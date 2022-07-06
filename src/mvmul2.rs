@@ -9,6 +9,10 @@ use halo2_proofs::{
         Value,        // basically an Option<V>, where Some(v) is called known and None is unknown
     },
     plonk::{
+        create_proof,
+        keygen_pk,
+        keygen_vk,
+        verify_proof,
         Advice,           // empty struct to mark Advice columns
         Assigned, // enum Zero, Trivial(F) "does not require inversion to evaluate", or Rational(F, F) "stored as a fraction to enable batch inversion". This is an actual value (wrapped felt)
         Circuit,  // trait with without_witnesses, configure, and synthesize methods
@@ -18,9 +22,15 @@ use halo2_proofs::{
         Error,       // Custom Error type
         Expression, // Polynomial expression enum, as binary tree, with 5 types of atomic variables v (Constant, Selector, Fixed, Advice, Instance) and combinations -v, v+v, a*v, or v*v.
         Selector, // (index: usize, simple: bool) column type, w/ index = index of this selector in the ConstraintSystem, simple = "can only be multiplied by Expressions not containing Selectors"
+        SingleVerifier,
     },
+    poly::commitment::Params,
     poly::Rotation, // i32 wrapper representing rotation in Lagrange basis
+    transcript::{Blake2bRead, Blake2bWrite, Challenge255},
 };
+
+use pasta_curves::{pallas, vesta};
+use rand::rngs::OsRng;
 
 #[derive(Clone)]
 struct MvmulConfig<F: FieldExt, const NROWS: usize, const NCOLS: usize> {
@@ -322,7 +332,27 @@ mod tests {
         }
 
         let circuit = MvmulCircuit::<Fp, NROWS, NCOLS> { a, v, u };
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+
+        //        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        //        prover.assert_satisfied();
+
+        let params: Params<vesta::Affine> = Params::new(k);
+
+        let empty_circuit = circuit.without_witnesses();
+
+        // Initialize the proving key
+        let vk = keygen_vk(&params, &empty_circuit).expect("keygen_vk should not fail");
+        let pk = keygen_pk(&params, vk.clone(), &empty_circuit).expect("keygen_pk should not fail");
+        //println!("{:?} {:?}", vk, pk);
+        let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+
+        let mut rng = OsRng;
+        create_proof(&params, &pk, &[circuit], &[&[]], &mut rng, &mut transcript)
+            .expect("proof generation should not fail");
+        let proof = transcript.finalize();
+        println!("{:?}", proof);
+        let strategy = SingleVerifier::new(&params);
+        let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+        assert!(verify_proof(&params, pk.get_vk(), strategy, &[&[]], &mut transcript).is_ok());
     }
 }
