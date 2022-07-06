@@ -22,63 +22,43 @@ use halo2_proofs::{
     poly::Rotation, // i32 wrapper representing rotation in Lagrange basis
 };
 
-// A Config is an associated type of your custom circuit (required only to be Clone).  With no particular enforced structure, it stores whatever type information is needed
-// to understand the constraint system (number and types of columns, their indices, some flags such as simple/complex selector, etc.).
-// It is a bit like a morphism type in a Monoidal category (domain and codomain), or the row and column labels in a dataframe. Let's call it the FrameType
-// It can be unstructured because it is the Circuit implementer's job to translate this information into the format needed for the Layouter.
 #[derive(Clone)]
 struct MvmulConfig<F: FieldExt, const NROWS: usize, const NCOLS: usize> {
+    // Config holds labels
     a: Vec<Vec<Column<Advice>>>,
     v: Vec<Column<Advice>>,
     u: Vec<Column<Advice>>,
-    q: Selector, // do we need these?
+    q: Selector,
     _marker: PhantomData<F>,
 }
-// By convention the Config gets a configure and assign method, which are delegated to by the configure and synthesize method of the Circuit.
+
 impl<F: FieldExt, const NROWS: usize, const NCOLS: usize> MvmulConfig<F, NROWS, NCOLS> {
-    fn alabels(&self) -> Vec<Vec<String>> {
-        let mut out = Vec::new();
-        for i in 1..NROWS {
-            let mut row = Vec::new();
-            for j in 1..NCOLS {
-                row.push(format!("a_{}_{}", i, j));
-            }
-            out.push(row);
-        }
-        out
-    }
+    //     fn alabels(&self) -> Vec<Vec<String>> {
+    //         let mut out = Vec::new();
+    //         for i in 1..NROWS {
+    //             let mut row = Vec::new();
+    //             for j in 1..NCOLS {
+    //                 row.push(format!("a_{}_{}", i, j));
+    //             }
+    //             out.push(row);
+    //         }
+    //         out
+    //     }
 
-    fn vlabels(&self) -> Vec<String> {
-        (1..NCOLS).map(|j| format!("v_{}", j)).collect()
-    }
-    fn ulabels(&self) -> Vec<String> {
-        (1..NROWS).map(|j| format!("u_{}", j)).collect()
-    }
-
-    // fn aadv(&self) -> Vec<Column<Advice>> {
-    // }
-    // fn vadv(&self) -> Vec<Column<Advice>> {
-    //     //NCOLS
-    //     (1..self.ncols).map(|j| format!("v_{}", j)).collect()
-    // }
-    // fn uadv(&self) -> Vec<Column<Advice>> {}
+    //     fn vlabels(&self) -> Vec<String> {
+    //         (1..NCOLS).map(|j| format!("v_{}", j)).collect()
+    //     }
+    //     fn ulabels(&self) -> Vec<String> {
+    //         (1..NROWS).map(|j| format!("u_{}", j)).collect()
+    //     }
 }
 
-//#[derive(Default)] // todo derive the Circuit, Config/FrameType & methods from a small description of the variables (or circom code)
+//#[derive(Default)]
 struct MvmulCircuit<F: FieldExt, const NROWS: usize, const NCOLS: usize> {
-    //    config: MvmulConfig<F, NROWS, NCOLS>,
-    // not totally convinced these are needed but
+    // circuit holds Values
     a: Vec<Vec<Value<Assigned<F>>>>,
-    u: Vec<Value<Assigned<F>>>,
     v: Vec<Value<Assigned<F>>>,
-    // a_00: Value<Assigned<F>>,
-    // a_01: Value<Assigned<F>>,
-    // a_10: Value<Assigned<F>>,
-    // a_11: Value<Assigned<F>>,
-    // v_0: Value<Assigned<F>>,
-    // v_1: Value<Assigned<F>>,
-    // u_0: Value<Assigned<F>>,
-    // u_1: Value<Assigned<F>>,
+    u: Vec<Value<Assigned<F>>>,
 }
 //impl<F: FieldExt, const RANGE: usize> MvmulCircuit<F, RANGE> {}
 
@@ -89,50 +69,49 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize> Circuit<F>
     type FloorPlanner = V1;
 
     fn without_witnesses(&self) -> Self {
-        // put Unknown in all the advice
-        //        Self::default()
+        // put Unknown in all the Value<Assigned>
         let mut a: Vec<Vec<Value<Assigned<F>>>> = Vec::new();
         let mut v: Vec<Value<Assigned<F>>> = Vec::new();
         let mut u: Vec<Value<Assigned<F>>> = Vec::new();
 
-        for i in 0..NROWS {
+        for _i in 0..NROWS {
             let mut row: Vec<Value<Assigned<F>>> = Vec::new();
-            for j in 0..NCOLS {
+            for _j in 0..NCOLS {
                 row.push(Value::default());
             }
             a.push(row);
         }
 
-        for j in 0..NCOLS {
+        for _j in 0..NCOLS {
             v.push(Value::default());
         }
 
-        for i in 0..NROWS {
+        for _i in 0..NROWS {
             u.push(Value::default());
         }
 
-        MvmulCircuit { a, u, v }
+        MvmulCircuit { a, v, u }
     }
 
     // define the constraints, mutate the provided ConstraintSystem, and output the resulting FrameType
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let (q, aadv, uadv, vadv) = {
-            let q = cs.selector();
+        let (qs, aadv, uadv, vadv) = {
+            let qs = cs.selector();
             let mut aadv: Vec<Vec<Column<Advice>>> = Vec::new();
-            for i in 0..NROWS {
+            for _i in 0..NROWS {
                 let mut row: Vec<Column<Advice>> = Vec::new();
-                for j in 0..NCOLS {
+                for _j in 0..NCOLS {
                     row.push(cs.advice_column());
                 }
                 aadv.push(row);
             }
             let uadv: Vec<Column<Advice>> = (0..NROWS).map(|_| cs.advice_column()).collect();
             let vadv: Vec<Column<Advice>> = (0..NCOLS).map(|_| cs.advice_column()).collect();
-            (q, aadv, uadv, vadv)
+            (qs, aadv, uadv, vadv)
         };
         cs.create_gate("mvmul", |virtual_cells| {
-            // 'allocate' all the advice cols
-            let q = virtual_cells.query_selector(q);
+            // 'allocate' all the advice  and selector cols by querying the cs with the labels
+            let q = virtual_cells.query_selector(qs);
             let mut a: Vec<Vec<Expression<F>>> = Vec::new();
             for i in 0..NROWS {
                 let mut row: Vec<Expression<F>> = Vec::new();
@@ -152,7 +131,9 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize> Circuit<F>
                 u.push(virtual_cells.query_advice(uadv[i], Rotation::cur()));
             }
 
+            // build the constraints c[i] is -u_i + \sum_j a_{ij} v_j
             let mut c: Vec<Expression<F>> = Vec::new();
+            // first c[i] = -u[i]
             for i in 0..NROWS {
                 c.push(-u[i].clone());
             }
@@ -163,8 +144,7 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize> Circuit<F>
                 }
             }
 
-            let constraints = (1..NROWS).map(|j| "c").zip(c);
-
+            let constraints = (0..NROWS).map(|j| "c").zip(c);
             Constraints::with_selector(q, constraints)
         });
         // The "FrameType"
@@ -172,7 +152,7 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize> Circuit<F>
             a: aadv,
             u: uadv,
             v: vadv,
-            q,
+            q: qs,
             _marker: PhantomData,
         }
     }
@@ -182,34 +162,18 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize> Circuit<F>
         config: Self::Config,
         mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
     ) -> Result<(), Error> {
-        // From the function docs:
-        // Assign a region of gates to an absolute row number.
-        // Inside the closure, the chip may freely use relative offsets; the `Layouter` will
-        // treat these assignments as a single "region" within the circuit. Outside this
-        // closure, the `Layouter` is allowed to optimise as it sees fit.
-
         layouter.assign_region(
             || "Assign values", // the name of the region
             |mut region| {
                 let offset = 0;
 
-                // Enable q_range_check. Remember that q_range_check is a label, a Selector.  Calling its enable
-                // - calls region.enable_selector(_,q_range_check,offset)  which
-                // - calls enable_selector on the region's RegionLayouter which
-                // - calls enable_selector on its "CS" (actually an Assignment<F> (a trait), and whatever impls that
-                // does the work, for example for MockProver the enable_selector function does some checks and then sets
-                //   self.selectors[selector.0][row] = true;
                 config.q.enable(&mut region, offset)?;
-
-                // Similarly after indirection calls assign_advice in e.g. the MockProver, which
-                // takes a Value-producing to() and does something like
-                // CellValue::Assigned(to().into_field().evaluate().assign()?);
 
                 for i in 0..NROWS {
                     for j in 0..NCOLS {
                         region.assign_advice(
                             || format!("a_{i}_{j}"),
-                            config.a[i][j],
+                            config.a[i][j], // Column<Advice>
                             offset,
                             || self.a[i][j],
                         )?;
@@ -233,13 +197,13 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize> Circuit<F>
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use halo2_proofs::{
         dev::{FailureLocation, MockProver, VerifyFailure},
         pasta::Fp,
         plonk::{Any, Circuit},
     };
-
-    use super::*;
+    use nalgebra;
 
     #[test]
     fn test_mvmul_succeed() {
@@ -281,38 +245,84 @@ mod tests {
 
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
-
-        // Failing
     }
 
-    // #[test]
-    // #[should_panic]
-    // fn test_mvmul_fail() {
-    //     let k = 4; //2^k rows
-    //     let a_00: u64 = 1;
-    //     let a_01: u64 = 2;
-    //     let a_10: u64 = 3;
-    //     let a_11: u64 = 4;
-    //     let v_0: u64 = 5;
-    //     let v_1: u64 = 6;
-    //     let u_0: u64 = 17;
-    //     let u_1: u64 = 212;
+    #[test]
+    #[should_panic]
+    fn test_mvmul_fail() {
+        let k = 4; //2^k rows
+        let a_00: u64 = 1;
+        let a_01: u64 = 2;
+        let a_10: u64 = 3;
+        let a_11: u64 = 4;
+        let v_0: u64 = 5;
+        let v_1: u64 = 6;
+        let u_0: u64 = 17;
+        let u_1: u64 = 212;
 
-    //     let circuit = MvmulCircuit::<Fp> {
-    //         a_00: Value::known(Fp::from(a_00).into()),
-    //         a_01: Value::known(Fp::from(a_01).into()),
-    //         a_10: Value::known(Fp::from(a_10).into()),
-    //         a_11: Value::known(Fp::from(a_11).into()),
-    //         v_0: Value::known(Fp::from(v_0).into()),
-    //         v_1: Value::known(Fp::from(v_1).into()),
-    //         u_0: Value::known(Fp::from(u_0).into()),
-    //         u_1: Value::known(Fp::from(u_1).into()),
-    //     };
+        // Successful cases
 
-    //     // The MockProver arguments are log_2(nrows), the circuit (with advice already assigned), and the instance variables.
-    //     // The MockProver will need to internally supply a Layouter for the constraint system to be actually written.
+        let circuit = MvmulCircuit::<Fp, 2, 2> {
+            a: vec![
+                vec![
+                    Value::known(Fp::from(a_00).into()),
+                    Value::known(Fp::from(a_01).into()),
+                ],
+                vec![
+                    Value::known(Fp::from(a_10).into()),
+                    Value::known(Fp::from(a_11).into()),
+                ],
+            ],
+            v: vec![
+                Value::known(Fp::from(v_0).into()),
+                Value::known(Fp::from(v_1).into()),
+            ],
+            u: vec![
+                Value::known(Fp::from(u_0).into()),
+                Value::known(Fp::from(u_1).into()),
+            ],
+        };
 
-    //     let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-    //     prover.assert_satisfied();
-    // }
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+
+    #[test]
+    fn test_mvmul_bigger() {
+        const NROWS: usize = 30;
+        const NCOLS: usize = 40;
+        let k = 4; //2^k rows
+                   //        let avals: [u64; 32] = rand.rand();
+        let m_a: nalgebra::SMatrix<u64, NROWS, NCOLS> =
+            nalgebra::SMatrix::from_iterator((0..NROWS * NCOLS).map(|x| x as u64));
+        let m_v: nalgebra::SVector<u64, NCOLS> =
+            nalgebra::SVector::from_iterator((0..NCOLS).map(|x| x as u64));
+        let m_u = m_a * m_v;
+        println!("a: {}", m_a);
+        println!("v: {}", m_v);
+        println!("u: {}", m_u);
+
+        let mut a: Vec<Vec<Value<Assigned<Fp>>>> = Vec::new();
+        for i in 0..NROWS {
+            let mut row: Vec<Value<Assigned<Fp>>> = Vec::new();
+            for j in 0..NCOLS {
+                row.push(Value::known(Fp::from(m_a[(i, j)]).into()))
+            }
+            a.push(row);
+        }
+
+        let mut v: Vec<Value<Assigned<Fp>>> = Vec::new();
+        let mut u: Vec<Value<Assigned<Fp>>> = Vec::new();
+        for j in 0..NCOLS {
+            v.push(Value::known(Fp::from(m_v[j]).into()));
+        }
+
+        for i in 0..NROWS {
+            u.push(Value::known(Fp::from(m_u[i]).into()));
+        }
+
+        let circuit = MvmulCircuit::<Fp, NROWS, NCOLS> { a, v, u };
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
 }

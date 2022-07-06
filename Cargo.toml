@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 halo2_proofs = { git = "https://github.com/zcash/halo2.git", rev = "a898d65ae3ad3d41987666f6a03cfc15edae01c4"}
+nalgebra = "0.31"
