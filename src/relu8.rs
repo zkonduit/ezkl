@@ -237,7 +237,7 @@ mod tests {
     }
 
     #[test]
-    fn test_relu_all_good() {
+    fn test_relu_all() {
         let shift = Fp::from(127);
         for ewe8 in 0..255 {
             let pi = if (ewe8 as i32) - 127 < 0 {
@@ -255,6 +255,20 @@ mod tests {
 
             let prover = MockProver::run(k, &circuit, vec![pub_inputs.clone()]).unwrap();
             assert!(prover.verify().is_ok());
+
+            // Assert that the lookup fails when `(a, c)` is not a row in the table;
+            let mut bad_circuit = circuit;
+            bad_circuit.c = Value::known((-Fp::from(1)).into());
+            let prover = MockProver::run(k, &bad_circuit, vec![pub_inputs]).unwrap();
+            match prover.verify() {
+                Err(errors) => {
+                    match &errors[0] {
+                        VerifyFailure::Lookup { .. } => {}
+                        e => panic!("expected lookup error, found: {:?}", e),
+                    };
+                }
+                _ => panic!("expected `prover.verify()` to fail"),
+            };
         }
     }
 }
