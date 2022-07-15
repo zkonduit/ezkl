@@ -4,9 +4,16 @@ use halo2_proofs::{
     circuit::{AssignedCell, Chip, Layouter, SimpleFloorPlanner, Value},
     dev::{MockProver, VerifyFailure},
     pasta::Fp,
-    plonk::{Advice, Assigned, Circuit, Column, ConstraintSystem, Error, Instance, TableColumn},
+    plonk::{
+        create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Assigned, Circuit, Column,
+        ConstraintSystem, Error, Instance, SingleVerifier, TableColumn,
+    },
+    poly::commitment::Params,
     poly::Rotation,
+    transcript::{Blake2bRead, Blake2bWrite, Challenge255},
 };
+use pasta_curves::{pallas, vesta};
+use rand::rngs::OsRng;
 
 //const XOR_BITS: usize = 2;
 
@@ -128,7 +135,7 @@ impl ReluChip {
 }
 
 // Proves knowledge of `a` such that `relu(a) == c` for public input `c`.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct ReluCircuit {
     // Private inputs.
     a: Value<Assigned<Fp>>,
@@ -140,7 +147,7 @@ impl Circuit<Fp> for ReluCircuit {
     type Config = ReluChipConfig;
 
     fn without_witnesses(&self) -> Self {
-        todo!()
+        Self::default()
     }
 
     fn configure(cs: &mut ConstraintSystem<Fp>) -> Self::Config {
@@ -168,6 +175,7 @@ mod tests {
         pasta::Fp,
         plonk::{Any, Circuit},
     };
+    use std::time::{Duration, Instant};
 
     use super::*;
 
@@ -234,6 +242,61 @@ mod tests {
             }
             _ => panic!("expected `prover.verify()` to fail"),
         };
+    }
+
+    #[test]
+    fn test_relu_real() {
+        // The verifier's public input.
+        const PUB_INPUT: u64 = 0;
+
+        let k = 9;
+        let pub_inputs = vec![Fp::from(PUB_INPUT)];
+
+        // Assert that the lookup passes because `relu(-3) == PUB_INPUT`.
+        let circuit = ReluCircuit {
+            a: Value::known((-Fp::from(3)).into()),
+            c: Value::known(Fp::from(PUB_INPUT).into()),
+        };
+
+        let params: Params<vesta::Affine> = Params::new(k);
+
+        let empty_circuit = circuit.without_witnesses();
+
+        // Initialize the proving key
+        let now = Instant::now();
+        let vk = keygen_vk(&params, &empty_circuit).expect("keygen_vk should not fail");
+        println!("VK took {}", now.elapsed().as_secs());
+        let now = Instant::now();
+        let pk = keygen_pk(&params, vk.clone(), &empty_circuit).expect("keygen_pk should not fail");
+        println!("PK took {}", now.elapsed().as_secs());
+        let now = Instant::now();
+        //println!("{:?} {:?}", vk, pk);
+        let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+        let mut rng = OsRng;
+        create_proof(
+            &params,
+            &pk,
+            &[circuit],
+            &[&[&pub_inputs]],
+            &mut rng,
+            &mut transcript,
+        )
+        .expect("proof generation should not fail");
+        let proof = transcript.finalize();
+        //println!("{:?}", proof);
+        println!("Proof took {}", now.elapsed().as_secs());
+        let now = Instant::now();
+        let strategy = SingleVerifier::new(&params);
+        let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+        assert!(verify_proof(
+            &params,
+            pk.get_vk(),
+            strategy,
+            &[&[&pub_inputs]],
+            &mut transcript
+        )
+        .is_ok());
+        println!("Verify took {}", now.elapsed().as_secs());
     }
 
     #[test]
