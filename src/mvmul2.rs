@@ -216,6 +216,7 @@ mod tests {
         plonk::{Any, Circuit},
     };
     use nalgebra;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn test_mvmul_succeed() {
@@ -300,9 +301,10 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_mvmul_bigger() {
         const NROWS: usize = 128;
-        const NCOLS: usize = 128; //32x52 overflows stack in verifying key creation
+        const NCOLS: usize = 128; //32x52 overflows stack in verifying key creation with V1
         let k = 4; //2^k rows
                    //        let avals: [u64; 32] = rand.rand();
         let m_a: nalgebra::SMatrix<u64, NROWS, NCOLS> =
@@ -344,18 +346,25 @@ mod tests {
         let empty_circuit = circuit.without_witnesses();
 
         // Initialize the proving key
+        let now = Instant::now();
         let vk = keygen_vk(&params, &empty_circuit).expect("keygen_vk should not fail");
+        println!("VK took {}", now.elapsed().as_secs());
+        let now = Instant::now();
         let pk = keygen_pk(&params, vk.clone(), &empty_circuit).expect("keygen_pk should not fail");
+        println!("PK took {}", now.elapsed().as_secs());
+        let now = Instant::now();
         //println!("{:?} {:?}", vk, pk);
         let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-
         let mut rng = OsRng;
         create_proof(&params, &pk, &[circuit], &[&[]], &mut rng, &mut transcript)
             .expect("proof generation should not fail");
         let proof = transcript.finalize();
         //println!("{:?}", proof);
+        println!("Proof took {}", now.elapsed().as_secs());
+        let now = Instant::now();
         let strategy = SingleVerifier::new(&params);
         let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
         assert!(verify_proof(&params, pk.get_vk(), strategy, &[&[]], &mut transcript).is_ok());
+        println!("Verify took {}", now.elapsed().as_secs());
     }
 }
