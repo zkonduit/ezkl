@@ -20,11 +20,9 @@ struct MvrlConfig<F: FieldExt, const NROWS: usize, const NCOLS: usize, const BIT
     v: Vec<Column<Advice>>,
     u: Vec<Column<Advice>>,
     r: Vec<Column<Advice>>,
-//    i_col: Vec<Column<Advice>>,
-//    o_col: Vec<Column<Advice>>,
     relu_i_col: TableColumn,
     relu_o_col: TableColumn,
-    pub_col: Vec<Column<Instance>>,
+//    pub_col: Vec<Column<Instance>>,
     q: Selector,
     _marker: PhantomData<F>,
 }
@@ -92,23 +90,14 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize, const BITS: usize>
             Constraints::with_selector(q, constraints)
         });
 
-        // Config the lookups
-  //      let i_col = cs.advice_column();
-	//      let o_col = cs.advice_column();
+	// let mut pub_col: Vec<Column<Instance>> = Vec::new();
+	// for _i in 0..NROWS {
+        //     pub_col.push(cs.instance_column());
+        // }
 
-	let mut pub_col: Vec<Column<Instance>> = Vec::new();
-	for _i in 0..NROWS {
-            pub_col.push(cs.instance_column());
-        }
-
-	for i in 0..NROWS {
-	    cs.enable_equality(pub_col[i]);
-        }
-
-        // let s_pub = cs.selector();
-
-        // cs.enable_equality(i_col);
-        // cs.enable_equality(o_col);
+	// for i in 0..NROWS {
+	//     cs.enable_equality(pub_col[i]);
+        // }
 
 
         let relu_i_col = cs.lookup_table_column();
@@ -133,7 +122,7 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize, const BITS: usize>
             // o_col,
             relu_i_col,
             relu_o_col,
-            pub_col,
+//            pub_col,
             _marker: PhantomData,
         }
     }
@@ -297,9 +286,9 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize, const BITS: usize> Cir
         config.alloc_table(&mut layouter)?;
 //        let c = config.alloc_private_and_public_inputs(&mut layouter, self.wasa, self.wasc)?;
 
-	for i in 0..NROWS {
-            layouter.constrain_instance(arr[i].cell(), config.pub_col[i], 0)?; // equality for r and the pub_col? Why do we need the pub_col?
-	}
+	// for i in 0..NROWS {
+        //     layouter.constrain_instance(arr[i].cell(), config.pub_col[i], 0)?; // equality for r and the pub_col? Why do we need the pub_col?
+	// }
 
         Ok(())
     }
@@ -365,7 +354,7 @@ mod tests {
         // The MockProver arguments are log_2(nrows), the circuit (with advice already assigned), and the instance variables.
         // The MockProver will need to internally supply a Layouter for the constraint system to be actually written.
 
-        let prover = MockProver::run(k, &circuit, vec![pub_inputs]).unwrap();
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
     }
 
@@ -420,7 +409,7 @@ mod tests {
    //         wasc,
         };
 
-        let prover = MockProver::run(k, &circuit, vec![pub_inputs]).unwrap();
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
     }
 
