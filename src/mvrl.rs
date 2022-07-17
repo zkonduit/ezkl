@@ -358,6 +358,55 @@ mod tests {
         prover.assert_satisfied();
     }
 
+        #[test]
+    fn test_mvrl_withneg() {
+        let k = 9; //2^k rows
+        let a_00: u64 = 1;
+        let a_01: u64 = 2;
+        let a_10: u64 = 3;
+        let a_11: u64 = 4;
+        let v_0: u64 = 5;
+        let v_1: u64 = 6;
+        let u_0: u64 = 17;
+        let u_1: u64 = 39;
+        let r_0: u64 = 0;
+        let r_1: u64 = 0;
+
+        let circuit = MvrlCircuit::<F, 2, 2, 8> {
+            a: vec![
+                vec![
+                    Value::known(F::from(a_00).into()),
+                    Value::known(F::from(a_01).into()),
+                ],
+                vec![
+                    Value::known(F::from(a_10).into()),
+                    Value::known(F::from(a_11).into()),
+                ],
+            ],
+            v: vec![
+                Value::known((-F::from(v_0)).into()),
+                Value::known((-F::from(v_1)).into()),
+            ],
+            u: vec![
+                Value::known((-F::from(u_0)).into()),
+                Value::known((-F::from(u_1)).into()),
+            ],
+            r: vec![
+                Value::known(F::from(r_0).into()),
+                Value::known(F::from(r_1).into()),
+            ],
+  //          wasa,
+   //         wasc,
+        };
+
+        // The MockProver arguments are log_2(nrows), the circuit (with advice already assigned), and the instance variables.
+        // The MockProver will need to internally supply a Layouter for the constraint system to be actually written.
+
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+
+
     #[test]
     #[should_panic]
     fn test_mvrl_fail() {
