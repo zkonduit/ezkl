@@ -13,23 +13,23 @@ use pasta_curves::{pallas, vesta};
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
 
-use tensorutils::{map3, map4};
+use tensorutils::{flatten3, flatten4, map3, map4};
 
-/// The linear part of a 2D convolution layer.
-/// Compile-time constants are:
-/// IH: Height in pixels of the input image
-/// IW: Width in pixels of the input image
-/// CHIN: Number of input channels
-/// CHOUT: Number of output channels = number of filters
-/// KH: Kernel height in pixels
-/// KW: Kernel width in pixels
-/// BITS: Bits in the activation & weight representations (e.g. 8 for i8)
-/// For now we only support stride of 1 and no padding.  Thus the ouput shape is
-/// (IH - KH+1) pixels high and (IW-KW+1) pixels wide
-/// PyTorch: https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html
-/// PyTorch Conv2d activations are (N, CHIN, H, W), and we are doing single-input
-/// inference so batchsize N=1.
-/// We may add support for different types of padding and stride, and possibly dilation, groups, and bias.
+// The linear part of a 2D convolution layer.
+// Compile-time constants are:
+// IH: Height in pixels of the input image
+// IW: Width in pixels of the input image
+// CHIN: Number of input channels
+// CHOUT: Number of output channels = number of filters
+// KH: Kernel height in pixels
+// KW: Kernel width in pixels
+// BITS: Bits in the activation & weight representations (e.g. 8 for i8)
+// For now we only support stride of 1 and no padding.  Thus the ouput shape is
+// (IH - KH+1) pixels high and (IW-KW+1) pixels wide
+// PyTorch: https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html
+// PyTorch Conv2d activations are (N, CHIN, H, W), and we are doing single-input
+// inference so batchsize N=1.
+// We may add support for different types of padding and stride, and possibly dilation, groups, and bias.
 
 #[derive(Clone)]
 struct Conv2dAdvice<
@@ -129,6 +129,21 @@ impl<
                 map3::<_, _, CHOUT, OH, OW>(|i, j, k| -lin_output_ex[i][j][k].clone());
 
             // Now we compute the convolution expression, collect it in a CHOUT x OH x OW tensor, and add it to constraints
+            for filter in (0..CHOUT) {
+                let kernel = kernel_ex[filter]; //CHIN x KH x KW
+                let b = flatten3(kernel);
+                for row in (0..OH) {
+                    for col in (0..OW) {
+                        //slice input to patch of kernel shape at this location
+                        let patch = input_ex[..][row..(row + KH)][col..(col + KW)];
+                        // take dot product with this chout kernel
+                        let a = flatten3(patch);
+                        let conv2dex = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+                        constraints[filter][row][col] =
+                            constraints[filter][row][col].clone() + conv2dex;
+                    }
+                }
+            }
 
             let constraints = (0..(CHOUT * OH * OW))
                 .map(|j| "c")
