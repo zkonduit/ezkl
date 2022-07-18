@@ -22,7 +22,7 @@ struct MvrlConfig<F: FieldExt, const NROWS: usize, const NCOLS: usize, const BIT
     r: Vec<Column<Advice>>,
     relu_i_col: TableColumn,
     relu_o_col: TableColumn,
-//    pub_col: Vec<Column<Instance>>,
+    //    pub_col: Vec<Column<Instance>>,
     q: Selector,
     _marker: PhantomData<F>,
 }
@@ -90,27 +90,26 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize, const BITS: usize>
             Constraints::with_selector(q, constraints)
         });
 
-	// let mut pub_col: Vec<Column<Instance>> = Vec::new();
-	// for _i in 0..NROWS {
+        // let mut pub_col: Vec<Column<Instance>> = Vec::new();
+        // for _i in 0..NROWS {
         //     pub_col.push(cs.instance_column());
         // }
 
-	// for i in 0..NROWS {
-	//     cs.enable_equality(pub_col[i]);
+        // for i in 0..NROWS {
+        //     cs.enable_equality(pub_col[i]);
         // }
-
 
         let relu_i_col = cs.lookup_table_column();
         let relu_o_col = cs.lookup_table_column();
 
-	for i in 0..NROWS {
+        for i in 0..NROWS {
             let _ = cs.lookup(|cs| {
-		vec![
+                vec![
                     (cs.query_advice(uadv[i], Rotation::cur()), relu_i_col),
                     (cs.query_advice(radv[i], Rotation::cur()), relu_o_col),
-		]
+                ]
             });
-	}
+        }
 
         Self {
             a: aadv,
@@ -122,7 +121,7 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize, const BITS: usize>
             // o_col,
             relu_i_col,
             relu_o_col,
-//            pub_col,
+            //            pub_col,
             _marker: PhantomData,
         }
     }
@@ -182,9 +181,9 @@ struct MvrlCircuit<F: FieldExt, const NROWS: usize, const NCOLS: usize, const BI
     v: Vec<Value<Assigned<F>>>,
     u: Vec<Value<Assigned<F>>>,
     r: Vec<Value<Assigned<F>>>,
-//    wasa: Value<Assigned<F>>,
+    //    wasa: Value<Assigned<F>>,
     // Public input (from prover).
-//    wasc: Value<Assigned<F>>,
+    //    wasc: Value<Assigned<F>>,
 }
 //impl<F: FieldExt, const RANGE: usize> MvmulCircuit<F, RANGE> {}
 
@@ -221,16 +220,16 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize, const BITS: usize> Cir
         for _i in 0..NROWS {
             r.push(Value::default());
         }
-  //      let wasa: Value<Assigned<F>> = Value::default();
-   //     let wasc: Value<Assigned<F>> = Value::default();
+        //      let wasa: Value<Assigned<F>> = Value::default();
+        //     let wasc: Value<Assigned<F>> = Value::default();
 
         MvrlCircuit {
             a,
             v,
             u,
             r,
-     //       wasa,
-       //     wasc,
+            //       wasa,
+            //     wasc,
         }
     }
 
@@ -247,7 +246,7 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize, const BITS: usize> Cir
         // mvmul
         let mut arr = Vec::new();
 
-	layouter.assign_region(
+        layouter.assign_region(
             || "Assign values", // the name of the region
             |mut region| {
                 let offset = 0;
@@ -270,25 +269,28 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize, const BITS: usize> Cir
                 }
 
                 for i in 0..NROWS {
-		    arr.push(
-			region.assign_advice(|| format!("r_{i}"), config.r[i], offset, || self.r[i])?
-			);
+                    arr.push(region.assign_advice(
+                        || format!("r_{i}"),
+                        config.r[i],
+                        offset,
+                        || self.r[i],
+                    )?);
                 }
 
                 for j in 0..NCOLS {
                     region.assign_advice(|| format!("v_{j}"), config.v[j], offset, || self.v[j])?;
                 }
 
-                Ok(()) 
+                Ok(())
             },
         )?;
 
         config.alloc_table(&mut layouter)?;
-//        let c = config.alloc_private_and_public_inputs(&mut layouter, self.wasa, self.wasc)?;
+        //        let c = config.alloc_private_and_public_inputs(&mut layouter, self.wasa, self.wasc)?;
 
-	// for i in 0..NROWS {
+        // for i in 0..NROWS {
         //     layouter.constrain_instance(arr[i].cell(), config.pub_col[i], 0)?; // equality for r and the pub_col? Why do we need the pub_col?
-	// }
+        // }
 
         Ok(())
     }
@@ -318,8 +320,8 @@ mod tests {
         let u_1: u64 = 39;
         let r_0: u64 = 17;
         let r_1: u64 = 39;
-//        let wasa: Value<Assigned<F>> = Value::known((-F::from(3)).into());
-//        let wasc: Value<Assigned<F>> = Value::known(F::from(0).into());
+        //        let wasa: Value<Assigned<F>> = Value::known((-F::from(3)).into());
+        //        let wasc: Value<Assigned<F>> = Value::known(F::from(0).into());
 
         let pub_inputs = vec![F::from(r_0), F::from(r_1), F::from(r_1)];
         // Successful cases
@@ -347,8 +349,8 @@ mod tests {
                 Value::known(F::from(r_0).into()),
                 Value::known(F::from(r_1).into()),
             ],
-  //          wasa,
-   //         wasc,
+            //          wasa,
+            //         wasc,
         };
 
         // The MockProver arguments are log_2(nrows), the circuit (with advice already assigned), and the instance variables.
@@ -358,7 +360,7 @@ mod tests {
         prover.assert_satisfied();
     }
 
-        #[test]
+    #[test]
     fn test_mvrl_withneg() {
         let k = 9; //2^k rows
         let a_00: u64 = 1;
@@ -395,8 +397,8 @@ mod tests {
                 Value::known(F::from(r_0).into()),
                 Value::known(F::from(r_1).into()),
             ],
-  //          wasa,
-   //         wasc,
+            //          wasa,
+            //         wasc,
         };
 
         // The MockProver arguments are log_2(nrows), the circuit (with advice already assigned), and the instance variables.
@@ -405,7 +407,6 @@ mod tests {
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
     }
-
 
     #[test]
     #[should_panic]
@@ -422,11 +423,11 @@ mod tests {
         let r_0: u64 = 17;
         let r_1: u64 = 212;
 
-//        let wasa: Value<Assigned<F>> = Value::known((-F::from(3)).into());
- //       let wasc: Value<Assigned<F>> = Value::known(F::from(0).into());
+        //        let wasa: Value<Assigned<F>> = Value::known((-F::from(3)).into());
+        //       let wasc: Value<Assigned<F>> = Value::known(F::from(0).into());
 
-	let pub_inputs = vec![F::from(r_0),F::from(r_1)];
-//        let pub_inputs = vec![F::from(0)];
+        let pub_inputs = vec![F::from(r_0), F::from(r_1)];
+        //        let pub_inputs = vec![F::from(0)];
 
         // Successful cases
 
@@ -453,9 +454,8 @@ mod tests {
                 Value::known(F::from(r_0).into()),
                 Value::known(F::from(r_1).into()),
             ],
-
-   //         wasa,
-   //         wasc,
+            //         wasa,
+            //         wasc,
         };
 
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
