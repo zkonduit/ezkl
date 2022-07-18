@@ -44,6 +44,18 @@ where
     a
 }
 
+fn flatten<T>(nested: Vec<Vec<T>>) -> Vec<T> {
+    nested.into_iter().flatten().collect()
+}
+
+fn flatten3<T>(nested: Vec<Vec<Vec<T>>>) -> Vec<T> {
+    flatten(nested).into_iter().flatten().collect()
+}
+
+fn flatten4<T>(nested: Vec<Vec<Vec<Vec<T>>>>) -> Vec<T> {
+    flatten3(nested).into_iter().flatten().collect()
+}
+
 mod test {
     use super::*;
     #[test]
@@ -73,12 +85,32 @@ mod test {
             ],
         ];
         assert_eq!(t, target);
+        assert_eq!(
+            flatten4(t),
+            vec![
+                (0, 0, 0, 0),
+                (0, 0, 0, 1),
+                (0, 0, 1, 0),
+                (0, 0, 1, 1),
+                (0, 1, 0, 0),
+                (0, 1, 0, 1),
+                (0, 1, 1, 0),
+                (0, 1, 1, 1),
+                (1, 0, 0, 0),
+                (1, 0, 0, 1),
+                (1, 0, 1, 0),
+                (1, 0, 1, 1),
+                (1, 1, 0, 0),
+                (1, 1, 0, 1),
+                (1, 1, 1, 0),
+                (1, 1, 1, 1)
+            ]
+        );
     }
 
     #[test]
     fn indices3() {
         let t: Vec<Vec<Vec<(usize, usize, usize)>>> = map3::<_, _, 2, 2, 2>(|i, j, k| (i, j, k));
-        println!("{:?}", t);
         let target = vec![
             vec![vec![(0, 0, 0), (0, 0, 1)], vec![(0, 1, 0), (0, 1, 1)]],
             vec![vec![(1, 0, 0), (1, 0, 1)], vec![(1, 1, 0), (1, 1, 1)]],

@@ -13,6 +13,7 @@ use pasta_curves::{pallas, vesta};
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
 
+use tensorutils::{map3, map4};
 
 /// The linear part of a 2D convolution layer.
 /// Compile-time constants are:
@@ -31,242 +32,130 @@ use std::marker::PhantomData;
 /// We may add support for different types of padding and stride, and possibly dilation, groups, and bias.
 
 #[derive(Clone)]
-struct Conv2dAdvice<F: FieldExt, const IH: usize, const IW: usize, const CHIN: usize, const CHOUT: usize, const KH: usize, const KW: usize, const BITS: usize> {
+struct Conv2dAdvice<
+    F: FieldExt,
+    const IH: usize,
+    const IW: usize,
+    const CHIN: usize,
+    const CHOUT: usize,
+    const KH: usize,
+    const KW: usize,
+    const BITS: usize,
+> {
     kernel: Vec<Vec<Vec<Vec<Column<Advice>>>>>, // CHOUT x CHIN x KH x KW
-    input: Vec<Vec<Vec<Column<Advice>>>>,  // CHIN x IH x IW
+    input: Vec<Vec<Vec<Column<Advice>>>>,       // CHIN x IH x IW
     lin_output: Vec<Vec<Vec<Column<Advice>>>>,  // CHOUT x OH x OW
-    nl_output: Vec<Vec<Vec<Column<Advice>>>>,  // CHOUT x OH x OW
+    nl_output: Vec<Vec<Vec<Column<Advice>>>>,   // CHOUT x OH x OW
 }
 
-
-
 #[derive(Clone)]
-struct Conv2dConfig<F: FieldExt, const IH: usize, const IW: usize, const CHIN: usize, const CHOUT: usize, const KH: usize, const KW: usize, const BITS: usize> {
+struct Conv2dConfig<
+    F: FieldExt,
+    const IH: usize,
+    const IW: usize,
+    const CHIN: usize,
+    const CHOUT: usize,
+    const KH: usize,
+    const KW: usize,
+    const BITS: usize,
+> {
     // const OH = (IH - KH + 1);
     // const OW = (IW - KW + 1);
-    advice: Conv2dAdvice<F,IH,IW,CHIN,CHOUT,KH,KW,BITS>,
+    advice: Conv2dAdvice<F, IH, IW, CHIN, CHOUT, KH, KW, BITS>,
     // relu_i_col: TableColumn,
     // relu_o_col: TableColumn,
     q: Selector,
     _marker: PhantomData<F>,
 }
 
-
-fn map4<Inner,Func, const I:usize, const J:usize, const K: usize, const L: usize>(f: Func) -> Vec<Vec<Vec<Vec<Inner>>>>
-where Func: Fn(usize,usize,usize,usize) -> Inner  {
-    let mut kernel: Vec<Vec<Vec<Vec<Inner>>>> = Vec::new();
-    for i in 0..I {
-        let mut outchannel: Vec<Vec<Vec<Inner>>> = Vec::new();
-        for j in 0..J {
-	    let mut inchannel: Vec<Vec<Inner>> = Vec::new();
-	    for k in 0..K {
-		let mut row: Vec<Inner> = Vec::new();
-		for l in 0..L {
-		    row.push( f(i,j,k,l) );
-		}
-		inchannel.push(row);
-	    }
-	    outchannel.push(inchannel);
-        }
-	kernel.push(outchannel);
-    }
-    kernel
-}
-
-
-// fn map4<Inner,Func>(f: Func) -> Vec<Vec<Vec<Vec<Inner>>>>
-// where Func: Fn(usize,usize,usize,usize) -> Inner  {
-//     let mut kernel: Vec<Vec<Vec<Vec<Inner>>>> = Vec::new();
-//     for outchan in 0..CHOUT {
-//         let mut outchannel: Vec<Vec<Vec<Inner>>> = Vec::new();
-//         for inchan in 0..CHIN {
-// 	    let mut inchannel: Vec<Vec<Inner>> = Vec::new();
-// 	    for kh in 0..KH {
-// 		let mut row: Vec<Inner> = Vec::new();
-// 		for kw in 0..KW {
-// 		    row.push( f(outchan,inchan,kh,kw) );
-// 		}
-// 		inchannel.push(row);
-// 	    }
-// 	    outchannel.push(inchannel);
-//         }
-// 	kernel.push(outchannel);
-//     }
-//     kernel
-// }
-
-
-
-
-
-impl<F: FieldExt, const IH: usize, const IW: usize, const CHIN: usize, const CHOUT: usize, const KH: usize, const KW: usize, const BITS: usize>
-    Conv2dConfig<F,IH,IW,CHIN,CHOUT,KH,KW,BITS>
+impl<
+        F: FieldExt,
+        const IH: usize,
+        const IW: usize,
+        const CHIN: usize,
+        const CHOUT: usize,
+        const KH: usize,
+        const KW: usize,
+        const BITS: usize,
+    > Conv2dConfig<F, IH, IW, CHIN, CHOUT, KH, KW, BITS>
 {
-
-    
-    fn define_advice(cs: &mut ConstraintSystem<F>) -> Conv2dAdvice<F,IH,IW,CHIN,CHOUT,KH,KW,BITS> {
-            let mut kernel_advice: Vec<Vec<Vec<Vec<Column<Advice>>>>> = Vec::new();
-            for _outchan in 0..CHOUT {
-                let mut outchannel: Vec<Vec<Vec<Column<Advice>>>> = Vec::new();
-                for _inchan in 0..CHIN {
-		    let mut inchannel: Vec<Vec<Column<Advice>>> = Vec::new();
-		    for _kh in 0..KH {
-			let mut row: Vec<Column<Advice>> = Vec::new();
-			for _kw in 0..KW {
-			    row.push(cs.advice_column());
-			}
-			inchannel.push(row);
-		    }
-		    outchannel.push(inchannel);
-                }
-		kernel_advice.push(outchannel);
-            }
-	    
-	    let mut input_advice: Vec<Vec<Vec<Column<Advice>>>> = Vec::new();
-            for _inchan in 0..CHIN {
-		let mut inchannel: Vec<Vec<Column<Advice>>> = Vec::new();
-		for _kh in 0..IH {
-		    let mut row: Vec<Column<Advice>> = Vec::new();
-		    for _kw in 0..IW {
-			row.push(cs.advice_column());
-		    }
-		    inchannel.push(row);
-		}
-		input_advice.push(inchannel);
-            }
-
-	    let mut lin_output_advice: Vec<Vec<Vec<Column<Advice>>>> = Vec::new();
-            for _outchan in 0..CHOUT {
-		let mut inchannel: Vec<Vec<Column<Advice>>> = Vec::new();
-		for _oh in 0..OH {
-		    let mut row: Vec<Column<Advice>> = Vec::new();
-		    for _ow in 0..OW {
-			row.push(cs.advice_column());
-		    }
-		    inchannel.push(row);
-		}
-		lin_output_advice.push(inchannel);
-            }
-
-	    let mut nl_output_advice: Vec<Vec<Vec<Column<Advice>>>> = Vec::new();
-            for _outchan in 0..CHOUT {
-		let mut inchannel: Vec<Vec<Column<Advice>>> = Vec::new();
-		for _oh in 0..OH {
-		    let mut row: Vec<Column<Advice>> = Vec::new();
-		    for _ow in 0..OW {
-			row.push(cs.advice_column());
-		    }
-		    inchannel.push(row);
-		}
-		nl_output_advice.push(inchannel);
-            }
-	Conv2dAdvice {kernel: kernel_advice,
-		      input: input_advice,
-		      lin_output: lin_output_advice,
-		      nl_output: nl_output_advice,
-	}
+    fn define_advice(
+        cs: &mut ConstraintSystem<F>,
+    ) -> Conv2dAdvice<F, IH, IW, CHIN, CHOUT, KH, KW, BITS> {
+        let kernel_advice: Vec<Vec<Vec<Vec<Column<Advice>>>>> =
+            map4::<_, _, CHOUT, CHIN, KH, KW>(|i, j, k, l| cs.advice_column());
+        let input_advice: Vec<Vec<Vec<Column<Advice>>>> =
+            map3::<_, _, CHIN, IH, IW>(|i, j, k| cs.advice_column());
+        let lin_output_advice: Vec<Vec<Vec<Column<Advice>>>> =
+            map3::<_, _, CHOUT, OH, OW>(|i, j, k| cs.advice_column());
+        let nl_output_advice: Vec<Vec<Vec<Column<Advice>>>> =
+            map3::<_, _, CHOUT, OH, OW>(|i, j, k| cs.advice_column());
+        Conv2dAdvice {
+            kernel: kernel_advice,
+            input: input_advice,
+            lin_output: lin_output_advice,
+            nl_output: nl_output_advice,
+        }
     }
 
-    // Make the linear constraints, as a tensor of the same shape as the linear output advice
-    // CHOUT x OH x OW
-    fn make_linear_constraints(&self, cs: &mut ConstraintSystem<F>) ->   Vec<Vec<Vec<Expression<F>>>> {
-	// First fill each entry of c with the claimed target value from the advice; i.e. query it
-	let mut lin_output_ex: Vec<Vec<Vec<Expression<F>>>> = Vec::new();
-        for outchan in 0..CHOUT {
-	    let mut inchannel: Vec<Vec<Expression<F>>> = Vec::new();
-	    for oh in 0..OH {
-		let mut row: Vec<Expression<F>> = Vec::new();
-		for ow in 0..OW {
-		    row.push(virtual_cells.query_advice(self.advice.lin_output[outchan][oh][ow], Rotation::cur()));
-		}
-		inchannel.push(row);
-	    }
-	    lin_output_ex.push(inchannel);
-        }
-	// and put the negation in constraint tensor
-	let mut c: Vec<Vec<Vec<Expression<F>>>> = Vec::new();
-
-
-	
-	for i in 0..NROWS {
-            c.push(-u[i].clone());
-        }
-	
-
-
-		    
-            for i in 0..NROWS {
-                let mut row: Vec<Expression<F>> = Vec::new();
-                for j in 0..NCOLS {
-                    row.push(virtual_cells.query_advice(aadv[i][j], Rotation::cur()));
-                }
-                a.push(row);
-            }
-
-
-	
-
-    }
-    
-    fn configure(cs: &mut ConstraintSystem<F>) -> Conv2dConfig<F,IH,IW,CHIN,CHOUT,KH,KW,BITS> {
+    fn configure(
+        cs: &mut ConstraintSystem<F>,
+    ) -> Conv2dConfig<F, IH, IW, CHIN, CHOUT, KH, KW, BITS> {
         let advice = Self::define_advice(&mut cs);
-	let qs = cs.selector();
+        let qs = cs.selector();
 
         cs.create_gate("cnvmul", |virtual_cells| {
-            // 'allocate' all the advice  and selector cols by querying the cs with the labels
+            // 'allocate' all the advice and selector cols by querying the cs with the labels
             let q = virtual_cells.query_selector(qs);
-            let mut kernel: Vec<Vec<Vec<Vec<Expression<F>>>>> = Vec::new();
 
-            let mut v: Vec<Expression<F>> = Vec::new();
+            let kernel_ex: Vec<Vec<Vec<Vec<Expresssion<F>>>>> =
+                map4::<_, _, CHOUT, CHIN, KH, KW>(|i, j, k, l| {
+                    virtual_cells.query_advice(advice.kernel[i][j][k][l], Rotation::cur())
+                });
+            let input_ex: Vec<Vec<Vec<Expression<F>>>> = map3::<_, _, CHIN, IH, IW>(|i, j, k| {
+                virtual_cells.query_advice(advice.lin_output[i][j][k], Rotation::cur())
+            });
+            let lin_output_ex: Vec<Vec<Vec<Expression<F>>>> =
+                map3::<_, _, CHOUT, OH, OW>(|i, j, k| {
+                    virtual_cells.query_advice(advice.lin_output[i][j][k], Rotation::cur())
+                });
+            let nl_output_ex: Vec<Vec<Vec<Expression<F>>>> =
+                map3::<_, _, CHOUT, OH, OW>(|i, j, k| {
+                    virtual_cells.query_advice(advice.nl_output[i][j][k], Rotation::cur())
+                });
 
-            let mut r: Vec<Expression<F>> = Vec::new();
-            for j in 0..NCOLS {
-                v.push(virtual_cells.query_advice(vadv[j], Rotation::cur()));
-            }
+            // We put the negation -lin_output_ex in constraint tensor.
+            let constraints: Vec<Vec<Vec<Expression<F>>>> =
+                map3::<_, _, CHOUT, OH, OW>(|i, j, k| -lin_output_ex[i][j][k].clone());
 
+            // Now we compute the convolution expression, collect it in a CHOUT x OH x OW tensor, and add it to constraints
 
-            for i in 0..NROWS {
-                r.push(virtual_cells.query_advice(radv[i], Rotation::cur()));
-            }
-
-            // build the constraints c[i] is -u_i + \sum_j a_{ij} v_j
-            let mut c: Vec<Expression<F>> = Vec::new();
-            // first c[i] = -u[i]
-            for i in 0..NROWS {
-                c.push(-u[i].clone());
-            }
-
-            for i in 0..NROWS {
-                for j in 0..NCOLS {
-                    c[i] = c[i].clone() + a[i][j].clone() * v[j].clone();
-                }
-            }
-
-            let constraints = (0..NROWS).map(|j| "c").zip(c);
+            let constraints = (0..(CHOUT * OH * OW))
+                .map(|j| "c")
+                .zip(flatten3(constraints));
             Constraints::with_selector(q, constraints)
         });
 
-	// let mut pub_col: Vec<Column<Instance>> = Vec::new();
-	// for _i in 0..NROWS {
+        // let mut pub_col: Vec<Column<Instance>> = Vec::new();
+        // for _i in 0..NROWS {
         //     pub_col.push(cs.instance_column());
         // }
 
-	// for i in 0..NROWS {
-	//     cs.enable_equality(pub_col[i]);
+        // for i in 0..NROWS {
+        //     cs.enable_equality(pub_col[i]);
         // }
-
 
         let relu_i_col = cs.lookup_table_column();
         let relu_o_col = cs.lookup_table_column();
 
-	for i in 0..NROWS {
+        for i in 0..NROWS {
             let _ = cs.lookup(|cs| {
-		vec![
+                vec![
                     (cs.query_advice(uadv[i], Rotation::cur()), relu_i_col),
                     (cs.query_advice(radv[i], Rotation::cur()), relu_o_col),
-		]
+                ]
             });
-	}
+        }
 
         Self {
             a: aadv,
@@ -278,7 +167,7 @@ impl<F: FieldExt, const IH: usize, const IW: usize, const CHIN: usize, const CHO
             // o_col,
             relu_i_col,
             relu_o_col,
-//            pub_col,
+            //            pub_col,
             _marker: PhantomData,
         }
     }
@@ -338,9 +227,9 @@ struct MvrlCircuit<F: FieldExt, const NROWS: usize, const NCOLS: usize, const BI
     v: Vec<Value<Assigned<F>>>,
     u: Vec<Value<Assigned<F>>>,
     r: Vec<Value<Assigned<F>>>,
-//    wasa: Value<Assigned<F>>,
+    //    wasa: Value<Assigned<F>>,
     // Public input (from prover).
-//    wasc: Value<Assigned<F>>,
+    //    wasc: Value<Assigned<F>>,
 }
 //impl<F: FieldExt, const RANGE: usize> MvmulCircuit<F, RANGE> {}
 
@@ -377,16 +266,16 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize, const BITS: usize> Cir
         for _i in 0..NROWS {
             r.push(Value::default());
         }
-  //      let wasa: Value<Assigned<F>> = Value::default();
-   //     let wasc: Value<Assigned<F>> = Value::default();
+        //      let wasa: Value<Assigned<F>> = Value::default();
+        //     let wasc: Value<Assigned<F>> = Value::default();
 
         MvrlCircuit {
             a,
             v,
             u,
             r,
-     //       wasa,
-       //     wasc,
+            //       wasa,
+            //     wasc,
         }
     }
 
@@ -403,7 +292,7 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize, const BITS: usize> Cir
         // mvmul
         let mut arr = Vec::new();
 
-	layouter.assign_region(
+        layouter.assign_region(
             || "Assign values", // the name of the region
             |mut region| {
                 let offset = 0;
@@ -426,25 +315,28 @@ impl<F: FieldExt, const NROWS: usize, const NCOLS: usize, const BITS: usize> Cir
                 }
 
                 for i in 0..NROWS {
-		    arr.push(
-			region.assign_advice(|| format!("r_{i}"), config.r[i], offset, || self.r[i])?
-			);
+                    arr.push(region.assign_advice(
+                        || format!("r_{i}"),
+                        config.r[i],
+                        offset,
+                        || self.r[i],
+                    )?);
                 }
 
                 for j in 0..NCOLS {
                     region.assign_advice(|| format!("v_{j}"), config.v[j], offset, || self.v[j])?;
                 }
 
-                Ok(()) 
+                Ok(())
             },
         )?;
 
         config.alloc_table(&mut layouter)?;
-//        let c = config.alloc_private_and_public_inputs(&mut layouter, self.wasa, self.wasc)?;
+        //        let c = config.alloc_private_and_public_inputs(&mut layouter, self.wasa, self.wasc)?;
 
-	// for i in 0..NROWS {
+        // for i in 0..NROWS {
         //     layouter.constrain_instance(arr[i].cell(), config.pub_col[i], 0)?; // equality for r and the pub_col? Why do we need the pub_col?
-	// }
+        // }
 
         Ok(())
     }
@@ -474,8 +366,8 @@ mod tests {
         let u_1: u64 = 39;
         let r_0: u64 = 17;
         let r_1: u64 = 39;
-//        let wasa: Value<Assigned<F>> = Value::known((-F::from(3)).into());
-//        let wasc: Value<Assigned<F>> = Value::known(F::from(0).into());
+        //        let wasa: Value<Assigned<F>> = Value::known((-F::from(3)).into());
+        //        let wasc: Value<Assigned<F>> = Value::known(F::from(0).into());
 
         let pub_inputs = vec![F::from(r_0), F::from(r_1), F::from(r_1)];
         // Successful cases
@@ -503,8 +395,8 @@ mod tests {
                 Value::known(F::from(r_0).into()),
                 Value::known(F::from(r_1).into()),
             ],
-  //          wasa,
-   //         wasc,
+            //          wasa,
+            //         wasc,
         };
 
         // The MockProver arguments are log_2(nrows), the circuit (with advice already assigned), and the instance variables.
@@ -514,7 +406,7 @@ mod tests {
         prover.assert_satisfied();
     }
 
-        #[test]
+    #[test]
     fn test_mvrl_withneg() {
         let k = 9; //2^k rows
         let a_00: u64 = 1;
@@ -551,8 +443,8 @@ mod tests {
                 Value::known(F::from(r_0).into()),
                 Value::known(F::from(r_1).into()),
             ],
-  //          wasa,
-   //         wasc,
+            //          wasa,
+            //         wasc,
         };
 
         // The MockProver arguments are log_2(nrows), the circuit (with advice already assigned), and the instance variables.
@@ -561,7 +453,6 @@ mod tests {
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
     }
-
 
     #[test]
     #[should_panic]
@@ -578,11 +469,11 @@ mod tests {
         let r_0: u64 = 17;
         let r_1: u64 = 212;
 
-//        let wasa: Value<Assigned<F>> = Value::known((-F::from(3)).into());
- //       let wasc: Value<Assigned<F>> = Value::known(F::from(0).into());
+        //        let wasa: Value<Assigned<F>> = Value::known((-F::from(3)).into());
+        //       let wasc: Value<Assigned<F>> = Value::known(F::from(0).into());
 
-	let pub_inputs = vec![F::from(r_0),F::from(r_1)];
-//        let pub_inputs = vec![F::from(0)];
+        let pub_inputs = vec![F::from(r_0), F::from(r_1)];
+        //        let pub_inputs = vec![F::from(0)];
 
         // Successful cases
 
@@ -609,9 +500,8 @@ mod tests {
                 Value::known(F::from(r_0).into()),
                 Value::known(F::from(r_1).into()),
             ],
-
-   //         wasa,
-   //         wasc,
+            //         wasa,
+            //         wasc,
         };
 
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
