@@ -13,6 +13,7 @@ use pasta_curves::{pallas, vesta};
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
 
+use crate::fieldutils::i32tofelt;
 use crate::tensorutils::{dot3, flatten3, flatten4, map3, map3r, map4, map4r};
 
 // The linear part of a 2D convolution layer.
@@ -138,6 +139,28 @@ impl<
             lin_output,
         }
     }
+
+    fn from_i32(
+        kernel: Vec<Vec<Vec<Vec<i32>>>>,
+        input: Vec<Vec<Vec<i32>>>,
+        lin_output: Vec<Vec<Vec<i32>>>,
+    ) -> Self {
+        let kernel = map4::<_, _, CHOUT, CHIN, KH, KW>(|i, j, k, l| {
+            Value::known(i32tofelt::<F>(kernel[i][j][k][l]).into())
+        });
+        let input = map3::<_, _, CHIN, IH, IW>(|i, j, k| {
+            Value::known(i32tofelt::<F>(input[i][j][k]).into())
+        });
+        let lin_output = map3::<_, _, CHOUT, OH, OW>(|i, j, k| {
+            Value::known(i32tofelt::<F>(lin_output[i][j][k]).into())
+        });
+
+        Self {
+            kernel,
+            input,
+            lin_output,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -231,20 +254,32 @@ impl<
                         //slice input to patch of kernel shape at this location
                         println!("input_ex.len(): {:?}", input_ex.len());
                         println!("CHIN: {:?}", CHIN);
-                        println!("filter {} row {} col {} KH {} KW {} 0..{} {}..{} {}..{}",filter, row, col, KH, KW, CHIN,row,(row + KH),col,(col + KW));
+                        println!(
+                            "filter {} row {} col {} KH {} KW {} 0..{} {}..{} {}..{}",
+                            filter,
+                            row,
+                            col,
+                            KH,
+                            KW,
+                            CHIN,
+                            row,
+                            (row + KH),
+                            col,
+                            (col + KW)
+                        );
                         let mut patch: Vec<Vec<Vec<Expression<F>>>> = Vec::new();
                         for i in 0..CHIN {
                             let mut channel: Vec<Vec<Expression<F>>> = Vec::new();
-                            for j in row..(row+KH) {
+                            for j in row..(row + KH) {
                                 let mut therow: Vec<Expression<F>> = Vec::new();
-                                for k in col..(col+KW) {
+                                for k in col..(col + KW) {
                                     therow.push(input_ex[i][j][k].clone());
                                 }
                                 channel.push(therow);
                             }
                             patch.push(channel);
                         }
-                        
+
                         //let patch = &input_ex[0..CHIN][row..(row + KH)][col..(col + KW)];
                         println!("HERE");
                         let conv2d_ex = dot3(&patch.to_vec(), &kernel);
