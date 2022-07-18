@@ -456,6 +456,8 @@ mod tests {
             Conv2dAssigned::<F, 3, 3, 2, 1, 2, 2, 2, 2, 8>::from_values(kernel, input, output);
 
         let circuit = Cnv2dCircuit::<F, 3, 3, 2, 1, 2, 2, 2, 2, 8> { assigned };
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
     }
 }
 
