@@ -74,8 +74,6 @@ impl Chip<Fp> for XorChip {
     }
 }
 
-struct Foo;
-
 impl XorChip {
     fn new(config: XorChipConfig) -> Self {
         XorChip { config }

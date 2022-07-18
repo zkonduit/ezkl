@@ -1,3 +1,4 @@
+mod cnvrl;
 mod fieldutils;
 mod mmul;
 mod mvmul2;

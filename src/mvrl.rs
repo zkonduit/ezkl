@@ -17,9 +17,9 @@ use std::marker::PhantomData;
 struct MvrlConfig<F: FieldExt, const NROWS: usize, const NCOLS: usize, const BITS: usize> {
     // Config holds labels; u = Av, r = relu(u)
     a: Vec<Vec<Column<Advice>>>, // Matrix
-    v: Vec<Column<Advice>>,
-    u: Vec<Column<Advice>>,
-    r: Vec<Column<Advice>>,
+    v: Vec<Column<Advice>>,      //input
+    u: Vec<Column<Advice>>,      //lin_output
+    r: Vec<Column<Advice>>,      //nl_output
     relu_i_col: TableColumn,
     relu_o_col: TableColumn,
     //    pub_col: Vec<Column<Instance>>,
@@ -323,7 +323,7 @@ mod tests {
         //        let wasa: Value<Assigned<F>> = Value::known((-F::from(3)).into());
         //        let wasc: Value<Assigned<F>> = Value::known(F::from(0).into());
 
-        let pub_inputs = vec![F::from(r_0), F::from(r_1), F::from(r_1)];
+        //        let pub_inputs = vec![F::from(r_0), F::from(r_1), F::from(r_1)];
         // Successful cases
 
         let circuit = MvrlCircuit::<F, 2, 2, 8> {
@@ -426,7 +426,7 @@ mod tests {
         //        let wasa: Value<Assigned<F>> = Value::known((-F::from(3)).into());
         //       let wasc: Value<Assigned<F>> = Value::known(F::from(0).into());
 
-        let pub_inputs = vec![F::from(r_0), F::from(r_1)];
+        //   let pub_inputs = vec![F::from(r_0), F::from(r_1)];
         //        let pub_inputs = vec![F::from(0)];
 
         // Successful cases
