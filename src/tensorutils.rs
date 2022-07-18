@@ -119,6 +119,16 @@ pub fn dot3<F: FieldExt>(
     result
 }
 
+pub fn dot3u(a: &Vec<Vec<Vec<u64>>>, b: &Vec<Vec<Vec<u64>>>) -> u64 {
+    let aflat = a.into_iter().flatten().flatten(); //flatten3(a);
+    let bflat = b.into_iter().flatten().flatten();
+    let result = aflat
+        .zip(bflat)
+        .map(|(x, y)| x.clone() * y.clone())
+        .fold(0u64, |sum, next| sum.clone() + next.clone());
+    result
+}
+
 mod test {
     use super::*;
     #[test]
@@ -180,4 +190,43 @@ mod test {
         ];
         assert_eq!(t, target);
     }
+
+    // #[test]
+    // fn dot() {
+    //     let input = vec![
+    //         vec![
+    //             vec![0u64, 1u64, 2u64],
+    //             vec![3u64, 4u64, 5u64],
+    //             vec![6u64, 7u64, 8u64],
+    //         ],
+    //         vec![
+    //             vec![1u64, 2u64, 3u64],
+    //             vec![4u64, 5u64, 6u64],
+    //             vec![7u64, 8u64, 9u64],
+    //         ],
+    //     ];
+    //     let kernels = vec![vec![
+    //         vec![vec![0u64, 1u64], vec![2u64, 3u64]],
+    //         vec![vec![1u64, 2u64], vec![3u64, 4u64]],
+    //     ]];
+    //     let output = vec![vec![vec![56u64, 72u64], vec![104u64, 120u64]]];
+
+    //     const CHOUT: usize = 1;
+    //     const CHIN: usize = 2;
+    //     const OH: usize = 2;
+    //     const OW: usize = 2;
+    //     const KH: usize = 2;
+    //     const KW: usize = 2;
+    //     for filter in 0..CHOUT {
+    //         let kernel = kernels[filter].clone(); //CHIN x KH x KW
+    //         for row in 0..OH {
+    //             for col in 0..OW {
+    //                 //slice input to patch of kernel shape at this location
+    //                 let patch = &input[0..CHIN][row..(row + KH)][col..(col + KW)];
+    //                 let res = dot3(&patch, &kernel);
+    //                 println!("{:?}", res);
+    //             }
+    //         }
+    //     }
+    // }
 }

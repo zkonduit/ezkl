@@ -208,7 +208,7 @@ impl<
                     virtual_cells.query_advice(advice.kernel[i][j][k][l], Rotation::cur())
                 });
             let input_ex: Vec<Vec<Vec<Expression<F>>>> = map3::<_, _, CHIN, IH, IW>(|i, j, k| {
-                virtual_cells.query_advice(advice.lin_output[i][j][k], Rotation::cur())
+                virtual_cells.query_advice(advice.input[i][j][k], Rotation::cur())
             });
             let lin_output_ex: Vec<Vec<Vec<Expression<F>>>> =
                 map3::<_, _, CHOUT, OH, OW>(|i, j, k| {
@@ -229,7 +229,24 @@ impl<
                 for row in 0..OH {
                     for col in 0..OW {
                         //slice input to patch of kernel shape at this location
-                        let patch = &input_ex[0..CHIN][row..(row + KH)][col..(col + KW)];
+                        println!("input_ex.len(): {:?}", input_ex.len());
+                        println!("CHIN: {:?}", CHIN);
+                        println!("filter {} row {} col {} KH {} KW {} 0..{} {}..{} {}..{}",filter, row, col, KH, KW, CHIN,row,(row + KH),col,(col + KW));
+                        let mut patch: Vec<Vec<Vec<Expression<F>>>> = Vec::new();
+                        for i in 0..CHIN {
+                            let mut channel: Vec<Vec<Expression<F>>> = Vec::new();
+                            for j in row..(row+KH) {
+                                let mut therow: Vec<Expression<F>> = Vec::new();
+                                for k in col..(col+KW) {
+                                    therow.push(input_ex[i][j][k].clone());
+                                }
+                                channel.push(therow);
+                            }
+                            patch.push(channel);
+                        }
+                        
+                        //let patch = &input_ex[0..CHIN][row..(row + KH)][col..(col + KW)];
+                        println!("HERE");
                         let conv2d_ex = dot3(&patch.to_vec(), &kernel);
                         constraints[filter][row][col] =
                             constraints[filter][row][col].clone() + conv2d_ex;
@@ -460,6 +477,16 @@ mod tests {
         prover.assert_satisfied();
     }
 }
+
+// const IH: usize,
+// const IW: usize,
+// const CHIN: usize,
+// const CHOUT: usize,
+// const KH: usize,
+// const KW: usize,
+// const OH: usize,
+// const OW: usize,
+// const BITS: usize,
 
 //         let a_00: u64 = 1;
 //         let a_01: u64 = 2;
