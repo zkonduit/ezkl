@@ -16,7 +16,7 @@ use std::marker::PhantomData;
 use crate::fieldutils::i32tofelt;
 
 #[derive(Clone)]
-struct Nonlin1d<F: FieldExt, Inner, const LEN: usize> {
+pub struct Nonlin1d<F: FieldExt, Inner, const LEN: usize> {
     input: Vec<Inner>,
     output: Vec<Inner>,
     _marker: PhantomData<F>,
@@ -32,6 +32,9 @@ impl<F: FieldExt, Inner, const LEN: usize> Nonlin1d<F, Inner, LEN> {
             _marker: PhantomData,
         }
     }
+    pub fn without_witnesses() -> Nonlin1d<F, Value<Assigned<F>>, LEN> {
+        Nonlin1d::<F, Value<Assigned<F>>, LEN>::fill(|i| Value::default())
+    }
 }
 
 #[derive(Clone)]
@@ -41,22 +44,38 @@ struct NonlinTable<const INBITS: usize, const OUTBITS: usize> {
 }
 
 #[derive(Clone)]
-struct NonlinConfig1d<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> {
+pub struct NonlinConfig1d<
+    F: FieldExt,
+    const LEN: usize,
+    const INBITS: usize,
+    const OUTBITS: usize,
+    NL: Nonlinearity<F>,
+> {
     advice: Nonlin1d<F, Column<Advice>, LEN>,
     table: NonlinTable<INBITS, OUTBITS>,
+    _marker: PhantomData<NL>,
 }
 
 // trait NonlinFn<F> {
 //     fn function() -> impl Fn(F) -> F {}
 // }
 
-impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize>
-    NonlinConfig1d<F, LEN, INBITS, OUTBITS>
+impl<
+        F: FieldExt,
+        const LEN: usize,
+        const INBITS: usize,
+        const OUTBITS: usize,
+        NL: 'static + Nonlinearity<F>,
+    > NonlinConfig1d<F, LEN, INBITS, OUTBITS, NL>
 {
     fn define_advice(cs: &mut ConstraintSystem<F>) -> Nonlin1d<F, Column<Advice>, LEN> {
         Nonlin1d::<F, Column<Advice>, LEN>::fill(|i| cs.advice_column())
     }
-    fn configure(cs: &mut ConstraintSystem<F>) -> NonlinConfig1d<F, LEN, INBITS, OUTBITS> {
+
+    pub fn composable_configure(
+        advice: Nonlin1d<F, Column<Advice>, LEN>,
+        cs: &mut ConstraintSystem<F>,
+    ) -> NonlinConfig1d<F, LEN, INBITS, OUTBITS, NL> {
         let advice = Self::define_advice(cs);
         let table = NonlinTable {
             table_input: cs.lookup_table_column(),
@@ -78,7 +97,40 @@ impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize>
             });
         }
 
-        Self { advice, table }
+        Self {
+            advice,
+            table,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn configure(cs: &mut ConstraintSystem<F>) -> NonlinConfig1d<F, LEN, INBITS, OUTBITS, NL> {
+        let advice = Self::define_advice(cs);
+        let table = NonlinTable {
+            table_input: cs.lookup_table_column(),
+            table_output: cs.lookup_table_column(),
+        };
+
+        for i in 0..LEN {
+            let _ = cs.lookup(|cs| {
+                vec![
+                    (
+                        cs.query_advice(advice.input[i], Rotation::cur()),
+                        table.table_input,
+                    ),
+                    (
+                        cs.query_advice(advice.output[i], Rotation::cur()),
+                        table.table_output,
+                    ),
+                ]
+            });
+        }
+
+        Self {
+            advice,
+            table,
+            _marker: PhantomData,
+        }
     }
 
     // Allocates all legal input-output tuples for the function in the first 2^k rows
@@ -115,9 +167,37 @@ impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize>
             },
         )
     }
+
+    pub fn layout(
+        &self,
+        assigned: &Nonlin1d<F, Value<Assigned<F>>, LEN>,
+        layouter: &mut impl Layouter<F>,
+    ) -> Result<(), halo2_proofs::plonk::Error> {
+        layouter.assign_region(
+            || "Assign values", // the name of the region
+            |mut region| {
+                let offset = 0;
+
+                for i in 0..LEN {
+                    region.assign_advice(
+                        || format!("nl_{i}"),
+                        self.advice.input[i], // Column<Advice>
+                        offset,
+                        || assigned.input[i], //Assigned<F>
+                    )?;
+                }
+
+                Ok(())
+            },
+        )?;
+
+        self.alloc_table(layouter, Box::new(NL::nonlinearity))?;
+
+        Ok(())
+    }
 }
 
-trait Nonlinearity<F: FieldExt> {
+pub trait Nonlinearity<F: FieldExt> {
     fn nonlinearity(x: i32) -> F;
 }
 
@@ -137,10 +217,10 @@ impl<
         const LEN: usize,
         const INBITS: usize,
         const OUTBITS: usize,
-        NL: 'static + Nonlinearity<F>,
+        NL: 'static + Nonlinearity<F> + Clone,
     > Circuit<F> for NLCircuit<F, LEN, INBITS, OUTBITS, NL>
 {
-    type Config = NonlinConfig1d<F, LEN, INBITS, OUTBITS>;
+    type Config = NonlinConfig1d<F, LEN, INBITS, OUTBITS, NL>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -187,7 +267,8 @@ impl<
 }
 
 // Now implement nonlinearity functions like this
-struct ReLu<F> {
+#[derive(Clone)]
+pub struct ReLu<F> {
     _marker: PhantomData<F>,
 }
 impl<F: FieldExt> Nonlinearity<F> for ReLu<F> {
@@ -212,7 +293,7 @@ mod tests {
     use std::time::{Duration, Instant};
 
     #[test]
-    fn test_mvrl_succeed() {
+    fn test_rl_succeed() {
         let k = 9; //2^k rows
         let a_00: u64 = 1;
         let a_01: u64 = 2;

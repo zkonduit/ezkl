@@ -33,7 +33,7 @@ use crate::tensorutils::{dot3, flatten3, flatten4, map3, map3r, map4, map4r};
 // We may add support for different types of padding and stride, and possibly dilation, groups, and bias.
 
 #[derive(Clone)]
-struct Conv2dAdvice<
+pub struct Conv2dAdvice<
     F: FieldExt,
     const IH: usize,
     const IW: usize,
@@ -45,9 +45,9 @@ struct Conv2dAdvice<
     const OW: usize,
     const BITS: usize,
 > {
-    kernel: Vec<Vec<Vec<Vec<Column<Advice>>>>>, // CHOUT x CHIN x KH x KW
-    input: Vec<Vec<Vec<Column<Advice>>>>,       // CHIN x IH x IW
-    lin_output: Vec<Vec<Vec<Column<Advice>>>>,  // CHOUT x OH x OW
+    pub kernel: Vec<Vec<Vec<Vec<Column<Advice>>>>>, // CHOUT x CHIN x KH x KW
+    pub input: Vec<Vec<Vec<Column<Advice>>>>,       // CHIN x IH x IW
+    pub lin_output: Vec<Vec<Vec<Column<Advice>>>>,  // CHOUT x OH x OW
     //    nl_output: Vec<Vec<Vec<Column<Advice>>>>,   // CHOUT x OH x OW
     _marker: PhantomData<F>,
 }
@@ -72,7 +72,7 @@ struct Conv2dExpression<
 }
 
 #[derive(Clone)]
-struct Conv2dAssigned<
+pub struct Conv2dAssigned<
     F: FieldExt,
     const IH: usize,
     const IW: usize,
@@ -84,10 +84,10 @@ struct Conv2dAssigned<
     const OW: usize,
     const BITS: usize,
 > {
-    kernel: Vec<Vec<Vec<Vec<Value<Assigned<F>>>>>>, // CHOUT x CHIN x KH x KW
-    input: Vec<Vec<Vec<Value<Assigned<F>>>>>,       // CHIN x IH x IW
-    lin_output: Vec<Vec<Vec<Value<Assigned<F>>>>>,  // CHOUT x OH x OW
-                                                    //    nl_output: Vec<Vec<Vec<Column<Advice>>>>,   // CHOUT x OH x OW
+    pub kernel: Vec<Vec<Vec<Vec<Value<Assigned<F>>>>>>, // CHOUT x CHIN x KH x KW
+    pub input: Vec<Vec<Vec<Value<Assigned<F>>>>>,       // CHIN x IH x IW
+    pub lin_output: Vec<Vec<Vec<Value<Assigned<F>>>>>,  // CHOUT x OH x OW
+                                                        //    nl_output: Vec<Vec<Vec<Column<Advice>>>>,   // CHOUT x OH x OW
 }
 
 impl<
@@ -103,7 +103,7 @@ impl<
         const BITS: usize,
     > Conv2dAssigned<F, IH, IW, CHIN, CHOUT, KH, KW, OH, OW, BITS>
 {
-    fn without_witnesses() -> Self {
+    pub fn without_witnesses() -> Self {
         let kernel: Vec<Vec<Vec<Vec<Value<Assigned<F>>>>>> =
             map4::<_, _, CHOUT, CHIN, KH, KW>(|i, j, k, l| Value::default());
         let input: Vec<Vec<Vec<Value<Assigned<F>>>>> =
@@ -117,7 +117,7 @@ impl<
         }
     }
 
-    fn from_values<T>(
+    pub fn from_values<T>(
         kernel: Vec<Vec<Vec<Vec<T>>>>,
         input: Vec<Vec<Vec<T>>>,
         lin_output: Vec<Vec<Vec<T>>>,
@@ -164,7 +164,7 @@ impl<
 }
 
 #[derive(Clone)]
-struct Conv2dConfig<
+pub struct Conv2dConfig<
     F: FieldExt,
     const IH: usize,
     const IW: usize,
@@ -176,10 +176,10 @@ struct Conv2dConfig<
     const OW: usize, //= (IW - KW + 1); //not supported yet in rust
     const BITS: usize,
 > {
-    advice: Conv2dAdvice<F, IH, IW, CHIN, CHOUT, KH, KW, OH, OW, BITS>,
+    pub advice: Conv2dAdvice<F, IH, IW, CHIN, CHOUT, KH, KW, OH, OW, BITS>,
     // relu_i_col: TableColumn,
     // relu_o_col: TableColumn,
-    q: Selector,
+    pub q: Selector,
     _marker: PhantomData<F>,
 }
 
@@ -216,7 +216,7 @@ impl<
         }
     }
 
-    fn configure(
+    pub fn configure(
         cs: &mut ConstraintSystem<F>,
     ) -> Conv2dConfig<F, IH, IW, CHIN, CHOUT, KH, KW, OH, OW, BITS> {
         let advice = Self::define_advice(cs);
@@ -324,6 +324,51 @@ impl<
             // pub_col,
             _marker: PhantomData,
         }
+    }
+
+    pub fn layout(
+        &self,
+        assigned: &Conv2dAssigned<F, IH, IW, CHIN, CHOUT, KH, KW, OH, OW, BITS>,
+        layouter: &mut impl Layouter<F>,
+    ) -> Result<(), halo2_proofs::plonk::Error> {
+        layouter.assign_region(
+            || "Assign values", // the name of the region
+            |mut region| {
+                let offset = 0;
+
+                self.q.enable(&mut region, offset)?;
+                // let kernel_res: Vec<Vec<Vec<Vec<()>>>> =
+                map4r::<_, _, halo2_proofs::plonk::Error, CHOUT, CHIN, KH, KW>(|i, j, k, l| {
+                    region.assign_advice(
+                        || format!("kr_{i}_{j}_{k}_{l}"),
+                        self.advice.kernel[i][j][k][l], // Column<Advice>
+                        offset,
+                        || assigned.kernel[i][j][k][l], //Assigned<F>
+                    )
+                })?;
+
+                //                let input_res: Vec<Vec<Vec<_>>> =
+                map3r::<_, _, halo2_proofs::plonk::Error, CHIN, IH, IW>(|i, j, k| {
+                    region.assign_advice(
+                        || format!("in_{i}_{j}_{k}"),
+                        self.advice.input[i][j][k], // Column<Advice>
+                        offset,
+                        || assigned.input[i][j][k], //Assigned<F>
+                    )
+                })?;
+
+                map3r::<_, _, halo2_proofs::plonk::Error, CHOUT, OH, OW>(|i, j, k| {
+                    region.assign_advice(
+                        || format!("out_{i}_{j}_{k}"),
+                        self.advice.lin_output[i][j][k], // Column<Advice>
+                        offset,
+                        || assigned.lin_output[i][j][k], //Assigned<F>
+                    )
+                })?;
+
+                Ok(())
+            },
+        )
     }
 
     // // Allocates all legal input-output tuples for the ReLu function in the first 2^16 rows

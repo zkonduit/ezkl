@@ -2,6 +2,7 @@ mod cnvrl;
 mod fieldutils;
 mod mmul;
 //mod mobilenetv3;
+mod combine;
 mod mvmul2;
 mod mvrl;
 mod nl;
