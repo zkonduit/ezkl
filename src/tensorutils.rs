@@ -1,5 +1,20 @@
 use halo2_proofs::{arithmetic::FieldExt, plonk::Expression};
 
+pub fn map2<Inner, Func, const I: usize, const J: usize>(mut f: Func) -> Vec<Vec<Inner>>
+where
+    Func: FnMut(usize, usize) -> Inner,
+{
+    let mut a: Vec<Vec<Inner>> = Vec::new();
+    for i in 0..I {
+        let mut b: Vec<Inner> = Vec::new();
+        for j in 0..J {
+            b.push(f(i, j));
+        }
+        a.push(b);
+    }
+    a
+}
+
 pub fn map3<Inner, Func, const I: usize, const J: usize, const K: usize>(
     mut f: Func,
 ) -> Vec<Vec<Vec<Inner>>>

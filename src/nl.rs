@@ -52,7 +52,7 @@ pub struct NonlinConfig1d<
     const OUTBITS: usize,
     NL: Nonlinearity<F>,
 > {
-    advice: Nonlin1d<F, Column<Advice>, LEN>,
+    pub advice: Nonlin1d<F, Column<Advice>, LEN>,
     table: NonlinTable<INBITS, OUTBITS>,
     _marker: PhantomData<NL>,
 }
@@ -73,11 +73,11 @@ impl<
         Nonlin1d::<F, Column<Advice>, LEN>::fill(|i| cs.advice_column())
     }
 
+    /// composable_configure takes the advice as an argument, so parts can be filled in by caller
     pub fn composable_configure(
         advice: Nonlin1d<F, Column<Advice>, LEN>,
         cs: &mut ConstraintSystem<F>,
     ) -> NonlinConfig1d<F, LEN, INBITS, OUTBITS, NL> {
-        let advice = Self::define_advice(cs);
         let table = NonlinTable {
             table_input: cs.lookup_table_column(),
             table_output: cs.lookup_table_column(),
@@ -105,33 +105,10 @@ impl<
         }
     }
 
+    /// configure generates the advice
     pub fn configure(cs: &mut ConstraintSystem<F>) -> NonlinConfig1d<F, LEN, INBITS, OUTBITS, NL> {
         let advice = Self::define_advice(cs);
-        let table = NonlinTable {
-            table_input: cs.lookup_table_column(),
-            table_output: cs.lookup_table_column(),
-        };
-
-        for i in 0..LEN {
-            let _ = cs.lookup(|cs| {
-                vec![
-                    (
-                        cs.query_advice(advice.input[i], Rotation::cur()),
-                        table.table_input,
-                    ),
-                    (
-                        cs.query_advice(advice.output[i], Rotation::cur()),
-                        table.table_output,
-                    ),
-                ]
-            });
-        }
-
-        Self {
-            advice,
-            table,
-            _marker: PhantomData,
-        }
+        Self::composable_configure(advice, cs)
     }
 
     // Allocates all legal input-output tuples for the function in the first 2^k rows
