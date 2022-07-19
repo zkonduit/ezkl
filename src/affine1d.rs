@@ -139,7 +139,7 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> 
                 .map(|i| virtual_cells.query_advice(advice.output[i], Rotation::cur()))
                 .collect();
 
-            let bias: Vec<Expression<F>> = (0..OUT)
+            let biases: Vec<Expression<F>> = (0..OUT)
                 .map(|i| virtual_cells.query_advice(advice.biases[i], Rotation::cur()))
                 .collect();
 
@@ -157,6 +157,11 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> 
                     constraints[i] =
                         constraints[i].clone() + weights[i][j].clone() * input[j].clone();
                 }
+            }
+
+            // add the bias
+            for i in 0..OUT {
+                constraints[i] = constraints[i].clone() + biases[i].clone();
             }
 
             let constraints = (0..OUT).map(|i| "c").zip(constraints);

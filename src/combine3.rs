@@ -185,8 +185,8 @@ mod tests {
             vec![0, 1, 0, 0],
             vec![1, 0, 0, 0],
         ];
-        let l2biases: Vec<i32> = vec![0, 0, 0, 0];
-        let l2output: Vec<i32> = vec![-120, 104, 72, 56];
+        let l2biases: Vec<i32> = vec![0, 0, 0, 1];
+        let l2output: Vec<i32> = vec![-120, 104, 72, 57];
 
         let c2d_assigned = Conv2dAssigned::<F, 3, 3, 2, 1, 2, 2, 2, 2, 8>::from_values(
             kernel,
