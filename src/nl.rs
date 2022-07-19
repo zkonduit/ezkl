@@ -117,28 +117,11 @@ impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize>
     }
 }
 
-trait NLCircuit<F: FieldExt> {
-    fn nonlinearity(x: i32) -> F;
-}
-
 trait Nonlinearity<F: FieldExt> {
     fn nonlinearity(x: i32) -> F;
 }
 
-struct ReLu<F> {
-    _marker: PhantomData<F>,
-}
-impl<F: FieldExt> Nonlinearity<F> for ReLu<F> {
-    fn nonlinearity(x: i32) -> F {
-        if x < 0 {
-            F::zero()
-        } else {
-            i32tofelt(x)
-        }
-    }
-}
-
-struct ReLuCircuit<
+struct NLCircuit<
     F: FieldExt,
     const LEN: usize,
     const INBITS: usize,
@@ -149,32 +132,13 @@ struct ReLuCircuit<
     _marker: PhantomData<NL>, //    nonlinearity: Box<dyn Fn(F) -> F>,
 }
 
-// impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize, NL: Nonlinearity<F>>
-//     for ReLuCircuit<F, LEN, INBITS, OUTBITS, NL>
-// {
-//     fn nonlinearity(x: i32) -> F {
-//         if x < 0 {
-//             F::zero()
-//         } else {
-//             i32tofelt(x)
-//         }
-//     }
-// }
-
-// impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize>
-//     ReLuCircuit<F, LEN, INBITS, OUTBITS>
-// {
-//     fn nonlinearity(x: i32) -> F {
-//         if x < 0 {
-//             F::zero()
-//         } else {
-//             i32tofelt(x)
-//         }
-//     }
-// }
-
-impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> Circuit<F>
-    for ReLuCircuit<F, LEN, INBITS, OUTBITS, ReLu<F>>
+impl<
+        F: FieldExt,
+        const LEN: usize,
+        const INBITS: usize,
+        const OUTBITS: usize,
+        NL: 'static + Nonlinearity<F>,
+    > Circuit<F> for NLCircuit<F, LEN, INBITS, OUTBITS, NL>
 {
     type Config = NonlinConfig1d<F, LEN, INBITS, OUTBITS>;
     type FloorPlanner = SimpleFloorPlanner;
@@ -216,9 +180,23 @@ impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> C
             },
         )?;
 
-        config.alloc_table(&mut layouter, Box::new(ReLu::nonlinearity))?;
+        config.alloc_table(&mut layouter, Box::new(NL::nonlinearity))?;
 
         Ok(())
+    }
+}
+
+// Now implement nonlinearity functions like this
+struct ReLu<F> {
+    _marker: PhantomData<F>,
+}
+impl<F: FieldExt> Nonlinearity<F> for ReLu<F> {
+    fn nonlinearity(x: i32) -> F {
+        if x < 0 {
+            F::zero()
+        } else {
+            i32tofelt(x)
+        }
     }
 }
 
