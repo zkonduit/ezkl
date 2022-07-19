@@ -1,8 +1,11 @@
 mod cnvrl;
 mod fieldutils;
 mod mmul;
+//mod mobilenetv3;
 mod mvmul2;
 mod mvrl;
+mod nl;
 mod relu8;
 mod tensorutils;
-mod xor;
+//mod tfaddition;
+//mod xor;
