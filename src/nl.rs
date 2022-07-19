@@ -14,12 +14,13 @@ use rand::rngs::OsRng;
 use std::marker::PhantomData;
 
 use crate::fieldutils::i32tofelt;
+use crate::tensorutils::flatten3;
 
 #[derive(Clone)]
 pub struct Nonlin1d<F: FieldExt, Inner, const LEN: usize> {
-    input: Vec<Inner>,
-    output: Vec<Inner>,
-    _marker: PhantomData<F>,
+    pub input: Vec<Inner>,
+    pub output: Vec<Inner>,
+    pub _marker: PhantomData<F>,
 }
 impl<F: FieldExt, Inner, const LEN: usize> Nonlin1d<F, Inner, LEN> {
     pub fn fill<Func>(mut f: Func) -> Self
@@ -148,6 +149,7 @@ impl<
             |mut table| {
                 let mut row_offset = 0;
                 for int_input in smallest..largest {
+                    println!("{}->{:?}", int_input, nonlinearity(int_input));
                     let input: F = i32tofelt(int_input);
                     table.assign_cell(
                         || format!("nl_i_col row {}", row_offset),
@@ -256,6 +258,15 @@ impl<
                     )?;
                 }
 
+                for i in 0..LEN {
+                    region.assign_advice(
+                        || format!("nl_{i}"),
+                        config.advice.output[i], // Column<Advice>
+                        offset,
+                        || self.assigned.output[i], //Assigned<F>
+                    )?;
+                }
+
                 Ok(())
             },
         )?;
@@ -273,10 +284,42 @@ pub struct ReLu<F> {
 }
 impl<F: FieldExt> Nonlinearity<F> for ReLu<F> {
     fn nonlinearity(x: i32) -> F {
-        if x < 0 {
-            F::zero()
-        } else {
-            i32tofelt(x)
-        }
+        let out = if x < 0 { F::zero() } else { i32tofelt(x) };
+        //        println!("{}->{:?}", x, out);
+        out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use halo2_proofs::{
+        dev::{FailureLocation, MockProver, VerifyFailure},
+        pasta::Fp as F,
+        plonk::{Any, Circuit},
+    };
+    //     use nalgebra;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn test_relunl() {
+        let k = 9; //2^k rows
+        let output = vec![vec![vec![1u64, 2u64], vec![3u64, 4u64]]];
+        let relu_v: Vec<Value<Assigned<F>>> = flatten3(output)
+            .iter()
+            .map(|x| Value::known(F::from(*x).into()))
+            .collect();
+        let assigned: Nonlin1d<F, Value<Assigned<F>>, 4> = Nonlin1d {
+            input: relu_v.clone(),
+            output: relu_v,
+            _marker: PhantomData,
+        };
+
+        let circuit = NLCircuit::<F, 4, 8, 8, ReLu<F>> {
+            assigned,
+            _marker: PhantomData,
+        };
+        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
     }
 }
