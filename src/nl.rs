@@ -193,6 +193,24 @@ impl<
             },
         )?;
 
+        layouter.assign_region(
+            || "Assign values", // the name of the region
+            |mut region| {
+                let offset = 0;
+
+                for i in 0..LEN {
+                    region.assign_advice(
+                        || format!("nl_{i}"),
+                        self.advice.output[i], // Column<Advice>
+                        offset,
+                        || assigned.output[i], //Assigned<F>
+                    )?;
+                }
+
+                Ok(())
+            },
+        )?;
+
         self.alloc_table(layouter, Box::new(NL::nonlinearity))?;
 
         Ok(())
