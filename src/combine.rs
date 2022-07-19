@@ -140,45 +140,45 @@ impl<
 //
 //
 //
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use halo2_proofs::{
-        dev::{FailureLocation, MockProver, VerifyFailure},
-        pasta::Fp as F,
-        plonk::{Any, Circuit},
-    };
-    //     use nalgebra;
-    use std::time::{Duration, Instant};
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use halo2_proofs::{
+//         dev::{FailureLocation, MockProver, VerifyFailure},
+//         pasta::Fp as F,
+//         plonk::{Any, Circuit},
+//     };
+//     //     use nalgebra;
+//     use std::time::{Duration, Instant};
 
-    #[test]
-    fn test_cnv2d_succeed() {
-        let k = 9; //2^k rows
-        let input = vec![
-            vec![
-                vec![0u64, 1u64, 2u64],
-                vec![3u64, 4u64, 5u64],
-                vec![6u64, 7u64, 8u64],
-            ],
-            vec![
-                vec![1u64, 2u64, 3u64],
-                vec![4u64, 5u64, 6u64],
-                vec![7u64, 8u64, 9u64],
-            ],
-        ];
-        let kernel = vec![vec![
-            vec![vec![0u64, 1u64], vec![2u64, 3u64]],
-            vec![vec![1u64, 2u64], vec![3u64, 4u64]],
-        ]];
-        let output = vec![vec![vec![56u64, 72u64], vec![104u64, 120u64]]];
-        let assigned =
-            Conv2dAssigned::<F, 3, 3, 2, 1, 2, 2, 2, 2, 8>::from_values(kernel, input, output);
+//     #[test]
+//     fn test_cnv2d_succeed() {
+//         let k = 9; //2^k rows
+//         let input = vec![
+//             vec![
+//                 vec![0u64, 1u64, 2u64],
+//                 vec![3u64, 4u64, 5u64],
+//                 vec![6u64, 7u64, 8u64],
+//             ],
+//             vec![
+//                 vec![1u64, 2u64, 3u64],
+//                 vec![4u64, 5u64, 6u64],
+//                 vec![7u64, 8u64, 9u64],
+//             ],
+//         ];
+//         let kernel = vec![vec![
+//             vec![vec![0u64, 1u64], vec![2u64, 3u64]],
+//             vec![vec![1u64, 2u64], vec![3u64, 4u64]],
+//         ]];
+//         let output = vec![vec![vec![56u64, 72u64], vec![104u64, 120u64]]];
+//         let assigned =
+//             Conv2dAssigned::<F, 3, 3, 2, 1, 2, 2, 2, 2, 8>::from_values(kernel, input, output);
 
-        let circuit = Conv2dCircuit::<F, 3, 3, 2, 1, 2, 2, 2, 2, 8> { assigned };
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
-    }
-}
+//         let circuit = Conv2dCircuit::<F, 3, 3, 2, 1, 2, 2, 2, 2, 8> { assigned };
+//         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+//         prover.assert_satisfied();
+//     }
+// }
 
 // const IH: usize,
 // const IW: usize,
