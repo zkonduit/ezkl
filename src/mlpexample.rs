@@ -18,9 +18,7 @@ use crate::tensorutils::{dot3, flatten3, flatten4, map2, map3, map3r, map4, map4
 
 use crate::affine1d::{Affine1d, Affine1dConfig};
 use crate::layertrait::FourLayer;
-use crate::nl::{Nonlin1d, NonlinConfig1d, Nonlinearity, ReLu};
-
-use std::collections::HashMap;
+use crate::nonlin1d::{Nonlin1d, NonlinConfig1d, Nonlinearity, ReLu};
 
 // A columnar ReLu MLP
 #[derive(Clone)]
@@ -54,10 +52,10 @@ struct MyCircuit<
     const OUTBITS: usize,
 > {
     // circuit holds Values
-    l0_assigned: Affine1d<F, Value<Assigned<F>>, LEN, LEN>,
-    l1_assigned: Nonlin1d<F, Value<Assigned<F>>, LEN>,
-    l2_assigned: Affine1d<F, Value<Assigned<F>>, LEN, LEN>,
-    l3_assigned: Nonlin1d<F, Value<Assigned<F>>, LEN>,
+    l0: Affine1d<F, Value<Assigned<F>>, LEN, LEN>,
+    l1: Nonlin1d<F, Value<Assigned<F>>, LEN, ReLu<F>>,
+    l2: Affine1d<F, Value<Assigned<F>>, LEN, LEN>,
+    l3: Nonlin1d<F, Value<Assigned<F>>, LEN, ReLu<F>>,
 }
 
 impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> Circuit<F>
@@ -68,10 +66,10 @@ impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> C
 
     fn without_witnesses(&self) -> Self {
         Self {
-            l0_assigned: Affine1d::<F, Value<Assigned<F>>, LEN, LEN>::without_witnesses(),
-            l1_assigned: Nonlin1d::<F, Value<Assigned<F>>, LEN>::without_witnesses(),
-            l2_assigned: Affine1d::<F, Value<Assigned<F>>, LEN, LEN>::without_witnesses(),
-            l3_assigned: Nonlin1d::<F, Value<Assigned<F>>, LEN>::without_witnesses(),
+            l0: Affine1d::<F, Value<Assigned<F>>, LEN, LEN>::without_witnesses(),
+            l1: Nonlin1d::<F, Value<Assigned<F>>, LEN, ReLu<F>>::without_witnesses(),
+            l2: Affine1d::<F, Value<Assigned<F>>, LEN, LEN>::without_witnesses(),
+            l3: Nonlin1d::<F, Value<Assigned<F>>, LEN, ReLu<F>>::without_witnesses(),
         }
     }
 
@@ -79,7 +77,7 @@ impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> C
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let l0 = <Self::Config as FourLayer>::L0::configure(cs);
-        let l1_adv: Nonlin1d<F, Column<Advice>, LEN> = Nonlin1d {
+        let l1_adv: Nonlin1d<F, Column<Advice>, LEN, ReLu<F>> = Nonlin1d {
             input: l0.advice.output.clone(),
             output: (0..LEN).map(|i| cs.advice_column()).collect(),
             _marker: PhantomData,
@@ -94,7 +92,7 @@ impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> C
             _marker: PhantomData,
         };
         let l2 = <Self::Config as FourLayer>::L2::composable_configure(l2_adv, cs);
-        let l3_adv: Nonlin1d<F, Column<Advice>, LEN> = Nonlin1d {
+        let l3_adv: Nonlin1d<F, Column<Advice>, LEN, ReLu<F>> = Nonlin1d {
             input: l2.advice.output.clone(),
             output: (0..LEN).map(|i| cs.advice_column()).collect(),
             _marker: PhantomData,
@@ -122,10 +120,11 @@ impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> C
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        config.l0.layout(&(self.l0_assigned), &mut layouter)?;
-        config.l1.layout(&(self.l1_assigned), &mut layouter)?;
-        config.l2.layout(&(self.l2_assigned), &mut layouter)?;
-        let output_for_eq = config.l3.layout(&(self.l3_assigned), &mut layouter)?;
+        config.l0.layout(&(self.l0), &mut layouter)?;
+        config.l1.layout(&(self.l1), &mut layouter)?;
+        config.l2.layout(&(self.l2), &mut layouter)?;
+        // tie the last output to public inputs (instance column)
+        let output_for_eq = config.l3.layout(&(self.l3), &mut layouter)?;
         for i in 0..LEN {
             layouter.constrain_instance(output_for_eq[i].cell(), config.public_output, i)?;
         }
@@ -144,11 +143,7 @@ mod tests {
     };
     //     use nalgebra;
     use rand::prelude::*;
-    use std::{
-        collections::HashMap,
-        fmt,
-        time::{Duration, Instant},
-    };
+    use std::time::{Duration, Instant};
 
     #[test]
     fn test_forward() {
@@ -171,61 +166,26 @@ mod tests {
 
         // input data
         let l0input: Vec<i32> = vec![-3, -2, 1, 4];
-        // let l0output: Vec<i32> = vec![-4, 1, -2, -2]; //also l1input
-        // let l1output = vec![0, 1, 0, 0]; //also l2input
-        // let l2output: Vec<i32> = vec![4, 1, 2, -1]; // also l3input
-        // let l3output: Vec<i32> = vec![4, 1, 2, 0];
+
+        // Create the layers
         let mut l0 = Affine1d::<F, Value<Assigned<F>>, 4, 4>::from_parameters(l0weights, l0biases);
+        let mut l1 = Nonlin1d::<F, Value<Assigned<F>>, 4, ReLu<F>>::from_parameters();
         let mut l2 = Affine1d::<F, Value<Assigned<F>>, 4, 4>::from_parameters(l2weights, l2biases);
+        let mut l3 = Nonlin1d::<F, Value<Assigned<F>>, 4, ReLu<F>>::from_parameters();
 
-        let l0out = l0.forward(
-            l0input
-                .iter()
-                .map(|x| Value::known(i32tofelt::<F>(*x).into()))
-                .collect(),
-        );
+        // Assign the input
+        let l0input = l0input
+            .iter()
+            .map(|x| Value::known(i32tofelt::<F>(*x).into()))
+            .collect();
 
-        // forward  for l1
-        let l1: Nonlin1d<F, Value<Assigned<F>>, 4> = Nonlin1d {
-            input: l0out.clone(),
-            output: l0out
-                .iter()
-                .map(|x| {
-                    (x.map(|x| {
-                        <ReLu<F> as Nonlinearity<F>>::nonlinearity(felt_to_i32(x.evaluate()))
-                    }))
-                    .into()
-                })
-                .collect::<Vec<Value<Assigned<F>>>>(),
-            _marker: PhantomData,
-        };
-        println!("l1out {:?}", l1.output);
+        // Compute the forward pass and witness, assigning as we go
+        let l0out = l0.forward(l0input);
+        let l1out = l1.forward(l0out);
+        let l2out = l2.forward(l1out);
+        let l3out = l3.forward(l2out);
 
-        let l2out = l2.forward(l1.output.clone()); //should assign rest of l2
-
-        println!("l2out {:?}", l2out); //correct
-
-        // forward for l3
-        let l3: Nonlin1d<F, Value<Assigned<F>>, 4> = Nonlin1d {
-            input: l2out.clone(),
-            output: l2out
-                .iter()
-                .map(|x| {
-                    (x.map(|x| {
-                        <ReLu<F> as Nonlinearity<F>>::nonlinearity(felt_to_i32(x.evaluate()))
-                    }))
-                    .into()
-                })
-                .collect::<Vec<Value<Assigned<F>>>>(),
-            _marker: PhantomData,
-        };
-        println!("l3out {:?}", l3.output);
-        let circuit = MyCircuit::<F, 4, 8, 8> {
-            l0_assigned: l0,
-            l1_assigned: l1,
-            l2_assigned: l2,
-            l3_assigned: l3,
-        };
+        let circuit = MyCircuit::<F, 4, 8, 8> { l0, l1, l2, l3 };
 
         let prover = MockProver::run(
             k,
