@@ -6,6 +6,7 @@ mod affine1d;
 mod combine;
 mod combine3;
 mod layertrait;
+mod mlpexample;
 mod mvmul2;
 mod mvrl;
 mod nl;

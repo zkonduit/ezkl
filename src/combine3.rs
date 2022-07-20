@@ -156,6 +156,7 @@ mod tests {
         plonk::{Any, Circuit},
     };
     //     use nalgebra;
+    use rand::prelude::*;
     use std::time::{Duration, Instant};
 
     #[test]

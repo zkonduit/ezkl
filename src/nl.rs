@@ -54,6 +54,7 @@ pub struct NonlinConfig1d<
 > {
     pub advice: Nonlin1d<F, Column<Advice>, LEN>,
     table: NonlinTable<INBITS, OUTBITS>,
+    qlookup: Selector,
     _marker: PhantomData<NL>,
 }
 
@@ -83,15 +84,18 @@ impl<
             table_output: cs.lookup_table_column(),
         };
 
+        let qlookup = cs.complex_selector();
+
         for i in 0..LEN {
             let _ = cs.lookup(|cs| {
+                let qlookup = cs.query_selector(qlookup);
                 vec![
                     (
-                        cs.query_advice(advice.input[i], Rotation::cur()),
+                        qlookup.clone() * cs.query_advice(advice.input[i], Rotation::cur()),
                         table.table_input,
                     ),
                     (
-                        cs.query_advice(advice.output[i], Rotation::cur()),
+                        qlookup.clone() * cs.query_advice(advice.output[i], Rotation::cur()),
                         table.table_output,
                     ),
                 ]
@@ -101,6 +105,7 @@ impl<
         Self {
             advice,
             table,
+            qlookup,
             _marker: PhantomData,
         }
     }
@@ -126,7 +131,7 @@ impl<
             |mut table| {
                 let mut row_offset = 0;
                 for int_input in smallest..largest {
-                    println!("{}->{:?}", int_input, nonlinearity(int_input));
+                    //println!("{}->{:?}", int_input, nonlinearity(int_input));
                     let input: F = i32tofelt(int_input);
                     table.assign_cell(
                         || format!("nl_i_col row {}", row_offset),
@@ -142,6 +147,7 @@ impl<
                     )?;
                     row_offset += 1;
                 }
+                println!("Assigned Table");
                 Ok(())
             },
         )
@@ -157,6 +163,8 @@ impl<
             |mut region| {
                 let offset = 0;
 
+                self.qlookup.enable(&mut region, offset)?;
+
                 for i in 0..LEN {
                     region.assign_advice(
                         || format!("nl_{i}"),
@@ -165,15 +173,6 @@ impl<
                         || assigned.input[i], //Assigned<F>
                     )?;
                 }
-
-                Ok(())
-            },
-        )?;
-
-        layouter.assign_region(
-            || "Assign values", // the name of the region
-            |mut region| {
-                let offset = 0;
 
                 for i in 0..LEN {
                     region.assign_advice(
@@ -187,6 +186,15 @@ impl<
                 Ok(())
             },
         )?;
+
+        // layouter.assign_region(
+        //     || "Assign values", // the name of the region
+        //     |mut region| {
+        //         let offset = 0;
+
+        //         Ok(())
+        //     },
+        // )?;
 
         self.alloc_table(layouter, Box::new(NL::nonlinearity))?;
 
