@@ -157,8 +157,8 @@ impl<
         &self,
         assigned: &Nonlin1d<F, Value<Assigned<F>>, LEN>,
         layouter: &mut impl Layouter<F>,
-    ) -> Result<(), halo2_proofs::plonk::Error> {
-        layouter.assign_region(
+    ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+        let output_for_eq = layouter.assign_region(
             || "Assign values", // the name of the region
             |mut region| {
                 let offset = 0;
@@ -174,16 +174,18 @@ impl<
                     )?;
                 }
 
+                let mut output_for_equality = Vec::new();
                 for i in 0..LEN {
-                    region.assign_advice(
+                    let ofe = region.assign_advice(
                         || format!("nl_{i}"),
                         self.advice.output[i], // Column<Advice>
                         offset,
                         || assigned.output[i], //Assigned<F>
                     )?;
+                    output_for_equality.push(ofe);
                 }
 
-                Ok(())
+                Ok(output_for_equality)
             },
         )?;
 
@@ -198,7 +200,7 @@ impl<
 
         self.alloc_table(layouter, Box::new(NL::nonlinearity))?;
 
-        Ok(())
+        Ok(output_for_eq)
     }
 }
 

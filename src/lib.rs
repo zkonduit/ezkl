@@ -7,6 +7,7 @@ mod combine;
 mod combine3;
 mod layertrait;
 mod mlpexample;
+mod mlpexampleinstance;
 mod mvmul2;
 mod mvrl;
 mod nl;
