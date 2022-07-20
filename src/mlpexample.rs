@@ -184,6 +184,13 @@ mod tests {
         let l1out = l1.forward(l0out);
         let l2out = l2.forward(l1out);
         let l3out = l3.forward(l2out);
+        println!(
+            "{:?}",
+            l3out
+                .iter()
+                .map(|x| x.map(|y| felt_to_i32(y.evaluate())))
+                .collect::<Vec<Value<i32>>>()
+        );
 
         let circuit = MyCircuit::<F, 4, 8, 8> { l0, l1, l2, l3 };
 

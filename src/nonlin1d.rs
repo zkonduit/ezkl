@@ -13,7 +13,7 @@ use pasta_curves::{pallas, vesta};
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
 
-use crate::fieldutils::{felt_to_i32, i32tofelt};
+use crate::fieldutils::{self, felt_to_i32, i32tofelt};
 use crate::tensorutils::flatten3;
 
 pub trait Nonlinearity<F: FieldExt> {
@@ -314,6 +314,39 @@ impl<F: FieldExt> Nonlinearity<F> for ReLu<F> {
     }
 }
 
+#[derive(Clone)]
+pub struct Sigmoid<F, const L: usize, const K: usize> {
+    _marker: PhantomData<F>,
+}
+// L is our implicit or explicit denominator (fixed point d)
+// Usually want K=L
+impl<F: FieldExt, const L: usize, const K: usize> Nonlinearity<F> for Sigmoid<F, L, K> {
+    fn nonlinearity(x: i32) -> F {
+        let kix = (x as f32) / (K as f32);
+        let fout = (L as f32) / (1.0 + (-kix).exp());
+        let rounded = fout.round();
+        let xi: i32 = unsafe { rounded.to_int_unchecked() };
+        let felt = fieldutils::i32tofelt(xi);
+        //        println!("{}->{}->{}->{}->{}", x, kix, fout, rounded, xi);
+        felt
+    }
+}
+
+#[derive(Clone)]
+pub struct DivideBy<F, const D: usize> {
+    _marker: PhantomData<F>,
+}
+impl<F: FieldExt, const D: usize> Nonlinearity<F> for DivideBy<F, D> {
+    fn nonlinearity(x: i32) -> F {
+        let d_inv_x = (x as f32) / (D as f32);
+        let rounded = d_inv_x.round();
+        let integral: i32 = unsafe { rounded.to_int_unchecked() };
+        let felt = fieldutils::i32tofelt(integral);
+        //        println!("{}->{}->{}", x, d_inv_x, integral);
+        felt
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -345,5 +378,21 @@ mod tests {
         };
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
+    }
+
+    #[test]
+    fn test_sigmoid() {
+        for i in -127..127 {
+            let r = <Sigmoid<F, 128, 128> as Nonlinearity<F>>::nonlinearity(i);
+            //            println!("{i}, {:?}", r);
+        }
+    }
+
+    #[test]
+    fn test_divide() {
+        for i in -127..127 {
+            let r = <DivideBy<F, 32> as Nonlinearity<F>>::nonlinearity(i);
+            //            println!("{i}, {:?}", r);
+        }
     }
 }
