@@ -136,6 +136,7 @@ impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> C
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fieldutils::felt_to_i32;
     use halo2_proofs::{
         dev::{FailureLocation, MockProver, VerifyFailure},
         pasta::Fp as F,
@@ -184,27 +185,16 @@ mod tests {
                 .collect(),
         );
 
-        let mut ridiculous = HashMap::<String, F>::new();
-        let INBITS = 8;
-        let base = 2i32;
-        let smallest = -base.pow(INBITS as u32 - 1);
-        let largest = base.pow(INBITS as u32 - 1);
-        for int_input in smallest..largest {
-            let va_input: Value<Assigned<F>> = Value::known(i32tofelt::<F>(int_input).into());
-            let table_input = format!("{:?}", va_input);
-            let table_output: F = <ReLu<F> as Nonlinearity<F>>::nonlinearity(int_input);
-            //            println!("{}, {:?}", table_input, table_output);
-            ridiculous.insert(table_input, table_output);
-        }
-
-        // forward for l1
+        // forward  for l1
         let l1: Nonlin1d<F, Value<Assigned<F>>, 4> = Nonlin1d {
             input: l0out.clone(),
             output: l0out
                 .iter()
                 .map(|x| {
-                    println!("{:?}", x);
-                    Value::known(ridiculous[&format!("{:?}", x)]).into()
+                    (x.map(|x| {
+                        <ReLu<F> as Nonlinearity<F>>::nonlinearity(felt_to_i32(x.evaluate()))
+                    }))
+                    .into()
                 })
                 .collect::<Vec<Value<Assigned<F>>>>(),
             _marker: PhantomData,
@@ -215,14 +205,16 @@ mod tests {
 
         println!("l2out {:?}", l2out); //correct
 
-        // forward for l1
+        // forward for l3
         let l3: Nonlin1d<F, Value<Assigned<F>>, 4> = Nonlin1d {
             input: l2out.clone(),
             output: l2out
                 .iter()
                 .map(|x| {
-                    //                  println!("{:?}", x);
-                    Value::known(ridiculous[&format!("{:?}", x)]).into()
+                    (x.map(|x| {
+                        <ReLu<F> as Nonlinearity<F>>::nonlinearity(felt_to_i32(x.evaluate()))
+                    }))
+                    .into()
                 })
                 .collect::<Vec<Value<Assigned<F>>>>(),
             _marker: PhantomData,

@@ -11,3 +11,7 @@ halo2_proofs = { git = "https://github.com/zcash/halo2.git", rev = "a898d65ae3ad
 nalgebra = "0.31"
 pasta_curves = "0.4"
 rand = "0.8"
+#tensorflow = {version = "0.18.0", features = ["eager"]}
+
+
+
