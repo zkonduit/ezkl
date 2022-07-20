@@ -97,6 +97,51 @@ impl<F: FieldExt, Inner, const IN: usize, const OUT: usize> Affine1d<F, Inner, I
     }
 }
 
+impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1d<F, Value<Assigned<F>>, IN, OUT> {
+    /// Assign parameters, leaving input and output as unknown Values.
+    pub fn from_parameters(weights: Vec<Vec<i32>>, biases: Vec<i32>) -> Self {
+        let biases: Vec<Value<Assigned<F>>> = (0..OUT)
+            .map(|i| Value::known(i32tofelt::<F>(biases[i]).into()))
+            .collect();
+        let weights: Vec<Vec<Value<Assigned<F>>>> =
+            map2::<_, _, OUT, IN>(|i, j| Value::known(i32tofelt::<F>(weights[i][j]).into()));
+
+        let input: Vec<Value<Assigned<F>>> = (0..IN).map(|i| Value::default()).collect();
+        let output: Vec<Value<Assigned<F>>> = (0..OUT).map(|i| Value::default()).collect();
+
+        Affine1d {
+            input,
+            output,
+            weights,
+            biases,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Take a layer with set parameters, accept an input, perform forward pass, and return output.
+    /// Mutates self to assign the input and computed output.
+    pub fn forward(&mut self, input: Vec<Value<Assigned<F>>>) -> Vec<Value<Assigned<F>>> {
+        self.input = input.clone();
+
+        let mut output: Vec<Value<Assigned<F>>> =
+            (0..OUT).map(|i| Value::known(F::zero().into())).collect();
+
+        for i in 0..OUT {
+            for j in 0..IN {
+                output[i] = output[i] + self.weights[i][j] * input[j];
+            }
+        }
+
+        // add the bias
+        for i in 0..OUT {
+            output[i] = output[i] + self.biases[i];
+        }
+
+        self.output = output.clone();
+        output
+    }
+}
+
 #[derive(Clone)]
 pub struct Affine1dConfig<F: FieldExt, const IN: usize, const OUT: usize> {
     pub advice: Affine1d<F, Column<Advice>, IN, OUT>,
