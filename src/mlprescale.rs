@@ -2,16 +2,20 @@ use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
     plonk::{
-        create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Assigned, Circuit, Column,
-        ConstraintSystem, Constraints, Error, Expression, Instance, Selector, SingleVerifier,
-        TableColumn,
+        //create_proof, keygen_pk, keygen_vk, verify_proof, Advice,
+        Assigned,
+        Circuit,
+        Column,
+        ConstraintSystem,
+        Error,
+        Instance,
     },
-    poly::{commitment::Params, Rotation},
-    transcript::{Blake2bRead, Blake2bWrite, Challenge255},
+    // poly::{commitment::Params, Rotation},
+    // transcript::{Blake2bRead, Blake2bWrite, Challenge255},
 };
 use pasta_curves::{pallas, vesta};
-use rand::rngs::OsRng;
-use std::marker::PhantomData;
+// use rand::rngs::OsRng;
+// use std::marker::PhantomData;
 
 use crate::fieldutils::i32tofelt;
 //use crate::tensorutils::{dot3, flatten3, flatten4, map2, map3, map3r, map4, map4r};

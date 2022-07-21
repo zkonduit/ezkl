@@ -18,6 +18,5 @@ mod nl;
 mod nonlin1d;
 mod relu8;
 mod tensorutils;
-//mod witnesscalculation;
+//mod useconv;
 //mod tfaddition;
-//mod xor;

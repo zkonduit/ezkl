@@ -89,4 +89,8 @@ impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> ImageConfig<F, HEIGHT
         let res: Result<Vec<_>, Error> = res.into_iter().collect();
         res.map(|v| v.try_into().unwrap())
     }
+
+    pub fn flatten(&self) -> Vec<Column<Advice>> {
+        self.0.clone().into_iter().flatten().collect()
+    }
 }

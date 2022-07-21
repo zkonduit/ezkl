@@ -1,6 +1,6 @@
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{Layouter, SimpleFloorPlanner, Value},
+    circuit::{AssignedCell, Layouter, Value},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Assigned, Circuit, Column,
         ConstraintSystem, Constraints, Error, Expression, Selector,
@@ -241,7 +241,7 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> 
         &self,
         assigned: &Affine1d<F, Value<Assigned<F>>, IN, OUT>,
         layouter: &mut impl Layouter<F>,
-    ) -> Result<(), halo2_proofs::plonk::Error> {
+    ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         layouter.assign_region(
             || "Assign values", // the name of the region
             |mut region| {
@@ -257,13 +257,15 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> 
                         || assigned.biases[i],
                     )?;
                 }
+                let mut output_for_equality = Vec::new();
                 for i in 0..OUT {
-                    region.assign_advice(
+                    let ofe = region.assign_advice(
                         || format!("o"),
                         self.advice.output[i],
                         offset,
                         || assigned.output[i],
                     )?;
+                    output_for_equality.push(ofe);
                 }
                 for j in 0..IN {
                     region.assign_advice(
@@ -285,7 +287,7 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> 
                     }
                 }
 
-                Ok(())
+                Ok(output_for_equality)
             },
         )
     }

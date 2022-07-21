@@ -14,10 +14,11 @@ mod util;
 
 use image::*;
 use kernel::*;
+pub use util::matrix;
 use util::*;
 
 #[derive(Debug, Clone)]
-struct Config<
+pub struct Config<
     F: FieldExt,
     const KERNEL_HEIGHT: usize,
     const KERNEL_WIDTH: usize,
@@ -34,7 +35,7 @@ struct Config<
     selector: Selector,
     kernel: KernelConfig<F, KERNEL_HEIGHT, KERNEL_WIDTH>,
     image: ImageConfig<F, IMAGE_HEIGHT, IMAGE_WIDTH>,
-    output: ImageConfig<
+    pub output: ImageConfig<
         F,
         { (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1 },
         { (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1 },
@@ -70,7 +71,7 @@ where
     [(); ((IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1)
         * ((IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1)]:,
 {
-    fn configure(meta: &mut ConstraintSystem<F>, advices: Vec<Column<Advice>>) -> Self {
+    pub fn configure(meta: &mut ConstraintSystem<F>, advices: Vec<Column<Advice>>) -> Self {
         let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
@@ -168,7 +169,7 @@ where
 
     pub fn assign(
         &self,
-        mut layouter: impl Layouter<F>,
+        layouter: &mut impl Layouter<F>,
         image: [Image<Value<F>, IMAGE_HEIGHT, IMAGE_WIDTH>; IN_CHANNELS],
         kernels: [[Kernel<Value<F>, KERNEL_HEIGHT, KERNEL_WIDTH>; IN_CHANNELS]; OUT_CHANNELS],
     ) -> Result<
@@ -194,6 +195,120 @@ where
             .collect::<Vec<_>>()
             .into_iter()
             .collect()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Conv2dAssigned<
+    F: FieldExt,
+    const KERNEL_HEIGHT: usize,
+    const KERNEL_WIDTH: usize,
+    const OUT_CHANNELS: usize,
+    const STRIDE: usize,
+    const IMAGE_HEIGHT: usize,
+    const IMAGE_WIDTH: usize,
+    const IN_CHANNELS: usize,
+    const PADDING: usize,
+> {
+    pub image: [Image<Value<Assigned<F>>, IMAGE_HEIGHT, IMAGE_WIDTH>; IN_CHANNELS],
+    pub kernels:
+        [[Kernel<Value<Assigned<F>>, KERNEL_HEIGHT, KERNEL_WIDTH>; IN_CHANNELS]; OUT_CHANNELS],
+}
+
+impl<
+        F: FieldExt,
+        const KERNEL_HEIGHT: usize,
+        const KERNEL_WIDTH: usize,
+        const OUT_CHANNELS: usize,
+        const STRIDE: usize,
+        const IMAGE_HEIGHT: usize,
+        const IMAGE_WIDTH: usize,
+        const IN_CHANNELS: usize,
+        const PADDING: usize,
+    >
+    Conv2dAssigned<
+        F,
+        KERNEL_HEIGHT,
+        KERNEL_WIDTH,
+        OUT_CHANNELS,
+        STRIDE,
+        IMAGE_HEIGHT,
+        IMAGE_WIDTH,
+        IN_CHANNELS,
+        PADDING,
+    >
+{
+    pub fn without_witnesses() -> Self {
+        let image = (0..IN_CHANNELS)
+            .map(|_| matrix(|| Value::default()))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        let kernels = (0..OUT_CHANNELS)
+            .map(|_| {
+                (0..IN_CHANNELS)
+                    .map(|_| matrix(|| Value::default()))
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap()
+            })
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        Self { image, kernels }
+    }
+
+    pub fn unwrap_assign_image(&self) -> [Image<Value<F>, IMAGE_HEIGHT, IMAGE_WIDTH>; IN_CHANNELS] {
+        self.image
+            .iter()
+            .map(|image| {
+                image
+                    .iter()
+                    .map(|cols| {
+                        cols.iter()
+                            .map(|&column| column.evaluate())
+                            .collect::<Vec<_>>()
+                            .try_into()
+                            .unwrap()
+                    })
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap()
+            })
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap()
+    }
+
+    pub fn unwrap_assign_kernels(
+        &self,
+    ) -> [[Kernel<Value<F>, KERNEL_HEIGHT, KERNEL_WIDTH>; IN_CHANNELS]; OUT_CHANNELS] {
+        self.kernels
+            .iter()
+            .map(|kernel| {
+                kernel
+                    .iter()
+                    .map(|image| {
+                        image
+                            .iter()
+                            .map(|cols| {
+                                cols.iter()
+                                    .map(|&column| column.evaluate())
+                                    .collect::<Vec<_>>()
+                                    .try_into()
+                                    .unwrap()
+                            })
+                            .collect::<Vec<_>>()
+                            .try_into()
+                            .unwrap()
+                    })
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap()
+            })
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap()
     }
 }
 
@@ -291,9 +406,9 @@ mod tests {
         fn synthesize(
             &self,
             config: Self::Config,
-            layouter: impl Layouter<F>,
+            mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let output = config.assign(layouter, self.image, self.kernels)?;
+            let output = config.assign(&mut layouter, self.image, self.kernels)?;
             Ok(())
         }
     }
