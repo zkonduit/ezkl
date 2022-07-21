@@ -12,7 +12,9 @@ mod image;
 mod kernel;
 mod util;
 
+pub use image::Image;
 use image::*;
+pub use kernel::Kernel;
 use kernel::*;
 pub use util::matrix;
 use util::*;
@@ -74,6 +76,10 @@ where
     pub fn configure(meta: &mut ConstraintSystem<F>, advices: Vec<Column<Advice>>) -> Self {
         let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
+
+        for advice in advices.iter() {
+            meta.enable_equality(*advice);
+        }
 
         let config = Self {
             selector: meta.selector(),
