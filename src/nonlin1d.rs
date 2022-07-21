@@ -97,7 +97,45 @@ impl<
         Nonlin1d::<F, Column<Advice>, LEN, NL>::fill(|i| cs.advice_column())
     }
 
-    /// composable_configure takes the advice as an argument, so parts can be filled in by caller
+    pub fn configure_with_input(
+        input: Vec<Column<Advice>>,
+        cs: &mut ConstraintSystem<F>,
+    ) -> NonlinConfig1d<F, LEN, INBITS, OUTBITS, NL> {
+        let mut advice = Self::define_advice(cs);
+        advice.input = input;
+
+        let table = NonlinTable {
+            table_input: cs.lookup_table_column(),
+            table_output: cs.lookup_table_column(),
+        };
+
+        let qlookup = cs.complex_selector();
+
+        for i in 0..LEN {
+            let _ = cs.lookup(|cs| {
+                let qlookup = cs.query_selector(qlookup);
+                vec![
+                    (
+                        qlookup.clone() * cs.query_advice(advice.input[i], Rotation::cur()),
+                        table.table_input,
+                    ),
+                    (
+                        qlookup.clone() * cs.query_advice(advice.output[i], Rotation::cur()),
+                        table.table_output,
+                    ),
+                ]
+            });
+        }
+
+        Self {
+            advice,
+            table,
+            qlookup,
+            _marker: PhantomData,
+        }
+    }
+
+    /// composable_configure takes the full advice as an argument, so parts can be filled in by caller
     pub fn composable_configure(
         advice: Nonlin1d<F, Column<Advice>, LEN, NL>,
         cs: &mut ConstraintSystem<F>,

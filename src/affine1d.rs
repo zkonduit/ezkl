@@ -165,6 +165,16 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> 
         // )
     }
 
+    // move these to a trait with trivial impl impl Layer for X; ?
+    pub fn configure_with_input(
+        input: Vec<Column<Advice>>,
+        cs: &mut ConstraintSystem<F>,
+    ) -> Affine1dConfig<F, IN, OUT> {
+        let mut advice = Self::define_advice(cs);
+        advice.input = input;
+        Self::composable_configure(advice, cs)
+    }
+
     // composable_configure takes the input tensor as an argument, and completes the advice by generating new for the rest
     pub fn composable_configure(
         advice: Affine1d<F, Column<Advice>, IN, OUT>,
