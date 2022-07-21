@@ -1,4 +1,5 @@
 mod cnvrl;
+mod cnvrl_generic;
 mod fieldutils;
 mod mmul;
 //mod mobilenetv3;
