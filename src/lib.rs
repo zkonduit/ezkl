@@ -1,3 +1,6 @@
+#![feature(generic_const_exprs)]
+#![feature(slice_flatten)]
+
 mod cnvrl;
 mod cnvrl_generic;
 mod fieldutils;
