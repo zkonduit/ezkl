@@ -10,6 +10,8 @@ mod affine1d;
 mod another1d;
 mod combine;
 mod combine3;
+mod convrelaffrel;
+mod eltwise;
 mod layertrait;
 mod mlpexample;
 mod mlprescale;

@@ -104,7 +104,7 @@ impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> C
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        config.l0.layout(&(self.l0), &mut layouter)?;
+        let ac0 = config.l0.layout(&(self.l0), &mut layouter)?;
         config.l1.layout(&(self.l1), &mut layouter)?;
         config.l2.layout(&(self.l2), &mut layouter)?;
         config.l3.layout(&(self.l3), &mut layouter)?;
