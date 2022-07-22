@@ -304,22 +304,9 @@ mod tests {
         //     vec![1, 0, 0, 10],
         // ];
         // let l0biases: Vec<i32> = vec![0, 0, 0, 1];
-        let l2weights: Vec<Vec<i32>> = vec![
-            vec![1; 9],
-            vec![2; 9],
-            vec![1; 9],
-            vec![2; 9],
-            vec![1; 9],
-            vec![2; 9],
-            vec![1; 9],
-            vec![2; 9],
-            vec![2; 9],
-        ];
+        let l2weights: Vec<Vec<i32>> = vec![vec![1; LEN]; LEN];
 
-        let l2biases: Vec<i32> = vec![
-            0, 3, 10, -1, 16, 0, 3, 10, -1, 16, 0, 3, 10, -1, 16, 0, 3, 10, -1, 16, 0, 3, 10, -1,
-            16,
-        ];
+        let l2biases: Vec<i32> = vec![1; LEN];
 
         let input = image; //: [cnvrl_generic::Image<Value<F>, IMAGE_HEIGHT, IMAGE_WIDTH>; IN_CHANNELS] = ;
         let l0_params = kernels; //         [[cnvrl_generic::Kernel<Value<F>, KERNEL_HEIGHT, KERNEL_WIDTH>; IN_CHANNELS]; OUT_CHANNELS] = ;
@@ -344,20 +331,7 @@ mod tests {
             l2_params,
         };
 
-        let public_input = vec![0, 3, 10, -1, 16, 0, 3, 10, -1];
-
-        //[-9, -15, 1, -19, 7, -18, -6, -8, -19]
-
-        // let public_input: Vec<i32> = unsafe {
-        //     vec![
-        //         (531f32 / 128f32).round().to_int_unchecked::<i32>().into(),
-        //         (103f32 / 128f32).round().to_int_unchecked::<i32>().into(),
-        //         (4469f32 / 128f32).round().to_int_unchecked::<i32>().into(),
-        //         (2849f32 / 128f32).to_int_unchecked::<i32>().into(),
-        //     ]
-        // };
-
-        println!("public input {:?}", public_input);
+        let public_input = vec![1; LEN];
 
         let nicer_pi: &[&[&[F]]] = &[&[&[
             i32tofelt::<F>(-9),
