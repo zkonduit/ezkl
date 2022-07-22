@@ -39,6 +39,7 @@ struct MyConfig<
 > where
     [(); (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1]:,
     [(); (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1]:,
+    [(); LEN + 3]:,
 {
     l0: cnvrl_generic::Config<
         F,
@@ -117,6 +118,7 @@ where
     [(); IMAGE_HEIGHT * IMAGE_WIDTH]:,
     [(); ((IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1)
         * ((IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1)]:,
+    [(); LEN + 3]:,
 {
     type Config = MyConfig<
         F,
@@ -165,7 +167,7 @@ where
         // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1 },
         //        { (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1 }
 
-        let num_advices = max(output_height * output_width, IMAGE_HEIGHT * IMAGE_WIDTH);
+        let num_advices = max(max(output_width, IMAGE_WIDTH), LEN + 3);
 
         let advices = (0..num_advices)
             .map(|_| cs.advice_column())
@@ -181,22 +183,25 @@ where
             IMAGE_WIDTH,
             IN_CHANNELS,
             PADDING,
-        >::configure(cs, advices);
+        >::configure(cs, advices.clone());
         // let l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
         //     NonlinConfig1d::configure_with_input(l0.output.flatten(), cs);
         //or	<Self::Config as FourLayer>::L1::configure_with_input(l0.advice.output.clone(), cs);
-        let l1: Affine1dConfig<F, LEN, LEN> =
-            Affine1dConfig::configure_with_input(l0.output.flatten(), cs); // or <Self::Config as FourLayer>::L2::
-                                                                           // let l3: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
-                                                                           //     NonlinConfig1d::configure_with_input(l2.advice.output.clone(), cs);
-                                                                           // let l4: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 128>> =
-                                                                           //     NonlinConfig1d::configure_with_input(l3.advice.output.clone(), cs);
+        let l1: Affine1dConfig<F, LEN, LEN> = Affine1dConfig::configure(
+            cs,
+            (&advices[..LEN]).try_into().unwrap(),
+            (&advices[LEN]).clone(),
+            (&advices[LEN + 1]).clone(),
+            (&advices[LEN + 2]).clone(),
+        ); // or <Self::Config as FourLayer>::L2::
+           // let l3: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
+           //     NonlinConfig1d::configure_with_input(l2.advice.output.clone(), cs);
+           // let l4: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 128>> =
+           //     NonlinConfig1d::configure_with_input(l3.advice.output.clone(), cs);
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
-        for i in 0..LEN {
-            cs.enable_equality(l1.advice.output[i]);
-        }
+        cs.enable_equality(l1.output);
 
         MyConfig {
             l0,

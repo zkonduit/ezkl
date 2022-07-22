@@ -84,14 +84,8 @@ where
         let config = Self {
             selector: meta.selector(),
             kernel: KernelConfig::configure(meta),
-            image: ImageConfig::configure(
-                advices[0..IMAGE_WIDTH].try_into().unwrap(),
-            ),
-            output: ImageConfig::configure(
-                advices[0..output_width]
-                    .try_into()
-                    .unwrap(),
-            ),
+            image: ImageConfig::configure(advices[0..IMAGE_WIDTH].try_into().unwrap()),
+            output: ImageConfig::configure(advices[0..output_width].try_into().unwrap()),
         };
 
         meta.create_gate("convolution", |meta| {
@@ -101,7 +95,9 @@ where
             let intermediate_outputs = (0..IN_CHANNELS)
                 .map(|rotation| {
                     let image = config.image.query(meta, rotation * IMAGE_HEIGHT);
-                    let kernel = config.kernel.query(meta, Rotation((rotation * IMAGE_HEIGHT) as i32));
+                    let kernel = config
+                        .kernel
+                        .query(meta, Rotation((rotation * IMAGE_HEIGHT) as i32));
                     convolution::<
                         _,
                         KERNEL_HEIGHT,
