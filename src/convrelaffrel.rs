@@ -56,8 +56,6 @@ struct MyConfig<
     l0q: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 32>>,
     l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>>,
     l2: Affine1dConfig<F, LEN, CLASSES>,
-    //    l3: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>>,
-    // l4: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 128>>,
     public_output: Column<Instance>,
 }
 
@@ -510,17 +508,17 @@ mod tests {
         let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner]];
 
         //        Mock Proof
-        let prover = MockProver::run(
-            K,
-            &circuit,
-            vec![public_input
-                .iter()
-                .map(|x| i32tofelt::<F>(*x).into())
-                .collect()],
-            //            vec![vec![(4).into(), (1).into(), (35).into(), (22).into()]],
-        )
-        .unwrap();
-        prover.assert_satisfied();
+        // let prover = MockProver::run(
+        //     K,
+        //     &circuit,
+        //     vec![public_input
+        //         .iter()
+        //         .map(|x| i32tofelt::<F>(*x).into())
+        //         .collect()],
+        //     //            vec![vec![(4).into(), (1).into(), (35).into(), (22).into()]],
+        // )
+        // .unwrap();
+        // prover.assert_satisfied();
 
         //	Real proof
         let params: Params<vesta::Affine> = Params::new(K);
