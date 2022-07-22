@@ -73,9 +73,9 @@ impl<
         cs: &mut ConstraintSystem<F>,
         advice: [Column<Advice>; LEN],
     ) -> NonlinConfig1d<F, LEN, INBITS, OUTBITS, NL> {
-        for col in advice.iter() {
-            cs.enable_equality(*col);
-        }
+        // for col in advice.iter() {
+        //     cs.enable_equality(*col);
+        // }
         let table = NonlinTable {
             table_input: cs.lookup_table_column(),
             table_output: cs.lookup_table_column(),

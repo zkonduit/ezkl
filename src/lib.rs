@@ -15,6 +15,7 @@ mod eltwise;
 mod layertrait;
 mod mlpexample;
 mod mlprescale;
+mod moreparams;
 mod mvmul2;
 mod mvrl;
 mod nl;
