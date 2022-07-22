@@ -85,12 +85,10 @@ where
             selector: meta.selector(),
             kernel: KernelConfig::configure(meta),
             image: ImageConfig::configure(
-                meta,
-                advices[0..(IMAGE_HEIGHT * IMAGE_WIDTH)].try_into().unwrap(),
+                advices[0..IMAGE_WIDTH].try_into().unwrap(),
             ),
             output: ImageConfig::configure(
-                meta,
-                advices[0..(output_height * output_width)]
+                advices[0..output_width]
                     .try_into()
                     .unwrap(),
             ),
@@ -102,8 +100,8 @@ where
             // Get output expressions for each input channel
             let intermediate_outputs = (0..IN_CHANNELS)
                 .map(|rotation| {
-                    let image = config.image.query(meta, Rotation(rotation as i32));
-                    let kernel = config.kernel.query(meta, Rotation(rotation as i32));
+                    let image = config.image.query(meta, rotation * IMAGE_HEIGHT);
+                    let kernel = config.kernel.query(meta, Rotation((rotation * IMAGE_HEIGHT) as i32));
                     convolution::<
                         _,
                         KERNEL_HEIGHT,
@@ -116,7 +114,7 @@ where
                 })
                 .collect();
 
-            let witnessed_output = config.output.query(meta, Rotation(IN_CHANNELS as i32));
+            let witnessed_output = config.output.query(meta, IN_CHANNELS * IMAGE_HEIGHT);
             let expected_output = op(intermediate_outputs, |a, b| a + b);
 
             let constraints = op_pair(witnessed_output, expected_output, |a, b| a - b)
@@ -163,7 +161,7 @@ where
                     self.image.assign_image_2d(&mut region, offset, image)?;
                     self.kernel.assign_kernel_2d(&mut region, offset, kernel)?;
 
-                    offset += 1;
+                    offset += IMAGE_HEIGHT;
                     outputs.push(output);
                 }
 
@@ -397,10 +395,10 @@ mod tests {
         // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
         // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
         fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-            let output_height = IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT + 1;
+            // let output_height = IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT + 1;
             let output_width = IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH + 1;
 
-            let num_advices = max(output_height * output_width, IMAGE_HEIGHT * IMAGE_WIDTH);
+            let num_advices = max(output_width, IMAGE_WIDTH);
 
             let advices = (0..num_advices)
                 .map(|_| meta.advice_column())
@@ -464,7 +462,7 @@ mod tests {
             kernels,
         };
 
-        let k = 4;
+        let k = 8;
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
     }

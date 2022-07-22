@@ -6,27 +6,16 @@ pub type Image<T, const HEIGHT: usize, const WIDTH: usize> = [[T; HEIGHT]; WIDTH
 
 #[derive(Debug, Clone)]
 pub struct ImageConfig<F: FieldExt, const HEIGHT: usize, const WIDTH: usize>(
-    Image<Column<Advice>, HEIGHT, WIDTH>,
+    [Column<Advice>; WIDTH],
     PhantomData<F>,
 );
 
 impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> ImageConfig<F, HEIGHT, WIDTH> {
     pub fn configure(
-        meta: &mut ConstraintSystem<F>,
-        advices: [Column<Advice>; HEIGHT * WIDTH],
+        advices: [Column<Advice>; WIDTH],
     ) -> Self {
         Self(
-            (0..WIDTH)
-                .map(|w| {
-                    (0..HEIGHT)
-                        .map(|h| advices[h * WIDTH + w])
-                        .collect::<Vec<_>>()
-                        .try_into()
-                        .unwrap()
-                })
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap(),
+            advices,
             PhantomData,
         )
     }
@@ -34,13 +23,12 @@ impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> ImageConfig<F, HEIGHT
     pub fn query(
         &self,
         meta: &mut VirtualCells<'_, F>,
-        rotation: Rotation,
+        offset: usize
     ) -> [[Expression<F>; HEIGHT]; WIDTH] {
         self.0
             .iter()
-            .map(|cols| {
-                cols.iter()
-                    .map(|&column| meta.query_advice(column, rotation))
+            .map(|&column| {
+                (0..HEIGHT).map(|i| meta.query_advice(column, Rotation(offset as i32 + i as i32)))
                     .collect::<Vec<_>>()
                     .try_into()
                     .unwrap()
@@ -73,8 +61,8 @@ impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> ImageConfig<F, HEIGHT
                                             row_idx, col_idx
                                         )
                                     },
-                                    self.0[col_idx][row_idx],
-                                    offset,
+                                    self.0[col_idx],
+                                    offset + row_idx,
                                     || cell.into(),
                                 )
                             },
@@ -91,6 +79,6 @@ impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> ImageConfig<F, HEIGHT
     }
 
     pub fn flatten(&self) -> Vec<Column<Advice>> {
-        self.0.clone().into_iter().flatten().collect()
+        self.0.to_vec()
     }
 }
