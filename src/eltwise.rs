@@ -1,6 +1,6 @@
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
+    circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Assigned, Circuit, Column,
         ConstraintSystem, Constraints, Error, Expression, Instance, Selector, SingleVerifier,
@@ -10,7 +10,7 @@ use halo2_proofs::{
     transcript::{Blake2bRead, Blake2bWrite, Challenge255},
 };
 use pasta_curves::{pallas, vesta};
-use std::marker::PhantomData;
+use std::{fmt::format, marker::PhantomData};
 
 use crate::fieldutils::{self, felt_to_i32, i32tofelt};
 use crate::tensorutils::flatten3;
@@ -55,15 +55,11 @@ pub struct NonlinConfig1d<
     const OUTBITS: usize,
     NL: Nonlinearity<F>,
 > {
-    pub advice: Nonlin1d<F, Column<Advice>, LEN, NL>,
+    pub advice: [Column<Advice>; LEN],
     table: NonlinTable<INBITS, OUTBITS>,
     qlookup: Selector,
-    _marker: PhantomData<NL>,
+    _marker: PhantomData<(NL, F)>,
 }
-
-// trait NonlinFn<F> {
-//     fn function() -> impl Fn(F) -> F {}
-// }
 
 impl<
         F: FieldExt,
@@ -73,20 +69,13 @@ impl<
         NL: 'static + Nonlinearity<F>,
     > NonlinConfig1d<F, LEN, INBITS, OUTBITS, NL>
 {
-    pub fn configure_as_initial_layer(
+    pub fn configure(
         cs: &mut ConstraintSystem<F>,
+        advice: [Column<Advice>; LEN],
     ) -> NonlinConfig1d<F, LEN, INBITS, OUTBITS, NL> {
-        let advice = Nonlin1d {
-            input: (0..LEN).map(|_| cs.advice_column()).collect(),
-            output: (0..LEN)
-                .map(|i| {
-                    let a = cs.advice_column();
-                    cs.enable_equality(a);
-                    a
-                })
-                .collect(),
-            _marker: PhantomData,
-        };
+        for col in advice.iter() {
+            cs.enable_equality(*col);
+        }
         let table = NonlinTable {
             table_input: cs.lookup_table_column(),
             table_output: cs.lookup_table_column(),
@@ -99,58 +88,11 @@ impl<
                 let qlookup = cs.query_selector(qlookup);
                 vec![
                     (
-                        qlookup.clone() * cs.query_advice(advice.input[i], Rotation::cur()),
+                        qlookup.clone() * cs.query_advice(advice[i], Rotation::cur()),
                         table.table_input,
                     ),
                     (
-                        qlookup.clone() * cs.query_advice(advice.output[i], Rotation::cur()),
-                        table.table_output,
-                    ),
-                ]
-            });
-        }
-
-        Self {
-            advice,
-            table,
-            qlookup,
-            _marker: PhantomData,
-        }
-    }
-
-    pub fn configure_with_input(
-        input: Vec<Column<Advice>>,
-        cs: &mut ConstraintSystem<F>,
-    ) -> NonlinConfig1d<F, LEN, INBITS, OUTBITS, NL> {
-        let advice = Nonlin1d {
-            input,
-            output: (0..LEN)
-                .map(|i| {
-                    let a = cs.advice_column();
-                    cs.enable_equality(a);
-                    a
-                })
-                .collect(),
-            _marker: PhantomData,
-        };
-
-        let table = NonlinTable {
-            table_input: cs.lookup_table_column(),
-            table_output: cs.lookup_table_column(),
-        };
-
-        let qlookup = cs.complex_selector();
-
-        for i in 0..LEN {
-            let _ = cs.lookup(|cs| {
-                let qlookup = cs.query_selector(qlookup);
-                vec![
-                    (
-                        qlookup.clone() * cs.query_advice(advice.input[i], Rotation::cur()),
-                        table.table_input,
-                    ),
-                    (
-                        qlookup.clone() * cs.query_advice(advice.output[i], Rotation::cur()),
+                        qlookup.clone() * cs.query_advice(advice[i], Rotation::next()),
                         table.table_output,
                     ),
                 ]
@@ -196,10 +138,43 @@ impl<
                     )?;
                     row_offset += 1;
                 }
-                println!("Assigned Table");
                 Ok(())
             },
         )
+    }
+
+    pub fn witness(
+        &self,
+        layouter: &mut impl Layouter<F>,
+        input: Vec<Value<Assigned<F>>>,
+    ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+        let output_for_eq = layouter.assign_region(
+            || "Elementwise", // the name of the region
+            |mut region| {
+                let offset = 0;
+                self.qlookup.enable(&mut region, offset)?;
+
+                let mut input_vec = Vec::new();
+                //witness the advice
+                for i in 0..LEN {
+                    let witnessed = region.assign_advice(
+                        || format!("input {:?}", i),
+                        self.advice[i],
+                        offset,
+                        || input[i],
+                    )?;
+                    input_vec.push(witnessed);
+                }
+
+                println!("input_vec {:?}", input_vec);
+
+                self.layout_inner(&mut region, offset, input_vec)
+            },
+        )?;
+
+        self.alloc_table(layouter, Box::new(NL::nonlinearity))?;
+
+        Ok(output_for_eq)
     }
 
     pub fn layout(
@@ -215,32 +190,10 @@ impl<
 
                 //copy the advice
                 for i in 0..LEN {
-                    input[i].copy_advice(|| "input", &mut region, self.advice.input[i], offset)?;
-                }
-                //calculate the value of output
-
-                let output = input
-                    .iter()
-                    .map(|acaf| acaf.value_field())
-                    .map(|vaf| {
-                        vaf.map(|f| {
-                            <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into()
-                        })
-                    })
-                    .collect::<Vec<Value<Assigned<F>>>>();
-
-                let mut output_for_equality = Vec::new();
-                for i in 0..LEN {
-                    let ofe = region.assign_advice(
-                        || format!("nl_{i}"),
-                        self.advice.output[i], // Column<Advice>
-                        offset,
-                        || output[i], //Assigned<F>
-                    )?;
-                    output_for_equality.push(ofe);
+                    input[i].copy_advice(|| "input", &mut region, self.advice[i], offset)?;
                 }
 
-                Ok(output_for_equality)
+                self.layout_inner(&mut region, offset, input.clone())
             },
         )?;
 
@@ -248,8 +201,41 @@ impl<
 
         Ok(output_for_eq)
     }
+
+    fn layout_inner(
+        &self,
+        region: &mut Region<'_, F>,
+        offset: usize,
+        input: Vec<AssignedCell<Assigned<F>, F>>,
+    ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+        //calculate the value of output
+
+        let output = input
+            .iter()
+            .map(|acaf| acaf.value_field())
+            .map(|vaf| {
+                vaf.map(|f| <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into())
+            })
+            .collect::<Vec<Value<Assigned<F>>>>();
+
+        println!("output {:?}", output);
+
+        let mut output_for_equality = Vec::new();
+        for i in 0..LEN {
+            let ofe = region.assign_advice(
+                || format!("nl_{i}"),
+                self.advice[i], // Column<Advice>
+                offset + 1,
+                || output[i], //Assigned<F>
+            )?;
+            output_for_equality.push(ofe);
+        }
+
+        Ok(output_for_equality)
+    }
 }
 
+#[derive(Clone)]
 struct NLCircuit<
     F: FieldExt,
     const LEN: usize,
@@ -273,15 +259,21 @@ impl<
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
-        let assigned = Nonlin1d::<F, Value<Assigned<F>>, LEN, NL>::fill(|i| Value::default());
-        Self {
-            assigned,
-            _marker: PhantomData,
-        }
+        self.clone()
+        // let assigned = Nonlin1d::<F, Value<Assigned<F>>, LEN, NL>::fill(|i| Value::default());
+        // Self {
+        //     assigned,
+        //     _marker: PhantomData,
+        // }
     }
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        Self::Config::configure_as_initial_layer(cs)
+        let advices = (0..LEN)
+            .map(|_| cs.advice_column())
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        Self::Config::configure(cs, advices)
     }
 
     fn synthesize(
@@ -289,36 +281,7 @@ impl<
         config: Self::Config,
         mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
     ) -> Result<(), Error> {
-        // mvmul
-
-        layouter.assign_region(
-            || "Assign values", // the name of the region
-            |mut region| {
-                let offset = 0;
-
-                for i in 0..LEN {
-                    region.assign_advice(
-                        || format!("nl_{i}"),
-                        config.advice.input[i], // Column<Advice>
-                        offset,
-                        || self.assigned.input[i], //Assigned<F>
-                    )?;
-                }
-
-                for i in 0..LEN {
-                    region.assign_advice(
-                        || format!("nl_{i}"),
-                        config.advice.output[i], // Column<Advice>
-                        offset,
-                        || self.assigned.output[i], //Assigned<F>
-                    )?;
-                }
-
-                Ok(())
-            },
-        )?;
-
-        config.alloc_table(&mut layouter, Box::new(NL::nonlinearity))?;
+        config.witness(&mut layouter, self.assigned.input.clone())?;
 
         Ok(())
     }
@@ -332,7 +295,6 @@ pub struct ReLu<F> {
 impl<F: FieldExt> Nonlinearity<F> for ReLu<F> {
     fn nonlinearity(x: i32) -> F {
         let out = if x < 0 { F::zero() } else { i32tofelt(x) };
-        //        println!("{}->{:?}", x, out);
         out
     }
 }

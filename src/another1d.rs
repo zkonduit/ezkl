@@ -28,13 +28,22 @@ pub struct Affine1dFullyAssigned<F: FieldExt, const IN: usize, const OUT: usize>
 }
 
 #[derive(Clone)]
-pub struct Affine1dConfig<F: FieldExt, const IN: usize, const OUT: usize> {
-    pub advice: Affine1d<F, Column<Advice>, IN, OUT>,
+pub struct Affine1dConfig<F: FieldExt, const IN: usize, const OUT: usize>
+where
+    [(); IN + 3]:,
+{
+    pub weights: [Column<Advice>; IN],
+    pub input: Column<Advice>,
+    pub output: Column<Advice>,
+    pub bias: Column<Advice>,
     pub q: Selector,
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> {
+impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT>
+where
+    [(); IN + 3]:,
+{
     pub fn layout(
         &self,
         layouter: &mut impl Layouter<F>,
@@ -60,7 +69,6 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> 
         &self,
         region: &mut Region<'_, F>,
         offset: usize,
-        //        layouter: &mut impl Layouter<F>,
         weights: Vec<Vec<i32>>,
         biases: Vec<i32>,
     ) -> Result<Parameters<F, IN, OUT>, halo2_proofs::plonk::Error> {
@@ -70,16 +78,10 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> 
         let weights: Vec<Vec<Value<Assigned<F>>>> =
             map2::<_, _, OUT, IN>(|i, j| Value::known(i32tofelt::<F>(weights[i][j]).into()));
 
-        //               self.q.enable(&mut region, offset)?;
-
         let mut biases_for_equality = Vec::new();
         for i in 0..OUT {
-            let bias = region.assign_advice(
-                || format!("b"),
-                self.advice.biases[i],
-                offset,
-                || biases[i],
-            )?;
+            let bias =
+                region.assign_advice(|| format!("b"), self.bias, offset + i, || biases[i])?;
             biases_for_equality.push(bias);
         }
 
@@ -89,8 +91,8 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> 
             for j in 0..IN {
                 let weight = region.assign_advice(
                     || format!("w"),
-                    self.advice.weights[i][j],
-                    offset,
+                    self.weights[i],
+                    offset + j,
                     || weights[i][j],
                 )?;
                 row.push(weight);
@@ -109,7 +111,6 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> 
 
     pub fn forward(
         &self, // just advice
-        //        layouter: &mut impl Layouter<F>,
         region: &mut Region<'_, F>,
         offset: usize,
         input: Vec<AssignedCell<Assigned<F>, F>>,
@@ -117,14 +118,7 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> 
     ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         // copy the input
         for j in 0..IN {
-            input[j].copy_advice(|| "input", region, self.advice.input[j], offset)?;
-            // that was the copy alternative to assigning:
-            // region.assign_advice(
-            //     || format!("i"),
-            //     self.advice.input[j], // Column<Advice>
-            //     offset,
-            //     || assigned.input[j], //Assigned<F>
-            // )?;
+            input[j].copy_advice(|| "input", region, self.input, offset + j)?;
         }
 
         // calculate value of output
@@ -147,8 +141,8 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> 
         for i in 0..OUT {
             let ofe = region.assign_advice(
                 || format!("o"),
-                self.advice.output[i], //advice
-                offset,
+                self.output, //advice
+                offset + i,
                 || output[i], //value
             )?;
             output_for_equality.push(ofe);
@@ -156,80 +150,37 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> 
         Ok(output_for_equality)
     }
 
-    fn define_advice(cs: &mut ConstraintSystem<F>) -> Affine1d<F, Column<Advice>, IN, OUT> {
-        Affine1d {
-            input: (0..IN)
-                .map(|i| {
-                    let advice = cs.advice_column();
-                    cs.enable_equality(advice);
-                    advice
-                })
-                .collect(),
-            output: (0..OUT)
-                .map(|i| {
-                    let advice = cs.advice_column();
-                    cs.enable_equality(advice);
-                    advice
-                })
-                .collect(),
-            weights: map2::<_, _, OUT, IN>(|i, j| cs.advice_column()),
-            biases: (0..OUT).map(|i| cs.advice_column()).collect(),
-            _marker: PhantomData,
-        }
-    }
-
-    // move these to a trait with trivial impl impl Layer for X; ?
-    pub fn configure_with_input(
-        input: Vec<Column<Advice>>,
-        cs: &mut ConstraintSystem<F>,
-    ) -> Affine1dConfig<F, IN, OUT> {
-        let mut advice = Self::define_advice(cs);
-        advice.input = input;
-        Self::composable_configure(advice, cs)
-    }
-
     // composable_configure takes the input tensor as an argument, and completes the advice by generating new for the rest
-    pub fn composable_configure(
-        advice: Affine1d<F, Column<Advice>, IN, OUT>,
+    pub fn configure(
         cs: &mut ConstraintSystem<F>,
-    ) -> Affine1dConfig<F, IN, OUT> {
+        weights: [Column<Advice>; IN],
+        input: Column<Advice>,
+        output: Column<Advice>,
+        bias: Column<Advice>,
+    ) -> Self {
         let qs = cs.selector();
 
         cs.create_gate("affine", |virtual_cells| {
             let q = virtual_cells.query_selector(qs);
 
-            //	    let input = advice.input.map(|a| virtual_cells.query_advice(a, Rotation::cur()));
-            let input: Vec<Expression<F>> = (0..IN)
-                .map(|i| virtual_cells.query_advice(advice.input[i], Rotation::cur()))
-                .collect();
-
-            let output: Vec<Expression<F>> = (0..OUT)
-                .map(|i| virtual_cells.query_advice(advice.output[i], Rotation::cur()))
-                .collect();
-
-            let biases: Vec<Expression<F>> = (0..OUT)
-                .map(|i| virtual_cells.query_advice(advice.biases[i], Rotation::cur()))
-                .collect();
-
-            let weights: Vec<Vec<Expression<F>>> = map2::<_, _, OUT, IN>(|i, j| {
-                virtual_cells.query_advice(advice.weights[i][j], Rotation::cur())
-            });
-
             // We put the negation of the claimed output in the constraint tensor.
-            let mut constraints: Vec<Expression<F>> =
-                (0..OUT).map(|i| -output[i].clone()).collect();
+            let mut constraints: Vec<Expression<F>> = (0..OUT)
+                .map(|i| -virtual_cells.query_advice(output, Rotation(i as i32)))
+                .collect();
 
             // Now we compute the linear expression,  and add it to constraints
             for i in 0..OUT {
                 for j in 0..IN {
-                    constraints[i] =
-                        constraints[i].clone() + weights[i][j].clone() * input[j].clone();
+                    constraints[i] = constraints[i].clone()
+                        + virtual_cells.query_advice(weights[i], Rotation(j as i32))
+                            * virtual_cells.query_advice(input, Rotation(j as i32));
                 }
             }
 
             // add the bias
             for i in 0..OUT {
-                constraints[i] = constraints[i].clone() + biases[i].clone();
+                constraints[i] =
+                    constraints[i].clone() + virtual_cells.query_advice(bias, Rotation(i as i32));
             }
 
             let constraints = (0..OUT).map(|i| "c").zip(constraints);
@@ -237,73 +188,14 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> 
         });
 
         Self {
-            advice,
+            weights,
+            input,
+            output,
+            bias,
             q: qs,
             _marker: PhantomData,
         }
     }
-
-    // configure creates fresh advice, while composable_configure uses previously-created advice.
-    pub fn configure(cs: &mut ConstraintSystem<F>) -> Affine1dConfig<F, IN, OUT> {
-        let advice = Self::define_advice(cs);
-        Self::composable_configure(advice, cs)
-    }
-
-    // pub fn layout(
-    //     //here
-    //     &self,
-    //     assigned: &Affine1d<F, Value<Assigned<F>>, IN, OUT>,
-    //     layouter: &mut impl Layouter<F>,
-    // ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
-    //     layouter.assign_region(
-    //         || "Assign values", // the name of the region
-    //         |mut region| {
-    //             let offset = 0;
-
-    //             self.q.enable(&mut region, offset)?;
-
-    //             for i in 0..OUT {
-    //                 region.assign_advice(
-    //                     || format!("b"),
-    //                     self.advice.biases[i],
-    //                     offset,
-    //                     || assigned.biases[i],
-    //                 )?;
-    //             }
-    //             let mut output_for_equality = Vec::new();
-    //             for i in 0..OUT {
-    //                 let ofe = region.assign_advice(
-    //                     || format!("o"),
-    //                     self.advice.output[i],
-    //                     offset,
-    //                     || assigned.output[i],
-    //                 )?;
-    //                 output_for_equality.push(ofe);
-    //             }
-    //             for j in 0..IN {
-    //                 region.assign_advice(
-    //                     || format!("i"),
-    //                     self.advice.input[j], // Column<Advice>
-    //                     offset,
-    //                     || assigned.input[j], //Assigned<F>
-    //                 )?;
-    //             }
-
-    //             for i in 0..OUT {
-    //                 for j in 0..IN {
-    //                     region.assign_advice(
-    //                         || format!("w"),
-    //                         self.advice.weights[i][j],
-    //                         offset,
-    //                         || assigned.weights[i][j],
-    //                     )?;
-    //                 }
-    //             }
-
-    //             Ok(output_for_equality)
-    //         },
-    //     )
-    // }
 }
 
 // impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dAC<F, IN, OUT> {}

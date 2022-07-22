@@ -11,24 +11,20 @@ pub struct ImageConfig<F: FieldExt, const HEIGHT: usize, const WIDTH: usize>(
 );
 
 impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> ImageConfig<F, HEIGHT, WIDTH> {
-    pub fn configure(
-        advices: [Column<Advice>; WIDTH],
-    ) -> Self {
-        Self(
-            advices,
-            PhantomData,
-        )
+    pub fn configure(advices: [Column<Advice>; WIDTH]) -> Self {
+        Self(advices, PhantomData)
     }
 
     pub fn query(
         &self,
         meta: &mut VirtualCells<'_, F>,
-        offset: usize
+        offset: usize,
     ) -> [[Expression<F>; HEIGHT]; WIDTH] {
         self.0
             .iter()
             .map(|&column| {
-                (0..HEIGHT).map(|i| meta.query_advice(column, Rotation(offset as i32 + i as i32)))
+                (0..HEIGHT)
+                    .map(|i| meta.query_advice(column, Rotation(offset as i32 + i as i32)))
                     .collect::<Vec<_>>()
                     .try_into()
                     .unwrap()
