@@ -12,6 +12,8 @@ nalgebra = "0.31"
 pasta_curves = "0.4"
 rand = "0.8"
 #tensorflow = {version = "0.18.0", features = ["eager"]}
+plotters = { version = "0.3.0", optional = true }
 
-
+[features]
+dev-graph = ["halo2_proofs/dev-graph", "plotters"]
 

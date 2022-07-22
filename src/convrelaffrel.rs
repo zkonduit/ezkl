@@ -260,28 +260,24 @@ mod tests {
     use rand::rngs::OsRng;
     use std::time::{Duration, Instant};
 
+    const K: u32 = 15;
+
+    const KERNEL_HEIGHT: usize = 2; //3
+    const KERNEL_WIDTH: usize = 2; //3
+    const OUT_CHANNELS: usize = 2;
+    const STRIDE: usize = 2;
+    const IMAGE_HEIGHT: usize = 28; //7
+    const IMAGE_WIDTH: usize = 28; //7
+    const IN_CHANNELS: usize = 2;
+    const PADDING: usize = 2;
+
+    const LEN: usize = {
+        ((IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1)
+            * ((IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1)
+    };
+
     #[test]
     fn test_convrelaffrel() {
-        let k = 15; //2^k rows
-                    // parameters
-
-        const KERNEL_HEIGHT: usize = 2; //3
-        const KERNEL_WIDTH: usize = 2; //3
-        const OUT_CHANNELS: usize = 2;
-        const STRIDE: usize = 2;
-        const IMAGE_HEIGHT: usize = 3; //7
-        const IMAGE_WIDTH: usize = 3; //7
-        const IN_CHANNELS: usize = 2;
-        const PADDING: usize = 2;
-
-        const LEN: usize = {
-            ((IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1)
-                * ((IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1)
-        };
-        // [(); (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1]:,
-        // [(); (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1]:,
-        //5x5?
-
         // Load the parameters and preimage from somewhere
 
         let image = (0..IN_CHANNELS)
@@ -381,7 +377,7 @@ mod tests {
         // .collect()];
 
         let prover = MockProver::run(
-            k,
+            K,
             &circuit,
             vec![public_input
                 .iter()
@@ -424,6 +420,39 @@ mod tests {
         // let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
         // assert!(verify_proof(&params, pk.get_vk(), strategy, nicer_pi, &mut transcript).is_ok());
         // println!("Verify took {}", now.elapsed().as_secs());
+    }
+
+    #[cfg(feature = "dev-graph")]
+    #[test]
+    fn print_convrelaffrel() {
+        use plotters::prelude::*;
+
+        let root = BitMapBackend::new("convrelaffrel-layout.png", (2048, 7680)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+        let root = root.titled("Conv -> ReLu -> Affine -> Relu", ("sans-serif", 60)).unwrap();
+
+        let circuit = MyCircuit::<
+            F,
+            LEN,
+            14,
+            14,
+            KERNEL_HEIGHT,
+            KERNEL_WIDTH,
+            OUT_CHANNELS,
+            STRIDE,
+            IMAGE_HEIGHT,
+            IMAGE_WIDTH,
+            IN_CHANNELS,
+            PADDING,
+        > {
+            input: [[[Value::unknown(); IMAGE_HEIGHT]; IMAGE_WIDTH]; IN_CHANNELS],
+            l0_params: [[[[Value::unknown(); KERNEL_HEIGHT]; KERNEL_WIDTH]; IN_CHANNELS];
+                OUT_CHANNELS],
+            l2_params: (vec![vec![1; LEN]; LEN], vec![1; LEN]),
+        };
+        halo2_proofs::dev::CircuitLayout::default()
+            .render(13, &circuit, &root)
+            .unwrap();
     }
 }
 
