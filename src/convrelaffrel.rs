@@ -248,21 +248,21 @@ where
         //         .collect::<Vec<_>>()
         // );
 
-        println!(
-            "L0qOut: {:?}",
-            l0qout
-                .iter()
-                .map(|x| x.value_field().map(|y| felt_to_i32(y.evaluate())))
-                .collect::<Vec<_>>()
-        );
+        // println!(
+        //     "L0qOut: {:?}",
+        //     l0qout
+        //         .iter()
+        //         .map(|x| x.value_field().map(|y| felt_to_i32(y.evaluate())))
+        //         .collect::<Vec<_>>()
+        // );
 
-        println!(
-            "L1Out: {:?}",
-            l1out
-                .iter()
-                .map(|x| x.value_field().map(|y| felt_to_i32(y.evaluate())))
-                .collect::<Vec<_>>()
-        );
+        // println!(
+        //     "L1Out: {:?}",
+        //     l1out
+        //         .iter()
+        //         .map(|x| x.value_field().map(|y| felt_to_i32(y.evaluate())))
+        //         .collect::<Vec<_>>()
+        // );
 
         println!(
             "L2Out: {:?}",
@@ -296,6 +296,8 @@ mod tests {
     use crate::moreparams;
     use crate::tensorutils::map4;
     use halo2_proofs::pasta::pallas;
+    use mnist::*;
+    use ndarray::prelude::*;
     use rand::prelude::*;
     use rand::rngs::OsRng;
     use std::time::{Duration, Instant};
@@ -320,18 +322,56 @@ mod tests {
     fn test_convrelaffrel() {
         // Load the parameters and preimage from somewhere
 
-        let image = (0..IN_CHANNELS)
-            .map(|i| {
-                matrix(|| {
-                    Value::known({
-                        i32tofelt::<F>(rand::random::<u8>() as i32)
-                        //                        F::random(OsRng)
-                    })
-                })
-            })
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
+        let Mnist {
+            trn_img,
+            trn_lbl,
+            tst_img,
+            tst_lbl,
+            ..
+        } = MnistBuilder::new()
+            .label_format_digit()
+            .training_set_length(50_000)
+            .validation_set_length(10_000)
+            .test_set_length(10_000)
+            .finalize();
+
+        let image_num = 0;
+        // Can use an Array2 or Array3 here (Array3 for visualization)
+        let train_data = Array3::from_shape_vec((50_000, 28, 28), trn_img)
+            .expect("Error converting images to Array3 struct")
+            //            .map(|x| *x as f32 / 256.0);
+            .map(|x| i32tofelt::<F>(*x as i32 / 16));
+        //        println!("{:#.1?}\n", train_data.slice(s![image_num, .., ..]));
+
+        let train_labels: Array2<f32> = Array2::from_shape_vec((50_000, 1), trn_lbl)
+            .expect("Error converting training labels to Array2 struct")
+            .map(|x| *x as f32);
+        println!(
+            "The first digit is a {:?}",
+            train_labels.slice(s![image_num, ..])
+        );
+        // let image = (0..IN_CHANNELS)
+        //     .map(|i| {
+        //         matrix(|| {
+        //             Value::known({
+        //                 i32tofelt::<F>(rand::random::<u8>() as i32)
+        //                 //                        F::random(OsRng)
+        //             })
+        //         })
+        //     })
+        //     .collect::<Vec<_>>()
+        //     .try_into()
+        //     .unwrap();
+
+        let mut image: [[[Value<F>; 28]; 28]; 1] = [[[Value::default(); 28]; 28]; 1];
+        for i in 0..1 {
+            for j in 0..28 {
+                for k in 0..28 {
+                    image[i][j][k] = Value::known(train_data[[image_num, j, k]]);
+                }
+            }
+        }
+
         // let kernels = (0..OUT_CHANNELS)
         //     .map(|i| {
         //         (0..IN_CHANNELS)
@@ -445,7 +485,9 @@ mod tests {
             l2_params,
         };
 
-        let public_input = vec![1; LEN];
+        let public_input = vec![
+            -3283, -1071, -7182, -9264, -5729, 1197, -2673, -12619, -1283, -14700,
+        ];
 
         // let nicer_pi: &[&[&[F]]] = &[&[&[
         //     i32tofelt::<F>(-9),
@@ -459,7 +501,7 @@ mod tests {
         //     i32tofelt::<F>(-19),
         // ]]];
 
-        let pi_inner: [F; LEN] = public_input
+        let pi_inner: [F; CLASSES] = public_input
             .iter()
             .map(|x| i32tofelt::<F>(*x).into())
             .collect::<Vec<F>>()
