@@ -1,6 +1,6 @@
 # Halo2 DL 
-[![Tests](https://github.com/jasonmorton/halo2deeplearning/workflows/rust.yml/badge.svg)]
 
+[![Test](https://github.com/jasonmorton/halo2deeplearning/workflows/Rust/badge.svg)](https://github.com/jasonmorton/halo2deeplearning/actions?query=workflow%3ARust)
 MNIST in a zk-snark
 
 This is a proof-of-concept implementation of inference for deep learning models in a zk-snark using Halo2. 2d convolution, fully connected (affine) layers, and nonlinearities such as ReLu and sigmoid are implemented.  The input image and model parameters are provided as private advice and the last layer is the public input (instance column). Other configurations are also possible.
