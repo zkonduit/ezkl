@@ -1,5 +1,5 @@
 # Halo2 DL 
-[![Tests](https://github.com/jasonmorton/halo2deeplearning/workflows/rust.yaml/badge.svg)]
+[![Tests](https://github.com/jasonmorton/halo2deeplearning/workflows/rust.yml/badge.svg)]
 
 MNIST in a zk-snark
 
