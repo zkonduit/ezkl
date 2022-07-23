@@ -16,12 +16,13 @@ use halo2_proofs::{
 use pasta_curves::{pallas, vesta};
 // use rand::rngs::OsRng;
 // use std::marker::PhantomData;
-
 use crate::fieldutils::i32tofelt;
+use std::marker::PhantomData;
 //use crate::tensorutils::{dot3, flatten3, flatten4, map2, map3, map3r, map4, map4r};
 
-use crate::affine1d::{Affine1d, Affine1dConfig};
-use crate::nonlin1d::{DivideBy, Nonlin1d, NonlinConfig1d, ReLu};
+use crate::affine1d::{Affine1dConfig, RawParameters};
+use crate::eltwise::{DivideBy, NonlinConfig1d, ReLu};
+use crate::inputlayer::InputConfig;
 
 // A columnar ReLu MLP
 #[derive(Clone)]
@@ -30,7 +31,10 @@ struct MyConfig<
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust
     const INBITS: usize,
     const OUTBITS: usize,
-> {
+> where
+    [(); LEN + 3]:,
+{
+    input: InputConfig<F, LEN>,
     l0: Affine1dConfig<F, LEN, LEN>,
     l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>>,
     l2: Affine1dConfig<F, LEN, LEN>,
@@ -39,57 +43,77 @@ struct MyConfig<
     public_output: Column<Instance>,
 }
 
+#[derive(Clone)]
 struct MyCircuit<
     F: FieldExt,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened
     const INBITS: usize,
     const OUTBITS: usize,
 > {
-    // circuit holds Values
-    l0: Affine1d<F, Value<Assigned<F>>, LEN, LEN>,
-    l1: Nonlin1d<F, Value<Assigned<F>>, LEN, ReLu<F>>,
-    l2: Affine1d<F, Value<Assigned<F>>, LEN, LEN>,
-    l3: Nonlin1d<F, Value<Assigned<F>>, LEN, ReLu<F>>,
-    l4: Nonlin1d<F, Value<Assigned<F>>, LEN, DivideBy<F, 128>>,
+    // Given the stateless MyConfig type information, a DNN trace is determined by its input and the parameters of its layers.
+    // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
+    input: Vec<i32>,
+    l0_params: RawParameters<LEN, LEN>,
+    l2_params: RawParameters<LEN, LEN>,
+    _marker: PhantomData<F>,
 }
 
 impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> Circuit<F>
     for MyCircuit<F, LEN, INBITS, OUTBITS>
+where
+    [(); LEN + 3]:,
 {
     type Config = MyConfig<F, LEN, INBITS, OUTBITS>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
-        Self {
-            l0: Affine1d::<F, Value<Assigned<F>>, LEN, LEN>::without_witnesses(),
-            l1: Nonlin1d::<F, Value<Assigned<F>>, LEN, ReLu<F>>::without_witnesses(),
-            l2: Affine1d::<F, Value<Assigned<F>>, LEN, LEN>::without_witnesses(),
-            l3: Nonlin1d::<F, Value<Assigned<F>>, LEN, ReLu<F>>::without_witnesses(),
-            l4: Nonlin1d::<F, Value<Assigned<F>>, LEN, DivideBy<F, 128>>::without_witnesses(),
-        }
+        self.clone()
     }
 
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let l0: Affine1dConfig<F, LEN, LEN> = Affine1dConfig::<F, LEN, LEN>::configure(cs);
+        let num_advices = LEN + 3;
+        let advices = (0..num_advices)
+            .map(|_| {
+                let col = cs.advice_column();
+                cs.enable_equality(col);
+                col
+            })
+            .collect::<Vec<_>>();
+
+        let input = InputConfig::<F, LEN>::configure(cs, advices[LEN].clone());
+
+        let l0 = Affine1dConfig::<F, LEN, LEN>::configure(
+            cs,
+            (&advices[..LEN]).try_into().unwrap(), // wts gets several col, others get a column each
+            (&advices[LEN]).clone(),               // input
+            (&advices[LEN + 1]).clone(),           // output
+            (&advices[LEN + 2]).clone(),           // bias
+        );
+
         let l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
-            NonlinConfig1d::configure_with_input(l0.advice.output.clone(), cs);
-        //or	<Self::Config as FourLayer>::L1::configure_with_input(l0.advice.output.clone(), cs);
-        let l2: Affine1dConfig<F, LEN, LEN> =
-            Affine1dConfig::configure_with_input(l1.advice.output.clone(), cs); // or <Self::Config as FourLayer>::L2::
+            NonlinConfig1d::configure(cs, (&advices[..LEN]).clone().try_into().unwrap());
+
+        let l2 = Affine1dConfig::<F, LEN, LEN>::configure(
+            cs,
+            (&advices[..LEN]).try_into().unwrap(),
+            (&advices[LEN]).clone(),
+            (&advices[LEN + 1]).clone(),
+            (&advices[LEN + 2]).clone(),
+        );
+
         let l3: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
-            NonlinConfig1d::configure_with_input(l2.advice.output.clone(), cs);
+            NonlinConfig1d::configure(cs, (&advices[..LEN]).clone().try_into().unwrap());
+
         let l4: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 128>> =
-            NonlinConfig1d::configure_with_input(l3.advice.output.clone(), cs);
+            NonlinConfig1d::configure(cs, (&advices[..LEN]).clone().try_into().unwrap());
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
-        for i in 0..LEN {
-            cs.enable_equality(l4.advice.output[i]);
-        }
 
         MyConfig {
+            input,
             l0,
             l1,
             l2,
@@ -104,14 +128,24 @@ impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> C
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let ac0 = config.l0.layout(&(self.l0), &mut layouter)?;
-        config.l1.layout(&(self.l1), &mut layouter)?;
-        config.l2.layout(&(self.l2), &mut layouter)?;
-        config.l3.layout(&(self.l3), &mut layouter)?;
-        // tie the last output to public inputs (instance column)
-        let output_for_eq = config.l4.layout(&(self.l4), &mut layouter)?;
+        let x = config.input.layout(&mut layouter, self.input.clone())?;
+        let x = config.l0.layout(
+            &mut layouter,
+            self.l0_params.weights.clone(),
+            self.l0_params.biases.clone(),
+            x,
+        )?;
+        let x = config.l1.layout(&mut layouter, x)?;
+        let x = config.l2.layout(
+            &mut layouter,
+            self.l2_params.weights.clone(),
+            self.l2_params.biases.clone(),
+            x,
+        )?;
+        let x = config.l3.layout(&mut layouter, x)?;
+        let x = config.l4.layout(&mut layouter, x)?;
         for i in 0..LEN {
-            layouter.constrain_instance(output_for_eq[i].cell(), config.public_output, i)?;
+            layouter.constrain_instance(x[i].cell(), config.public_output, i)?;
         }
         Ok(())
     }
@@ -124,11 +158,10 @@ mod tests {
     use halo2_proofs::{
         dev::{FailureLocation, MockProver, VerifyFailure},
         pasta::Fp as F,
-        plonk::{Any, Circuit},
+        //        plonk::{Any, Circuit},
     };
-    //     use nalgebra;
-    use rand::prelude::*;
-    use std::time::{Duration, Instant};
+    // use rand::prelude::*;
+    // use std::time::{Duration, Instant};
 
     #[test]
     fn test_rescale() {
@@ -141,6 +174,10 @@ mod tests {
             vec![1, 0, 0, 10],
         ];
         let l0biases: Vec<i32> = vec![0, 0, 0, 1];
+        let l0_params = RawParameters {
+            weights: l0weights,
+            biases: l0biases,
+        };
         let l2weights: Vec<Vec<i32>> = vec![
             vec![0, 3, 10, -1],
             vec![0, 10, 1, 0],
@@ -148,38 +185,19 @@ mod tests {
             vec![1, -2, 32, 0],
         ];
         let l2biases: Vec<i32> = vec![12, 14, 17, 1];
-
+        let l2_params = RawParameters {
+            weights: l2weights,
+            biases: l2biases,
+        };
         // input data
-        let l0input: Vec<i32> = vec![-30, -21, 11, 40];
+        let input: Vec<i32> = vec![-30, -21, 11, 40];
 
-        // Create the layers
-        let mut l0 = Affine1d::<F, Value<Assigned<F>>, 4, 4>::from_parameters(l0weights, l0biases);
-        let mut l1 = Nonlin1d::<F, Value<Assigned<F>>, 4, ReLu<F>>::from_parameters();
-        let mut l2 = Affine1d::<F, Value<Assigned<F>>, 4, 4>::from_parameters(l2weights, l2biases);
-        let mut l3 = Nonlin1d::<F, Value<Assigned<F>>, 4, ReLu<F>>::from_parameters();
-        let mut l4 = Nonlin1d::<F, Value<Assigned<F>>, 4, DivideBy<F, 128>>::from_parameters();
-
-        // Assign the input
-        let l0input = l0input
-            .iter()
-            .map(|x| Value::known(i32tofelt::<F>(*x).into()))
-            .collect();
-
-        // Compute the forward pass and witness, assigning as we go
-        let l0out = l0.forward(l0input);
-        let l1out = l1.forward(l0out);
-        let l2out = l2.forward(l1out);
-        let l3out = l3.forward(l2out);
-        let l4out = l4.forward(l3out);
-        println!(
-            "{:?}",
-            l4out
-                .iter()
-                .map(|x| x.map(|y| felt_to_i32(y.evaluate())))
-                .collect::<Vec<Value<i32>>>()
-        );
-
-        let circuit = MyCircuit::<F, 4, 14, 14> { l0, l1, l2, l3, l4 };
+        let circuit = MyCircuit::<F, 4, 14, 14> {
+            input,
+            l0_params,
+            l2_params,
+            _marker: PhantomData,
+        };
 
         let public_input: Vec<i32> = unsafe {
             vec![
