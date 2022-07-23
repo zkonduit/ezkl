@@ -1,6 +1,6 @@
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
+    circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Assigned, Circuit, Column,
         ConstraintSystem, Error, Instance, SingleVerifier,
@@ -17,7 +17,7 @@ use crate::fieldutils::{felt_to_i32, i32tofelt};
 
 use std::cmp::max;
 
-use crate::another1d::{Affine1d, Affine1dConfig};
+use crate::affine1d::{Affine1d, Affine1dConfig};
 use crate::cnvrl_generic;
 use crate::eltwise::{DivideBy, Nonlin1d, NonlinConfig1d, ReLu};
 
@@ -317,7 +317,8 @@ mod tests {
     };
 
     #[test]
-    fn test_convrelaffrel() {
+    #[ignore]
+    fn test_prove_mnist_inference() {
         // Load the parameters and preimage from somewhere
 
         let Mnist {

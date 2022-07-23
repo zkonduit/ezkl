@@ -1,5 +1,5 @@
 [package]
-name = "halommrl"
+name = "halo2deeplearning"
 version = "0.1.0"
 edition = "2021"
 
@@ -11,11 +11,13 @@ halo2_proofs = { git = "https://github.com/zcash/halo2.git", rev = "a898d65ae3ad
 nalgebra = "0.31"
 pasta_curves = "0.4"
 rand = "0.8"
-#tensorflow = {version = "0.18.0", features = ["eager"]}
-plotters = { version = "0.3.0", optional = true }
 mnist = "0.5"
 ndarray = "0.15"
+tensorflow = {version = "0.18.0", features = ["eager"], optional = true }
+plotters = { version = "0.3.0", optional = true }
 
 [features]
 dev-graph = ["halo2_proofs/dev-graph", "plotters"]
+tensorflow = ["dep:tensorflow"]
+
 
