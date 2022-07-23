@@ -9,8 +9,8 @@ We give an example of proving inference with a model that achieves 97.5% accurac
 
 
 ## Running examples
-The MNIST inference example (`test_prove_mnist_inference`) is by default ignored because it uses a lot of resources. To run it, use
+The MNIST inference example (`test_prove_mnist_inference`) is by default ignored because making the proof uses a lot of memory and takes about three minutes. To run it, use
 ```bash
-cargo test -- --ignored --nocapture
+cargo test --release -- --ignored --nocapture
 ```
 or ``--include-ignored` to run together with the rest.
