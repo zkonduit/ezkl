@@ -2,8 +2,8 @@
 #![feature(slice_flatten)]
 
 mod affine1d;
-mod apiexperiment;
-mod cnvrl;
+//mod apiexperiment;
+//mod cnvrl;
 mod cnvrl_generic;
 mod conv2d_mnist_example;
 mod eltwise;
