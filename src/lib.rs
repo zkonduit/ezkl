@@ -2,13 +2,14 @@
 #![feature(slice_flatten)]
 
 mod affine1d;
-mod apiexperiment;
+//mod apiexperiment;
 mod cnvrl;
 mod cnvrl_generic;
 mod conv2d_mnist_example;
 mod eltwise;
 mod fieldutils;
 mod inputlayer;
+//mod softmax;
 //mod layertrait;
 mod mlprescale;
 mod moreparams;
