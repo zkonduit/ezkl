@@ -3,13 +3,12 @@ use halo2_proofs::{
     circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Assigned, Circuit, Column,
-        ConstraintSystem, Constraints, Error, Expression, Instance, Selector, SingleVerifier,
-        TableColumn,
+        ConstraintSystem, Constraints, Error, Expression, Instance, Selector, TableColumn,
     },
     poly::{commitment::Params, Rotation},
     transcript::{Blake2bRead, Blake2bWrite, Challenge255},
 };
-use pasta_curves::{pallas, vesta};
+use halo2curves::pasta::{pallas, vesta};
 use std::{fmt::format, marker::PhantomData};
 
 use crate::fieldutils::{self, felt_to_i32, i32tofelt};
