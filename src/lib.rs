@@ -3,16 +3,18 @@
 
 mod affine1d;
 //mod apiexperiment;
-//mod cnvrl;
 mod cnvrl_generic;
+//pub mod cnvrl;
+pub mod cnvrl_generic;
 mod conv2d_mnist_example;
-mod eltwise;
-mod fieldutils;
-mod inputlayer;
+pub mod eltwise;
+pub mod fieldutils;
+pub mod inputlayer;
+//mod softmax;
 //mod layertrait;
 mod mlprescale;
 mod moreparams;
 //mod mvmul2; // debug overflow in V1
 //mod relu8; //move tests
-mod tensorutils;
+pub mod tensorutils;
 //mod tfaddition;
