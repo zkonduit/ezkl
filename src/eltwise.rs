@@ -83,7 +83,7 @@ impl<
         let qlookup = cs.complex_selector();
 
         for i in 0..LEN {
-            let _ = cs.lookup(|cs| {
+            let _ = cs.lookup("lk", |cs| {
                 let qlookup = cs.query_selector(qlookup);
                 vec![
                     (
