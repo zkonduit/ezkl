@@ -1,14 +1,28 @@
 use halo2_proofs::{
+    poly::{
+        commitment::ParamsProver,
+        ipa::{
+            commitment::{IPACommitmentScheme, ParamsIPA},
+            multiopen::ProverIPA,
+            strategy::SingleStrategy,
+        },
+        VerificationStrategy,
+    },
+    transcript::{TranscriptReadBuffer, TranscriptWriterBuffer},
+};
+
+use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Assigned, Circuit, Column,
-        ConstraintSystem, Error, Instance, SingleVerifier,
+        ConstraintSystem, Error, Instance,
     },
     poly::{commitment::Params, Rotation},
     transcript::{Blake2bRead, Blake2bWrite, Challenge255},
 };
-use pasta_curves::{pallas, vesta};
+use halo2curves::pasta::{pallas, vesta};
+//use pasta_curves::{pallas, vesta};
 // use rand::rngs::OsRng;
 // use std::marker::PhantomData;
 
@@ -285,15 +299,30 @@ mod tests {
     use halo2_proofs::{
         arithmetic::{Field, FieldExt},
         dev::{FailureLocation, MockProver, VerifyFailure},
-        pasta::Fp as F,
+        //        pasta::Fp as F,
         plonk::{Any, Circuit},
     };
+
+    use halo2_proofs::{
+        poly::{
+            commitment::ParamsProver,
+            ipa::{
+                commitment::{IPACommitmentScheme, ParamsIPA},
+                multiopen::ProverIPA,
+                strategy::SingleStrategy,
+            },
+            VerificationStrategy,
+        },
+        transcript::{TranscriptReadBuffer, TranscriptWriterBuffer},
+    };
+
+    use halo2curves::pasta::Fp as F;
     //     use nalgebra;
     use crate::cnvrl_generic::matrix;
     use crate::fieldutils;
     use crate::moreparams;
     use crate::tensorutils::map4;
-    use halo2_proofs::pasta::pallas;
+    use halo2curves::pasta::pallas;
     use mnist::*;
     use ndarray::prelude::*;
     use rand::prelude::*;
@@ -522,7 +551,7 @@ mod tests {
         // prover.assert_satisfied();
 
         //	Real proof
-        let params: Params<vesta::Affine> = Params::new(K);
+        let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(K);
         let empty_circuit = circuit.without_witnesses();
         // Initialize the proving key
         let now = Instant::now();
@@ -535,7 +564,7 @@ mod tests {
         //println!("{:?} {:?}", vk, pk);
         let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
         let mut rng = OsRng;
-        create_proof(
+        create_proof::<IPACommitmentScheme<_>, ProverIPA<_>, _, _, _, _>(
             &params,
             &pk,
             &[circuit],
@@ -548,7 +577,7 @@ mod tests {
         //println!("{:?}", proof);
         println!("Proof took {}", now.elapsed().as_secs());
         let now = Instant::now();
-        let strategy = SingleVerifier::new(&params);
+        let strategy = SingleStrategy::new(&params);
         let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
         assert!(verify_proof(
             &params,

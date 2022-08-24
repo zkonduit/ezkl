@@ -13,7 +13,7 @@ use halo2_proofs::{
     // poly::{commitment::Params, Rotation},
     // transcript::{Blake2bRead, Blake2bWrite, Challenge255},
 };
-use pasta_curves::{pallas, vesta};
+//use pasta_curves::{pallas, vesta};
 // use rand::rngs::OsRng;
 // use std::marker::PhantomData;
 use crate::fieldutils::i32tofelt;
@@ -155,11 +155,8 @@ where
 mod tests {
     use super::*;
     use crate::fieldutils::felt_to_i32;
-    use halo2_proofs::{
-        dev::{FailureLocation, MockProver, VerifyFailure},
-        pasta::Fp as F,
-        //        plonk::{Any, Circuit},
-    };
+    use halo2_proofs::dev::{FailureLocation, MockProver, VerifyFailure};
+    use halo2curves::pasta::Fp as F;
     // use rand::prelude::*;
     // use std::time::{Duration, Instant};
 

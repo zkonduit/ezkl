@@ -3,7 +3,7 @@
 
 pub mod affine1d;
 //mod apiexperiment;
-pub mod cnvrl;
+//pub mod cnvrl;
 pub mod cnvrl_generic;
 mod conv2d_mnist_example;
 pub mod eltwise;

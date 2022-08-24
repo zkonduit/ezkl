@@ -3,13 +3,12 @@ use halo2_proofs::{
     circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Assigned, Circuit, Column,
-        ConstraintSystem, Constraints, Error, Expression, Instance, Selector, SingleVerifier,
-        TableColumn,
+        ConstraintSystem, Constraints, Error, Expression, Instance, Selector, TableColumn,
     },
     poly::{commitment::Params, Rotation},
     transcript::{Blake2bRead, Blake2bWrite, Challenge255},
 };
-use pasta_curves::{pallas, vesta};
+use halo2curves::pasta::{pallas, vesta};
 use std::{fmt::format, marker::PhantomData};
 
 use crate::fieldutils::{self, felt_to_i32, i32tofelt};
@@ -84,7 +83,7 @@ impl<
         let qlookup = cs.complex_selector();
 
         for i in 0..LEN {
-            let _ = cs.lookup(|cs| {
+            let _ = cs.lookup("lk", |cs| {
                 let qlookup = cs.query_selector(qlookup);
                 vec![
                     (
@@ -337,9 +336,10 @@ mod tests {
     use super::*;
     use halo2_proofs::{
         dev::{FailureLocation, MockProver, VerifyFailure},
-        pasta::Fp as F,
         plonk::{Any, Circuit},
     };
+    use halo2curves::pasta::Fp as F;
+
     //     use nalgebra;
     use std::time::{Duration, Instant};
 
