@@ -336,9 +336,10 @@ mod tests {
     use super::*;
     use halo2_proofs::{
         dev::{FailureLocation, MockProver, VerifyFailure},
-        pasta::Fp as F,
         plonk::{Any, Circuit},
     };
+    use halo2curves::pasta::Fp as F;
+
     //     use nalgebra;
     use std::time::{Duration, Instant};
 
