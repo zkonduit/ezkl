@@ -1,9 +1,8 @@
 #![feature(generic_const_exprs)]
 #![feature(slice_flatten)]
 
-mod affine1d;
+pub mod affine1d;
 //mod apiexperiment;
-//mod cnvrl_generic;
 //pub mod cnvrl;
 pub mod cnvrl_generic;
 mod conv2d_mnist_example;
