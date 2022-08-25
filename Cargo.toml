@@ -7,9 +7,9 @@ edition = "2021"
 
 [dependencies]
 #halo2_proofs = { git = "https://github.com/zcash/halo2.git", rev = "a898d65ae3ad3d41987666f6a03cfc15edae01c4"}
-halo2_proofs = { git = "https://github.com/zcash/halo2.git", branch = "reduce-ast-evaluator-memory-usage"}
-#halo2_proofs = { git = "https://github.com/zcash/halo2.git", branch = "main"}
+#halo2_proofs = { git = "https://github.com/zcash/halo2.git", branch = "reduce-ast-evaluator-memory-usage"}
 #halo2_proofs = { path = "../halo2/halo2_proofs" }
+halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git"}
 nalgebra = "0.31"
 pasta_curves = "0.4"
 rand = "0.8"
@@ -17,6 +17,10 @@ mnist = "0.5"
 ndarray = "0.15"
 tensorflow = {version = "0.18.0", features = ["eager"], optional = true }
 plotters = { version = "0.3.0", optional = true }
+# pse: 
+halo2curves = { git = 'https://github.com/privacy-scaling-explorations/halo2curves', tag = "0.2.1" }
+
+
 
 [features]
 dev-graph = ["halo2_proofs/dev-graph", "plotters"]

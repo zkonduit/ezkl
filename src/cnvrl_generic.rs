@@ -415,7 +415,8 @@ mod tests {
 
     #[test]
     fn test_cnvrl() {
-        use halo2_proofs::pasta::pallas;
+        //        use halo2_proofs::pasta::pallas;
+        use halo2curves::pasta::{pallas, vesta};
 
         const KERNEL_HEIGHT: usize = 3;
         const KERNEL_WIDTH: usize = 3;
