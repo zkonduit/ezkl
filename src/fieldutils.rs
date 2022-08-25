@@ -12,11 +12,15 @@ fn felt_to_u16<F: FieldExt>(x: F) -> u16 {
     x.get_lower_32() as u16
 }
 
+fn felt_to_u32<F: FieldExt>(x: F) -> u32 {
+    x.get_lower_32() as u32
+}
+
 pub fn felt_to_i32<F: FieldExt>(x: F) -> i32 {
     if x > F::from(65536) {
-        -(felt_to_u16(-x) as i32)
+        -(felt_to_u32(-x) as i32)
     } else {
-        felt_to_u16(x) as i32
+        felt_to_u32(x) as i32
     }
 }
 
