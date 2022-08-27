@@ -217,7 +217,7 @@ impl<
             })
             .collect::<Vec<Value<Assigned<F>>>>();
 
-        println!("output {:?}", output);
+        //        println!("output {:?}", output);
 
         let mut output_for_equality = Vec::new();
         for i in 0..LEN {

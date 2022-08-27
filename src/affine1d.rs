@@ -310,10 +310,10 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1d<F, Value<Assigned<
     }
 }
 
-#[cfg(test)]
-use halo2_proofs::{
-    poly::commitment::Params,
-    transcript::{Blake2bRead, Blake2bWrite, Challenge255},
-};
-use pasta_curves::{pallas, vesta};
-use rand::rngs::OsRng;
+// #[cfg(test)]
+// use halo2_proofs::{
+//     poly::commitment::Params,
+//     transcript::{Blake2bRead, Blake2bWrite, Challenge255},
+// };
+// use pasta_curves::{pallas, vesta};
+// use rand::rngs::OsRng;
