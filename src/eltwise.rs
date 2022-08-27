@@ -9,7 +9,7 @@ use halo2_proofs::{
     transcript::{Blake2bRead, Blake2bWrite, Challenge255},
 };
 use halo2curves::pasta::{pallas, vesta};
-use std::{fmt::format, marker::PhantomData};
+use std::{marker::PhantomData, rc::Rc};
 
 use crate::fieldutils::{self, felt_to_i32, i32tofelt};
 use crate::tensorutils::flatten3;
@@ -282,22 +282,21 @@ impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, 
 }
 
 #[derive(Clone)]
-pub struct EltwiseConfig<'a, F: FieldExt, const LEN: usize, const BITS: usize, NL: Nonlinearity<F>>
-{
+pub struct EltwiseConfig<F: FieldExt, const LEN: usize, const BITS: usize, NL: Nonlinearity<F>> {
     pub advice: [Column<Advice>; LEN],
-    table: &'a EltwiseTable<F, BITS, NL>,
+    table: Rc<EltwiseTable<F, BITS, NL>>,
     qlookup: Selector,
     _marker: PhantomData<(NL, F)>,
 }
 
-impl<'a, F: FieldExt, const LEN: usize, const BITS: usize, NL: 'static + Nonlinearity<F>>
-    EltwiseConfig<'a, F, LEN, BITS, NL>
+impl<F: FieldExt, const LEN: usize, const BITS: usize, NL: 'static + Nonlinearity<F>>
+    EltwiseConfig<F, LEN, BITS, NL>
 {
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
         advice: [Column<Advice>; LEN],
-        table: &'a EltwiseTable<F, BITS, NL>,
-    ) -> EltwiseConfig<'a, F, LEN, BITS, NL> {
+        table: Rc<EltwiseTable<F, BITS, NL>>,
+    ) -> EltwiseConfig<F, LEN, BITS, NL> {
         let qlookup = cs.complex_selector();
 
         for i in 0..LEN {
