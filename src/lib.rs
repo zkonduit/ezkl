@@ -17,3 +17,4 @@ mod moreparams;
 //mod relu8; //move tests
 pub mod tensorutils;
 //mod tfaddition;
+mod mlp;
