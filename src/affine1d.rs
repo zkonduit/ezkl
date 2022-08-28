@@ -1,10 +1,7 @@
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{layouter, AssignedCell, Layouter, Region, Value},
-    plonk::{
-        create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Assigned, Circuit, Column,
-        ConstraintSystem, Constraints, Error, Expression, Selector,
-    },
+    circuit::{AssignedCell, Layouter, Region, Value},
+    plonk::{Advice, Assigned, Column, ConstraintSystem, Constraints, Expression, Selector},
     poly::Rotation,
 };
 use std::marker::PhantomData;
@@ -129,7 +126,7 @@ where
 
         // calculate value of output
         let mut output: Vec<Value<Assigned<F>>> =
-            (0..OUT).map(|i| Value::known(F::zero().into())).collect();
+            (0..OUT).map(|_| Value::known(F::zero().into())).collect();
 
         for i in 0..OUT {
             for j in 0..IN {
@@ -189,7 +186,7 @@ where
                     constraints[i].clone() + virtual_cells.query_advice(bias, Rotation(i as i32));
             }
 
-            let constraints = (0..OUT).map(|i| "c").zip(constraints);
+            let constraints = (0..OUT).map(|_| "c").zip(constraints);
             Constraints::with_selector(q, constraints)
         });
 
@@ -274,8 +271,8 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1d<F, Value<Assigned<
         let weights: Vec<Vec<Value<Assigned<F>>>> =
             map2::<_, _, OUT, IN>(|i, j| Value::known(i32tofelt::<F>(weights[i][j]).into()));
 
-        let input: Vec<Value<Assigned<F>>> = (0..IN).map(|i| Value::default()).collect();
-        let output: Vec<Value<Assigned<F>>> = (0..OUT).map(|i| Value::default()).collect();
+        let input: Vec<Value<Assigned<F>>> = (0..IN).map(|_| Value::default()).collect();
+        let output: Vec<Value<Assigned<F>>> = (0..OUT).map(|_| Value::default()).collect();
 
         Affine1d {
             input,
@@ -292,7 +289,7 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1d<F, Value<Assigned<
         self.input = input.clone();
 
         let mut output: Vec<Value<Assigned<F>>> =
-            (0..OUT).map(|i| Value::known(F::zero().into())).collect();
+            (0..OUT).map(|_| Value::known(F::zero().into())).collect();
 
         for i in 0..OUT {
             for j in 0..IN {
@@ -309,11 +306,3 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1d<F, Value<Assigned<
         output
     }
 }
-
-#[cfg(test)]
-use halo2_proofs::{
-    poly::commitment::Params,
-    transcript::{Blake2bRead, Blake2bWrite, Challenge255},
-};
-use pasta_curves::{pallas, vesta};
-use rand::rngs::OsRng;
