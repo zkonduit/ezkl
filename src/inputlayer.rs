@@ -1,11 +1,10 @@
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{layouter, AssignedCell, Layouter, Region, Value},
+    circuit::{AssignedCell, Layouter, Value},
     plonk::{
-        create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Assigned, Circuit, Column,
-        ConstraintSystem, Constraints, Error, Expression, Selector,
+        Advice, Assigned, Column,
+        ConstraintSystem, Selector,
     },
-    poly::Rotation,
 };
 use std::marker::PhantomData;
 

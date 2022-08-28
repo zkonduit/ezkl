@@ -1,39 +1,21 @@
 use halo2_proofs::{
-    poly::{
-        commitment::ParamsProver,
-        ipa::{
-            commitment::{IPACommitmentScheme, ParamsIPA},
-            multiopen::ProverIPA,
-            strategy::SingleStrategy,
-        },
-        VerificationStrategy,
-    },
-    transcript::{TranscriptReadBuffer, TranscriptWriterBuffer},
-};
-
-use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
-    plonk::{
-        create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Assigned, Circuit, Column,
-        ConstraintSystem, Error, Instance,
-    },
-    poly::{commitment::Params, Rotation},
-    transcript::{Blake2bRead, Blake2bWrite, Challenge255},
+    plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
-use halo2curves::pasta::{pallas, vesta};
+
 //use pasta_curves::{pallas, vesta};
 // use rand::rngs::OsRng;
 // use std::marker::PhantomData;
 
-use crate::fieldutils::{felt_to_i32, i32tofelt};
+use crate::fieldutils::felt_to_i32;
 //use crate::tensorutils::{dot3, flatten3, flatten4, map2, map3, map3r, map4, map4r};
 
 use std::cmp::max;
 
-use crate::affine1d::{Affine1d, Affine1dConfig};
+use crate::affine1d::Affine1dConfig;
 use crate::cnvrl_generic;
-use crate::eltwise::{DivideBy, Nonlin1d, NonlinConfig1d, ReLu};
+use crate::eltwise::{DivideBy, NonlinConfig1d, ReLu};
 
 #[derive(Clone)]
 struct MyConfig<
@@ -179,7 +161,7 @@ where
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
+        let _output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
         // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1 },
@@ -295,13 +277,13 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fieldutils::felt_to_i32;
+
+    use crate::fieldutils::i32tofelt;
     use halo2_proofs::{
-        arithmetic::{Field, FieldExt},
-        dev::{FailureLocation, MockProver, VerifyFailure},
-        //        pasta::Fp as F,
-        plonk::{Any, Circuit},
+        plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit},
+        transcript::{Blake2bRead, Blake2bWrite, Challenge255},
     };
+    use halo2curves::pasta::vesta;
 
     use halo2_proofs::{
         poly::{
@@ -318,16 +300,16 @@ mod tests {
 
     use halo2curves::pasta::Fp as F;
     //     use nalgebra;
-    use crate::cnvrl_generic::matrix;
+
     use crate::fieldutils;
     use crate::moreparams;
     use crate::tensorutils::map4;
-    use halo2curves::pasta::pallas;
+
     use mnist::*;
     use ndarray::prelude::*;
-    use rand::prelude::*;
+    // use rand::prelude::*;
     use rand::rngs::OsRng;
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     const K: u32 = 17;
 
@@ -353,8 +335,8 @@ mod tests {
         let Mnist {
             trn_img,
             trn_lbl,
-            tst_img,
-            tst_lbl,
+            tst_img: _,
+            tst_lbl: _,
             ..
         } = MnistBuilder::new()
             .label_format_digit()

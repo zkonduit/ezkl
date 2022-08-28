@@ -1,18 +1,13 @@
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
-    plonk::{
-        create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Assigned, Circuit, Column,
-        ConstraintSystem, Constraints, Error, Expression, Instance, Selector, TableColumn,
-    },
-    poly::{commitment::Params, Rotation},
-    transcript::{Blake2bRead, Blake2bWrite, Challenge255},
+    plonk::{Advice, Assigned, Circuit, Column, ConstraintSystem, Error, Selector, TableColumn},
+    poly::Rotation,
 };
-use halo2curves::pasta::{pallas, vesta};
-use std::{fmt::format, marker::PhantomData};
+
+use std::marker::PhantomData;
 
 use crate::fieldutils::{self, felt_to_i32, i32tofelt};
-use crate::tensorutils::flatten3;
 
 pub trait Nonlinearity<F: FieldExt> {
     fn nonlinearity(x: i32) -> F;
@@ -36,7 +31,7 @@ impl<F: FieldExt, Inner, const LEN: usize, NL: Nonlinearity<F>> Nonlin1d<F, Inne
         }
     }
     pub fn without_witnesses() -> Nonlin1d<F, Value<Assigned<F>>, LEN, NL> {
-        Nonlin1d::<F, Value<Assigned<F>>, LEN, NL>::fill(|i| Value::default())
+        Nonlin1d::<F, Value<Assigned<F>>, LEN, NL>::fill(|_| Value::default())
     }
 }
 
@@ -259,11 +254,6 @@ impl<
 
     fn without_witnesses(&self) -> Self {
         self.clone()
-        // let assigned = Nonlin1d::<F, Value<Assigned<F>>, LEN, NL>::fill(|i| Value::default());
-        // Self {
-        //     assigned,
-        //     _marker: PhantomData,
-        // }
     }
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
@@ -334,14 +324,9 @@ impl<F: FieldExt, const D: usize> Nonlinearity<F> for DivideBy<F, D> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use halo2_proofs::{
-        dev::{FailureLocation, MockProver, VerifyFailure},
-        plonk::{Any, Circuit},
-    };
+    use crate::tensorutils::flatten3;
+    use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp as F;
-
-    //     use nalgebra;
-    use std::time::{Duration, Instant};
 
     #[test]
     fn test_eltrelunl() {
@@ -368,7 +353,7 @@ mod tests {
     #[test]
     fn test_eltsigmoid() {
         for i in -127..127 {
-            let r = <Sigmoid<F, 128, 128> as Nonlinearity<F>>::nonlinearity(i);
+            let _r = <Sigmoid<F, 128, 128> as Nonlinearity<F>>::nonlinearity(i);
             //            println!("{i}, {:?}", r);
         }
     }
@@ -376,7 +361,7 @@ mod tests {
     #[test]
     fn test_eltdivide() {
         for i in -127..127 {
-            let r = <DivideBy<F, 32> as Nonlinearity<F>>::nonlinearity(i);
+            let _r = <DivideBy<F, 32> as Nonlinearity<F>>::nonlinearity(i);
             //            println!("{i}, {:?}", r);
         }
     }

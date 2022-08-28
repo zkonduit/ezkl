@@ -1,9 +1,8 @@
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
+    circuit::{Layouter, SimpleFloorPlanner},
     plonk::{
         //create_proof, keygen_pk, keygen_vk, verify_proof, Advice,
-        Assigned,
         Circuit,
         Column,
         ConstraintSystem,
@@ -16,7 +15,7 @@ use halo2_proofs::{
 //use pasta_curves::{pallas, vesta};
 // use rand::rngs::OsRng;
 // use std::marker::PhantomData;
-use crate::fieldutils::i32tofelt;
+
 use std::marker::PhantomData;
 //use crate::tensorutils::{dot3, flatten3, flatten4, map2, map3, map3r, map4, map4r};
 
@@ -154,11 +153,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fieldutils::felt_to_i32;
-    use halo2_proofs::dev::{FailureLocation, MockProver, VerifyFailure};
+
+    use crate::fieldutils::i32tofelt;
+    use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp as F;
-    // use rand::prelude::*;
-    // use std::time::{Duration, Instant};
+    
 
     #[test]
     fn test_rescale() {
