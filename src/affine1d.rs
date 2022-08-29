@@ -35,8 +35,8 @@ pub struct Affine1dFullyAssigned<F: FieldExt, const IN: usize, const OUT: usize>
 
 #[derive(Clone)]
 pub struct Affine1dConfig<F: FieldExt, const IN: usize, const OUT: usize>
-where
-    [(); IN + 3]:,
+// where
+//     [(); IN + 3]:,
 {
     pub weights: [Column<Advice>; IN],
     pub input: Column<Advice>,
@@ -47,8 +47,8 @@ where
 }
 
 impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT>
-where
-    [(); IN + 3]:,
+// where
+//     [(); IN + 3]:,
 {
     pub fn layout(
         &self,

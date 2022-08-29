@@ -31,8 +31,9 @@ struct MyConfig<
     F: FieldExt,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust
     const BITS: usize,
-> where
-    [(); LEN + 3]:,
+>
+// where
+//     [(); LEN + 3]:,
 {
     relutable: Rc<EltwiseTable<F, BITS, ReLu<F>>>,
     divtable: Rc<EltwiseTable<F, BITS, DivideBy<F, 128>>>,
@@ -60,8 +61,8 @@ struct MyCircuit<
 }
 
 impl<F: FieldExt, const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<F, LEN, BITS>
-where
-    [(); LEN + 3]:,
+// where
+//     [(); LEN + 3]:,
 {
     type Config = MyConfig<F, LEN, BITS>;
     type FloorPlanner = SimpleFloorPlanner;
