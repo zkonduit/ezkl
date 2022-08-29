@@ -146,8 +146,8 @@ where
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         // Layout the reused tables
-        config.relutable.layout(&mut layouter);
-        config.divtable.layout(&mut layouter);
+        config.relutable.layout(&mut layouter)?;
+        config.divtable.layout(&mut layouter)?;
 
         let x = config.input.layout(&mut layouter, self.input.clone())?;
         let x = config.l0.layout(
