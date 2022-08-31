@@ -25,6 +25,7 @@ pub fn felt_to_i32<F: FieldExt>(x: F) -> i32 {
 }
 
 mod test {
+
     use super::*;
     use halo2curves::pasta::Fp as F;
 

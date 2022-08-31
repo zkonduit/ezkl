@@ -134,7 +134,7 @@ pub fn dot3<F: FieldExt>(
 pub fn dot3u(a: &[Vec<Vec<u64>>], b: &[Vec<Vec<u64>>]) -> u64 {
     let aflat = a.iter().flatten().flatten(); //flatten3(a);
     let bflat = b.iter().flatten().flatten();
-    aflat.zip(bflat).map(|(x, y)| x.clone() * y.clone()).sum()
+    aflat.zip(bflat).map(|(x, y)| *x * *y).sum()
 }
 
 mod test {

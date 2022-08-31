@@ -5,7 +5,8 @@ use halo2_proofs::{
     poly::Rotation,
 };
 
-use std::marker::PhantomData;
+use halo2curves::pasta::{pallas, vesta};
+use std::{marker::PhantomData, rc::Rc};
 
 use crate::fieldutils::{self, felt_to_i32, i32tofelt};
 
@@ -25,8 +26,8 @@ impl<F: FieldExt, Inner, const LEN: usize, NL: Nonlinearity<F>> Nonlin1d<F, Inne
         Func: FnMut(usize) -> Inner,
     {
         Nonlin1d {
-            input: (0..LEN).map(|i| f(i)).collect(),
-            output: (0..LEN).map(|i| f(i)).collect(),
+            input: (0..LEN).map(&mut f).collect(),
+            output: (0..LEN).map(f).collect(),
             _marker: PhantomData,
         }
     }
@@ -77,16 +78,16 @@ impl<
 
         let qlookup = cs.complex_selector();
 
-        for i in 0..LEN {
+        for a in advice.iter().take(LEN) {
             let _ = cs.lookup("lk", |cs| {
                 let qlookup = cs.query_selector(qlookup);
                 vec![
                     (
-                        qlookup.clone() * cs.query_advice(advice[i], Rotation::cur()),
+                        qlookup.clone() * cs.query_advice(*a, Rotation::cur()),
                         table.table_input,
                     ),
                     (
-                        qlookup.clone() * cs.query_advice(advice[i], Rotation::next()),
+                        qlookup * cs.query_advice(*a, Rotation::next()),
                         table.table_output,
                     ),
                 ]
@@ -114,8 +115,7 @@ impl<
         layouter.assign_table(
             || "nl table",
             |mut table| {
-                let mut row_offset = 0;
-                for int_input in smallest..largest {
+                for (row_offset, int_input) in (smallest..largest).enumerate() {
                     //println!("{}->{:?}", int_input, nonlinearity(int_input));
                     let input: F = i32tofelt(int_input);
                     table.assign_cell(
@@ -130,13 +130,13 @@ impl<
                         row_offset,
                         || Value::known(nonlinearity(int_input)),
                     )?;
-                    row_offset += 1;
                 }
                 Ok(())
             },
         )
     }
 
+    // layout without copying advice
     pub fn witness(
         &self,
         layouter: &mut impl Layouter<F>,
@@ -150,17 +150,17 @@ impl<
 
                 let mut input_vec = Vec::new();
                 //witness the advice
-                for i in 0..LEN {
+                for (i, x) in input.iter().enumerate().take(LEN) {
                     let witnessed = region.assign_advice(
                         || format!("input {:?}", i),
                         self.advice[i],
                         offset,
-                        || input[i],
+                        || *x,
                     )?;
                     input_vec.push(witnessed);
                 }
 
-                println!("input_vec {:?}", input_vec);
+                //                println!("input_vec {:?}", input_vec);
 
                 self.layout_inner(&mut region, offset, input_vec)
             },
@@ -183,8 +183,8 @@ impl<
                 self.qlookup.enable(&mut region, offset)?;
 
                 //copy the advice
-                for i in 0..LEN {
-                    input[i].copy_advice(|| "input", &mut region, self.advice[i], offset)?;
+                for (i, x) in input.iter().enumerate().take(LEN) {
+                    x.copy_advice(|| "input", &mut region, self.advice[i], offset)?;
                 }
 
                 self.layout_inner(&mut region, offset, input.clone())
@@ -212,7 +212,7 @@ impl<
             })
             .collect::<Vec<Value<Assigned<F>>>>();
 
-        println!("output {:?}", output);
+        //        println!("output {:?}", output);
 
         let mut output_for_equality = Vec::new();
         for i in 0..LEN {
@@ -221,6 +221,147 @@ impl<
                 self.advice[i], // Column<Advice>
                 offset + 1,
                 || output[i], //Assigned<F>
+            )?;
+            output_for_equality.push(ofe);
+        }
+
+        Ok(output_for_equality)
+    }
+}
+
+// Table that should be reused across all lookups (so no Clone)
+#[derive(Clone)]
+pub struct EltwiseTable<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> {
+    pub table_input: TableColumn,
+    pub table_output: TableColumn,
+    _marker: PhantomData<(F, NL)>,
+}
+
+impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, NL> {
+    pub fn configure(cs: &mut ConstraintSystem<F>) -> EltwiseTable<F, BITS, NL> {
+        EltwiseTable {
+            table_input: cs.lookup_table_column(),
+            table_output: cs.lookup_table_column(),
+            _marker: PhantomData,
+        }
+    }
+    pub fn layout(&self, layouter: &mut impl Layouter<F>) -> Result<(), Error> {
+        let base = 2i32;
+        let smallest = -base.pow(BITS as u32 - 1);
+        let largest = base.pow(BITS as u32 - 1);
+        layouter.assign_table(
+            || "nl table",
+            |mut table| {
+                let mut row_offset = 0;
+                for int_input in smallest..largest {
+                    let input: F = i32tofelt(int_input);
+                    table.assign_cell(
+                        || format!("nl_i_col row {}", row_offset),
+                        self.table_input,
+                        row_offset,
+                        || Value::known(input),
+                    )?;
+                    table.assign_cell(
+                        || format!("nl_o_col row {}", row_offset),
+                        self.table_output,
+                        row_offset,
+                        || Value::known(NL::nonlinearity(int_input)),
+                    )?;
+                    row_offset += 1;
+                }
+                Ok(())
+            },
+        )
+    }
+}
+
+#[derive(Clone)]
+pub struct EltwiseConfig<F: FieldExt, const LEN: usize, const BITS: usize, NL: Nonlinearity<F>> {
+    pub advice: [Column<Advice>; LEN],
+    table: Rc<EltwiseTable<F, BITS, NL>>,
+    qlookup: Selector,
+    _marker: PhantomData<(NL, F)>,
+}
+
+impl<F: FieldExt, const LEN: usize, const BITS: usize, NL: 'static + Nonlinearity<F>>
+    EltwiseConfig<F, LEN, BITS, NL>
+{
+    pub fn configure(
+        cs: &mut ConstraintSystem<F>,
+        advice: [Column<Advice>; LEN],
+        table: Rc<EltwiseTable<F, BITS, NL>>,
+    ) -> EltwiseConfig<F, LEN, BITS, NL> {
+        let qlookup = cs.complex_selector();
+
+        for i in 0..LEN {
+            let _ = cs.lookup("lk", |cs| {
+                let qlookup = cs.query_selector(qlookup);
+                vec![
+                    (
+                        qlookup.clone() * cs.query_advice(advice[i], Rotation::cur()),
+                        table.table_input,
+                    ),
+                    (
+                        qlookup.clone() * cs.query_advice(advice[i], Rotation::next()),
+                        table.table_output,
+                    ),
+                ]
+            });
+        }
+
+        Self {
+            advice,
+            table,
+            qlookup,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn layout(
+        &self,
+        layouter: &mut impl Layouter<F>,
+        input: Vec<AssignedCell<Assigned<F>, F>>,
+    ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+        let output_for_eq = layouter.assign_region(
+            || "Elementwise", // the name of the region
+            |mut region| {
+                let offset = 0;
+                self.qlookup.enable(&mut region, offset)?;
+
+                //copy the advice
+                for i in 0..LEN {
+                    input[i].copy_advice(|| "input", &mut region, self.advice[i], offset)?;
+                }
+
+                self.layout_inner(&mut region, offset, input.clone())
+            },
+        )?;
+
+        Ok(output_for_eq)
+    }
+
+    fn layout_inner(
+        &self,
+        region: &mut Region<'_, F>,
+        offset: usize,
+        input: Vec<AssignedCell<Assigned<F>, F>>,
+    ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+        //calculate the value of output
+        let output = input
+            .iter()
+            .map(|acaf| acaf.value_field())
+            .map(|vaf| {
+                vaf.map(|f| <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into())
+            })
+            .collect::<Vec<Value<Assigned<F>>>>();
+
+        let mut output_for_equality = Vec::new();
+        for (i, o) in output.iter().enumerate().take(LEN) {
+            let ofe = region.assign_advice(
+                || format!("nl_{i}"),
+                self.advice[i], // Column<Advice>
+                offset + 1,
+                || *o, //Assigned<F>
             )?;
             output_for_equality.push(ofe);
         }
@@ -283,8 +424,11 @@ pub struct ReLu<F> {
 }
 impl<F: FieldExt> Nonlinearity<F> for ReLu<F> {
     fn nonlinearity(x: i32) -> F {
-        let out = if x < 0 { F::zero() } else { i32tofelt(x) };
-        out
+        if x < 0 {
+            F::zero()
+        } else {
+            i32tofelt(x)
+        }
     }
 }
 
@@ -300,9 +444,7 @@ impl<F: FieldExt, const L: usize, const K: usize> Nonlinearity<F> for Sigmoid<F,
         let fout = (L as f32) / (1.0 + (-kix).exp());
         let rounded = fout.round();
         let xi: i32 = unsafe { rounded.to_int_unchecked() };
-        let felt = fieldutils::i32tofelt(xi);
-        //        println!("{}->{}->{}->{}->{}", x, kix, fout, rounded, xi);
-        felt
+        fieldutils::i32tofelt(xi)
     }
 }
 
@@ -315,9 +457,7 @@ impl<F: FieldExt, const D: usize> Nonlinearity<F> for DivideBy<F, D> {
         let d_inv_x = (x as f32) / (D as f32);
         let rounded = d_inv_x.round();
         let integral: i32 = unsafe { rounded.to_int_unchecked() };
-        let felt = fieldutils::i32tofelt(integral);
-        //        println!("{}->{}->{}", x, d_inv_x, integral);
-        felt
+        fieldutils::i32tofelt(integral)
     }
 }
 
