@@ -28,12 +28,12 @@ use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp as F;
 //     use nalgebra;
 // use crate::params;
-use halo2deeplearning::affine1d::Affine1dConfig;
-use halo2deeplearning::cnvrl_generic;
-use halo2deeplearning::eltwise::{DivideBy, NonlinConfig1d, ReLu};
 use halo2deeplearning::fieldutils;
 use halo2deeplearning::fieldutils::i32tofelt;
-use halo2deeplearning::tensorutils::map4;
+use halo2deeplearning::nn::affine1d::Affine1dConfig;
+use halo2deeplearning::nn::cnvrl_generic;
+use halo2deeplearning::tensor_ops::eltwise::{DivideBy, NonlinConfig1d, ReLu};
+use halo2deeplearning::tensor_ops::utils::map4;
 use std::cmp::max;
 
 mod params;

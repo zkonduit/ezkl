@@ -1,32 +1,56 @@
+use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner},
-    plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
+    plonk::{
+        //create_proof, keygen_pk, keygen_vk, verify_proof, Advice,
+        Circuit,
+        Column,
+        ConstraintSystem,
+        Error,
+        Instance,
+    },
+    // poly::{commitment::Params, Rotation},
+    // transcript::{Blake2bRead, Blake2bWrite, Challenge255},
 };
+use halo2curves::pasta::Fp as F;
 
-use halo2deeplearning::{
-    affine1d::{Affine1dConfig, RawParameters},
-    eltwise::{DivideBy, NonlinConfig1d, ReLu},
-    inputlayer::InputConfig,
-};
+use halo2deeplearning::fieldutils::i32tofelt;
 use std::marker::PhantomData;
+use std::rc::Rc;
+//use crate::tensorutils::{dot3, flatten3, flatten4, map2, map3, map3r, map4, map4r};
 
-// A columnar ReLu MLP consisting of a stateless MLPConfig, and an MLPCircuit with parameters and input.
-
+use halo2deeplearning::nn::affine1d::{Affine1dConfig, RawParameters};
+use halo2deeplearning::nn::input::InputConfig;
+use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu};
+// A columnar ReLu MLP
 #[derive(Clone)]
-struct MLPConfig<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> {
+struct MyConfig<
+    F: FieldExt,
+    const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust
+    const BITS: usize,
+>
+// where
+//     [(); LEN + 3]:,
+{
+    relutable: Rc<EltwiseTable<F, BITS, ReLu<F>>>,
+    divtable: Rc<EltwiseTable<F, BITS, DivideBy<F, 128>>>,
     input: InputConfig<F, LEN>,
     l0: Affine1dConfig<F, LEN, LEN>,
-    l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>>,
+    l1: EltwiseConfig<F, LEN, BITS, ReLu<F>>,
     l2: Affine1dConfig<F, LEN, LEN>,
-    l3: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>>,
-    l4: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 128>>,
+    l3: EltwiseConfig<F, LEN, BITS, ReLu<F>>,
+    l4: EltwiseConfig<F, LEN, BITS, DivideBy<F, 128>>,
     public_output: Column<Instance>,
 }
 
 #[derive(Clone)]
-struct MLPCircuit<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> {
-    // Given the stateless MLPConfig type information, a DNN trace is determined by its input and the parameters of its layers.
+struct MyCircuit<
+    F: FieldExt,
+    const LEN: usize, //LEN = CHOUT x OH x OW flattened
+    const BITS: usize,
+> {
+    // Given the stateless MyConfig type information, a DNN trace is determined by its input and the parameters of its layers.
     // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
     input: Vec<i32>,
     l0_params: RawParameters<LEN, LEN>,
@@ -34,17 +58,19 @@ struct MLPCircuit<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTB
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> Circuit<F>
-    for MLPCircuit<F, LEN, INBITS, OUTBITS>
-
+impl<F: FieldExt, const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<F, LEN, BITS>
+// where
+//     [(); LEN + 3]:,
 {
-    type Config = MLPConfig<F, LEN, INBITS, OUTBITS>;
+    type Config = MyConfig<F, LEN, BITS>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
         self.clone()
     }
 
+    // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
+    // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let num_advices = LEN + 3;
         let advices = (0..num_advices)
@@ -55,7 +81,13 @@ impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> C
             })
             .collect::<Vec<_>>();
 
-        let input = InputConfig::<F, LEN>::configure(cs, advices[LEN]);
+        let relutable_config = EltwiseTable::<F, BITS, ReLu<F>>::configure(cs);
+        let divtable_config = EltwiseTable::<F, BITS, DivideBy<F, 128>>::configure(cs);
+
+        let relutable = Rc::new(relutable_config);
+        let divtable = Rc::new(divtable_config);
+
+        let input = InputConfig::<F, LEN>::configure(cs, advices[LEN].clone());
 
         let l0 = Affine1dConfig::<F, LEN, LEN>::configure(
             cs,
@@ -65,8 +97,11 @@ impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> C
             advices[LEN + 2],                      // bias
         );
 
-        let l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
-            NonlinConfig1d::configure(cs, (&advices[..LEN]).try_into().unwrap());
+        let l1: EltwiseConfig<F, LEN, BITS, ReLu<F>> = EltwiseConfig::configure(
+            cs,
+            (&advices[..LEN]).clone().try_into().unwrap(),
+            relutable.clone(),
+        );
 
         let l2 = Affine1dConfig::<F, LEN, LEN>::configure(
             cs,
@@ -76,16 +111,24 @@ impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> C
             advices[LEN + 2],
         );
 
-        let l3: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
-            NonlinConfig1d::configure(cs, (&advices[..LEN]).try_into().unwrap());
+        let l3: EltwiseConfig<F, LEN, BITS, ReLu<F>> = EltwiseConfig::configure(
+            cs,
+            (&advices[..LEN]).clone().try_into().unwrap(),
+            relutable.clone(),
+        );
 
-        let l4: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 128>> =
-            NonlinConfig1d::configure(cs, (&advices[..LEN]).try_into().unwrap());
+        let l4: EltwiseConfig<F, LEN, BITS, DivideBy<F, 128>> = EltwiseConfig::configure(
+            cs,
+            (&advices[..LEN]).clone().try_into().unwrap(),
+            divtable.clone(),
+        );
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
 
-        MLPConfig {
+        MyConfig {
+            relutable,
+            divtable,
             input,
             l0,
             l1,
@@ -101,6 +144,10 @@ impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> C
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
+        // Layout the reused tables
+        config.relutable.layout(&mut layouter)?;
+        config.divtable.layout(&mut layouter)?;
+
         let x = config.input.layout(&mut layouter, self.input.clone())?;
         let x = config.l0.layout(
             &mut layouter,
@@ -124,11 +171,7 @@ impl<F: FieldExt, const LEN: usize, const INBITS: usize, const OUTBITS: usize> C
     }
 }
 
-pub fn mlprun() {
-    use halo2_proofs::dev::MockProver;
-    use halo2curves::pasta::Fp as F;
-    use halo2deeplearning::fieldutils::i32tofelt;
-
+pub fn runmlp() {
     let k = 15; //2^k rows
                 // parameters
     let l0weights: Vec<Vec<i32>> = vec![
@@ -156,7 +199,7 @@ pub fn mlprun() {
     // input data
     let input: Vec<i32> = vec![-30, -21, 11, 40];
 
-    let circuit = MLPCircuit::<F, 4, 14, 14> {
+    let circuit = MyCircuit::<F, 4, 14> {
         input,
         l0_params,
         l2_params,
@@ -165,10 +208,10 @@ pub fn mlprun() {
 
     let public_input: Vec<i32> = unsafe {
         vec![
-            (531f32 / 128f32).round().to_int_unchecked::<i32>(),
-            (103f32 / 128f32).round().to_int_unchecked::<i32>(),
-            (4469f32 / 128f32).round().to_int_unchecked::<i32>(),
-            (2849f32 / 128f32).to_int_unchecked::<i32>(),
+            (531f32 / 128f32).round().to_int_unchecked::<i32>().into(),
+            (103f32 / 128f32).round().to_int_unchecked::<i32>().into(),
+            (4469f32 / 128f32).round().to_int_unchecked::<i32>().into(),
+            (2849f32 / 128f32).to_int_unchecked::<i32>().into(),
         ]
     };
 
@@ -177,13 +220,16 @@ pub fn mlprun() {
     let prover = MockProver::run(
         k,
         &circuit,
-        vec![public_input.iter().map(|x| i32tofelt::<F>(*x)).collect()],
+        vec![public_input
+            .iter()
+            .map(|x| i32tofelt::<F>(*x).into())
+            .collect()],
         //            vec![vec![(4).into(), (1).into(), (35).into(), (22).into()]],
     )
     .unwrap();
     prover.assert_satisfied();
 }
 
-fn main() {
-    mlprun()
+pub fn main() {
+    runmlp()
 }

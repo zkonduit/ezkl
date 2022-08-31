@@ -5,7 +5,6 @@ use halo2_proofs::{
     poly::Rotation,
 };
 
-use halo2curves::pasta::{pallas, vesta};
 use std::{marker::PhantomData, rc::Rc};
 
 use crate::fieldutils::{self, felt_to_i32, i32tofelt};
@@ -464,7 +463,7 @@ impl<F: FieldExt, const D: usize> Nonlinearity<F> for DivideBy<F, D> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tensorutils::flatten3;
+    use crate::tensor_ops::utils::flatten3;
     use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp as F;
 
