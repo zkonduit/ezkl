@@ -188,16 +188,16 @@ where
             PADDING,
         >::configure(cs, advices.clone());
         let l0q: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 32>> =
-            NonlinConfig1d::configure(cs, (&advices[..LEN]).clone().try_into().unwrap());
+            NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
         let l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
-            NonlinConfig1d::configure(cs, (&advices[..LEN]).clone().try_into().unwrap());
+            NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
 
         let l2: Affine1dConfig<F, LEN, CLASSES> = Affine1dConfig::configure(
             cs,
-            (&advices[..LEN]).try_into().unwrap(),
-            (&advices[LEN]).clone(),
-            (&advices[CLASSES + 1]).clone(),
-            (&advices[LEN + 2]).clone(),
+            advices[..LEN].try_into().unwrap(),
+            advices[LEN],
+            advices[CLASSES + 1],
+            advices[LEN + 2],
         );
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -226,12 +226,12 @@ where
             &mut layouter,
             l0out.into_iter().flatten().flatten().collect(),
         )?;
-        let l1out = config.l1.layout(&mut layouter, l0qout.clone())?;
+        let l1out = config.l1.layout(&mut layouter, l0qout)?;
         let l2out = config.l2.layout(
             &mut layouter,
             self.l2_params.0.clone(),
             self.l2_params.1.clone(),
-            l1out.clone(),
+            l1out,
         )?;
         //        println!("l1out {:?}", l1out);
         // println!(
@@ -267,8 +267,8 @@ where
         );
 
         // tie the last output to public inputs (instance column)
-        for i in 0..CLASSES {
-            layouter.constrain_instance(l2out[i].cell(), config.public_output, i)?;
+        for (i, a) in l2out.iter().enumerate().take(CLASSES) {
+            layouter.constrain_instance(a.cell(), config.public_output, i)?;
         }
         Ok(())
     }
@@ -349,9 +349,7 @@ mod tests {
         // Can use an Array2 or Array3 here (Array3 for visualization)
         let train_data = Array3::from_shape_vec((50_000, 28, 28), trn_img)
             .expect("Error converting images to Array3 struct")
-            //            .map(|x| *x as f32 / 256.0);
             .map(|x| i32tofelt::<F>(*x as i32 / 16));
-        //        println!("{:#.1?}\n", train_data.slice(s![image_num, .., ..]));
 
         let train_labels: Array2<f32> = Array2::from_shape_vec((50_000, 1), trn_lbl)
             .expect("Error converting training labels to Array2 struct")
@@ -543,7 +541,6 @@ mod tests {
         let pk = keygen_pk(&params, vk.clone(), &empty_circuit).expect("keygen_pk should not fail");
         println!("PK took {}", now.elapsed().as_secs());
         let now = Instant::now();
-        //println!("{:?} {:?}", vk, pk);
         let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
         let mut rng = OsRng;
         create_proof::<IPACommitmentScheme<_>, ProverIPA<_>, _, _, _, _>(

@@ -240,14 +240,14 @@ impl<
 {
     pub fn without_witnesses() -> Self {
         let image = (0..IN_CHANNELS)
-            .map(|_| matrix(|| Value::default()))
+            .map(|_| matrix(Value::default))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
         let kernels = (0..OUT_CHANNELS)
             .map(|_| {
                 (0..IN_CHANNELS)
-                    .map(|_| matrix(|| Value::default()))
+                    .map(|_| matrix(Value::default))
                     .collect::<Vec<_>>()
                     .try_into()
                     .unwrap()
@@ -416,7 +416,7 @@ mod tests {
     #[test]
     fn test_cnvrl() {
         //        use halo2_proofs::pasta::pallas;
-        use halo2curves::pasta::{pallas};
+        use halo2curves::pasta::pallas;
 
         const KERNEL_HEIGHT: usize = 3;
         const KERNEL_WIDTH: usize = 3;

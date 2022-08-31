@@ -40,12 +40,12 @@ impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> ImageConfig<F, HEIGHT
         offset: usize,
         image: Image<Value<F>, HEIGHT, WIDTH>,
     ) -> Result<Image<AssignedCell<Assigned<F>, F>, HEIGHT, WIDTH>, Error> {
-        let res = image
+        let res: Result<Vec<_>, Error> = image
             .iter()
             .enumerate()
             .map(
                 |(col_idx, column)| -> Result<[AssignedCell<Assigned<F>, F>; HEIGHT], Error> {
-                    let res = column
+                    let res: Result<Vec<_>, Error> = column
                         .iter()
                         .enumerate()
                         .map(
@@ -63,14 +63,12 @@ impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> ImageConfig<F, HEIGHT
                                 )
                             },
                         )
-                        .collect::<Vec<_>>();
-                    let res: Result<Vec<_>, Error> = res.into_iter().collect();
+                        .collect();
                     res.map(|vec| vec.try_into().unwrap())
                 },
             )
-            .collect::<Vec<_>>();
+            .collect();
 
-        let res: Result<Vec<_>, Error> = res.into_iter().collect();
         res.map(|v| v.try_into().unwrap())
     }
 

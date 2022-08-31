@@ -111,10 +111,10 @@ fn slice<
 where
     T: Clone + Debug + Zero,
 {
-    (&image[col_start..(col_start + KERNEL_WIDTH)])
+    (image[col_start..(col_start + KERNEL_WIDTH)])
         .iter()
         .map(|col| {
-            (&col[row_start..(row_start + KERNEL_HEIGHT)])
+            (col[row_start..(row_start + KERNEL_HEIGHT)])
                 .to_vec()
                 .try_into()
                 .unwrap()

@@ -81,32 +81,32 @@ where
             })
             .collect::<Vec<_>>();
 
-        let input = InputConfig::<F, LEN>::configure(cs, advices[LEN].clone());
+        let input = InputConfig::<F, LEN>::configure(cs, advices[LEN]);
 
         let l0 = Affine1dConfig::<F, LEN, LEN>::configure(
             cs,
             (&advices[..LEN]).try_into().unwrap(), // wts gets several col, others get a column each
-            (&advices[LEN]).clone(),               // input
-            (&advices[LEN + 1]).clone(),           // output
-            (&advices[LEN + 2]).clone(),           // bias
+            advices[LEN],                          // input
+            advices[LEN + 1],                      // output
+            advices[LEN + 2],                      // bias
         );
 
         let l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
-            NonlinConfig1d::configure(cs, (&advices[..LEN]).clone().try_into().unwrap());
+            NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
 
         let l2 = Affine1dConfig::<F, LEN, LEN>::configure(
             cs,
             (&advices[..LEN]).try_into().unwrap(),
-            (&advices[LEN]).clone(),
-            (&advices[LEN + 1]).clone(),
-            (&advices[LEN + 2]).clone(),
+            advices[LEN],
+            advices[LEN + 1],
+            advices[LEN + 2],
         );
 
         let l3: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
-            NonlinConfig1d::configure(cs, (&advices[..LEN]).clone().try_into().unwrap());
+            NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
 
         let l4: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 128>> =
-            NonlinConfig1d::configure(cs, (&advices[..LEN]).clone().try_into().unwrap());
+            NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -143,8 +143,8 @@ where
         )?;
         let x = config.l3.layout(&mut layouter, x)?;
         let x = config.l4.layout(&mut layouter, x)?;
-        for i in 0..LEN {
-            layouter.constrain_instance(x[i].cell(), config.public_output, i)?;
+        for (i, x_i) in x.iter().enumerate().take(LEN) {
+            layouter.constrain_instance(x_i.cell(), config.public_output, i)?;
         }
         Ok(())
     }
@@ -157,7 +157,6 @@ mod tests {
     use crate::fieldutils::i32tofelt;
     use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp as F;
-    
 
     #[test]
     fn test_rescale() {
@@ -200,7 +199,7 @@ mod tests {
                 (531f32 / 128f32).round().to_int_unchecked::<i32>().into(),
                 (103f32 / 128f32).round().to_int_unchecked::<i32>().into(),
                 (4469f32 / 128f32).round().to_int_unchecked::<i32>().into(),
-                (2849f32 / 128f32).to_int_unchecked::<i32>().into(),
+                (2849f32 / 128f32).to_int_unchecked::<i32>(),
             ]
         };
 
@@ -209,10 +208,7 @@ mod tests {
         let prover = MockProver::run(
             k,
             &circuit,
-            vec![public_input
-                .iter()
-                .map(|x| i32tofelt::<F>(*x).into())
-                .collect()],
+            vec![public_input.iter().map(|x| i32tofelt::<F>(*x)).collect()],
             //            vec![vec![(4).into(), (1).into(), (35).into(), (22).into()]],
         )
         .unwrap();
