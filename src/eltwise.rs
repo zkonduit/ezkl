@@ -25,8 +25,8 @@ impl<F: FieldExt, Inner, const LEN: usize, NL: Nonlinearity<F>> Nonlin1d<F, Inne
         Func: FnMut(usize) -> Inner,
     {
         Nonlin1d {
-            input: (0..LEN).map(|i| f(i)).collect(),
-            output: (0..LEN).map(|i| f(i)).collect(),
+            input: (0..LEN).map(&mut f).collect(),
+            output: (0..LEN).map(f).collect(),
             _marker: PhantomData,
         }
     }
@@ -77,16 +77,16 @@ impl<
 
         let qlookup = cs.complex_selector();
 
-        for i in 0..LEN {
+        for a in advice.iter().take(LEN) {
             let _ = cs.lookup("lk", |cs| {
                 let qlookup = cs.query_selector(qlookup);
                 vec![
                     (
-                        qlookup.clone() * cs.query_advice(advice[i], Rotation::cur()),
+                        qlookup.clone() * cs.query_advice(*a, Rotation::cur()),
                         table.table_input,
                     ),
                     (
-                        qlookup.clone() * cs.query_advice(advice[i], Rotation::next()),
+                        qlookup * cs.query_advice(*a, Rotation::next()),
                         table.table_output,
                     ),
                 ]
@@ -114,8 +114,7 @@ impl<
         layouter.assign_table(
             || "nl table",
             |mut table| {
-                let mut row_offset = 0;
-                for int_input in smallest..largest {
+                for (row_offset, int_input) in (smallest..largest).enumerate() {
                     //println!("{}->{:?}", int_input, nonlinearity(int_input));
                     let input: F = i32tofelt(int_input);
                     table.assign_cell(
@@ -130,7 +129,6 @@ impl<
                         row_offset,
                         || Value::known(nonlinearity(int_input)),
                     )?;
-                    row_offset += 1;
                 }
                 Ok(())
             },
@@ -150,12 +148,12 @@ impl<
 
                 let mut input_vec = Vec::new();
                 //witness the advice
-                for i in 0..LEN {
+                for (i, x) in input.iter().enumerate().take(LEN) {
                     let witnessed = region.assign_advice(
                         || format!("input {:?}", i),
                         self.advice[i],
                         offset,
-                        || input[i],
+                        || *x,
                     )?;
                     input_vec.push(witnessed);
                 }
@@ -183,8 +181,8 @@ impl<
                 self.qlookup.enable(&mut region, offset)?;
 
                 //copy the advice
-                for i in 0..LEN {
-                    input[i].copy_advice(|| "input", &mut region, self.advice[i], offset)?;
+                for (i, x) in input.iter().enumerate().take(LEN) {
+                    x.copy_advice(|| "input", &mut region, self.advice[i], offset)?;
                 }
 
                 self.layout_inner(&mut region, offset, input.clone())
@@ -215,12 +213,12 @@ impl<
         println!("output {:?}", output);
 
         let mut output_for_equality = Vec::new();
-        for i in 0..LEN {
+        for (i, o) in output.iter().enumerate().take(LEN) {
             let ofe = region.assign_advice(
                 || format!("nl_{i}"),
                 self.advice[i], // Column<Advice>
                 offset + 1,
-                || output[i], //Assigned<F>
+                || *o, //Assigned<F>
             )?;
             output_for_equality.push(ofe);
         }
@@ -283,8 +281,11 @@ pub struct ReLu<F> {
 }
 impl<F: FieldExt> Nonlinearity<F> for ReLu<F> {
     fn nonlinearity(x: i32) -> F {
-        let out = if x < 0 { F::zero() } else { i32tofelt(x) };
-        out
+        if x < 0 {
+            F::zero()
+        } else {
+            i32tofelt(x)
+        }
     }
 }
 
@@ -300,9 +301,7 @@ impl<F: FieldExt, const L: usize, const K: usize> Nonlinearity<F> for Sigmoid<F,
         let fout = (L as f32) / (1.0 + (-kix).exp());
         let rounded = fout.round();
         let xi: i32 = unsafe { rounded.to_int_unchecked() };
-        let felt = fieldutils::i32tofelt(xi);
-        //        println!("{}->{}->{}->{}->{}", x, kix, fout, rounded, xi);
-        felt
+        fieldutils::i32tofelt(xi)
     }
 }
 
@@ -315,9 +314,7 @@ impl<F: FieldExt, const D: usize> Nonlinearity<F> for DivideBy<F, D> {
         let d_inv_x = (x as f32) / (D as f32);
         let rounded = d_inv_x.round();
         let integral: i32 = unsafe { rounded.to_int_unchecked() };
-        let felt = fieldutils::i32tofelt(integral);
-        //        println!("{}->{}->{}", x, d_inv_x, integral);
-        felt
+        fieldutils::i32tofelt(integral)
     }
 }
 
