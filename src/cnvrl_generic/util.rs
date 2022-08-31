@@ -45,6 +45,10 @@ pub fn convolution<
     const KERNEL_WIDTH: usize,
     const IMAGE_HEIGHT: usize,
     const IMAGE_WIDTH: usize,
+    const PADDED_HEIGHT: usize,
+    const PADDED_WIDTH: usize,
+    const OUTPUT_HEIGHT: usize,
+    const OUTPUT_WIDTH: usize,
     const PADDING: usize,
     const STRIDE: usize,
 >(
@@ -52,17 +56,19 @@ pub fn convolution<
     image: Matrix<T, IMAGE_HEIGHT, IMAGE_WIDTH>,
 ) -> Matrix<
     T,
-    { (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1 },
-    { (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1 },
+    OUTPUT_HEIGHT, // { (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1 },
+    OUTPUT_WIDTH,  // { (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1 },
 >
 where
     T: Clone + Debug + Zero + Add<Output = T> + Mul<Output = T>,
 {
-    let padded_image = pad::<T, IMAGE_HEIGHT, IMAGE_WIDTH, PADDING>(image);
+    let padded_image =
+        pad::<T, IMAGE_HEIGHT, IMAGE_WIDTH, PADDED_HEIGHT, PADDED_WIDTH, PADDING>(image);
 
     let horz_slides = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
     let vert_slides = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
-
+    assert!(horz_slides == OUTPUT_HEIGHT);
+    assert!(vert_slides == OUTPUT_WIDTH);
     (0..horz_slides)
         .map(|horz_slide| {
             let col_start = horz_slide * STRIDE;
@@ -124,14 +130,23 @@ where
         .unwrap()
 }
 
-fn pad<T, const IMAGE_HEIGHT: usize, const IMAGE_WIDTH: usize, const PADDING: usize>(
+fn pad<
+    T,
+    const IMAGE_HEIGHT: usize,
+    const IMAGE_WIDTH: usize,
+    const PADDED_HEIGHT: usize,
+    const PADDED_WIDTH: usize,
+    const PADDING: usize,
+>(
     image: Matrix<T, IMAGE_HEIGHT, IMAGE_WIDTH>,
-) -> Matrix<T, { IMAGE_HEIGHT + 2 * PADDING }, { IMAGE_WIDTH + 2 * PADDING }>
+) -> Matrix<T, PADDED_HEIGHT, PADDED_WIDTH>
 where
     T: Clone + Debug + Zero,
 {
-    let mut output: [[T; IMAGE_HEIGHT + 2 * PADDING]; IMAGE_WIDTH + 2 * PADDING] = (0
-        ..(IMAGE_HEIGHT + 2 * PADDING))
+    assert!(PADDED_HEIGHT == IMAGE_HEIGHT + 2 * PADDING);
+    assert!(PADDED_WIDTH == IMAGE_WIDTH + 2 * PADDING);
+
+    let mut output: [[T; PADDED_HEIGHT]; PADDED_WIDTH] = (0..(IMAGE_HEIGHT + 2 * PADDING))
         .map(|_| {
             (0..(IMAGE_WIDTH + 2 * PADDING))
                 .map(|_| T::zero())

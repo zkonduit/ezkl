@@ -49,12 +49,17 @@ struct MyConfig<
     const STRIDE: usize,
     const IMAGE_HEIGHT: usize,
     const IMAGE_WIDTH: usize,
+    const PADDED_HEIGHT: usize, // IMAGE_HEIGHT + 2 * PADDING
+    const PADDED_WIDTH: usize,  // IMAGE_WIDTH + 2 * PADDING
+    const OUTPUT_HEIGHT: usize, // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
+    const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
     const IN_CHANNELS: usize,
     const PADDING: usize,
-> where
-    [(); (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1]:,
-    [(); (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1]:,
-    [(); LEN + 3]:,
+>
+// where
+//     [(); (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1]:,
+//     [(); (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1]:,
+//     [(); LEN + 3]:,
 {
     l0: cnvrl_generic::Config<
         F,
@@ -64,6 +69,10 @@ struct MyConfig<
         STRIDE,
         IMAGE_HEIGHT,
         IMAGE_WIDTH,
+        PADDED_HEIGHT,
+        PADDED_WIDTH,
+        OUTPUT_HEIGHT,
+        OUTPUT_WIDTH,
         IN_CHANNELS,
         PADDING,
     >,
@@ -87,6 +96,10 @@ struct MyCircuit<
     const STRIDE: usize,
     const IMAGE_HEIGHT: usize,
     const IMAGE_WIDTH: usize,
+    const PADDED_HEIGHT: usize, // IMAGE_HEIGHT + 2 * PADDING
+    const PADDED_WIDTH: usize,  // IMAGE_WIDTH + 2 * PADDING
+    const OUTPUT_HEIGHT: usize, // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
+    const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
     const IN_CHANNELS: usize,
     const PADDING: usize,
 > {
@@ -111,6 +124,10 @@ impl<
         const STRIDE: usize,
         const IMAGE_HEIGHT: usize,
         const IMAGE_WIDTH: usize,
+        const PADDED_HEIGHT: usize, // IMAGE_HEIGHT + 2 * PADDING
+        const PADDED_WIDTH: usize,  // IMAGE_WIDTH + 2 * PADDING
+        const OUTPUT_HEIGHT: usize, // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
+        const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
         const IN_CHANNELS: usize,
         const PADDING: usize,
     > Circuit<F>
@@ -126,16 +143,20 @@ impl<
         STRIDE,
         IMAGE_HEIGHT,
         IMAGE_WIDTH,
+        PADDED_HEIGHT,
+        PADDED_WIDTH,
+        OUTPUT_HEIGHT,
+        OUTPUT_WIDTH,
         IN_CHANNELS,
         PADDING,
     >
-where
-    [(); (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1]:,
-    [(); (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1]:,
-    [(); IMAGE_HEIGHT * IMAGE_WIDTH]:,
-    [(); ((IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1)
-        * ((IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1)]:,
-    [(); LEN + 3]:,
+// where
+//     [(); (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1]:,
+//     [(); (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1]:,
+//     [(); IMAGE_HEIGHT * IMAGE_WIDTH]:,
+//     [(); ((IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1)
+//         * ((IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1)]:,
+//     [(); LEN + 3]:,
 {
     type Config = MyConfig<
         F,
@@ -149,6 +170,10 @@ where
         STRIDE,
         IMAGE_HEIGHT,
         IMAGE_WIDTH,
+        PADDED_HEIGHT,
+        PADDED_WIDTH,
+        OUTPUT_HEIGHT,
+        OUTPUT_WIDTH,
         IN_CHANNELS,
         PADDING,
     >;
@@ -202,6 +227,10 @@ where
             STRIDE,
             IMAGE_HEIGHT,
             IMAGE_WIDTH,
+            PADDED_HEIGHT,
+            PADDED_WIDTH,
+            OUTPUT_HEIGHT,
+            OUTPUT_WIDTH,
             IN_CHANNELS,
             PADDING,
         >::configure(cs, advices.clone());
@@ -331,12 +360,16 @@ mod tests {
 
     const K: u32 = 17;
 
-    const KERNEL_HEIGHT: usize = 5; //3
-    const KERNEL_WIDTH: usize = 5; //3
+    const KERNEL_HEIGHT: usize = 5;
+    const KERNEL_WIDTH: usize = 5;
     const OUT_CHANNELS: usize = 4;
     const STRIDE: usize = 2;
-    const IMAGE_HEIGHT: usize = 28; //7
-    const IMAGE_WIDTH: usize = 28; //7
+    const IMAGE_HEIGHT: usize = 28;
+    const IMAGE_WIDTH: usize = 28;
+    const PADDED_HEIGHT: usize = 28 + 2 * 0; // IMAGE_HEIGHT + 2 * PADDING
+    const PADDED_WIDTH: usize = 28 + 2 * 0; // IMAGE_WIDTH + 2 * PADDING
+    const OUTPUT_HEIGHT: usize = (28 + 2 * 0 - 5) / 2 + 1; // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
+    const OUTPUT_WIDTH: usize = (28 + 2 * 0 - 5) / 2 + 1; // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
     const IN_CHANNELS: usize = 1;
     const PADDING: usize = 0;
     const CLASSES: usize = 10;
@@ -505,6 +538,10 @@ mod tests {
             STRIDE,
             IMAGE_HEIGHT,
             IMAGE_WIDTH,
+            PADDED_HEIGHT,
+            PADDED_WIDTH,
+            OUTPUT_HEIGHT,
+            OUTPUT_WIDTH,
             IN_CHANNELS,
             PADDING,
         > {
@@ -613,6 +650,10 @@ mod tests {
             STRIDE,
             IMAGE_HEIGHT,
             IMAGE_WIDTH,
+            PADDED_HEIGHT,
+            PADDED_WIDTH,
+            OUTPUT_HEIGHT,
+            OUTPUT_WIDTH,
             IN_CHANNELS,
             PADDING,
         > {
