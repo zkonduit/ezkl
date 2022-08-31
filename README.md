@@ -1,4 +1,4 @@
-# Halo2 Deep Learning 
+# Halo2 Deep Learning
 
 [![Test](https://github.com/jasonmorton/halo2deeplearning/workflows/Rust/badge.svg)](https://github.com/jasonmorton/halo2deeplearning/actions?query=workflow%3ARust)
 
@@ -14,3 +14,8 @@ The MNIST inference example (`test_prove_mnist_inference`) is by default ignored
 cargo test --release -- --ignored --nocapture
 ```
 or ``--include-ignored` to run together with the rest.
+
+Note that the library requires a nightly version of the rust toolchain. You can change the default toolchain by running:
+```bash
+rustup override set nightly         
+```

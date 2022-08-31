@@ -120,32 +120,26 @@ pub fn flatten4<T>(nested: Vec<Vec<Vec<Vec<T>>>>) -> Vec<T> {
 }
 
 pub fn dot3<F: FieldExt>(
-    a: &Vec<Vec<Vec<Expression<F>>>>,
-    b: &Vec<Vec<Vec<Expression<F>>>>,
+    a: &[Vec<Vec<Expression<F>>>],
+    b: &[Vec<Vec<Expression<F>>>],
 ) -> Expression<F> {
-    let aflat = a.into_iter().flatten().flatten(); //flatten3(a);
-    let bflat = b.into_iter().flatten().flatten();
-    let result = aflat
+    let aflat = a.iter().flatten().flatten(); //flatten3(a);
+    let bflat = b.iter().flatten().flatten();
+    aflat
         .zip(bflat)
         .map(|(x, y)| x.clone() * y.clone())
-        .fold(Expression::Constant(F::zero()), |sum, next| {
-            sum.clone() + next.clone()
-        });
-    result
+        .fold(Expression::Constant(F::zero()), |sum, next| sum + next)
 }
 
-pub fn dot3u(a: &Vec<Vec<Vec<u64>>>, b: &Vec<Vec<Vec<u64>>>) -> u64 {
-    let aflat = a.into_iter().flatten().flatten(); //flatten3(a);
-    let bflat = b.into_iter().flatten().flatten();
-    let result = aflat
-        .zip(bflat)
-        .map(|(x, y)| x.clone() * y.clone())
-        .fold(0u64, |sum, next| sum.clone() + next.clone());
-    result
+pub fn dot3u(a: &[Vec<Vec<u64>>], b: &[Vec<Vec<u64>>]) -> u64 {
+    let aflat = a.iter().flatten().flatten(); //flatten3(a);
+    let bflat = b.iter().flatten().flatten();
+    aflat.zip(bflat).map(|(x, y)| *x * *y).sum()
 }
 
 mod test {
     use super::*;
+
     #[test]
     fn indices4() {
         let t: Vec<Vec<Vec<Vec<(usize, usize, usize, usize)>>>> =

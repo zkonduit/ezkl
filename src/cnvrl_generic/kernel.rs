@@ -53,12 +53,12 @@ impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> KernelConfig<F, HEIGH
         offset: usize,
         kernel: Kernel<Value<F>, HEIGHT, WIDTH>,
     ) -> Result<Kernel<AssignedCell<Assigned<F>, F>, HEIGHT, WIDTH>, Error> {
-        let res = kernel
+        let res: Result<Vec<_>, Error> = kernel
             .iter()
             .enumerate()
             .map(
                 |(col_idx, column)| -> Result<[AssignedCell<Assigned<F>, F>; HEIGHT], Error> {
-                    let res = column
+                    let res: Result<Vec<_>, Error> = column
                         .iter()
                         .enumerate()
                         .map(
@@ -76,14 +76,12 @@ impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> KernelConfig<F, HEIGH
                                 )
                             },
                         )
-                        .collect::<Vec<_>>();
-                    let res: Result<Vec<_>, Error> = res.into_iter().collect();
+                        .collect();
                     res.map(|vec| vec.try_into().unwrap())
                 },
             )
-            .collect::<Vec<_>>();
+            .collect();
 
-        let res: Result<Vec<_>, Error> = res.into_iter().collect();
         res.map(|v| v.try_into().unwrap())
     }
 }

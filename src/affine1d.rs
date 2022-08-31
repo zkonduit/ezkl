@@ -1,10 +1,7 @@
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{layouter, AssignedCell, Layouter, Region, Value},
-    plonk::{
-        create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Assigned, Circuit, Column,
-        ConstraintSystem, Constraints, Error, Expression, Selector,
-    },
+    circuit::{AssignedCell, Layouter, Region, Value},
+    plonk::{Advice, Assigned, Column, ConstraintSystem, Constraints, Expression, Selector},
     poly::Rotation,
 };
 use std::marker::PhantomData;
@@ -85,21 +82,21 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT>
             map2::<_, _, OUT, IN>(|i, j| Value::known(i32tofelt::<F>(weights[i][j]).into()));
 
         let mut biases_for_equality = Vec::new();
-        for i in 0..OUT {
+        for (i, bias_i) in biases.iter().enumerate().take(OUT) {
             let bias =
-                region.assign_advice(|| format!("b"), self.bias, offset + i, || biases[i])?;
+                region.assign_advice(|| "b".to_string(), self.bias, offset + i, || *bias_i)?;
             biases_for_equality.push(bias);
         }
 
         let mut weights_for_equality = Vec::new();
-        for i in 0..OUT {
+        for (i, w_i) in weights.iter().enumerate().take(OUT) {
             let mut row = Vec::new();
-            for j in 0..IN {
+            for (j, w_i_j) in w_i.iter().enumerate().take(IN) {
                 let weight = region.assign_advice(
-                    || format!("w"),
+                    || "w".to_string(),
                     self.weights[i],
                     offset + j,
-                    || weights[i][j],
+                    || *w_i_j,
                 )?;
                 row.push(weight);
             }
@@ -123,33 +120,30 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT>
         params: Parameters<F, IN, OUT>,
     ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         // copy the input
-        for j in 0..IN {
-            input[j].copy_advice(|| "input", region, self.input, offset + j)?;
+        for (j, x) in input.iter().enumerate().take(IN) {
+            x.copy_advice(|| "input", region, self.input, offset + j)?;
         }
 
         // calculate value of output
         let mut output: Vec<Value<Assigned<F>>> =
-            (0..OUT).map(|i| Value::known(F::zero().into())).collect();
+            (0..OUT).map(|_| Value::known(F::zero().into())).collect();
 
-        for i in 0..OUT {
-            for j in 0..IN {
-                output[i] = output[i] + params.weights[i][j].value_field() * input[j].value_field();
+        for (i, o) in output.iter_mut().enumerate().take(OUT) {
+            for (j, x) in input.iter().enumerate().take(IN) {
+                *o = *o + params.weights[i][j].value_field() * x.value_field();
             }
-        }
-
-        // add the bias
-        for i in 0..OUT {
-            output[i] = output[i] + params.biases[i].value_field();
+            // add bias
+            *o = *o + params.biases[i].value_field();
         }
 
         // assign that value and return it
         let mut output_for_equality = Vec::new();
-        for i in 0..OUT {
+        for (i, o) in output.iter_mut().enumerate().take(OUT) {
             let ofe = region.assign_advice(
-                || format!("o"),
+                || "o".to_string(),
                 self.output, //advice
                 offset + i,
-                || output[i], //value
+                || *o, //value
             )?;
             output_for_equality.push(ofe);
         }
@@ -175,21 +169,17 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT>
                 .collect();
 
             // Now we compute the linear expression,  and add it to constraints
-            for i in 0..OUT {
+            for (i, c) in constraints.iter_mut().enumerate().take(OUT) {
                 for j in 0..IN {
-                    constraints[i] = constraints[i].clone()
+                    *c = c.clone()
                         + virtual_cells.query_advice(weights[i], Rotation(j as i32))
                             * virtual_cells.query_advice(input, Rotation(j as i32));
                 }
+                // add the bias
+                *c = c.clone() + virtual_cells.query_advice(bias, Rotation(i as i32));
             }
 
-            // add the bias
-            for i in 0..OUT {
-                constraints[i] =
-                    constraints[i].clone() + virtual_cells.query_advice(bias, Rotation(i as i32));
-            }
-
-            let constraints = (0..OUT).map(|i| "c").zip(constraints);
+            let constraints = (0..OUT).map(|_| "c").zip(constraints);
             Constraints::with_selector(q, constraints)
         });
 
@@ -216,16 +206,16 @@ pub struct Affine1d<F: FieldExt, Inner, const IN: usize, const OUT: usize> {
 }
 
 impl<F: FieldExt, Inner, const IN: usize, const OUT: usize> Affine1d<F, Inner, IN, OUT> {
-    pub fn fill<Func1, Func2>(mut f: Func1, mut w: Func2) -> Self
+    pub fn fill<Func1, Func2>(mut f: Func1, w: Func2) -> Self
     where
         Func1: FnMut(usize) -> Inner,
         Func2: FnMut(usize, usize) -> Inner,
     {
         Affine1d {
-            input: (0..IN).map(|i| f(i)).collect(),
-            output: (0..OUT).map(|i| f(i)).collect(),
-            weights: map2::<_, _, OUT, IN>(|i, j| w(i, j)),
-            biases: (0..OUT).map(|i| f(i)).collect(),
+            input: (0..IN).map(&mut f).collect(),
+            output: (0..OUT).map(&mut f).collect(),
+            weights: map2::<_, _, OUT, IN>(w),
+            biases: (0..OUT).map(f).collect(),
 
             _marker: PhantomData,
         }
@@ -274,8 +264,8 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1d<F, Value<Assigned<
         let weights: Vec<Vec<Value<Assigned<F>>>> =
             map2::<_, _, OUT, IN>(|i, j| Value::known(i32tofelt::<F>(weights[i][j]).into()));
 
-        let input: Vec<Value<Assigned<F>>> = (0..IN).map(|i| Value::default()).collect();
-        let output: Vec<Value<Assigned<F>>> = (0..OUT).map(|i| Value::default()).collect();
+        let input: Vec<Value<Assigned<F>>> = (0..IN).map(|_| Value::default()).collect();
+        let output: Vec<Value<Assigned<F>>> = (0..OUT).map(|_| Value::default()).collect();
 
         Affine1d {
             input,
@@ -292,28 +282,17 @@ impl<F: FieldExt, const IN: usize, const OUT: usize> Affine1d<F, Value<Assigned<
         self.input = input.clone();
 
         let mut output: Vec<Value<Assigned<F>>> =
-            (0..OUT).map(|i| Value::known(F::zero().into())).collect();
+            (0..OUT).map(|_| Value::known(F::zero().into())).collect();
 
-        for i in 0..OUT {
-            for j in 0..IN {
-                output[i] = output[i] + self.weights[i][j] * input[j];
+        for (i, o) in output.iter_mut().enumerate().take(OUT) {
+            for (j, x) in input.iter().enumerate().take(IN) {
+                *o = *o + self.weights[i][j] * x;
             }
-        }
-
-        // add the bias
-        for i in 0..OUT {
-            output[i] = output[i] + self.biases[i];
+            // add the bias
+            *o = *o + self.biases[i];
         }
 
         self.output = output.clone();
         output
     }
 }
-
-// #[cfg(test)]
-// use halo2_proofs::{
-//     poly::commitment::Params,
-//     transcript::{Blake2bRead, Blake2bWrite, Challenge255},
-// };
-// use pasta_curves::{pallas, vesta};
-// use rand::rngs::OsRng;

@@ -89,7 +89,7 @@ impl<
 //     * ((IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1)]:,
 {
     pub fn configure(meta: &mut ConstraintSystem<F>, advices: Vec<Column<Advice>>) -> Self {
-        let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
+        let _output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
         for advice in advices.iter() {
@@ -279,14 +279,14 @@ impl<
 {
     pub fn without_witnesses() -> Self {
         let image = (0..IN_CHANNELS)
-            .map(|_| matrix(|| Value::default()))
+            .map(|_| matrix(Value::default))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
         let kernels = (0..OUT_CHANNELS)
             .map(|_| {
                 (0..IN_CHANNELS)
-                    .map(|_| matrix(|| Value::default()))
+                    .map(|_| matrix(Value::default))
                     .collect::<Vec<_>>()
                     .try_into()
                     .unwrap()
@@ -463,7 +463,7 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let output = config.assign(&mut layouter, self.image, self.kernels)?;
+            let _output = config.assign(&mut layouter, self.image, self.kernels)?;
             Ok(())
         }
     }
@@ -471,7 +471,7 @@ mod tests {
     #[test]
     fn test_cnvrl() {
         //        use halo2_proofs::pasta::pallas;
-        use halo2curves::pasta::{pallas, vesta};
+        use halo2curves::pasta::pallas;
 
         const KERNEL_HEIGHT: usize = 3;
         const KERNEL_WIDTH: usize = 3;

@@ -1,39 +1,21 @@
 use halo2_proofs::{
-    poly::{
-        commitment::ParamsProver,
-        ipa::{
-            commitment::{IPACommitmentScheme, ParamsIPA},
-            multiopen::ProverIPA,
-            strategy::SingleStrategy,
-        },
-        VerificationStrategy,
-    },
-    transcript::{TranscriptReadBuffer, TranscriptWriterBuffer},
-};
-
-use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
-    plonk::{
-        create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Assigned, Circuit, Column,
-        ConstraintSystem, Error, Instance,
-    },
-    poly::{commitment::Params, Rotation},
-    transcript::{Blake2bRead, Blake2bWrite, Challenge255},
+    plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
-use halo2curves::pasta::{pallas, vesta};
+
 //use pasta_curves::{pallas, vesta};
 // use rand::rngs::OsRng;
 // use std::marker::PhantomData;
 
-use crate::fieldutils::{felt_to_i32, i32tofelt};
+use crate::fieldutils::felt_to_i32;
 //use crate::tensorutils::{dot3, flatten3, flatten4, map2, map3, map3r, map4, map4r};
 
 use std::cmp::max;
 
-use crate::affine1d::{Affine1d, Affine1dConfig};
+use crate::affine1d::Affine1dConfig;
 use crate::cnvrl_generic;
-use crate::eltwise::{DivideBy, Nonlin1d, NonlinConfig1d, ReLu};
+use crate::eltwise::{DivideBy, NonlinConfig1d, ReLu};
 
 #[derive(Clone)]
 struct MyConfig<
@@ -204,7 +186,7 @@ impl<
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
+        let _output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
         // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1 },
@@ -235,16 +217,16 @@ impl<
             PADDING,
         >::configure(cs, advices.clone());
         let l0q: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 32>> =
-            NonlinConfig1d::configure(cs, (&advices[..LEN]).clone().try_into().unwrap());
+            NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
         let l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
-            NonlinConfig1d::configure(cs, (&advices[..LEN]).clone().try_into().unwrap());
+            NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
 
         let l2: Affine1dConfig<F, LEN, CLASSES> = Affine1dConfig::configure(
             cs,
-            (&advices[..LEN]).try_into().unwrap(),
-            (&advices[LEN]).clone(),
-            (&advices[CLASSES + 1]).clone(),
-            (&advices[LEN + 2]).clone(),
+            advices[..LEN].try_into().unwrap(),
+            advices[LEN],
+            advices[CLASSES + 1],
+            advices[LEN + 2],
         );
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -273,12 +255,12 @@ impl<
             &mut layouter,
             l0out.into_iter().flatten().flatten().collect(),
         )?;
-        let l1out = config.l1.layout(&mut layouter, l0qout.clone())?;
+        let l1out = config.l1.layout(&mut layouter, l0qout)?;
         let l2out = config.l2.layout(
             &mut layouter,
             self.l2_params.0.clone(),
             self.l2_params.1.clone(),
-            l1out.clone(),
+            l1out,
         )?;
         //        println!("l1out {:?}", l1out);
         // println!(
@@ -314,8 +296,8 @@ impl<
         );
 
         // tie the last output to public inputs (instance column)
-        for i in 0..CLASSES {
-            layouter.constrain_instance(l2out[i].cell(), config.public_output, i)?;
+        for (i, a) in l2out.iter().enumerate().take(CLASSES) {
+            layouter.constrain_instance(a.cell(), config.public_output, i)?;
         }
         Ok(())
     }
@@ -324,13 +306,13 @@ impl<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fieldutils::felt_to_i32;
+
+    use crate::fieldutils::i32tofelt;
     use halo2_proofs::{
-        arithmetic::{Field, FieldExt},
-        dev::{FailureLocation, MockProver, VerifyFailure},
-        //        pasta::Fp as F,
-        plonk::{Any, Circuit},
+        plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit},
+        transcript::{Blake2bRead, Blake2bWrite, Challenge255},
     };
+    use halo2curves::pasta::vesta;
 
     use halo2_proofs::{
         poly::{
@@ -347,16 +329,16 @@ mod tests {
 
     use halo2curves::pasta::Fp as F;
     //     use nalgebra;
-    use crate::cnvrl_generic::matrix;
+
     use crate::fieldutils;
     use crate::moreparams;
     use crate::tensorutils::map4;
-    use halo2curves::pasta::pallas;
+
     use mnist::*;
     use ndarray::prelude::*;
-    use rand::prelude::*;
+    // use rand::prelude::*;
     use rand::rngs::OsRng;
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     const K: u32 = 17;
 
@@ -386,8 +368,8 @@ mod tests {
         let Mnist {
             trn_img,
             trn_lbl,
-            tst_img,
-            tst_lbl,
+            tst_img: _,
+            tst_lbl: _,
             ..
         } = MnistBuilder::new()
             .label_format_digit()
@@ -400,9 +382,7 @@ mod tests {
         // Can use an Array2 or Array3 here (Array3 for visualization)
         let train_data = Array3::from_shape_vec((50_000, 28, 28), trn_img)
             .expect("Error converting images to Array3 struct")
-            //            .map(|x| *x as f32 / 256.0);
             .map(|x| i32tofelt::<F>(*x as i32 / 16));
-        //        println!("{:#.1?}\n", train_data.slice(s![image_num, .., ..]));
 
         let train_labels: Array2<f32> = Array2::from_shape_vec((50_000, 1), trn_lbl)
             .expect("Error converting training labels to Array2 struct")
@@ -598,7 +578,6 @@ mod tests {
         let pk = keygen_pk(&params, vk.clone(), &empty_circuit).expect("keygen_pk should not fail");
         println!("PK took {}", now.elapsed().as_secs());
         let now = Instant::now();
-        //println!("{:?} {:?}", vk, pk);
         let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
         let mut rng = OsRng;
         create_proof::<IPACommitmentScheme<_>, ProverIPA<_>, _, _, _, _>(

@@ -1,11 +1,7 @@
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{layouter, AssignedCell, Layouter, Region, Value},
-    plonk::{
-        create_proof, keygen_pk, keygen_vk, verify_proof, Advice, Assigned, Circuit, Column,
-        ConstraintSystem, Constraints, Error, Expression, Selector,
-    },
-    poly::Rotation,
+    circuit::{AssignedCell, Layouter, Value},
+    plonk::{Advice, Assigned, Column, ConstraintSystem, Selector},
 };
 use std::marker::PhantomData;
 
@@ -44,12 +40,12 @@ impl<F: FieldExt, const IN: usize> InputConfig<F, IN> {
                 self.q.enable(&mut region, offset)?;
 
                 let mut output_for_equality = Vec::new();
-                for i in 0..IN {
+                for (i, x) in raw_input.iter().enumerate().take(IN) {
                     let ofe = region.assign_advice(
-                        || format!("o"),
-                        self.input, // advice column
-                        offset + i, // row in advice col to put value
-                        || Value::known(i32tofelt::<F>(raw_input[i])).into(), //value
+                        || "o".to_string(),
+                        self.input,                                // advice column
+                        offset + i,                                // row in advice col to put value
+                        || Value::known(i32tofelt::<F>(*x)).into(), //value
                     )?;
                     output_for_equality.push(ofe);
                 }
