@@ -355,10 +355,7 @@ mod tests {
     const IN_CHANNELS: usize = 1;
     const PADDING: usize = 0;
     const CLASSES: usize = 10;
-    const LEN: usize = {
-        ((IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1)
-            * ((IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1)
-    };
+    const LEN: usize = ((28 + 2 * 0 - 5) / 2 + 1) * ((28 + 2 * 0 - 5) / 2 + 1);
 
     #[test]
     #[ignore]
