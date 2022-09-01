@@ -10,11 +10,11 @@ We give an example of proving inference with a model that achieves 97.5% accurac
 
 The MNIST inference example is contained in `examples/conv2d_mnist`. To run it:
 ```bash
-cargo run --example conv2d_mnist
+cargo run --release --example conv2d_mnist
 ```
 We also provide an example which runs an MLP on input data with four dimensions. To run it:
 ```bash
-cargo run --example mlp_4d
+cargo run --release --example mlp_4d
 ```
 
 Note that the library requires a nightly version of the rust toolchain. You can change the default toolchain by running:
