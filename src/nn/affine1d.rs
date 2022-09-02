@@ -7,7 +7,7 @@ use halo2_proofs::{
 use std::marker::PhantomData;
 
 use crate::fieldutils::i32tofelt;
-use crate::tensorutils::map2;
+use crate::tensor_ops::utils::map2;
 
 // We layout in two phases: first we load any parameters (returning parameters, used only in case of a tied weight model),
 // then we load the input, perform the forward pass, and layout the input and output, returning the output

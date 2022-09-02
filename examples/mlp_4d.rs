@@ -1,9 +1,9 @@
+use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
+    circuit::{Layouter, SimpleFloorPlanner},
     plonk::{
         //create_proof, keygen_pk, keygen_vk, verify_proof, Advice,
-        Assigned,
         Circuit,
         Column,
         ConstraintSystem,
@@ -13,18 +13,16 @@ use halo2_proofs::{
     // poly::{commitment::Params, Rotation},
     // transcript::{Blake2bRead, Blake2bWrite, Challenge255},
 };
-//use pasta_curves::{pallas, vesta};
-// use rand::rngs::OsRng;
-// use std::marker::PhantomData;
-use crate::fieldutils::i32tofelt;
+use halo2curves::pasta::Fp as F;
+
+use halo2deeplearning::fieldutils::i32tofelt;
 use std::marker::PhantomData;
 use std::rc::Rc;
 //use crate::tensorutils::{dot3, flatten3, flatten4, map2, map3, map3r, map4, map4r};
 
-use crate::affine1d::{Affine1dConfig, RawParameters};
-use crate::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu};
-use crate::inputlayer::InputConfig;
-
+use halo2deeplearning::nn::affine1d::{Affine1dConfig, RawParameters};
+use halo2deeplearning::nn::input::InputConfig;
+use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu};
 // A columnar ReLu MLP
 #[derive(Clone)]
 struct MyConfig<
@@ -173,72 +171,65 @@ impl<F: FieldExt, const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::fieldutils::felt_to_i32;
-    use halo2_proofs::dev::{FailureLocation, MockProver, VerifyFailure};
-    use halo2curves::pasta::Fp as F;
-    // use rand::prelude::*;
-    // use std::time::{Duration, Instant};
+pub fn runmlp() {
+    let k = 15; //2^k rows
+                // parameters
+    let l0weights: Vec<Vec<i32>> = vec![
+        vec![10, 0, 0, -1],
+        vec![0, 10, 1, 0],
+        vec![0, 1, 10, 0],
+        vec![1, 0, 0, 10],
+    ];
+    let l0biases: Vec<i32> = vec![0, 0, 0, 1];
+    let l0_params = RawParameters {
+        weights: l0weights,
+        biases: l0biases,
+    };
+    let l2weights: Vec<Vec<i32>> = vec![
+        vec![0, 3, 10, -1],
+        vec![0, 10, 1, 0],
+        vec![0, 1, 0, 12],
+        vec![1, -2, 32, 0],
+    ];
+    let l2biases: Vec<i32> = vec![12, 14, 17, 1];
+    let l2_params = RawParameters {
+        weights: l2weights,
+        biases: l2biases,
+    };
+    // input data
+    let input: Vec<i32> = vec![-30, -21, 11, 40];
 
-    #[test]
-    fn test_mlp() {
-        let k = 15; //2^k rows
-                    // parameters
-        let l0weights: Vec<Vec<i32>> = vec![
-            vec![10, 0, 0, -1],
-            vec![0, 10, 1, 0],
-            vec![0, 1, 10, 0],
-            vec![1, 0, 0, 10],
-        ];
-        let l0biases: Vec<i32> = vec![0, 0, 0, 1];
-        let l0_params = RawParameters {
-            weights: l0weights,
-            biases: l0biases,
-        };
-        let l2weights: Vec<Vec<i32>> = vec![
-            vec![0, 3, 10, -1],
-            vec![0, 10, 1, 0],
-            vec![0, 1, 0, 12],
-            vec![1, -2, 32, 0],
-        ];
-        let l2biases: Vec<i32> = vec![12, 14, 17, 1];
-        let l2_params = RawParameters {
-            weights: l2weights,
-            biases: l2biases,
-        };
-        // input data
-        let input: Vec<i32> = vec![-30, -21, 11, 40];
+    let circuit = MyCircuit::<F, 4, 14> {
+        input,
+        l0_params,
+        l2_params,
+        _marker: PhantomData,
+    };
 
-        let circuit = MyCircuit::<F, 4, 14> {
-            input,
-            l0_params,
-            l2_params,
-            _marker: PhantomData,
-        };
+    let public_input: Vec<i32> = unsafe {
+        vec![
+            (531f32 / 128f32).round().to_int_unchecked::<i32>().into(),
+            (103f32 / 128f32).round().to_int_unchecked::<i32>().into(),
+            (4469f32 / 128f32).round().to_int_unchecked::<i32>().into(),
+            (2849f32 / 128f32).to_int_unchecked::<i32>().into(),
+        ]
+    };
 
-        let public_input: Vec<i32> = unsafe {
-            vec![
-                (531f32 / 128f32).round().to_int_unchecked::<i32>().into(),
-                (103f32 / 128f32).round().to_int_unchecked::<i32>().into(),
-                (4469f32 / 128f32).round().to_int_unchecked::<i32>().into(),
-                (2849f32 / 128f32).to_int_unchecked::<i32>().into(),
-            ]
-        };
+    println!("public input {:?}", public_input);
 
-        println!("public input {:?}", public_input);
+    let prover = MockProver::run(
+        k,
+        &circuit,
+        vec![public_input
+            .iter()
+            .map(|x| i32tofelt::<F>(*x).into())
+            .collect()],
+        //            vec![vec![(4).into(), (1).into(), (35).into(), (22).into()]],
+    )
+    .unwrap();
+    prover.assert_satisfied();
+}
 
-        let prover = MockProver::run(
-            k,
-            &circuit,
-            vec![public_input
-                .iter()
-                .map(|x| i32tofelt::<F>(*x).into())
-                .collect()],
-            //            vec![vec![(4).into(), (1).into(), (35).into(), (22).into()]],
-        )
-        .unwrap();
-        prover.assert_satisfied();
-    }
+pub fn main() {
+    runmlp()
 }

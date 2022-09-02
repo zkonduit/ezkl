@@ -5,7 +5,6 @@ use halo2_proofs::{
     poly::Rotation,
 };
 
-use halo2curves::pasta::{pallas, vesta};
 use std::{marker::PhantomData, rc::Rc};
 
 use crate::fieldutils::{self, felt_to_i32, i32tofelt};
@@ -215,12 +214,12 @@ impl<
         //        println!("output {:?}", output);
 
         let mut output_for_equality = Vec::new();
-        for i in 0..LEN {
+        for (i, o) in output.iter().enumerate().take(LEN) {
             let ofe = region.assign_advice(
                 || format!("nl_{i}"),
                 self.advice[i], // Column<Advice>
                 offset + 1,
-                || output[i], //Assigned<F>
+                || *o, //Assigned<F>
             )?;
             output_for_equality.push(ofe);
         }
@@ -252,8 +251,7 @@ impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, 
         layouter.assign_table(
             || "nl table",
             |mut table| {
-                let mut row_offset = 0;
-                for int_input in smallest..largest {
+                for (row_offset, int_input) in (smallest..largest).enumerate() {
                     let input: F = i32tofelt(int_input);
                     table.assign_cell(
                         || format!("nl_i_col row {}", row_offset),
@@ -267,7 +265,6 @@ impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, 
                         row_offset,
                         || Value::known(NL::nonlinearity(int_input)),
                     )?;
-                    row_offset += 1;
                 }
                 Ok(())
             },
@@ -293,16 +290,16 @@ impl<F: FieldExt, const LEN: usize, const BITS: usize, NL: 'static + Nonlinearit
     ) -> EltwiseConfig<F, LEN, BITS, NL> {
         let qlookup = cs.complex_selector();
 
-        for i in 0..LEN {
+        for a in advice.iter().take(LEN) {
             let _ = cs.lookup("lk", |cs| {
                 let qlookup = cs.query_selector(qlookup);
                 vec![
                     (
-                        qlookup.clone() * cs.query_advice(advice[i], Rotation::cur()),
+                        qlookup.clone() * cs.query_advice(*a, Rotation::cur()),
                         table.table_input,
                     ),
                     (
-                        qlookup.clone() * cs.query_advice(advice[i], Rotation::next()),
+                        qlookup * cs.query_advice(*a, Rotation::next()),
                         table.table_output,
                     ),
                 ]
@@ -329,8 +326,8 @@ impl<F: FieldExt, const LEN: usize, const BITS: usize, NL: 'static + Nonlinearit
                 self.qlookup.enable(&mut region, offset)?;
 
                 //copy the advice
-                for i in 0..LEN {
-                    input[i].copy_advice(|| "input", &mut region, self.advice[i], offset)?;
+                for (i, x) in input.iter().enumerate().take(LEN) {
+                    x.copy_advice(|| "input", &mut region, self.advice[i], offset)?;
                 }
 
                 self.layout_inner(&mut region, offset, input.clone())
@@ -464,7 +461,7 @@ impl<F: FieldExt, const D: usize> Nonlinearity<F> for DivideBy<F, D> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tensorutils::flatten3;
+    use crate::tensor_ops::utils::flatten3;
     use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp as F;
 
