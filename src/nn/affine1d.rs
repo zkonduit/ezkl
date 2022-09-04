@@ -111,6 +111,42 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         Ok(params)
     }
 
+    pub fn forward(
+        &self, // just advice
+        region: &mut Region<'_, F>,
+        offset: usize,
+        input: Tensor<AssignedCell<Assigned<F>, F>>,
+        params: Parameters<F, IN, OUT>,
+    ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+        // copy the input
+        for (j, x) in input.iter().enumerate().take(IN) {
+            x.copy_advice(|| "input", region, self.input, offset + j)?;
+        }
+        // calculate value of output
+        let mut output: Tensor<Value<Assigned<F>>> = Tensor::new(None, &[OUT]).unwrap();
+
+        for (i, o) in output.iter_mut().enumerate().take(OUT) {
+            for (j, x) in input.iter().enumerate().take(IN) {
+                *o = *o + params.weights[i][j].value_field() * x.value_field();
+            }
+            // add bias
+            *o = *o + params.biases[i].value_field();
+        }
+
+        // assign that value and return it
+        let mut output_for_equality = Vec::new();
+        for (i, o) in output.iter_mut().enumerate().take(OUT) {
+            let ofe = region.assign_advice(
+                || "o".to_string(),
+                self.output, //advice
+                offset + i,
+                || *o, //value
+            )?;
+            output_for_equality.push(ofe);
+        }
+        Ok(output_for_equality)
+    }
+
     // composable_configure takes the input tensor as an argument, and completes the advice by generating new for the rest
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
