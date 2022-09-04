@@ -206,22 +206,27 @@ pub fn runmlp() {
         _marker: PhantomData,
     };
 
-    let public_input = unsafe {
-        Tensor::<i32>::new(
-            Some(&[
-                (531f32 / 128f32).round().to_int_unchecked::<i32>().into(),
-                (103f32 / 128f32).round().to_int_unchecked::<i32>().into(),
-                (4469f32 / 128f32).round().to_int_unchecked::<i32>().into(),
-                (2849f32 / 128f32).to_int_unchecked::<i32>().into(),
-            ]),
-            &[4],
-        )
-        .unwrap()
+    let public_input: Vec<i32> = unsafe {
+        vec![
+            (531f32 / 128f32).round().to_int_unchecked::<i32>().into(),
+            (103f32 / 128f32).round().to_int_unchecked::<i32>().into(),
+            (4469f32 / 128f32).round().to_int_unchecked::<i32>().into(),
+            (2849f32 / 128f32).to_int_unchecked::<i32>().into(),
+        ]
     };
 
     println!("public input {:?}", public_input);
 
-    let prover = MockProver::run(k, &circuit, public_input.into()).unwrap();
+    let prover = MockProver::run(
+        k,
+        &circuit,
+        vec![public_input
+            .iter()
+            .map(|x| i32tofelt::<F>(*x).into())
+            .collect()],
+        //            vec![vec![(4).into(), (1).into(), (35).into(), (22).into()]],
+    )
+    .unwrap();
     prover.assert_satisfied();
 }
 

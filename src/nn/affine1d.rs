@@ -80,11 +80,9 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         let biases: Tensor<Value<Assigned<F>>> = biases.into();
         let weights: Tensor<Value<Assigned<F>>> = weights.into();
 
-        let mut biases_for_equality =
-            biases.assign_cell(region, "b".to_string(), &[self.bias], offset)?;
+        let mut biases_for_equality = biases.assign_cell(region, "b", &[self.bias], offset)?;
 
-        let weights_for_equality =
-            weights.assign_cell(region, "w".to_string(), &self.weights, offset)?;
+        let weights_for_equality = weights.assign_cell(region, "w", &self.weights, offset)?;
 
         let params = Parameters {
             biases: biases_for_equality,
@@ -111,7 +109,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
 
         // assign that value and return it
         let mut output_for_equality =
-            output.assign_cell(region, "o".to_string(), &[self.output], offset)?;
+            output.assign_cell(region, "o", &[self.output], offset)?;
 
         Ok(output_for_equality)
     }

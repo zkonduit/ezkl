@@ -156,7 +156,7 @@ impl<
 
                 let mut input_vec = input
                     .clone()
-                    .assign_cell(&mut region, "input_{i}".to_string(), &self.advice, offset)
+                    .assign_cell(&mut region, "input_{i}", &self.advice, offset)
                     .unwrap();
 
                 self.layout_inner(&mut region, offset, input_vec)
@@ -214,7 +214,7 @@ impl<
         );
 
         Ok(output
-            .assign_cell(region, "nl_{i}".to_string(), &self.advice, offset)
+            .assign_cell(region, "nl_{i}", &self.advice, offset)
             .unwrap())
     }
 }
@@ -276,8 +276,12 @@ pub struct EltwiseConfig<
     _marker: PhantomData<(NL, F)>,
 }
 
-impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize, NL: 'static + Nonlinearity<F>>
-    EltwiseConfig<F, LEN, BITS, NL>
+impl<
+        F: FieldExt + TensorType,
+        const LEN: usize,
+        const BITS: usize,
+        NL: 'static + Nonlinearity<F>,
+    > EltwiseConfig<F, LEN, BITS, NL>
 {
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
@@ -353,8 +357,21 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize, NL: 'static 
         );
 
         Ok(output
-            .assign_cell(region, "nl_{i}".to_string(), &self.advice, offset)
+            .assign_cell_const_offst(region, "nl_{i}", &self.advice, offset + 1)
             .unwrap())
+        //
+        // let mut output_for_equality = Vec::new();
+        // for (i, o) in output.iter().enumerate() {
+        //     let ofe = region.assign_advice(
+        //         || format!("nl_{i}"),
+        //         self.advice[i], // Column<Advice>
+        //         offset + 1,
+        //         || *o, //Assigned<F>
+        //     )?;
+        //     output_for_equality.push(ofe);
+        // }
+        //
+        // Ok(Tensor::from(output_for_equality))
     }
 }
 

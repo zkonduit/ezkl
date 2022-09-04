@@ -100,7 +100,7 @@ impl<F: Clone + FieldExt + TensorType> Tensor<Value<Assigned<F>>> {
     pub fn assign_cell(
         self,
         region: &mut Region<'_, F>,
-        str: String,
+        name: &str,
         columns: &[Column<Advice>],
         offset: usize,
     ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
@@ -109,7 +109,7 @@ impl<F: Clone + FieldExt + TensorType> Tensor<Value<Assigned<F>>> {
         if self.dims.len() == 1 {
             for i in 0..self.dims()[0] {
                 let v = region.assign_advice(
-                    || str.clone(),
+                    || format!("{}", name),
                     columns[0],
                     offset + i,
                     || self.get(&[i]),
@@ -121,9 +121,47 @@ impl<F: Clone + FieldExt + TensorType> Tensor<Value<Assigned<F>>> {
             for i in 0..self.dims()[0] {
                 for j in 0..self.dims()[1] {
                     let weight = region.assign_advice(
-                        || str.clone(),
+                        || format!("{}", name),
                         columns[i],
                         offset + j,
+                        || self.get(&[i, j]),
+                    )?;
+                    eq.push(weight);
+                }
+            }
+            Ok(Tensor::new(Some(&eq), self.dims()).unwrap())
+        } else {
+            panic!("should never reach here")
+        }
+    }
+
+    pub fn assign_cell_const_offst(
+        self,
+        region: &mut Region<'_, F>,
+        name: &str,
+        columns: &[Column<Advice>],
+        offset: usize,
+    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+        assert!(self.dims.len() <= 2);
+        let mut eq = Vec::new();
+        if self.dims.len() == 1 {
+            for i in 0..self.dims()[0] {
+                let v = region.assign_advice(
+                    || format!("{}", name),
+                    columns[i],
+                    offset,
+                    || self.get(&[i]),
+                )?;
+                eq.push(v);
+            }
+            Ok(Tensor::new(Some(&eq), self.dims()).unwrap())
+        } else if self.dims.len() == 2 {
+            for i in 0..self.dims()[0] {
+                for j in 0..self.dims()[1] {
+                    let weight = region.assign_advice(
+                        || format!("{}", name),
+                        columns[i],
+                        offset,
                         || self.get(&[i, j]),
                     )?;
                     eq.push(weight);

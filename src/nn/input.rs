@@ -41,7 +41,7 @@ impl<F: FieldExt + TensorType, const IN: usize> InputConfig<F, IN> {
                 self.q.enable(&mut region, offset)?;
 
                 let mut output: Tensor<Value<Assigned<F>>> = raw_input.clone().into();
-                output.assign_cell(&mut region, "o".to_string(), &[self.input], offset)
+                output.assign_cell(&mut region, "o", &[self.input], offset)
             },
         )
     }
