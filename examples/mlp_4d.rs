@@ -15,18 +15,19 @@ use halo2_proofs::{
 };
 use halo2curves::pasta::Fp as F;
 
-use halo2deeplearning::fieldutils::i32tofelt;
 use std::marker::PhantomData;
 use std::rc::Rc;
 //use crate::tensorutils::{dot3, flatten3, flatten4, map2, map3, map3r, map4, map4r};
 
+use halo2deeplearning::fieldutils::i32tofelt;
 use halo2deeplearning::nn::affine1d::{Affine1dConfig, RawParameters};
 use halo2deeplearning::nn::input::InputConfig;
+use halo2deeplearning::tensor::{Tensor, TensorType};
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu};
 // A columnar ReLu MLP
 #[derive(Clone)]
 struct MyConfig<
-    F: FieldExt,
+    F: FieldExt + TensorType,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust
     const BITS: usize,
 >
@@ -52,13 +53,14 @@ struct MyCircuit<
 > {
     // Given the stateless MyConfig type information, a DNN trace is determined by its input and the parameters of its layers.
     // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
-    input: Vec<i32>,
+    input: Tensor<i32>,
     l0_params: RawParameters<LEN, LEN>,
     l2_params: RawParameters<LEN, LEN>,
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt, const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<F, LEN, BITS>
+impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
+    for MyCircuit<F, LEN, BITS>
 // where
 //     [(); LEN + 3]:,
 {
@@ -174,30 +176,28 @@ impl<F: FieldExt, const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<
 pub fn runmlp() {
     let k = 15; //2^k rows
                 // parameters
-    let l0weights: Vec<Vec<i32>> = vec![
-        vec![10, 0, 0, -1],
-        vec![0, 10, 1, 0],
-        vec![0, 1, 10, 0],
-        vec![1, 0, 0, 10],
-    ];
-    let l0biases: Vec<i32> = vec![0, 0, 0, 1];
+    let l0weights = Tensor::<i32>::new(
+        Some(&[10, 0, 0, -1, 0, 10, 1, 0, 0, 1, 10, 0, 1, 0, 0, 10]),
+        &[4, 4],
+    )
+    .unwrap();
+    let l0biases = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[4]).unwrap();
     let l0_params = RawParameters {
         weights: l0weights,
         biases: l0biases,
     };
-    let l2weights: Vec<Vec<i32>> = vec![
-        vec![0, 3, 10, -1],
-        vec![0, 10, 1, 0],
-        vec![0, 1, 0, 12],
-        vec![1, -2, 32, 0],
-    ];
-    let l2biases: Vec<i32> = vec![12, 14, 17, 1];
+    let l2weights = Tensor::<i32>::new(
+        Some(&[0, 3, 10, -1, 0, 10, 1, 0, 0, 1, 0, 12, 1, -2, 32, 0]),
+        &[4, 4],
+    )
+    .unwrap();
+    let l2biases = Tensor::<i32>::new(Some(&[12, 14, 17, 1]), &[4]).unwrap();
     let l2_params = RawParameters {
         weights: l2weights,
         biases: l2biases,
     };
     // input data
-    let input: Vec<i32> = vec![-30, -21, 11, 40];
+    let input = Tensor::<i32>::new(Some(&[-30, -21, 11, 40]), &[4]).unwrap();
 
     let circuit = MyCircuit::<F, 4, 14> {
         input,
@@ -206,27 +206,22 @@ pub fn runmlp() {
         _marker: PhantomData,
     };
 
-    let public_input: Vec<i32> = unsafe {
-        vec![
-            (531f32 / 128f32).round().to_int_unchecked::<i32>().into(),
-            (103f32 / 128f32).round().to_int_unchecked::<i32>().into(),
-            (4469f32 / 128f32).round().to_int_unchecked::<i32>().into(),
-            (2849f32 / 128f32).to_int_unchecked::<i32>().into(),
-        ]
+    let public_input = unsafe {
+        Tensor::<i32>::new(
+            Some(&[
+                (531f32 / 128f32).round().to_int_unchecked::<i32>().into(),
+                (103f32 / 128f32).round().to_int_unchecked::<i32>().into(),
+                (4469f32 / 128f32).round().to_int_unchecked::<i32>().into(),
+                (2849f32 / 128f32).to_int_unchecked::<i32>().into(),
+            ]),
+            &[4],
+        )
+        .unwrap()
     };
 
     println!("public input {:?}", public_input);
 
-    let prover = MockProver::run(
-        k,
-        &circuit,
-        vec![public_input
-            .iter()
-            .map(|x| i32tofelt::<F>(*x).into())
-            .collect()],
-        //            vec![vec![(4).into(), (1).into(), (35).into(), (22).into()]],
-    )
-    .unwrap();
+    let prover = MockProver::run(k, &circuit, public_input.into()).unwrap();
     prover.assert_satisfied();
 }
 

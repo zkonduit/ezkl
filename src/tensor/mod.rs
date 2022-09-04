@@ -13,49 +13,36 @@ use std::fmt::Error;
 use std::ops::Deref;
 use std::ops::DerefMut;
 
-pub trait TensorType: Default + Clone + Debug + 'static {
+pub trait TensorType: Clone + Debug + 'static {
     /// Returns the zero value.
-    fn zero() -> Self;
-    /// Returns the one value.
-    fn one() -> Self;
+    fn zero() -> Option<Self> {
+        None
+    }
 }
 
 macro_rules! tensor_type {
-    ($rust_type:ty, $tensor_type:ident, $zero:expr, $one:expr) => {
+    ($rust_type:ty, $tensor_type:ident, $zero:expr) => {
         impl TensorType for $rust_type {
-            fn zero() -> Self {
-                $zero
-            }
-
-            fn one() -> Self {
-                $one
+            fn zero() -> Option<Self> {
+                Some($zero)
             }
         }
     };
 }
 
-tensor_type!(f32, Float, 0.0, 1.0);
-tensor_type!(f64, Double, 0.0, 1.0);
-tensor_type!(i32, Int32, 0, 1);
-tensor_type!(u8, UInt8, 0, 1);
-tensor_type!(u16, UInt16, 0, 1);
-tensor_type!(u32, UInt32, 0, 1);
-tensor_type!(u64, UInt64, 0, 1);
-tensor_type!(i16, Int16, 0, 1);
-tensor_type!(i8, Int8, 0, 1);
-tensor_type!(i64, Int64, 0, 1);
-tensor_type!(bool, Bool, false, true);
+tensor_type!(f32, Float, 0.0);
+tensor_type!(i32, Int32, 0);
 
 impl<F: FieldExt> TensorType for Value<Assigned<F>> {
     /// Returns the zero value.
-    fn zero() -> Self {
-        Value::known(F::zero().into())
-    }
-    /// Returns the one value.
-    fn one() -> Self {
-        Value::known(F::one().into())
+    fn zero() -> Option<Self> {
+        Some(Value::known(F::zero().into()))
     }
 }
+
+impl<F: FieldExt> TensorType for AssignedCell<Assigned<F>, F> {}
+
+impl TensorType for halo2curves::pasta::Fp {}
 
 #[derive(Debug)]
 pub struct TensorError(String);
@@ -94,12 +81,58 @@ impl<'a, T: Clone + TensorType> From<&'a [T]> for Tensor<T> {
     }
 }
 
+impl<'a, T: Clone + TensorType> From<Vec<T>> for Tensor<T> {
+    fn from(value: Vec<T>) -> Tensor<T> {
+        Tensor::new(Some(&value), &[value.len() as usize]).unwrap()
+    }
+}
+
 impl<F: Clone + FieldExt + TensorType> From<Tensor<i32>> for Tensor<Value<Assigned<F>>> {
-    fn from(t: Tensor<i32>) -> Tensor<Value<Assigned<F>>> {
+    fn from(mut t: Tensor<i32>) -> Tensor<Value<Assigned<F>>> {
         let data: Vec<Value<Assigned<F>>> = (0..t.len())
             .map(|i| Value::known(i32tofelt::<F>(t[i]).into()))
             .collect();
         Tensor::new(Some(&data), t.dims()).unwrap()
+    }
+}
+
+impl<F: Clone + FieldExt + TensorType> Tensor<Value<Assigned<F>>> {
+    pub fn assign_cell(
+        self,
+        region: &mut Region<'_, F>,
+        str: String,
+        columns: &[Column<Advice>],
+        offset: usize,
+    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+        assert!(self.dims.len() <= 2);
+        let mut eq = Vec::new();
+        if self.dims.len() == 1 {
+            for i in 0..self.dims()[0] {
+                let v = region.assign_advice(
+                    || str.clone(),
+                    columns[0],
+                    offset + i,
+                    || self.get(&[i]),
+                )?;
+                eq.push(v);
+            }
+            Ok(Tensor::new(Some(&eq), self.dims()).unwrap())
+        } else if self.dims.len() == 2 {
+            for i in 0..self.dims()[0] {
+                for j in 0..self.dims()[1] {
+                    let weight = region.assign_advice(
+                        || str.clone(),
+                        columns[i],
+                        offset + j,
+                        || self.get(&[i, j]),
+                    )?;
+                    eq.push(weight);
+                }
+            }
+            Ok(Tensor::new(Some(&eq), self.dims()).unwrap())
+        } else {
+            panic!("should never reach here")
+        }
     }
 }
 
@@ -121,14 +154,14 @@ impl<T: Clone + TensorType> Tensor<T> {
                 })
             }
             None => Ok(Tensor {
-                inner: vec![T::zero(); total_dims as usize],
+                inner: vec![T::zero().unwrap(); total_dims as usize],
                 dims: Vec::from(dims),
             }),
         }
     }
 
     pub fn len(&mut self) -> usize {
-        self.dims().iter().product() as usize
+        self.dims().iter().product::<usize>()
     }
 
     /// Set one single value on the tensor.
@@ -197,8 +230,8 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// a.reshape(&[9, 3])
     /// assert_eq!(a.dims(), &[9, 3]);
     /// ```
-    pub fn reshape(&self, new_dims: &[usize]) {
-        assert!(self.len() == new_dims.iter().product() as usize);
+    pub fn reshape(&mut self, new_dims: &[usize]) {
+        assert!(self.len() == new_dims.iter().product::<usize>());
         self.dims = Vec::from(new_dims);
     }
 }

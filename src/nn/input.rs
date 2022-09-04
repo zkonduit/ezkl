@@ -1,3 +1,4 @@
+use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Layouter, Value},
@@ -17,7 +18,7 @@ pub struct InputConfig<F: FieldExt, const IN: usize> {
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt, const IN: usize> InputConfig<F, IN> {
+impl<F: FieldExt + TensorType, const IN: usize> InputConfig<F, IN> {
     pub fn configure(cs: &mut ConstraintSystem<F>, col: Column<Advice>) -> InputConfig<F, IN> {
         let qs = cs.selector();
         // could put additional constraints on input here
@@ -31,25 +32,16 @@ impl<F: FieldExt, const IN: usize> InputConfig<F, IN> {
     pub fn layout(
         &self,
         layouter: &mut impl Layouter<F>,
-        raw_input: Vec<i32>,
-    ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+        raw_input: Tensor<i32>,
+    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         layouter.assign_region(
             || "Input",
             |mut region| {
                 let offset = 0;
                 self.q.enable(&mut region, offset)?;
 
-                let mut output_for_equality = Vec::new();
-                for (i, x) in raw_input.iter().enumerate().take(IN) {
-                    let ofe = region.assign_advice(
-                        || "o".to_string(),
-                        self.input,                                // advice column
-                        offset + i,                                // row in advice col to put value
-                        || Value::known(i32tofelt::<F>(*x)).into(), //value
-                    )?;
-                    output_for_equality.push(ofe);
-                }
-                Ok(output_for_equality)
+                let mut output: Tensor<Value<Assigned<F>>> = raw_input.clone().into();
+                output.assign_cell(&mut region, "o".to_string(), &[self.input], offset)
             },
         )
     }

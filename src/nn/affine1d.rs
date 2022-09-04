@@ -9,7 +9,7 @@ use std::marker::PhantomData;
 use crate::fieldutils::i32tofelt;
 use crate::tensor::{Tensor, TensorType};
 use crate::tensor_ops::utils::map2;
-use crate::tensor_ops::vec_matmul;
+use crate::tensor_ops::vec_matmul_field;
 
 // We layout in two phases: first we load any parameters (returning parameters, used only in case of a tied weight model),
 // then we load the input, perform the forward pass, and layout the input and output, returning the output
@@ -55,7 +55,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         weights: Tensor<i32>,
         biases: Tensor<i32>,
         input: Tensor<AssignedCell<Assigned<F>, F>>,
-    ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         layouter.assign_region(
             || "Both",
             |mut region| {
@@ -80,27 +80,11 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         let biases: Tensor<Value<Assigned<F>>> = biases.into();
         let weights: Tensor<Value<Assigned<F>>> = weights.into();
 
-        let mut biases_for_equality = Vec::new();
-        for (i, bias_i) in biases.iter().enumerate().take(OUT) {
-            let bias =
-                region.assign_advice(|| "b".to_string(), self.bias, offset + i, || *bias_i)?;
-            biases_for_equality.push(bias);
-        }
+        let mut biases_for_equality =
+            biases.assign_cell(region, "b".to_string(), &[self.bias], offset)?;
 
-        let mut weights_for_equality = Vec::new();
-        for (i, w_i) in weights.iter().enumerate().take(OUT) {
-            let mut row = Vec::new();
-            for (j, w_i_j) in w_i.iter().enumerate().take(IN) {
-                let weight = region.assign_advice(
-                    || "w".to_string(),
-                    self.weights[i],
-                    offset + j,
-                    || *w_i_j,
-                )?;
-                row.push(weight);
-            }
-            weights_for_equality.push(row);
-        }
+        let weights_for_equality =
+            weights.assign_cell(region, "w".to_string(), &self.weights, offset)?;
 
         let params = Parameters {
             biases: biases_for_equality,
@@ -117,33 +101,18 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         offset: usize,
         input: Tensor<AssignedCell<Assigned<F>, F>>,
         params: Parameters<F, IN, OUT>,
-    ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         // copy the input
         for (j, x) in input.iter().enumerate().take(IN) {
             x.copy_advice(|| "input", region, self.input, offset + j)?;
         }
         // calculate value of output
-        let mut output: Tensor<Value<Assigned<F>>> = Tensor::new(None, &[OUT]).unwrap();
-
-        for (i, o) in output.iter_mut().enumerate().take(OUT) {
-            for (j, x) in input.iter().enumerate().take(IN) {
-                *o = *o + params.weights[i][j].value_field() * x.value_field();
-            }
-            // add bias
-            *o = *o + params.biases[i].value_field();
-        }
+        let mut output = vec_matmul_field(input, params.weights, Some(params.biases));
 
         // assign that value and return it
-        let mut output_for_equality = Vec::new();
-        for (i, o) in output.iter_mut().enumerate().take(OUT) {
-            let ofe = region.assign_advice(
-                || "o".to_string(),
-                self.output, //advice
-                offset + i,
-                || *o, //value
-            )?;
-            output_for_equality.push(ofe);
-        }
+        let mut output_for_equality =
+            output.assign_cell(region, "o".to_string(), &[self.output], offset)?;
+
         Ok(output_for_equality)
     }
 
