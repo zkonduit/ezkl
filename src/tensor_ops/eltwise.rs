@@ -32,8 +32,8 @@ impl<F: FieldExt + TensorType, Inner: TensorType, const LEN: usize, NL: Nonlinea
         Func: FnMut(usize) -> Inner,
     {
         Nonlin1d {
-            input: Tensor::from((0..LEN).map(&mut f).collect::<Vec<Inner>>()),
-            output: Tensor::from((0..LEN).map(f).collect::<Vec<Inner>>()),
+            input: Tensor::from((0..LEN).map(&mut f)),
+            output: Tensor::from((0..LEN).map(f)),
             _marker: PhantomData,
         }
     }
@@ -210,7 +210,6 @@ impl<
                         <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into()
                     })
                 })
-                .collect::<Vec<Value<Assigned<F>>>>(),
         );
 
         Ok(output
@@ -344,17 +343,9 @@ impl<
         input: Tensor<AssignedCell<Assigned<F>, F>>,
     ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         //calculate the value of output
-        let output = Tensor::from(
-            input
-                .iter()
-                .map(|acaf| acaf.value_field())
-                .map(|vaf| {
-                    vaf.map(|f| {
-                        <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into()
-                    })
-                })
-                .collect::<Vec<Value<Assigned<F>>>>(),
-        );
+        let output = Tensor::from(input.iter().map(|acaf| acaf.value_field()).map(|vaf| {
+            vaf.map(|f| <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into())
+        }));
 
         Ok(output
             .assign_cell_const_offst(region, "nl_{i}", &self.advice, offset + 1)

@@ -108,8 +108,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         let mut output = vec_matmul_field(input, params.weights, Some(params.biases));
 
         // assign that value and return it
-        let mut output_for_equality =
-            output.assign_cell(region, "o", &[self.output], offset)?;
+        let mut output_for_equality = output.assign_cell(region, "o", &[self.output], offset)?;
 
         Ok(output_for_equality)
     }
@@ -128,9 +127,9 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
             let q = virtual_cells.query_selector(qs);
 
             // We put the negation of the claimed output in the constraint tensor.
-            let mut constraints: Vec<Expression<F>> = (0..OUT)
-                .map(|i| -virtual_cells.query_advice(output, Rotation(i as i32)))
-                .collect();
+            let mut constraints: Tensor<Expression<F>> = Tensor::from(
+                (0..OUT).map(|i| -virtual_cells.query_advice(output, Rotation(i as i32))),
+            );
 
             // Now we compute the linear expression,  and add it to constraints
             for (i, c) in constraints.iter_mut().enumerate().take(OUT) {

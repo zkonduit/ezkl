@@ -8,8 +8,7 @@ use halo2_proofs::{
 };
 
 use std::fmt::Debug;
-use std::fmt::Display;
-use std::fmt::Error;
+use std::iter::Iterator;
 use std::ops::Deref;
 use std::ops::DerefMut;
 
@@ -32,6 +31,7 @@ macro_rules! tensor_type {
 
 tensor_type!(f32, Float, 0.0);
 tensor_type!(i32, Int32, 0);
+tensor_type!(usize, USize, 0);
 
 impl<F: FieldExt> TensorType for Value<Assigned<F>> {
     /// Returns the zero value.
@@ -41,19 +41,28 @@ impl<F: FieldExt> TensorType for Value<Assigned<F>> {
 }
 
 impl<F: FieldExt> TensorType for AssignedCell<Assigned<F>, F> {}
-
+impl<F: FieldExt> TensorType for Expression<F> {}
 impl TensorType for halo2curves::pasta::Fp {}
 
 #[derive(Debug)]
 pub struct TensorError(String);
 
 #[derive(Clone, Debug, Eq)]
-pub struct Tensor<T> {
+pub struct Tensor<T: TensorType> {
     inner: Vec<T>,
     dims: Vec<usize>,
 }
 
-impl<T> Deref for Tensor<T> {
+impl<T: TensorType> IntoIterator for Tensor<T> {
+    type Item = T;
+    type IntoIter = ::std::vec::IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
+    }
+}
+
+impl<T: TensorType> Deref for Tensor<T> {
     type Target = [T];
 
     #[inline]
@@ -62,37 +71,36 @@ impl<T> Deref for Tensor<T> {
     }
 }
 
-impl<T> DerefMut for Tensor<T> {
+impl<T: TensorType> DerefMut for Tensor<T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut [T] {
         self.inner.deref_mut()
     }
 }
 
-impl<T: PartialEq> PartialEq for Tensor<T> {
+impl<T: PartialEq + TensorType> PartialEq for Tensor<T> {
     fn eq(&self, other: &Tensor<T>) -> bool {
         self.dims == other.dims && self.deref() == other.deref()
     }
 }
 
-impl<'a, T: Clone + TensorType> From<&'a [T]> for Tensor<T> {
-    fn from(value: &'a [T]) -> Tensor<T> {
-        Tensor::new(Some(&value), &[value.len() as usize]).unwrap()
-    }
-}
-
-impl<'a, T: Clone + TensorType> From<Vec<T>> for Tensor<T> {
-    fn from(value: Vec<T>) -> Tensor<T> {
-        Tensor::new(Some(&value), &[value.len() as usize]).unwrap()
+impl<I: Iterator, T: Clone + TensorType + From<I::Item>> From<I> for Tensor<T>
+where
+    I::Item: Clone + TensorType,
+    Vec<T>: FromIterator<I::Item>,
+{
+    fn from(value: I) -> Tensor<T> {
+        let data: Vec<T> = value.collect::<Vec<T>>();
+        Tensor::new(Some(&data), &[data.len() as usize]).unwrap()
     }
 }
 
 impl<F: Clone + FieldExt + TensorType> From<Tensor<i32>> for Tensor<Value<Assigned<F>>> {
     fn from(mut t: Tensor<i32>) -> Tensor<Value<Assigned<F>>> {
-        let data: Vec<Value<Assigned<F>>> = (0..t.len())
-            .map(|i| Value::known(i32tofelt::<F>(t[i]).into()))
-            .collect();
-        Tensor::new(Some(&data), t.dims()).unwrap()
+        let mut ta: Tensor<Value<Assigned<F>>> =
+            Tensor::from((0..t.len()).map(|i| Value::known(i32tofelt::<F>(t[i]).into())));
+        ta.reshape(t.dims());
+        ta
     }
 }
 
