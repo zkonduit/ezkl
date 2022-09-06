@@ -154,12 +154,19 @@ impl<
                 let offset = 0;
                 self.qlookup.enable(&mut region, offset)?;
 
-                let mut input_vec = input
-                    .clone()
-                    .assign_cell(&mut region, "input_{i}", &self.advice, offset)
-                    .unwrap();
+                let mut input_vec = Vec::new();
+                //witness the advice
+                for (i, x) in input.iter().enumerate().take(LEN) {
+                    let witnessed = region.assign_advice(
+                        || format!("input {:?}", i),
+                        self.advice[i],
+                        offset,
+                        || *x,
+                    )?;
+                    input_vec.push(witnessed);
+                }
 
-                self.layout_inner(&mut region, offset, input_vec)
+                self.layout_inner(&mut region, offset, Tensor::from(input_vec.into_iter()))
             },
         )?;
 
@@ -201,20 +208,22 @@ impl<
     ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         //calculate the value of output
 
-        let output = Tensor::from(
-            input
-                .iter()
-                .map(|acaf| acaf.value_field())
-                .map(|vaf| {
-                    vaf.map(|f| {
-                        <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into()
-                    })
-                })
-        );
+        let output = Tensor::from(input.iter().map(|acaf| acaf.value_field()).map(|vaf| {
+            vaf.map(|f| <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into())
+        }));
 
-        Ok(output
-            .assign_cell(region, "nl_{i}", &self.advice, offset)
-            .unwrap())
+        let mut output_for_equality = Vec::new();
+        for (i, o) in output.iter().enumerate().take(LEN) {
+            let ofe = region.assign_advice(
+                || format!("nl_{i}"),
+                self.advice[i], // Column<Advice>
+                offset + 1,
+                || *o, //Assigned<F>
+            )?;
+            output_for_equality.push(ofe);
+        }
+
+        Ok(Tensor::from(output_for_equality.into_iter()))
     }
 }
 
@@ -347,22 +356,18 @@ impl<
             vaf.map(|f| <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into())
         }));
 
-        Ok(output
-            .assign_cell_const_offst(region, "nl_{i}", &self.advice, offset + 1)
-            .unwrap())
-        //
-        // let mut output_for_equality = Vec::new();
-        // for (i, o) in output.iter().enumerate() {
-        //     let ofe = region.assign_advice(
-        //         || format!("nl_{i}"),
-        //         self.advice[i], // Column<Advice>
-        //         offset + 1,
-        //         || *o, //Assigned<F>
-        //     )?;
-        //     output_for_equality.push(ofe);
-        // }
-        //
-        // Ok(Tensor::from(output_for_equality))
+        let mut output_for_equality = Vec::new();
+        for (i, o) in output.iter().enumerate() {
+            let ofe = region.assign_advice(
+                || format!("nl_{i}"),
+                self.advice[i], // Column<Advice>
+                offset + 1,
+                || *o, //Assigned<F>
+            )?;
+            output_for_equality.push(ofe);
+        }
+
+        Ok(Tensor::from(output_for_equality.into_iter()))
     }
 }
 
@@ -460,7 +465,6 @@ impl<F: FieldExt, const D: usize> Nonlinearity<F> for DivideBy<F, D> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tensor_ops::utils::flatten3;
     use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp as F;
 

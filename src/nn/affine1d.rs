@@ -6,14 +6,12 @@ use halo2_proofs::{
 };
 use std::marker::PhantomData;
 
-use crate::fieldutils::i32tofelt;
+use crate::fieldutils::assign_advice_tensor;
 use crate::tensor::{Tensor, TensorType};
-use crate::tensor_ops::utils::map2;
 use crate::tensor_ops::vec_matmul_field;
 
 // We layout in two phases: first we load any parameters (returning parameters, used only in case of a tied weight model),
 // then we load the input, perform the forward pass, and layout the input and output, returning the output
-
 #[derive(Clone)]
 pub struct RawParameters<const IN: usize, const OUT: usize> {
     pub weights: Tensor<i32>,
@@ -24,12 +22,6 @@ pub struct Parameters<F: FieldExt, const IN: usize, const OUT: usize> {
     weights: Tensor<AssignedCell<Assigned<F>, F>>,
     biases: Tensor<AssignedCell<Assigned<F>, F>>,
     pub _marker: PhantomData<F>,
-}
-
-pub struct Affine1dFullyAssigned<F: FieldExt, const IN: usize, const OUT: usize> {
-    parameters: Parameters<F, IN, OUT>,
-    input: Tensor<AssignedCell<Assigned<F>, F>>,
-    output: Tensor<AssignedCell<Assigned<F>, F>>,
 }
 
 #[derive(Clone)]
@@ -77,12 +69,14 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         weights: Tensor<i32>,
         biases: Tensor<i32>,
     ) -> Result<Parameters<F, IN, OUT>, halo2_proofs::plonk::Error> {
-        let biases: Tensor<Value<Assigned<F>>> = biases.into();
-        let weights: Tensor<Value<Assigned<F>>> = weights.into();
+        let mut biases: Tensor<Value<Assigned<F>>> = biases.into();
+        let mut weights: Tensor<Value<Assigned<F>>> = weights.into();
 
-        let mut biases_for_equality = biases.assign_cell(region, "b", &[self.bias], offset)?;
+        let biases_for_equality =
+            assign_advice_tensor(&mut biases, region, "b", &[self.bias], offset)?;
 
-        let weights_for_equality = weights.assign_cell(region, "w", &self.weights, offset)?;
+        let weights_for_equality =
+            assign_advice_tensor(&mut weights, region, "w", &self.weights, offset)?;
 
         let params = Parameters {
             biases: biases_for_equality,
@@ -108,7 +102,8 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         let mut output = vec_matmul_field(input, params.weights, Some(params.biases));
 
         // assign that value and return it
-        let mut output_for_equality = output.assign_cell(region, "o", &[self.output], offset)?;
+        let output_for_equality =
+            assign_advice_tensor(&mut output, region, "o", &[self.output], offset)?;
 
         Ok(output_for_equality)
     }

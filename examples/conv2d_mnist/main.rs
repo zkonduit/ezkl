@@ -32,6 +32,7 @@ use halo2deeplearning::fieldutils;
 use halo2deeplearning::fieldutils::i32tofelt;
 use halo2deeplearning::nn::affine1d::Affine1dConfig;
 use halo2deeplearning::nn::cnvrl_generic;
+use halo2deeplearning::tensor::{Tensor, TensorType};
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, NonlinConfig1d, ReLu};
 use halo2deeplearning::tensor_ops::utils::map4;
 use std::cmp::max;
@@ -40,7 +41,7 @@ mod params;
 
 #[derive(Clone)]
 struct ConvConfig<
-    F: FieldExt,
+    F: FieldExt + TensorType,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust stable
     const CLASSES: usize,
     const INBITS: usize,
@@ -58,7 +59,9 @@ struct ConvConfig<
     const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
     const IN_CHANNELS: usize,
     const PADDING: usize,
-> {
+> where
+    Value<F>: TensorType,
+{
     l0: cnvrl_generic::Config<
         F,
         KERNEL_HEIGHT,
@@ -100,17 +103,18 @@ struct MyCircuit<
     const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
     const IN_CHANNELS: usize,
     const PADDING: usize,
-> {
+> where
+    Value<F>: TensorType,
+{
     // Given the stateless ConvConfig type information, a DNN trace is determined by its input and the parameters of its layers.
     // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
-    input: [cnvrl_generic::Image<Value<F>, IMAGE_HEIGHT, IMAGE_WIDTH>; IN_CHANNELS],
-    l0_params:
-        [[cnvrl_generic::Kernel<Value<F>, KERNEL_HEIGHT, KERNEL_WIDTH>; IN_CHANNELS]; OUT_CHANNELS],
-    l2_params: (Vec<Vec<i32>>, Vec<i32>),
+    input: Tensor<Value<F>>,
+    l0_params: Tensor<Value<F>>,
+    l2_params: (Tensor<i32>, Tensor<i32>),
 }
 
 impl<
-        F: FieldExt,
+        F: FieldExt + TensorType,
         const LEN: usize,
         const CLASSES: usize,
         const INBITS: usize,
@@ -148,6 +152,8 @@ impl<
         IN_CHANNELS,
         PADDING,
     >
+where
+    Value<F>: TensorType,
 {
     type Config = ConvConfig<
         F,
@@ -182,12 +188,8 @@ impl<
 
         let num_advices = max(max(output_width, IMAGE_WIDTH), LEN + 3);
 
-        let advices = (0..num_advices)
-            .map(|_| cs.advice_column())
-            .collect::<Vec<_>>();
-        for col in advices.iter() {
-            cs.enable_equality(*col);
-        }
+        let advices = Tensor::from((0..num_advices).map(|_| cs.advice_column()));
+        advices.map(|col| cs.enable_equality(col));
 
         let l0 = cnvrl_generic::Config::<
             F,
@@ -236,29 +238,16 @@ impl<
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let l0out = config
-            .l0
-            .assign(&mut layouter, self.input, self.l0_params)?;
-        let l0qout = config.l0q.layout(
-            &mut layouter,
-            l0out.into_iter().flatten().flatten().collect(),
-        )?;
+        let l0out = config.l0.assign(&mut layouter, self.input, self.l0_params);
+        let l0qout = config
+            .l0q
+            .layout(&mut layouter, l0out.into_iter().flatten().flatten().into())?;
         let l1out = config.l1.layout(&mut layouter, l0qout)?;
         let l2out = config.l2.layout(
             &mut layouter,
             self.l2_params.0.clone(),
             self.l2_params.1.clone(),
             l1out,
-        )?;
-
-        println!(
-            "L2Out: {:?}",
-            l2out
-                .iter()
-                .map(|x| x
-                    .value_field()
-                    .map(|y| fieldutils::felt_to_i32(y.evaluate())))
-                .collect::<Vec<_>>()
         );
 
         // tie the last output to public inputs (instance column)
@@ -307,97 +296,49 @@ pub fn runconv() {
 
     let image_num = 0;
     // Can use an Array2 or Array3 here (Array3 for visualization)
-    let train_data = Array3::from_shape_vec((50_000, 28, 28), trn_img)
-        .expect("Error converting images to Array3 struct")
-        .map(|x| i32tofelt::<F>(*x as i32 / 16));
+    let train_data = Tensor::from(trn_img.iter().map(|x| i32tofelt::<F>(*x as i32 / 16)));
+    train_data.reshape(&[50_000, 28, 28]);
 
-    let train_labels: Array2<f32> = Array2::from_shape_vec((50_000, 1), trn_lbl)
-        .expect("Error converting training labels to Array2 struct")
-        .map(|x| *x as f32);
-    println!(
-        "The first digit is a {:?}",
-        train_labels.slice(s![image_num, ..])
-    );
+    let train_labels = Tensor::from(trn_lbl.iter().map(|x| *x as f32));
+    train_labels.reshape(&[50_000, 1]);
 
-    let mut image: [[[Value<F>; 28]; 28]; 1] = [[[Value::default(); 28]; 28]; 1];
-    for i in 0..1 {
-        for j in 0..28 {
-            for k in 0..28 {
-                image[i][j][k] = Value::known(train_data[[image_num, j, k]]);
-            }
-        }
-    }
+    println!("The first digit is a {:?}", train_labels[0]);
+
+    let mut image = train_data
+        .get_slice(&[0..1, 0..28, 0..28])
+        .map(|d| Value::known(d));
+    image.reshape(&[1, 28, 28]);
 
     let myparams = params::Params::new();
-    let tfkernels = map4::<Value<F>, _, KERNEL_HEIGHT, KERNEL_WIDTH, IN_CHANNELS, OUT_CHANNELS>(
-        |i, j, k, l| {
-            let dx = (myparams.kernels[i][j][k][l] as f32) * (32 as f32);
-            let rounded = dx.round();
-            let integral: i32 = unsafe { rounded.to_int_unchecked() };
-            let felt = fieldutils::i32tofelt(integral);
-            Value::known(felt)
-        },
-    );
-
-    let l2biases: Vec<i32> = {
-        let mut b = Vec::new();
-        for fl in myparams.biases {
-            let dx = fl * (32 as f32);
-            let rounded = dx.round();
-            let integral: i32 = unsafe { rounded.to_int_unchecked() };
-            //                let felt = fieldutils::i32tofelt(integral);
-            b.push(integral);
-        }
-        b
-    };
-
-    let tfweights: Vec<Vec<i32>> = {
-        let mut w: Vec<Vec<i32>> = Vec::new();
-        for row in myparams.weights {
-            let mut newrow = Vec::new();
-            for fl in row {
-                let dx = fl * (32 as f32);
-                let rounded = dx.round();
-                let integral: i32 = unsafe { rounded.to_int_unchecked() };
-                //                    let felt = fieldutils::i32tofelt(integral);
-                newrow.push(integral);
-            }
-            w.push(newrow);
-        }
-        w
-    };
-
-    let l2weights = {
-        let mut w: Vec<Vec<i32>> = Vec::new();
-        for i in 0..CLASSES {
-            let mut row = Vec::new();
-            for j in 0..LEN {
-                row.push(tfweights[j][i]);
-            }
-            w.push(row);
-        }
-        w
-    };
-
+    let kernels = Tensor::from(myparams.weights.into_iter().flatten().map(|fl| {
+        let dx = (fl as f32) * (32 as f32);
+        let rounded = dx.round();
+        let integral: i32 = unsafe { rounded.to_int_unchecked() };
+        let felt = fieldutils::i32tofelt(integral);
+        Value::known(felt)
+    }));
     // tensorflow is in KHxKWxINxOUT we are OUTxINxWxH?
-    let kernels: [[[[Value<F>; KERNEL_HEIGHT]; KERNEL_WIDTH]; IN_CHANNELS]; OUT_CHANNELS] = {
-        let mut t4 =
-            [[[[Value::unknown(); KERNEL_HEIGHT]; KERNEL_WIDTH]; IN_CHANNELS]; OUT_CHANNELS];
-        for i in 0..OUT_CHANNELS {
-            for j in 0..IN_CHANNELS {
-                for k in 0..KERNEL_WIDTH {
-                    for l in 0..KERNEL_HEIGHT {
-                        t4[i][j][k][l] = tfkernels[l][k][j][i];
-                    }
-                }
-            }
-        }
-        t4
-    };
+    kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_WIDTH, KERNEL_HEIGHT]);
 
-    let input = image; //: [cnvrl_generic::Image<Value<F>, IMAGE_HEIGHT, IMAGE_WIDTH>; IN_CHANNELS] = ;
-    let l0_params = kernels; //         [[cnvrl_generic::Kernel<Value<F>, KERNEL_HEIGHT, KERNEL_WIDTH>; IN_CHANNELS]; OUT_CHANNELS] = ;
-    let l2_params: (Vec<Vec<i32>>, Vec<i32>) = (l2weights, l2biases);
+    let l2biases = Tensor::<i32>::from(myparams.biases.into_iter().map(|fl| {
+        let dx = fl * (32 as f32);
+        let rounded = dx.round();
+        let integral: i32 = unsafe { rounded.to_int_unchecked() };
+        integral
+    }));
+
+    let l2weights = Tensor::<i32>::from(myparams.weights.into_iter().flatten().map(|fl| {
+        let dx = fl * (32 as f32);
+        let rounded = dx.round();
+        let integral: i32 = unsafe { rounded.to_int_unchecked() };
+        integral
+    }));
+
+    l2weights.reshape(&[LEN, CLASSES]);
+
+    let input = image;
+    let l0_params = kernels;
+    let l2_params: (Tensor<i32>, Tensor<i32>) = (l2weights, l2biases);
 
     let circuit = MyCircuit::<
         F,
@@ -423,16 +364,14 @@ pub fn runconv() {
         l2_params,
     };
 
-    let public_input = vec![
-        -3283, -1071, -7182, -9264, -5729, 1197, -2673, -12619, -1283, -14700,
-    ];
+    let public_input = Tensor::<i32>::from(
+        &[
+            -3283i32, -1071, -7182, -9264, -5729, 1197, -2673, -12619, -1283, -14700,
+        ]
+        .iter(),
+    );
 
-    let pi_inner: [F; CLASSES] = public_input
-        .iter()
-        .map(|x| i32tofelt::<F>(*x).into())
-        .collect::<Vec<F>>()
-        .try_into()
-        .unwrap();
+    let pi_inner: Tensor<F> = public_input.into();
     let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner]];
 
     //	Real proof
@@ -477,40 +416,3 @@ pub fn runconv() {
 fn main() {
     runconv()
 }
-
-// fn print_convrelaffrel() {
-//     use plotters::prelude::*;
-//
-//     let root = BitMapBackend::new("convrelaffrel-layout.png", (2048, 7680)).into_drawing_area();
-//     root.fill(&WHITE).unwrap();
-//     let root = root
-//         .titled("Conv -> ReLu -> Affine -> Relu", ("sans-serif", 60))
-//         .unwrap();
-//
-//     let circuit = MyCircuit::<
-//         F,
-//         LEN,
-//         10,
-//         14,
-//         14,
-//         KERNEL_HEIGHT,
-//         KERNEL_WIDTH,
-//         OUT_CHANNELS,
-//         STRIDE,
-//         IMAGE_HEIGHT,
-//         IMAGE_WIDTH,
-//         PADDED_HEIGHT,
-//         PADDED_WIDTH,
-//         OUTPUT_HEIGHT,
-//         OUTPUT_WIDTH,
-//         IN_CHANNELS,
-//         PADDING,
-//     > {
-//         input: [[[Value::unknown(); IMAGE_HEIGHT]; IMAGE_WIDTH]; IN_CHANNELS],
-//         l0_params: [[[[Value::unknown(); KERNEL_HEIGHT]; KERNEL_WIDTH]; IN_CHANNELS]; OUT_CHANNELS],
-//         l2_params: (vec![vec![1; LEN]; LEN], vec![1; LEN]),
-//     };
-//     halo2_proofs::dev::CircuitLayout::default()
-//         .render(13, &circuit, &root)
-//         .unwrap();
-// }

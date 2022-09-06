@@ -2,15 +2,16 @@ use crate::fieldutils::i32tofelt;
 
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, Region, Value},
-    plonk::{Advice, Assigned, Column, ConstraintSystem, Constraints, Expression, Selector},
-    poly::Rotation,
+    circuit::{AssignedCell, Value},
+    plonk::{Advice, Assigned, Column, Expression, Fixed},
 };
 
+use itertools::Itertools;
 use std::fmt::Debug;
 use std::iter::Iterator;
 use std::ops::Deref;
 use std::ops::DerefMut;
+use std::ops::Range;
 
 pub trait TensorType: Clone + Debug + 'static {
     /// Returns the zero value.
@@ -32,6 +33,7 @@ macro_rules! tensor_type {
 tensor_type!(f32, Float, 0.0);
 tensor_type!(i32, Int32, 0);
 tensor_type!(usize, USize, 0);
+tensor_type!((), Empty, ());
 
 impl<F: FieldExt> TensorType for Value<Assigned<F>> {
     /// Returns the zero value.
@@ -41,8 +43,25 @@ impl<F: FieldExt> TensorType for Value<Assigned<F>> {
 }
 
 impl<F: FieldExt> TensorType for AssignedCell<Assigned<F>, F> {}
-impl<F: FieldExt> TensorType for Expression<F> {}
+impl TensorType for Column<Advice> {}
+// impl<'static> TensorType for &'static Column<Advice> {}
+impl TensorType for Column<Fixed> {}
+
+impl<T: TensorType> TensorType for Tensor<T> {}
+
+impl<F: FieldExt> TensorType for Expression<F> {
+    fn zero() -> Option<Self> {
+        Some(Expression::Constant(F::zero()))
+    }
+}
+
 impl TensorType for halo2curves::pasta::Fp {}
+impl TensorType for Value<halo2curves::pasta::Fp> {
+    /// Returns the zero value.
+    fn zero() -> Option<Self> {
+        Some(Value::known(halo2curves::pasta::Fp::zero()))
+    }
+}
 
 #[derive(Debug)]
 pub struct TensorError(String);
@@ -104,84 +123,6 @@ impl<F: Clone + FieldExt + TensorType> From<Tensor<i32>> for Tensor<Value<Assign
     }
 }
 
-impl<F: Clone + FieldExt + TensorType> Tensor<Value<Assigned<F>>> {
-    pub fn assign_cell(
-        self,
-        region: &mut Region<'_, F>,
-        name: &str,
-        columns: &[Column<Advice>],
-        offset: usize,
-    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
-        assert!(self.dims.len() <= 2);
-        let mut eq = Vec::new();
-        if self.dims.len() == 1 {
-            for i in 0..self.dims()[0] {
-                let v = region.assign_advice(
-                    || format!("{}", name),
-                    columns[0],
-                    offset + i,
-                    || self.get(&[i]),
-                )?;
-                eq.push(v);
-            }
-            Ok(Tensor::new(Some(&eq), self.dims()).unwrap())
-        } else if self.dims.len() == 2 {
-            for i in 0..self.dims()[0] {
-                for j in 0..self.dims()[1] {
-                    let weight = region.assign_advice(
-                        || format!("{}", name),
-                        columns[i],
-                        offset + j,
-                        || self.get(&[i, j]),
-                    )?;
-                    eq.push(weight);
-                }
-            }
-            Ok(Tensor::new(Some(&eq), self.dims()).unwrap())
-        } else {
-            panic!("should never reach here")
-        }
-    }
-
-    pub fn assign_cell_const_offst(
-        self,
-        region: &mut Region<'_, F>,
-        name: &str,
-        columns: &[Column<Advice>],
-        offset: usize,
-    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
-        assert!(self.dims.len() <= 2);
-        let mut eq = Vec::new();
-        if self.dims.len() == 1 {
-            for i in 0..self.dims()[0] {
-                let v = region.assign_advice(
-                    || format!("{}", name),
-                    columns[i],
-                    offset,
-                    || self.get(&[i]),
-                )?;
-                eq.push(v);
-            }
-            Ok(Tensor::new(Some(&eq), self.dims()).unwrap())
-        } else if self.dims.len() == 2 {
-            for i in 0..self.dims()[0] {
-                for j in 0..self.dims()[1] {
-                    let weight = region.assign_advice(
-                        || format!("{}", name),
-                        columns[i],
-                        offset,
-                        || self.get(&[i, j]),
-                    )?;
-                    eq.push(weight);
-                }
-            }
-            Ok(Tensor::new(Some(&eq), self.dims()).unwrap())
-        } else {
-            panic!("should never reach here")
-        }
-    }
-}
-
 impl<T: Clone + TensorType> Tensor<T> {
     /// Sets (copies) the tensor values to the provided ones.
     /// ```
@@ -189,7 +130,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         let total_dims: usize = dims.iter().product();
         match values {
             Some(v) => {
-                if total_dims != v.len().try_into().unwrap() {
+                if total_dims != v.len() {
                     return Err(TensorError(
                         "length of values array is not equal to tensor total elements".to_string(),
                     ));
@@ -208,6 +149,10 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     pub fn len(&mut self) -> usize {
         self.dims().iter().product::<usize>()
+    }
+
+    pub fn is_empty(&mut self) -> bool {
+        self.dims().iter().product::<usize>() == 0
     }
 
     /// Set one single value on the tensor.
@@ -241,6 +186,33 @@ impl<T: Clone + TensorType> Tensor<T> {
         self[index].clone()
     }
 
+    /// Get one single value from the Tensor.
+    ///
+    /// ```
+    /// use halo2deeplearning::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
+    /// let mut b = Tensor::<i32>::new(Some(&[1, 2].iter()), &[2]).unwrap();
+    ///
+    /// assert_eq!(a.get_slice(&[1..2]), b);
+    /// ```
+    pub fn get_slice(&self, indices: &[Range<usize>]) -> Tensor<T> {
+        assert!(self.dims.len() >= indices.len());
+        let mut res = Vec::new();
+        // if indices weren't specified we fill them in as required
+        let mut full_indices = indices.to_vec();
+        for i in 0..(self.dims.len() - indices.len()) {
+            full_indices.push(0..self.dims()[indices.len() + i])
+        }
+        for e in full_indices.iter().cloned().multi_cartesian_product() {
+            let index = self.get_index(&e);
+            res.push(self[index].clone())
+        }
+        let mut dims: Vec<usize> = full_indices.iter().map(|e| e.end - e.start).collect();
+
+        dims.retain(|&x| x > 1);
+        Tensor::new(Some(&res), &dims).unwrap()
+    }
+
     /// Get the array index from rows / columns indices.
     ///
     /// ```
@@ -269,7 +241,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         &self.dims
     }
 
-    /// Returns the tensor's dimensions.
+    ///Reshape the tensor
     /// ```
     /// use halo2deeplearning::tensor::Tensor;
     /// let a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
@@ -279,6 +251,31 @@ impl<T: Clone + TensorType> Tensor<T> {
     pub fn reshape(&mut self, new_dims: &[usize]) {
         assert!(self.len() == new_dims.iter().product::<usize>());
         self.dims = Vec::from(new_dims);
+    }
+
+    pub fn map<F: FnMut(T) -> G, G: TensorType>(&self, mut f: F) -> Tensor<G> {
+        Tensor::from(self.inner.iter().map(|e| f(e.clone())))
+    }
+}
+
+impl<T: Clone + TensorType> Tensor<Tensor<T>> {
+    /// Flattens a tensor of tensors
+    /// ```
+    /// use halo2deeplearning::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
+    /// let mut b = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
+    /// let mut c = Tensor::new(&[a,b], &[2]);
+    /// let mut d = c.flatten();
+    /// assert_eq!(d.dims(), &[8]);
+    /// ```
+    pub fn flatten(&self) -> Tensor<T> {
+        let mut dims = 0;
+        let mut inner = Vec::new();
+        for mut t in self.inner.clone().into_iter() {
+            dims += t.len();
+            inner.extend(t.inner);
+        }
+        Tensor::new(Some(&inner), &[dims]).unwrap()
     }
 }
 
@@ -305,11 +302,18 @@ mod tests {
     #[test]
     fn tensor_eq() {
         let a = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
-        let b = Tensor::<i32>::from(&[1, 2, 3][..]);
+        let mut b = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3, 1]).unwrap();
+        b.reshape(&[3]);
         let c = Tensor::<i32>::new(Some(&[1, 2, 4]), &[3]).unwrap();
         let d = Tensor::<i32>::new(Some(&[1, 2, 4]), &[3, 1]).unwrap();
         assert_eq!(a, b);
         assert_ne!(a, c);
         assert_ne!(a, d);
+    }
+    #[test]
+    fn tensor_slice() {
+        let a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
+        let b = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
+        assert_eq!(a.get_slice(&[0..2, 0..1]), b);
     }
 }

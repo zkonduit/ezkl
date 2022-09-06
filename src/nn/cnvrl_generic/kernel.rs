@@ -1,8 +1,9 @@
 use halo2_proofs::{circuit::AssignedCell, plonk::VirtualCells};
 
 use super::*;
+use crate::tensor::{Tensor, TensorType};
 
-pub type Kernel<T, const HEIGHT: usize, const WIDTH: usize> = [[T; HEIGHT]; WIDTH];
+pub type Kernel<T, const HEIGHT: usize, const WIDTH: usize> = Tensor<T>;
 
 #[derive(Debug, Clone)]
 pub struct KernelConfig<F: FieldExt, const HEIGHT: usize, const WIDTH: usize>(
@@ -10,41 +11,30 @@ pub struct KernelConfig<F: FieldExt, const HEIGHT: usize, const WIDTH: usize>(
     PhantomData<F>,
 );
 
-impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> KernelConfig<F, HEIGHT, WIDTH> {
+impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> KernelConfig<F, HEIGHT, WIDTH>
+where
+    Value<F>: TensorType,
+{
     pub fn configure(meta: &mut ConstraintSystem<F>) -> Self {
-        Self(
-            (0..WIDTH)
-                .map(|_| {
-                    (0..HEIGHT)
-                        .map(|_| meta.fixed_column())
-                        .collect::<Vec<_>>()
-                        .try_into()
-                        .unwrap()
-                })
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap(),
-            PhantomData,
-        )
+        let mut vec = Vec::new();
+        for _ in 0..WIDTH {
+            for _ in 0..HEIGHT {
+                vec.push(meta.fixed_column())
+            }
+        }
+        let mut t = Tensor::from(vec.into_iter());
+        t.reshape(&[WIDTH, HEIGHT]);
+        Self(t, PhantomData)
     }
 
     pub fn query(
         &self,
         meta: &mut VirtualCells<'_, F>,
         rotation: Rotation,
-    ) -> [[Expression<F>; HEIGHT]; WIDTH] {
-        self.0
-            .iter()
-            .map(|cols| {
-                cols.iter()
-                    .map(|&column| meta.query_fixed(column, rotation))
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .unwrap()
-            })
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap()
+    ) -> Tensor<Expression<F>> {
+        let mut t = Tensor::from(self.0.iter().map(|&col| meta.query_fixed(col, rotation)));
+        t.reshape(&[WIDTH, HEIGHT]);
+        t
     }
 
     pub fn assign_kernel_2d(
@@ -52,36 +42,25 @@ impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> KernelConfig<F, HEIGH
         region: &mut Region<'_, F>,
         offset: usize,
         kernel: Kernel<Value<F>, HEIGHT, WIDTH>,
-    ) -> Result<Kernel<AssignedCell<Assigned<F>, F>, HEIGHT, WIDTH>, Error> {
-        let res: Result<Vec<_>, Error> = kernel
-            .iter()
-            .enumerate()
-            .map(
-                |(col_idx, column)| -> Result<[AssignedCell<Assigned<F>, F>; HEIGHT], Error> {
-                    let res: Result<Vec<_>, Error> = column
-                        .iter()
-                        .enumerate()
-                        .map(
-                            |(row_idx, &cell)| -> Result<AssignedCell<Assigned<F>, F>, Error> {
-                                region.assign_fixed(
-                                    || {
-                                        format!(
-                                            "kernel value at row: {:?}, column: {:?}",
-                                            row_idx, col_idx
-                                        )
-                                    },
-                                    self.0[col_idx][row_idx],
-                                    offset,
-                                    || cell.into(),
-                                )
-                            },
+    ) -> Kernel<AssignedCell<Assigned<F>, F>, HEIGHT, WIDTH> {
+        let mut res = Vec::new();
+        println!("self {:?}", self.0);
+        for i in 0..WIDTH {
+            for j in 0..HEIGHT {
+                res.push(
+                    region
+                        .assign_fixed(
+                            || format!("kernel at row: {:?}, column: {:?}", j, i),
+                            self.0.get(&[i, j]),
+                            offset,
+                            || kernel.get(&[i, j]).into(),
                         )
-                        .collect();
-                    res.map(|vec| vec.try_into().unwrap())
-                },
-            )
-            .collect();
-
-        res.map(|v| v.try_into().unwrap())
+                        .unwrap(),
+                )
+            }
+        }
+        let mut t = Tensor::from(res.into_iter());
+        t.reshape(&[WIDTH, HEIGHT]);
+        t
     }
 }

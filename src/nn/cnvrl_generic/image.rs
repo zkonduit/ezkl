@@ -2,36 +2,34 @@ use halo2_proofs::{circuit::AssignedCell, plonk::VirtualCells};
 
 use super::*;
 
-pub type Image<T, const HEIGHT: usize, const WIDTH: usize> = [[T; HEIGHT]; WIDTH];
+pub type Image<T, const HEIGHT: usize, const WIDTH: usize> = Tensor<T>;
 
 #[derive(Debug, Clone)]
 pub struct ImageConfig<F: FieldExt, const HEIGHT: usize, const WIDTH: usize>(
-    [Column<Advice>; WIDTH],
+    Tensor<Column<Advice>>,
     PhantomData<F>,
 );
 
-impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> ImageConfig<F, HEIGHT, WIDTH> {
-    pub fn configure(advices: [Column<Advice>; WIDTH]) -> Self {
+impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> ImageConfig<F, HEIGHT, WIDTH>
+where
+    Value<F>: TensorType,
+{
+    pub fn configure(advices: Tensor<Column<Advice>>) -> Self {
         Self(advices, PhantomData)
     }
 
-    pub fn query(
-        &self,
-        meta: &mut VirtualCells<'_, F>,
-        offset: usize,
-    ) -> [[Expression<F>; HEIGHT]; WIDTH] {
-        self.0
-            .iter()
-            .map(|&column| {
-                (0..HEIGHT)
-                    .map(|i| meta.query_advice(column, Rotation(offset as i32 + i as i32)))
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .unwrap()
+    pub fn query(&self, meta: &mut VirtualCells<'_, F>, offset: usize) -> Tensor<Expression<F>> {
+        let mut t: Tensor<Expression<F>> = self
+            .0
+            .map(|column| {
+                Tensor::from(
+                    (0..HEIGHT)
+                        .map(|i| meta.query_advice(column, Rotation(offset as i32 + i as i32))),
+                )
             })
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap()
+            .flatten();
+        t.reshape(&[HEIGHT, WIDTH]);
+        t
     }
 
     pub fn assign_image_2d(
@@ -39,37 +37,25 @@ impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> ImageConfig<F, HEIGHT
         region: &mut Region<'_, F>,
         offset: usize,
         image: Image<Value<F>, HEIGHT, WIDTH>,
-    ) -> Result<Image<AssignedCell<Assigned<F>, F>, HEIGHT, WIDTH>, Error> {
-        let res: Result<Vec<_>, Error> = image
-            .iter()
-            .enumerate()
-            .map(
-                |(col_idx, column)| -> Result<[AssignedCell<Assigned<F>, F>; HEIGHT], Error> {
-                    let res: Result<Vec<_>, Error> = column
-                        .iter()
-                        .enumerate()
-                        .map(
-                            |(row_idx, &cell)| -> Result<AssignedCell<Assigned<F>, F>, Error> {
-                                region.assign_advice(
-                                    || {
-                                        format!(
-                                            "pixel at row: {:?}, column: {:?}",
-                                            row_idx, col_idx
-                                        )
-                                    },
-                                    self.0[col_idx],
-                                    offset + row_idx,
-                                    || cell.into(),
-                                )
-                            },
+    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+        let mut res = Vec::new();
+        for i in 0..WIDTH {
+            for j in 0..HEIGHT {
+                res.push(
+                    region
+                        .assign_advice(
+                            || format!("pixel at row: {:?}, column: {:?}", j, i),
+                            self.0[i],
+                            offset + j,
+                            || image.get(&[i, j]).into(),
                         )
-                        .collect();
-                    res.map(|vec| vec.try_into().unwrap())
-                },
-            )
-            .collect();
-
-        res.map(|v| v.try_into().unwrap())
+                        .unwrap(),
+                )
+            }
+        }
+        let mut t = Tensor::from(res.into_iter());
+        t.reshape(&[HEIGHT, WIDTH]);
+        t
     }
 
     pub fn flatten(&self) -> Vec<Column<Advice>> {
