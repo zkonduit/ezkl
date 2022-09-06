@@ -120,8 +120,6 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
             o + params.biases.get(&[i]).value_field()
         });
 
-        // calculate value of output
-
         // assign that value and return it
         let output_for_equality = output.enum_map(|i, o| {
             region

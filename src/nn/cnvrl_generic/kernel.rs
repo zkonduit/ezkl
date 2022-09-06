@@ -41,8 +41,9 @@ where
         let dims = kernel.dims();
         assert!(dims.len() == 2);
         kernel.enum_map(|i, k| {
-            let row = i / dims[1];
+            let row = i / dims[0];
             let col = i % dims[0];
+            println! {"row {:?} col {:?} w {:?}" , row, col, k};
             region
                 .assign_fixed(
                     || format!("kernel at row: {:?}, column: {:?}", row, col),

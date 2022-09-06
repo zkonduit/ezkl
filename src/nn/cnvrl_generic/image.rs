@@ -47,9 +47,10 @@ where
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         let dims = image.dims();
         assert!(dims.len() == 2);
-        image.enum_map(|i, w| {
-            let row = i / dims[1];
+        image.enum_map(|i, x| {
+            let row = i / dims[0];
             let col = i % dims[0];
+
             region
                 .assign_advice(
                     || format!("pixel at row: {:?}, column: {:?}", row, col),
@@ -57,7 +58,7 @@ where
                     self.advices[col],
                     // columns indices
                     offset + row,
-                    || w.into(),
+                    || x.into(),
                 )
                 .unwrap()
         })
