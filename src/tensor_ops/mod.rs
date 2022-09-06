@@ -25,7 +25,9 @@ pub fn vec_matmul_field<F: FieldExt>(
         for (j, x) in a.iter().enumerate() {
             *o = *o + b.get(&[i, j]).value_field() * x.value_field();
         }
-        if let Some(ref bias) = biases { *o = *o + bias.get(&[i]).value_field() }
+        if let Some(ref bias) = biases {
+            *o = *o + bias.get(&[i]).value_field()
+        }
     }
     output
 }
@@ -111,22 +113,6 @@ pub fn op<T: TensorType, const IMAGE_HEIGHT: usize, const IMAGE_WIDTH: usize>(
     f: impl Fn(T, T) -> T + Clone,
 ) -> Tensor<T> {
     images.iter().skip(1).fold(images[0].clone(), |acc, image| {
-        op_pair(acc, image.clone(), f.clone())
+        acc.enum_map(|i, e| f(e, image[i].clone()))
     })
-}
-
-pub fn op_pair<T: TensorType>(
-    image: Tensor<T>,
-    other: Tensor<T>,
-    f: impl Fn(T, T) -> T + Clone,
-) -> Tensor<T> {
-    let mut res = Vec::new();
-    for i in 0..image.dims()[0] {
-        for j in 0..image.dims()[1] {
-            res.push(f(image.get(&[i, j]).clone(), other.get(&[i, j]).clone()));
-        }
-    }
-    let mut t = Tensor::from(res.into_iter());
-    t.reshape(image.dims());
-    t
 }

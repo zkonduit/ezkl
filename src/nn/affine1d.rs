@@ -6,7 +6,6 @@ use halo2_proofs::{
 };
 use std::marker::PhantomData;
 
-use crate::fieldutils::assign_advice_tensor;
 use crate::tensor::{Tensor, TensorType};
 use crate::tensor_ops::vec_matmul_field;
 
@@ -69,14 +68,27 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         weights: Tensor<i32>,
         biases: Tensor<i32>,
     ) -> Result<Parameters<F, IN, OUT>, halo2_proofs::plonk::Error> {
-        let mut biases: Tensor<Value<Assigned<F>>> = biases.into();
-        let mut weights: Tensor<Value<Assigned<F>>> = weights.into();
+        let biases: Tensor<Value<Assigned<F>>> = biases.into();
+        let weights: Tensor<Value<Assigned<F>>> = weights.into();
 
-        let biases_for_equality =
-            assign_advice_tensor(&mut biases, region, "b", &[self.bias], offset)?;
+        let biases_for_equality = biases.enum_map(|i, b| {
+            region
+                .assign_advice(|| "b".to_string(), self.bias, offset + i, || b)
+                .unwrap()
+        });
 
-        let weights_for_equality =
-            assign_advice_tensor(&mut weights, region, "w", &self.weights, offset)?;
+        let weights_for_equality = weights.enum_map(|i, w| {
+            region
+                .assign_advice(
+                    || "w".to_string(),
+                    // row indices
+                    self.weights[i / weights.dims()[0]],
+                    // columns indices
+                    offset + i % weights.dims()[1],
+                    || w,
+                )
+                .unwrap()
+        });
 
         let params = Parameters {
             biases: biases_for_equality,
@@ -99,11 +111,14 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
             x.copy_advice(|| "input", region, self.input, offset + j)?;
         }
         // calculate value of output
-        let mut output = vec_matmul_field(input, params.weights, Some(params.biases));
+        let output = vec_matmul_field(input, params.weights, Some(params.biases));
 
         // assign that value and return it
-        let output_for_equality =
-            assign_advice_tensor(&mut output, region, "o", &[self.output], offset)?;
+        let output_for_equality = output.enum_map(|i, o| {
+            region
+                .assign_advice(|| "o".to_string(), self.output, offset + i, || o)
+                .unwrap()
+        });
 
         Ok(output_for_equality)
     }
@@ -127,15 +142,15 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
             );
 
             // Now we compute the linear expression,  and add it to constraints
-            for (i, c) in constraints.iter_mut().enumerate().take(OUT) {
+            constraints = constraints.enum_map(|i, mut c| {
                 for j in 0..IN {
-                    *c = c.clone()
+                    c = c.clone()
                         + virtual_cells.query_advice(weights[i], Rotation(j as i32))
                             * virtual_cells.query_advice(input, Rotation(j as i32));
                 }
                 // add the bias
-                *c = c.clone() + virtual_cells.query_advice(bias, Rotation(i as i32));
-            }
+                c.clone() + virtual_cells.query_advice(bias, Rotation(i as i32))
+            });
 
             let constraints = (0..OUT).map(|_| "c").zip(constraints);
             Constraints::with_selector(q, constraints)

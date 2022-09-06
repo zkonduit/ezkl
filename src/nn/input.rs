@@ -6,7 +6,6 @@ use halo2_proofs::{
 };
 use std::marker::PhantomData;
 
-use crate::fieldutils::{assign_advice_tensor};
 
 // Takes input data provided as raw data type, e.g. i32, and sets it up to be passed into a pipeline,
 // including laying it out in a column and outputting Vec<AssignedCell<Assigned<F>, F>> suitable for copying
@@ -40,8 +39,12 @@ impl<F: FieldExt + TensorType, const IN: usize> InputConfig<F, IN> {
                 let offset = 0;
                 self.q.enable(&mut region, offset)?;
 
-                let mut output: Tensor<Value<Assigned<F>>> = raw_input.clone().into();
-                assign_advice_tensor(&mut output, &mut region, "o", &[self.input], offset)
+                let output: Tensor<Value<Assigned<F>>> = raw_input.clone().into();
+                Ok(output.enum_map(|i, o| {
+                    region
+                        .assign_advice(|| "o".to_string(), self.input, offset + i, || o)
+                        .unwrap()
+                }))
             },
         )
     }

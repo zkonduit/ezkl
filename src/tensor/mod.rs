@@ -236,6 +236,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         index as usize
     }
 
+
     /// Returns the tensor's dimensions.
     pub fn dims(&self) -> &[usize] {
         &self.dims
@@ -255,6 +256,12 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     pub fn map<F: FnMut(T) -> G, G: TensorType>(&self, mut f: F) -> Tensor<G> {
         Tensor::from(self.inner.iter().map(|e| f(e.clone())))
+    }
+
+    pub fn enum_map<F: FnMut(usize, T) -> G, G: TensorType>(&self, mut f: F) -> Tensor<G> {
+        let mut t = Tensor::from(self.inner.iter().enumerate().map(|(i, e)| f(i, e.clone())));
+        t.reshape(self.dims());
+        t
     }
 }
 
@@ -313,7 +320,7 @@ mod tests {
     #[test]
     fn tensor_slice() {
         let a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
-        let b = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
+        let b = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
         assert_eq!(a.get_slice(&[0..2, 0..1]), b);
     }
 }

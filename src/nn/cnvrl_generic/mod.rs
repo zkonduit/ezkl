@@ -137,7 +137,8 @@ where
             let expected_output =
                 op::<_, IMAGE_HEIGHT, IMAGE_WIDTH>(intermediate_outputs, |a, b| a + b);
 
-            let constraints = op_pair(witnessed_output, expected_output, |a, b| a - b);
+            let constraints = witnessed_output.enum_map(|i, o| o - expected_output[i].clone());
+
 
             Constraints::with_selector(selector, constraints)
         });

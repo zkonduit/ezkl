@@ -154,19 +154,13 @@ impl<
                 let offset = 0;
                 self.qlookup.enable(&mut region, offset)?;
 
-                let mut input_vec = Vec::new();
-                //witness the advice
-                for (i, x) in input.iter().enumerate().take(LEN) {
-                    let witnessed = region.assign_advice(
-                        || format!("input {:?}", i),
-                        self.advice[i],
-                        offset,
-                        || *x,
-                    )?;
-                    input_vec.push(witnessed);
-                }
+                let w = input.enum_map(|i, x| {
+                    region
+                        .assign_advice(|| format!("input {:?}", i), self.advice[i], offset, || x)
+                        .unwrap()
+                });
 
-                self.layout_inner(&mut region, offset, Tensor::from(input_vec.into_iter()))
+                self.layout_inner(&mut region, offset, w)
             },
         )?;
 
@@ -187,9 +181,10 @@ impl<
                 self.qlookup.enable(&mut region, offset)?;
 
                 //copy the advice
-                for (i, x) in input.iter().enumerate() {
-                    x.copy_advice(|| "input", &mut region, self.advice[i], offset)?;
-                }
+                input.enum_map(|i, x| {
+                    x.copy_advice(|| "input", &mut region, self.advice[i], offset)
+                        .unwrap();
+                });
 
                 self.layout_inner(&mut region, offset, input.clone())
             },
@@ -212,18 +207,18 @@ impl<
             vaf.map(|f| <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into())
         }));
 
-        let mut output_for_equality = Vec::new();
-        for (i, o) in output.iter().enumerate().take(LEN) {
-            let ofe = region.assign_advice(
-                || format!("nl_{i}"),
-                self.advice[i], // Column<Advice>
-                offset + 1,
-                || *o, //Assigned<F>
-            )?;
-            output_for_equality.push(ofe);
-        }
+        let output_for_equality = output.enum_map(|i, o| {
+            region
+                .assign_advice(
+                    || format!("nl_{i}"),
+                    self.advice[i], // Column<Advice>
+                    offset + 1,
+                    || o, //Assigned<F>
+                )
+                .unwrap()
+        });
 
-        Ok(Tensor::from(output_for_equality.into_iter()))
+        Ok(output_for_equality)
     }
 }
 
