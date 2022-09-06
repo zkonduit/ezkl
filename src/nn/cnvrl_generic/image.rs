@@ -48,9 +48,8 @@ where
         let dims = image.dims();
         assert!(dims.len() == 2);
         image.enum_map(|i, x| {
-            let row = i / dims[0];
-            let col = i % dims[0];
-
+            let row = i % dims[1];
+            let col = i / dims[1];
             region
                 .assign_advice(
                     || format!("pixel at row: {:?}, column: {:?}", row, col),

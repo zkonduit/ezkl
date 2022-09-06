@@ -267,11 +267,11 @@ mod tests {
         use halo2curves::pasta::pallas;
 
         const KERNEL_HEIGHT: usize = 1;
-        const KERNEL_WIDTH: usize = 2;
+        const KERNEL_WIDTH: usize = 3;
         const OUT_CHANNELS: usize = 1;
         const STRIDE: usize = 1;
-        const IMAGE_HEIGHT: usize = 2;
-        const IMAGE_WIDTH: usize = 2;
+        const IMAGE_HEIGHT: usize = 3;
+        const IMAGE_WIDTH: usize = 3;
         const IN_CHANNELS: usize = 1;
         const PADDING: usize = 0;
 
