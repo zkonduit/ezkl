@@ -208,8 +208,8 @@ impl<T: Clone + TensorType> Tensor<T> {
             res.push(self[index].clone())
         }
         let mut dims: Vec<usize> = full_indices.iter().map(|e| e.end - e.start).collect();
-        for i in 0..indices.len() {
-            if dims[i] == 1 {
+        for i in (0..indices.len()).rev() {
+            if (dims[i] == 1) && (dims.len() > 1) {
                 dims.remove(i);
             }
         }

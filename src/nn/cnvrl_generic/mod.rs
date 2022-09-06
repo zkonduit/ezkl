@@ -266,14 +266,14 @@ mod tests {
         //        use halo2_proofs::pasta::pallas;
         use halo2curves::pasta::pallas;
 
-        const KERNEL_HEIGHT: usize = 3;
-        const KERNEL_WIDTH: usize = 3;
-        const OUT_CHANNELS: usize = 2;
-        const STRIDE: usize = 2;
+        const KERNEL_HEIGHT: usize = 1;
+        const KERNEL_WIDTH: usize = 1;
+        const OUT_CHANNELS: usize = 1;
+        const STRIDE: usize = 1;
         const IMAGE_HEIGHT: usize = 1;
         const IMAGE_WIDTH: usize = 2;
-        const IN_CHANNELS: usize = 2;
-        const PADDING: usize = 2;
+        const IN_CHANNELS: usize = 1;
+        const PADDING: usize = 0;
 
         let mut image = Tensor::from(
             (0..IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH)
