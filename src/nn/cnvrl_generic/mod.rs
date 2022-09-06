@@ -13,9 +13,7 @@ mod image;
 mod kernel;
 
 use crate::tensor_ops::*;
-pub use image::Image;
 use image::*;
-pub use kernel::Kernel;
 use kernel::*;
 
 #[derive(Debug, Clone)]
@@ -27,29 +25,15 @@ pub struct Config<
     const STRIDE: usize,
     const IMAGE_HEIGHT: usize,
     const IMAGE_WIDTH: usize,
-    const PADDED_HEIGHT: usize,
-    const PADDED_WIDTH: usize,
-    const OUTPUT_HEIGHT: usize, // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
-    const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
     const IN_CHANNELS: usize,
     const PADDING: usize,
->
-// where
-//     [(); (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1]:,
-//     [(); (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1]:
-where
+> where
     Value<F>: TensorType,
 {
     selector: Selector,
     kernel: KernelConfig<F, KERNEL_HEIGHT, KERNEL_WIDTH>,
-    image: ImageConfig<F, IMAGE_HEIGHT, IMAGE_WIDTH>,
-    pub output: ImageConfig<
-        F,
-        OUTPUT_HEIGHT,
-        OUTPUT_WIDTH,
-        //        { (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1 },
-        //        { (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1 },
-    >,
+    image: ImageConfig<F>,
+    pub output: ImageConfig<F>,
 }
 
 impl<
@@ -60,10 +44,6 @@ impl<
         const STRIDE: usize,
         const IMAGE_HEIGHT: usize,
         const IMAGE_WIDTH: usize,
-        const PADDED_HEIGHT: usize, // IMAGE_HEIGHT + 2 * PADDING
-        const PADDED_WIDTH: usize,  // IMAGE_WIDTH + 2 * PADDING
-        const OUTPUT_HEIGHT: usize, // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
-        const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
         const IN_CHANNELS: usize,
         const PADDING: usize,
     >
@@ -75,35 +55,25 @@ impl<
         STRIDE,
         IMAGE_HEIGHT,
         IMAGE_WIDTH,
-        PADDED_HEIGHT,
-        PADDED_WIDTH,
-        OUTPUT_HEIGHT,
-        OUTPUT_WIDTH,
         IN_CHANNELS,
         PADDING,
     >
 where
     Value<F>: TensorType,
-    //where
-    // [(); (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1]:,
-    // [(); (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1]:,
-    // [(); IMAGE_HEIGHT * IMAGE_WIDTH]:,
-    // [(); ((IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1)
-    //     * ((IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1)]:,
 {
     pub fn configure(meta: &mut ConstraintSystem<F>, advices: Tensor<Column<Advice>>) -> Self {
-        let _output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
+        let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
         for advice in advices.iter() {
             meta.enable_equality(*advice);
         }
 
-        let config = Self {
+        let mut config = Self {
             selector: meta.selector(),
             kernel: KernelConfig::configure(meta),
-            image: ImageConfig::configure(advices.get_slice(&[0..IMAGE_WIDTH])),
-            output: ImageConfig::configure(advices.get_slice(&[0..output_width])),
+            image: ImageConfig::configure(advices.get_slice(&[0..IMAGE_WIDTH]), IMAGE_HEIGHT),
+            output: ImageConfig::configure(advices.get_slice(&[0..output_width]), output_height),
         };
 
         meta.create_gate("convolution", |meta| {
@@ -116,29 +86,14 @@ where
                     let kernel = config
                         .kernel
                         .query(meta, Rotation((rotation * IMAGE_HEIGHT) as i32));
-                    convolution::<
-                        _,
-                        KERNEL_HEIGHT,
-                        KERNEL_WIDTH,
-                        IMAGE_HEIGHT,
-                        IMAGE_WIDTH,
-                        PADDED_HEIGHT,
-                        PADDED_WIDTH,
-                        OUTPUT_HEIGHT,
-                        OUTPUT_WIDTH,
-                        PADDING,
-                        STRIDE,
-                    >(kernel, image)
-                    // .map(|a| *a)
+                    convolution::<_, PADDING, STRIDE>(kernel, image)
                 })
                 .collect();
 
             let witnessed_output = config.output.query(meta, IN_CHANNELS * IMAGE_HEIGHT);
-            let expected_output =
-                op::<_, IMAGE_HEIGHT, IMAGE_WIDTH>(intermediate_outputs, |a, b| a + b);
+            let expected_output = op(intermediate_outputs, |a, b| a + b);
 
             let constraints = witnessed_output.enum_map(|i, o| o - expected_output[i].clone());
-
 
             Constraints::with_selector(selector, constraints)
         });
@@ -161,19 +116,7 @@ where
 
                     let outputs = (0..IN_CHANNELS)
                         .map(|i| {
-                            let output = convolution::<
-                                _,
-                                KERNEL_HEIGHT,
-                                KERNEL_WIDTH,
-                                IMAGE_HEIGHT,
-                                IMAGE_WIDTH,
-                                PADDED_HEIGHT,
-                                PADDED_WIDTH,
-                                OUTPUT_HEIGHT,
-                                OUTPUT_WIDTH,
-                                PADDING,
-                                STRIDE,
-                            >(
+                            let output = convolution::<_, PADDING, STRIDE>(
                                 kernel.get_slice(&[i..i + 1]),
                                 image.get_slice(&[i..i + 1]),
                             );
@@ -195,7 +138,7 @@ where
                         })
                         .collect();
 
-                    let output = op::<_, IMAGE_HEIGHT, IMAGE_WIDTH>(outputs, |a, b| a + b);
+                    let output = op(outputs, |a, b| a + b);
                     Ok(self.output.assign_image_2d(&mut region, offset, output))
                 },
             )
@@ -242,10 +185,6 @@ mod tests {
         const STRIDE: usize,
         const IMAGE_HEIGHT: usize,
         const IMAGE_WIDTH: usize,
-        const PADDED_HEIGHT: usize, // IMAGE_HEIGHT + 2 * PADDING
-        const PADDED_WIDTH: usize,  // IMAGE_WIDTH + 2 * PADDING
-        const OUTPUT_HEIGHT: usize, // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
-        const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
         const IN_CHANNELS: usize,
         const PADDING: usize,
     >
@@ -264,10 +203,6 @@ mod tests {
             const STRIDE: usize,
             const IMAGE_HEIGHT: usize,
             const IMAGE_WIDTH: usize,
-            const PADDED_HEIGHT: usize, // IMAGE_HEIGHT + 2 * PADDING
-            const PADDED_WIDTH: usize,  // IMAGE_WIDTH + 2 * PADDING
-            const OUTPUT_HEIGHT: usize, // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
-            const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
             const IN_CHANNELS: usize,
             const PADDING: usize,
         > Circuit<F>
@@ -279,20 +214,11 @@ mod tests {
             STRIDE,
             IMAGE_HEIGHT,
             IMAGE_WIDTH,
-            PADDED_HEIGHT,
-            PADDED_WIDTH,
-            OUTPUT_HEIGHT,
-            OUTPUT_WIDTH,
             IN_CHANNELS,
             PADDING,
         >
     where
-        Value<F>: TensorType, // where
-                              //     [(); (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1]:,
-                              //     [(); (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1]:,
-                              //     [(); IMAGE_HEIGHT * IMAGE_WIDTH]:,
-                              //     [(); ((IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1)
-                              //         * ((IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1)]:,
+        Value<F>: TensorType,
     {
         type Config = Config<
             F,
@@ -302,10 +228,6 @@ mod tests {
             STRIDE,
             IMAGE_HEIGHT,
             IMAGE_WIDTH,
-            PADDED_HEIGHT,
-            PADDED_WIDTH,
-            OUTPUT_HEIGHT,
-            OUTPUT_WIDTH,
             IN_CHANNELS,
             PADDING,
         >;
@@ -349,11 +271,7 @@ mod tests {
         const OUT_CHANNELS: usize = 2;
         const STRIDE: usize = 2;
         const IMAGE_HEIGHT: usize = 7;
-        const IMAGE_WIDTH: usize = 7;
-        const PADDED_HEIGHT: usize = 7 + 2 * 2; // IMAGE_HEIGHT + 2 * PADDING
-        const PADDED_WIDTH: usize = 7 + 2 * 2; // IMAGE_WIDTH + 2 * PADDING
-        const OUTPUT_HEIGHT: usize = (7 + 2 * 2 - 3) / 2 + 1; // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
-        const OUTPUT_WIDTH: usize = (7 + 2 * 2 - 3) / 2 + 1; // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
+        const IMAGE_WIDTH: usize = 2;
         const IN_CHANNELS: usize = 2;
         const PADDING: usize = 2;
 
@@ -361,12 +279,12 @@ mod tests {
             (0..IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH)
                 .map(|_| Value::known(pallas::Base::random(OsRng))),
         );
-        image.reshape(&[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH]);
+        image.reshape(&[IN_CHANNELS, IMAGE_WIDTH, IMAGE_HEIGHT]);
         let mut kernels = Tensor::from(
             (0..{ OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH })
                 .map(|_| Value::known(pallas::Base::random(OsRng))),
         );
-        kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
+        kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_WIDTH, KERNEL_HEIGHT]);
 
         let circuit = MyCircuit::<
             pallas::Base,
@@ -376,10 +294,6 @@ mod tests {
             STRIDE,
             IMAGE_HEIGHT,
             IMAGE_WIDTH,
-            PADDED_HEIGHT,
-            PADDED_WIDTH,
-            OUTPUT_HEIGHT,
-            OUTPUT_WIDTH,
             IN_CHANNELS,
             PADDING,
         > {

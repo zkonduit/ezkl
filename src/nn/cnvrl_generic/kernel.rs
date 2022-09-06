@@ -3,28 +3,23 @@ use halo2_proofs::{circuit::AssignedCell, plonk::VirtualCells};
 use super::*;
 use crate::tensor::{Tensor, TensorType};
 
-pub type Kernel<T, const HEIGHT: usize, const WIDTH: usize> = Tensor<T>;
-
 #[derive(Debug, Clone)]
-pub struct KernelConfig<F: FieldExt, const HEIGHT: usize, const WIDTH: usize>(
-    Kernel<Column<Fixed>, HEIGHT, WIDTH>,
-    PhantomData<F>,
-);
+pub struct KernelConfig<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> {
+    fixed: Tensor<Column<Fixed>>,
+    marker: PhantomData<F>,
+}
 
 impl<F: FieldExt, const HEIGHT: usize, const WIDTH: usize> KernelConfig<F, HEIGHT, WIDTH>
 where
     Value<F>: TensorType,
 {
     pub fn configure(meta: &mut ConstraintSystem<F>) -> Self {
-        let mut vec = Vec::new();
-        for _ in 0..WIDTH {
-            for _ in 0..HEIGHT {
-                vec.push(meta.fixed_column())
-            }
+        let mut fixed = Tensor::from((0..WIDTH * HEIGHT).map(|_| meta.fixed_column()));
+        fixed.reshape(&[WIDTH, HEIGHT]);
+        Self {
+            fixed,
+            marker: PhantomData,
         }
-        let mut t = Tensor::from(vec.into_iter());
-        t.reshape(&[WIDTH, HEIGHT]);
-        Self(t, PhantomData)
     }
 
     pub fn query(
@@ -32,7 +27,7 @@ where
         meta: &mut VirtualCells<'_, F>,
         rotation: Rotation,
     ) -> Tensor<Expression<F>> {
-        let mut t = Tensor::from(self.0.iter().map(|&col| meta.query_fixed(col, rotation)));
+        let mut t = self.fixed.map(|col| meta.query_fixed(col, rotation));
         t.reshape(&[WIDTH, HEIGHT]);
         t
     }
@@ -41,26 +36,21 @@ where
         &self,
         region: &mut Region<'_, F>,
         offset: usize,
-        kernel: Kernel<Value<F>, HEIGHT, WIDTH>,
-    ) -> Kernel<AssignedCell<Assigned<F>, F>, HEIGHT, WIDTH> {
-        let mut res = Vec::new();
-        println!("self {:?}", self.0);
-        for i in 0..WIDTH {
-            for j in 0..HEIGHT {
-                res.push(
-                    region
-                        .assign_fixed(
-                            || format!("kernel at row: {:?}, column: {:?}", j, i),
-                            self.0.get(&[i, j]),
-                            offset,
-                            || kernel.get(&[i, j]).into(),
-                        )
-                        .unwrap(),
+        kernel: Tensor<Value<F>>,
+    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+        kernel.enum_map(|i, k| {
+            let row = i / kernel.dims()[1];
+            let col = i % kernel.dims()[0];
+            region
+                .assign_fixed(
+                    || format!("kernel at row: {:?}, column: {:?}", row, col),
+                    // row indices
+                    self.fixed.get(&[col, row]),
+                    // columns indices
+                    offset,
+                    || k.into(),
                 )
-            }
-        }
-        let mut t = Tensor::from(res.into_iter());
-        t.reshape(&[WIDTH, HEIGHT]);
-        t
+                .unwrap()
+        })
     }
 }

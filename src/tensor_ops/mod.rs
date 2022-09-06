@@ -34,24 +34,18 @@ pub fn vec_matmul_field<F: FieldExt>(
 
 pub fn convolution<
     T: TensorType + Mul<Output = T> + Add<Output = T>,
-    const KERNEL_HEIGHT: usize,
-    const KERNEL_WIDTH: usize,
-    const IMAGE_HEIGHT: usize,
-    const IMAGE_WIDTH: usize,
-    const PADDED_HEIGHT: usize,
-    const PADDED_WIDTH: usize,
-    const OUTPUT_HEIGHT: usize,
-    const OUTPUT_WIDTH: usize,
     const PADDING: usize,
     const STRIDE: usize,
 >(
     kernel: Tensor<T>,
     image: Tensor<T>,
 ) -> Tensor<T> {
-    let padded_image = pad::<T, PADDED_HEIGHT, PADDED_WIDTH, PADDING>(image);
+    let padded_image = pad::<T, PADDING>(image.clone());
 
-    let horz_slides = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
-    let vert_slides = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
+    let image_dims = image.dims();
+    let kernel_dims = kernel.dims();
+    let horz_slides = (image_dims[0] + 2 * PADDING - kernel_dims[0]) / STRIDE + 1;
+    let vert_slides = (image_dims[1] + 2 * PADDING - kernel_dims[1]) / STRIDE + 1;
 
     // calculate value of output
     let mut output: Tensor<T> = Tensor::new(None, &[horz_slides, vert_slides]).unwrap();
@@ -65,8 +59,8 @@ pub fn convolution<
                 dot_product(
                     kernel.clone(),
                     padded_image.get_slice(&[
-                        col_start..(col_start + KERNEL_WIDTH),
-                        row_start..(row_start + KERNEL_HEIGHT),
+                        col_start..(col_start + kernel_dims[0]),
+                        row_start..(row_start + kernel_dims[1]),
                     ]),
                 ),
             );
@@ -81,19 +75,12 @@ fn dot_product<T: TensorType + Mul<Output = T> + Add<Output = T>>(w: Tensor<T>, 
         .fold(T::zero().unwrap(), |acc, (k, i)| acc + k.clone() * i)
 }
 
-fn pad<
-    T: TensorType,
-    const PADDED_HEIGHT: usize,
-    const PADDED_WIDTH: usize,
-    const PADDING: usize,
->(
-    image: Tensor<T>,
-) -> Tensor<T> {
-    assert!(PADDED_HEIGHT == image.dims()[0] + 2 * PADDING);
-    assert!(PADDED_WIDTH == image.dims()[1] + 2 * PADDING);
+fn pad<T: TensorType, const PADDING: usize>(image: Tensor<T>) -> Tensor<T> {
+    let padded_height = image.dims()[0] + 2 * PADDING;
+    let padded_width = image.dims()[1] + 2 * PADDING;
 
     println!("{:?}", image);
-    let mut output = Tensor::<T>::new(None, &[PADDED_HEIGHT, PADDED_WIDTH]).unwrap();
+    let mut output = Tensor::<T>::new(None, &[padded_height, padded_width]).unwrap();
 
     for col in 0..image.dims()[0] {
         for row in 0..image.dims()[1] {
@@ -104,14 +91,11 @@ fn pad<
         }
     }
 
-    output.reshape(&[PADDED_HEIGHT, PADDED_WIDTH]);
+    output.reshape(&[padded_height, padded_width]);
     output
 }
 
-pub fn op<T: TensorType, const IMAGE_HEIGHT: usize, const IMAGE_WIDTH: usize>(
-    images: Vec<Tensor<T>>,
-    f: impl Fn(T, T) -> T + Clone,
-) -> Tensor<T> {
+pub fn op<T: TensorType>(images: Vec<Tensor<T>>, f: impl Fn(T, T) -> T + Clone) -> Tensor<T> {
     images.iter().skip(1).fold(images[0].clone(), |acc, image| {
         acc.enum_map(|i, e| f(e, image[i].clone()))
     })
