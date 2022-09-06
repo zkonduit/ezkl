@@ -269,11 +269,11 @@ mod tests {
         const KERNEL_HEIGHT: usize = 1;
         const KERNEL_WIDTH: usize = 3;
         const OUT_CHANNELS: usize = 1;
-        const STRIDE: usize = 1;
-        const IMAGE_HEIGHT: usize = 3;
-        const IMAGE_WIDTH: usize = 3;
+        const STRIDE: usize = 2;
+        const IMAGE_HEIGHT: usize = 9;
+        const IMAGE_WIDTH: usize = 7;
         const IN_CHANNELS: usize = 1;
-        const PADDING: usize = 0;
+        const PADDING: usize = 2;
 
         let mut image = Tensor::from(
             (0..IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH)
