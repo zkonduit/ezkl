@@ -107,11 +107,21 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         params: Parameters<F, IN, OUT>,
     ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         // copy the input
-        for (j, x) in input.iter().enumerate().take(IN) {
-            x.copy_advice(|| "input", region, self.input, offset + j)?;
-        }
+        input.enum_map(|i, x| {
+            x.copy_advice(|| "input", region, self.input, offset + i)
+                .unwrap()
+        });
+
         // calculate value of output
-        let output = vec_matmul_field(input, params.weights, Some(params.biases));
+        let mut output: Tensor<Value<Assigned<F>>> = Tensor::new(None, &[OUT]).unwrap();
+        output = output.enum_map(|i, mut o| {
+            for (j, x) in input.iter().enumerate() {
+                o = o + params.weights.get(&[i, j]).value_field() * x.value_field();
+            }
+            o + params.biases.get(&[i]).value_field()
+        });
+
+        // calculate value of output
 
         // assign that value and return it
         let output_for_equality = output.enum_map(|i, o| {
