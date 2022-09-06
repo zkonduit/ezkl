@@ -79,7 +79,6 @@ fn pad<T: TensorType, const PADDING: usize>(image: Tensor<T>) -> Tensor<T> {
     let padded_height = image.dims()[0] + 2 * PADDING;
     let padded_width = image.dims()[1] + 2 * PADDING;
 
-    println!("{:?}", image);
     let mut output = Tensor::<T>::new(None, &[padded_height, padded_width]).unwrap();
 
     for col in 0..image.dims()[0] {

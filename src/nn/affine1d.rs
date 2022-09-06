@@ -144,12 +144,11 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
             // Now we compute the linear expression,  and add it to constraints
             constraints = constraints.enum_map(|i, mut c| {
                 for j in 0..IN {
-                    c = c.clone()
-                        + virtual_cells.query_advice(weights[i], Rotation(j as i32))
-                            * virtual_cells.query_advice(input, Rotation(j as i32));
+                    c = c + virtual_cells.query_advice(weights[i], Rotation(j as i32))
+                        * virtual_cells.query_advice(input, Rotation(j as i32));
                 }
                 // add the bias
-                c.clone() + virtual_cells.query_advice(bias, Rotation(i as i32))
+                c + virtual_cells.query_advice(bias, Rotation(i as i32))
             });
 
             let constraints = (0..OUT).map(|_| "c").zip(constraints);

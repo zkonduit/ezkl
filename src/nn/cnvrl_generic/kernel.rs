@@ -38,9 +38,11 @@ where
         offset: usize,
         kernel: Tensor<Value<F>>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+        let dims = kernel.dims();
+        assert!(dims.len() == 2);
         kernel.enum_map(|i, k| {
-            let row = i / kernel.dims()[1];
-            let col = i % kernel.dims()[0];
+            let row = i / dims[1];
+            let col = i % dims[0];
             region
                 .assign_fixed(
                     || format!("kernel at row: {:?}, column: {:?}", row, col),

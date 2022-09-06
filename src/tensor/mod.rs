@@ -208,8 +208,12 @@ impl<T: Clone + TensorType> Tensor<T> {
             res.push(self[index].clone())
         }
         let mut dims: Vec<usize> = full_indices.iter().map(|e| e.end - e.start).collect();
+        for i in 0..indices.len() {
+            if dims[i] == 1 {
+                dims.remove(i);
+            }
+        }
 
-        dims.retain(|&x| x > 1);
         Tensor::new(Some(&res), &dims).unwrap()
     }
 
@@ -235,7 +239,6 @@ impl<T: Clone + TensorType> Tensor<T> {
         }
         index as usize
     }
-
 
     /// Returns the tensor's dimensions.
     pub fn dims(&self) -> &[usize] {

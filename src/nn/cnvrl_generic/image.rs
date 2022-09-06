@@ -45,12 +45,11 @@ where
         offset: usize,
         image: Tensor<Value<F>>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
-        println!("{:?}", image.dims());
-        println!("{:?}", self.advices.dims());
+        let dims = image.dims();
+        assert!(dims.len() == 2);
         image.enum_map(|i, w| {
-            let row = i / image.dims()[1];
-            let col = i % image.dims()[0];
-            println!("row: {:?}, col: {:?},", row, col);
+            let row = i / dims[1];
+            let col = i % dims[0];
             region
                 .assign_advice(
                     || format!("pixel at row: {:?}, column: {:?}", row, col),

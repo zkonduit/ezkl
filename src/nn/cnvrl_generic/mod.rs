@@ -270,7 +270,7 @@ mod tests {
         const KERNEL_WIDTH: usize = 3;
         const OUT_CHANNELS: usize = 2;
         const STRIDE: usize = 2;
-        const IMAGE_HEIGHT: usize = 7;
+        const IMAGE_HEIGHT: usize = 1;
         const IMAGE_WIDTH: usize = 2;
         const IN_CHANNELS: usize = 2;
         const PADDING: usize = 2;
