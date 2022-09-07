@@ -43,7 +43,6 @@ where
         kernel.enum_map(|i, k| {
             let row = i % dims[1];
             let col = i / dims[1];
-            println! {"row {:?} col {:?} w {:?}" , row, col, k};
             region
                 .assign_fixed(
                     || format!("kernel at row: {:?}, column: {:?}", row, col),
