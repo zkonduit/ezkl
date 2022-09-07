@@ -223,8 +223,6 @@ where
             )
             .unwrap();
 
-        println!("{:?}", l2out.dims());
-
         // tie the last output to public inputs (instance column)
         l2out.enum_map(|i, a| {
             layouter
