@@ -11,23 +11,23 @@ use crate::tensor::{Tensor, TensorType};
 // We layout in two phases: first we load any parameters (returning parameters, used only in case of a tied weight model),
 // then we load the input, perform the forward pass, and layout the input and output, returning the output
 #[derive(Clone)]
-pub struct RawParameters<const IN: usize, const OUT: usize> {
+pub struct RawParameters<const IN: usize> {
     pub weights: Tensor<i32>,
     pub biases: Tensor<i32>,
 }
 
-pub struct Parameters<F: FieldExt, const IN: usize, const OUT: usize> {
+pub struct Parameters<F: FieldExt, const IN: usize> {
     weights: Tensor<AssignedCell<Assigned<F>, F>>,
     biases: Tensor<AssignedCell<Assigned<F>, F>>,
     pub _marker: PhantomData<F>,
 }
 
 #[derive(Clone)]
-pub struct Affine1dConfig<F: FieldExt, const IN: usize, const OUT: usize>
+pub struct Affine1dConfig<F: FieldExt, const IN: usize>
 // where
 //     [(); IN + 3]:,
 {
-    pub weights: [Column<Advice>; IN],
+    pub weights: Tensor<Column<Advice>>,
     pub input: Column<Advice>,
     pub output: Column<Advice>,
     pub bias: Column<Advice>,
@@ -35,7 +35,7 @@ pub struct Affine1dConfig<F: FieldExt, const IN: usize, const OUT: usize>
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT>
+impl<F: FieldExt + TensorType, const IN: usize> Affine1dConfig<F, IN>
 // where
 //     [(); IN + 3]:,
 {
@@ -66,7 +66,9 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         offset: usize,
         weights: Tensor<i32>,
         biases: Tensor<i32>,
-    ) -> Result<Parameters<F, IN, OUT>, halo2_proofs::plonk::Error> {
+    ) -> Result<Parameters<F, IN>, halo2_proofs::plonk::Error> {
+        // assert weight matrix is 2D
+        assert!(weights.dims().len() == 2);
         let biases: Tensor<Value<Assigned<F>>> = biases.into();
         let weights: Tensor<Value<Assigned<F>>> = weights.into();
 
@@ -81,9 +83,9 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
                 .assign_advice(
                     || "w".to_string(),
                     // row indices
-                    self.weights[i / weights.dims()[0]],
+                    self.weights[i / IN],
                     // columns indices
-                    offset + i % weights.dims()[1],
+                    offset + i % IN,
                     || w,
                 )
                 .unwrap()
@@ -103,16 +105,18 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         region: &mut Region<'_, F>,
         offset: usize,
         input: Tensor<AssignedCell<Assigned<F>, F>>,
-        params: Parameters<F, IN, OUT>,
+        params: Parameters<F, IN>,
     ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         // copy the input
+        let out_dim = self.weights.dims()[0];
+
         input.enum_map(|i, x| {
             x.copy_advice(|| "input", region, self.input, offset + i)
                 .unwrap()
         });
 
         // calculate value of output
-        let mut output: Tensor<Value<Assigned<F>>> = Tensor::new(None, &[OUT]).unwrap();
+        let mut output: Tensor<Value<Assigned<F>>> = Tensor::new(None, &[out_dim]).unwrap();
         output = output.enum_map(|i, mut o| {
             for (j, x) in input.iter().enumerate() {
                 o = o + params.weights.get(&[i, j]).value_field() * x.value_field();
@@ -133,7 +137,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
     // composable_configure takes the input tensor as an argument, and completes the advice by generating new for the rest
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
-        weights: [Column<Advice>; IN],
+        weights: Tensor<Column<Advice>>,
         input: Column<Advice>,
         output: Column<Advice>,
         bias: Column<Advice>,
@@ -142,10 +146,10 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
 
         cs.create_gate("affine", |virtual_cells| {
             let q = virtual_cells.query_selector(qs);
-
+            let out_dim = weights.dims()[0];
             // We put the negation of the claimed output in the constraint tensor.
             let mut constraints: Tensor<Expression<F>> = Tensor::from(
-                (0..OUT).map(|i| -virtual_cells.query_advice(output, Rotation(i as i32))),
+                (0..out_dim).map(|i| -virtual_cells.query_advice(output, Rotation(i as i32))),
             );
 
             // Now we compute the linear expression,  and add it to constraints
@@ -158,7 +162,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
                 c + virtual_cells.query_advice(bias, Rotation(i as i32))
             });
 
-            let constraints = (0..OUT).map(|_| "c").zip(constraints);
+            let constraints = (0..out_dim).map(|_| "c").zip(constraints);
             Constraints::with_selector(q, constraints)
         });
 

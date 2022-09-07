@@ -195,9 +195,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// ```
     /// use halo2deeplearning::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
-    /// let mut b = Tensor::<i32>::new(Some(&[1, 2].iter()), &[2]).unwrap();
+    /// let mut b = Tensor::<i32>::new(Some(&[1, 2]), &[2]).unwrap();
     ///
-    /// assert_eq!(a.get_slice(&[1..2]), b);
+    /// assert_eq!(a.get_slice(&[0..2]), b);
     /// ```
     pub fn get_slice(&self, indices: &[Range<usize>]) -> Tensor<T> {
         assert!(self.dims.len() >= indices.len());
@@ -253,8 +253,8 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///Reshape the tensor
     /// ```
     /// use halo2deeplearning::tensor::Tensor;
-    /// let a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
-    /// a.reshape(&[9, 3])
+    /// let mut a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
+    /// a.reshape(&[9, 3]);
     /// assert_eq!(a.dims(), &[9, 3]);
     /// ```
     pub fn reshape(&mut self, new_dims: &[usize]) {
@@ -265,9 +265,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Maps a function to tensors
     /// ```
     /// use halo2deeplearning::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
-    /// let mut c = a.map(|x| x**2);
-    /// assert_eq!(d.inner, &[1, 16]);
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
+    /// let mut c = a.map(|x| i32::pow(x,2));
+    /// assert_eq!(c, Tensor::from([1, 16].into_iter()))
     /// ```
     pub fn map<F: FnMut(T) -> G, G: TensorType>(&self, mut f: F) -> Tensor<G> {
         Tensor::from(self.inner.iter().map(|e| f(e.clone())))
@@ -276,9 +276,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Maps a function to tensors and enumerates
     /// ```
     /// use halo2deeplearning::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
-    /// let mut c = a.map(|i, x| (x + i)**2);
-    /// assert_eq!(d.inner, &[4, 25]);
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
+    /// let mut c = a.enum_map(|i, x| i32::pow(x + i as i32, 2));
+    /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
     /// ```
     pub fn enum_map<F: FnMut(usize, T) -> G, G: TensorType>(&self, mut f: F) -> Tensor<G> {
         let mut t = Tensor::from(self.inner.iter().enumerate().map(|(i, e)| f(i, e.clone())));
@@ -293,7 +293,7 @@ impl<T: Clone + TensorType> Tensor<Tensor<T>> {
     /// use halo2deeplearning::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
     /// let mut b = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
-    /// let mut c = Tensor::new(&[a,b], &[2]);
+    /// let mut c = Tensor::new(Some(&[a,b]), &[2]).unwrap();
     /// let mut d = c.flatten();
     /// assert_eq!(d.dims(), &[8]);
     /// ```

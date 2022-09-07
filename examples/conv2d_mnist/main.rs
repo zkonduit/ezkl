@@ -69,7 +69,7 @@ struct ConvConfig<
     >,
     l0q: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 32>>,
     l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>>,
-    l2: Affine1dConfig<F, LEN, CLASSES>,
+    l2: Affine1dConfig<F, LEN>,
     public_output: Column<Instance>,
 }
 
@@ -181,9 +181,9 @@ where
         let l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
             NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
 
-        let l2: Affine1dConfig<F, LEN, CLASSES> = Affine1dConfig::configure(
+        let l2: Affine1dConfig<F, LEN> = Affine1dConfig::configure(
             cs,
-            advices[..LEN].try_into().unwrap(),
+            advices.get_slice(&[0..CLASSES]),
             advices[LEN],
             advices[CLASSES + 1],
             advices[LEN + 2],
@@ -226,9 +226,12 @@ where
         println!("{:?}", l2out.dims());
 
         // tie the last output to public inputs (instance column)
-        for (i, a) in l2out.iter().enumerate().take(CLASSES) {
-            layouter.constrain_instance(a.cell(), config.public_output, i)?;
-        }
+        l2out.enum_map(|i, a| {
+            layouter
+                .constrain_instance(a.cell(), config.public_output, i)
+                .unwrap()
+        });
+
         Ok(())
     }
 }

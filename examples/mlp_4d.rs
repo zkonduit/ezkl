@@ -37,9 +37,9 @@ struct MyConfig<
     relutable: Rc<EltwiseTable<F, BITS, ReLu<F>>>,
     divtable: Rc<EltwiseTable<F, BITS, DivideBy<F, 128>>>,
     input: InputConfig<F, LEN>,
-    l0: Affine1dConfig<F, LEN, LEN>,
+    l0: Affine1dConfig<F, LEN>,
     l1: EltwiseConfig<F, LEN, BITS, ReLu<F>>,
-    l2: Affine1dConfig<F, LEN, LEN>,
+    l2: Affine1dConfig<F, LEN>,
     l3: EltwiseConfig<F, LEN, BITS, ReLu<F>>,
     l4: EltwiseConfig<F, LEN, BITS, DivideBy<F, 128>>,
     public_output: Column<Instance>,
@@ -54,8 +54,8 @@ struct MyCircuit<
     // Given the stateless MyConfig type information, a DNN trace is determined by its input and the parameters of its layers.
     // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
     input: Tensor<i32>,
-    l0_params: RawParameters<LEN, LEN>,
-    l2_params: RawParameters<LEN, LEN>,
+    l0_params: RawParameters<LEN>,
+    l2_params: RawParameters<LEN>,
     _marker: PhantomData<F>,
 }
 
@@ -75,13 +75,11 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let num_advices = LEN + 3;
-        let advices = (0..num_advices)
-            .map(|_| {
-                let col = cs.advice_column();
-                cs.enable_equality(col);
-                col
-            })
-            .collect::<Vec<_>>();
+        let advices = Tensor::from((0..num_advices).map(|_| {
+            let col = cs.advice_column();
+            cs.enable_equality(col);
+            col
+        }));
 
         let relutable_config = EltwiseTable::<F, BITS, ReLu<F>>::configure(cs);
         let divtable_config = EltwiseTable::<F, BITS, DivideBy<F, 128>>::configure(cs);
@@ -91,12 +89,12 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
 
         let input = InputConfig::<F, LEN>::configure(cs, advices[LEN].clone());
 
-        let l0 = Affine1dConfig::<F, LEN, LEN>::configure(
+        let l0 = Affine1dConfig::<F, LEN>::configure(
             cs,
-            (&advices[..LEN]).try_into().unwrap(), // wts gets several col, others get a column each
-            advices[LEN],                          // input
-            advices[LEN + 1],                      // output
-            advices[LEN + 2],                      // bias
+            advices.get_slice(&[0..LEN]), // wts gets several col, others get a column each
+            advices[LEN],                 // input
+            advices[LEN + 1],             // output
+            advices[LEN + 2],             // bias
         );
 
         let l1: EltwiseConfig<F, LEN, BITS, ReLu<F>> = EltwiseConfig::configure(
@@ -105,9 +103,9 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
             relutable.clone(),
         );
 
-        let l2 = Affine1dConfig::<F, LEN, LEN>::configure(
+        let l2 = Affine1dConfig::<F, LEN>::configure(
             cs,
-            (&advices[..LEN]).try_into().unwrap(),
+            advices.get_slice(&[0..LEN]),
             advices[LEN],
             advices[LEN + 1],
             advices[LEN + 2],
@@ -166,9 +164,11 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         )?;
         let x = config.l3.layout(&mut layouter, x)?;
         let x = config.l4.layout(&mut layouter, x)?;
-        for i in 0..LEN {
-            layouter.constrain_instance(x[i].cell(), config.public_output, i)?;
-        }
+        x.enum_map(|i, x| {
+            layouter
+                .constrain_instance(x.cell(), config.public_output, i)
+                .unwrap()
+        });
         Ok(())
     }
 }
