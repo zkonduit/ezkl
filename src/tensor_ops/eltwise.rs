@@ -1,10 +1,10 @@
+use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
     plonk::{Advice, Assigned, Circuit, Column, ConstraintSystem, Error, Selector, TableColumn},
     poly::Rotation,
 };
-
 use std::{marker::PhantomData, rc::Rc};
 
 use crate::fieldutils::{self, felt_to_i32, i32tofelt};
@@ -14,19 +14,26 @@ pub trait Nonlinearity<F: FieldExt> {
 }
 
 #[derive(Clone)]
-pub struct Nonlin1d<F: FieldExt, Inner, const LEN: usize, NL: Nonlinearity<F>> {
-    pub input: Vec<Inner>,
-    pub output: Vec<Inner>,
+pub struct Nonlin1d<
+    F: FieldExt + TensorType,
+    Inner: TensorType,
+    const LEN: usize,
+    NL: Nonlinearity<F>,
+> {
+    pub input: Tensor<Inner>,
+    pub output: Tensor<Inner>,
     pub _marker: PhantomData<(F, NL)>,
 }
-impl<F: FieldExt, Inner, const LEN: usize, NL: Nonlinearity<F>> Nonlin1d<F, Inner, LEN, NL> {
+impl<F: FieldExt + TensorType, Inner: TensorType, const LEN: usize, NL: Nonlinearity<F>>
+    Nonlin1d<F, Inner, LEN, NL>
+{
     pub fn fill<Func>(mut f: Func) -> Self
     where
         Func: FnMut(usize) -> Inner,
     {
         Nonlin1d {
-            input: (0..LEN).map(&mut f).collect(),
-            output: (0..LEN).map(f).collect(),
+            input: Tensor::from((0..LEN).map(&mut f)),
+            output: Tensor::from((0..LEN).map(f)),
             _marker: PhantomData,
         }
     }
@@ -43,7 +50,7 @@ struct NonlinTable<const INBITS: usize, const OUTBITS: usize> {
 
 #[derive(Clone)]
 pub struct NonlinConfig1d<
-    F: FieldExt,
+    F: FieldExt + TensorType,
     const LEN: usize,
     const INBITS: usize,
     const OUTBITS: usize,
@@ -56,7 +63,7 @@ pub struct NonlinConfig1d<
 }
 
 impl<
-        F: FieldExt,
+        F: FieldExt + TensorType,
         const LEN: usize,
         const INBITS: usize,
         const OUTBITS: usize,
@@ -139,29 +146,21 @@ impl<
     pub fn witness(
         &self,
         layouter: &mut impl Layouter<F>,
-        input: Vec<Value<Assigned<F>>>,
-    ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+        input: Tensor<Value<Assigned<F>>>,
+    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         let output_for_eq = layouter.assign_region(
             || "Elementwise", // the name of the region
             |mut region| {
                 let offset = 0;
                 self.qlookup.enable(&mut region, offset)?;
 
-                let mut input_vec = Vec::new();
-                //witness the advice
-                for (i, x) in input.iter().enumerate().take(LEN) {
-                    let witnessed = region.assign_advice(
-                        || format!("input {:?}", i),
-                        self.advice[i],
-                        offset,
-                        || *x,
-                    )?;
-                    input_vec.push(witnessed);
-                }
+                let w = input.enum_map(|i, x| {
+                    region
+                        .assign_advice(|| format!("input {:?}", i), self.advice[i], offset, || x)
+                        .unwrap()
+                });
 
-                //                println!("input_vec {:?}", input_vec);
-
-                self.layout_inner(&mut region, offset, input_vec)
+                self.layout_inner(&mut region, offset, w)
             },
         )?;
 
@@ -173,8 +172,8 @@ impl<
     pub fn layout(
         &self,
         layouter: &mut impl Layouter<F>,
-        input: Vec<AssignedCell<Assigned<F>, F>>,
-    ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+        input: Tensor<AssignedCell<Assigned<F>, F>>,
+    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         let output_for_eq = layouter.assign_region(
             || "Elementwise", // the name of the region
             |mut region| {
@@ -182,9 +181,10 @@ impl<
                 self.qlookup.enable(&mut region, offset)?;
 
                 //copy the advice
-                for (i, x) in input.iter().enumerate().take(LEN) {
-                    x.copy_advice(|| "input", &mut region, self.advice[i], offset)?;
-                }
+                input.enum_map(|i, x| {
+                    x.copy_advice(|| "input", &mut region, self.advice[i], offset)
+                        .unwrap();
+                });
 
                 self.layout_inner(&mut region, offset, input.clone())
             },
@@ -199,30 +199,24 @@ impl<
         &self,
         region: &mut Region<'_, F>,
         offset: usize,
-        input: Vec<AssignedCell<Assigned<F>, F>>,
-    ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+        input: Tensor<AssignedCell<Assigned<F>, F>>,
+    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         //calculate the value of output
 
-        let output = input
-            .iter()
-            .map(|acaf| acaf.value_field())
-            .map(|vaf| {
-                vaf.map(|f| <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into())
-            })
-            .collect::<Vec<Value<Assigned<F>>>>();
+        let output = Tensor::from(input.iter().map(|acaf| acaf.value_field()).map(|vaf| {
+            vaf.map(|f| <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into())
+        }));
 
-        //        println!("output {:?}", output);
-
-        let mut output_for_equality = Vec::new();
-        for (i, o) in output.iter().enumerate().take(LEN) {
-            let ofe = region.assign_advice(
-                || format!("nl_{i}"),
-                self.advice[i], // Column<Advice>
-                offset + 1,
-                || *o, //Assigned<F>
-            )?;
-            output_for_equality.push(ofe);
-        }
+        let output_for_equality = output.enum_map(|i, o| {
+            region
+                .assign_advice(
+                    || format!("nl_{i}"),
+                    self.advice[i], // Column<Advice>
+                    offset + 1,
+                    || o, //Assigned<F>
+                )
+                .unwrap()
+        });
 
         Ok(output_for_equality)
     }
@@ -273,15 +267,24 @@ impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, 
 }
 
 #[derive(Clone)]
-pub struct EltwiseConfig<F: FieldExt, const LEN: usize, const BITS: usize, NL: Nonlinearity<F>> {
+pub struct EltwiseConfig<
+    F: FieldExt + TensorType,
+    const LEN: usize,
+    const BITS: usize,
+    NL: Nonlinearity<F>,
+> {
     pub advice: [Column<Advice>; LEN],
     table: Rc<EltwiseTable<F, BITS, NL>>,
     qlookup: Selector,
     _marker: PhantomData<(NL, F)>,
 }
 
-impl<F: FieldExt, const LEN: usize, const BITS: usize, NL: 'static + Nonlinearity<F>>
-    EltwiseConfig<F, LEN, BITS, NL>
+impl<
+        F: FieldExt + TensorType,
+        const LEN: usize,
+        const BITS: usize,
+        NL: 'static + Nonlinearity<F>,
+    > EltwiseConfig<F, LEN, BITS, NL>
 {
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
@@ -317,8 +320,8 @@ impl<F: FieldExt, const LEN: usize, const BITS: usize, NL: 'static + Nonlinearit
     pub fn layout(
         &self,
         layouter: &mut impl Layouter<F>,
-        input: Vec<AssignedCell<Assigned<F>, F>>,
-    ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+        input: Tensor<AssignedCell<Assigned<F>, F>>,
+    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         let output_for_eq = layouter.assign_region(
             || "Elementwise", // the name of the region
             |mut region| {
@@ -341,19 +344,15 @@ impl<F: FieldExt, const LEN: usize, const BITS: usize, NL: 'static + Nonlinearit
         &self,
         region: &mut Region<'_, F>,
         offset: usize,
-        input: Vec<AssignedCell<Assigned<F>, F>>,
-    ) -> Result<Vec<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+        input: Tensor<AssignedCell<Assigned<F>, F>>,
+    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         //calculate the value of output
-        let output = input
-            .iter()
-            .map(|acaf| acaf.value_field())
-            .map(|vaf| {
-                vaf.map(|f| <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into())
-            })
-            .collect::<Vec<Value<Assigned<F>>>>();
+        let output = Tensor::from(input.iter().map(|acaf| acaf.value_field()).map(|vaf| {
+            vaf.map(|f| <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into())
+        }));
 
         let mut output_for_equality = Vec::new();
-        for (i, o) in output.iter().enumerate().take(LEN) {
+        for (i, o) in output.iter().enumerate() {
             let ofe = region.assign_advice(
                 || format!("nl_{i}"),
                 self.advice[i], // Column<Advice>
@@ -363,13 +362,13 @@ impl<F: FieldExt, const LEN: usize, const BITS: usize, NL: 'static + Nonlinearit
             output_for_equality.push(ofe);
         }
 
-        Ok(output_for_equality)
+        Ok(Tensor::from(output_for_equality.into_iter()))
     }
 }
 
 #[derive(Clone)]
 struct NLCircuit<
-    F: FieldExt,
+    F: FieldExt + TensorType,
     const LEN: usize,
     const INBITS: usize,
     const OUTBITS: usize,
@@ -380,7 +379,7 @@ struct NLCircuit<
 }
 
 impl<
-        F: FieldExt,
+        F: FieldExt + TensorType,
         const LEN: usize,
         const INBITS: usize,
         const OUTBITS: usize,
@@ -461,18 +460,14 @@ impl<F: FieldExt, const D: usize> Nonlinearity<F> for DivideBy<F, D> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tensor_ops::utils::flatten3;
     use halo2_proofs::dev::MockProver;
     use halo2curves::pasta::Fp as F;
 
     #[test]
     fn test_eltrelunl() {
         let k = 9; //2^k rows
-        let output = vec![vec![vec![1u64, 2u64], vec![3u64, 4u64]]];
-        let relu_v: Vec<Value<Assigned<F>>> = flatten3(output)
-            .iter()
-            .map(|x| Value::known(F::from(*x).into()))
-            .collect();
+        let output = Tensor::<i32>::new(Some(&[1, 2, 3, 4]), &[4]).unwrap();
+        let relu_v: Tensor<Value<Assigned<F>>> = output.into();
         let assigned: Nonlin1d<F, Value<Assigned<F>>, 4, ReLu<F>> = Nonlin1d {
             input: relu_v.clone(),
             output: relu_v,

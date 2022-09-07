@@ -1,68 +1,47 @@
+use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Layouter, Region, Value},
-    plonk::{
-        Advice, Assigned, Column, ConstraintSystem, Constraints, Error, Expression, Fixed, Selector,
-    },
+    plonk::{Advice, Assigned, Column, ConstraintSystem, Constraints, Expression, Fixed, Selector},
     poly::Rotation,
 };
 use std::marker::PhantomData;
 
 mod image;
 mod kernel;
-mod util;
 
-pub use image::Image;
+use crate::tensor_ops::*;
 use image::*;
-pub use kernel::Kernel;
 use kernel::*;
-pub use util::matrix;
-use util::*;
 
 #[derive(Debug, Clone)]
 pub struct Config<
-    F: FieldExt,
+    F: FieldExt + TensorType,
     const KERNEL_HEIGHT: usize,
     const KERNEL_WIDTH: usize,
     const OUT_CHANNELS: usize,
     const STRIDE: usize,
     const IMAGE_HEIGHT: usize,
     const IMAGE_WIDTH: usize,
-    const PADDED_HEIGHT: usize,
-    const PADDED_WIDTH: usize,
-    const OUTPUT_HEIGHT: usize, // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
-    const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
     const IN_CHANNELS: usize,
     const PADDING: usize,
->
-// where
-//     [(); (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1]:,
-//     [(); (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1]:,
+> where
+    Value<F>: TensorType,
 {
     selector: Selector,
     kernel: KernelConfig<F, KERNEL_HEIGHT, KERNEL_WIDTH>,
-    image: ImageConfig<F, IMAGE_HEIGHT, IMAGE_WIDTH>,
-    pub output: ImageConfig<
-        F,
-        OUTPUT_HEIGHT,
-        OUTPUT_WIDTH,
-        //        { (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1 },
-        //        { (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1 },
-    >,
+    image: ImageConfig<F>,
+    pub output: ImageConfig<F>,
 }
 
 impl<
-        F: FieldExt,
+        F: FieldExt + TensorType,
         const KERNEL_HEIGHT: usize,
         const KERNEL_WIDTH: usize,
         const OUT_CHANNELS: usize,
         const STRIDE: usize,
         const IMAGE_HEIGHT: usize,
         const IMAGE_WIDTH: usize,
-        const PADDED_HEIGHT: usize, // IMAGE_HEIGHT + 2 * PADDING
-        const PADDED_WIDTH: usize,  // IMAGE_WIDTH + 2 * PADDING
-        const OUTPUT_HEIGHT: usize, // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
-        const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
         const IN_CHANNELS: usize,
         const PADDING: usize,
     >
@@ -74,33 +53,25 @@ impl<
         STRIDE,
         IMAGE_HEIGHT,
         IMAGE_WIDTH,
-        PADDED_HEIGHT,
-        PADDED_WIDTH,
-        OUTPUT_HEIGHT,
-        OUTPUT_WIDTH,
         IN_CHANNELS,
         PADDING,
     >
-//where
-// [(); (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1]:,
-// [(); (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1]:,
-// [(); IMAGE_HEIGHT * IMAGE_WIDTH]:,
-// [(); ((IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1)
-//     * ((IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1)]:,
+where
+    Value<F>: TensorType,
 {
-    pub fn configure(meta: &mut ConstraintSystem<F>, advices: Vec<Column<Advice>>) -> Self {
-        let _output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
+    pub fn configure(meta: &mut ConstraintSystem<F>, advices: Tensor<Column<Advice>>) -> Self {
+        let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
         for advice in advices.iter() {
             meta.enable_equality(*advice);
         }
 
-        let config = Self {
+        let mut config = Self {
             selector: meta.selector(),
             kernel: KernelConfig::configure(meta),
-            image: ImageConfig::configure(advices[0..IMAGE_WIDTH].try_into().unwrap()),
-            output: ImageConfig::configure(advices[0..output_width].try_into().unwrap()),
+            image: ImageConfig::configure(advices.get_slice(&[0..IMAGE_WIDTH]), IMAGE_HEIGHT),
+            output: ImageConfig::configure(advices.get_slice(&[0..output_width]), output_height),
         };
 
         meta.create_gate("convolution", |meta| {
@@ -113,28 +84,14 @@ impl<
                     let kernel = config
                         .kernel
                         .query(meta, Rotation((rotation * IMAGE_HEIGHT) as i32));
-                    convolution::<
-                        _,
-                        KERNEL_HEIGHT,
-                        KERNEL_WIDTH,
-                        IMAGE_HEIGHT,
-                        IMAGE_WIDTH,
-                        PADDED_HEIGHT,
-                        PADDED_WIDTH,
-                        OUTPUT_HEIGHT,
-                        OUTPUT_WIDTH,
-                        PADDING,
-                        STRIDE,
-                    >(kernel, image)
+                    convolution::<_, PADDING, STRIDE>(kernel, image)
                 })
                 .collect();
 
             let witnessed_output = config.output.query(meta, IN_CHANNELS * IMAGE_HEIGHT);
             let expected_output = op(intermediate_outputs, |a, b| a + b);
 
-            let constraints = op_pair(witnessed_output, expected_output, |a, b| a - b)
-                .flatten()
-                .to_vec();
+            let constraints = witnessed_output.enum_map(|i, o| o - expected_output[i].clone());
 
             Constraints::with_selector(selector, constraints)
         });
@@ -145,209 +102,65 @@ impl<
     fn assign_filter(
         &self,
         mut layouter: impl Layouter<F>,
-        image: [Image<Value<F>, IMAGE_HEIGHT, IMAGE_WIDTH>; IN_CHANNELS],
-        kernel: [Kernel<Value<F>, KERNEL_HEIGHT, KERNEL_WIDTH>; IN_CHANNELS],
-    ) -> Result<
-        Image<
-            AssignedCell<Assigned<F>, F>,
-            OUTPUT_HEIGHT,
-            OUTPUT_WIDTH,
-            // { (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1 },
-            // { (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1 },
-        >,
-        Error,
-    > {
-        layouter.assign_region(
-            || "assign image and kernel",
-            |mut region| {
-                let mut offset = 0;
-                self.selector.enable(&mut region, offset)?;
+        image: Tensor<Value<F>>,
+        kernel: Tensor<Value<F>>,
+    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+        layouter
+            .assign_region(
+                || "assign image and kernel",
+                |mut region| {
+                    let mut offset = 0;
+                    self.selector.enable(&mut region, offset)?;
 
-                let mut outputs = Vec::new();
-                for (&image, &kernel) in image.iter().zip(kernel.iter()) {
-                    let output = convolution::<
-                        _,
-                        KERNEL_HEIGHT,
-                        KERNEL_WIDTH,
-                        IMAGE_HEIGHT,
-                        IMAGE_WIDTH,
-                        PADDED_HEIGHT,
-                        PADDED_WIDTH,
-                        OUTPUT_HEIGHT,
-                        OUTPUT_WIDTH,
-                        PADDING,
-                        STRIDE,
-                    >(kernel, image);
+                    let outputs = (0..IN_CHANNELS)
+                        .map(|i| {
+                            let output = convolution::<_, PADDING, STRIDE>(
+                                kernel.get_slice(&[i..i + 1]),
+                                image.get_slice(&[i..i + 1]),
+                            );
 
-                    self.image.assign_image_2d(&mut region, offset, image)?;
-                    self.kernel.assign_kernel_2d(&mut region, offset, kernel)?;
+                            self.image.assign_image_2d(
+                                &mut region,
+                                offset,
+                                image.get_slice(&[i..i + 1]),
+                            );
 
-                    offset += IMAGE_HEIGHT;
-                    outputs.push(output);
-                }
+                            self.kernel.assign_kernel_2d(
+                                &mut region,
+                                offset,
+                                kernel.get_slice(&[i..i + 1]),
+                            );
 
-                let output = op(outputs, |a, b| a + b);
-                self.output.assign_image_2d(&mut region, offset, output)
-            },
-        )
+                            offset += IMAGE_HEIGHT;
+                            output
+                        })
+                        .collect();
+
+                    let output = op(outputs, |a, b| a + b);
+                    Ok(self.output.assign_image_2d(&mut region, offset, output))
+                },
+            )
+            .unwrap()
     }
 
     pub fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
-        image: [Image<Value<F>, IMAGE_HEIGHT, IMAGE_WIDTH>; IN_CHANNELS],
-        kernels: [[Kernel<Value<F>, KERNEL_HEIGHT, KERNEL_WIDTH>; IN_CHANNELS]; OUT_CHANNELS],
-    ) -> Result<
-        Vec<
-            Image<
-                AssignedCell<Assigned<F>, F>,
-                OUTPUT_HEIGHT,
-                OUTPUT_WIDTH,
-                // { (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1 },
-                // { (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1 },
-            >,
-        >,
-        Error,
-    > {
-        kernels
-            .iter()
-            .enumerate()
-            .map(|(filter_idx, &kernel)| {
-                self.assign_filter(
-                    layouter.namespace(|| format!("filter: {:?}", filter_idx)),
-                    image,
-                    kernel,
-                )
-            })
-            .collect::<Vec<_>>()
-            .into_iter()
-            .collect()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Conv2dAssigned<
-    F: FieldExt,
-    const KERNEL_HEIGHT: usize,
-    const KERNEL_WIDTH: usize,
-    const OUT_CHANNELS: usize,
-    const STRIDE: usize,
-    const IMAGE_HEIGHT: usize,
-    const IMAGE_WIDTH: usize,
-    const PADDED_HEIGHT: usize, // IMAGE_HEIGHT + 2 * PADDING
-    const PADDED_WIDTH: usize,  // IMAGE_WIDTH + 2 * PADDING
-    const OUTPUT_HEIGHT: usize, // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
-    const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
-    const IN_CHANNELS: usize,
-    const PADDING: usize,
-> {
-    pub image: [Image<Value<Assigned<F>>, IMAGE_HEIGHT, IMAGE_WIDTH>; IN_CHANNELS],
-    pub kernels:
-        [[Kernel<Value<Assigned<F>>, KERNEL_HEIGHT, KERNEL_WIDTH>; IN_CHANNELS]; OUT_CHANNELS],
-}
-
-impl<
-        F: FieldExt,
-        const KERNEL_HEIGHT: usize,
-        const KERNEL_WIDTH: usize,
-        const OUT_CHANNELS: usize,
-        const STRIDE: usize,
-        const IMAGE_HEIGHT: usize,
-        const IMAGE_WIDTH: usize,
-        const PADDED_HEIGHT: usize, // IMAGE_HEIGHT + 2 * PADDING
-        const PADDED_WIDTH: usize,  // IMAGE_WIDTH + 2 * PADDING
-        const OUTPUT_HEIGHT: usize, // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
-        const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
-        const IN_CHANNELS: usize,
-        const PADDING: usize,
-    >
-    Conv2dAssigned<
-        F,
-        KERNEL_HEIGHT,
-        KERNEL_WIDTH,
-        OUT_CHANNELS,
-        STRIDE,
-        IMAGE_HEIGHT,
-        IMAGE_WIDTH,
-        PADDED_HEIGHT,
-        PADDED_WIDTH,
-        OUTPUT_HEIGHT,
-        OUTPUT_WIDTH,
-        IN_CHANNELS,
-        PADDING,
-    >
-{
-    pub fn without_witnesses() -> Self {
-        let image = (0..IN_CHANNELS)
-            .map(|_| matrix(Value::default))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-        let kernels = (0..OUT_CHANNELS)
-            .map(|_| {
-                (0..IN_CHANNELS)
-                    .map(|_| matrix(Value::default))
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .unwrap()
-            })
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-        Self { image, kernels }
-    }
-
-    pub fn unwrap_assign_image(&self) -> [Image<Value<F>, IMAGE_HEIGHT, IMAGE_WIDTH>; IN_CHANNELS] {
-        self.image
-            .iter()
-            .map(|image| {
-                image
-                    .iter()
-                    .map(|cols| {
-                        cols.iter()
-                            .map(|&column| column.evaluate())
-                            .collect::<Vec<_>>()
-                            .try_into()
-                            .unwrap()
-                    })
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .unwrap()
-            })
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap()
-    }
-
-    pub fn unwrap_assign_kernels(
-        &self,
-    ) -> [[Kernel<Value<F>, KERNEL_HEIGHT, KERNEL_WIDTH>; IN_CHANNELS]; OUT_CHANNELS] {
-        self.kernels
-            .iter()
-            .map(|kernel| {
-                kernel
-                    .iter()
-                    .map(|image| {
-                        image
-                            .iter()
-                            .map(|cols| {
-                                cols.iter()
-                                    .map(|&column| column.evaluate())
-                                    .collect::<Vec<_>>()
-                                    .try_into()
-                                    .unwrap()
-                            })
-                            .collect::<Vec<_>>()
-                            .try_into()
-                            .unwrap()
-                    })
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .unwrap()
-            })
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap()
+        image: Tensor<Value<F>>,
+        kernels: Tensor<Value<F>>,
+    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+        let horz = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
+        let vert = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
+        let t = Tensor::from((0..OUT_CHANNELS).map(|i| {
+            self.assign_filter(
+                layouter.namespace(|| format!("filter: {:?}", i)),
+                image.clone(),
+                kernels.get_slice(&[i..i + 1]),
+            )
+        }));
+        let mut t = t.flatten();
+        t.reshape(&[OUT_CHANNELS, horz, vert]);
+        t
     }
 }
 
@@ -360,42 +173,37 @@ mod tests {
         arithmetic::{Field, FieldExt},
         circuit::SimpleFloorPlanner,
         dev::MockProver,
-        plonk::Circuit,
+        plonk::{Circuit, Error},
     };
     use rand::rngs::OsRng;
 
     #[derive(Clone, Debug)]
     struct MyCircuit<
-        F: FieldExt,
+        F: FieldExt + TensorType,
         const KERNEL_HEIGHT: usize,
         const KERNEL_WIDTH: usize,
         const OUT_CHANNELS: usize,
         const STRIDE: usize,
         const IMAGE_HEIGHT: usize,
         const IMAGE_WIDTH: usize,
-        const PADDED_HEIGHT: usize, // IMAGE_HEIGHT + 2 * PADDING
-        const PADDED_WIDTH: usize,  // IMAGE_WIDTH + 2 * PADDING
-        const OUTPUT_HEIGHT: usize, // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
-        const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
         const IN_CHANNELS: usize,
         const PADDING: usize,
-    > {
-        image: [Image<Value<F>, IMAGE_HEIGHT, IMAGE_WIDTH>; IN_CHANNELS],
-        kernels: [[Kernel<Value<F>, KERNEL_HEIGHT, KERNEL_WIDTH>; IN_CHANNELS]; OUT_CHANNELS],
+    >
+    where
+        Value<F>: TensorType,
+    {
+        image: Tensor<Value<F>>,
+        kernels: Tensor<Value<F>>,
     }
 
     impl<
-            F: FieldExt,
+            F: FieldExt + TensorType,
             const KERNEL_HEIGHT: usize,
             const KERNEL_WIDTH: usize,
             const OUT_CHANNELS: usize,
             const STRIDE: usize,
             const IMAGE_HEIGHT: usize,
             const IMAGE_WIDTH: usize,
-            const PADDED_HEIGHT: usize, // IMAGE_HEIGHT + 2 * PADDING
-            const PADDED_WIDTH: usize,  // IMAGE_WIDTH + 2 * PADDING
-            const OUTPUT_HEIGHT: usize, // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
-            const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
             const IN_CHANNELS: usize,
             const PADDING: usize,
         > Circuit<F>
@@ -407,19 +215,11 @@ mod tests {
             STRIDE,
             IMAGE_HEIGHT,
             IMAGE_WIDTH,
-            PADDED_HEIGHT,
-            PADDED_WIDTH,
-            OUTPUT_HEIGHT,
-            OUTPUT_WIDTH,
             IN_CHANNELS,
             PADDING,
         >
-    // where
-    //     [(); (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1]:,
-    //     [(); (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1]:,
-    //     [(); IMAGE_HEIGHT * IMAGE_WIDTH]:,
-    //     [(); ((IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1)
-    //         * ((IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1)]:,
+    where
+        Value<F>: TensorType,
     {
         type Config = Config<
             F,
@@ -429,14 +229,9 @@ mod tests {
             STRIDE,
             IMAGE_HEIGHT,
             IMAGE_WIDTH,
-            PADDED_HEIGHT,
-            PADDED_WIDTH,
-            OUTPUT_HEIGHT,
-            OUTPUT_WIDTH,
             IN_CHANNELS,
             PADDING,
         >;
-        //        Conv2d_then_Relu_Config<F, IH, IW, CHIN, CHOUT, KH, KW, OH, OW, BITS, LEN, INBITS, OUTBITS>;
         type FloorPlanner = SimpleFloorPlanner;
 
         fn without_witnesses(&self) -> Self {
@@ -446,14 +241,11 @@ mod tests {
         // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
         // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
         fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-            // let output_height = IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT + 1;
-            let output_width = IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH + 1;
+            let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
             let num_advices = max(output_width, IMAGE_WIDTH);
 
-            let advices = (0..num_advices)
-                .map(|_| meta.advice_column())
-                .collect::<Vec<_>>();
+            let advices = Tensor::from((0..num_advices).map(|_| meta.advice_column()));
 
             Self::Config::configure(meta, advices)
         }
@@ -463,7 +255,7 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _output = config.assign(&mut layouter, self.image, self.kernels)?;
+            let _output = config.assign(&mut layouter, self.image.clone(), self.kernels.clone());
             Ok(())
         }
     }
@@ -473,35 +265,25 @@ mod tests {
         //        use halo2_proofs::pasta::pallas;
         use halo2curves::pasta::pallas;
 
-        const KERNEL_HEIGHT: usize = 3;
+        const KERNEL_HEIGHT: usize = 1;
         const KERNEL_WIDTH: usize = 3;
         const OUT_CHANNELS: usize = 2;
         const STRIDE: usize = 2;
-        const IMAGE_HEIGHT: usize = 7;
+        const IMAGE_HEIGHT: usize = 9;
         const IMAGE_WIDTH: usize = 7;
-        const PADDED_HEIGHT: usize = 7 + 2 * 2; // IMAGE_HEIGHT + 2 * PADDING
-        const PADDED_WIDTH: usize = 7 + 2 * 2; // IMAGE_WIDTH + 2 * PADDING
-        const OUTPUT_HEIGHT: usize = (7 + 2 * 2 - 3) / 2 + 1; // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
-        const OUTPUT_WIDTH: usize = (7 + 2 * 2 - 3) / 2 + 1; // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
         const IN_CHANNELS: usize = 2;
         const PADDING: usize = 2;
 
-        let image = (0..IN_CHANNELS)
-            .map(|_| matrix(|| Value::known(pallas::Base::random(OsRng))))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-        let kernels = (0..OUT_CHANNELS)
-            .map(|_| {
-                (0..IN_CHANNELS)
-                    .map(|_| matrix(|| Value::known(pallas::Base::random(OsRng))))
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .unwrap()
-            })
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
+        let mut image = Tensor::from(
+            (0..IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH)
+                .map(|_| Value::known(pallas::Base::random(OsRng))),
+        );
+        image.reshape(&[IN_CHANNELS, IMAGE_WIDTH, IMAGE_HEIGHT]);
+        let mut kernels = Tensor::from(
+            (0..{ OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH })
+                .map(|_| Value::known(pallas::Base::random(OsRng))),
+        );
+        kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_WIDTH, KERNEL_HEIGHT]);
 
         let circuit = MyCircuit::<
             pallas::Base,
@@ -511,10 +293,6 @@ mod tests {
             STRIDE,
             IMAGE_HEIGHT,
             IMAGE_WIDTH,
-            PADDED_HEIGHT,
-            PADDED_WIDTH,
-            OUTPUT_HEIGHT,
-            OUTPUT_WIDTH,
             IN_CHANNELS,
             PADDING,
         > {

@@ -18,13 +18,11 @@ mnist = "0.5"
 ndarray = "0.15"
 tensorflow = {version = "0.18.0", features = ["eager"], optional = true }
 plotters = { version = "0.3.0", optional = true }
-# pse: 
+# pse:
 halo2curves = { git = 'https://github.com/privacy-scaling-explorations/halo2curves', tag = "0.2.1" }
-
+itertools = "0.10.3"
 
 
 [features]
 dev-graph = ["halo2_proofs/dev-graph", "plotters"]
 tensorflow = ["dep:tensorflow"]
-
-

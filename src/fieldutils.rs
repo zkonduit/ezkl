@@ -1,15 +1,10 @@
 use halo2_proofs::arithmetic::FieldExt;
-
 pub fn i32tofelt<F: FieldExt>(x: i32) -> F {
     if x >= 0 {
         F::from(x as u64)
     } else {
         -F::from((-x) as u64)
     }
-}
-
-fn felt_to_u16<F: FieldExt>(x: F) -> u16 {
-    x.get_lower_32() as u16
 }
 
 fn felt_to_u32<F: FieldExt>(x: F) -> u32 {
