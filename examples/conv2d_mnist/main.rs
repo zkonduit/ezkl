@@ -314,7 +314,7 @@ pub fn runconv() {
         integral
     }));
 
-    l2weights.reshape(&[CLASSES, LEN * OUT_CHANNELS]);
+    l2weights.reshape(&[CLASSES, LEN]);
 
     let input = image;
     let l0_params = kernels;
