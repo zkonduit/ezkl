@@ -32,7 +32,7 @@ where
         t
     }
 
-    pub fn assign_kernel_2d(
+    pub fn assign(
         &self,
         region: &mut Region<'_, F>,
         offset: usize,

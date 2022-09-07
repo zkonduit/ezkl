@@ -39,7 +39,7 @@ where
         t
     }
 
-    pub fn assign_image_2d(
+    pub fn assign(
         &self,
         region: &mut Region<'_, F>,
         offset: usize,

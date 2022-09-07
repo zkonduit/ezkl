@@ -119,17 +119,11 @@ where
                                 image.get_slice(&[i..i + 1]),
                             );
 
-                            self.image.assign_image_2d(
-                                &mut region,
-                                offset,
-                                image.get_slice(&[i..i + 1]),
-                            );
+                            self.image
+                                .assign(&mut region, offset, image.get_slice(&[i..i + 1]));
 
-                            self.kernel.assign_kernel_2d(
-                                &mut region,
-                                offset,
-                                kernel.get_slice(&[i..i + 1]),
-                            );
+                            self.kernel
+                                .assign(&mut region, offset, kernel.get_slice(&[i..i + 1]));
 
                             offset += IMAGE_HEIGHT;
                             output
@@ -137,7 +131,7 @@ where
                         .collect();
 
                     let output = op(outputs, |a, b| a + b);
-                    Ok(self.output.assign_image_2d(&mut region, offset, output))
+                    Ok(self.output.assign(&mut region, offset, output))
                 },
             )
             .unwrap()
