@@ -200,6 +200,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         let mut res = Vec::new();
         // if indices weren't specified we fill them in as required
         let mut full_indices = indices.to_vec();
+
         for i in 0..(self.dims.len() - indices.len()) {
             full_indices.push(0..self.dims()[indices.len() + i])
         }

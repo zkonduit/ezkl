@@ -1,10 +1,5 @@
 pub mod eltwise;
 use crate::tensor::{Tensor, TensorType};
-use halo2_proofs::{
-    arithmetic::FieldExt,
-    circuit::{AssignedCell, Value},
-    plonk::Assigned,
-};
 pub use std::ops::{Add, Mul};
 
 pub fn convolution<

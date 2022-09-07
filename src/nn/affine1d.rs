@@ -113,12 +113,14 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
 
         // calculate value of output
         let mut output: Tensor<Value<Assigned<F>>> = Tensor::new(None, &[OUT]).unwrap();
-        output = output.enum_map(|i, mut o| {
-            for (j, x) in input.iter().enumerate() {
-                o = o + params.weights.get(&[i, j]).value_field() * x.value_field();
-            }
-            o + params.biases.get(&[i]).value_field()
-        });
+        output = output
+            .enum_map(|i, mut o| {
+                input.enum_map(|j, x| {
+                    o = o + params.weights.get(&[i, j]).value_field() * x.value_field();
+                    o + params.biases.get(&[i]).value_field()
+                })
+            })
+            .flatten();
 
         // assign that value and return it
         let output_for_equality = output.enum_map(|i, o| {

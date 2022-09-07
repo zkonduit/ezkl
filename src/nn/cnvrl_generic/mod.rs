@@ -2,9 +2,7 @@ use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Layouter, Region, Value},
-    plonk::{
-        Advice, Assigned, Column, ConstraintSystem, Constraints, Error, Expression, Fixed, Selector,
-    },
+    plonk::{Advice, Assigned, Column, ConstraintSystem, Constraints, Expression, Fixed, Selector},
     poly::Rotation,
 };
 use std::marker::PhantomData;
@@ -150,16 +148,19 @@ where
         layouter: &mut impl Layouter<F>,
         image: Tensor<Value<F>>,
         kernels: Tensor<Value<F>>,
-    ) -> Vec<Tensor<AssignedCell<Assigned<F>, F>>> {
-        let mut res = Vec::new();
-        for i in 0..OUT_CHANNELS {
-            res.push(self.assign_filter(
+    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+        let horz = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
+        let vert = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
+        let t = Tensor::from((0..OUT_CHANNELS).map(|i| {
+            self.assign_filter(
                 layouter.namespace(|| format!("filter: {:?}", i)),
                 image.clone(),
                 kernels.get_slice(&[i..i + 1]).clone(),
-            ))
-        }
-        res
+            )
+        }));
+        let mut t = t.flatten();
+        t.reshape(&[OUT_CHANNELS, horz, vert]);
+        t
     }
 }
 
@@ -172,7 +173,7 @@ mod tests {
         arithmetic::{Field, FieldExt},
         circuit::SimpleFloorPlanner,
         dev::MockProver,
-        plonk::Circuit,
+        plonk::{Circuit, Error},
     };
     use rand::rngs::OsRng;
 
@@ -231,7 +232,6 @@ mod tests {
             IN_CHANNELS,
             PADDING,
         >;
-        //        Conv2d_then_Relu_Config<F, IH, IW, CHIN, CHOUT, KH, KW, OH, OW, BITS, LEN, INBITS, OUTBITS>;
         type FloorPlanner = SimpleFloorPlanner;
 
         fn without_witnesses(&self) -> Self {
@@ -241,7 +241,6 @@ mod tests {
         // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
         // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
         fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-            // let output_height = IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT + 1;
             let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
             let num_advices = max(output_width, IMAGE_WIDTH);

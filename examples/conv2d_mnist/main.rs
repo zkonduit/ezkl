@@ -20,7 +20,6 @@ use halo2_proofs::{
 };
 
 use mnist::*;
-use ndarray::prelude::*;
 use rand::rngs::OsRng;
 use std::time::Instant;
 
@@ -34,7 +33,6 @@ use halo2deeplearning::nn::affine1d::Affine1dConfig;
 use halo2deeplearning::nn::cnvrl_generic;
 use halo2deeplearning::tensor::{Tensor, TensorType};
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, NonlinConfig1d, ReLu};
-use halo2deeplearning::tensor_ops::utils::map4;
 use std::cmp::max;
 
 mod params;
@@ -53,10 +51,6 @@ struct ConvConfig<
     const STRIDE: usize,
     const IMAGE_HEIGHT: usize,
     const IMAGE_WIDTH: usize,
-    const PADDED_HEIGHT: usize, // IMAGE_HEIGHT + 2 * PADDING
-    const PADDED_WIDTH: usize,  // IMAGE_WIDTH + 2 * PADDING
-    const OUTPUT_HEIGHT: usize, // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
-    const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
     const IN_CHANNELS: usize,
     const PADDING: usize,
 > where
@@ -70,10 +64,6 @@ struct ConvConfig<
         STRIDE,
         IMAGE_HEIGHT,
         IMAGE_WIDTH,
-        PADDED_HEIGHT,
-        PADDED_WIDTH,
-        OUTPUT_HEIGHT,
-        OUTPUT_WIDTH,
         IN_CHANNELS,
         PADDING,
     >,
@@ -97,10 +87,6 @@ struct MyCircuit<
     const STRIDE: usize,
     const IMAGE_HEIGHT: usize,
     const IMAGE_WIDTH: usize,
-    const PADDED_HEIGHT: usize, // IMAGE_HEIGHT + 2 * PADDING
-    const PADDED_WIDTH: usize,  // IMAGE_WIDTH + 2 * PADDING
-    const OUTPUT_HEIGHT: usize, // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
-    const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
     const IN_CHANNELS: usize,
     const PADDING: usize,
 > where
@@ -126,10 +112,6 @@ impl<
         const STRIDE: usize,
         const IMAGE_HEIGHT: usize,
         const IMAGE_WIDTH: usize,
-        const PADDED_HEIGHT: usize, // IMAGE_HEIGHT + 2 * PADDING
-        const PADDED_WIDTH: usize,  // IMAGE_WIDTH + 2 * PADDING
-        const OUTPUT_HEIGHT: usize, // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
-        const OUTPUT_WIDTH: usize,  // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
         const IN_CHANNELS: usize,
         const PADDING: usize,
     > Circuit<F>
@@ -145,10 +127,6 @@ impl<
         STRIDE,
         IMAGE_HEIGHT,
         IMAGE_WIDTH,
-        PADDED_HEIGHT,
-        PADDED_WIDTH,
-        OUTPUT_HEIGHT,
-        OUTPUT_WIDTH,
         IN_CHANNELS,
         PADDING,
     >
@@ -167,10 +145,6 @@ where
         STRIDE,
         IMAGE_HEIGHT,
         IMAGE_WIDTH,
-        PADDED_HEIGHT,
-        PADDED_WIDTH,
-        OUTPUT_HEIGHT,
-        OUTPUT_WIDTH,
         IN_CHANNELS,
         PADDING,
     >;
@@ -199,10 +173,6 @@ where
             STRIDE,
             IMAGE_HEIGHT,
             IMAGE_WIDTH,
-            PADDED_HEIGHT,
-            PADDED_WIDTH,
-            OUTPUT_HEIGHT,
-            OUTPUT_WIDTH,
             IN_CHANNELS,
             PADDING,
         >::configure(cs, advices.clone());
@@ -238,17 +208,20 @@ where
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let l0out = config.l0.assign(&mut layouter, self.input, self.l0_params);
-        let l0qout = config
-            .l0q
-            .layout(&mut layouter, l0out.into_iter().flatten().flatten().into())?;
+        let l0out = config
+            .l0
+            .assign(&mut layouter, self.input.clone(), self.l0_params.clone());
+        let l0qout = config.l0q.layout(&mut layouter, l0out)?;
         let l1out = config.l1.layout(&mut layouter, l0qout)?;
-        let l2out = config.l2.layout(
-            &mut layouter,
-            self.l2_params.0.clone(),
-            self.l2_params.1.clone(),
-            l1out,
-        );
+        let l2out = config
+            .l2
+            .layout(
+                &mut layouter,
+                self.l2_params.0.clone(),
+                self.l2_params.1.clone(),
+                l1out,
+            )
+            .unwrap();
 
         // tie the last output to public inputs (instance column)
         for (i, a) in l2out.iter().enumerate().take(CLASSES) {
@@ -267,15 +240,12 @@ pub fn runconv() {
     const STRIDE: usize = 2;
     const IMAGE_HEIGHT: usize = 28;
     const IMAGE_WIDTH: usize = 28;
-    const PADDED_HEIGHT: usize = 28 + 2 * 0; // IMAGE_HEIGHT + 2 * PADDING
-    const PADDED_WIDTH: usize = 28 + 2 * 0; // IMAGE_WIDTH + 2 * PADDING
-    const OUTPUT_HEIGHT: usize = (28 + 2 * 0 - 5) / 2 + 1; // (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1
-    const OUTPUT_WIDTH: usize = (28 + 2 * 0 - 5) / 2 + 1; // (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1
     const IN_CHANNELS: usize = 1;
     const PADDING: usize = 0;
     const CLASSES: usize = 10;
     const LEN: usize = {
-        ((IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1)
+        OUT_CHANNELS
+            * ((IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1)
             * ((IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1)
     };
 
@@ -294,12 +264,11 @@ pub fn runconv() {
         .test_set_length(10_000)
         .finalize();
 
-    let image_num = 0;
     // Can use an Array2 or Array3 here (Array3 for visualization)
-    let train_data = Tensor::from(trn_img.iter().map(|x| i32tofelt::<F>(*x as i32 / 16)));
+    let mut train_data = Tensor::from(trn_img.iter().map(|x| i32tofelt::<F>(*x as i32 / 16)));
     train_data.reshape(&[50_000, 28, 28]);
 
-    let train_labels = Tensor::from(trn_lbl.iter().map(|x| *x as f32));
+    let mut train_labels = Tensor::from(trn_lbl.iter().map(|x| *x as f32));
     train_labels.reshape(&[50_000, 1]);
 
     println!("The first digit is a {:?}", train_labels[0]);
@@ -307,17 +276,28 @@ pub fn runconv() {
     let mut image = train_data
         .get_slice(&[0..1, 0..28, 0..28])
         .map(|d| Value::known(d));
+
     image.reshape(&[1, 28, 28]);
 
     let myparams = params::Params::new();
-    let kernels = Tensor::from(myparams.weights.into_iter().flatten().map(|fl| {
-        let dx = (fl as f32) * (32 as f32);
-        let rounded = dx.round();
-        let integral: i32 = unsafe { rounded.to_int_unchecked() };
-        let felt = fieldutils::i32tofelt(integral);
-        Value::known(felt)
-    }));
+    let mut kernels = Tensor::from(
+        myparams
+            .kernels
+            .clone()
+            .into_iter()
+            .flatten()
+            .flatten()
+            .flatten()
+            .map(|fl| {
+                let dx = (fl as f32) * (32 as f32);
+                let rounded = dx.round();
+                let integral: i32 = unsafe { rounded.to_int_unchecked() };
+                let felt = fieldutils::i32tofelt(integral);
+                Value::known(felt)
+            }),
+    );
     // tensorflow is in KHxKWxINxOUT we are OUTxINxWxH?
+
     kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_WIDTH, KERNEL_HEIGHT]);
 
     let l2biases = Tensor::<i32>::from(myparams.biases.into_iter().map(|fl| {
@@ -327,14 +307,14 @@ pub fn runconv() {
         integral
     }));
 
-    let l2weights = Tensor::<i32>::from(myparams.weights.into_iter().flatten().map(|fl| {
+    let mut l2weights = Tensor::<i32>::from(myparams.weights.into_iter().flatten().map(|fl| {
         let dx = fl * (32 as f32);
         let rounded = dx.round();
         let integral: i32 = unsafe { rounded.to_int_unchecked() };
         integral
     }));
 
-    l2weights.reshape(&[LEN, CLASSES]);
+    l2weights.reshape(&[CLASSES, LEN * OUT_CHANNELS]);
 
     let input = image;
     let l0_params = kernels;
@@ -352,10 +332,6 @@ pub fn runconv() {
         STRIDE,
         IMAGE_HEIGHT,
         IMAGE_WIDTH,
-        PADDED_HEIGHT,
-        PADDED_WIDTH,
-        OUTPUT_HEIGHT,
-        OUTPUT_WIDTH,
         IN_CHANNELS,
         PADDING,
     > {
@@ -364,14 +340,13 @@ pub fn runconv() {
         l2_params,
     };
 
-    let public_input = Tensor::<i32>::from(
-        &[
-            -3283i32, -1071, -7182, -9264, -5729, 1197, -2673, -12619, -1283, -14700,
-        ]
-        .iter(),
-    );
+    let public_input: Tensor<i32> = vec![
+        -3283i32, -1071, -7182, -9264, -5729, 1197, -2673, -12619, -1283, -14700,
+    ]
+    .into_iter()
+    .into();
 
-    let pi_inner: Tensor<F> = public_input.into();
+    let pi_inner: Tensor<F> = public_input.map(|x| i32tofelt::<F>(x).into());
     let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner]];
 
     //	Real proof
