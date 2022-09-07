@@ -223,6 +223,8 @@ where
             )
             .unwrap();
 
+        println!("{:?}", l2out.dims());
+
         // tie the last output to public inputs (instance column)
         for (i, a) in l2out.iter().enumerate().take(CLASSES) {
             layouter.constrain_instance(a.cell(), config.public_output, i)?;

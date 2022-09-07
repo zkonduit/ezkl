@@ -35,6 +35,12 @@ tensor_type!(i32, Int32, 0);
 tensor_type!(usize, USize, 0);
 tensor_type!((), Empty, ());
 
+impl<T: TensorType> TensorType for Tensor<T> {
+    /// Returns the zero value.
+    fn zero() -> Option<Self> {
+        Some(Tensor::new(Some(&[T::zero().unwrap()]), &[1]).unwrap())
+    }
+}
 impl<F: FieldExt> TensorType for Value<Assigned<F>> {
     /// Returns the zero value.
     fn zero() -> Option<Self> {
@@ -42,19 +48,17 @@ impl<F: FieldExt> TensorType for Value<Assigned<F>> {
     }
 }
 
+// generic types
 impl<F: FieldExt> TensorType for AssignedCell<Assigned<F>, F> {}
 impl TensorType for Column<Advice> {}
-// impl<'static> TensorType for &'static Column<Advice> {}
 impl TensorType for Column<Fixed> {}
-
-impl<T: TensorType> TensorType for Tensor<T> {}
-
 impl<F: FieldExt> TensorType for Expression<F> {
     fn zero() -> Option<Self> {
         Some(Expression::Constant(F::zero()))
     }
 }
 
+// specific types
 impl TensorType for halo2curves::pasta::Fp {}
 impl TensorType for Value<halo2curves::pasta::Fp> {
     /// Returns the zero value.
@@ -186,7 +190,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         self[index].clone()
     }
 
-    /// Get one single value from the Tensor.
+    /// Get a slice from the Tensor.
     ///
     /// ```
     /// use halo2deeplearning::tensor::Tensor;
@@ -258,10 +262,24 @@ impl<T: Clone + TensorType> Tensor<T> {
         self.dims = Vec::from(new_dims);
     }
 
+    /// Maps a function to tensors
+    /// ```
+    /// use halo2deeplearning::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
+    /// let mut c = a.map(|x| x**2);
+    /// assert_eq!(d.inner, &[1, 16]);
+    /// ```
     pub fn map<F: FnMut(T) -> G, G: TensorType>(&self, mut f: F) -> Tensor<G> {
         Tensor::from(self.inner.iter().map(|e| f(e.clone())))
     }
 
+    /// Maps a function to tensors and enumerates
+    /// ```
+    /// use halo2deeplearning::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
+    /// let mut c = a.map(|i, x| (x + i)**2);
+    /// assert_eq!(d.inner, &[4, 25]);
+    /// ```
     pub fn enum_map<F: FnMut(usize, T) -> G, G: TensorType>(&self, mut f: F) -> Tensor<G> {
         let mut t = Tensor::from(self.inner.iter().enumerate().map(|(i, e)| f(i, e.clone())));
         t.reshape(self.dims());
