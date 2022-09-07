@@ -155,7 +155,7 @@ where
             self.assign_filter(
                 layouter.namespace(|| format!("filter: {:?}", i)),
                 image.clone(),
-                kernels.get_slice(&[i..i + 1]).clone(),
+                kernels.get_slice(&[i..i + 1]),
             )
         }));
         let mut t = t.flatten();

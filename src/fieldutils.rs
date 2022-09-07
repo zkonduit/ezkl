@@ -1,5 +1,4 @@
 use halo2_proofs::arithmetic::FieldExt;
-
 pub fn i32tofelt<F: FieldExt>(x: i32) -> F {
     if x >= 0 {
         F::from(x as u64)

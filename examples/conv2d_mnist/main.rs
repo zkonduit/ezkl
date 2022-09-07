@@ -213,15 +213,12 @@ where
             .assign(&mut layouter, self.input.clone(), self.l0_params.clone());
         let l0qout = config.l0q.layout(&mut layouter, l0out)?;
         let l1out = config.l1.layout(&mut layouter, l0qout)?;
-        let l2out = config
-            .l2
-            .layout(
-                &mut layouter,
-                self.l2_params.0.clone(),
-                self.l2_params.1.clone(),
-                l1out,
-            )
-            .unwrap();
+        let l2out = config.l2.layout(
+            &mut layouter,
+            self.l2_params.0.clone(),
+            self.l2_params.1.clone(),
+            l1out,
+        )?;
 
         // tie the last output to public inputs (instance column)
         l2out.enum_map(|i, a| {
@@ -344,7 +341,7 @@ pub fn runconv() {
     };
 
     let public_input: Tensor<i32> = vec![
-        -3283i32, -1071, -7182, -9264, -5729, 1197, -2673, -12619, -1283, -14700,
+        -25124i32, -19304, -16668, -4399, -6209, -4548, -2317, -8349, -6117, -23461,
     ]
     .into_iter()
     .into();

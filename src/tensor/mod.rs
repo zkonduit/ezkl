@@ -1,11 +1,9 @@
-use crate::fieldutils::i32tofelt;
-
+use crate::fieldutils::{felt_to_i32, i32tofelt};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Value},
     plonk::{Advice, Assigned, Column, Expression, Fixed},
 };
-
 use itertools::Itertools;
 use std::fmt::Debug;
 use std::iter::Iterator;
@@ -49,14 +47,15 @@ impl<F: FieldExt> TensorType for Value<Assigned<F>> {
 }
 
 // generic types
-impl<F: FieldExt> TensorType for AssignedCell<Assigned<F>, F> {}
-impl TensorType for Column<Advice> {}
-impl TensorType for Column<Fixed> {}
 impl<F: FieldExt> TensorType for Expression<F> {
     fn zero() -> Option<Self> {
         Some(Expression::Constant(F::zero()))
     }
 }
+impl TensorType for Column<Advice> {}
+impl TensorType for Column<Fixed> {}
+impl TensorType for Value<i32> {}
+impl<F: FieldExt> TensorType for AssignedCell<Assigned<F>, F> {}
 
 // specific types
 impl TensorType for halo2curves::pasta::Fp {}
@@ -115,6 +114,20 @@ where
     fn from(value: I) -> Tensor<T> {
         let data: Vec<T> = value.collect::<Vec<T>>();
         Tensor::new(Some(&data), &[data.len() as usize]).unwrap()
+    }
+}
+
+impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>> for Tensor<i32> {
+    fn from(value: Tensor<AssignedCell<Assigned<F>, F>>) -> Tensor<i32> {
+        let mut output = Vec::new();
+        value.map(|x| {
+            x.clone().evaluate().value().map(|y| {
+                let e = felt_to_i32(*y);
+                output.push(e);
+                e
+            })
+        });
+        Tensor::new(Some(&output), value.dims()).unwrap()
     }
 }
 
