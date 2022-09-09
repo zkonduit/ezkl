@@ -1,11 +1,10 @@
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, Value},
+    circuit::{AssignedCell, Layouter, Region, Value},
     plonk::{Advice, Assigned, Column, ConstraintSystem, Selector},
 };
 use std::marker::PhantomData;
-
 
 // Takes input data provided as raw data type, e.g. i32, and sets it up to be passed into a pipeline,
 // including laying it out in a column and outputting Vec<AssignedCell<Assigned<F>, F>> suitable for copying
@@ -17,7 +16,10 @@ pub struct InputConfig<F: FieldExt, const IN: usize> {
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType, const IN: usize> InputConfig<F, IN> {
+impl<F: FieldExt + TensorType, const IN: usize> InputConfig<F, IN>
+where
+    Value<F>: TensorType,
+{
     pub fn configure(cs: &mut ConstraintSystem<F>, col: Column<Advice>) -> InputConfig<F, IN> {
         let qs = cs.selector();
         // could put additional constraints on input here
@@ -27,6 +29,8 @@ impl<F: FieldExt + TensorType, const IN: usize> InputConfig<F, IN> {
             _marker: PhantomData,
         }
     }
+
+
 
     pub fn layout(
         &self,
@@ -38,14 +42,21 @@ impl<F: FieldExt + TensorType, const IN: usize> InputConfig<F, IN> {
             |mut region| {
                 let offset = 0;
                 self.q.enable(&mut region, offset)?;
-
-                let output: Tensor<Value<Assigned<F>>> = raw_input.clone().into();
-                Ok(output.enum_map(|i, o| {
-                    region
-                        .assign_advice(|| "o".to_string(), self.input, offset + i, || o)
-                        .unwrap()
-                }))
+                Ok(self.assign(&mut region, offset, raw_input.clone().into()))
             },
         )
+    }
+
+    pub fn assign(
+        &self,
+        region: &mut Region<'_, F>,
+        offset: usize,
+        input: Tensor<Value<Assigned<F>>>,
+    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+        input.enum_map(|i, o| {
+            region
+                .assign_advice(|| "o".to_string(), self.input, offset + i, || o)
+                .unwrap()
+        })
     }
 }
