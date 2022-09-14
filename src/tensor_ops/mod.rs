@@ -2,6 +2,28 @@ pub mod eltwise;
 use crate::tensor::{Tensor, TensorType};
 pub use std::ops::{Add, Mul};
 
+pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+    kernel: Tensor<T>,
+    input: Tensor<T>,
+) -> Tensor<T> {
+    let input_dims = input.dims();
+    let kernel_dims = kernel.dims();
+
+    println!("{:?} {:?}", input_dims, kernel_dims);
+
+    // calculate value of output
+    let mut output: Tensor<T> = Tensor::new(None, &[1, kernel_dims[0]]).unwrap();
+
+    for i in 0..kernel_dims[0] {
+        println!("{:?}", i);
+        output.set(
+            &[0, i],
+            dot_product(kernel.get_slice(&[i..i + 1]), input.get_slice(&[0..1])),
+        );
+    }
+    output
+}
+
 pub fn convolution<
     T: TensorType + Mul<Output = T> + Add<Output = T>,
     const PADDING: usize,
@@ -39,7 +61,7 @@ pub fn convolution<
     output
 }
 
-fn dot_product<T: TensorType + Mul<Output = T> + Add<Output = T>>(w: Tensor<T>, x: Tensor<T>) -> T {
+pub fn dot_product<T: TensorType + Mul<Output = T> + Add<Output = T>>(w: Tensor<T>, x: Tensor<T>) -> T {
     w.iter()
         .zip(x)
         .fold(T::zero().unwrap(), |acc, (k, i)| acc + k.clone() * i)

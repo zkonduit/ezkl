@@ -30,7 +30,8 @@ use halo2curves::pasta::Fp as F;
 use halo2deeplearning::fieldutils;
 use halo2deeplearning::fieldutils::i32tofelt;
 use halo2deeplearning::nn::affine1d::Affine1dConfig;
-use halo2deeplearning::nn::cnvrl_generic;
+use halo2deeplearning::nn::cnvrl;
+use halo2deeplearning::nn::kernel::ParamType;
 use halo2deeplearning::tensor::{Tensor, TensorType};
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, NonlinConfig1d, ReLu};
 use std::cmp::max;
@@ -56,7 +57,7 @@ struct ConvConfig<
 > where
     Value<F>: TensorType,
 {
-    l0: cnvrl_generic::Config<
+    l0: cnvrl::Config<
         F,
         KERNEL_HEIGHT,
         KERNEL_WIDTH,
@@ -69,7 +70,7 @@ struct ConvConfig<
     >,
     l0q: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 32>>,
     l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>>,
-    l2: Affine1dConfig<F, LEN>,
+    l2: Affine1dConfig<F, LEN, CLASSES>,
     public_output: Column<Instance>,
 }
 
@@ -165,7 +166,12 @@ where
         let advices = Tensor::from((0..num_advices).map(|_| cs.advice_column()));
         advices.map(|col| cs.enable_equality(col));
 
-        let l0 = cnvrl_generic::Config::<
+        let mut kernel = Tensor::from(
+            (0..KERNEL_WIDTH * KERNEL_HEIGHT).map(|_| ParamType::Fixed(cs.fixed_column())),
+        );
+        kernel.reshape(&[KERNEL_WIDTH, KERNEL_HEIGHT]);
+
+        let l0 = cnvrl::Config::<
             F,
             KERNEL_HEIGHT,
             KERNEL_WIDTH,
@@ -175,18 +181,24 @@ where
             IMAGE_WIDTH,
             IN_CHANNELS,
             PADDING,
-        >::configure(cs, advices.clone());
+        >::configure(cs, kernel, advices.clone());
         let l0q: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 32>> =
             NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
         let l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
             NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
 
-        let l2: Affine1dConfig<F, LEN> = Affine1dConfig::configure(
+        let mut affine_input = Vec::new();
+        let kernel = advices
+            .get_slice(&[0..CLASSES])
+            .map(|a| ParamType::Advice(a));
+        affine_input.extend(vec![advices[LEN]]);
+        affine_input.extend(advices.get_slice(&[CLASSES + 1..CLASSES + 2]));
+        println!("len {:?}", affine_input.len());
+        let l2: Affine1dConfig<F, LEN, CLASSES> = Affine1dConfig::configure(
             cs,
-            advices.get_slice(&[0..CLASSES]),
-            advices[LEN],
-            advices[CLASSES + 1],
-            advices[LEN + 2],
+            kernel,
+            Tensor::from(affine_input.into_iter()),
+            // advices[LEN + 2],
         );
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -215,9 +227,9 @@ where
         let l1out = config.l1.layout(&mut layouter, l0qout)?;
         let l2out = config.l2.layout(
             &mut layouter,
-            self.l2_params.0.clone(),
-            self.l2_params.1.clone(),
-            l1out,
+            self.l2_params.0.clone().into(),
+            // self.l2_params.1.clone(),
+            l1out.into(),
         )?;
 
         // tie the last output to public inputs (instance column)

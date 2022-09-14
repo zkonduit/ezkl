@@ -81,16 +81,17 @@ where
         input: Tensor<Value<F>>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         let dims = input.dims();
+        println!("{:?} {:?}", dims, self.dims);
         assert!(dims == self.dims);
         input.enum_map(|i, x| {
-            let coord = (i % dims[1], i / dims[1]);
+            let coord = [i / dims[1], i % dims[1]];
             region
                 .assign_advice(
-                    || format!("input at row: {:?}, column: {:?}", coord.0, coord.1),
+                    || format!("input at row: {:?}, column: {:?}", coord[1], coord[0]),
                     // row indices
-                    self.advices[coord.1],
+                    self.advices[coord[0]],
                     // columns indices
-                    offset + coord.0,
+                    offset + coord[1],
                     || x.into(),
                 )
                 .unwrap()

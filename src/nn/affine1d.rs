@@ -1,173 +1,84 @@
+use crate::nn::io::*;
+use crate::nn::kernel::*;
+use crate::tensor::{Tensor, TensorType};
+use crate::tensor_ops::*;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, Region, Value},
+    circuit::{AssignedCell, Layouter, Value},
     plonk::{Advice, Assigned, Column, ConstraintSystem, Constraints, Expression, Selector},
     poly::Rotation,
 };
 use std::marker::PhantomData;
 
-use crate::tensor::{Tensor, TensorType};
-
-// We layout in two phases: first we load any parameters (returning parameters, used only in case of a tied weight model),
-// then we load the input, perform the forward pass, and layout the input and output, returning the output
 #[derive(Clone)]
-pub struct RawParameters<const IN: usize> {
-    pub weights: Tensor<i32>,
-    pub biases: Tensor<i32>,
-}
-
-pub struct Parameters<F: FieldExt, const IN: usize> {
-    weights: Tensor<AssignedCell<Assigned<F>, F>>,
-    biases: Tensor<AssignedCell<Assigned<F>, F>>,
-    pub _marker: PhantomData<F>,
-}
-
-#[derive(Clone)]
-pub struct Affine1dConfig<F: FieldExt, const IN: usize> {
-    pub weights: Tensor<Column<Advice>>,
-    pub input: Column<Advice>,
-    pub output: Column<Advice>,
-    pub bias: Column<Advice>,
-    pub q: Selector,
+pub struct Affine1dConfig<F: FieldExt, const IN: usize, const OUT: usize> {
+    // kernel is weights and biases concatenated
+    pub kernel: KernelConfig<F>,
+    pub input: IOConfig<F>,
+    pub output: IOConfig<F>,
+    pub selector: Selector,
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType, const IN: usize> Affine1dConfig<F, IN>
-{
-    pub fn layout(
-        &self,
-        layouter: &mut impl Layouter<F>,
-        weights: Tensor<i32>,
-        biases: Tensor<i32>,
-        input: Tensor<AssignedCell<Assigned<F>, F>>,
-    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
-        layouter.assign_region(
-            || "Both",
-            |mut region| {
-                let offset = 0;
-                self.q.enable(&mut region, offset)?;
-
-                let params =
-                    self.assign_parameters(&mut region, offset, weights.clone(), biases.clone())?;
-                let output = self.forward(&mut region, offset, input.clone(), params)?;
-                Ok(output)
-            },
-        )
-    }
-
-    pub fn assign_parameters(
-        &self,
-        region: &mut Region<'_, F>,
-        offset: usize,
-        weights: Tensor<i32>,
-        biases: Tensor<i32>,
-    ) -> Result<Parameters<F, IN>, halo2_proofs::plonk::Error> {
-        // assert weight matrix is 2D
-        assert!(weights.dims().len() == 2);
-        let biases: Tensor<Value<F>> = biases.into();
-        let weights: Tensor<Value<F>> = weights.into();
-
-        let biases_for_equality = biases.enum_map(|i, b| {
-            region
-                .assign_advice(|| "b".to_string(), self.bias, offset + i, || b.into())
-                .unwrap()
-        });
-
-        let weights_for_equality = weights.enum_map(|i, w| {
-            region
-                .assign_advice(
-                    || "w".to_string(),
-                    // row indices
-                    self.weights[i / IN],
-                    // columns indices
-                    offset + i % IN,
-                    || w.into(),
-                )
-                .unwrap()
-        });
-
-        let params = Parameters {
-            biases: biases_for_equality,
-            weights: weights_for_equality,
+impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> {
+    // composable_configure takes the input tensor as an argument, and completes the advice by generating new for the rest
+    pub fn configure(
+        meta: &mut ConstraintSystem<F>,
+        kernel: Tensor<ParamType>,
+        advices: Tensor<Column<Advice>>,
+    ) -> Self {
+        // println!("aaaaaa {:?}", data.len());
+        // let res = data.get_slice(&[OUT + 2..OUT + 3]);
+        // println!("bbbbbb {:?}", data.len());
+        let mut config = Self {
+            selector: meta.selector(),
+            kernel: KernelConfig::configure(meta, kernel, &[OUT, IN]),
+            // add 1 to incorporate bias !
+            input: IOConfig::configure(meta, advices.get_slice(&[0..1]), &[1, IN]),
+            output: IOConfig::configure(meta, advices.get_slice(&[1..2]), &[1, OUT]),
             _marker: PhantomData,
         };
 
-        Ok(params)
-    }
-
-    pub fn forward(
-        &self, // just advice
-        region: &mut Region<'_, F>,
-        offset: usize,
-        input: Tensor<AssignedCell<Assigned<F>, F>>,
-        params: Parameters<F, IN>,
-    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
-        // copy the input
-        let out_dim = self.weights.dims()[0];
-
-        input.enum_map(|i, x| {
-            x.copy_advice(|| "input", region, self.input, offset + i)
-                .unwrap()
-        });
-
-        // calculate value of output
-        let mut output: Tensor<Value<Assigned<F>>> = Tensor::new(None, &[out_dim]).unwrap();
-        output = output.enum_map(|i, mut o| {
-            for (j, x) in input.iter().enumerate() {
-                o = o + params.weights.get(&[i, j]).value_field() * x.value_field();
-            }
-            o + params.biases.get(&[i]).value_field()
-        });
-
-        // assign that value and return it
-        let output_for_equality = output.enum_map(|i, o| {
-            region
-                .assign_advice(|| "o".to_string(), self.output, offset + i, || o)
-                .unwrap()
-        });
-
-        Ok(output_for_equality)
-    }
-
-    // composable_configure takes the input tensor as an argument, and completes the advice by generating new for the rest
-    pub fn configure(
-        cs: &mut ConstraintSystem<F>,
-        weights: Tensor<Column<Advice>>,
-        input: Column<Advice>,
-        output: Column<Advice>,
-        bias: Column<Advice>,
-    ) -> Self {
-        let qs = cs.selector();
-
-        cs.create_gate("affine", |virtual_cells| {
-            let q = virtual_cells.query_selector(qs);
-            let out_dim = weights.dims()[0];
-            // We put the negation of the claimed output in the constraint tensor.
-            let mut constraints: Tensor<Expression<F>> = Tensor::from(
-                (0..out_dim).map(|i| -virtual_cells.query_advice(output, Rotation(i as i32))),
-            );
-
+        meta.create_gate("affine", |meta| {
+            let selector = meta.query_selector(config.selector);
+            // Get output expressions for each input channel
+            let expected_output: Tensor<Expression<F>> = config.output.query(meta, 0);
             // Now we compute the linear expression,  and add it to constraints
-            constraints = constraints.enum_map(|i, mut c| {
+            let witnessed_output = expected_output.enum_map(|i, _| {
+                let mut c = Expression::Constant(<F as TensorType>::zero().unwrap());
                 for j in 0..IN {
-                    c = c + virtual_cells.query_advice(weights[i], Rotation(j as i32))
-                        * virtual_cells.query_advice(input, Rotation(j as i32));
+                    c = c + config.kernel.params[i].query(meta, Rotation(j as i32))
+                        * meta.query_advice(advices[0], Rotation(j as i32));
                 }
+                c
                 // add the bias
-                c + virtual_cells.query_advice(bias, Rotation(i as i32))
             });
 
-            let constraints = (0..out_dim).map(|_| "c").zip(constraints);
-            Constraints::with_selector(q, constraints)
+            let constraints = witnessed_output.enum_map(|i, o| o - expected_output[i].clone());
+
+            Constraints::with_selector(selector, constraints)
         });
 
-        Self {
-            weights,
-            input,
-            output,
-            bias,
-            q: qs,
-            _marker: PhantomData,
-        }
+        config
+    }
+
+    pub fn layout(
+        &self,
+        layouter: &mut impl Layouter<F>,
+        kernel: Tensor<Value<F>>,
+        input: Tensor<Value<F>>,
+    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
+        layouter.assign_region(
+            || "assign image and kernel",
+            |mut region| {
+                let offset = 0;
+                self.selector.enable(&mut region, offset)?;
+
+                let output = matmul(kernel.clone(), input.clone());
+                self.input.assign(&mut region, offset, input.clone());
+                self.kernel.assign(&mut region, offset, kernel.clone());
+                Ok(self.output.assign(&mut region, offset, output))
+            },
+        )
     }
 }

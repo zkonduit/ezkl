@@ -1,4 +1,5 @@
 use crate::fieldutils::{felt_to_i32, i32tofelt};
+use crate::nn::kernel::ParamType;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Value},
@@ -61,7 +62,8 @@ impl<F: FieldExt> TensorType for Expression<F> {
 }
 
 impl TensorType for Column<Advice> {}
-impl TensorType for Column<Fixed> {}
+impl TensorType for ParamType {}
+// impl<F: FieldExt> TensorType for IOType<F> {}
 impl<F: FieldExt> TensorType for AssignedCell<Assigned<F>, F> {}
 
 // specific types
@@ -133,6 +135,23 @@ impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>
             })
         });
         Tensor::new(Some(&output), value.dims()).unwrap()
+    }
+}
+
+impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>>
+    for Tensor<Value<F>>
+{
+    fn from(value: Tensor<AssignedCell<Assigned<F>, F>>) -> Tensor<Value<F>> {
+        let mut output = Vec::new();
+        value.map(|x| {
+            x.clone().evaluate().value().map(|y| {
+                let e = felt_to_i32(*y);
+                output.push(e);
+                e
+            })
+        });
+        println!("from tensor {:?} {:?}", value.dims(), output.len());
+        Tensor::new(Some(&output), value.dims()).unwrap().into()
     }
 }
 
@@ -284,6 +303,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// assert_eq!(a.dims(), &[9, 3]);
     /// ```
     pub fn reshape(&mut self, new_dims: &[usize]) {
+        println!("{:?} {:?}", self.len(), new_dims);
         assert!(self.len() == new_dims.iter().product::<usize>());
         self.dims = Vec::from(new_dims);
     }

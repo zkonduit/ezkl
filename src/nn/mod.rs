@@ -1,3 +1,5 @@
+
 pub mod affine1d;
+pub mod cnvrl;
 pub mod io;
-pub mod cnvrl_generic;
+pub mod kernel;
