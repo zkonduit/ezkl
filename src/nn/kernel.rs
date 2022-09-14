@@ -101,7 +101,6 @@ where
         assert!(dims.len() == 2);
         kernel.enum_map(|i, k| {
             let coord = [i / dims[1], i % dims[1]];
-            println!("{:?} {:?}", coord, self.params);
             match self.params[0] {
                 ParamType::Fixed(_) => self.params.get(&coord).assign(region, offset, k),
                 ParamType::Advice(_) => {

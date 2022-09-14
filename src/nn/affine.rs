@@ -27,9 +27,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         kernel: Tensor<ParamType>,
         advices: Tensor<Column<Advice>>,
     ) -> Self {
-        // println!("aaaaaa {:?}", data.len());
-        // let res = data.get_slice(&[OUT + 2..OUT + 3]);
-        // println!("bbbbbb {:?}", data.len());
+
         let mut config = Self {
             selector: meta.selector(),
             kernel: KernelConfig::configure(meta, kernel, &[OUT, IN]),

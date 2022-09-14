@@ -10,6 +10,10 @@ use std::marker::PhantomData;
 // Takes input data provided as raw data type, e.g. i32, and sets it up to be passed into a pipeline,
 // including laying it out in a column and outputting Vec<AssignedCell<Assigned<F>, F>> suitable for copying
 // Can also have a variant to check a signature, check that input matches a hash, etc.
+pub enum InputType<F: FieldExt> {
+    New(Value<F>),
+    PrevAssigned(AssignedCell<Assigned<F>, F>),
+}
 
 #[derive(Debug, Clone)]
 pub struct IOConfig<F: FieldExt> {
@@ -81,7 +85,6 @@ where
         input: Tensor<Value<F>>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         let dims = input.dims();
-        println!("{:?} {:?}", dims, self.dims);
         assert!(dims == self.dims);
         input.enum_map(|i, x| {
             let coord = [i / dims[1], i % dims[1]];

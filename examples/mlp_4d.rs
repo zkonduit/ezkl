@@ -20,7 +20,7 @@ use std::rc::Rc;
 //use crate::tensorutils::{dot3, flatten3, flatten4, map2, map3, map3r, map4, map4r};
 
 use halo2deeplearning::fieldutils::i32tofelt;
-use halo2deeplearning::nn::affine1d::Affine1dConfig;
+use halo2deeplearning::nn::affine::Affine1dConfig;
 use halo2deeplearning::nn::kernel::ParamType;
 use halo2deeplearning::tensor::{Tensor, TensorType};
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu};
@@ -101,7 +101,6 @@ where
             relutable.clone(),
         );
 
-
         let l2 = Affine1dConfig::<F, LEN, LEN>::configure(
             cs,
             kernel,
@@ -145,17 +144,14 @@ where
         config.divtable.layout(&mut layouter)?;
         let mut x = self.input.clone();
         x.reshape(&[1, LEN]);
-        println!("l0 {:?} {:?}", self.l0_params.clone(), x);
         let x = config
             .l0
             .layout(&mut layouter, self.l0_params.clone().into(), x.into())?;
         let mut x = config.l1.layout(&mut layouter, x)?;
         x.reshape(&[1, LEN]);
-        println!("l2");
         let x = config
             .l2
             .layout(&mut layouter, self.l2_params.clone().into(), x.into())?;
-        println!("l3");
         let x = config.l3.layout(&mut layouter, x)?;
         let x = config.l4.layout(&mut layouter, x)?;
         x.enum_map(|i, x| {

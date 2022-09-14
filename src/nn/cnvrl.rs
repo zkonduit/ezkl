@@ -2,11 +2,8 @@ use crate::nn::io::*;
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, Region, Value},
-    plonk::{
-        Advice, Assigned, Column, ColumnType, ConstraintSystem, Constraints, Expression, Fixed,
-        Selector,
-    },
+    circuit::{AssignedCell, Layouter, Value},
+    plonk::{Advice, Assigned, Column, ConstraintSystem, Constraints, Selector},
     poly::Rotation,
 };
 

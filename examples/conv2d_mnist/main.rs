@@ -29,7 +29,7 @@ use halo2curves::pasta::Fp as F;
 // use crate::params;
 use halo2deeplearning::fieldutils;
 use halo2deeplearning::fieldutils::i32tofelt;
-use halo2deeplearning::nn::affine1d::Affine1dConfig;
+use halo2deeplearning::nn::affine::Affine1dConfig;
 use halo2deeplearning::nn::cnvrl;
 use halo2deeplearning::nn::kernel::ParamType;
 use halo2deeplearning::tensor::{Tensor, TensorType};
@@ -193,7 +193,6 @@ where
             .map(|a| ParamType::Advice(a));
         affine_input.extend(vec![advices[LEN]]);
         affine_input.extend(advices.get_slice(&[CLASSES + 1..CLASSES + 2]));
-        println!("len {:?}", affine_input.len());
         let l2: Affine1dConfig<F, LEN, CLASSES> = Affine1dConfig::configure(
             cs,
             kernel,
@@ -224,13 +223,12 @@ where
             .l0
             .assign(&mut layouter, self.input.clone(), self.l0_params.clone());
         let l0qout = config.l0q.layout(&mut layouter, l0out)?;
-        let l1out = config.l1.layout(&mut layouter, l0qout)?;
-        let l2out = config.l2.layout(
-            &mut layouter,
-            self.l2_params.0.clone().into(),
-            // self.l2_params.1.clone(),
-            l1out.into(),
-        )?;
+        let mut l1out = config.l1.layout(&mut layouter, l0qout)?;
+        l1out.reshape(&[1, l1out.dims()[0]]);
+        let l2out =
+            config
+                .l2
+                .layout(&mut layouter, self.l2_params.0.clone().into(), l1out.into())?;
 
         // tie the last output to public inputs (instance column)
         l2out.enum_map(|i, a| {
