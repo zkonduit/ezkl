@@ -1,7 +1,7 @@
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{Layouter, SimpleFloorPlanner},
+    circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{
         //create_proof, keygen_pk, keygen_vk, verify_proof, Advice,
         Circuit,
@@ -21,7 +21,7 @@ use std::rc::Rc;
 
 use halo2deeplearning::fieldutils::i32tofelt;
 use halo2deeplearning::nn::affine1d::{Affine1dConfig, RawParameters};
-use halo2deeplearning::nn::input::InputConfig;
+use halo2deeplearning::nn::io::IOConfig;
 use halo2deeplearning::tensor::{Tensor, TensorType};
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu};
 // A columnar ReLu MLP
@@ -36,7 +36,7 @@ struct MyConfig<
 {
     relutable: Rc<EltwiseTable<F, BITS, ReLu<F>>>,
     divtable: Rc<EltwiseTable<F, BITS, DivideBy<F, 128>>>,
-    input: InputConfig<F, LEN>,
+    input: IOConfig<F>,
     l0: Affine1dConfig<F, LEN>,
     l1: EltwiseConfig<F, LEN, BITS, ReLu<F>>,
     l2: Affine1dConfig<F, LEN>,
@@ -61,8 +61,10 @@ struct MyCircuit<
 
 impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     for MyCircuit<F, LEN, BITS>
-// where
-//     [(); LEN + 3]:,
+where
+    Value<F>: TensorType,
+    // where
+    //     [(); LEN + 3]:,
 {
     type Config = MyConfig<F, LEN, BITS>;
     type FloorPlanner = SimpleFloorPlanner;
@@ -87,7 +89,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let relutable = Rc::new(relutable_config);
         let divtable = Rc::new(divtable_config);
 
-        let input = InputConfig::<F, LEN>::configure(cs, advices[LEN].clone());
+        let input = IOConfig::<F>::configure(cs, advices.get_slice(&[LEN..LEN + 1]), &[1, LEN]);
 
         let l0 = Affine1dConfig::<F, LEN>::configure(
             cs,
@@ -147,8 +149,9 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         // Layout the reused tables
         config.relutable.layout(&mut layouter)?;
         config.divtable.layout(&mut layouter)?;
-
-        let x = config.input.layout(&mut layouter, self.input.clone())?;
+        let mut x = self.input.clone();
+        x.reshape(&[1, LEN]);
+        let x = config.input.layout(&mut layouter, x)?;
         let x = config.l0.layout(
             &mut layouter,
             self.l0_params.weights.clone(),

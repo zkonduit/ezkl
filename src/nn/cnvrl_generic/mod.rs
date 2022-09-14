@@ -1,3 +1,4 @@
+use crate::nn::io::IOConfig;
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -7,11 +8,9 @@ use halo2_proofs::{
 };
 use std::marker::PhantomData;
 
-mod image;
 mod kernel;
 
 use crate::tensor_ops::*;
-use image::*;
 use kernel::*;
 
 #[derive(Debug, Clone)]
@@ -30,8 +29,8 @@ pub struct Config<
 {
     selector: Selector,
     kernel: KernelConfig<F, KERNEL_HEIGHT, KERNEL_WIDTH>,
-    image: ImageConfig<F>,
-    pub output: ImageConfig<F>,
+    image: IOConfig<F>,
+    pub output: IOConfig<F>,
 }
 
 impl<
@@ -70,8 +69,16 @@ where
         let mut config = Self {
             selector: meta.selector(),
             kernel: KernelConfig::configure(meta),
-            image: ImageConfig::configure(advices.get_slice(&[0..IMAGE_WIDTH]), IMAGE_HEIGHT),
-            output: ImageConfig::configure(advices.get_slice(&[0..output_width]), output_height),
+            image: IOConfig::configure(
+                meta,
+                advices.get_slice(&[0..IMAGE_WIDTH]),
+                &[IMAGE_WIDTH, IMAGE_HEIGHT],
+            ),
+            output: IOConfig::configure(
+                meta,
+                advices.get_slice(&[0..output_width]),
+                &[output_width, output_height],
+            ),
         };
 
         meta.create_gate("convolution", |meta| {

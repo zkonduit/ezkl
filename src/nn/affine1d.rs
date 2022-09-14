@@ -23,10 +23,7 @@ pub struct Parameters<F: FieldExt, const IN: usize> {
 }
 
 #[derive(Clone)]
-pub struct Affine1dConfig<F: FieldExt, const IN: usize>
-// where
-//     [(); IN + 3]:,
-{
+pub struct Affine1dConfig<F: FieldExt, const IN: usize> {
     pub weights: Tensor<Column<Advice>>,
     pub input: Column<Advice>,
     pub output: Column<Advice>,
@@ -36,8 +33,6 @@ pub struct Affine1dConfig<F: FieldExt, const IN: usize>
 }
 
 impl<F: FieldExt + TensorType, const IN: usize> Affine1dConfig<F, IN>
-// where
-//     [(); IN + 3]:,
 {
     pub fn layout(
         &self,
@@ -69,12 +64,12 @@ impl<F: FieldExt + TensorType, const IN: usize> Affine1dConfig<F, IN>
     ) -> Result<Parameters<F, IN>, halo2_proofs::plonk::Error> {
         // assert weight matrix is 2D
         assert!(weights.dims().len() == 2);
-        let biases: Tensor<Value<Assigned<F>>> = biases.into();
-        let weights: Tensor<Value<Assigned<F>>> = weights.into();
+        let biases: Tensor<Value<F>> = biases.into();
+        let weights: Tensor<Value<F>> = weights.into();
 
         let biases_for_equality = biases.enum_map(|i, b| {
             region
-                .assign_advice(|| "b".to_string(), self.bias, offset + i, || b)
+                .assign_advice(|| "b".to_string(), self.bias, offset + i, || b.into())
                 .unwrap()
         });
 
@@ -86,7 +81,7 @@ impl<F: FieldExt + TensorType, const IN: usize> Affine1dConfig<F, IN>
                     self.weights[i / IN],
                     // columns indices
                     offset + i % IN,
-                    || w,
+                    || w.into(),
                 )
                 .unwrap()
         });
