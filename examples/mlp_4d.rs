@@ -31,8 +31,6 @@ struct MyConfig<
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust
     const BITS: usize,
 >
-// where
-//     [(); LEN + 3]:,
 {
     relutable: Rc<EltwiseTable<F, BITS, ReLu<F>>>,
     divtable: Rc<EltwiseTable<F, BITS, DivideBy<F, 128>>>,
