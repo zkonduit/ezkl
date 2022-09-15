@@ -6,15 +6,26 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use std::marker::PhantomData;
+use std::ops::Range;
 
 // Takes input data provided as raw data type, e.g. i32, and sets it up to be passed into a pipeline,
 // including laying it out in a column and outputting Vec<AssignedCell<Assigned<F>, F>> suitable for copying
 // Can also have a variant to check a signature, check that input matches a hash, etc.
 #[derive(Debug, Clone)]
-pub enum InputType<F: FieldExt + TensorType> {
+pub enum IOType<F: FieldExt + TensorType> {
     Value(Tensor<Value<F>>),
     AssignedValue(Tensor<Value<Assigned<F>>>),
     PrevAssigned(Tensor<AssignedCell<Assigned<F>, F>>),
+}
+
+impl<F: FieldExt + TensorType> IOType<F> {
+    pub fn get_slice(&self, indices: &[Range<usize>]) -> IOType<F> {
+        match self {
+            IOType::Value(v) => IOType::Value(v.get_slice(indices)),
+            IOType::AssignedValue(v) => IOType::AssignedValue(v.get_slice(indices)),
+            IOType::PrevAssigned(v) => IOType::PrevAssigned(v.get_slice(indices)),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +76,15 @@ where
         t
     }
 
+    pub fn query_idx(
+        &self,
+        meta: &mut VirtualCells<'_, F>,
+        idx: usize,
+        offset: usize,
+    ) -> Expression<F> {
+        meta.query_advice(self.advices[idx], Rotation(offset as i32))
+    }
+
     pub fn layout(
         &self,
         layouter: &mut impl Layouter<F>,
@@ -75,11 +95,7 @@ where
             |mut region| {
                 let offset = 0;
                 self.q.enable(&mut region, offset)?;
-                Ok(self.assign(
-                    &mut region,
-                    offset,
-                    InputType::Value(raw_input.clone().into()),
-                ))
+                Ok(self.assign(&mut region, offset, IOType::Value(raw_input.clone().into())))
             },
         )
     }
@@ -88,10 +104,10 @@ where
         &self,
         region: &mut Region<'_, F>,
         offset: usize,
-        input: InputType<F>,
+        input: IOType<F>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         match input {
-            InputType::Value(mut v) => {
+            IOType::Value(mut v) => {
                 v.reshape(&self.dims);
                 v.enum_map(|i, x| {
                     let dims = v.dims();
@@ -106,7 +122,7 @@ where
                         .unwrap()
                 })
             }
-            InputType::AssignedValue(mut v) => {
+            IOType::AssignedValue(mut v) => {
                 v.reshape(&self.dims);
                 v.enum_map(|i, x| {
                     let coord = [i / self.dims[1], i % self.dims[1]];
@@ -120,7 +136,7 @@ where
                         .unwrap()
                 })
             }
-            InputType::PrevAssigned(mut a) => {
+            IOType::PrevAssigned(mut a) => {
                 a.reshape(&self.dims);
                 a.enum_map(|i, x| {
                     let coord = [i / self.dims[1], i % self.dims[1]];

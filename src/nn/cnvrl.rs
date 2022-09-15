@@ -57,7 +57,7 @@ where
 {
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
-        kernel: Tensor<ParamType>,
+        kernel: ParamType,
         advices: Tensor<Column<Advice>>,
     ) -> Self {
         let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
@@ -89,9 +89,7 @@ where
             let intermediate_outputs = (0..IN_CHANNELS)
                 .map(|rotation| {
                     let image = config.image.query(meta, rotation * IMAGE_HEIGHT);
-                    let kernel = config
-                        .kernel
-                        .query(meta, Rotation((rotation * IMAGE_HEIGHT) as i32));
+                    let kernel = config.kernel.query(meta, rotation * IMAGE_HEIGHT);
                     convolution::<_, PADDING, STRIDE>(kernel, image)
                 })
                 .collect();
@@ -110,7 +108,7 @@ where
     fn layout(
         &self,
         mut layouter: impl Layouter<F>,
-        image: Tensor<Value<F>>,
+        image: IOType<F>,
         kernel: Tensor<Value<F>>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         layouter
@@ -122,16 +120,19 @@ where
 
                     let outputs = (0..IN_CHANNELS)
                         .map(|i| {
-                            let output = convolution::<_, PADDING, STRIDE>(
-                                kernel.get_slice(&[i..i + 1]),
-                                image.get_slice(&[i..i + 1]),
-                            );
-
-                            self.image
-                                .assign(&mut region, offset, InputType::Value(image.get_slice(&[i..i + 1])));
-
                             self.kernel
                                 .assign(&mut region, offset, kernel.get_slice(&[i..i + 1]));
+
+                            self.image
+                                .assign(&mut region, offset, image.get_slice(&[i..i + 1]));
+
+                            let output = match image.clone() {
+                                IOType::Value(img) => convolution::<_, PADDING, STRIDE>(
+                                    kernel.get_slice(&[i..i + 1]),
+                                    img.get_slice(&[i..i + 1]),
+                                ),
+                                _ => panic!("not implemented"),
+                            };
 
                             offset += IMAGE_HEIGHT;
                             output
@@ -141,7 +142,7 @@ where
                     let output = op(outputs, |a, b| a + b);
                     Ok(self
                         .output
-                        .assign(&mut region, offset, InputType::Value(output)))
+                        .assign(&mut region, offset, IOType::Value(output)))
                 },
             )
             .unwrap()
@@ -150,7 +151,7 @@ where
     pub fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
-        image: Tensor<Value<F>>,
+        image: IOType<F>,
         kernels: Tensor<Value<F>>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         let horz = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
@@ -196,7 +197,7 @@ mod tests {
     where
         Value<F>: TensorType,
     {
-        image: Tensor<Value<F>>,
+        image: IOType<F>,
         kernels: Tensor<Value<F>>,
     }
 
@@ -251,12 +252,11 @@ mod tests {
 
             let advices = Tensor::from((0..num_advices).map(|_| meta.advice_column()));
 
-            let mut kernel = Tensor::from(
-                (0..KERNEL_WIDTH * KERNEL_HEIGHT).map(|_| ParamType::Fixed(meta.fixed_column())),
-            );
+            let mut kernel =
+                Tensor::from((0..KERNEL_WIDTH * KERNEL_HEIGHT).map(|_| meta.fixed_column()));
             kernel.reshape(&[KERNEL_WIDTH, KERNEL_HEIGHT]);
 
-            Self::Config::configure(meta, kernel, advices)
+            Self::Config::configure(meta, ParamType::Fixed(kernel), advices)
         }
 
         fn synthesize(
@@ -305,7 +305,7 @@ mod tests {
             IN_CHANNELS,
             PADDING,
         > {
-            image,
+            image: IOType::Value(image),
             kernels,
         };
 

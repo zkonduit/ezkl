@@ -21,7 +21,7 @@ use std::rc::Rc;
 
 use halo2deeplearning::fieldutils::i32tofelt;
 use halo2deeplearning::nn::affine::Affine1dConfig;
-use halo2deeplearning::nn::io::InputType;
+use halo2deeplearning::nn::io::IOType;
 use halo2deeplearning::nn::kernel::ParamType;
 
 use halo2deeplearning::tensor::{Tensor, TensorType};
@@ -86,7 +86,7 @@ where
         let relutable = Rc::new(relutable_config);
         let divtable = Rc::new(divtable_config);
 
-        let kernel = advices.get_slice(&[0..LEN]).map(|a| ParamType::Advice(a));
+        let kernel = ParamType::Advice(advices.get_slice(&[0..LEN]).map(|a| a));
 
         let l0 = Affine1dConfig::<F, LEN, LEN>::configure(
             cs,
@@ -145,13 +145,13 @@ where
         let x = config.l0.layout(
             &mut layouter,
             self.l0_params.clone().into(),
-            InputType::Value(x.into()),
+            IOType::Value(x.into()),
         )?;
         let x = config.l1.layout(&mut layouter, x)?;
         let x = config.l2.layout(
             &mut layouter,
             self.l2_params.clone().into(),
-            InputType::PrevAssigned(x),
+            IOType::PrevAssigned(x),
         )?;
         let x = config.l3.layout(&mut layouter, x)?;
         let x = config.l4.layout(&mut layouter, x)?;

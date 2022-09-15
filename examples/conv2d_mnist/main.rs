@@ -31,8 +31,8 @@ use halo2deeplearning::fieldutils;
 use halo2deeplearning::fieldutils::i32tofelt;
 use halo2deeplearning::nn::affine::Affine1dConfig;
 use halo2deeplearning::nn::cnvrl;
+use halo2deeplearning::nn::io::IOType;
 use halo2deeplearning::nn::kernel::ParamType;
-use halo2deeplearning::nn::io::InputType;
 use halo2deeplearning::tensor::{Tensor, TensorType};
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, NonlinConfig1d, ReLu};
 use std::cmp::max;
@@ -167,9 +167,7 @@ where
         let advices = Tensor::from((0..num_advices).map(|_| cs.advice_column()));
         advices.map(|col| cs.enable_equality(col));
 
-        let mut kernel = Tensor::from(
-            (0..KERNEL_WIDTH * KERNEL_HEIGHT).map(|_| ParamType::Fixed(cs.fixed_column())),
-        );
+        let mut kernel = Tensor::from((0..KERNEL_WIDTH * KERNEL_HEIGHT).map(|_| cs.fixed_column()));
         kernel.reshape(&[KERNEL_WIDTH, KERNEL_HEIGHT]);
 
         let l0 = cnvrl::Config::<
@@ -182,16 +180,14 @@ where
             IMAGE_WIDTH,
             IN_CHANNELS,
             PADDING,
-        >::configure(cs, kernel, advices.clone());
+        >::configure(cs, ParamType::Fixed(kernel), advices.clone());
         let l0q: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 32>> =
             NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
         let l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
             NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
 
         let mut affine_input = Vec::new();
-        let kernel = advices
-            .get_slice(&[0..CLASSES])
-            .map(|a| ParamType::Advice(a));
+        let kernel = ParamType::Advice(advices.get_slice(&[0..CLASSES]).map(|a| a));
         affine_input.extend(vec![advices[LEN]]);
         affine_input.extend(advices.get_slice(&[CLASSES + 1..CLASSES + 2]));
         let l2: Affine1dConfig<F, LEN, CLASSES> = Affine1dConfig::configure(
@@ -222,14 +218,14 @@ where
     ) -> Result<(), Error> {
         let l0out = config
             .l0
-            .assign(&mut layouter, self.input.clone(), self.l0_params.clone());
+            .assign(&mut layouter, IOType::Value(self.input.clone()), self.l0_params.clone());
         let l0qout = config.l0q.layout(&mut layouter, l0out)?;
         let mut l1out = config.l1.layout(&mut layouter, l0qout)?;
         l1out.reshape(&[1, l1out.dims()[0]]);
         let l2out = config.l2.layout(
             &mut layouter,
             self.l2_params.0.clone().into(),
-            InputType::PrevAssigned(l1out),
+            IOType::PrevAssigned(l1out),
         )?;
 
         // tie the last output to public inputs (instance column)

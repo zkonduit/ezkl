@@ -6,7 +6,6 @@ use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Layouter, Value},
     plonk::{Advice, Assigned, Column, ConstraintSystem, Constraints, Expression, Selector},
-    poly::Rotation,
 };
 use std::marker::PhantomData;
 
@@ -24,7 +23,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
     // composable_configure takes the input tensor as an argument, and completes the advice by generating new for the rest
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
-        kernel: Tensor<ParamType>,
+        kernel: ParamType,
         advices: Tensor<Column<Advice>>,
     ) -> Self {
         let mut config = Self {
@@ -44,8 +43,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
             let witnessed_output = expected_output.enum_map(|i, _| {
                 let mut c = Expression::Constant(<F as TensorType>::zero().unwrap());
                 for j in 0..IN {
-                    c = c + config.kernel.params[i].query(meta, Rotation(j as i32))
-                        * meta.query_advice(advices[0], Rotation(j as i32));
+                    c = c + config.kernel.query_idx(meta, i, j) * config.input.query_idx(meta, 0, j)
                 }
                 c
                 // add the bias
@@ -63,7 +61,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         &self,
         layouter: &mut impl Layouter<F>,
         kernel: Tensor<Value<F>>,
-        input: InputType<F>,
+        input: IOType<F>,
     ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         layouter.assign_region(
             || "assign image and kernel",
@@ -85,7 +83,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
 
                 Ok(self
                     .output
-                    .assign(&mut region, offset, InputType::AssignedValue(output)))
+                    .assign(&mut region, offset, IOType::AssignedValue(output)))
             },
         )
     }

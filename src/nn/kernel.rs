@@ -6,58 +6,26 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use std::marker::PhantomData;
+use std::ops::Range;
 
 #[derive(Clone, Debug)]
 pub enum ParamType {
-    Advice(Column<Advice>),
-    Fixed(Column<Fixed>),
+    Advice(Tensor<Column<Advice>>),
+    Fixed(Tensor<Column<Fixed>>),
 }
 
 impl ParamType {
-    fn assign<F: FieldExt>(
-        &self,
-        region: &mut Region<'_, F>,
-        offset: usize,
-        elem: Value<F>,
-    ) -> AssignedCell<Assigned<F>, F> {
+    pub fn get_slice(&self, indices: &[Range<usize>]) -> ParamType {
         match self {
-            ParamType::Fixed(c) => region
-                .assign_fixed(
-                    || format!("w"),
-                    // row indices
-                    *c,
-                    // columns indices
-                    offset,
-                    || elem.into(),
-                )
-                .unwrap(),
-            ParamType::Advice(c) => region
-                .assign_advice(
-                    || format!("w"),
-                    // row indices
-                    *c,
-                    // columns indices
-                    offset,
-                    || elem.into(),
-                )
-                .unwrap(),
-        }
-    }
-    pub fn query<F: FieldExt>(
-        &self,
-        meta: &mut VirtualCells<'_, F>,
-        rotation: Rotation,
-    ) -> Expression<F> {
-        match self {
-            ParamType::Fixed(c) => meta.query_fixed(*c, rotation),
-            ParamType::Advice(c) => meta.query_advice(*c, rotation),
+            ParamType::Advice(v) => ParamType::Advice(v.get_slice(indices)),
+            ParamType::Fixed(v) => ParamType::Fixed(v.get_slice(indices)),
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct KernelConfig<F: FieldExt> {
-    pub params: Tensor<ParamType>,
+    pub params: ParamType,
     dims: Vec<usize>,
     marker: PhantomData<F>,
 }
@@ -66,11 +34,7 @@ impl<F: FieldExt> KernelConfig<F>
 where
     Value<F>: TensorType,
 {
-    pub fn configure(
-        meta: &mut ConstraintSystem<F>,
-        params: Tensor<ParamType>,
-        dims: &[usize],
-    ) -> Self {
+    pub fn configure(_meta: &mut ConstraintSystem<F>, params: ParamType, dims: &[usize]) -> Self {
         Self {
             params,
             dims: dims.to_vec(),
@@ -78,17 +42,27 @@ where
         }
     }
 
-    pub fn query(
+    pub fn query(&self, meta: &mut VirtualCells<'_, F>, offset: usize) -> Tensor<Expression<F>> {
+        match &self.params {
+            ParamType::Fixed(f) => {
+                let mut t = f.map(|c| meta.query_fixed(c, Rotation(offset as i32)));
+                t.reshape(&self.dims);
+                t
+            }
+            ParamType::Advice(a) => a.map(|c| meta.query_advice(c, Rotation(offset as i32))),
+        }
+    }
+
+    pub fn query_idx(
         &self,
         meta: &mut VirtualCells<'_, F>,
-        rotation: Rotation,
-    ) -> Tensor<Expression<F>> {
-        let mut t = self.params.map(|col| col.query(meta, rotation));
-        match self.params[0] {
-            ParamType::Advice(_) => {}
-            ParamType::Fixed(_) => t.reshape(&self.dims),
+        idx: usize,
+        offset: usize,
+    ) -> Expression<F> {
+        match &self.params {
+            ParamType::Fixed(f) => meta.query_fixed(f[idx], Rotation(offset as i32)),
+            ParamType::Advice(a) => meta.query_advice(a[idx], Rotation(offset as i32)),
         }
-        t
     }
 
     pub fn assign(
@@ -101,13 +75,27 @@ where
         assert!(dims.len() == 2);
         kernel.enum_map(|i, k| {
             let coord = [i / dims[1], i % dims[1]];
-            match self.params[0] {
-                ParamType::Fixed(_) => self.params.get(&coord).assign(region, offset, k),
-                ParamType::Advice(_) => {
-                    self.params
-                        .get(&[coord[0]])
-                        .assign(region, offset + coord[1], k)
-                }
+            match &self.params {
+                ParamType::Fixed(f) => region
+                    .assign_fixed(
+                        || format!("w"),
+                        // row indices
+                        f.get(&coord),
+                        // columns indices
+                        offset,
+                        || k.into(),
+                    )
+                    .unwrap(),
+                ParamType::Advice(a) => region
+                    .assign_advice(
+                        || format!("w"),
+                        // row indices
+                        a.get(&[coord[0]]),
+                        // columns indices
+                        offset + coord[1],
+                        || k.into(),
+                    )
+                    .unwrap(),
             }
         })
     }

@@ -1,5 +1,5 @@
 use crate::fieldutils::{felt_to_i32, i32tofelt};
-use crate::nn::kernel::ParamType;
+
 
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -65,8 +65,6 @@ impl<F: FieldExt> TensorType for Expression<F> {
 impl TensorType for Column<Advice> {}
 impl TensorType for Column<Fixed> {}
 
-impl TensorType for ParamType {}
-// impl<F: FieldExt> TensorType for IOType<F> {}
 impl<F: FieldExt> TensorType for AssignedCell<Assigned<F>, F> {}
 
 // specific types
