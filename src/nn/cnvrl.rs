@@ -10,7 +10,7 @@ use crate::nn::io::*;
 use crate::tensor_ops::*;
 
 #[derive(Debug, Clone)]
-pub struct Config<
+pub struct ConvConfig<
     F: FieldExt + TensorType,
     const KERNEL_HEIGHT: usize,
     const KERNEL_WIDTH: usize,
@@ -40,7 +40,7 @@ impl<
         const IN_CHANNELS: usize,
         const PADDING: usize,
     > LayerConfig<F>
-    for Config<
+    for ConvConfig<
         F,
         KERNEL_HEIGHT,
         KERNEL_WIDTH,
@@ -66,8 +66,8 @@ where
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
         let kernel = params[0].clone();
-        input.enable_equality(meta);
         kernel.enable_equality(meta);
+        input.enable_equality(meta);
         output.enable_equality(meta);
 
         let config = Self {
@@ -85,7 +85,6 @@ where
                 .map(|rotation| {
                     let image = config.image.query(meta, rotation * IMAGE_HEIGHT);
                     let kernel = config.kernel.query(meta, rotation * IMAGE_HEIGHT);
-                    println!("image {:?} kernel {:?}", image, kernel);
                     convolution::<_, PADDING, STRIDE>(kernel, image)
                 })
                 .collect();
@@ -104,7 +103,7 @@ where
     fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
-        image: IOType<F>,
+        input: IOType<F>,
         kernels: &[IOType<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         assert!(kernels.len() == 1);
@@ -124,9 +123,9 @@ where
                             );
 
                             self.image
-                                .assign(&mut region, offset, image.get_slice(&[i..i + 1]));
+                                .assign(&mut region, offset, input.get_slice(&[i..i + 1]));
 
-                            let output = match image.clone() {
+                            let output = match input.clone() {
                                 IOType::Value(img) => match kernels[0].clone() {
                                     IOType::Value(k) => convolution::<_, PADDING, STRIDE>(
                                         k.get_slice(&[i..i + 1]),
@@ -230,7 +229,7 @@ mod tests {
     where
         Value<F>: TensorType,
     {
-        type Config = Config<
+        type Config = ConvConfig<
             F,
             KERNEL_HEIGHT,
             KERNEL_WIDTH,
@@ -281,7 +280,6 @@ mod tests {
 
     #[test]
     fn test_cnvrl() {
-        //        use halo2_proofs::pasta::pallas;
         use halo2curves::pasta::pallas;
 
         const KERNEL_HEIGHT: usize = 1;
@@ -320,6 +318,7 @@ mod tests {
         };
 
         let k = 8;
+
         let prover = MockProver::run(k, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
     }

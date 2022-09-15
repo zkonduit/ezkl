@@ -18,6 +18,7 @@ pub struct IOConfig<F: FieldExt + TensorType> {
 
 impl<F: FieldExt + TensorType> IOConfig<F> {
     pub fn configure(meta: &mut ConstraintSystem<F>, values: ParamType, dims: &[usize]) -> Self {
+        assert!(dims.len() == 2);
         Self {
             values,
             selector: meta.selector(),
@@ -28,7 +29,9 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
 
     pub fn query(&self, meta: &mut VirtualCells<'_, F>, offset: usize) -> Tensor<Expression<F>> {
         let mut t = match &self.values {
+            // when fixed we have 1 col per param
             ParamType::Fixed(f) => f.map(|c| meta.query_fixed(c, Rotation(offset as i32))),
+            // when advice we have 1 col per row
             ParamType::Advice(a) => a
                 .map(|column| {
                     Tensor::from(

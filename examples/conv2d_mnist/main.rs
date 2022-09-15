@@ -23,7 +23,7 @@ use halo2curves::pasta::Fp as F;
 use halo2deeplearning::fieldutils;
 use halo2deeplearning::fieldutils::i32tofelt;
 use halo2deeplearning::nn::affine::Affine1dConfig;
-use halo2deeplearning::nn::cnvrl;
+use halo2deeplearning::nn::cnvrl::ConvConfig;
 use halo2deeplearning::nn::*;
 use halo2deeplearning::tensor::{Tensor, TensorType};
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, NonlinConfig1d, ReLu};
@@ -35,7 +35,7 @@ use std::time::Instant;
 mod params;
 
 #[derive(Clone)]
-struct ConvConfig<
+struct Config<
     F: FieldExt + TensorType,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust stable
     const CLASSES: usize,
@@ -53,7 +53,7 @@ struct ConvConfig<
 > where
     Value<F>: TensorType,
 {
-    l0: cnvrl::Config<
+    l0: ConvConfig<
         F,
         KERNEL_HEIGHT,
         KERNEL_WIDTH,
@@ -130,7 +130,7 @@ impl<
 where
     Value<F>: TensorType,
 {
-    type Config = ConvConfig<
+    type Config = Config<
         F,
         LEN,
         CLASSES,
@@ -165,7 +165,7 @@ where
         let mut kernel = Tensor::from((0..KERNEL_WIDTH * KERNEL_HEIGHT).map(|_| cs.fixed_column()));
         kernel.reshape(&[KERNEL_WIDTH, KERNEL_HEIGHT]);
 
-        let l0 = cnvrl::Config::<
+        let l0 = ConvConfig::<
             F,
             KERNEL_HEIGHT,
             KERNEL_WIDTH,
@@ -178,8 +178,8 @@ where
         >::configure(
             cs,
             &[ParamType::Fixed(kernel)],
-            ParamType::Advice(advices.clone()),
-            ParamType::Advice(advices.clone()),
+            ParamType::Advice(advices.clone()).get_slice(&[0..IMAGE_WIDTH]),
+            ParamType::Advice(advices.clone()).get_slice(&[0..output_width]),
         );
         let l0q: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 32>> =
             NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
@@ -197,15 +197,12 @@ where
         );
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
-        //        cs.enable_equality(l2.output);
 
-        ConvConfig {
+        Config {
             l0,
             l0q,
             l1,
             l2,
-            // l3,
-            // l4,
             public_output,
         }
     }
