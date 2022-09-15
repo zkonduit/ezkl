@@ -1,18 +1,17 @@
+use super::*;
 use crate::nn::io::*;
-use crate::nn::kernel::*;
 use crate::tensor::{Tensor, TensorType};
-use crate::tensor_ops::*;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Layouter, Value},
-    plonk::{Advice, Assigned, Column, ConstraintSystem, Constraints, Expression, Selector},
+    plonk::{Assigned, ConstraintSystem, Constraints, Expression, Selector},
 };
 use std::marker::PhantomData;
 
 #[derive(Clone)]
-pub struct Affine1dConfig<F: FieldExt, const IN: usize, const OUT: usize> {
+pub struct Affine1dConfig<F: FieldExt + TensorType, const IN: usize, const OUT: usize> {
     // kernel is weights and biases concatenated
-    pub kernel: KernelConfig<F>,
+    pub kernel: IOConfig<F>,
     pub input: IOConfig<F>,
     pub output: IOConfig<F>,
     pub selector: Selector,
@@ -24,14 +23,15 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         kernel: ParamType,
-        advices: Tensor<Column<Advice>>,
+        input: ParamType,
+        output: ParamType,
     ) -> Self {
-        let mut config = Self {
+        let config = Self {
             selector: meta.selector(),
-            kernel: KernelConfig::configure(meta, kernel, &[OUT, IN]),
+            kernel: IOConfig::configure(meta, kernel, &[OUT, IN]),
             // add 1 to incorporate bias !
-            input: IOConfig::configure(meta, advices.get_slice(&[0..1]), &[1, IN]),
-            output: IOConfig::configure(meta, advices.get_slice(&[1..2]), &[1, OUT]),
+            input: IOConfig::configure(meta, input, &[1, IN]),
+            output: IOConfig::configure(meta, output, &[1, OUT]),
             _marker: PhantomData,
         };
 
@@ -60,7 +60,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
     pub fn layout(
         &self,
         layouter: &mut impl Layouter<F>,
-        kernel: Tensor<Value<F>>,
+        kernel: IOType<F>,
         input: IOType<F>,
     ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         layouter.assign_region(

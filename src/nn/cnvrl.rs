@@ -1,13 +1,12 @@
-use crate::nn::io::*;
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Layouter, Value},
-    plonk::{Advice, Assigned, Column, ConstraintSystem, Constraints, Selector},
-    poly::Rotation,
+    plonk::{Assigned, ConstraintSystem, Constraints, Selector},
 };
 
-use crate::nn::kernel::*;
+use super::*;
+use crate::nn::io::*;
 use crate::tensor_ops::*;
 
 #[derive(Debug, Clone)]
@@ -25,7 +24,7 @@ pub struct Config<
     Value<F>: TensorType,
 {
     selector: Selector,
-    kernel: KernelConfig<F>,
+    kernel: IOConfig<F>,
     image: IOConfig<F>,
     pub output: IOConfig<F>,
 }
@@ -58,28 +57,21 @@ where
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         kernel: ParamType,
-        advices: Tensor<Column<Advice>>,
+        input: ParamType,
+        output: ParamType,
     ) -> Self {
         let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
-        for advice in advices.iter() {
-            meta.enable_equality(*advice);
-        }
+        input.enable_equality(meta);
+        kernel.enable_equality(meta);
+        output.enable_equality(meta);
 
-        let mut config = Self {
+        let config = Self {
             selector: meta.selector(),
-            kernel: KernelConfig::configure(meta, kernel, &[KERNEL_WIDTH, KERNEL_HEIGHT]),
-            image: IOConfig::configure(
-                meta,
-                advices.get_slice(&[0..IMAGE_WIDTH]),
-                &[IMAGE_WIDTH, IMAGE_HEIGHT],
-            ),
-            output: IOConfig::configure(
-                meta,
-                advices.get_slice(&[0..output_width]),
-                &[output_width, output_height],
-            ),
+            kernel: IOConfig::configure(meta, kernel, &[KERNEL_WIDTH, KERNEL_HEIGHT]),
+            image: IOConfig::configure(meta, input, &[IMAGE_WIDTH, IMAGE_HEIGHT]),
+            output: IOConfig::configure(meta, output, &[output_width, output_height]),
         };
 
         meta.create_gate("convolution", |meta| {
@@ -90,6 +82,7 @@ where
                 .map(|rotation| {
                     let image = config.image.query(meta, rotation * IMAGE_HEIGHT);
                     let kernel = config.kernel.query(meta, rotation * IMAGE_HEIGHT);
+                    println!("image {:?} kernel {:?}", image, kernel);
                     convolution::<_, PADDING, STRIDE>(kernel, image)
                 })
                 .collect();
@@ -109,7 +102,7 @@ where
         &self,
         mut layouter: impl Layouter<F>,
         image: IOType<F>,
-        kernel: Tensor<Value<F>>,
+        kernel: IOType<F>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         layouter
             .assign_region(
@@ -127,10 +120,13 @@ where
                                 .assign(&mut region, offset, image.get_slice(&[i..i + 1]));
 
                             let output = match image.clone() {
-                                IOType::Value(img) => convolution::<_, PADDING, STRIDE>(
-                                    kernel.get_slice(&[i..i + 1]),
-                                    img.get_slice(&[i..i + 1]),
-                                ),
+                                IOType::Value(img) => match kernel.clone() {
+                                    IOType::Value(k) => convolution::<_, PADDING, STRIDE>(
+                                        k.get_slice(&[i..i + 1]),
+                                        img.get_slice(&[i..i + 1]),
+                                    ),
+                                    _ => panic!("not implemented"),
+                                },
                                 _ => panic!("not implemented"),
                             };
 
@@ -152,7 +148,7 @@ where
         &self,
         layouter: &mut impl Layouter<F>,
         image: IOType<F>,
-        kernels: Tensor<Value<F>>,
+        kernels: IOType<F>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         let horz = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
         let vert = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
@@ -198,7 +194,7 @@ mod tests {
         Value<F>: TensorType,
     {
         image: IOType<F>,
-        kernels: Tensor<Value<F>>,
+        kernels: IOType<F>,
     }
 
     impl<
@@ -250,13 +246,19 @@ mod tests {
 
             let num_advices = max(output_width, IMAGE_WIDTH);
 
-            let advices = Tensor::from((0..num_advices).map(|_| meta.advice_column()));
+            let advices =
+                ParamType::Advice(Tensor::from((0..num_advices).map(|_| meta.advice_column())));
 
             let mut kernel =
                 Tensor::from((0..KERNEL_WIDTH * KERNEL_HEIGHT).map(|_| meta.fixed_column()));
             kernel.reshape(&[KERNEL_WIDTH, KERNEL_HEIGHT]);
 
-            Self::Config::configure(meta, ParamType::Fixed(kernel), advices)
+            Self::Config::configure(
+                meta,
+                ParamType::Fixed(kernel),
+                advices.get_slice(&[0..IMAGE_WIDTH]),
+                advices.get_slice(&[0..output_width]),
+            )
         }
 
         fn synthesize(
@@ -306,7 +308,7 @@ mod tests {
             PADDING,
         > {
             image: IOType::Value(image),
-            kernels,
+            kernels: IOType::Value(kernels),
         };
 
         let k = 8;

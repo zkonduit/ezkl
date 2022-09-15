@@ -21,8 +21,7 @@ use std::rc::Rc;
 
 use halo2deeplearning::fieldutils::i32tofelt;
 use halo2deeplearning::nn::affine::Affine1dConfig;
-use halo2deeplearning::nn::io::IOType;
-use halo2deeplearning::nn::kernel::ParamType;
+use halo2deeplearning::nn::*;
 
 use halo2deeplearning::tensor::{Tensor, TensorType};
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu};
@@ -91,7 +90,8 @@ where
         let l0 = Affine1dConfig::<F, LEN, LEN>::configure(
             cs,
             kernel.clone(),
-            advices.get_slice(&[LEN..LEN + 3]),
+            ParamType::Advice(advices.get_slice(&[LEN..LEN + 1])),
+            ParamType::Advice(advices.get_slice(&[LEN + 1..LEN + 2])),
         );
 
         let l1: EltwiseConfig<F, LEN, BITS, ReLu<F>> = EltwiseConfig::configure(
@@ -103,7 +103,8 @@ where
         let l2 = Affine1dConfig::<F, LEN, LEN>::configure(
             cs,
             kernel,
-            advices.get_slice(&[LEN..LEN + 3]),
+            ParamType::Advice(advices.get_slice(&[LEN..LEN + 1])),
+            ParamType::Advice(advices.get_slice(&[LEN + 1..LEN + 2])),
         );
 
         let l3: EltwiseConfig<F, LEN, BITS, ReLu<F>> = EltwiseConfig::configure(
@@ -144,13 +145,13 @@ where
         let x = self.input.clone();
         let x = config.l0.layout(
             &mut layouter,
-            self.l0_params.clone().into(),
+            IOType::Value(self.l0_params.clone().into()),
             IOType::Value(x.into()),
         )?;
         let x = config.l1.layout(&mut layouter, x)?;
         let x = config.l2.layout(
             &mut layouter,
-            self.l2_params.clone().into(),
+            IOType::Value(self.l2_params.clone().into()),
             IOType::PrevAssigned(x),
         )?;
         let x = config.l3.layout(&mut layouter, x)?;
