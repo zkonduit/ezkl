@@ -216,7 +216,7 @@ where
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let l0out = config.l0.assign(
+        let l0out = config.l0.layout(
             &mut layouter,
             IOType::Value(self.input.clone()),
             IOType::Value(self.l0_params.clone()),
@@ -226,9 +226,9 @@ where
         l1out.reshape(&[1, l1out.dims()[0]]);
         let l2out = config.l2.layout(
             &mut layouter,
-            IOType::Value(self.l2_params.0.clone().into()),
             IOType::PrevAssigned(l1out),
-        )?;
+            IOType::Value(self.l2_params.0.clone().into()),
+        );
 
         // tie the last output to public inputs (instance column)
         l2out.enum_map(|i, a| {

@@ -92,6 +92,7 @@ where
             kernel.clone(),
             ParamType::Advice(advices.get_slice(&[LEN..LEN + 1])),
             ParamType::Advice(advices.get_slice(&[LEN + 1..LEN + 2])),
+
         );
 
         let l1: EltwiseConfig<F, LEN, BITS, ReLu<F>> = EltwiseConfig::configure(
@@ -145,15 +146,15 @@ where
         let x = self.input.clone();
         let x = config.l0.layout(
             &mut layouter,
-            IOType::Value(self.l0_params.clone().into()),
             IOType::Value(x.into()),
-        )?;
+            IOType::Value(self.l0_params.clone().into()),
+        );
         let x = config.l1.layout(&mut layouter, x)?;
         let x = config.l2.layout(
             &mut layouter,
-            IOType::Value(self.l2_params.clone().into()),
             IOType::PrevAssigned(x),
-        )?;
+            IOType::Value(self.l2_params.clone().into()),
+        );
         let x = config.l3.layout(&mut layouter, x)?;
         let x = config.l4.layout(&mut layouter, x)?;
         x.enum_map(|i, x| {

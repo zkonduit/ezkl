@@ -1,8 +1,8 @@
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, Region, Value},
-    plonk::{Advice, Assigned, Column, ConstraintSystem, Expression, Fixed, VirtualCells},
+    circuit::{AssignedCell, Layouter, Value},
+    plonk::{Advice, Assigned, Column, ConstraintSystem, Fixed},
 };
 use std::ops::Range;
 
@@ -43,28 +43,33 @@ impl ParamType {
 
     pub fn enable_equality<F: FieldExt>(&self, meta: &mut ConstraintSystem<F>) {
         match self {
-            ParamType::Advice(advices) => for advice in advices.iter() {
-                meta.enable_equality(*advice);
-            },
+            ParamType::Advice(advices) => {
+                for advice in advices.iter() {
+                    meta.enable_equality(*advice);
+                }
+            }
             ParamType::Fixed(_) => {}
         }
     }
 }
 
 pub trait LayerConfig<F: FieldExt + TensorType> {
-    fn configure(_meta: &mut ConstraintSystem<F>, params: ParamType, dims: &[usize]) -> Self;
-    fn query(&self, meta: &mut VirtualCells<'_, F>, offset: usize) -> Tensor<Expression<F>>;
-    fn query_idx(&self, meta: &mut VirtualCells<'_, F>, idx: usize, offset: usize)
-        -> Expression<F>;
-    fn assign(
-        &self,
-        region: &mut Region<'_, F>,
-        offset: usize,
-        input: IOType<F>,
-    ) -> Tensor<AssignedCell<Assigned<F>, F>>;
+    fn configure(
+        _meta: &mut ConstraintSystem<F>,
+        params: ParamType,
+        input: ParamType,
+        output: ParamType,
+    ) -> Self;
     fn layout(
         &self,
         layouter: &mut impl Layouter<F>,
-        raw_input: Tensor<i32>,
-    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error>;
+        input: IOType<F>,
+        kernel: IOType<F>,
+    ) -> Tensor<AssignedCell<Assigned<F>, F>>;
+    fn assign(
+        &self,
+        layouter: &mut impl Layouter<F>,
+        input: IOType<F>,
+        kernels: IOType<F>,
+    ) -> Tensor<AssignedCell<Assigned<F>, F>>;
 }

@@ -18,9 +18,11 @@ pub struct Affine1dConfig<F: FieldExt + TensorType, const IN: usize, const OUT: 
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig<F, IN, OUT> {
+impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
+    for Affine1dConfig<F, IN, OUT>
+{
     // composable_configure takes the input tensor as an argument, and completes the advice by generating new for the rest
-    pub fn configure(
+    fn configure(
         meta: &mut ConstraintSystem<F>,
         kernel: ParamType,
         input: ParamType,
@@ -57,34 +59,44 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         config
     }
 
-    pub fn layout(
+    fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
-        kernel: IOType<F>,
         input: IOType<F>,
-    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
-        layouter.assign_region(
-            || "assign image and kernel",
-            |mut region| {
-                let offset = 0;
-                self.selector.enable(&mut region, offset)?;
+        kernel: IOType<F>,
+    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+        layouter
+            .assign_region(
+                || "assign image and kernel",
+                |mut region| {
+                    let offset = 0;
+                    self.selector.enable(&mut region, offset)?;
 
-                let input = self.input.assign(&mut region, offset, input.clone());
-                let weights = self.kernel.assign(&mut region, offset, kernel.clone());
+                    let input = self.input.assign(&mut region, offset, input.clone());
+                    let weights = self.kernel.assign(&mut region, offset, kernel.clone());
 
-                // calculate value of output
-                let mut output: Tensor<Value<Assigned<F>>> = Tensor::new(None, &[OUT]).unwrap();
-                output = output.enum_map(|i, mut o| {
-                    for (j, x) in input.iter().enumerate() {
-                        o = o + x.value_field() * weights.get(&[i, j]).value_field();
-                    }
-                    o
-                });
+                    // calculate value of output
+                    let mut output: Tensor<Value<Assigned<F>>> = Tensor::new(None, &[OUT]).unwrap();
+                    output = output.enum_map(|i, mut o| {
+                        for (j, x) in input.iter().enumerate() {
+                            o = o + x.value_field() * weights.get(&[i, j]).value_field();
+                        }
+                        o
+                    });
 
-                Ok(self
-                    .output
-                    .assign(&mut region, offset, IOType::AssignedValue(output)))
-            },
-        )
+                    Ok(self
+                        .output
+                        .assign(&mut region, offset, IOType::AssignedValue(output)))
+                },
+            )
+            .unwrap()
+    }
+    fn layout(
+        &self,
+        layouter: &mut impl Layouter<F>,
+        input: IOType<F>,
+        kernels: IOType<F>,
+    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+        self.assign(layouter, input, kernels)
     }
 }

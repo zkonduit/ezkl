@@ -39,8 +39,8 @@ impl<
         const IMAGE_WIDTH: usize,
         const IN_CHANNELS: usize,
         const PADDING: usize,
-    >
-    Config<
+    > LayerConfig<F>
+    for Config<
         F,
         KERNEL_HEIGHT,
         KERNEL_WIDTH,
@@ -54,9 +54,9 @@ impl<
 where
     Value<F>: TensorType,
 {
-    pub fn configure(
+    fn configure(
         meta: &mut ConstraintSystem<F>,
-        kernel: ParamType,
+        params: ParamType,
         input: ParamType,
         output: ParamType,
     ) -> Self {
@@ -64,12 +64,12 @@ where
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
         input.enable_equality(meta);
-        kernel.enable_equality(meta);
+        params.enable_equality(meta);
         output.enable_equality(meta);
 
         let config = Self {
             selector: meta.selector(),
-            kernel: IOConfig::configure(meta, kernel, &[KERNEL_WIDTH, KERNEL_HEIGHT]),
+            kernel: IOConfig::configure(meta, params, &[KERNEL_WIDTH, KERNEL_HEIGHT]),
             image: IOConfig::configure(meta, input, &[IMAGE_WIDTH, IMAGE_HEIGHT]),
             output: IOConfig::configure(meta, output, &[output_width, output_height]),
         };
@@ -98,9 +98,9 @@ where
         config
     }
 
-    fn layout(
+    fn assign(
         &self,
-        mut layouter: impl Layouter<F>,
+        layouter: &mut impl Layouter<F>,
         image: IOType<F>,
         kernel: IOType<F>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
@@ -144,18 +144,18 @@ where
             .unwrap()
     }
 
-    pub fn assign(
+    fn layout(
         &self,
         layouter: &mut impl Layouter<F>,
-        image: IOType<F>,
+        input: IOType<F>,
         kernels: IOType<F>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         let horz = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
         let vert = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let t = Tensor::from((0..OUT_CHANNELS).map(|i| {
-            self.layout(
-                layouter.namespace(|| format!("filter: {:?}", i)),
-                image.clone(),
+            self.assign(
+                &mut layouter.namespace(|| format!("filter: {:?}", i)),
+                input.clone(),
                 kernels.get_slice(&[i..i + 1]),
             )
         }));
@@ -266,7 +266,7 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _output = config.assign(&mut layouter, self.image.clone(), self.kernels.clone());
+            let _output = config.layout(&mut layouter, self.image.clone(), self.kernels.clone());
             Ok(())
         }
     }

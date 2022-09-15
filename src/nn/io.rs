@@ -16,8 +16,8 @@ pub struct IOConfig<F: FieldExt + TensorType> {
     marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType> LayerConfig<F> for IOConfig<F> {
-    fn configure(meta: &mut ConstraintSystem<F>, values: ParamType, dims: &[usize]) -> Self {
+impl<F: FieldExt + TensorType> IOConfig<F> {
+    pub fn configure(meta: &mut ConstraintSystem<F>, values: ParamType, dims: &[usize]) -> Self {
         Self {
             values,
             selector: meta.selector(),
@@ -26,8 +26,7 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for IOConfig<F> {
         }
     }
 
-    fn query(&self, meta: &mut VirtualCells<'_, F>, offset: usize) -> Tensor<Expression<F>> {
-        println!("self dims {:?}", self.dims);
+    pub fn query(&self, meta: &mut VirtualCells<'_, F>, offset: usize) -> Tensor<Expression<F>> {
         let mut t = match &self.values {
             ParamType::Fixed(f) => f.map(|c| meta.query_fixed(c, Rotation(offset as i32))),
             ParamType::Advice(a) => a
@@ -43,7 +42,7 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for IOConfig<F> {
         t
     }
 
-    fn query_idx(
+    pub fn query_idx(
         &self,
         meta: &mut VirtualCells<'_, F>,
         idx: usize,
@@ -55,7 +54,7 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for IOConfig<F> {
         }
     }
 
-    fn assign(
+    pub fn assign(
         &self,
         region: &mut Region<'_, F>,
         offset: usize,
@@ -140,7 +139,7 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for IOConfig<F> {
         }
     }
 
-    fn layout(
+    pub fn layout(
         &self,
         layouter: &mut impl Layouter<F>,
         raw_input: Tensor<i32>,
