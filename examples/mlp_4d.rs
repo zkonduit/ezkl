@@ -21,7 +21,9 @@ use std::rc::Rc;
 
 use halo2deeplearning::fieldutils::i32tofelt;
 use halo2deeplearning::nn::affine::Affine1dConfig;
+use halo2deeplearning::nn::io::InputType;
 use halo2deeplearning::nn::kernel::ParamType;
+
 use halo2deeplearning::tensor::{Tensor, TensorType};
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu};
 // A columnar ReLu MLP
@@ -30,8 +32,7 @@ struct MyConfig<
     F: FieldExt + TensorType,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust
     const BITS: usize,
->
-{
+> {
     relutable: Rc<EltwiseTable<F, BITS, ReLu<F>>>,
     divtable: Rc<EltwiseTable<F, BITS, DivideBy<F, 128>>>,
     l0: Affine1dConfig<F, LEN, LEN>,
@@ -140,16 +141,18 @@ where
         // Layout the reused tables
         config.relutable.layout(&mut layouter)?;
         config.divtable.layout(&mut layouter)?;
-        let mut x = self.input.clone();
-        x.reshape(&[1, LEN]);
-        let x = config
-            .l0
-            .layout(&mut layouter, self.l0_params.clone().into(), x.into())?;
-        let mut x = config.l1.layout(&mut layouter, x)?;
-        x.reshape(&[1, LEN]);
-        let x = config
-            .l2
-            .layout(&mut layouter, self.l2_params.clone().into(), x.into())?;
+        let x = self.input.clone();
+        let x = config.l0.layout(
+            &mut layouter,
+            self.l0_params.clone().into(),
+            InputType::Value(x.into()),
+        )?;
+        let x = config.l1.layout(&mut layouter, x)?;
+        let x = config.l2.layout(
+            &mut layouter,
+            self.l2_params.clone().into(),
+            InputType::PrevAssigned(x),
+        )?;
         let x = config.l3.layout(&mut layouter, x)?;
         let x = config.l4.layout(&mut layouter, x)?;
         x.enum_map(|i, x| {

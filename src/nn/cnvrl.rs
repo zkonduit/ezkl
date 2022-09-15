@@ -128,7 +128,7 @@ where
                             );
 
                             self.image
-                                .assign(&mut region, offset, image.get_slice(&[i..i + 1]));
+                                .assign(&mut region, offset, InputType::Value(image.get_slice(&[i..i + 1])));
 
                             self.kernel
                                 .assign(&mut region, offset, kernel.get_slice(&[i..i + 1]));
@@ -139,7 +139,9 @@ where
                         .collect();
 
                     let output = op(outputs, |a, b| a + b);
-                    Ok(self.output.assign(&mut region, offset, output))
+                    Ok(self
+                        .output
+                        .assign(&mut region, offset, InputType::Value(output)))
                 },
             )
             .unwrap()

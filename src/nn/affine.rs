@@ -27,7 +27,6 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         kernel: Tensor<ParamType>,
         advices: Tensor<Column<Advice>>,
     ) -> Self {
-
         let mut config = Self {
             selector: meta.selector(),
             kernel: KernelConfig::configure(meta, kernel, &[OUT, IN]),
@@ -64,7 +63,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
         &self,
         layouter: &mut impl Layouter<F>,
         kernel: Tensor<Value<F>>,
-        input: Tensor<Value<F>>,
+        input: InputType<F>,
     ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
         layouter.assign_region(
             || "assign image and kernel",
@@ -72,10 +71,21 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> Affine1dConfig
                 let offset = 0;
                 self.selector.enable(&mut region, offset)?;
 
-                let output = matmul(kernel.clone(), input.clone());
-                self.input.assign(&mut region, offset, input.clone());
-                self.kernel.assign(&mut region, offset, kernel.clone());
-                Ok(self.output.assign(&mut region, offset, output))
+                let input = self.input.assign(&mut region, offset, input.clone());
+                let weights = self.kernel.assign(&mut region, offset, kernel.clone());
+
+                // calculate value of output
+                let mut output: Tensor<Value<Assigned<F>>> = Tensor::new(None, &[OUT]).unwrap();
+                output = output.enum_map(|i, mut o| {
+                    for (j, x) in input.iter().enumerate() {
+                        o = o + x.value_field() * weights.get(&[i, j]).value_field();
+                    }
+                    o
+                });
+
+                Ok(self
+                    .output
+                    .assign(&mut region, offset, InputType::AssignedValue(output)))
             },
         )
     }

@@ -11,6 +11,13 @@ use std::marker::PhantomData;
 // including laying it out in a column and outputting Vec<AssignedCell<Assigned<F>, F>> suitable for copying
 // Can also have a variant to check a signature, check that input matches a hash, etc.
 #[derive(Debug, Clone)]
+pub enum InputType<F: FieldExt + TensorType> {
+    Value(Tensor<Value<F>>),
+    AssignedValue(Tensor<Value<Assigned<F>>>),
+    PrevAssigned(Tensor<AssignedCell<Assigned<F>, F>>),
+}
+
+#[derive(Debug, Clone)]
 pub struct IOConfig<F: FieldExt> {
     pub advices: Tensor<Column<Advice>>,
     pub dims: Vec<usize>,
@@ -68,7 +75,11 @@ where
             |mut region| {
                 let offset = 0;
                 self.q.enable(&mut region, offset)?;
-                Ok(self.assign(&mut region, offset, raw_input.clone().into()))
+                Ok(self.assign(
+                    &mut region,
+                    offset,
+                    InputType::Value(raw_input.clone().into()),
+                ))
             },
         )
     }
@@ -77,22 +88,51 @@ where
         &self,
         region: &mut Region<'_, F>,
         offset: usize,
-        input: Tensor<Value<F>>,
+        input: InputType<F>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
-        let dims = input.dims();
-        assert!(dims == self.dims);
-        input.enum_map(|i, x| {
-            let coord = [i / dims[1], i % dims[1]];
-            region
-                .assign_advice(
-                    || format!("input at row: {:?}, column: {:?}", coord[1], coord[0]),
-                    // row indices
-                    self.advices[coord[0]],
-                    // columns indices
-                    offset + coord[1],
-                    || x.into(),
-                )
-                .unwrap()
-        })
+        match input {
+            InputType::Value(mut v) => {
+                v.reshape(&self.dims);
+                v.enum_map(|i, x| {
+                    let dims = v.dims();
+                    let coord = [i / dims[1], i % dims[1]];
+                    region
+                        .assign_advice(
+                            || format!("input at row: {:?}, column: {:?}", coord[1], coord[0]),
+                            self.advices[coord[0]],
+                            offset + coord[1],
+                            || x.into(),
+                        )
+                        .unwrap()
+                })
+            }
+            InputType::AssignedValue(mut v) => {
+                v.reshape(&self.dims);
+                v.enum_map(|i, x| {
+                    let coord = [i / self.dims[1], i % self.dims[1]];
+                    region
+                        .assign_advice(
+                            || format!("input at row: {:?}, column: {:?}", coord[1], coord[0]),
+                            self.advices[coord[0]],
+                            offset + coord[1],
+                            || x.into(),
+                        )
+                        .unwrap()
+                })
+            }
+            InputType::PrevAssigned(mut a) => {
+                a.reshape(&self.dims);
+                a.enum_map(|i, x| {
+                    let coord = [i / self.dims[1], i % self.dims[1]];
+                    x.copy_advice(
+                        || format!("input at row: {:?}, column: {:?}", coord[1], coord[0]),
+                        region,
+                        self.advices[coord[0]],
+                        offset + coord[1],
+                    )
+                    .unwrap()
+                })
+            }
+        }
     }
 }

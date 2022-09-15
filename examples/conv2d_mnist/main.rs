@@ -32,6 +32,7 @@ use halo2deeplearning::fieldutils::i32tofelt;
 use halo2deeplearning::nn::affine::Affine1dConfig;
 use halo2deeplearning::nn::cnvrl;
 use halo2deeplearning::nn::kernel::ParamType;
+use halo2deeplearning::nn::io::InputType;
 use halo2deeplearning::tensor::{Tensor, TensorType};
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, NonlinConfig1d, ReLu};
 use std::cmp::max;
@@ -225,10 +226,11 @@ where
         let l0qout = config.l0q.layout(&mut layouter, l0out)?;
         let mut l1out = config.l1.layout(&mut layouter, l0qout)?;
         l1out.reshape(&[1, l1out.dims()[0]]);
-        let l2out =
-            config
-                .l2
-                .layout(&mut layouter, self.l2_params.0.clone().into(), l1out.into())?;
+        let l2out = config.l2.layout(
+            &mut layouter,
+            self.l2_params.0.clone().into(),
+            InputType::PrevAssigned(l1out),
+        )?;
 
         // tie the last output to public inputs (instance column)
         l2out.enum_map(|i, a| {
