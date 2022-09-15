@@ -56,20 +56,21 @@ where
 {
     fn configure(
         meta: &mut ConstraintSystem<F>,
-        params: ParamType,
+        params: &[ParamType],
         input: ParamType,
         output: ParamType,
     ) -> Self {
         let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
+        let kernel = params[0].clone();
         input.enable_equality(meta);
-        params.enable_equality(meta);
+        kernel.enable_equality(meta);
         output.enable_equality(meta);
 
         let config = Self {
             selector: meta.selector(),
-            kernel: IOConfig::configure(meta, params, &[KERNEL_WIDTH, KERNEL_HEIGHT]),
+            kernel: IOConfig::configure(meta, kernel, &[KERNEL_WIDTH, KERNEL_HEIGHT]),
             image: IOConfig::configure(meta, input, &[IMAGE_WIDTH, IMAGE_HEIGHT]),
             output: IOConfig::configure(meta, output, &[output_width, output_height]),
         };
@@ -102,7 +103,7 @@ where
         &self,
         layouter: &mut impl Layouter<F>,
         image: IOType<F>,
-        kernel: IOType<F>,
+        kernels: &[IOType<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         layouter
             .assign_region(
@@ -113,14 +114,17 @@ where
 
                     let outputs = (0..IN_CHANNELS)
                         .map(|i| {
-                            self.kernel
-                                .assign(&mut region, offset, kernel.get_slice(&[i..i + 1]));
+                            self.kernel.assign(
+                                &mut region,
+                                offset,
+                                kernels[0].get_slice(&[i..i + 1]),
+                            );
 
                             self.image
                                 .assign(&mut region, offset, image.get_slice(&[i..i + 1]));
 
                             let output = match image.clone() {
-                                IOType::Value(img) => match kernel.clone() {
+                                IOType::Value(img) => match kernels[0].clone() {
                                     IOType::Value(k) => convolution::<_, PADDING, STRIDE>(
                                         k.get_slice(&[i..i + 1]),
                                         img.get_slice(&[i..i + 1]),
@@ -148,7 +152,7 @@ where
         &self,
         layouter: &mut impl Layouter<F>,
         input: IOType<F>,
-        kernels: IOType<F>,
+        kernels: &[IOType<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         let horz = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
         let vert = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
@@ -156,7 +160,7 @@ where
             self.assign(
                 &mut layouter.namespace(|| format!("filter: {:?}", i)),
                 input.clone(),
-                kernels.get_slice(&[i..i + 1]),
+                &[kernels[0].get_slice(&[i..i + 1])],
             )
         }));
         let mut t = t.flatten();
@@ -255,7 +259,7 @@ mod tests {
 
             Self::Config::configure(
                 meta,
-                ParamType::Fixed(kernel),
+                &[ParamType::Fixed(kernel)],
                 advices.get_slice(&[0..IMAGE_WIDTH]),
                 advices.get_slice(&[0..output_width]),
             )
@@ -266,7 +270,7 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _output = config.layout(&mut layouter, self.image.clone(), self.kernels.clone());
+            let _output = config.layout(&mut layouter, self.image.clone(), &[self.kernels.clone()]);
             Ok(())
         }
     }

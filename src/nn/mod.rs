@@ -56,7 +56,7 @@ impl ParamType {
 pub trait LayerConfig<F: FieldExt + TensorType> {
     fn configure(
         _meta: &mut ConstraintSystem<F>,
-        params: ParamType,
+        params: &[ParamType],
         input: ParamType,
         output: ParamType,
     ) -> Self;
@@ -64,12 +64,12 @@ pub trait LayerConfig<F: FieldExt + TensorType> {
         &self,
         layouter: &mut impl Layouter<F>,
         input: IOType<F>,
-        kernel: IOType<F>,
+        kernel: &[IOType<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>>;
     fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
         input: IOType<F>,
-        kernels: IOType<F>,
+        kernels: &[IOType<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>>;
 }

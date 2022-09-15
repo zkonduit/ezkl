@@ -1,30 +1,18 @@
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{Layouter, SimpleFloorPlanner, Value},
-    plonk::{
-        //create_proof, keygen_pk, keygen_vk, verify_proof, Advice,
-        Circuit,
-        Column,
-        ConstraintSystem,
-        Error,
-        Instance,
-    },
-    // poly::{commitment::Params, Rotation},
-    // transcript::{Blake2bRead, Blake2bWrite, Challenge255},
+    circuit::{Layouter, SimpleFloorPlanner},
+    plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
 use halo2curves::pasta::Fp as F;
-
-use std::marker::PhantomData;
-use std::rc::Rc;
-//use crate::tensorutils::{dot3, flatten3, flatten4, map2, map3, map3r, map4, map4r};
-
 use halo2deeplearning::fieldutils::i32tofelt;
 use halo2deeplearning::nn::affine::Affine1dConfig;
 use halo2deeplearning::nn::*;
-
 use halo2deeplearning::tensor::{Tensor, TensorType};
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu};
+use std::marker::PhantomData;
+use std::rc::Rc;
+
 // A columnar ReLu MLP
 #[derive(Clone)]
 struct MyConfig<
@@ -51,17 +39,13 @@ struct MyCircuit<
     // Given the stateless MyConfig type information, a DNN trace is determined by its input and the parameters of its layers.
     // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
     input: Tensor<i32>,
-    l0_params: Tensor<i32>,
-    l2_params: Tensor<i32>,
+    l0_params: [Tensor<i32>; 2],
+    l2_params: [Tensor<i32>; 2],
     _marker: PhantomData<F>,
 }
 
 impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     for MyCircuit<F, LEN, BITS>
-where
-    Value<F>: TensorType,
-    // where
-    //     [(); LEN + 3]:,
 {
     type Config = MyConfig<F, LEN, BITS>;
     type FloorPlanner = SimpleFloorPlanner;
@@ -86,13 +70,13 @@ where
         let divtable = Rc::new(divtable_config);
 
         let kernel = ParamType::Advice(advices.get_slice(&[0..LEN]).map(|a| a));
+        let bias = ParamType::Advice(advices.get_slice(&[LEN + 2..LEN + 3]).map(|a| a));
 
         let l0 = Affine1dConfig::<F, LEN, LEN>::configure(
             cs,
-            kernel.clone(),
+            &[kernel.clone(), bias.clone()],
             ParamType::Advice(advices.get_slice(&[LEN..LEN + 1])),
             ParamType::Advice(advices.get_slice(&[LEN + 1..LEN + 2])),
-
         );
 
         let l1: EltwiseConfig<F, LEN, BITS, ReLu<F>> = EltwiseConfig::configure(
@@ -103,7 +87,7 @@ where
 
         let l2 = Affine1dConfig::<F, LEN, LEN>::configure(
             cs,
-            kernel,
+            &[kernel, bias],
             ParamType::Advice(advices.get_slice(&[LEN..LEN + 1])),
             ParamType::Advice(advices.get_slice(&[LEN + 1..LEN + 2])),
         );
@@ -147,13 +131,21 @@ where
         let x = config.l0.layout(
             &mut layouter,
             IOType::Value(x.into()),
-            IOType::Value(self.l0_params.clone().into()),
+            &self
+                .l0_params
+                .iter()
+                .map(|a| IOType::Value(a.clone().into()))
+                .collect::<Vec<IOType<F>>>(),
         );
         let x = config.l1.layout(&mut layouter, x)?;
         let x = config.l2.layout(
             &mut layouter,
             IOType::PrevAssigned(x),
-            IOType::Value(self.l2_params.clone().into()),
+            &self
+                .l2_params
+                .iter()
+                .map(|a| IOType::Value(a.clone().into()))
+                .collect::<Vec<IOType<F>>>(),
         );
         let x = config.l3.layout(&mut layouter, x)?;
         let x = config.l4.layout(&mut layouter, x)?;
@@ -169,32 +161,26 @@ where
 pub fn runmlp() {
     let k = 15; //2^k rows
                 // parameters
-    let l0_params = Tensor::<i32>::new(
-        // last 4 elements are the bias
-        Some(&[
-            10, 0, 0, -1, 0, 10, 1, 0, 0, 1, 10, 0, 1, 0, 0, 10,
-            // 0, 0, 0, 1,
-        ]),
+    let l0_kernel = Tensor::<i32>::new(
+        Some(&[10, 0, 0, -1, 0, 10, 1, 0, 0, 1, 10, 0, 1, 0, 0, 10]),
         &[4, 4],
     )
     .unwrap();
+    let l0_bias = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[1, 4]).unwrap();
 
-    let l2_params = Tensor::<i32>::new(
-        // last 4 elements are the bias
-        Some(&[
-            0, 3, 10, -1, 0, 10, 1, 0, 0, 1, 0, 12, 1, -2, 32, 0,
-            // 12, 14, 17, 1,
-        ]),
+    let l2_kernel = Tensor::<i32>::new(
+        Some(&[0, 3, 10, -1, 0, 10, 1, 0, 0, 1, 0, 12, 1, -2, 32, 0]),
         &[4, 4],
     )
     .unwrap();
     // input data, with 1 padding to allow for bias
     let input = Tensor::<i32>::new(Some(&[-30, -21, 11, 40]), &[1, 4]).unwrap();
+    let l2_bias = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[1, 4]).unwrap();
 
     let circuit = MyCircuit::<F, 4, 14> {
         input,
-        l0_params,
-        l2_params,
+        l0_params: [l0_kernel, l0_bias],
+        l2_params: [l2_kernel, l2_bias],
         _marker: PhantomData,
     };
 

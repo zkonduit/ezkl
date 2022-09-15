@@ -18,15 +18,8 @@ use halo2_proofs::{
         Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
     },
 };
-
-use mnist::*;
-use rand::rngs::OsRng;
-use std::time::Instant;
-
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp as F;
-//     use nalgebra;
-// use crate::params;
 use halo2deeplearning::fieldutils;
 use halo2deeplearning::fieldutils::i32tofelt;
 use halo2deeplearning::nn::affine::Affine1dConfig;
@@ -34,7 +27,10 @@ use halo2deeplearning::nn::cnvrl;
 use halo2deeplearning::nn::*;
 use halo2deeplearning::tensor::{Tensor, TensorType};
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, NonlinConfig1d, ReLu};
+use mnist::*;
+use rand::rngs::OsRng;
 use std::cmp::max;
+use std::time::Instant;
 
 mod params;
 
@@ -97,7 +93,7 @@ struct MyCircuit<
     // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
     input: Tensor<Value<F>>,
     l0_params: Tensor<Value<F>>,
-    l2_params: (Tensor<i32>, Tensor<i32>),
+    l2_params: [Tensor<i32>; 2],
 }
 
 impl<
@@ -181,7 +177,7 @@ where
             PADDING,
         >::configure(
             cs,
-            ParamType::Fixed(kernel),
+            &[ParamType::Fixed(kernel)],
             ParamType::Advice(advices.clone()),
             ParamType::Advice(advices.clone()),
         );
@@ -192,9 +188,12 @@ where
 
         let l2: Affine1dConfig<F, LEN, CLASSES> = Affine1dConfig::configure(
             cs,
-            ParamType::Advice(advices.get_slice(&[0..CLASSES]).map(|a| a)),
+            &[
+                ParamType::Advice(advices.get_slice(&[0..CLASSES])),
+                ParamType::Advice(advices.get_slice(&[LEN + 2..LEN + 3])),
+            ],
             ParamType::Advice(advices.get_slice(&[LEN..LEN + 1])),
-            ParamType::Advice(advices.get_slice(&[LEN + 2..LEN + 3])),
+            ParamType::Advice(advices.get_slice(&[CLASSES + 1..CLASSES + 2])),
         );
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -219,7 +218,7 @@ where
         let l0out = config.l0.layout(
             &mut layouter,
             IOType::Value(self.input.clone()),
-            IOType::Value(self.l0_params.clone()),
+            &[IOType::Value(self.l0_params.clone())],
         );
         let l0qout = config.l0q.layout(&mut layouter, l0out)?;
         let mut l1out = config.l1.layout(&mut layouter, l0qout)?;
@@ -227,7 +226,11 @@ where
         let l2out = config.l2.layout(
             &mut layouter,
             IOType::PrevAssigned(l1out),
-            IOType::Value(self.l2_params.0.clone().into()),
+            &self
+                .l2_params
+                .iter()
+                .map(|a| IOType::Value(a.clone().into()))
+                .collect::<Vec<IOType<F>>>(),
         );
 
         // tie the last output to public inputs (instance column)
@@ -328,7 +331,7 @@ pub fn runconv() {
 
     let input = image;
     let l0_params = kernels;
-    let l2_params: (Tensor<i32>, Tensor<i32>) = (l2weights, l2biases);
+    let l2_params = [l2weights, l2biases];
 
     let circuit = MyCircuit::<
         F,

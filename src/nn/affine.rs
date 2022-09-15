@@ -12,6 +12,7 @@ use std::marker::PhantomData;
 pub struct Affine1dConfig<F: FieldExt + TensorType, const IN: usize, const OUT: usize> {
     // kernel is weights and biases concatenated
     pub kernel: IOConfig<F>,
+    pub bias: IOConfig<F>,
     pub input: IOConfig<F>,
     pub output: IOConfig<F>,
     pub selector: Selector,
@@ -24,13 +25,14 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
     // composable_configure takes the input tensor as an argument, and completes the advice by generating new for the rest
     fn configure(
         meta: &mut ConstraintSystem<F>,
-        kernel: ParamType,
+        params: &[ParamType],
         input: ParamType,
         output: ParamType,
     ) -> Self {
         let config = Self {
             selector: meta.selector(),
-            kernel: IOConfig::configure(meta, kernel, &[OUT, IN]),
+            kernel: IOConfig::configure(meta, params[0].clone(), &[OUT, IN]),
+            bias: IOConfig::configure(meta, params[1].clone(), &[1, OUT]),
             // add 1 to incorporate bias !
             input: IOConfig::configure(meta, input, &[1, IN]),
             output: IOConfig::configure(meta, output, &[1, OUT]),
@@ -47,7 +49,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
                 for j in 0..IN {
                     c = c + config.kernel.query_idx(meta, i, j) * config.input.query_idx(meta, 0, j)
                 }
-                c
+                c + config.bias.query_idx(meta, 0, i)
                 // add the bias
             });
 
@@ -63,7 +65,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
         &self,
         layouter: &mut impl Layouter<F>,
         input: IOType<F>,
-        kernel: IOType<F>,
+        kernels: &[IOType<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         layouter
             .assign_region(
@@ -73,7 +75,8 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
                     self.selector.enable(&mut region, offset)?;
 
                     let input = self.input.assign(&mut region, offset, input.clone());
-                    let weights = self.kernel.assign(&mut region, offset, kernel.clone());
+                    let weights = self.kernel.assign(&mut region, offset, kernels[0].clone());
+                    let bias = self.bias.assign(&mut region, offset, kernels[1].clone());
 
                     // calculate value of output
                     let mut output: Tensor<Value<Assigned<F>>> = Tensor::new(None, &[OUT]).unwrap();
@@ -81,7 +84,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
                         for (j, x) in input.iter().enumerate() {
                             o = o + x.value_field() * weights.get(&[i, j]).value_field();
                         }
-                        o
+                        o + bias.get(&[0, i]).value_field()
                     });
 
                     Ok(self
@@ -95,7 +98,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
         &self,
         layouter: &mut impl Layouter<F>,
         input: IOType<F>,
-        kernels: IOType<F>,
+        kernels: &[IOType<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         self.assign(layouter, input, kernels)
     }
