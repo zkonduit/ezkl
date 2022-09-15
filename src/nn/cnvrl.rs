@@ -60,6 +60,8 @@ where
         input: ParamType,
         output: ParamType,
     ) -> Self {
+        assert!(params.len() == 1);
+
         let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
@@ -105,6 +107,7 @@ where
         image: IOType<F>,
         kernels: &[IOType<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+        assert!(kernels.len() == 1);
         layouter
             .assign_region(
                 || "assign image and kernel",
@@ -154,6 +157,7 @@ where
         input: IOType<F>,
         kernels: &[IOType<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+        assert!(kernels.len() == 1);
         let horz = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
         let vert = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let t = Tensor::from((0..OUT_CHANNELS).map(|i| {

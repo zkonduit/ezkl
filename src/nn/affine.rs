@@ -29,6 +29,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
         input: ParamType,
         output: ParamType,
     ) -> Self {
+        assert!(params.len() == 2);
         let config = Self {
             selector: meta.selector(),
             kernel: IOConfig::configure(meta, params[0].clone(), &[OUT, IN]),
@@ -67,6 +68,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
         input: IOType<F>,
         kernels: &[IOType<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+        assert!(kernels.len() == 2);
         layouter
             .assign_region(
                 || "assign image and kernel",
@@ -100,6 +102,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
         input: IOType<F>,
         kernels: &[IOType<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+        assert!(kernels.len() == 2);
         self.assign(layouter, input, kernels)
     }
 }
