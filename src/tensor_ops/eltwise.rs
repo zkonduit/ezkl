@@ -467,10 +467,10 @@ mod tests {
     fn test_eltrelunl() {
         let k = 9; //2^k rows
         let output = Tensor::<i32>::new(Some(&[1, 2, 3, 4]), &[4]).unwrap();
-        let relu_v: Tensor<Value<Assigned<F>>> = output.into();
+        let relu_v: Tensor<Value<F>> = output.into();
         let assigned: Nonlin1d<F, Value<Assigned<F>>, 4, ReLu<F>> = Nonlin1d {
-            input: relu_v.clone(),
-            output: relu_v,
+            input: relu_v.clone().into(),
+            output: relu_v.into(),
             _marker: PhantomData,
         };
 

@@ -1,4 +1,6 @@
 use crate::fieldutils::{felt_to_i32, i32tofelt};
+
+
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Value},
@@ -39,30 +41,36 @@ impl<T: TensorType> TensorType for Tensor<T> {
         Some(Tensor::new(Some(&[T::zero().unwrap()]), &[1]).unwrap())
     }
 }
-impl<F: FieldExt> TensorType for Value<Assigned<F>> {
+
+impl<T: TensorType> TensorType for Value<T> {
     /// Returns the zero value.
     fn zero() -> Option<Self> {
-        Some(Value::known(F::zero().into()))
+        Some(Value::known(T::zero().unwrap().into()))
     }
 }
 
-// generic types
+impl<F: FieldExt> TensorType for Assigned<F> {
+    /// Returns the zero value.
+    fn zero() -> Option<Self> {
+        Some(F::zero().into())
+    }
+}
+
 impl<F: FieldExt> TensorType for Expression<F> {
     fn zero() -> Option<Self> {
         Some(Expression::Constant(F::zero()))
     }
 }
+
 impl TensorType for Column<Advice> {}
 impl TensorType for Column<Fixed> {}
-impl TensorType for Value<i32> {}
+
 impl<F: FieldExt> TensorType for AssignedCell<Assigned<F>, F> {}
 
 // specific types
-impl TensorType for halo2curves::pasta::Fp {}
-impl TensorType for Value<halo2curves::pasta::Fp> {
-    /// Returns the zero value.
+impl TensorType for halo2curves::pasta::Fp {
     fn zero() -> Option<Self> {
-        Some(Value::known(halo2curves::pasta::Fp::zero()))
+        Some(halo2curves::pasta::Fp::zero())
     }
 }
 
@@ -131,9 +139,29 @@ impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>
     }
 }
 
-impl<F: Clone + FieldExt + TensorType> From<Tensor<i32>> for Tensor<Value<Assigned<F>>> {
-    fn from(mut t: Tensor<i32>) -> Tensor<Value<Assigned<F>>> {
-        let mut ta: Tensor<Value<Assigned<F>>> =
+impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>>
+    for Tensor<Value<F>>
+{
+    fn from(value: Tensor<AssignedCell<Assigned<F>, F>>) -> Tensor<Value<F>> {
+        let mut output = Vec::new();
+        for (_, x) in value.iter().enumerate() {
+            output.push(x.value_field().evaluate());
+        }
+        Tensor::new(Some(&output), value.dims()).unwrap()
+    }
+}
+
+impl<F: FieldExt + TensorType + Clone> From<Tensor<Value<F>>> for Tensor<Value<Assigned<F>>> {
+    fn from(mut t: Tensor<Value<F>>) -> Tensor<Value<Assigned<F>>> {
+        let mut ta: Tensor<Value<Assigned<F>>> = Tensor::from((0..t.len()).map(|i| t[i].into()));
+        ta.reshape(t.dims());
+        ta
+    }
+}
+
+impl<F: FieldExt + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> {
+    fn from(mut t: Tensor<i32>) -> Tensor<Value<F>> {
+        let mut ta: Tensor<Value<F>> =
             Tensor::from((0..t.len()).map(|i| Value::known(i32tofelt::<F>(t[i]).into())));
         ta.reshape(t.dims());
         ta

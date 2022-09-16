@@ -1,4 +1,3 @@
-//#![feature(generic_const_exprs)]
 #![feature(slice_flatten)]
 
 pub mod nn;

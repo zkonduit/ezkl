@@ -18,27 +18,24 @@ use halo2_proofs::{
         Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
     },
 };
-
-use mnist::*;
-use rand::rngs::OsRng;
-use std::time::Instant;
-
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp as F;
-//     use nalgebra;
-// use crate::params;
 use halo2deeplearning::fieldutils;
 use halo2deeplearning::fieldutils::i32tofelt;
-use halo2deeplearning::nn::affine1d::Affine1dConfig;
-use halo2deeplearning::nn::cnvrl_generic;
+use halo2deeplearning::nn::affine::Affine1dConfig;
+use halo2deeplearning::nn::cnvrl::ConvConfig;
+use halo2deeplearning::nn::*;
 use halo2deeplearning::tensor::{Tensor, TensorType};
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, NonlinConfig1d, ReLu};
+use mnist::*;
+use rand::rngs::OsRng;
 use std::cmp::max;
+use std::time::Instant;
 
 mod params;
 
 #[derive(Clone)]
-struct ConvConfig<
+struct Config<
     F: FieldExt + TensorType,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust stable
     const CLASSES: usize,
@@ -56,7 +53,7 @@ struct ConvConfig<
 > where
     Value<F>: TensorType,
 {
-    l0: cnvrl_generic::Config<
+    l0: ConvConfig<
         F,
         KERNEL_HEIGHT,
         KERNEL_WIDTH,
@@ -69,7 +66,7 @@ struct ConvConfig<
     >,
     l0q: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 32>>,
     l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>>,
-    l2: Affine1dConfig<F, LEN>,
+    l2: Affine1dConfig<F, LEN, CLASSES>,
     public_output: Column<Instance>,
 }
 
@@ -96,7 +93,7 @@ struct MyCircuit<
     // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
     input: Tensor<Value<F>>,
     l0_params: Tensor<Value<F>>,
-    l2_params: (Tensor<i32>, Tensor<i32>),
+    l2_params: [Tensor<i32>; 2],
 }
 
 impl<
@@ -133,7 +130,7 @@ impl<
 where
     Value<F>: TensorType,
 {
-    type Config = ConvConfig<
+    type Config = Config<
         F,
         LEN,
         CLASSES,
@@ -165,7 +162,10 @@ where
         let advices = Tensor::from((0..num_advices).map(|_| cs.advice_column()));
         advices.map(|col| cs.enable_equality(col));
 
-        let l0 = cnvrl_generic::Config::<
+        let mut kernel = Tensor::from((0..KERNEL_WIDTH * KERNEL_HEIGHT).map(|_| cs.fixed_column()));
+        kernel.reshape(&[KERNEL_WIDTH, KERNEL_HEIGHT]);
+
+        let l0 = ConvConfig::<
             F,
             KERNEL_HEIGHT,
             KERNEL_WIDTH,
@@ -175,30 +175,34 @@ where
             IMAGE_WIDTH,
             IN_CHANNELS,
             PADDING,
-        >::configure(cs, advices.clone());
+        >::configure(
+            cs,
+            &[ParamType::Fixed(kernel)],
+            ParamType::Advice(advices.clone()).get_slice(&[0..IMAGE_WIDTH]),
+            ParamType::Advice(advices.clone()).get_slice(&[0..output_width]),
+        );
         let l0q: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 32>> =
             NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
         let l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
             NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
 
-        let l2: Affine1dConfig<F, LEN> = Affine1dConfig::configure(
+        let l2: Affine1dConfig<F, LEN, CLASSES> = Affine1dConfig::configure(
             cs,
-            advices.get_slice(&[0..CLASSES]),
-            advices[LEN],
-            advices[CLASSES + 1],
-            advices[LEN + 2],
+            &[
+                ParamType::Advice(advices.get_slice(&[0..CLASSES])),
+                ParamType::Advice(advices.get_slice(&[LEN + 2..LEN + 3])),
+            ],
+            ParamType::Advice(advices.get_slice(&[LEN..LEN + 1])),
+            ParamType::Advice(advices.get_slice(&[CLASSES + 1..CLASSES + 2])),
         );
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
-        //        cs.enable_equality(l2.output);
 
-        ConvConfig {
+        Config {
             l0,
             l0q,
             l1,
             l2,
-            // l3,
-            // l4,
             public_output,
         }
     }
@@ -208,17 +212,23 @@ where
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let l0out = config
-            .l0
-            .assign(&mut layouter, self.input.clone(), self.l0_params.clone());
+        let l0out = config.l0.layout(
+            &mut layouter,
+            IOType::Value(self.input.clone()),
+            &[IOType::Value(self.l0_params.clone())],
+        );
         let l0qout = config.l0q.layout(&mut layouter, l0out)?;
-        let l1out = config.l1.layout(&mut layouter, l0qout)?;
+        let mut l1out = config.l1.layout(&mut layouter, l0qout)?;
+        l1out.reshape(&[1, l1out.dims()[0]]);
         let l2out = config.l2.layout(
             &mut layouter,
-            self.l2_params.0.clone(),
-            self.l2_params.1.clone(),
-            l1out,
-        )?;
+            IOType::PrevAssigned(l1out),
+            &self
+                .l2_params
+                .iter()
+                .map(|a| IOType::Value(a.clone().into()))
+                .collect::<Vec<IOType<F>>>(),
+        );
 
         // tie the last output to public inputs (instance column)
         l2out.enum_map(|i, a| {
@@ -318,7 +328,7 @@ pub fn runconv() {
 
     let input = image;
     let l0_params = kernels;
-    let l2_params: (Tensor<i32>, Tensor<i32>) = (l2weights, l2biases);
+    let l2_params = [l2weights, l2biases];
 
     let circuit = MyCircuit::<
         F,

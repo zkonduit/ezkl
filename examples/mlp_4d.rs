@@ -2,44 +2,29 @@ use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner},
-    plonk::{
-        //create_proof, keygen_pk, keygen_vk, verify_proof, Advice,
-        Circuit,
-        Column,
-        ConstraintSystem,
-        Error,
-        Instance,
-    },
-    // poly::{commitment::Params, Rotation},
-    // transcript::{Blake2bRead, Blake2bWrite, Challenge255},
+    plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
 use halo2curves::pasta::Fp as F;
-
-use std::marker::PhantomData;
-use std::rc::Rc;
-//use crate::tensorutils::{dot3, flatten3, flatten4, map2, map3, map3r, map4, map4r};
-
 use halo2deeplearning::fieldutils::i32tofelt;
-use halo2deeplearning::nn::affine1d::{Affine1dConfig, RawParameters};
-use halo2deeplearning::nn::input::InputConfig;
+use halo2deeplearning::nn::affine::Affine1dConfig;
+use halo2deeplearning::nn::*;
 use halo2deeplearning::tensor::{Tensor, TensorType};
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu};
+use std::marker::PhantomData;
+use std::rc::Rc;
+
 // A columnar ReLu MLP
 #[derive(Clone)]
 struct MyConfig<
     F: FieldExt + TensorType,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust
     const BITS: usize,
->
-// where
-//     [(); LEN + 3]:,
-{
+> {
     relutable: Rc<EltwiseTable<F, BITS, ReLu<F>>>,
     divtable: Rc<EltwiseTable<F, BITS, DivideBy<F, 128>>>,
-    input: InputConfig<F, LEN>,
-    l0: Affine1dConfig<F, LEN>,
+    l0: Affine1dConfig<F, LEN, LEN>,
     l1: EltwiseConfig<F, LEN, BITS, ReLu<F>>,
-    l2: Affine1dConfig<F, LEN>,
+    l2: Affine1dConfig<F, LEN, LEN>,
     l3: EltwiseConfig<F, LEN, BITS, ReLu<F>>,
     l4: EltwiseConfig<F, LEN, BITS, DivideBy<F, 128>>,
     public_output: Column<Instance>,
@@ -54,15 +39,13 @@ struct MyCircuit<
     // Given the stateless MyConfig type information, a DNN trace is determined by its input and the parameters of its layers.
     // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
     input: Tensor<i32>,
-    l0_params: RawParameters<LEN>,
-    l2_params: RawParameters<LEN>,
+    l0_params: [Tensor<i32>; 2],
+    l2_params: [Tensor<i32>; 2],
     _marker: PhantomData<F>,
 }
 
 impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     for MyCircuit<F, LEN, BITS>
-// where
-//     [(); LEN + 3]:,
 {
     type Config = MyConfig<F, LEN, BITS>;
     type FloorPlanner = SimpleFloorPlanner;
@@ -74,8 +57,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let num_advices = LEN + 3;
-        let advices = Tensor::from((0..num_advices).map(|_| {
+        let advices = Tensor::from((0..LEN + 3).map(|_| {
             let col = cs.advice_column();
             cs.enable_equality(col);
             col
@@ -87,14 +69,14 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let relutable = Rc::new(relutable_config);
         let divtable = Rc::new(divtable_config);
 
-        let input = InputConfig::<F, LEN>::configure(cs, advices[LEN].clone());
+        let kernel = ParamType::Advice(advices.get_slice(&[0..LEN]).map(|a| a));
+        let bias = ParamType::Advice(advices.get_slice(&[LEN + 2..LEN + 3]).map(|a| a));
 
-        let l0 = Affine1dConfig::<F, LEN>::configure(
+        let l0 = Affine1dConfig::<F, LEN, LEN>::configure(
             cs,
-            advices.get_slice(&[0..LEN]), // wts gets several col, others get a column each
-            advices[LEN],                 // input
-            advices[LEN + 1],             // output
-            advices[LEN + 2],             // bias
+            &[kernel.clone(), bias.clone()],
+            ParamType::Advice(advices.get_slice(&[LEN..LEN + 1])),
+            ParamType::Advice(advices.get_slice(&[LEN + 1..LEN + 2])),
         );
 
         let l1: EltwiseConfig<F, LEN, BITS, ReLu<F>> = EltwiseConfig::configure(
@@ -103,12 +85,11 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
             relutable.clone(),
         );
 
-        let l2 = Affine1dConfig::<F, LEN>::configure(
+        let l2 = Affine1dConfig::<F, LEN, LEN>::configure(
             cs,
-            advices.get_slice(&[0..LEN]),
-            advices[LEN],
-            advices[LEN + 1],
-            advices[LEN + 2],
+            &[kernel, bias],
+            ParamType::Advice(advices.get_slice(&[LEN..LEN + 1])),
+            ParamType::Advice(advices.get_slice(&[LEN + 1..LEN + 2])),
         );
 
         let l3: EltwiseConfig<F, LEN, BITS, ReLu<F>> = EltwiseConfig::configure(
@@ -129,7 +110,6 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         MyConfig {
             relutable,
             divtable,
-            input,
             l0,
             l1,
             l2,
@@ -147,21 +127,26 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         // Layout the reused tables
         config.relutable.layout(&mut layouter)?;
         config.divtable.layout(&mut layouter)?;
-
-        let x = config.input.layout(&mut layouter, self.input.clone())?;
+        let x = self.input.clone();
         let x = config.l0.layout(
             &mut layouter,
-            self.l0_params.weights.clone(),
-            self.l0_params.biases.clone(),
-            x,
-        )?;
+            IOType::Value(x.into()),
+            &self
+                .l0_params
+                .iter()
+                .map(|a| IOType::Value(a.clone().into()))
+                .collect::<Vec<IOType<F>>>(),
+        );
         let x = config.l1.layout(&mut layouter, x)?;
         let x = config.l2.layout(
             &mut layouter,
-            self.l2_params.weights.clone(),
-            self.l2_params.biases.clone(),
-            x,
-        )?;
+            IOType::PrevAssigned(x),
+            &self
+                .l2_params
+                .iter()
+                .map(|a| IOType::Value(a.clone().into()))
+                .collect::<Vec<IOType<F>>>(),
+        );
         let x = config.l3.layout(&mut layouter, x)?;
         let x = config.l4.layout(&mut layouter, x)?;
         x.enum_map(|i, x| {
@@ -176,33 +161,26 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
 pub fn runmlp() {
     let k = 15; //2^k rows
                 // parameters
-    let l0weights = Tensor::<i32>::new(
+    let l0_kernel = Tensor::<i32>::new(
         Some(&[10, 0, 0, -1, 0, 10, 1, 0, 0, 1, 10, 0, 1, 0, 0, 10]),
         &[4, 4],
     )
     .unwrap();
-    let l0biases = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[4]).unwrap();
-    let l0_params = RawParameters {
-        weights: l0weights,
-        biases: l0biases,
-    };
-    let l2weights = Tensor::<i32>::new(
+    let l0_bias = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[1, 4]).unwrap();
+
+    let l2_kernel = Tensor::<i32>::new(
         Some(&[0, 3, 10, -1, 0, 10, 1, 0, 0, 1, 0, 12, 1, -2, 32, 0]),
         &[4, 4],
     )
     .unwrap();
-    let l2biases = Tensor::<i32>::new(Some(&[12, 14, 17, 1]), &[4]).unwrap();
-    let l2_params = RawParameters {
-        weights: l2weights,
-        biases: l2biases,
-    };
-    // input data
-    let input = Tensor::<i32>::new(Some(&[-30, -21, 11, 40]), &[4]).unwrap();
+    // input data, with 1 padding to allow for bias
+    let input = Tensor::<i32>::new(Some(&[-30, -21, 11, 40]), &[1, 4]).unwrap();
+    let l2_bias = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[1, 4]).unwrap();
 
     let circuit = MyCircuit::<F, 4, 14> {
         input,
-        l0_params,
-        l2_params,
+        l0_params: [l0_kernel, l0_bias],
+        l2_params: [l2_kernel, l2_bias],
         _marker: PhantomData,
     };
 
