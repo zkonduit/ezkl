@@ -53,6 +53,7 @@ impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, 
         }
     }
     pub fn layout(&mut self, layouter: &mut impl Layouter<F>) {
+        assert!(self.is_assigned == false);
         let base = 2i32;
         let smallest = -base.pow(BITS as u32 - 1);
         let largest = base.pow(BITS as u32 - 1);
