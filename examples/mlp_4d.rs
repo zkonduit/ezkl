@@ -11,7 +11,7 @@ use halo2deeplearning::nn::*;
 use halo2deeplearning::tensor::{Tensor, TensorType};
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu};
 use std::marker::PhantomData;
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 // A columnar ReLu MLP
 #[derive(Clone)]
@@ -20,8 +20,6 @@ struct MyConfig<
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust
     const BITS: usize,
 > {
-    relutable: Rc<EltwiseTable<F, BITS, ReLu<F>>>,
-    divtable: Rc<EltwiseTable<F, BITS, DivideBy<F, 128>>>,
     l0: Affine1dConfig<F, LEN, LEN>,
     l1: EltwiseConfig<F, BITS, ReLu<F>>,
     l2: Affine1dConfig<F, LEN, LEN>,
@@ -66,8 +64,8 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let relutable_config = EltwiseTable::<F, BITS, ReLu<F>>::configure(cs);
         let divtable_config = EltwiseTable::<F, BITS, DivideBy<F, 128>>::configure(cs);
 
-        let relutable = Rc::new(relutable_config);
-        let divtable = Rc::new(divtable_config);
+        let relutable = Rc::new(RefCell::new(relutable_config));
+        let divtable = Rc::new(RefCell::new(divtable_config));
 
         let kernel = advices.get_slice(&[0..LEN]);
         let bias = advices.get_slice(&[LEN + 2..LEN + 3]);
@@ -99,8 +97,6 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         cs.enable_equality(public_output);
 
         MyConfig {
-            relutable,
-            divtable,
             l0,
             l1,
             l2,
@@ -125,7 +121,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                 .map(|a| IOType::Value(a.clone().into()))
                 .collect::<Vec<IOType<F>>>(),
         );
-        let x = config.l1.layout(&mut layouter, x, true);
+        let x = config.l1.layout(&mut layouter, x);
         let x = config.l2.layout(
             &mut layouter,
             x,
@@ -135,8 +131,8 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                 .map(|a| IOType::Value(a.clone().into()))
                 .collect::<Vec<IOType<F>>>(),
         );
-        let x = config.l3.layout(&mut layouter, x, false);
-        let x = config.l4.layout(&mut layouter, x, true);
+        let x = config.l3.layout(&mut layouter, x);
+        let x = config.l4.layout(&mut layouter, x);
         match x {
             IOType::PrevAssigned(v) => v.enum_map(|i, x| {
                 layouter

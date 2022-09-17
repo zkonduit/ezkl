@@ -7,7 +7,7 @@ use halo2_proofs::{
     plonk::{Assigned, Circuit, ConstraintSystem, Error, Selector, TableColumn},
     poly::Rotation,
 };
-use std::{marker::PhantomData, rc::Rc};
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 pub trait Nonlinearity<F: FieldExt> {
     fn nonlinearity(x: i32) -> F;
 }
@@ -39,6 +39,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, NL: Nonlinearity<F>> Nonlin1d<F
 pub struct EltwiseTable<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> {
     pub table_input: TableColumn,
     pub table_output: TableColumn,
+    pub is_assigned: bool,
     _marker: PhantomData<(F, NL)>,
 }
 
@@ -47,10 +48,11 @@ impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, 
         EltwiseTable {
             table_input: cs.lookup_table_column(),
             table_output: cs.lookup_table_column(),
+            is_assigned: false,
             _marker: PhantomData,
         }
     }
-    pub fn layout(&self, layouter: &mut impl Layouter<F>) {
+    pub fn layout(&mut self, layouter: &mut impl Layouter<F>) {
         let base = 2i32;
         let smallest = -base.pow(BITS as u32 - 1);
         let largest = base.pow(BITS as u32 - 1);
@@ -81,13 +83,14 @@ impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, 
                 },
             )
             .unwrap();
+        self.is_assigned = true;
     }
 }
 
 #[derive(Clone)]
 pub struct EltwiseConfig<F: FieldExt + TensorType, const BITS: usize, NL: Nonlinearity<F>> {
     pub input: ParamType,
-    pub table: Rc<EltwiseTable<F, BITS, NL>>,
+    pub table: Rc<RefCell<EltwiseTable<F, BITS, NL>>>,
     qlookup: Selector,
     _marker: PhantomData<(NL, F)>,
 }
@@ -98,13 +101,13 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
         input: ParamType,
-        table: Option<Rc<EltwiseTable<F, BITS, NL>>>,
+        table: Option<Rc<RefCell<EltwiseTable<F, BITS, NL>>>>,
     ) -> EltwiseConfig<F, BITS, NL> {
         let qlookup = cs.complex_selector();
 
         let table = match table {
             Some(t) => t,
-            None => Rc::new(EltwiseTable::<F, BITS, NL>::configure(cs)),
+            None => Rc::new(RefCell::new(EltwiseTable::<F, BITS, NL>::configure(cs))),
         };
 
         match &input {
@@ -115,11 +118,11 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                         vec![
                             (
                                 qlookup.clone() * cs.query_advice(a, Rotation::cur()),
-                                table.table_input,
+                                table.borrow().table_input,
                             ),
                             (
                                 qlookup * cs.query_advice(a, Rotation::next()),
-                                table.table_output,
+                                table.borrow().table_output,
                             ),
                         ]
                     });
@@ -200,14 +203,9 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
             .unwrap()
     }
 
-    pub fn layout(
-        &self,
-        layouter: &mut impl Layouter<F>,
-        input: IOType<F>,
-        setup_table: bool,
-    ) -> IOType<F> {
-        if setup_table {
-            self.table.layout(layouter)
+    pub fn layout(&self, layouter: &mut impl Layouter<F>, input: IOType<F>) -> IOType<F> {
+        if !self.table.borrow().is_assigned {
+            self.table.borrow_mut().layout(layouter)
         }
         IOType::PrevAssigned(self.assign(layouter, input))
     }
@@ -244,7 +242,7 @@ impl<
         config: Self::Config,
         mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
     ) -> Result<(), Error> {
-        config.layout(&mut layouter, self.assigned.input.clone(), true);
+        config.layout(&mut layouter, self.assigned.input.clone());
 
         Ok(())
     }
