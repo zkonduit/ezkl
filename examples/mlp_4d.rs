@@ -115,9 +115,6 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        // Layout the reused tables
-        config.relutable.layout(&mut layouter);
-        config.divtable.layout(&mut layouter);
         let x = self.input.clone();
         let x = config.l0.layout(
             &mut layouter,
@@ -128,7 +125,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                 .map(|a| IOType::Value(a.clone().into()))
                 .collect::<Vec<IOType<F>>>(),
         );
-        let x = config.l1.layout(&mut layouter, x, false);
+        let x = config.l1.layout(&mut layouter, x, true);
         let x = config.l2.layout(
             &mut layouter,
             x,
@@ -139,7 +136,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                 .collect::<Vec<IOType<F>>>(),
         );
         let x = config.l3.layout(&mut layouter, x, false);
-        let x = config.l4.layout(&mut layouter, x, false);
+        let x = config.l4.layout(&mut layouter, x, true);
         match x {
             IOType::PrevAssigned(v) => v.enum_map(|i, x| {
                 layouter
