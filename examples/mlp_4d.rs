@@ -9,9 +9,8 @@ use halo2deeplearning::fieldutils::i32tofelt;
 use halo2deeplearning::nn::affine::Affine1dConfig;
 use halo2deeplearning::nn::*;
 use halo2deeplearning::tensor::{Tensor, TensorType};
-use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu};
+use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, ReLu};
 use std::marker::PhantomData;
-use std::{cell::RefCell, rc::Rc};
 
 // A columnar ReLu MLP
 #[derive(Clone)]
@@ -61,10 +60,6 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
             col
         })));
 
-        let relutable_config = EltwiseTable::<F, BITS, ReLu<F>>::configure(cs);
-
-        let relutable = Rc::new(RefCell::new(relutable_config));
-
         let kernel = advices.get_slice(&[0..LEN]);
         let bias = advices.get_slice(&[LEN + 2..LEN + 3]);
 
@@ -76,7 +71,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         );
 
         let l1: EltwiseConfig<F, BITS, ReLu<F>> =
-            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN]), Some(relutable.clone()));
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN]), None);
 
         let l2 = Affine1dConfig::<F, LEN, LEN>::configure(
             cs,
@@ -86,7 +81,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         );
 
         let l3: EltwiseConfig<F, BITS, ReLu<F>> =
-            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN]), Some(relutable.clone()));
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN]), Some(l1.table.clone()));
 
         let l4: EltwiseConfig<F, BITS, DivideBy<F, 128>> =
             EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN]), None);
