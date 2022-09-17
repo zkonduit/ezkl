@@ -70,21 +70,12 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
                     let coord = [i / self.dims[1], i % self.dims[1]];
                     match &self.values {
                         ParamType::Fixed(f) => region
-                            .assign_fixed(
-                                || format!("k"),
-                                // row indices
-                                f.get(&coord),
-                                // columns indices
-                                offset,
-                                || k.into(),
-                            )
+                            .assign_fixed(|| "k", f.get(&coord), offset, || k.into())
                             .unwrap(),
                         ParamType::Advice(a) => region
                             .assign_advice(
-                                || format!("k"),
-                                // row indices
+                                || "k",
                                 a.get(&[coord[0]]),
-                                // columns indices
                                 offset + coord[1],
                                 || k.into(),
                             )
@@ -99,14 +90,7 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
                     match &self.values {
                         ParamType::Fixed(_) => panic!("not implemented"),
                         ParamType::Advice(a) => x
-                            .copy_advice(
-                                || format!("k"),
-                                region,
-                                // row indices
-                                a.get(&[coord[0]]),
-                                // columns indices
-                                offset + coord[1],
-                            )
+                            .copy_advice(|| "k", region, a.get(&[coord[0]]), offset + coord[1])
                             .unwrap(),
                     }
                 })
@@ -117,24 +101,10 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
                     let coord = [i / self.dims[1], i % self.dims[1]];
                     match &self.values {
                         ParamType::Fixed(f) => region
-                            .assign_fixed(
-                                || format!("k"),
-                                // row indices
-                                f.get(&coord),
-                                // columns indices
-                                offset,
-                                || k.into(),
-                            )
+                            .assign_fixed(|| "k", f.get(&coord), offset, || k)
                             .unwrap(),
                         ParamType::Advice(a) => region
-                            .assign_advice(
-                                || format!("k"),
-                                // row indices
-                                a.get(&[coord[0]]),
-                                // columns indices
-                                offset + coord[1],
-                                || k.into(),
-                            )
+                            .assign_advice(|| "k", a.get(&[coord[0]]), offset + coord[1], || k)
                             .unwrap(),
                     }
                 })

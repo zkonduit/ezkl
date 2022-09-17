@@ -1,224 +1,36 @@
+use crate::fieldutils::{self, felt_to_i32, i32tofelt};
+use crate::nn::*;
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
-    plonk::{Advice, Assigned, Circuit, Column, ConstraintSystem, Error, Selector, TableColumn},
+    circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
+    plonk::{Assigned, Circuit, ConstraintSystem, Error, Selector, TableColumn},
     poly::Rotation,
 };
 use std::{marker::PhantomData, rc::Rc};
-
-use crate::fieldutils::{self, felt_to_i32, i32tofelt};
-
 pub trait Nonlinearity<F: FieldExt> {
     fn nonlinearity(x: i32) -> F;
 }
 
 #[derive(Clone)]
-pub struct Nonlin1d<
-    F: FieldExt + TensorType,
-    Inner: TensorType,
-    const LEN: usize,
-    NL: Nonlinearity<F>,
-> {
-    pub input: Tensor<Inner>,
-    pub output: Tensor<Inner>,
+pub struct Nonlin1d<F: FieldExt + TensorType, const LEN: usize, NL: Nonlinearity<F>> {
+    pub input: IOType<F>,
+    pub output: IOType<F>,
     pub _marker: PhantomData<(F, NL)>,
 }
-impl<F: FieldExt + TensorType, Inner: TensorType, const LEN: usize, NL: Nonlinearity<F>>
-    Nonlin1d<F, Inner, LEN, NL>
-{
+impl<F: FieldExt + TensorType, const LEN: usize, NL: Nonlinearity<F>> Nonlin1d<F, LEN, NL> {
     pub fn fill<Func>(mut f: Func) -> Self
     where
-        Func: FnMut(usize) -> Inner,
+        Func: FnMut(Tensor<usize>) -> IOType<F>,
     {
         Nonlin1d {
-            input: Tensor::from((0..LEN).map(&mut f)),
-            output: Tensor::from((0..LEN).map(f)),
+            input: f(Tensor::from(0..LEN)),
+            output: f(Tensor::from(0..LEN)),
             _marker: PhantomData,
         }
     }
-    pub fn without_witnesses() -> Nonlin1d<F, Value<Assigned<F>>, LEN, NL> {
-        Nonlin1d::<F, Value<Assigned<F>>, LEN, NL>::fill(|_| Value::default())
-    }
-}
-
-#[derive(Clone)]
-struct NonlinTable<const INBITS: usize, const OUTBITS: usize> {
-    table_input: TableColumn,
-    table_output: TableColumn,
-}
-
-#[derive(Clone)]
-pub struct NonlinConfig1d<
-    F: FieldExt + TensorType,
-    const LEN: usize,
-    const INBITS: usize,
-    const OUTBITS: usize,
-    NL: Nonlinearity<F>,
-> {
-    pub advice: [Column<Advice>; LEN],
-    table: NonlinTable<INBITS, OUTBITS>,
-    qlookup: Selector,
-    _marker: PhantomData<(NL, F)>,
-}
-
-impl<
-        F: FieldExt + TensorType,
-        const LEN: usize,
-        const INBITS: usize,
-        const OUTBITS: usize,
-        NL: 'static + Nonlinearity<F>,
-    > NonlinConfig1d<F, LEN, INBITS, OUTBITS, NL>
-{
-    pub fn configure(
-        cs: &mut ConstraintSystem<F>,
-        advice: [Column<Advice>; LEN],
-    ) -> NonlinConfig1d<F, LEN, INBITS, OUTBITS, NL> {
-        // for col in advice.iter() {
-        //     cs.enable_equality(*col);
-        // }
-        let table = NonlinTable {
-            table_input: cs.lookup_table_column(),
-            table_output: cs.lookup_table_column(),
-        };
-
-        let qlookup = cs.complex_selector();
-
-        for a in advice.iter().take(LEN) {
-            let _ = cs.lookup("lk", |cs| {
-                let qlookup = cs.query_selector(qlookup);
-                vec![
-                    (
-                        qlookup.clone() * cs.query_advice(*a, Rotation::cur()),
-                        table.table_input,
-                    ),
-                    (
-                        qlookup * cs.query_advice(*a, Rotation::next()),
-                        table.table_output,
-                    ),
-                ]
-            });
-        }
-
-        Self {
-            advice,
-            table,
-            qlookup,
-            _marker: PhantomData,
-        }
-    }
-
-    // Allocates all legal input-output tuples for the function in the first 2^k rows
-    // of the constraint system.
-    fn alloc_table(
-        &self,
-        layouter: &mut impl Layouter<F>,
-        nonlinearity: Box<dyn Fn(i32) -> F>,
-    ) -> Result<(), Error> {
-        let base = 2i32;
-        let smallest = -base.pow(INBITS as u32 - 1);
-        let largest = base.pow(INBITS as u32 - 1);
-        layouter.assign_table(
-            || "nl table",
-            |mut table| {
-                for (row_offset, int_input) in (smallest..largest).enumerate() {
-                    //println!("{}->{:?}", int_input, nonlinearity(int_input));
-                    let input: F = i32tofelt(int_input);
-                    table.assign_cell(
-                        || format!("nl_i_col row {}", row_offset),
-                        self.table.table_input,
-                        row_offset,
-                        || Value::known(input),
-                    )?;
-                    table.assign_cell(
-                        || format!("nl_o_col row {}", row_offset),
-                        self.table.table_output,
-                        row_offset,
-                        || Value::known(nonlinearity(int_input)),
-                    )?;
-                }
-                Ok(())
-            },
-        )
-    }
-
-    // layout without copying advice
-    pub fn witness(
-        &self,
-        layouter: &mut impl Layouter<F>,
-        input: Tensor<Value<Assigned<F>>>,
-    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
-        let output_for_eq = layouter.assign_region(
-            || "Elementwise", // the name of the region
-            |mut region| {
-                let offset = 0;
-                self.qlookup.enable(&mut region, offset)?;
-
-                let w = input.enum_map(|i, x| {
-                    region
-                        .assign_advice(|| format!("input {:?}", i), self.advice[i], offset, || x)
-                        .unwrap()
-                });
-
-                self.layout_inner(&mut region, offset, w)
-            },
-        )?;
-
-        self.alloc_table(layouter, Box::new(NL::nonlinearity))?;
-
-        Ok(output_for_eq)
-    }
-
-    pub fn layout(
-        &self,
-        layouter: &mut impl Layouter<F>,
-        input: Tensor<AssignedCell<Assigned<F>, F>>,
-    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
-        let output_for_eq = layouter.assign_region(
-            || "Elementwise", // the name of the region
-            |mut region| {
-                let offset = 0;
-                self.qlookup.enable(&mut region, offset)?;
-
-                //copy the advice
-                input.enum_map(|i, x| {
-                    x.copy_advice(|| "input", &mut region, self.advice[i], offset)
-                        .unwrap();
-                });
-
-                self.layout_inner(&mut region, offset, input.clone())
-            },
-        )?;
-
-        self.alloc_table(layouter, Box::new(NL::nonlinearity))?;
-
-        Ok(output_for_eq)
-    }
-
-    fn layout_inner(
-        &self,
-        region: &mut Region<'_, F>,
-        offset: usize,
-        input: Tensor<AssignedCell<Assigned<F>, F>>,
-    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
-        //calculate the value of output
-
-        let output = Tensor::from(input.iter().map(|acaf| acaf.value_field()).map(|vaf| {
-            vaf.map(|f| <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into())
-        }));
-
-        let output_for_equality = output.enum_map(|i, o| {
-            region
-                .assign_advice(
-                    || format!("nl_{i}"),
-                    self.advice[i], // Column<Advice>
-                    offset + 1,
-                    || o, //Assigned<F>
-                )
-                .unwrap()
-        });
-
-        Ok(output_for_equality)
+    pub fn without_witnesses() -> Nonlin1d<F, LEN, NL> {
+        Nonlin1d::<F, LEN, NL>::fill(|x| IOType::Value(x.map(|_| Value::default())))
     }
 }
 
@@ -267,126 +79,143 @@ impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, 
 }
 
 #[derive(Clone)]
-pub struct EltwiseConfig<
-    F: FieldExt + TensorType,
-    const LEN: usize,
-    const BITS: usize,
-    NL: Nonlinearity<F>,
-> {
-    pub advice: [Column<Advice>; LEN],
-    table: Rc<EltwiseTable<F, BITS, NL>>,
+pub struct EltwiseConfig<F: FieldExt + TensorType, const BITS: usize, NL: Nonlinearity<F>> {
+    pub input: ParamType,
+    pub table: Rc<EltwiseTable<F, BITS, NL>>,
     qlookup: Selector,
     _marker: PhantomData<(NL, F)>,
 }
 
-impl<
-        F: FieldExt + TensorType,
-        const LEN: usize,
-        const BITS: usize,
-        NL: 'static + Nonlinearity<F>,
-    > EltwiseConfig<F, LEN, BITS, NL>
+impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
+    EltwiseConfig<F, BITS, NL>
 {
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
-        advice: [Column<Advice>; LEN],
-        table: Rc<EltwiseTable<F, BITS, NL>>,
-    ) -> EltwiseConfig<F, LEN, BITS, NL> {
+        input: ParamType,
+        table: Option<Rc<EltwiseTable<F, BITS, NL>>>,
+    ) -> EltwiseConfig<F, BITS, NL> {
         let qlookup = cs.complex_selector();
 
-        for a in advice.iter().take(LEN) {
-            let _ = cs.lookup("lk", |cs| {
-                let qlookup = cs.query_selector(qlookup);
-                vec![
-                    (
-                        qlookup.clone() * cs.query_advice(*a, Rotation::cur()),
-                        table.table_input,
-                    ),
-                    (
-                        qlookup * cs.query_advice(*a, Rotation::next()),
-                        table.table_output,
-                    ),
-                ]
-            });
+        let table = match table {
+            Some(t) => t,
+            None => {
+                Rc::new(EltwiseTable::<F, BITS, NL>::configure(cs))
+            }
+        };
+
+        match &input {
+            ParamType::Advice(advice) => {
+                advice.map(|a| {
+                    let _ = cs.lookup("lk", |cs| {
+                        let qlookup = cs.query_selector(qlookup);
+                        vec![
+                            (
+                                qlookup.clone() * cs.query_advice(a, Rotation::cur()),
+                                table.table_input,
+                            ),
+                            (
+                                qlookup * cs.query_advice(a, Rotation::next()),
+                                table.table_output,
+                            ),
+                        ]
+                    });
+                });
+            }
+            _ => panic!("not yet implemented"),
         }
 
         Self {
-            advice,
+            input,
             table,
             qlookup,
             _marker: PhantomData,
         }
     }
 
-    pub fn layout(
+    fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
-        input: Tensor<AssignedCell<Assigned<F>, F>>,
-    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
-        let output_for_eq = layouter.assign_region(
-            || "Elementwise", // the name of the region
-            |mut region| {
-                let offset = 0;
-                self.qlookup.enable(&mut region, offset)?;
+        input: IOType<F>,
+    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+        layouter
+            .assign_region(
+                || "Elementwise", // the name of the region
+                |mut region| {
+                    let offset = 0;
+                    self.qlookup.enable(&mut region, offset)?;
 
-                //copy the advice
-                for (i, x) in input.iter().enumerate().take(LEN) {
-                    x.copy_advice(|| "input", &mut region, self.advice[i], offset)?;
-                }
+                    let w = match &input {
+                        IOType::AssignedValue(v) => match &self.input {
+                            ParamType::Advice(advice) => v.enum_map(|i, x| {
+                                // assign the advice
+                                region
+                                    .assign_advice(|| "input", advice[i], offset, || x)
+                                    .unwrap()
+                            }),
+                            _ => panic!("not yet implemented"),
+                        },
+                        IOType::PrevAssigned(v) => match &self.input {
+                            ParamType::Advice(advice) =>
+                            //copy the advice
+                            {
+                                v.enum_map(|i, x| {
+                                    x.copy_advice(|| "input", &mut region, advice[i], offset)
+                                        .unwrap()
+                                })
+                            }
+                            _ => panic!("not yet implemented"),
+                        },
+                        IOType::Value(v) => match &self.input {
+                            ParamType::Advice(advice) => v.enum_map(|i, x| {
+                                // assign the advice
+                                region
+                                    .assign_advice(|| "input", advice[i], offset, || x.into())
+                                    .unwrap()
+                            }),
+                            _ => panic!("not yet implemented"),
+                        },
+                    };
 
-                self.layout_inner(&mut region, offset, input.clone())
-            },
-        )?;
+                    let output = Tensor::from(w.iter().map(|acaf| acaf.value_field()).map(|vaf| {
+                        vaf.map(|f| {
+                            <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into()
+                        })
+                    }));
 
-        Ok(output_for_eq)
+                    match &self.input {
+                        ParamType::Advice(advice) => Ok(output.enum_map(|i, o| {
+                            region
+                                .assign_advice(|| format!("nl_{i}"), advice[i], 1, || o)
+                                .unwrap()
+                        })),
+
+                        _ => panic!("not yet implemented"),
+                    }
+                },
+            )
+            .unwrap()
     }
 
-    fn layout_inner(
-        &self,
-        region: &mut Region<'_, F>,
-        offset: usize,
-        input: Tensor<AssignedCell<Assigned<F>, F>>,
-    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
-        //calculate the value of output
-        let output = Tensor::from(input.iter().map(|acaf| acaf.value_field()).map(|vaf| {
-            vaf.map(|f| <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into())
-        }));
-
-        let mut output_for_equality = Vec::new();
-        for (i, o) in output.iter().enumerate() {
-            let ofe = region.assign_advice(
-                || format!("nl_{i}"),
-                self.advice[i], // Column<Advice>
-                offset + 1,
-                || *o, //Assigned<F>
-            )?;
-            output_for_equality.push(ofe);
-        }
-
-        Ok(Tensor::from(output_for_equality.into_iter()))
+    pub fn layout(&self, layouter: &mut impl Layouter<F>, input: IOType<F>) -> IOType<F> {
+        IOType::PrevAssigned(self.assign(layouter, input))
     }
 }
 
 #[derive(Clone)]
-struct NLCircuit<
-    F: FieldExt + TensorType,
-    const LEN: usize,
-    const INBITS: usize,
-    const OUTBITS: usize,
-    NL: Nonlinearity<F>,
-> {
-    assigned: Nonlin1d<F, Value<Assigned<F>>, LEN, NL>,
+struct NLCircuit<F: FieldExt + TensorType, const LEN: usize, const BITS: usize, NL: Nonlinearity<F>>
+{
+    assigned: Nonlin1d<F, LEN, NL>,
     _marker: PhantomData<NL>, //    nonlinearity: Box<dyn Fn(F) -> F>,
 }
 
 impl<
         F: FieldExt + TensorType,
         const LEN: usize,
-        const INBITS: usize,
-        const OUTBITS: usize,
+        const BITS: usize,
         NL: 'static + Nonlinearity<F> + Clone,
-    > Circuit<F> for NLCircuit<F, LEN, INBITS, OUTBITS, NL>
+    > Circuit<F> for NLCircuit<F, LEN, BITS, NL>
 {
-    type Config = NonlinConfig1d<F, LEN, INBITS, OUTBITS, NL>;
+    type Config = EltwiseConfig<F, BITS, NL>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -394,12 +223,8 @@ impl<
     }
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let advices = (0..LEN)
-            .map(|_| cs.advice_column())
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-        Self::Config::configure(cs, advices)
+        let advices = ParamType::Advice((0..LEN).map(|_| cs.advice_column()).into());
+        Self::Config::configure(cs, advices, None)
     }
 
     fn synthesize(
@@ -407,7 +232,8 @@ impl<
         config: Self::Config,
         mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
     ) -> Result<(), Error> {
-        config.witness(&mut layouter, self.assigned.input.clone())?;
+        config.table.layout(&mut layouter)?;
+        config.layout(&mut layouter, self.assigned.input.clone());
 
         Ok(())
     }
@@ -468,13 +294,13 @@ mod tests {
         let k = 9; //2^k rows
         let output = Tensor::<i32>::new(Some(&[1, 2, 3, 4]), &[4]).unwrap();
         let relu_v: Tensor<Value<F>> = output.into();
-        let assigned: Nonlin1d<F, Value<Assigned<F>>, 4, ReLu<F>> = Nonlin1d {
-            input: relu_v.clone().into(),
-            output: relu_v.into(),
+        let assigned: Nonlin1d<F, 4, ReLu<F>> = Nonlin1d {
+            input: IOType::Value(relu_v.clone().into()),
+            output: IOType::Value(relu_v.into()),
             _marker: PhantomData,
         };
 
-        let circuit = NLCircuit::<F, 4, 8, 8, ReLu<F>> {
+        let circuit = NLCircuit::<F, 4, 8, ReLu<F>> {
             assigned,
             _marker: PhantomData,
         };

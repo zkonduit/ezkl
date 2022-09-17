@@ -25,6 +25,22 @@ impl<F: FieldExt + TensorType> IOType<F> {
             IOType::PrevAssigned(v) => IOType::PrevAssigned(v.get_slice(indices)),
         }
     }
+
+    pub fn dims(&self) -> &[usize] {
+        match self {
+            IOType::Value(v) => v.dims(),
+            IOType::AssignedValue(v) => v.dims(),
+            IOType::PrevAssigned(v) => v.dims(),
+        }
+    }
+
+    pub fn reshape(&mut self, new_dims: &[usize]) {
+        match self {
+            IOType::Value(v) => v.reshape(new_dims),
+            IOType::AssignedValue(v) => v.reshape(new_dims),
+            IOType::PrevAssigned(v) => v.reshape(new_dims),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -64,12 +80,12 @@ pub trait LayerConfig<F: FieldExt + TensorType> {
         &self,
         layouter: &mut impl Layouter<F>,
         input: IOType<F>,
-        kernel: &[IOType<F>],
-    ) -> Tensor<AssignedCell<Assigned<F>, F>>;
+        params: &[IOType<F>],
+    ) -> IOType<F>;
     fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
         input: IOType<F>,
-        kernels: &[IOType<F>],
+        params: &[IOType<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>>;
 }

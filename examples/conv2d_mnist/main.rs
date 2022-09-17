@@ -26,7 +26,7 @@ use halo2deeplearning::nn::affine::Affine1dConfig;
 use halo2deeplearning::nn::cnvrl::ConvConfig;
 use halo2deeplearning::nn::*;
 use halo2deeplearning::tensor::{Tensor, TensorType};
-use halo2deeplearning::tensor_ops::eltwise::{DivideBy, NonlinConfig1d, ReLu};
+use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, ReLu};
 use mnist::*;
 use rand::rngs::OsRng;
 use std::cmp::max;
@@ -39,8 +39,7 @@ struct Config<
     F: FieldExt + TensorType,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust stable
     const CLASSES: usize,
-    const INBITS: usize,
-    const OUTBITS: usize,
+    const BITS: usize,
     // Convolution
     const KERNEL_HEIGHT: usize,
     const KERNEL_WIDTH: usize,
@@ -64,8 +63,8 @@ struct Config<
         IN_CHANNELS,
         PADDING,
     >,
-    l0q: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 32>>,
-    l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>>,
+    l0q: EltwiseConfig<F, BITS, DivideBy<F, 32>>,
+    l1: EltwiseConfig<F, BITS, ReLu<F>>,
     l2: Affine1dConfig<F, LEN, CLASSES>,
     public_output: Column<Instance>,
 }
@@ -75,8 +74,7 @@ struct MyCircuit<
     F: FieldExt,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened
     const CLASSES: usize,
-    const INBITS: usize,
-    const OUTBITS: usize,
+    const BITS: usize,
     // Convolution
     const KERNEL_HEIGHT: usize,
     const KERNEL_WIDTH: usize,
@@ -100,8 +98,7 @@ impl<
         F: FieldExt + TensorType,
         const LEN: usize,
         const CLASSES: usize,
-        const INBITS: usize,
-        const OUTBITS: usize,
+        const BITS: usize,
         // Convolution
         const KERNEL_HEIGHT: usize,
         const KERNEL_WIDTH: usize,
@@ -116,8 +113,7 @@ impl<
         F,
         LEN,
         CLASSES,
-        INBITS,
-        OUTBITS,
+        BITS,
         KERNEL_HEIGHT,
         KERNEL_WIDTH,
         OUT_CHANNELS,
@@ -134,8 +130,7 @@ where
         F,
         LEN,
         CLASSES,
-        INBITS,
-        OUTBITS,
+        BITS,
         KERNEL_HEIGHT,
         KERNEL_WIDTH,
         OUT_CHANNELS,
@@ -159,8 +154,11 @@ where
 
         let num_advices = max(max(output_width, IMAGE_WIDTH), LEN + 3);
 
-        let advices = Tensor::from((0..num_advices).map(|_| cs.advice_column()));
-        advices.map(|col| cs.enable_equality(col));
+        let advices = ParamType::Advice(Tensor::from((0..num_advices).map(|_| {
+            let col = cs.advice_column();
+            cs.enable_equality(col);
+            col
+        })));
 
         let mut kernel = Tensor::from((0..KERNEL_WIDTH * KERNEL_HEIGHT).map(|_| cs.fixed_column()));
         kernel.reshape(&[KERNEL_WIDTH, KERNEL_HEIGHT]);
@@ -178,22 +176,23 @@ where
         >::configure(
             cs,
             &[ParamType::Fixed(kernel)],
-            ParamType::Advice(advices.clone()).get_slice(&[0..IMAGE_WIDTH]),
-            ParamType::Advice(advices.clone()).get_slice(&[0..output_width]),
+            advices.get_slice(&[0..IMAGE_WIDTH]),
+            advices.get_slice(&[0..output_width]),
         );
-        let l0q: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 32>> =
-            NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
-        let l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
-            NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
+
+        let l0q: EltwiseConfig<F, BITS, DivideBy<F, 32>> =
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN]), None);
+        let l1: EltwiseConfig<F, BITS, ReLu<F>> =
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN]), None);
 
         let l2: Affine1dConfig<F, LEN, CLASSES> = Affine1dConfig::configure(
             cs,
             &[
-                ParamType::Advice(advices.get_slice(&[0..CLASSES])),
-                ParamType::Advice(advices.get_slice(&[LEN + 2..LEN + 3])),
+                advices.get_slice(&[0..CLASSES]),
+                advices.get_slice(&[LEN + 2..LEN + 3]),
             ],
-            ParamType::Advice(advices.get_slice(&[LEN..LEN + 1])),
-            ParamType::Advice(advices.get_slice(&[CLASSES + 1..CLASSES + 2])),
+            advices.get_slice(&[LEN..LEN + 1]),
+            advices.get_slice(&[CLASSES + 1..CLASSES + 2]),
         );
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -217,12 +216,12 @@ where
             IOType::Value(self.input.clone()),
             &[IOType::Value(self.l0_params.clone())],
         );
-        let l0qout = config.l0q.layout(&mut layouter, l0out)?;
-        let mut l1out = config.l1.layout(&mut layouter, l0qout)?;
+        let l0qout = config.l0q.layout(&mut layouter, l0out);
+        let mut l1out = config.l1.layout(&mut layouter, l0qout);
         l1out.reshape(&[1, l1out.dims()[0]]);
         let l2out = config.l2.layout(
             &mut layouter,
-            IOType::PrevAssigned(l1out),
+            l1out,
             &self
                 .l2_params
                 .iter()
@@ -230,12 +229,14 @@ where
                 .collect::<Vec<IOType<F>>>(),
         );
 
-        // tie the last output to public inputs (instance column)
-        l2out.enum_map(|i, a| {
-            layouter
-                .constrain_instance(a.cell(), config.public_output, i)
-                .unwrap()
-        });
+        match l2out {
+            IOType::PrevAssigned(v) => v.enum_map(|i, x| {
+                layouter
+                    .constrain_instance(x.cell(), config.public_output, i)
+                    .unwrap()
+            }),
+            _ => panic!("Should be assigned"),
+        };
 
         Ok(())
     }
@@ -334,7 +335,6 @@ pub fn runconv() {
         F,
         LEN,
         10,
-        16,
         16,
         KERNEL_HEIGHT,
         KERNEL_WIDTH,

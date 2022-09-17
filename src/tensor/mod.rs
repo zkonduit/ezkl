@@ -1,6 +1,5 @@
 use crate::fieldutils::{felt_to_i32, i32tofelt};
 
-
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Value},
@@ -36,21 +35,18 @@ tensor_type!(usize, USize, 0);
 tensor_type!((), Empty, ());
 
 impl<T: TensorType> TensorType for Tensor<T> {
-    /// Returns the zero value.
     fn zero() -> Option<Self> {
         Some(Tensor::new(Some(&[T::zero().unwrap()]), &[1]).unwrap())
     }
 }
 
 impl<T: TensorType> TensorType for Value<T> {
-    /// Returns the zero value.
     fn zero() -> Option<Self> {
-        Some(Value::known(T::zero().unwrap().into()))
+        Some(Value::known(T::zero().unwrap()))
     }
 }
 
 impl<F: FieldExt> TensorType for Assigned<F> {
-    /// Returns the zero value.
     fn zero() -> Option<Self> {
         Some(F::zero().into())
     }
@@ -129,7 +125,7 @@ impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>
     fn from(value: Tensor<AssignedCell<Assigned<F>, F>>) -> Tensor<i32> {
         let mut output = Vec::new();
         value.map(|x| {
-            x.clone().evaluate().value().map(|y| {
+            x.evaluate().value().map(|y| {
                 let e = felt_to_i32(*y);
                 output.push(e);
                 e
@@ -162,7 +158,7 @@ impl<F: FieldExt + TensorType + Clone> From<Tensor<Value<F>>> for Tensor<Value<A
 impl<F: FieldExt + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> {
     fn from(mut t: Tensor<i32>) -> Tensor<Value<F>> {
         let mut ta: Tensor<Value<F>> =
-            Tensor::from((0..t.len()).map(|i| Value::known(i32tofelt::<F>(t[i]).into())));
+            Tensor::from((0..t.len()).map(|i| Value::known(i32tofelt::<F>(t[i]))));
         ta.reshape(t.dims());
         ta
     }

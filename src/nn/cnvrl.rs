@@ -104,9 +104,10 @@ where
         &self,
         layouter: &mut impl Layouter<F>,
         input: IOType<F>,
-        kernels: &[IOType<F>],
+        params: &[IOType<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
-        assert!(kernels.len() == 1);
+        assert!(params.len() == 1);
+        let kernel = params[0].clone();
         layouter
             .assign_region(
                 || "assign image and kernel",
@@ -116,17 +117,14 @@ where
 
                     let outputs = (0..IN_CHANNELS)
                         .map(|i| {
-                            self.kernel.assign(
-                                &mut region,
-                                offset,
-                                kernels[0].get_slice(&[i..i + 1]),
-                            );
+                            self.kernel
+                                .assign(&mut region, offset, kernel.get_slice(&[i..i + 1]));
 
                             self.image
                                 .assign(&mut region, offset, input.get_slice(&[i..i + 1]));
 
                             let output = match input.clone() {
-                                IOType::Value(img) => match kernels[0].clone() {
+                                IOType::Value(img) => match kernel.clone() {
                                     IOType::Value(k) => convolution::<_, PADDING, STRIDE>(
                                         k.get_slice(&[i..i + 1]),
                                         img.get_slice(&[i..i + 1]),
@@ -154,21 +152,21 @@ where
         &self,
         layouter: &mut impl Layouter<F>,
         input: IOType<F>,
-        kernels: &[IOType<F>],
-    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
-        assert!(kernels.len() == 1);
+        params: &[IOType<F>],
+    ) -> IOType<F> {
+        assert!(params.len() == 1);
         let horz = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
         let vert = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let t = Tensor::from((0..OUT_CHANNELS).map(|i| {
             self.assign(
                 &mut layouter.namespace(|| format!("filter: {:?}", i)),
                 input.clone(),
-                &[kernels[0].get_slice(&[i..i + 1])],
+                &[params[0].get_slice(&[i..i + 1])],
             )
         }));
         let mut t = t.flatten();
         t.reshape(&[OUT_CHANNELS, horz, vert]);
-        t
+        IOType::PrevAssigned(t)
     }
 }
 

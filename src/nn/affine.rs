@@ -30,10 +30,11 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
         output: ParamType,
     ) -> Self {
         assert!(params.len() == 2);
+        let (kernel, bias) = (params[0].clone(), params[1].clone());
         let config = Self {
             selector: meta.selector(),
-            kernel: IOConfig::configure(meta, params[0].clone(), &[OUT, IN]),
-            bias: IOConfig::configure(meta, params[1].clone(), &[1, OUT]),
+            kernel: IOConfig::configure(meta, kernel, &[OUT, IN]),
+            bias: IOConfig::configure(meta, bias, &[1, OUT]),
             // add 1 to incorporate bias !
             input: IOConfig::configure(meta, input, &[1, IN]),
             output: IOConfig::configure(meta, output, &[1, OUT]),
@@ -66,9 +67,10 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
         &self,
         layouter: &mut impl Layouter<F>,
         input: IOType<F>,
-        kernels: &[IOType<F>],
+        params: &[IOType<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
-        assert!(kernels.len() == 2);
+        assert!(params.len() == 2);
+        let (kernel, bias) = (params[0].clone(), params[1].clone());
         layouter
             .assign_region(
                 || "assign image and kernel",
@@ -77,8 +79,8 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
                     self.selector.enable(&mut region, offset)?;
 
                     let input = self.input.assign(&mut region, offset, input.clone());
-                    let weights = self.kernel.assign(&mut region, offset, kernels[0].clone());
-                    let bias = self.bias.assign(&mut region, offset, kernels[1].clone());
+                    let weights = self.kernel.assign(&mut region, offset, kernel.clone());
+                    let bias = self.bias.assign(&mut region, offset, bias.clone());
 
                     // calculate value of output
                     let mut output: Tensor<Value<Assigned<F>>> = Tensor::new(None, &[OUT]).unwrap();
@@ -100,9 +102,9 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
         &self,
         layouter: &mut impl Layouter<F>,
         input: IOType<F>,
-        kernels: &[IOType<F>],
-    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
-        assert!(kernels.len() == 2);
-        self.assign(layouter, input, kernels)
+        params: &[IOType<F>],
+    ) -> IOType<F> {
+        assert!(params.len() == 2);
+        IOType::PrevAssigned(self.assign(layouter, input, params))
     }
 }
