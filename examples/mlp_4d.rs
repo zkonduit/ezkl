@@ -128,7 +128,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                 .map(|a| IOType::Value(a.clone().into()))
                 .collect::<Vec<IOType<F>>>(),
         );
-        let x = config.l1.layout(&mut layouter, x);
+        let x = config.l1.layout(&mut layouter, x, false);
         let x = config.l2.layout(
             &mut layouter,
             x,
@@ -138,8 +138,8 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                 .map(|a| IOType::Value(a.clone().into()))
                 .collect::<Vec<IOType<F>>>(),
         );
-        let x = config.l3.layout(&mut layouter, x);
-        let x = config.l4.layout(&mut layouter, x);
+        let x = config.l3.layout(&mut layouter, x, false);
+        let x = config.l4.layout(&mut layouter, x, false);
         match x {
             IOType::PrevAssigned(v) => v.enum_map(|i, x| {
                 layouter
