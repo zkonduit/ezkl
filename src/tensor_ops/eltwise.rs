@@ -50,31 +50,35 @@ impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, 
             _marker: PhantomData,
         }
     }
-    pub fn layout(&self, layouter: &mut impl Layouter<F>) -> Result<(), Error> {
+    pub fn layout(&self, layouter: &mut impl Layouter<F>) {
         let base = 2i32;
         let smallest = -base.pow(BITS as u32 - 1);
         let largest = base.pow(BITS as u32 - 1);
-        layouter.assign_table(
-            || "nl table",
-            |mut table| {
-                for (row_offset, int_input) in (smallest..largest).enumerate() {
-                    let input: F = i32tofelt(int_input);
-                    table.assign_cell(
-                        || format!("nl_i_col row {}", row_offset),
-                        self.table_input,
-                        row_offset,
-                        || Value::known(input),
-                    )?;
-                    table.assign_cell(
-                        || format!("nl_o_col row {}", row_offset),
-                        self.table_output,
-                        row_offset,
-                        || Value::known(NL::nonlinearity(int_input)),
-                    )?;
-                }
-                Ok(())
-            },
-        )
+        layouter
+            .assign_table(
+                || "nl table",
+                |mut table| {
+                    for (row_offset, int_input) in (smallest..largest).enumerate() {
+                        let input: F = i32tofelt(int_input);
+                        table.assign_cell(
+                            || format!("nl_i_col row {}", row_offset),
+                            self.table_input,
+                            row_offset,
+                            || Value::known(input),
+                        ).unwrap();
+                        table
+                            .assign_cell(
+                                || format!("nl_o_col row {}", row_offset),
+                                self.table_output,
+                                row_offset,
+                                || Value::known(NL::nonlinearity(int_input)),
+                            )
+                            .unwrap();
+                    }
+                    Ok(())
+                },
+            )
+            .unwrap();
     }
 }
 
@@ -98,9 +102,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
 
         let table = match table {
             Some(t) => t,
-            None => {
-                Rc::new(EltwiseTable::<F, BITS, NL>::configure(cs))
-            }
+            None => Rc::new(EltwiseTable::<F, BITS, NL>::configure(cs)),
         };
 
         match &input {
@@ -232,7 +234,7 @@ impl<
         config: Self::Config,
         mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
     ) -> Result<(), Error> {
-        config.table.layout(&mut layouter)?;
+        config.table.layout(&mut layouter);
         config.layout(&mut layouter, self.assigned.input.clone());
 
         Ok(())

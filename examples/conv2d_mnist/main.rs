@@ -216,7 +216,9 @@ where
             IOType::Value(self.input.clone()),
             &[IOType::Value(self.l0_params.clone())],
         );
+        config.l0q.table.layout(&mut layouter);
         let l0qout = config.l0q.layout(&mut layouter, l0out);
+        config.l1.table.layout(&mut layouter);
         let mut l1out = config.l1.layout(&mut layouter, l0qout);
         l1out.reshape(&[1, l1out.dims()[0]]);
         let l2out = config.l2.layout(
