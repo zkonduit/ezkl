@@ -29,3 +29,27 @@ pub trait LayerConfig<F: FieldExt + TensorType> {
         params: &[ValTensor<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>>;
 }
+
+pub trait LayerConfigDyn<F: FieldExt + TensorType> {
+    fn configure(
+        _meta: &mut ConstraintSystem<F>,
+        params: &[VarTensor],
+        input: VarTensor,
+        output: VarTensor,
+        shape: Vec<usize>,
+    ) -> Self;
+    fn layout(
+        &self,
+        layouter: &mut impl Layouter<F>,
+        input: ValTensor<F>,
+        params: &[ValTensor<F>],
+        shape: Vec<usize>,
+    ) -> ValTensor<F>;
+    fn assign(
+        &self,
+        layouter: &mut impl Layouter<F>,
+        input: ValTensor<F>,
+        params: &[ValTensor<F>],
+        shape: Vec<usize>,
+    ) -> Tensor<AssignedCell<Assigned<F>, F>>;
+}

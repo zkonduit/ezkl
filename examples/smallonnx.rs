@@ -6,7 +6,7 @@ use halo2_proofs::{
 };
 use halo2curves::pasta::Fp as F;
 use halo2deeplearning::fieldutils::i32_to_felt;
-use halo2deeplearning::nn::affine::Affine1dConfig;
+use halo2deeplearning::nn::affine::Affine1dConfigDyn;
 use halo2deeplearning::nn::*;
 use halo2deeplearning::onnx::OnnxModel;
 use halo2deeplearning::tensor::{Tensor, TensorType, ValTensor, VarTensor};
@@ -14,23 +14,21 @@ use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, ReLu};
 use std::marker::PhantomData;
 
 #[derive(Clone)]
-struct MyConfig<F: FieldExt + TensorType, const IN: usize, const OUT: usize, const BITS: usize> {
-    l0: Affine1dConfig<F, IN, OUT>,
+struct MyConfig<F: FieldExt + TensorType, const BITS: usize> {
+    l0: Affine1dConfigDyn<F>,
     l1: EltwiseConfig<F, BITS, ReLu<F>>,
     public_output: Column<Instance>,
 }
 
 #[derive(Clone)]
-struct MyCircuit<F: FieldExt, const IN: usize, const OUT: usize, const BITS: usize> {
+struct MyCircuit<F: FieldExt, const BITS: usize> {
     input: Tensor<i32>,
     l0_params: [Tensor<i32>; 2],
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize, const BITS: usize> Circuit<F>
-    for MyCircuit<F, IN, OUT, BITS>
-{
-    type Config = MyConfig<F, IN, OUT, BITS>;
+impl<F: FieldExt + TensorType, const BITS: usize> Circuit<F> for MyCircuit<F, BITS> {
+    type Config = MyConfig<F, BITS>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -38,24 +36,31 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize, const BITS: us
     }
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let advices = VarTensor::Advice(Tensor::from((0..OUT + 3).map(|_| {
+        let onnx_model = OnnxModel::new("onnx_models/ff.onnx");
+        let l0_kernel = onnx_model.get_tensor_by_node_name("fc1.weight", 0f32, 256f32);
+        let shape = l0_kernel.dims();
+        let in_dims = shape[1];
+        let out_dims = shape[0];
+
+        let advices = VarTensor::Advice(Tensor::from((0..out_dims + 3).map(|_| {
             let col = cs.advice_column();
             cs.enable_equality(col);
             col
         })));
 
-        let kernel = advices.get_slice(&[0..OUT]);
-        let bias = advices.get_slice(&[OUT + 2..OUT + 3]);
+        let kernel = advices.get_slice(&[0..out_dims]);
+        let bias = advices.get_slice(&[out_dims + 2..out_dims + 3]);
 
-        let l0 = Affine1dConfig::<F, IN, OUT>::configure(
+        let l0 = Affine1dConfigDyn::<F>::configure(
             cs,
             &[kernel.clone(), bias.clone()],
-            advices.get_slice(&[OUT..OUT + 1]),
-            advices.get_slice(&[OUT + 1..OUT + 2]),
+            advices.get_slice(&[out_dims..out_dims + 1]),
+            advices.get_slice(&[out_dims + 1..out_dims + 2]),
+            shape.to_vec(),
         );
 
         let l1: EltwiseConfig<F, BITS, ReLu<F>> =
-            EltwiseConfig::configure(cs, advices.get_slice(&[0..OUT]), None);
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..out_dims]), None);
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -72,7 +77,12 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize, const BITS: us
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
+        let onnx_model = OnnxModel::new("onnx_models/ff.onnx");
+        let l0_kernel = onnx_model.get_tensor_by_node_name("fc1.weight", 0f32, 256f32);
+        let shape = l0_kernel.dims();
+
         let x = self.input.clone();
+
         let x = config.l0.layout(
             &mut layouter,
             ValTensor::Value(x.into()),
@@ -81,9 +91,11 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize, const BITS: us
                 .iter()
                 .map(|a| ValTensor::Value(a.clone().into()))
                 .collect::<Vec<ValTensor<F>>>(),
+            shape.to_vec(),
         );
+
         let x = config.l1.layout(&mut layouter, x);
-        println!("{:?}", x);
+
         match x {
             ValTensor::PrevAssigned(v) => v.enum_map(|i, x| {
                 layouter
@@ -107,7 +119,7 @@ pub fn runmlp() {
 
     let input = Tensor::<i32>::new(Some(&[-30, -21, 11]), &[1, 3]).unwrap();
 
-    let circuit = MyCircuit::<F, 3, 4, 14> {
+    let circuit = MyCircuit::<F, 14> {
         input,
         l0_params: [l0_kernel, l0_bias],
         _marker: PhantomData,

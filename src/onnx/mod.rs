@@ -30,7 +30,7 @@ pub fn ndarray_to_quantized(
 impl OnnxModel {
     pub fn new(path: impl AsRef<Path>) -> Self {
         let model = tract_onnx::onnx().model_for_path(path).unwrap();
-        println!("loaded model {:?}", model);
+        //        println!("loaded model {:?}", model);
         OnnxModel { model }
     }
 
@@ -44,10 +44,8 @@ impl OnnxModel {
         //        let fact = &self.model.nodes[1].outputs[0].fact;
         let fact = &node.outputs[0].fact;
         let shape = fact.shape.clone().as_concrete_finite().unwrap().unwrap();
-        println!("{:?}", shape);
+
         let nav = fact
-            // let nav = self.model.nodes[1].outputs[0]
-            //     .fact
             .value
             .concretize()
             .unwrap()
