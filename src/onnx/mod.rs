@@ -6,7 +6,7 @@ use tract_onnx::prelude::{Framework, Graph, InferenceFact};
 use tract_onnx::tract_hir::infer::Factoid;
 use tract_onnx::tract_hir::internal::InferenceOp;
 
-struct OnnxModel {
+pub struct OnnxModel {
     model: Graph<InferenceFact, Box<dyn InferenceOp>>,
 }
 
