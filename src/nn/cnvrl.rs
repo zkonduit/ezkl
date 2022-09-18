@@ -56,9 +56,9 @@ where
 {
     fn configure(
         meta: &mut ConstraintSystem<F>,
-        params: &[ParamType],
-        input: ParamType,
-        output: ParamType,
+        params: &[VarTensor],
+        input: VarTensor,
+        output: VarTensor,
     ) -> Self {
         assert!(params.len() == 1);
 
@@ -103,8 +103,8 @@ where
     fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
-        input: IOType<F>,
-        params: &[IOType<F>],
+        input: ValTensor<F>,
+        params: &[ValTensor<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         assert!(params.len() == 1);
         let kernel = params[0].clone();
@@ -124,8 +124,8 @@ where
                                 .assign(&mut region, offset, input.get_slice(&[i..i + 1]));
 
                             let output = match input.clone() {
-                                IOType::Value(img) => match kernel.clone() {
-                                    IOType::Value(k) => convolution::<_, PADDING, STRIDE>(
+                                ValTensor::Value(img) => match kernel.clone() {
+                                    ValTensor::Value(k) => convolution::<_, PADDING, STRIDE>(
                                         k.get_slice(&[i..i + 1]),
                                         img.get_slice(&[i..i + 1]),
                                     ),
@@ -142,7 +142,7 @@ where
                     let output = op(outputs, |a, b| a + b);
                     Ok(self
                         .output
-                        .assign(&mut region, offset, IOType::Value(output)))
+                        .assign(&mut region, offset, ValTensor::Value(output)))
                 },
             )
             .unwrap()
@@ -151,9 +151,9 @@ where
     fn layout(
         &self,
         layouter: &mut impl Layouter<F>,
-        input: IOType<F>,
-        params: &[IOType<F>],
-    ) -> IOType<F> {
+        input: ValTensor<F>,
+        params: &[ValTensor<F>],
+    ) -> ValTensor<F> {
         assert!(params.len() == 1);
         let horz = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
         let vert = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
@@ -166,7 +166,7 @@ where
         }));
         let mut t = t.flatten();
         t.reshape(&[OUT_CHANNELS, horz, vert]);
-        IOType::PrevAssigned(t)
+        ValTensor::PrevAssigned(t)
     }
 }
 
@@ -198,8 +198,8 @@ mod tests {
     where
         Value<F>: TensorType,
     {
-        image: IOType<F>,
-        kernels: IOType<F>,
+        image: ValTensor<F>,
+        kernels: ValTensor<F>,
     }
 
     impl<
@@ -252,7 +252,7 @@ mod tests {
             let num_advices = max(output_width, IMAGE_WIDTH);
 
             let advices =
-                ParamType::Advice(Tensor::from((0..num_advices).map(|_| meta.advice_column())));
+                VarTensor::Advice(Tensor::from((0..num_advices).map(|_| meta.advice_column())));
 
             let mut kernel =
                 Tensor::from((0..KERNEL_WIDTH * KERNEL_HEIGHT).map(|_| meta.fixed_column()));
@@ -260,7 +260,7 @@ mod tests {
 
             Self::Config::configure(
                 meta,
-                &[ParamType::Fixed(kernel)],
+                &[VarTensor::Fixed(kernel)],
                 advices.get_slice(&[0..IMAGE_WIDTH]),
                 advices.get_slice(&[0..output_width]),
             )
@@ -311,8 +311,8 @@ mod tests {
             IN_CHANNELS,
             PADDING,
         > {
-            image: IOType::Value(image),
-            kernels: IOType::Value(kernels),
+            image: ValTensor::Value(image),
+            kernels: ValTensor::Value(kernels),
         };
 
         let k = 8;

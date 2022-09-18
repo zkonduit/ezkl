@@ -25,9 +25,9 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
     // composable_configure takes the input tensor as an argument, and completes the advice by generating new for the rest
     fn configure(
         meta: &mut ConstraintSystem<F>,
-        params: &[ParamType],
-        input: ParamType,
-        output: ParamType,
+        params: &[VarTensor],
+        input: VarTensor,
+        output: VarTensor,
     ) -> Self {
         assert!(params.len() == 2);
         let (kernel, bias) = (params[0].clone(), params[1].clone());
@@ -66,8 +66,8 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
     fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
-        input: IOType<F>,
-        params: &[IOType<F>],
+        input: ValTensor<F>,
+        params: &[ValTensor<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         assert!(params.len() == 2);
         let (kernel, bias) = (params[0].clone(), params[1].clone());
@@ -93,7 +93,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
 
                     Ok(self
                         .output
-                        .assign(&mut region, offset, IOType::AssignedValue(output)))
+                        .assign(&mut region, offset, ValTensor::AssignedValue(output)))
                 },
             )
             .unwrap()
@@ -101,10 +101,10 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
     fn layout(
         &self,
         layouter: &mut impl Layouter<F>,
-        input: IOType<F>,
-        params: &[IOType<F>],
-    ) -> IOType<F> {
+        input: ValTensor<F>,
+        params: &[ValTensor<F>],
+    ) -> ValTensor<F> {
         assert!(params.len() == 2);
-        IOType::PrevAssigned(self.assign(layouter, input, params))
+        ValTensor::PrevAssigned(self.assign(layouter, input, params))
     }
 }

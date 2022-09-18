@@ -1,6 +1,5 @@
-use crate::fieldutils::{self, felt_to_i32, i32tofelt};
-use crate::nn::*;
-use crate::tensor::{Tensor, TensorType};
+use crate::fieldutils::{self, felt_to_i32, i32_to_felt};
+use crate::tensor::*;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
@@ -14,14 +13,14 @@ pub trait Nonlinearity<F: FieldExt> {
 
 #[derive(Clone)]
 pub struct Nonlin1d<F: FieldExt + TensorType, const LEN: usize, NL: Nonlinearity<F>> {
-    pub input: IOType<F>,
-    pub output: IOType<F>,
+    pub input: ValTensor<F>,
+    pub output: ValTensor<F>,
     pub _marker: PhantomData<(F, NL)>,
 }
 impl<F: FieldExt + TensorType, const LEN: usize, NL: Nonlinearity<F>> Nonlin1d<F, LEN, NL> {
     pub fn fill<Func>(mut f: Func) -> Self
     where
-        Func: FnMut(Tensor<usize>) -> IOType<F>,
+        Func: FnMut(Tensor<usize>) -> ValTensor<F>,
     {
         Nonlin1d {
             input: f(Tensor::from(0..LEN)),
@@ -30,7 +29,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, NL: Nonlinearity<F>> Nonlin1d<F
         }
     }
     pub fn without_witnesses() -> Nonlin1d<F, LEN, NL> {
-        Nonlin1d::<F, LEN, NL>::fill(|x| IOType::Value(x.map(|_| Value::default())))
+        Nonlin1d::<F, LEN, NL>::fill(|x| ValTensor::Value(x.map(|_| Value::default())))
     }
 }
 
@@ -62,7 +61,7 @@ impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, 
                 || "nl table",
                 |mut table| {
                     for (row_offset, int_input) in (smallest..largest).enumerate() {
-                        let input: F = i32tofelt(int_input);
+                        let input: F = i32_to_felt(int_input);
                         table
                             .assign_cell(
                                 || format!("nl_i_col row {}", row_offset),
@@ -90,7 +89,7 @@ impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, 
 
 #[derive(Clone)]
 pub struct EltwiseConfig<F: FieldExt + TensorType, const BITS: usize, NL: Nonlinearity<F>> {
-    pub input: ParamType,
+    pub input: VarTensor,
     pub table: Rc<RefCell<EltwiseTable<F, BITS, NL>>>,
     qlookup: Selector,
     _marker: PhantomData<(NL, F)>,
@@ -101,7 +100,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
 {
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
-        input: ParamType,
+        input: VarTensor,
         table: Option<Rc<RefCell<EltwiseTable<F, BITS, NL>>>>,
     ) -> EltwiseConfig<F, BITS, NL> {
         let qlookup = cs.complex_selector();
@@ -112,7 +111,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
         };
 
         match &input {
-            ParamType::Advice(advice) => {
+            VarTensor::Advice(advice) => {
                 advice.map(|a| {
                     let _ = cs.lookup("lk", |cs| {
                         let qlookup = cs.query_selector(qlookup);
@@ -143,7 +142,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
     fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
-        input: IOType<F>,
+        input: ValTensor<F>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         layouter
             .assign_region(
@@ -153,8 +152,8 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                     self.qlookup.enable(&mut region, offset)?;
 
                     let w = match &input {
-                        IOType::AssignedValue(v) => match &self.input {
-                            ParamType::Advice(advice) => v.enum_map(|i, x| {
+                        ValTensor::AssignedValue(v) => match &self.input {
+                            VarTensor::Advice(advice) => v.enum_map(|i, x| {
                                 // assign the advice
                                 region
                                     .assign_advice(|| "input", advice[i], offset, || x)
@@ -162,8 +161,8 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                             }),
                             _ => panic!("not yet implemented"),
                         },
-                        IOType::PrevAssigned(v) => match &self.input {
-                            ParamType::Advice(advice) =>
+                        ValTensor::PrevAssigned(v) => match &self.input {
+                            VarTensor::Advice(advice) =>
                             //copy the advice
                             {
                                 v.enum_map(|i, x| {
@@ -173,8 +172,8 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                             }
                             _ => panic!("not yet implemented"),
                         },
-                        IOType::Value(v) => match &self.input {
-                            ParamType::Advice(advice) => v.enum_map(|i, x| {
+                        ValTensor::Value(v) => match &self.input {
+                            VarTensor::Advice(advice) => v.enum_map(|i, x| {
                                 // assign the advice
                                 region
                                     .assign_advice(|| "input", advice[i], offset, || x.into())
@@ -191,7 +190,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                     }));
 
                     match &self.input {
-                        ParamType::Advice(advice) => Ok(output.enum_map(|i, o| {
+                        VarTensor::Advice(advice) => Ok(output.enum_map(|i, o| {
                             region
                                 .assign_advice(|| format!("nl_{i}"), advice[i], 1, || o)
                                 .unwrap()
@@ -204,11 +203,11 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
             .unwrap()
     }
 
-    pub fn layout(&self, layouter: &mut impl Layouter<F>, input: IOType<F>) -> IOType<F> {
+    pub fn layout(&self, layouter: &mut impl Layouter<F>, input: ValTensor<F>) -> ValTensor<F> {
         if !self.table.borrow().is_assigned {
             self.table.borrow_mut().layout(layouter)
         }
-        IOType::PrevAssigned(self.assign(layouter, input))
+        ValTensor::PrevAssigned(self.assign(layouter, input))
     }
 }
 
@@ -234,7 +233,7 @@ impl<
     }
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let advices = ParamType::Advice((0..LEN).map(|_| cs.advice_column()).into());
+        let advices = VarTensor::Advice((0..LEN).map(|_| cs.advice_column()).into());
         Self::Config::configure(cs, advices, None)
     }
 
@@ -259,7 +258,7 @@ impl<F: FieldExt> Nonlinearity<F> for ReLu<F> {
         if x < 0 {
             F::zero()
         } else {
-            i32tofelt(x)
+            i32_to_felt(x)
         }
     }
 }
@@ -276,7 +275,7 @@ impl<F: FieldExt, const L: usize, const K: usize> Nonlinearity<F> for Sigmoid<F,
         let fout = (L as f32) / (1.0 + (-kix).exp());
         let rounded = fout.round();
         let xi: i32 = unsafe { rounded.to_int_unchecked() };
-        fieldutils::i32tofelt(xi)
+        fieldutils::i32_to_felt(xi)
     }
 }
 
@@ -289,7 +288,7 @@ impl<F: FieldExt, const D: usize> Nonlinearity<F> for DivideBy<F, D> {
         let d_inv_x = (x as f32) / (D as f32);
         let rounded = d_inv_x.round();
         let integral: i32 = unsafe { rounded.to_int_unchecked() };
-        fieldutils::i32tofelt(integral)
+        fieldutils::i32_to_felt(integral)
     }
 }
 
@@ -305,8 +304,8 @@ mod tests {
         let output = Tensor::<i32>::new(Some(&[1, 2, 3, 4]), &[4]).unwrap();
         let relu_v: Tensor<Value<F>> = output.into();
         let assigned: Nonlin1d<F, 4, ReLu<F>> = Nonlin1d {
-            input: IOType::Value(relu_v.clone().into()),
-            output: IOType::Value(relu_v.into()),
+            input: ValTensor::Value(relu_v.clone().into()),
+            output: ValTensor::Value(relu_v.into()),
             _marker: PhantomData,
         };
 

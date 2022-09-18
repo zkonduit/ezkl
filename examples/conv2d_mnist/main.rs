@@ -21,11 +21,11 @@ use halo2_proofs::{
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp as F;
 use halo2deeplearning::fieldutils;
-use halo2deeplearning::fieldutils::i32tofelt;
+use halo2deeplearning::fieldutils::i32_to_felt;
 use halo2deeplearning::nn::affine::Affine1dConfig;
 use halo2deeplearning::nn::cnvrl::ConvConfig;
 use halo2deeplearning::nn::*;
-use halo2deeplearning::tensor::{Tensor, TensorType};
+use halo2deeplearning::tensor::*;
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, ReLu};
 use mnist::*;
 use rand::rngs::OsRng;
@@ -154,7 +154,7 @@ where
 
         let num_advices = max(max(output_width, IMAGE_WIDTH), LEN + 3);
 
-        let advices = ParamType::Advice(Tensor::from((0..num_advices).map(|_| {
+        let advices = VarTensor::Advice(Tensor::from((0..num_advices).map(|_| {
             let col = cs.advice_column();
             cs.enable_equality(col);
             col
@@ -175,7 +175,7 @@ where
             PADDING,
         >::configure(
             cs,
-            &[ParamType::Fixed(kernel)],
+            &[VarTensor::Fixed(kernel)],
             advices.get_slice(&[0..IMAGE_WIDTH]),
             advices.get_slice(&[0..output_width]),
         );
@@ -213,8 +213,8 @@ where
     ) -> Result<(), Error> {
         let l0out = config.l0.layout(
             &mut layouter,
-            IOType::Value(self.input.clone()),
-            &[IOType::Value(self.l0_params.clone())],
+            ValTensor::Value(self.input.clone()),
+            &[ValTensor::Value(self.l0_params.clone())],
         );
         let l0qout = config.l0q.layout(&mut layouter, l0out);
         let mut l1out = config.l1.layout(&mut layouter, l0qout);
@@ -225,12 +225,12 @@ where
             &self
                 .l2_params
                 .iter()
-                .map(|a| IOType::Value(a.clone().into()))
-                .collect::<Vec<IOType<F>>>(),
+                .map(|a| ValTensor::Value(a.clone().into()))
+                .collect::<Vec<ValTensor<F>>>(),
         );
 
         match l2out {
-            IOType::PrevAssigned(v) => v.enum_map(|i, x| {
+            ValTensor::PrevAssigned(v) => v.enum_map(|i, x| {
                 layouter
                     .constrain_instance(x.cell(), config.public_output, i)
                     .unwrap()
@@ -276,7 +276,7 @@ pub fn runconv() {
         .finalize();
 
     // Can use an Array2 or Array3 here (Array3 for visualization)
-    let mut train_data = Tensor::from(trn_img.iter().map(|x| i32tofelt::<F>(*x as i32 / 16)));
+    let mut train_data = Tensor::from(trn_img.iter().map(|x| i32_to_felt::<F>(*x as i32 / 16)));
     train_data.reshape(&[50_000, 28, 28]);
 
     let mut train_labels = Tensor::from(trn_lbl.iter().map(|x| *x as f32));
@@ -303,7 +303,7 @@ pub fn runconv() {
                 let dx = (fl as f32) * (32 as f32);
                 let rounded = dx.round();
                 let integral: i32 = unsafe { rounded.to_int_unchecked() };
-                let felt = fieldutils::i32tofelt(integral);
+                let felt = fieldutils::i32_to_felt(integral);
                 Value::known(felt)
             }),
     );
@@ -356,7 +356,7 @@ pub fn runconv() {
     .into_iter()
     .into();
 
-    let pi_inner: Tensor<F> = public_input.map(|x| i32tofelt::<F>(x).into());
+    let pi_inner: Tensor<F> = public_input.map(|x| i32_to_felt::<F>(x).into());
     let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner]];
 
     //	Real proof

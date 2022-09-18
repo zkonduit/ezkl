@@ -1,9 +1,9 @@
-use crate::fieldutils::{felt_to_i32, i32tofelt};
+use crate::fieldutils::{felt_to_i32, i32_to_felt};
 
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Value},
-    plonk::{Advice, Assigned, Column, Expression, Fixed},
+    plonk::{Advice, Assigned, Column, ConstraintSystem, Expression, Fixed},
 };
 use itertools::Itertools;
 use std::fmt::Debug;
@@ -11,6 +11,65 @@ use std::iter::Iterator;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
+
+#[derive(Debug, Clone)]
+pub enum ValTensor<F: FieldExt + TensorType> {
+    Value(Tensor<Value<F>>),
+    AssignedValue(Tensor<Value<Assigned<F>>>),
+    PrevAssigned(Tensor<AssignedCell<Assigned<F>, F>>),
+}
+
+impl<F: FieldExt + TensorType> ValTensor<F> {
+    pub fn get_slice(&self, indices: &[Range<usize>]) -> ValTensor<F> {
+        match self {
+            ValTensor::Value(v) => ValTensor::Value(v.get_slice(indices)),
+            ValTensor::AssignedValue(v) => ValTensor::AssignedValue(v.get_slice(indices)),
+            ValTensor::PrevAssigned(v) => ValTensor::PrevAssigned(v.get_slice(indices)),
+        }
+    }
+
+    pub fn dims(&self) -> &[usize] {
+        match self {
+            ValTensor::Value(v) => v.dims(),
+            ValTensor::AssignedValue(v) => v.dims(),
+            ValTensor::PrevAssigned(v) => v.dims(),
+        }
+    }
+
+    pub fn reshape(&mut self, new_dims: &[usize]) {
+        match self {
+            ValTensor::Value(v) => v.reshape(new_dims),
+            ValTensor::AssignedValue(v) => v.reshape(new_dims),
+            ValTensor::PrevAssigned(v) => v.reshape(new_dims),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum VarTensor {
+    Advice(Tensor<Column<Advice>>),
+    Fixed(Tensor<Column<Fixed>>),
+}
+
+impl VarTensor {
+    pub fn get_slice(&self, indices: &[Range<usize>]) -> VarTensor {
+        match self {
+            VarTensor::Advice(v) => VarTensor::Advice(v.get_slice(indices)),
+            VarTensor::Fixed(v) => VarTensor::Fixed(v.get_slice(indices)),
+        }
+    }
+
+    pub fn enable_equality<F: FieldExt>(&self, meta: &mut ConstraintSystem<F>) {
+        match self {
+            VarTensor::Advice(advices) => {
+                for advice in advices.iter() {
+                    meta.enable_equality(*advice);
+                }
+            }
+            VarTensor::Fixed(_) => {}
+        }
+    }
+}
 
 pub trait TensorType: Clone + Debug + 'static {
     /// Returns the zero value.
@@ -158,7 +217,7 @@ impl<F: FieldExt + TensorType + Clone> From<Tensor<Value<F>>> for Tensor<Value<A
 impl<F: FieldExt + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> {
     fn from(mut t: Tensor<i32>) -> Tensor<Value<F>> {
         let mut ta: Tensor<Value<F>> =
-            Tensor::from((0..t.len()).map(|i| Value::known(i32tofelt::<F>(t[i]))));
+            Tensor::from((0..t.len()).map(|i| Value::known(i32_to_felt::<F>(t[i]))));
         ta.reshape(t.dims());
         ta
     }

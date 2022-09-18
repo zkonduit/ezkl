@@ -5,10 +5,10 @@ use halo2_proofs::{
     plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
 use halo2curves::pasta::Fp as F;
-use halo2deeplearning::fieldutils::i32tofelt;
+use halo2deeplearning::fieldutils::i32_to_felt;
 use halo2deeplearning::nn::affine::Affine1dConfig;
 use halo2deeplearning::nn::*;
-use halo2deeplearning::tensor::{Tensor, TensorType};
+use halo2deeplearning::tensor::*;
 use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, ReLu};
 use std::marker::PhantomData;
 
@@ -54,7 +54,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let advices = ParamType::Advice(Tensor::from((0..LEN + 3).map(|_| {
+        let advices = VarTensor::Advice(Tensor::from((0..LEN + 3).map(|_| {
             let col = cs.advice_column();
             cs.enable_equality(col);
             col
@@ -110,12 +110,12 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let x = self.input.clone();
         let x = config.l0.layout(
             &mut layouter,
-            IOType::Value(x.into()),
+            ValTensor::Value(x.into()),
             &self
                 .l0_params
                 .iter()
-                .map(|a| IOType::Value(a.clone().into()))
-                .collect::<Vec<IOType<F>>>(),
+                .map(|a| ValTensor::Value(a.clone().into()))
+                .collect::<Vec<ValTensor<F>>>(),
         );
         let x = config.l1.layout(&mut layouter, x);
         let x = config.l2.layout(
@@ -124,13 +124,13 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
             &self
                 .l2_params
                 .iter()
-                .map(|a| IOType::Value(a.clone().into()))
-                .collect::<Vec<IOType<F>>>(),
+                .map(|a| ValTensor::Value(a.clone().into()))
+                .collect::<Vec<ValTensor<F>>>(),
         );
         let x = config.l3.layout(&mut layouter, x);
         let x = config.l4.layout(&mut layouter, x);
         match x {
-            IOType::PrevAssigned(v) => v.enum_map(|i, x| {
+            ValTensor::PrevAssigned(v) => v.enum_map(|i, x| {
                 layouter
                     .constrain_instance(x.cell(), config.public_output, i)
                     .unwrap()
@@ -183,7 +183,7 @@ pub fn runmlp() {
         &circuit,
         vec![public_input
             .iter()
-            .map(|x| i32tofelt::<F>(*x).into())
+            .map(|x| i32_to_felt::<F>(*x).into())
             .collect()],
         //            vec![vec![(4).into(), (1).into(), (35).into(), (22).into()]],
     )
