@@ -12,4 +12,5 @@ pub mod fieldutils;
 //mod relu8; //move tests
 pub mod tensor_ops;
 //mod tfaddition;
+pub mod onnx;
 pub mod tensor;
