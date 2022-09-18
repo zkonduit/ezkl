@@ -70,10 +70,6 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
             advices.get_slice(&[LEN + 1..LEN + 2]),
         );
 
-        // sets up a new ReLU table
-        let l1: EltwiseConfig<F, BITS, ReLu<F>> =
-            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN]), None);
-
         let l2 = Affine1dConfig::<F, LEN, LEN>::configure(
             cs,
             &[kernel, bias],
@@ -81,9 +77,9 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
             advices.get_slice(&[LEN + 1..LEN + 2]),
         );
 
-        // re-uses l1's ReLU table
-        let l3: EltwiseConfig<F, BITS, ReLu<F>> =
-            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN]), Some(l1.table.clone()));
+        // sets up a new ReLU table and resuses it for l1 and l3 non linearities
+        let [l1, l3]: [EltwiseConfig<F, BITS, ReLu<F>>; 2] =
+            EltwiseConfig::configure_multiple(cs, advices.get_slice(&[0..LEN]));
 
         // sets up a new Divide by table
         let l4: EltwiseConfig<F, BITS, DivideBy<F, 128>> =

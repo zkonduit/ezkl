@@ -7,11 +7,12 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
+
 pub trait Nonlinearity<F: FieldExt> {
     fn nonlinearity(x: i32) -> F;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Nonlin1d<F: FieldExt + TensorType, const LEN: usize, NL: Nonlinearity<F>> {
     pub input: ValTensor<F>,
     pub output: ValTensor<F>,
@@ -34,7 +35,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, NL: Nonlinearity<F>> Nonlin1d<F
 }
 
 // Table that should be reused across all lookups (so no Clone)
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EltwiseTable<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> {
     pub table_input: TableColumn,
     pub table_output: TableColumn,
@@ -87,7 +88,7 @@ impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, 
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EltwiseConfig<F: FieldExt + TensorType, const BITS: usize, NL: Nonlinearity<F>> {
     pub input: VarTensor,
     pub table: Rc<RefCell<EltwiseTable<F, BITS, NL>>>,
@@ -98,6 +99,25 @@ pub struct EltwiseConfig<F: FieldExt + TensorType, const BITS: usize, NL: Nonlin
 impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
     EltwiseConfig<F, BITS, NL>
 {
+    pub fn configure_multiple<const NUM: usize>(
+        cs: &mut ConstraintSystem<F>,
+        input: VarTensor,
+    ) -> [EltwiseConfig<F, BITS, NL>; NUM] {
+        let mut table = None;
+        let configs = (0..NUM)
+            .map(|_| {
+                let l = Self::configure(cs, input.clone(), table.clone());
+                table = Some(l.table.clone());
+                l
+            })
+            .collect::<Vec<EltwiseConfig<F, BITS, NL>>>()
+            .try_into();
+
+        match configs {
+            Ok(x) => x,
+            Err(_) => panic!("failed to initialize layers"),
+        }
+    }
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
         input: VarTensor,
