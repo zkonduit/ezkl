@@ -1,7 +1,7 @@
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{Layouter, SimpleFloorPlanner},
+    circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
 use halo2curves::pasta::Fp as F;
@@ -10,7 +10,7 @@ use halo2deeplearning::nn::affine::Affine1dConfigDyn;
 use halo2deeplearning::nn::*;
 use halo2deeplearning::onnx::OnnxModel;
 use halo2deeplearning::tensor::{Tensor, TensorType, ValTensor, VarTensor};
-use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, ReLu};
+use halo2deeplearning::tensor_ops::eltwise::{EltwiseConfig, ReLu};
 use std::marker::PhantomData;
 
 #[derive(Clone)]
@@ -42,25 +42,24 @@ impl<F: FieldExt + TensorType, const BITS: usize> Circuit<F> for MyCircuit<F, BI
         let in_dims = shape[1];
         let out_dims = shape[0];
 
-        let advices = VarTensor::Advice(Tensor::from((0..out_dims + 3).map(|_| {
+        let advices = VarTensor::from(Tensor::from((0..out_dims + 3).map(|_| {
             let col = cs.advice_column();
             cs.enable_equality(col);
             col
         })));
 
-        let kernel = advices.get_slice(&[0..out_dims]);
-        let bias = advices.get_slice(&[out_dims + 2..out_dims + 3]);
+        let kernel = advices.get_slice(&[0..out_dims], &[out_dims, in_dims]);
+        let bias = advices.get_slice(&[out_dims + 2..out_dims + 3], &[1, out_dims]);
 
         let l0 = Affine1dConfigDyn::<F>::configure(
             cs,
-            &[kernel.clone(), bias.clone()],
-            advices.get_slice(&[out_dims..out_dims + 1]),
-            advices.get_slice(&[out_dims + 1..out_dims + 2]),
-            shape.to_vec(),
+            &[kernel, bias],
+            advices.get_slice(&[out_dims..out_dims + 1], &[1, in_dims]),
+            advices.get_slice(&[out_dims + 1..out_dims + 2], &[1, out_dims]),
         );
 
         let l1: EltwiseConfig<F, BITS, ReLu<F>> =
-            EltwiseConfig::configure(cs, advices.get_slice(&[0..out_dims]), None);
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..out_dims], &[1, out_dims]), None);
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -77,27 +76,22 @@ impl<F: FieldExt + TensorType, const BITS: usize> Circuit<F> for MyCircuit<F, BI
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let onnx_model = OnnxModel::new("onnx_models/ff.onnx");
-        let l0_kernel = onnx_model.get_tensor_by_node_name("fc1.weight", 0f32, 256f32);
-        let shape = l0_kernel.dims();
-
-        let x = self.input.clone();
+        let x: Tensor<Value<F>> = self.input.clone().into();
 
         let x = config.l0.layout(
             &mut layouter,
-            ValTensor::Value(x.into()),
+            ValTensor::from(x),
             &self
                 .l0_params
                 .iter()
-                .map(|a| ValTensor::Value(a.clone().into()))
+                .map(|a| ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(a.clone())))
                 .collect::<Vec<ValTensor<F>>>(),
-            shape.to_vec(),
         );
 
         let x = config.l1.layout(&mut layouter, x);
 
         match x {
-            ValTensor::PrevAssigned(v) => v.enum_map(|i, x| {
+            ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|i, x| {
                 layouter
                     .constrain_instance(x.cell(), config.public_output, i)
                     .unwrap()
@@ -108,16 +102,17 @@ impl<F: FieldExt + TensorType, const BITS: usize> Circuit<F> for MyCircuit<F, BI
     }
 }
 
-pub fn runmlp() {
+pub fn run() {
     let k = 15; //2^k rows
-                // parameters
 
     let onnx_model = OnnxModel::new("onnx_models/ff.onnx");
 
     let l0_kernel = onnx_model.get_tensor_by_node_name("fc1.weight", 0f32, 256f32);
-    let l0_bias = onnx_model.get_tensor_by_node_name("fc1.bias", 0f32, 256f32);
+    let mut l0_bias = onnx_model.get_tensor_by_node_name("fc1.bias", 0f32, 256f32);
+    l0_bias.reshape(&[1, 4]);
 
-    let input = Tensor::<i32>::new(Some(&[-30, -21, 11]), &[1, 3]).unwrap();
+    let mut input = Tensor::<i32>::new(Some(&[-30, -21, 11]), &[1, 3]).unwrap();
+    input.reshape(&[1, 3]);
 
     let circuit = MyCircuit::<F, 14> {
         input,
@@ -132,16 +127,12 @@ pub fn runmlp() {
     let prover = MockProver::run(
         k,
         &circuit,
-        vec![public_input
-            .iter()
-            .map(|x| i32_to_felt::<F>(*x).into())
-            .collect()],
-        //            vec![vec![(4).into(), (1).into(), (35).into(), (22).into()]],
+        vec![public_input.iter().map(|x| i32_to_felt::<F>(*x)).collect()],
     )
     .unwrap();
     prover.assert_satisfied();
 }
 
 pub fn main() {
-    runmlp()
+    run()
 }

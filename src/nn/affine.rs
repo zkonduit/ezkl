@@ -89,7 +89,8 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
                     let bias = self.bias.assign(&mut region, offset, bias.clone());
 
                     // calculate value of output
-                    let mut output: Tensor<Value<Assigned<F>>> = Tensor::new(None, &[1,OUT]).unwrap();
+                    let mut output: Tensor<Value<Assigned<F>>> =
+                        Tensor::new(None, &[1, OUT]).unwrap();
                     output = output.enum_map(|i, mut o| {
                         for (j, x) in input.iter().enumerate() {
                             o = o + x.value_field() * weights.get(&[i, j]).value_field();
@@ -126,27 +127,25 @@ pub struct Affine1dConfigDyn<F: FieldExt + TensorType> {
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType> LayerConfigDyn<F> for Affine1dConfigDyn<F> {
+impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfigDyn<F> {
     // Takes the layer's input tensor as an argument, and completes the advice by generating new for the rest
     fn configure(
         meta: &mut ConstraintSystem<F>,
         params: &[VarTensor],
         input: VarTensor,
         output: VarTensor,
-        shape: Vec<usize>,
     ) -> Self {
         assert!(params.len() == 2);
-        assert!(shape.len() == 2);
-        let in_dim = shape[1];
-        let out_dim = shape[0];
+        let in_dim = input.dims()[1];
+
         let (kernel, bias) = (params[0].clone(), params[1].clone());
         let config = Self {
             selector: meta.selector(),
-            kernel: IOConfig::configure(meta, kernel, &[out_dim, in_dim]),
-            bias: IOConfig::configure(meta, bias, &[1, out_dim]),
+            kernel: IOConfig::configure(meta, kernel),
+            bias: IOConfig::configure(meta, bias),
             // add 1 to incorporate bias !
-            input: IOConfig::configure(meta, input, &[1, in_dim]),
-            output: IOConfig::configure(meta, output, &[1, out_dim]),
+            input: IOConfig::configure(meta, input),
+            output: IOConfig::configure(meta, output),
             _marker: PhantomData,
         };
 
@@ -177,12 +176,9 @@ impl<F: FieldExt + TensorType> LayerConfigDyn<F> for Affine1dConfigDyn<F> {
         layouter: &mut impl Layouter<F>,
         input: ValTensor<F>,
         params: &[ValTensor<F>],
-        shape: Vec<usize>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         assert!(params.len() == 2);
-        assert!(shape.len() == 2);
-        let in_dim = shape[1];
-        let out_dim = shape[0];
+        let out_dim = params[1].dims()[1];
 
         let (kernel, bias) = (params[0].clone(), params[1].clone());
         layouter
@@ -194,11 +190,11 @@ impl<F: FieldExt + TensorType> LayerConfigDyn<F> for Affine1dConfigDyn<F> {
 
                     let input = self.input.assign(&mut region, offset, input.clone());
                     let weights = self.kernel.assign(&mut region, offset, kernel.clone());
-                    let bias = self.bias.assign(&mut region, offset, bias.clone());
 
+                    let bias = self.bias.assign(&mut region, offset, bias.clone());
                     // calculate value of output
                     let mut output: Tensor<Value<Assigned<F>>> =
-                        Tensor::new(None, &[out_dim]).unwrap();
+                        Tensor::new(None, &[1, out_dim]).unwrap();
                     output = output.enum_map(|i, mut o| {
                         for (j, x) in input.iter().enumerate() {
                             o = o + x.value_field() * weights.get(&[i, j]).value_field();
@@ -208,7 +204,7 @@ impl<F: FieldExt + TensorType> LayerConfigDyn<F> for Affine1dConfigDyn<F> {
 
                     Ok(self
                         .output
-                        .assign(&mut region, offset, ValTensor::AssignedValue(output)))
+                        .assign(&mut region, offset, ValTensor::from(output)))
                 },
             )
             .unwrap()
@@ -218,9 +214,8 @@ impl<F: FieldExt + TensorType> LayerConfigDyn<F> for Affine1dConfigDyn<F> {
         layouter: &mut impl Layouter<F>,
         input: ValTensor<F>,
         params: &[ValTensor<F>],
-        shape: Vec<usize>,
     ) -> ValTensor<F> {
         assert!(params.len() == 2);
-        ValTensor::PrevAssigned(self.assign(layouter, input, params, shape))
+        ValTensor::from(self.assign(layouter, input, params))
     }
 }

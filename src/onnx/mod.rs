@@ -1,6 +1,5 @@
-use crate::fieldutils::felt_to_i32;
 use crate::tensor::{Tensor, TensorError};
-use std::{fs, marker::PhantomData, path::Path};
+use std::path::Path;
 use tract_onnx;
 use tract_onnx::prelude::{Framework, Graph, InferenceFact};
 use tract_onnx::tract_hir::infer::Factoid;
@@ -16,13 +15,13 @@ pub fn ndarray_to_quantized(
     shift: f32,
     scale: f32,
 ) -> Result<Tensor<i32>, TensorError> {
-    let order = arr.ndim();
+    //    let order = arr.ndim();
     let dims: Vec<usize> = arr.shape().to_vec();
     let scaled = scale * arr + shift;
     let inner: Vec<i32> = scaled
         .into_raw_vec()
         .iter()
-        .map(|float| unsafe { float.round().to_int_unchecked::<i32>().into() })
+        .map(|float| unsafe { float.round().to_int_unchecked::<i32>() })
         .collect();
     Tensor::new(Some(&inner), &dims)
 }
@@ -43,7 +42,7 @@ impl OnnxModel {
         let node = self.model.node_by_name(name).unwrap();
         //        let fact = &self.model.nodes[1].outputs[0].fact;
         let fact = &node.outputs[0].fact;
-        let shape = fact.shape.clone().as_concrete_finite().unwrap().unwrap();
+        //        let shape = fact.shape.clone().as_concrete_finite().unwrap().unwrap();
 
         let nav = fact
             .value
