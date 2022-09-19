@@ -14,59 +14,162 @@ use std::ops::Range;
 
 #[derive(Debug, Clone)]
 pub enum ValTensor<F: FieldExt + TensorType> {
-    Value(Tensor<Value<F>>),
-    AssignedValue(Tensor<Value<Assigned<F>>>),
-    PrevAssigned(Tensor<AssignedCell<Assigned<F>, F>>),
+    Value {
+        inner: Tensor<Value<F>>,
+        dims: Vec<usize>,
+    },
+    AssignedValue {
+        inner: Tensor<Value<Assigned<F>>>,
+        dims: Vec<usize>,
+    },
+    PrevAssigned {
+        inner: Tensor<AssignedCell<Assigned<F>, F>>,
+        dims: Vec<usize>,
+    },
+}
+
+impl<F: FieldExt + TensorType> From<Tensor<Value<F>>> for ValTensor<F> {
+    fn from(t: Tensor<Value<F>>) -> ValTensor<F> {
+        ValTensor::Value {
+            inner: t.clone(),
+            dims: t.dims().to_vec(),
+        }
+    }
+}
+
+impl<F: FieldExt + TensorType> From<Tensor<Value<Assigned<F>>>> for ValTensor<F> {
+    fn from(t: Tensor<Value<Assigned<F>>>) -> ValTensor<F> {
+        ValTensor::AssignedValue {
+            inner: t.clone(),
+            dims: t.dims().to_vec(),
+        }
+    }
+}
+
+impl<F: FieldExt + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>> for ValTensor<F> {
+    fn from(t: Tensor<AssignedCell<Assigned<F>, F>>) -> ValTensor<F> {
+        ValTensor::PrevAssigned {
+            inner: t.clone(),
+            dims: t.dims().to_vec(),
+        }
+    }
 }
 
 impl<F: FieldExt + TensorType> ValTensor<F> {
     pub fn get_slice(&self, indices: &[Range<usize>]) -> ValTensor<F> {
         match self {
-            ValTensor::Value(v) => ValTensor::Value(v.get_slice(indices)),
-            ValTensor::AssignedValue(v) => ValTensor::AssignedValue(v.get_slice(indices)),
-            ValTensor::PrevAssigned(v) => ValTensor::PrevAssigned(v.get_slice(indices)),
-        }
-    }
-
-    pub fn dims(&self) -> &[usize] {
-        match self {
-            ValTensor::Value(v) => v.dims(),
-            ValTensor::AssignedValue(v) => v.dims(),
-            ValTensor::PrevAssigned(v) => v.dims(),
+            ValTensor::Value { inner: v, dims: _ } => {
+                let slice = v.get_slice(indices);
+                ValTensor::Value {
+                    inner: slice.clone(),
+                    dims: slice.dims().to_vec(),
+                }
+            }
+            ValTensor::AssignedValue { inner: v, dims: _ } => {
+                let slice = v.get_slice(indices);
+                ValTensor::AssignedValue {
+                    inner: slice.clone(),
+                    dims: slice.dims().to_vec(),
+                }
+            }
+            ValTensor::PrevAssigned { inner: v, dims: _ } => {
+                let slice = v.get_slice(indices);
+                ValTensor::PrevAssigned {
+                    inner: slice.clone(),
+                    dims: slice.dims().to_vec(),
+                }
+            }
         }
     }
 
     pub fn reshape(&mut self, new_dims: &[usize]) {
         match self {
-            ValTensor::Value(v) => v.reshape(new_dims),
-            ValTensor::AssignedValue(v) => v.reshape(new_dims),
-            ValTensor::PrevAssigned(v) => v.reshape(new_dims),
+            ValTensor::Value { inner: _, dims: d } => {
+                assert!(d.iter().product::<usize>() == new_dims.iter().product());
+                *d = new_dims.to_vec();
+            }
+            ValTensor::AssignedValue { inner: _, dims: d } => {
+                assert!(d.iter().product::<usize>() == new_dims.iter().product());
+                *d = new_dims.to_vec();
+            }
+            ValTensor::PrevAssigned { inner: _, dims: d } => {
+                assert!(d.iter().product::<usize>() == new_dims.iter().product());
+                *d = new_dims.to_vec();
+            }
+        }
+    }
+
+    pub fn dims(&self) -> &[usize] {
+        match self {
+            ValTensor::Value { inner: _, dims: d } => d,
+            ValTensor::AssignedValue { inner: _, dims: d } => d,
+            ValTensor::PrevAssigned { inner: _, dims: d } => d,
         }
     }
 }
 
 #[derive(Clone, Debug)]
 pub enum VarTensor {
-    Advice(Tensor<Column<Advice>>),
-    Fixed(Tensor<Column<Fixed>>),
+    Advice {
+        inner: Tensor<Column<Advice>>,
+        dims: Vec<usize>,
+    },
+    Fixed {
+        inner: Tensor<Column<Fixed>>,
+        dims: Vec<usize>,
+    },
+}
+
+impl From<Tensor<Column<Advice>>> for VarTensor {
+    fn from(t: Tensor<Column<Advice>>) -> VarTensor {
+        VarTensor::Advice {
+            inner: t.clone(),
+            dims: t.dims().to_vec(),
+        }
+    }
+}
+
+impl From<Tensor<Column<Fixed>>> for VarTensor {
+    fn from(t: Tensor<Column<Fixed>>) -> VarTensor {
+        VarTensor::Fixed {
+            inner: t.clone(),
+            dims: t.dims().to_vec(),
+        }
+    }
 }
 
 impl VarTensor {
-    pub fn get_slice(&self, indices: &[Range<usize>]) -> VarTensor {
+    pub fn dims(&self) -> &[usize] {
         match self {
-            VarTensor::Advice(v) => VarTensor::Advice(v.get_slice(indices)),
-            VarTensor::Fixed(v) => VarTensor::Fixed(v.get_slice(indices)),
+            VarTensor::Advice { inner: _, dims: d } => d,
+            VarTensor::Fixed { inner: _, dims: d } => d,
+        }
+    }
+
+    pub fn get_slice(&self, indices: &[Range<usize>], new_dims: &[usize]) -> VarTensor {
+        match self {
+            VarTensor::Advice { inner: v, dims: _ } => VarTensor::Advice {
+                inner: v.get_slice(indices),
+                dims: new_dims.to_vec(),
+            },
+            VarTensor::Fixed { inner: v, dims: _ } => VarTensor::Fixed {
+                inner: v.get_slice(indices),
+                dims: new_dims.to_vec(),
+            },
         }
     }
 
     pub fn enable_equality<F: FieldExt>(&self, meta: &mut ConstraintSystem<F>) {
         match self {
-            VarTensor::Advice(advices) => {
+            VarTensor::Advice {
+                inner: advices,
+                dims: _,
+            } => {
                 for advice in advices.iter() {
                     meta.enable_equality(*advice);
                 }
             }
-            VarTensor::Fixed(_) => {}
+            VarTensor::Fixed { inner: _, dims: _ } => {}
         }
     }
 }

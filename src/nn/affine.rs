@@ -31,13 +31,19 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
     ) -> Self {
         assert!(params.len() == 2);
         let (kernel, bias) = (params[0].clone(), params[1].clone());
+
+        // kernel.reshape(&[OUT, IN]);
+        // bias.reshape(&[1, OUT]);
+        // input.reshape(&[1, IN]);
+        // output.reshape(&[1, OUT]);
+
         let config = Self {
             selector: meta.selector(),
-            kernel: IOConfig::configure(meta, kernel, &[OUT, IN]),
-            bias: IOConfig::configure(meta, bias, &[1, OUT]),
+            kernel: IOConfig::configure(meta, kernel),
+            bias: IOConfig::configure(meta, bias),
             // add 1 to incorporate bias !
-            input: IOConfig::configure(meta, input, &[1, IN]),
-            output: IOConfig::configure(meta, output, &[1, OUT]),
+            input: IOConfig::configure(meta, input),
+            output: IOConfig::configure(meta, output),
             _marker: PhantomData,
         };
 
@@ -83,7 +89,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
                     let bias = self.bias.assign(&mut region, offset, bias.clone());
 
                     // calculate value of output
-                    let mut output: Tensor<Value<Assigned<F>>> = Tensor::new(None, &[OUT]).unwrap();
+                    let mut output: Tensor<Value<Assigned<F>>> = Tensor::new(None, &[1,OUT]).unwrap();
                     output = output.enum_map(|i, mut o| {
                         for (j, x) in input.iter().enumerate() {
                             o = o + x.value_field() * weights.get(&[i, j]).value_field();
@@ -93,7 +99,7 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
 
                     Ok(self
                         .output
-                        .assign(&mut region, offset, ValTensor::AssignedValue(output)))
+                        .assign(&mut region, offset, ValTensor::from(output)))
                 },
             )
             .unwrap()
@@ -105,6 +111,6 @@ impl<F: FieldExt + TensorType, const IN: usize, const OUT: usize> LayerConfig<F>
         params: &[ValTensor<F>],
     ) -> ValTensor<F> {
         assert!(params.len() == 2);
-        ValTensor::PrevAssigned(self.assign(layouter, input, params))
+        ValTensor::from(self.assign(layouter, input, params))
     }
 }

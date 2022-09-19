@@ -30,7 +30,10 @@ impl<F: FieldExt + TensorType, const LEN: usize, NL: Nonlinearity<F>> Nonlin1d<F
         }
     }
     pub fn without_witnesses() -> Nonlin1d<F, LEN, NL> {
-        Nonlin1d::<F, LEN, NL>::fill(|x| ValTensor::Value(x.map(|_| Value::default())))
+        Nonlin1d::<F, LEN, NL>::fill(|x| {
+            let t: Tensor<Value<F>> = x.map(|_| Value::default());
+            ValTensor::from(t)
+        })
     }
 }
 
@@ -53,7 +56,7 @@ impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, 
         }
     }
     pub fn layout(&mut self, layouter: &mut impl Layouter<F>) {
-        assert!(self.is_assigned == false);
+        assert!(!self.is_assigned);
         let base = 2i32;
         let smallest = -base.pow(BITS as u32 - 1);
         let largest = base.pow(BITS as u32 - 1);
@@ -131,7 +134,10 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
         };
 
         match &input {
-            VarTensor::Advice(advice) => {
+            VarTensor::Advice {
+                inner: advice,
+                dims: _,
+            } => {
                 advice.map(|a| {
                     let _ = cs.lookup("lk", |cs| {
                         let qlookup = cs.query_selector(qlookup);
@@ -172,8 +178,11 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                     self.qlookup.enable(&mut region, offset)?;
 
                     let w = match &input {
-                        ValTensor::AssignedValue(v) => match &self.input {
-                            VarTensor::Advice(advice) => v.enum_map(|i, x| {
+                        ValTensor::AssignedValue { inner: v, dims: _ } => match &self.input {
+                            VarTensor::Advice {
+                                inner: advice,
+                                dims: _,
+                            } => v.enum_map(|i, x| {
                                 // assign the advice
                                 region
                                     .assign_advice(|| "input", advice[i], offset, || x)
@@ -181,8 +190,11 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                             }),
                             _ => panic!("not yet implemented"),
                         },
-                        ValTensor::PrevAssigned(v) => match &self.input {
-                            VarTensor::Advice(advice) =>
+                        ValTensor::PrevAssigned { inner: v, dims: _ } => match &self.input {
+                            VarTensor::Advice {
+                                inner: advice,
+                                dims: _,
+                            } =>
                             //copy the advice
                             {
                                 v.enum_map(|i, x| {
@@ -192,8 +204,11 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                             }
                             _ => panic!("not yet implemented"),
                         },
-                        ValTensor::Value(v) => match &self.input {
-                            VarTensor::Advice(advice) => v.enum_map(|i, x| {
+                        ValTensor::Value { inner: v, dims: _ } => match &self.input {
+                            VarTensor::Advice {
+                                inner: advice,
+                                dims: _,
+                            } => v.enum_map(|i, x| {
                                 // assign the advice
                                 region
                                     .assign_advice(|| "input", advice[i], offset, || x.into())
@@ -210,7 +225,10 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                     }));
 
                     match &self.input {
-                        VarTensor::Advice(advice) => Ok(output.enum_map(|i, o| {
+                        VarTensor::Advice {
+                            inner: advice,
+                            dims: _,
+                        } => Ok(output.enum_map(|i, o| {
                             region
                                 .assign_advice(|| format!("nl_{i}"), advice[i], 1, || o)
                                 .unwrap()
@@ -227,7 +245,9 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
         if !self.table.borrow().is_assigned {
             self.table.borrow_mut().layout(layouter)
         }
-        ValTensor::PrevAssigned(self.assign(layouter, input))
+        let mut t = ValTensor::from(self.assign(layouter, input.clone()));
+        t.reshape(input.dims());
+        t
     }
 }
 
@@ -253,7 +273,10 @@ impl<
     }
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let advices = VarTensor::Advice((0..LEN).map(|_| cs.advice_column()).into());
+        let advices = VarTensor::Advice {
+            inner: (0..LEN).map(|_| cs.advice_column()).into(),
+            dims: [LEN].to_vec(),
+        };
         Self::Config::configure(cs, advices, None)
     }
 
@@ -324,8 +347,8 @@ mod tests {
         let output = Tensor::<i32>::new(Some(&[1, 2, 3, 4]), &[4]).unwrap();
         let relu_v: Tensor<Value<F>> = output.into();
         let assigned: Nonlin1d<F, 4, ReLu<F>> = Nonlin1d {
-            input: ValTensor::Value(relu_v.clone().into()),
-            output: ValTensor::Value(relu_v.into()),
+            input: ValTensor::from(relu_v.clone()),
+            output: ValTensor::from(relu_v),
             _marker: PhantomData,
         };
 

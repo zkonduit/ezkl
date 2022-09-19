@@ -62,19 +62,23 @@ where
     ) -> Self {
         assert!(params.len() == 1);
 
-        let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
-        let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
+        // let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
+        // let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
         let kernel = params[0].clone();
         kernel.enable_equality(meta);
         input.enable_equality(meta);
         output.enable_equality(meta);
 
+        // kernel.reshape(&[KERNEL_WIDTH, KERNEL_HEIGHT]);
+        // image.reshape(&[IMAGE_WIDTH, IMAGE_HEIGHT]);
+        // output.reshape(&[output_width, output_height]);
+
         let config = Self {
             selector: meta.selector(),
-            kernel: IOConfig::configure(meta, kernel, &[KERNEL_WIDTH, KERNEL_HEIGHT]),
-            image: IOConfig::configure(meta, input, &[IMAGE_WIDTH, IMAGE_HEIGHT]),
-            output: IOConfig::configure(meta, output, &[output_width, output_height]),
+            kernel: IOConfig::configure(meta, kernel),
+            image: IOConfig::configure(meta, input),
+            output: IOConfig::configure(meta, output),
         };
 
         meta.create_gate("convolution", |meta| {
@@ -124,11 +128,16 @@ where
                                 .assign(&mut region, offset, input.get_slice(&[i..i + 1]));
 
                             let output = match input.clone() {
-                                ValTensor::Value(img) => match kernel.clone() {
-                                    ValTensor::Value(k) => convolution::<_, PADDING, STRIDE>(
-                                        k.get_slice(&[i..i + 1]),
-                                        img.get_slice(&[i..i + 1]),
-                                    ),
+                                ValTensor::Value {
+                                    inner: img,
+                                    dims: _,
+                                } => match kernel.clone() {
+                                    ValTensor::Value { inner: k, dims: _ } => {
+                                        convolution::<_, PADDING, STRIDE>(
+                                            k.get_slice(&[i..i + 1]),
+                                            img.get_slice(&[i..i + 1]),
+                                        )
+                                    }
                                     _ => panic!("not implemented"),
                                 },
                                 _ => panic!("not implemented"),
@@ -142,7 +151,7 @@ where
                     let output = op(outputs, |a, b| a + b);
                     Ok(self
                         .output
-                        .assign(&mut region, offset, ValTensor::Value(output)))
+                        .assign(&mut region, offset, ValTensor::from(output)))
                 },
             )
             .unwrap()
@@ -166,7 +175,7 @@ where
         }));
         let mut t = t.flatten();
         t.reshape(&[OUT_CHANNELS, horz, vert]);
-        ValTensor::PrevAssigned(t)
+        ValTensor::from(t)
     }
 }
 
@@ -247,12 +256,13 @@ mod tests {
         // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
         // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
         fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+            let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
             let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
             let num_advices = max(output_width, IMAGE_WIDTH);
 
             let advices =
-                VarTensor::Advice(Tensor::from((0..num_advices).map(|_| meta.advice_column())));
+                VarTensor::from(Tensor::from((0..num_advices).map(|_| meta.advice_column())));
 
             let mut kernel =
                 Tensor::from((0..KERNEL_WIDTH * KERNEL_HEIGHT).map(|_| meta.fixed_column()));
@@ -260,9 +270,9 @@ mod tests {
 
             Self::Config::configure(
                 meta,
-                &[VarTensor::Fixed(kernel)],
-                advices.get_slice(&[0..IMAGE_WIDTH]),
-                advices.get_slice(&[0..output_width]),
+                &[VarTensor::from(kernel)],
+                advices.get_slice(&[0..IMAGE_WIDTH], &[IMAGE_WIDTH, IMAGE_HEIGHT]),
+                advices.get_slice(&[0..output_width], &[output_width, output_height]),
             )
         }
 
@@ -311,8 +321,8 @@ mod tests {
             IN_CHANNELS,
             PADDING,
         > {
-            image: ValTensor::Value(image),
-            kernels: ValTensor::Value(kernels),
+            image: ValTensor::from(image),
+            kernels: ValTensor::from(kernels),
         };
 
         let k = 8;
