@@ -195,6 +195,7 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfigDyn<F> {
                     // calculate value of output
                     let mut output: Tensor<Value<Assigned<F>>> =
                         Tensor::new(None, &[1, out_dim]).unwrap();
+
                     output = output.enum_map(|i, mut o| {
                         for (j, x) in input.iter().enumerate() {
                             o = o + x.value_field() * weights.get(&[i, j]).value_field();
