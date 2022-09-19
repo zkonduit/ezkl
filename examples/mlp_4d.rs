@@ -19,9 +19,9 @@ struct MyConfig<
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust
     const BITS: usize,
 > {
-    l0: Affine1dConfig<F, LEN, LEN>,
+    l0: Affine1dConfig<F>,
     l1: EltwiseConfig<F, BITS, ReLu<F>>,
-    l2: Affine1dConfig<F, LEN, LEN>,
+    l2: Affine1dConfig<F>,
     l3: EltwiseConfig<F, BITS, ReLu<F>>,
     l4: EltwiseConfig<F, BITS, DivideBy<F, 128>>,
     public_output: Column<Instance>,
@@ -55,22 +55,22 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let advices = VarTensor::from(Tensor::from((0..LEN + 3).map(|_| {
-                let col = cs.advice_column();
-                cs.enable_equality(col);
-                col
-            })));
+            let col = cs.advice_column();
+            cs.enable_equality(col);
+            col
+        })));
 
         let kernel = advices.get_slice(&[0..LEN], &[LEN, LEN]);
         let bias = advices.get_slice(&[LEN + 2..LEN + 3], &[1, LEN]);
 
-        let l0 = Affine1dConfig::<F, LEN, LEN>::configure(
+        let l0 = Affine1dConfig::<F>::configure(
             cs,
             &[kernel.clone(), bias.clone()],
             advices.get_slice(&[LEN..LEN + 1], &[1, LEN]),
             advices.get_slice(&[LEN + 1..LEN + 2], &[1, LEN]),
         );
 
-        let l2 = Affine1dConfig::<F, LEN, LEN>::configure(
+        let l2 = Affine1dConfig::<F>::configure(
             cs,
             &[kernel, bias],
             advices.get_slice(&[LEN..LEN + 1], &[1, LEN]),

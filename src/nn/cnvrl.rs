@@ -12,12 +12,8 @@ use crate::tensor_ops::*;
 #[derive(Debug, Clone)]
 pub struct ConvConfig<
     F: FieldExt + TensorType,
-    const KERNEL_HEIGHT: usize,
-    const KERNEL_WIDTH: usize,
     const OUT_CHANNELS: usize,
     const STRIDE: usize,
-    const IMAGE_HEIGHT: usize,
-    const IMAGE_WIDTH: usize,
     const IN_CHANNELS: usize,
     const PADDING: usize,
 > where
@@ -31,26 +27,11 @@ pub struct ConvConfig<
 
 impl<
         F: FieldExt + TensorType,
-        const KERNEL_HEIGHT: usize,
-        const KERNEL_WIDTH: usize,
         const OUT_CHANNELS: usize,
         const STRIDE: usize,
-        const IMAGE_HEIGHT: usize,
-        const IMAGE_WIDTH: usize,
         const IN_CHANNELS: usize,
         const PADDING: usize,
-    > LayerConfig<F>
-    for ConvConfig<
-        F,
-        KERNEL_HEIGHT,
-        KERNEL_WIDTH,
-        OUT_CHANNELS,
-        STRIDE,
-        IMAGE_HEIGHT,
-        IMAGE_WIDTH,
-        IN_CHANNELS,
-        PADDING,
-    >
+    > LayerConfig<F> for ConvConfig<F, OUT_CHANNELS, STRIDE, IN_CHANNELS, PADDING>
 where
     Value<F>: TensorType,
 {
@@ -62,17 +43,12 @@ where
     ) -> Self {
         assert!(params.len() == 1);
 
-        // let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
-        // let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
-
         let kernel = params[0].clone();
         kernel.enable_equality(meta);
         input.enable_equality(meta);
         output.enable_equality(meta);
 
-        // kernel.reshape(&[KERNEL_WIDTH, KERNEL_HEIGHT]);
-        // image.reshape(&[IMAGE_WIDTH, IMAGE_HEIGHT]);
-        // output.reshape(&[output_width, output_height]);
+        let image_height = input.dims()[1];
 
         let config = Self {
             selector: meta.selector(),
@@ -87,13 +63,13 @@ where
             // Get output expressions for each input channel
             let intermediate_outputs = (0..IN_CHANNELS)
                 .map(|rotation| {
-                    let image = config.image.query(meta, rotation * IMAGE_HEIGHT);
-                    let kernel = config.kernel.query(meta, rotation * IMAGE_HEIGHT);
+                    let image = config.image.query(meta, rotation * image_height);
+                    let kernel = config.kernel.query(meta, rotation * image_height);
                     convolution::<_, PADDING, STRIDE>(kernel, image)
                 })
                 .collect();
 
-            let witnessed_output = config.output.query(meta, IN_CHANNELS * IMAGE_HEIGHT);
+            let witnessed_output = config.output.query(meta, IN_CHANNELS * image_height);
             let expected_output = op(intermediate_outputs, |a, b| a + b);
 
             let constraints = witnessed_output.enum_map(|i, o| o - expected_output[i].clone());
@@ -112,6 +88,7 @@ where
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         assert!(params.len() == 1);
         let kernel = params[0].clone();
+        let image_height = input.dims()[2];
         layouter
             .assign_region(
                 || "assign image and kernel",
@@ -143,7 +120,7 @@ where
                                 _ => panic!("not implemented"),
                             };
 
-                            offset += IMAGE_HEIGHT;
+                            offset += image_height;
                             output
                         })
                         .collect();
@@ -163,14 +140,18 @@ where
         input: ValTensor<F>,
         params: &[ValTensor<F>],
     ) -> ValTensor<F> {
-        assert!(params.len() == 1);
-        let horz = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
-        let vert = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
+        assert_eq!(params.len(), 1);
+        let kernel = params[0].clone();
+        let (image_width, image_height) = (input.dims()[1], input.dims()[2]);
+        let (kernel_width, kernel_height) = (kernel.dims()[2], kernel.dims()[3]);
+        let horz = (image_width + 2 * PADDING - kernel_width) / STRIDE + 1;
+        let vert = (image_height + 2 * PADDING - kernel_height) / STRIDE + 1;
+
         let t = Tensor::from((0..OUT_CHANNELS).map(|i| {
             self.assign(
                 &mut layouter.namespace(|| format!("filter: {:?}", i)),
                 input.clone(),
-                &[params[0].get_slice(&[i..i + 1])],
+                &[kernel.get_slice(&[i..i + 1])],
             )
         }));
         let mut t = t.flatten();
@@ -236,17 +217,7 @@ mod tests {
     where
         Value<F>: TensorType,
     {
-        type Config = ConvConfig<
-            F,
-            KERNEL_HEIGHT,
-            KERNEL_WIDTH,
-            OUT_CHANNELS,
-            STRIDE,
-            IMAGE_HEIGHT,
-            IMAGE_WIDTH,
-            IN_CHANNELS,
-            PADDING,
-        >;
+        type Config = ConvConfig<F, OUT_CHANNELS, STRIDE, IN_CHANNELS, PADDING>;
         type FloorPlanner = SimpleFloorPlanner;
 
         fn without_witnesses(&self) -> Self {

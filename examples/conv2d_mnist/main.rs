@@ -52,20 +52,10 @@ struct Config<
 > where
     Value<F>: TensorType,
 {
-    l0: ConvConfig<
-        F,
-        KERNEL_HEIGHT,
-        KERNEL_WIDTH,
-        OUT_CHANNELS,
-        STRIDE,
-        IMAGE_HEIGHT,
-        IMAGE_WIDTH,
-        IN_CHANNELS,
-        PADDING,
-    >,
+    l0: ConvConfig<F, OUT_CHANNELS, STRIDE, IN_CHANNELS, PADDING>,
     l0q: EltwiseConfig<F, BITS, DivideBy<F, 32>>,
     l1: EltwiseConfig<F, BITS, ReLu<F>>,
-    l2: Affine1dConfig<F, LEN, CLASSES>,
+    l2: Affine1dConfig<F>,
     public_output: Column<Instance>,
 }
 
@@ -167,12 +157,10 @@ where
 
         let l0 = ConvConfig::<
             F,
-            KERNEL_HEIGHT,
-            KERNEL_WIDTH,
+
             OUT_CHANNELS,
             STRIDE,
-            IMAGE_HEIGHT,
-            IMAGE_WIDTH,
+    
             IN_CHANNELS,
             PADDING,
         >::configure(
@@ -187,7 +175,7 @@ where
         let l1: EltwiseConfig<F, BITS, ReLu<F>> =
             EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[1, LEN]), None);
 
-        let l2: Affine1dConfig<F, LEN, CLASSES> = Affine1dConfig::configure(
+        let l2: Affine1dConfig<F> = Affine1dConfig::configure(
             cs,
             &[
                 advices.get_slice(&[0..CLASSES], &[CLASSES, LEN]),
@@ -221,7 +209,7 @@ where
         );
         let l0qout = config.l0q.layout(&mut layouter, l0out);
         let mut l1out = config.l1.layout(&mut layouter, l0qout);
-        l1out.reshape(&[1,LEN]);
+        l1out.reshape(&[1, LEN]);
         let l2out = config.l2.layout(
             &mut layouter,
             l1out,
