@@ -3,7 +3,7 @@ use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, Column, ConstraintSystem, Error,
-        Instance,
+        Fixed, Instance,
     },
     poly::{
         commitment::ParamsProver,
@@ -149,18 +149,20 @@ where
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let _output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
+        let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
         let num_advices = max(max(output_width, IMAGE_WIDTH), LEN + 3);
 
-        let advices = VarTensor::Advice(Tensor::from((0..num_advices).map(|_| {
+        let advices = VarTensor::from(Tensor::from((0..num_advices).map(|_| {
             let col = cs.advice_column();
             cs.enable_equality(col);
             col
         })));
 
-        let mut kernel = Tensor::from((0..KERNEL_WIDTH * KERNEL_HEIGHT).map(|_| cs.fixed_column()));
+        let mut kernel: Tensor<Column<Fixed>> = (0..KERNEL_WIDTH * KERNEL_HEIGHT)
+            .map(|_| cs.fixed_column())
+            .into();
         kernel.reshape(&[KERNEL_WIDTH, KERNEL_HEIGHT]);
 
         let l0 = ConvConfig::<
@@ -175,24 +177,24 @@ where
             PADDING,
         >::configure(
             cs,
-            &[VarTensor::Fixed(kernel)],
-            advices.get_slice(&[0..IMAGE_WIDTH]),
-            advices.get_slice(&[0..output_width]),
+            &[VarTensor::from(kernel)],
+            advices.get_slice(&[0..IMAGE_WIDTH], &[IMAGE_WIDTH, IMAGE_HEIGHT]),
+            advices.get_slice(&[0..output_width], &[output_width, output_height]),
         );
 
         let l0q: EltwiseConfig<F, BITS, DivideBy<F, 32>> =
-            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN]), None);
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[1, LEN]), None);
         let l1: EltwiseConfig<F, BITS, ReLu<F>> =
-            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN]), None);
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[1, LEN]), None);
 
         let l2: Affine1dConfig<F, LEN, CLASSES> = Affine1dConfig::configure(
             cs,
             &[
-                advices.get_slice(&[0..CLASSES]),
-                advices.get_slice(&[LEN + 2..LEN + 3]),
+                advices.get_slice(&[0..CLASSES], &[CLASSES, LEN]),
+                advices.get_slice(&[LEN + 2..LEN + 3], &[1, CLASSES]),
             ],
-            advices.get_slice(&[LEN..LEN + 1]),
-            advices.get_slice(&[CLASSES + 1..CLASSES + 2]),
+            advices.get_slice(&[LEN..LEN + 1], &[1, LEN]),
+            advices.get_slice(&[CLASSES + 1..CLASSES + 2], &[1, CLASSES]),
         );
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -211,26 +213,27 @@ where
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
+        let x: Tensor<Value<F>> = self.input.clone().into();
         let l0out = config.l0.layout(
             &mut layouter,
-            ValTensor::Value(self.input.clone()),
-            &[ValTensor::Value(self.l0_params.clone())],
+            ValTensor::from(x),
+            &[ValTensor::from(self.l0_params.clone())],
         );
         let l0qout = config.l0q.layout(&mut layouter, l0out);
         let mut l1out = config.l1.layout(&mut layouter, l0qout);
-        l1out.reshape(&[1, l1out.dims()[0]]);
+        l1out.reshape(&[1,LEN]);
         let l2out = config.l2.layout(
             &mut layouter,
             l1out,
             &self
                 .l2_params
                 .iter()
-                .map(|a| ValTensor::Value(a.clone().into()))
+                .map(|a| ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(a.clone())))
                 .collect::<Vec<ValTensor<F>>>(),
         );
 
         match l2out {
-            ValTensor::PrevAssigned(v) => v.enum_map(|i, x| {
+            ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|i, x| {
                 layouter
                     .constrain_instance(x.cell(), config.public_output, i)
                     .unwrap()
@@ -311,12 +314,14 @@ pub fn runconv() {
 
     kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_WIDTH, KERNEL_HEIGHT]);
 
-    let l2biases = Tensor::<i32>::from(myparams.biases.into_iter().map(|fl| {
+    let mut l2biases = Tensor::<i32>::from(myparams.biases.into_iter().map(|fl| {
         let dx = fl * (32 as f32);
         let rounded = dx.round();
         let integral: i32 = unsafe { rounded.to_int_unchecked() };
         integral
     }));
+
+    l2biases.reshape(&[1, CLASSES]);
 
     let mut l2weights = Tensor::<i32>::from(myparams.weights.into_iter().flatten().map(|fl| {
         let dx = fl * (32 as f32);

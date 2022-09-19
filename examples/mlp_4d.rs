@@ -1,7 +1,7 @@
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{Layouter, SimpleFloorPlanner},
+    circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
 use halo2curves::pasta::Fp as F;
@@ -54,36 +54,36 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let advices = VarTensor::Advice(Tensor::from((0..LEN + 3).map(|_| {
-            let col = cs.advice_column();
-            cs.enable_equality(col);
-            col
-        })));
+        let advices = VarTensor::from(Tensor::from((0..LEN + 3).map(|_| {
+                let col = cs.advice_column();
+                cs.enable_equality(col);
+                col
+            })));
 
-        let kernel = advices.get_slice(&[0..LEN]);
-        let bias = advices.get_slice(&[LEN + 2..LEN + 3]);
+        let kernel = advices.get_slice(&[0..LEN], &[LEN, LEN]);
+        let bias = advices.get_slice(&[LEN + 2..LEN + 3], &[1, LEN]);
 
         let l0 = Affine1dConfig::<F, LEN, LEN>::configure(
             cs,
             &[kernel.clone(), bias.clone()],
-            advices.get_slice(&[LEN..LEN + 1]),
-            advices.get_slice(&[LEN + 1..LEN + 2]),
+            advices.get_slice(&[LEN..LEN + 1], &[1, LEN]),
+            advices.get_slice(&[LEN + 1..LEN + 2], &[1, LEN]),
         );
 
         let l2 = Affine1dConfig::<F, LEN, LEN>::configure(
             cs,
             &[kernel, bias],
-            advices.get_slice(&[LEN..LEN + 1]),
-            advices.get_slice(&[LEN + 1..LEN + 2]),
+            advices.get_slice(&[LEN..LEN + 1], &[1, LEN]),
+            advices.get_slice(&[LEN + 1..LEN + 2], &[1, LEN]),
         );
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
         let [l1, l3]: [EltwiseConfig<F, BITS, ReLu<F>>; 2] =
-            EltwiseConfig::configure_multiple(cs, advices.get_slice(&[0..LEN]));
+            EltwiseConfig::configure_multiple(cs, advices.get_slice(&[0..LEN], &[1, LEN]));
 
         // sets up a new Divide by table
         let l4: EltwiseConfig<F, BITS, DivideBy<F, 128>> =
-            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN]), None);
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[1, LEN]), None);
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -103,14 +103,14 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let x = self.input.clone();
+        let x: Tensor<Value<F>> = self.input.clone().into();
         let x = config.l0.layout(
             &mut layouter,
-            ValTensor::Value(x.into()),
+            ValTensor::from(x),
             &self
                 .l0_params
                 .iter()
-                .map(|a| ValTensor::Value(a.clone().into()))
+                .map(|a| ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(a.clone())))
                 .collect::<Vec<ValTensor<F>>>(),
         );
         let x = config.l1.layout(&mut layouter, x);
@@ -120,13 +120,13 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
             &self
                 .l2_params
                 .iter()
-                .map(|a| ValTensor::Value(a.clone().into()))
+                .map(|a| ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(a.clone())))
                 .collect::<Vec<ValTensor<F>>>(),
         );
         let x = config.l3.layout(&mut layouter, x);
         let x = config.l4.layout(&mut layouter, x);
         match x {
-            ValTensor::PrevAssigned(v) => v.enum_map(|i, x| {
+            ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|i, x| {
                 layouter
                     .constrain_instance(x.cell(), config.public_output, i)
                     .unwrap()
