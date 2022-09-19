@@ -6,23 +6,21 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-#halo2_proofs = { git = "https://github.com/zcash/halo2.git", rev = "a898d65ae3ad3d41987666f6a03cfc15edae01c4"}
-#halo2_proofs = { git = "https://github.com/zcash/halo2.git", branch = "reduce-ast-evaluator-memory-usage"}
-#halo2_proofs = { path = "../halo2/halo2_proofs" }
-#halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git"}
 halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2", tag = "v2022_08_19"}
+halo2curves = { git = 'https://github.com/privacy-scaling-explorations/halo2curves', tag = "0.2.1" }
 nalgebra = "0.31"
-#pasta_curves = "0.4"
 rand = "0.8"
 mnist = "0.5"
 ndarray = "0.15"
+itertools = "0.10.3"
+
 tensorflow = {version = "0.18.0", features = ["eager"], optional = true }
 plotters = { version = "0.3.0", optional = true }
-# pse:
-halo2curves = { git = 'https://github.com/privacy-scaling-explorations/halo2curves', tag = "0.2.1" }
-itertools = "0.10.3"
+tract-onnx = { version = "0.17.7", optional = true }
+
 
 
 [features]
 dev-graph = ["halo2_proofs/dev-graph", "plotters"]
 tensorflow = ["dep:tensorflow"]
+onnx = ["dep:tract-onnx"]

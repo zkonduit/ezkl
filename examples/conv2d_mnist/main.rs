@@ -3,7 +3,7 @@ use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, Column, ConstraintSystem, Error,
-        Instance,
+        Fixed, Instance,
     },
     poly::{
         commitment::ParamsProver,
@@ -21,12 +21,12 @@ use halo2_proofs::{
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp as F;
 use halo2deeplearning::fieldutils;
-use halo2deeplearning::fieldutils::i32tofelt;
+use halo2deeplearning::fieldutils::i32_to_felt;
 use halo2deeplearning::nn::affine::Affine1dConfig;
 use halo2deeplearning::nn::cnvrl::ConvConfig;
 use halo2deeplearning::nn::*;
-use halo2deeplearning::tensor::{Tensor, TensorType};
-use halo2deeplearning::tensor_ops::eltwise::{DivideBy, NonlinConfig1d, ReLu};
+use halo2deeplearning::tensor::*;
+use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, ReLu};
 use mnist::*;
 use rand::rngs::OsRng;
 use std::cmp::max;
@@ -39,8 +39,7 @@ struct Config<
     F: FieldExt + TensorType,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust stable
     const CLASSES: usize,
-    const INBITS: usize,
-    const OUTBITS: usize,
+    const BITS: usize,
     // Convolution
     const KERNEL_HEIGHT: usize,
     const KERNEL_WIDTH: usize,
@@ -53,20 +52,10 @@ struct Config<
 > where
     Value<F>: TensorType,
 {
-    l0: ConvConfig<
-        F,
-        KERNEL_HEIGHT,
-        KERNEL_WIDTH,
-        OUT_CHANNELS,
-        STRIDE,
-        IMAGE_HEIGHT,
-        IMAGE_WIDTH,
-        IN_CHANNELS,
-        PADDING,
-    >,
-    l0q: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 32>>,
-    l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>>,
-    l2: Affine1dConfig<F, LEN, CLASSES>,
+    l0: ConvConfig<F, OUT_CHANNELS, STRIDE, IN_CHANNELS, PADDING>,
+    l0q: EltwiseConfig<F, BITS, DivideBy<F, 32>>,
+    l1: EltwiseConfig<F, BITS, ReLu<F>>,
+    l2: Affine1dConfig<F>,
     public_output: Column<Instance>,
 }
 
@@ -75,8 +64,7 @@ struct MyCircuit<
     F: FieldExt,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened
     const CLASSES: usize,
-    const INBITS: usize,
-    const OUTBITS: usize,
+    const BITS: usize,
     // Convolution
     const KERNEL_HEIGHT: usize,
     const KERNEL_WIDTH: usize,
@@ -100,8 +88,7 @@ impl<
         F: FieldExt + TensorType,
         const LEN: usize,
         const CLASSES: usize,
-        const INBITS: usize,
-        const OUTBITS: usize,
+        const BITS: usize,
         // Convolution
         const KERNEL_HEIGHT: usize,
         const KERNEL_WIDTH: usize,
@@ -116,8 +103,7 @@ impl<
         F,
         LEN,
         CLASSES,
-        INBITS,
-        OUTBITS,
+        BITS,
         KERNEL_HEIGHT,
         KERNEL_WIDTH,
         OUT_CHANNELS,
@@ -134,8 +120,7 @@ where
         F,
         LEN,
         CLASSES,
-        INBITS,
-        OUTBITS,
+        BITS,
         KERNEL_HEIGHT,
         KERNEL_WIDTH,
         OUT_CHANNELS,
@@ -154,46 +139,50 @@ where
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let _output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
+        let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
         let num_advices = max(max(output_width, IMAGE_WIDTH), LEN + 3);
 
-        let advices = Tensor::from((0..num_advices).map(|_| cs.advice_column()));
-        advices.map(|col| cs.enable_equality(col));
+        let advices = VarTensor::from(Tensor::from((0..num_advices).map(|_| {
+            let col = cs.advice_column();
+            cs.enable_equality(col);
+            col
+        })));
 
-        let mut kernel = Tensor::from((0..KERNEL_WIDTH * KERNEL_HEIGHT).map(|_| cs.fixed_column()));
+        let mut kernel: Tensor<Column<Fixed>> = (0..KERNEL_WIDTH * KERNEL_HEIGHT)
+            .map(|_| cs.fixed_column())
+            .into();
         kernel.reshape(&[KERNEL_WIDTH, KERNEL_HEIGHT]);
 
         let l0 = ConvConfig::<
             F,
-            KERNEL_HEIGHT,
-            KERNEL_WIDTH,
+
             OUT_CHANNELS,
             STRIDE,
-            IMAGE_HEIGHT,
-            IMAGE_WIDTH,
+    
             IN_CHANNELS,
             PADDING,
         >::configure(
             cs,
-            &[ParamType::Fixed(kernel)],
-            ParamType::Advice(advices.clone()).get_slice(&[0..IMAGE_WIDTH]),
-            ParamType::Advice(advices.clone()).get_slice(&[0..output_width]),
+            &[VarTensor::from(kernel)],
+            advices.get_slice(&[0..IMAGE_WIDTH], &[IMAGE_WIDTH, IMAGE_HEIGHT]),
+            advices.get_slice(&[0..output_width], &[output_width, output_height]),
         );
-        let l0q: NonlinConfig1d<F, LEN, INBITS, OUTBITS, DivideBy<F, 32>> =
-            NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
-        let l1: NonlinConfig1d<F, LEN, INBITS, OUTBITS, ReLu<F>> =
-            NonlinConfig1d::configure(cs, advices[..LEN].try_into().unwrap());
 
-        let l2: Affine1dConfig<F, LEN, CLASSES> = Affine1dConfig::configure(
+        let l0q: EltwiseConfig<F, BITS, DivideBy<F, 32>> =
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[1, LEN]), None);
+        let l1: EltwiseConfig<F, BITS, ReLu<F>> =
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[1, LEN]), None);
+
+        let l2: Affine1dConfig<F> = Affine1dConfig::configure(
             cs,
             &[
-                ParamType::Advice(advices.get_slice(&[0..CLASSES])),
-                ParamType::Advice(advices.get_slice(&[LEN + 2..LEN + 3])),
+                advices.get_slice(&[0..CLASSES], &[CLASSES, LEN]),
+                advices.get_slice(&[LEN + 2..LEN + 3], &[1, CLASSES]),
             ],
-            ParamType::Advice(advices.get_slice(&[LEN..LEN + 1])),
-            ParamType::Advice(advices.get_slice(&[CLASSES + 1..CLASSES + 2])),
+            advices.get_slice(&[LEN..LEN + 1], &[1, LEN]),
+            advices.get_slice(&[CLASSES + 1..CLASSES + 2], &[1, CLASSES]),
         );
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -212,30 +201,33 @@ where
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
+        let x: Tensor<Value<F>> = self.input.clone().into();
         let l0out = config.l0.layout(
             &mut layouter,
-            IOType::Value(self.input.clone()),
-            &[IOType::Value(self.l0_params.clone())],
+            ValTensor::from(x),
+            &[ValTensor::from(self.l0_params.clone())],
         );
-        let l0qout = config.l0q.layout(&mut layouter, l0out)?;
-        let mut l1out = config.l1.layout(&mut layouter, l0qout)?;
-        l1out.reshape(&[1, l1out.dims()[0]]);
+        let l0qout = config.l0q.layout(&mut layouter, l0out);
+        let mut l1out = config.l1.layout(&mut layouter, l0qout);
+        l1out.reshape(&[1, LEN]);
         let l2out = config.l2.layout(
             &mut layouter,
-            IOType::PrevAssigned(l1out),
+            l1out,
             &self
                 .l2_params
                 .iter()
-                .map(|a| IOType::Value(a.clone().into()))
-                .collect::<Vec<IOType<F>>>(),
+                .map(|a| ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(a.clone())))
+                .collect::<Vec<ValTensor<F>>>(),
         );
 
-        // tie the last output to public inputs (instance column)
-        l2out.enum_map(|i, a| {
-            layouter
-                .constrain_instance(a.cell(), config.public_output, i)
-                .unwrap()
-        });
+        match l2out {
+            ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|i, x| {
+                layouter
+                    .constrain_instance(x.cell(), config.public_output, i)
+                    .unwrap()
+            }),
+            _ => panic!("Should be assigned"),
+        };
 
         Ok(())
     }
@@ -275,7 +267,7 @@ pub fn runconv() {
         .finalize();
 
     // Can use an Array2 or Array3 here (Array3 for visualization)
-    let mut train_data = Tensor::from(trn_img.iter().map(|x| i32tofelt::<F>(*x as i32 / 16)));
+    let mut train_data = Tensor::from(trn_img.iter().map(|x| i32_to_felt::<F>(*x as i32 / 16)));
     train_data.reshape(&[50_000, 28, 28]);
 
     let mut train_labels = Tensor::from(trn_lbl.iter().map(|x| *x as f32));
@@ -302,7 +294,7 @@ pub fn runconv() {
                 let dx = (fl as f32) * (32 as f32);
                 let rounded = dx.round();
                 let integral: i32 = unsafe { rounded.to_int_unchecked() };
-                let felt = fieldutils::i32tofelt(integral);
+                let felt = fieldutils::i32_to_felt(integral);
                 Value::known(felt)
             }),
     );
@@ -310,12 +302,14 @@ pub fn runconv() {
 
     kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_WIDTH, KERNEL_HEIGHT]);
 
-    let l2biases = Tensor::<i32>::from(myparams.biases.into_iter().map(|fl| {
+    let mut l2biases = Tensor::<i32>::from(myparams.biases.into_iter().map(|fl| {
         let dx = fl * (32 as f32);
         let rounded = dx.round();
         let integral: i32 = unsafe { rounded.to_int_unchecked() };
         integral
     }));
+
+    l2biases.reshape(&[1, CLASSES]);
 
     let mut l2weights = Tensor::<i32>::from(myparams.weights.into_iter().flatten().map(|fl| {
         let dx = fl * (32 as f32);
@@ -334,7 +328,6 @@ pub fn runconv() {
         F,
         LEN,
         10,
-        16,
         16,
         KERNEL_HEIGHT,
         KERNEL_WIDTH,
@@ -356,7 +349,7 @@ pub fn runconv() {
     .into_iter()
     .into();
 
-    let pi_inner: Tensor<F> = public_input.map(|x| i32tofelt::<F>(x).into());
+    let pi_inner: Tensor<F> = public_input.map(|x| i32_to_felt::<F>(x).into());
     let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner]];
 
     //	Real proof

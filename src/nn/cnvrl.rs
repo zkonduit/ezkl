@@ -12,12 +12,8 @@ use crate::tensor_ops::*;
 #[derive(Debug, Clone)]
 pub struct ConvConfig<
     F: FieldExt + TensorType,
-    const KERNEL_HEIGHT: usize,
-    const KERNEL_WIDTH: usize,
     const OUT_CHANNELS: usize,
     const STRIDE: usize,
-    const IMAGE_HEIGHT: usize,
-    const IMAGE_WIDTH: usize,
     const IN_CHANNELS: usize,
     const PADDING: usize,
 > where
@@ -31,50 +27,34 @@ pub struct ConvConfig<
 
 impl<
         F: FieldExt + TensorType,
-        const KERNEL_HEIGHT: usize,
-        const KERNEL_WIDTH: usize,
         const OUT_CHANNELS: usize,
         const STRIDE: usize,
-        const IMAGE_HEIGHT: usize,
-        const IMAGE_WIDTH: usize,
         const IN_CHANNELS: usize,
         const PADDING: usize,
-    > LayerConfig<F>
-    for ConvConfig<
-        F,
-        KERNEL_HEIGHT,
-        KERNEL_WIDTH,
-        OUT_CHANNELS,
-        STRIDE,
-        IMAGE_HEIGHT,
-        IMAGE_WIDTH,
-        IN_CHANNELS,
-        PADDING,
-    >
+    > LayerConfig<F> for ConvConfig<F, OUT_CHANNELS, STRIDE, IN_CHANNELS, PADDING>
 where
     Value<F>: TensorType,
 {
     fn configure(
         meta: &mut ConstraintSystem<F>,
-        params: &[ParamType],
-        input: ParamType,
-        output: ParamType,
+        params: &[VarTensor],
+        input: VarTensor,
+        output: VarTensor,
     ) -> Self {
         assert!(params.len() == 1);
-
-        let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
-        let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
         let kernel = params[0].clone();
         kernel.enable_equality(meta);
         input.enable_equality(meta);
         output.enable_equality(meta);
 
+        let image_height = input.dims()[1];
+
         let config = Self {
             selector: meta.selector(),
-            kernel: IOConfig::configure(meta, kernel, &[KERNEL_WIDTH, KERNEL_HEIGHT]),
-            image: IOConfig::configure(meta, input, &[IMAGE_WIDTH, IMAGE_HEIGHT]),
-            output: IOConfig::configure(meta, output, &[output_width, output_height]),
+            kernel: IOConfig::configure(meta, kernel),
+            image: IOConfig::configure(meta, input),
+            output: IOConfig::configure(meta, output),
         };
 
         meta.create_gate("convolution", |meta| {
@@ -83,13 +63,13 @@ where
             // Get output expressions for each input channel
             let intermediate_outputs = (0..IN_CHANNELS)
                 .map(|rotation| {
-                    let image = config.image.query(meta, rotation * IMAGE_HEIGHT);
-                    let kernel = config.kernel.query(meta, rotation * IMAGE_HEIGHT);
+                    let image = config.image.query(meta, rotation * image_height);
+                    let kernel = config.kernel.query(meta, rotation * image_height);
                     convolution::<_, PADDING, STRIDE>(kernel, image)
                 })
                 .collect();
 
-            let witnessed_output = config.output.query(meta, IN_CHANNELS * IMAGE_HEIGHT);
+            let witnessed_output = config.output.query(meta, IN_CHANNELS * image_height);
             let expected_output = op(intermediate_outputs, |a, b| a + b);
 
             let constraints = witnessed_output.enum_map(|i, o| o - expected_output[i].clone());
@@ -103,10 +83,12 @@ where
     fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
-        input: IOType<F>,
-        kernels: &[IOType<F>],
+        input: ValTensor<F>,
+        params: &[ValTensor<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
-        assert!(kernels.len() == 1);
+        assert!(params.len() == 1);
+        let kernel = params[0].clone();
+        let image_height = input.dims()[2];
         layouter
             .assign_region(
                 || "assign image and kernel",
@@ -116,27 +98,29 @@ where
 
                     let outputs = (0..IN_CHANNELS)
                         .map(|i| {
-                            self.kernel.assign(
-                                &mut region,
-                                offset,
-                                kernels[0].get_slice(&[i..i + 1]),
-                            );
+                            self.kernel
+                                .assign(&mut region, offset, kernel.get_slice(&[i..i + 1]));
 
                             self.image
                                 .assign(&mut region, offset, input.get_slice(&[i..i + 1]));
 
                             let output = match input.clone() {
-                                IOType::Value(img) => match kernels[0].clone() {
-                                    IOType::Value(k) => convolution::<_, PADDING, STRIDE>(
-                                        k.get_slice(&[i..i + 1]),
-                                        img.get_slice(&[i..i + 1]),
-                                    ),
+                                ValTensor::Value {
+                                    inner: img,
+                                    dims: _,
+                                } => match kernel.clone() {
+                                    ValTensor::Value { inner: k, dims: _ } => {
+                                        convolution::<_, PADDING, STRIDE>(
+                                            k.get_slice(&[i..i + 1]),
+                                            img.get_slice(&[i..i + 1]),
+                                        )
+                                    }
                                     _ => panic!("not implemented"),
                                 },
                                 _ => panic!("not implemented"),
                             };
 
-                            offset += IMAGE_HEIGHT;
+                            offset += image_height;
                             output
                         })
                         .collect();
@@ -144,7 +128,7 @@ where
                     let output = op(outputs, |a, b| a + b);
                     Ok(self
                         .output
-                        .assign(&mut region, offset, IOType::Value(output)))
+                        .assign(&mut region, offset, ValTensor::from(output)))
                 },
             )
             .unwrap()
@@ -153,22 +137,26 @@ where
     fn layout(
         &self,
         layouter: &mut impl Layouter<F>,
-        input: IOType<F>,
-        kernels: &[IOType<F>],
-    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
-        assert!(kernels.len() == 1);
-        let horz = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
-        let vert = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
+        input: ValTensor<F>,
+        params: &[ValTensor<F>],
+    ) -> ValTensor<F> {
+        assert_eq!(params.len(), 1);
+        let kernel = params[0].clone();
+        let (image_width, image_height) = (input.dims()[1], input.dims()[2]);
+        let (kernel_width, kernel_height) = (kernel.dims()[2], kernel.dims()[3]);
+        let horz = (image_width + 2 * PADDING - kernel_width) / STRIDE + 1;
+        let vert = (image_height + 2 * PADDING - kernel_height) / STRIDE + 1;
+
         let t = Tensor::from((0..OUT_CHANNELS).map(|i| {
             self.assign(
                 &mut layouter.namespace(|| format!("filter: {:?}", i)),
                 input.clone(),
-                &[kernels[0].get_slice(&[i..i + 1])],
+                &[kernel.get_slice(&[i..i + 1])],
             )
         }));
         let mut t = t.flatten();
         t.reshape(&[OUT_CHANNELS, horz, vert]);
-        t
+        ValTensor::from(t)
     }
 }
 
@@ -200,8 +188,8 @@ mod tests {
     where
         Value<F>: TensorType,
     {
-        image: IOType<F>,
-        kernels: IOType<F>,
+        image: ValTensor<F>,
+        kernels: ValTensor<F>,
     }
 
     impl<
@@ -229,17 +217,7 @@ mod tests {
     where
         Value<F>: TensorType,
     {
-        type Config = ConvConfig<
-            F,
-            KERNEL_HEIGHT,
-            KERNEL_WIDTH,
-            OUT_CHANNELS,
-            STRIDE,
-            IMAGE_HEIGHT,
-            IMAGE_WIDTH,
-            IN_CHANNELS,
-            PADDING,
-        >;
+        type Config = ConvConfig<F, OUT_CHANNELS, STRIDE, IN_CHANNELS, PADDING>;
         type FloorPlanner = SimpleFloorPlanner;
 
         fn without_witnesses(&self) -> Self {
@@ -249,12 +227,13 @@ mod tests {
         // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
         // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
         fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+            let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
             let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
             let num_advices = max(output_width, IMAGE_WIDTH);
 
             let advices =
-                ParamType::Advice(Tensor::from((0..num_advices).map(|_| meta.advice_column())));
+                VarTensor::from(Tensor::from((0..num_advices).map(|_| meta.advice_column())));
 
             let mut kernel =
                 Tensor::from((0..KERNEL_WIDTH * KERNEL_HEIGHT).map(|_| meta.fixed_column()));
@@ -262,9 +241,9 @@ mod tests {
 
             Self::Config::configure(
                 meta,
-                &[ParamType::Fixed(kernel)],
-                advices.get_slice(&[0..IMAGE_WIDTH]),
-                advices.get_slice(&[0..output_width]),
+                &[VarTensor::from(kernel)],
+                advices.get_slice(&[0..IMAGE_WIDTH], &[IMAGE_WIDTH, IMAGE_HEIGHT]),
+                advices.get_slice(&[0..output_width], &[output_width, output_height]),
             )
         }
 
@@ -313,8 +292,8 @@ mod tests {
             IN_CHANNELS,
             PADDING,
         > {
-            image: IOType::Value(image),
-            kernels: IOType::Value(kernels),
+            image: ValTensor::from(image),
+            kernels: ValTensor::from(kernels),
         };
 
         let k = 8;

@@ -1,17 +1,16 @@
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{Layouter, SimpleFloorPlanner},
+    circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
 use halo2curves::pasta::Fp as F;
-use halo2deeplearning::fieldutils::i32tofelt;
+use halo2deeplearning::fieldutils::i32_to_felt;
 use halo2deeplearning::nn::affine::Affine1dConfig;
 use halo2deeplearning::nn::*;
-use halo2deeplearning::tensor::{Tensor, TensorType};
-use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu};
+use halo2deeplearning::tensor::*;
+use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, ReLu};
 use std::marker::PhantomData;
-use std::rc::Rc;
 
 // A columnar ReLu MLP
 #[derive(Clone)]
@@ -20,13 +19,11 @@ struct MyConfig<
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust
     const BITS: usize,
 > {
-    relutable: Rc<EltwiseTable<F, BITS, ReLu<F>>>,
-    divtable: Rc<EltwiseTable<F, BITS, DivideBy<F, 128>>>,
-    l0: Affine1dConfig<F, LEN, LEN>,
-    l1: EltwiseConfig<F, LEN, BITS, ReLu<F>>,
-    l2: Affine1dConfig<F, LEN, LEN>,
-    l3: EltwiseConfig<F, LEN, BITS, ReLu<F>>,
-    l4: EltwiseConfig<F, LEN, BITS, DivideBy<F, 128>>,
+    l0: Affine1dConfig<F>,
+    l1: EltwiseConfig<F, BITS, ReLu<F>>,
+    l2: Affine1dConfig<F>,
+    l3: EltwiseConfig<F, BITS, ReLu<F>>,
+    l4: EltwiseConfig<F, BITS, DivideBy<F, 128>>,
     public_output: Column<Instance>,
 }
 
@@ -57,59 +54,41 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let advices = Tensor::from((0..LEN + 3).map(|_| {
+        let advices = VarTensor::from(Tensor::from((0..LEN + 3).map(|_| {
             let col = cs.advice_column();
             cs.enable_equality(col);
             col
-        }));
+        })));
 
-        let relutable_config = EltwiseTable::<F, BITS, ReLu<F>>::configure(cs);
-        let divtable_config = EltwiseTable::<F, BITS, DivideBy<F, 128>>::configure(cs);
+        let kernel = advices.get_slice(&[0..LEN], &[LEN, LEN]);
+        let bias = advices.get_slice(&[LEN + 2..LEN + 3], &[1, LEN]);
 
-        let relutable = Rc::new(relutable_config);
-        let divtable = Rc::new(divtable_config);
-
-        let kernel = ParamType::Advice(advices.get_slice(&[0..LEN]).map(|a| a));
-        let bias = ParamType::Advice(advices.get_slice(&[LEN + 2..LEN + 3]).map(|a| a));
-
-        let l0 = Affine1dConfig::<F, LEN, LEN>::configure(
+        let l0 = Affine1dConfig::<F>::configure(
             cs,
             &[kernel.clone(), bias.clone()],
-            ParamType::Advice(advices.get_slice(&[LEN..LEN + 1])),
-            ParamType::Advice(advices.get_slice(&[LEN + 1..LEN + 2])),
+            advices.get_slice(&[LEN..LEN + 1], &[1, LEN]),
+            advices.get_slice(&[LEN + 1..LEN + 2], &[1, LEN]),
         );
 
-        let l1: EltwiseConfig<F, LEN, BITS, ReLu<F>> = EltwiseConfig::configure(
-            cs,
-            (&advices[..LEN]).clone().try_into().unwrap(),
-            relutable.clone(),
-        );
-
-        let l2 = Affine1dConfig::<F, LEN, LEN>::configure(
+        let l2 = Affine1dConfig::<F>::configure(
             cs,
             &[kernel, bias],
-            ParamType::Advice(advices.get_slice(&[LEN..LEN + 1])),
-            ParamType::Advice(advices.get_slice(&[LEN + 1..LEN + 2])),
+            advices.get_slice(&[LEN..LEN + 1], &[1, LEN]),
+            advices.get_slice(&[LEN + 1..LEN + 2], &[1, LEN]),
         );
 
-        let l3: EltwiseConfig<F, LEN, BITS, ReLu<F>> = EltwiseConfig::configure(
-            cs,
-            (&advices[..LEN]).clone().try_into().unwrap(),
-            relutable.clone(),
-        );
+        // sets up a new ReLU table and resuses it for l1 and l3 non linearities
+        let [l1, l3]: [EltwiseConfig<F, BITS, ReLu<F>>; 2] =
+            EltwiseConfig::configure_multiple(cs, advices.get_slice(&[0..LEN], &[1, LEN]));
 
-        let l4: EltwiseConfig<F, LEN, BITS, DivideBy<F, 128>> = EltwiseConfig::configure(
-            cs,
-            (&advices[..LEN]).clone().try_into().unwrap(),
-            divtable.clone(),
-        );
+        // sets up a new Divide by table
+        let l4: EltwiseConfig<F, BITS, DivideBy<F, 128>> =
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[1, LEN]), None);
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
 
         MyConfig {
-            relutable,
-            divtable,
             l0,
             l1,
             l2,
@@ -124,36 +103,36 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        // Layout the reused tables
-        config.relutable.layout(&mut layouter)?;
-        config.divtable.layout(&mut layouter)?;
-        let x = self.input.clone();
+        let x: Tensor<Value<F>> = self.input.clone().into();
         let x = config.l0.layout(
             &mut layouter,
-            IOType::Value(x.into()),
+            ValTensor::from(x),
             &self
                 .l0_params
                 .iter()
-                .map(|a| IOType::Value(a.clone().into()))
-                .collect::<Vec<IOType<F>>>(),
+                .map(|a| ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(a.clone())))
+                .collect::<Vec<ValTensor<F>>>(),
         );
-        let x = config.l1.layout(&mut layouter, x)?;
+        let x = config.l1.layout(&mut layouter, x);
         let x = config.l2.layout(
             &mut layouter,
-            IOType::PrevAssigned(x),
+            x,
             &self
                 .l2_params
                 .iter()
-                .map(|a| IOType::Value(a.clone().into()))
-                .collect::<Vec<IOType<F>>>(),
+                .map(|a| ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(a.clone())))
+                .collect::<Vec<ValTensor<F>>>(),
         );
-        let x = config.l3.layout(&mut layouter, x)?;
-        let x = config.l4.layout(&mut layouter, x)?;
-        x.enum_map(|i, x| {
-            layouter
-                .constrain_instance(x.cell(), config.public_output, i)
-                .unwrap()
-        });
+        let x = config.l3.layout(&mut layouter, x);
+        let x = config.l4.layout(&mut layouter, x);
+        match x {
+            ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|i, x| {
+                layouter
+                    .constrain_instance(x.cell(), config.public_output, i)
+                    .unwrap()
+            }),
+            _ => panic!("Should be assigned"),
+        };
         Ok(())
     }
 }
@@ -200,7 +179,7 @@ pub fn runmlp() {
         &circuit,
         vec![public_input
             .iter()
-            .map(|x| i32tofelt::<F>(*x).into())
+            .map(|x| i32_to_felt::<F>(*x).into())
             .collect()],
         //            vec![vec![(4).into(), (1).into(), (35).into(), (22).into()]],
     )

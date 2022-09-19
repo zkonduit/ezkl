@@ -1,10 +1,9 @@
-use crate::fieldutils::{felt_to_i32, i32tofelt};
-
+use crate::fieldutils::{felt_to_i32, i32_to_felt};
 
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{AssignedCell, Value},
-    plonk::{Advice, Assigned, Column, Expression, Fixed},
+    plonk::{Advice, Assigned, Column, ConstraintSystem, Expression, Fixed},
 };
 use itertools::Itertools;
 use std::fmt::Debug;
@@ -12,6 +11,168 @@ use std::iter::Iterator;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
+
+#[derive(Debug, Clone)]
+pub enum ValTensor<F: FieldExt + TensorType> {
+    Value {
+        inner: Tensor<Value<F>>,
+        dims: Vec<usize>,
+    },
+    AssignedValue {
+        inner: Tensor<Value<Assigned<F>>>,
+        dims: Vec<usize>,
+    },
+    PrevAssigned {
+        inner: Tensor<AssignedCell<Assigned<F>, F>>,
+        dims: Vec<usize>,
+    },
+}
+
+impl<F: FieldExt + TensorType> From<Tensor<Value<F>>> for ValTensor<F> {
+    fn from(t: Tensor<Value<F>>) -> ValTensor<F> {
+        ValTensor::Value {
+            inner: t.clone(),
+            dims: t.dims().to_vec(),
+        }
+    }
+}
+
+impl<F: FieldExt + TensorType> From<Tensor<Value<Assigned<F>>>> for ValTensor<F> {
+    fn from(t: Tensor<Value<Assigned<F>>>) -> ValTensor<F> {
+        ValTensor::AssignedValue {
+            inner: t.clone(),
+            dims: t.dims().to_vec(),
+        }
+    }
+}
+
+impl<F: FieldExt + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>> for ValTensor<F> {
+    fn from(t: Tensor<AssignedCell<Assigned<F>, F>>) -> ValTensor<F> {
+        ValTensor::PrevAssigned {
+            inner: t.clone(),
+            dims: t.dims().to_vec(),
+        }
+    }
+}
+
+impl<F: FieldExt + TensorType> ValTensor<F> {
+    pub fn get_slice(&self, indices: &[Range<usize>]) -> ValTensor<F> {
+        match self {
+            ValTensor::Value { inner: v, dims: _ } => {
+                let slice = v.get_slice(indices);
+                ValTensor::Value {
+                    inner: slice.clone(),
+                    dims: slice.dims().to_vec(),
+                }
+            }
+            ValTensor::AssignedValue { inner: v, dims: _ } => {
+                let slice = v.get_slice(indices);
+                ValTensor::AssignedValue {
+                    inner: slice.clone(),
+                    dims: slice.dims().to_vec(),
+                }
+            }
+            ValTensor::PrevAssigned { inner: v, dims: _ } => {
+                let slice = v.get_slice(indices);
+                ValTensor::PrevAssigned {
+                    inner: slice.clone(),
+                    dims: slice.dims().to_vec(),
+                }
+            }
+        }
+    }
+
+    pub fn reshape(&mut self, new_dims: &[usize]) {
+        match self {
+            ValTensor::Value { inner: _, dims: d } => {
+                assert!(d.iter().product::<usize>() == new_dims.iter().product());
+                *d = new_dims.to_vec();
+            }
+            ValTensor::AssignedValue { inner: _, dims: d } => {
+                assert!(d.iter().product::<usize>() == new_dims.iter().product());
+                *d = new_dims.to_vec();
+            }
+            ValTensor::PrevAssigned { inner: _, dims: d } => {
+                assert!(d.iter().product::<usize>() == new_dims.iter().product());
+                *d = new_dims.to_vec();
+            }
+        }
+    }
+
+    pub fn dims(&self) -> &[usize] {
+        match self {
+            ValTensor::Value { inner: _, dims: d } => d,
+            ValTensor::AssignedValue { inner: _, dims: d } => d,
+            ValTensor::PrevAssigned { inner: _, dims: d } => d,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum VarTensor {
+    Advice {
+        inner: Tensor<Column<Advice>>,
+        dims: Vec<usize>,
+    },
+    Fixed {
+        inner: Tensor<Column<Fixed>>,
+        dims: Vec<usize>,
+    },
+}
+
+impl From<Tensor<Column<Advice>>> for VarTensor {
+    fn from(t: Tensor<Column<Advice>>) -> VarTensor {
+        VarTensor::Advice {
+            inner: t.clone(),
+            dims: t.dims().to_vec(),
+        }
+    }
+}
+
+impl From<Tensor<Column<Fixed>>> for VarTensor {
+    fn from(t: Tensor<Column<Fixed>>) -> VarTensor {
+        VarTensor::Fixed {
+            inner: t.clone(),
+            dims: t.dims().to_vec(),
+        }
+    }
+}
+
+impl VarTensor {
+    pub fn dims(&self) -> &[usize] {
+        match self {
+            VarTensor::Advice { inner: _, dims: d } => d,
+            VarTensor::Fixed { inner: _, dims: d } => d,
+        }
+    }
+
+    pub fn get_slice(&self, indices: &[Range<usize>], new_dims: &[usize]) -> VarTensor {
+        match self {
+            VarTensor::Advice { inner: v, dims: _ } => VarTensor::Advice {
+                inner: v.get_slice(indices),
+                dims: new_dims.to_vec(),
+            },
+            VarTensor::Fixed { inner: v, dims: _ } => VarTensor::Fixed {
+                inner: v.get_slice(indices),
+                dims: new_dims.to_vec(),
+            },
+        }
+    }
+
+    pub fn enable_equality<F: FieldExt>(&self, meta: &mut ConstraintSystem<F>) {
+        match self {
+            VarTensor::Advice {
+                inner: advices,
+                dims: _,
+            } => {
+                for advice in advices.iter() {
+                    meta.enable_equality(*advice);
+                }
+            }
+            VarTensor::Fixed { inner: _, dims: _ } => {}
+        }
+    }
+}
 
 pub trait TensorType: Clone + Debug + 'static {
     /// Returns the zero value.
@@ -36,21 +197,18 @@ tensor_type!(usize, USize, 0);
 tensor_type!((), Empty, ());
 
 impl<T: TensorType> TensorType for Tensor<T> {
-    /// Returns the zero value.
     fn zero() -> Option<Self> {
         Some(Tensor::new(Some(&[T::zero().unwrap()]), &[1]).unwrap())
     }
 }
 
 impl<T: TensorType> TensorType for Value<T> {
-    /// Returns the zero value.
     fn zero() -> Option<Self> {
-        Some(Value::known(T::zero().unwrap().into()))
+        Some(Value::known(T::zero().unwrap()))
     }
 }
 
 impl<F: FieldExt> TensorType for Assigned<F> {
-    /// Returns the zero value.
     fn zero() -> Option<Self> {
         Some(F::zero().into())
     }
@@ -129,7 +287,7 @@ impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>
     fn from(value: Tensor<AssignedCell<Assigned<F>, F>>) -> Tensor<i32> {
         let mut output = Vec::new();
         value.map(|x| {
-            x.clone().evaluate().value().map(|y| {
+            x.evaluate().value().map(|y| {
                 let e = felt_to_i32(*y);
                 output.push(e);
                 e
@@ -162,7 +320,7 @@ impl<F: FieldExt + TensorType + Clone> From<Tensor<Value<F>>> for Tensor<Value<A
 impl<F: FieldExt + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> {
     fn from(mut t: Tensor<i32>) -> Tensor<Value<F>> {
         let mut ta: Tensor<Value<F>> =
-            Tensor::from((0..t.len()).map(|i| Value::known(i32tofelt::<F>(t[i]).into())));
+            Tensor::from((0..t.len()).map(|i| Value::known(i32_to_felt::<F>(t[i]))));
         ta.reshape(t.dims());
         ta
     }
