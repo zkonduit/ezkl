@@ -12,7 +12,6 @@ use crate::tensor_ops::*;
 #[derive(Debug, Clone)]
 pub struct ConvConfig<
     F: FieldExt + TensorType,
-    const OUT_CHANNELS: usize,
     const STRIDE: usize,
     const IN_CHANNELS: usize,
     const PADDING: usize,
@@ -27,11 +26,10 @@ pub struct ConvConfig<
 
 impl<
         F: FieldExt + TensorType,
-        const OUT_CHANNELS: usize,
         const STRIDE: usize,
         const IN_CHANNELS: usize,
         const PADDING: usize,
-    > LayerConfig<F> for ConvConfig<F, OUT_CHANNELS, STRIDE, IN_CHANNELS, PADDING>
+    > LayerConfig<F> for ConvConfig<F, STRIDE, IN_CHANNELS, PADDING>
 where
     Value<F>: TensorType,
 {
@@ -88,7 +86,7 @@ where
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         assert!(params.len() == 1);
         let kernel = params[0].clone();
-        let image_height = input.dims()[2];
+        let (in_channels, image_height) = (input.dims()[0], input.dims()[2]);
         layouter
             .assign_region(
                 || "assign image and kernel",
@@ -96,7 +94,7 @@ where
                     let mut offset = 0;
                     self.selector.enable(&mut region, offset)?;
 
-                    let outputs = (0..IN_CHANNELS)
+                    let outputs = (0..in_channels)
                         .map(|i| {
                             self.kernel
                                 .assign(&mut region, offset, kernel.get_slice(&[i..i + 1]));
@@ -143,11 +141,12 @@ where
         assert_eq!(params.len(), 1);
         let kernel = params[0].clone();
         let (image_width, image_height) = (input.dims()[1], input.dims()[2]);
-        let (kernel_width, kernel_height) = (kernel.dims()[2], kernel.dims()[3]);
+        let (out_channels, kernel_width, kernel_height) =
+            (kernel.dims()[0], kernel.dims()[2], kernel.dims()[3]);
         let horz = (image_width + 2 * PADDING - kernel_width) / STRIDE + 1;
         let vert = (image_height + 2 * PADDING - kernel_height) / STRIDE + 1;
 
-        let t = Tensor::from((0..OUT_CHANNELS).map(|i| {
+        let t = Tensor::from((0..out_channels).map(|i| {
             self.assign(
                 &mut layouter.namespace(|| format!("filter: {:?}", i)),
                 input.clone(),
@@ -155,7 +154,7 @@ where
             )
         }));
         let mut t = t.flatten();
-        t.reshape(&[OUT_CHANNELS, horz, vert]);
+        t.reshape(&[out_channels, horz, vert]);
         ValTensor::from(t)
     }
 }
@@ -217,7 +216,7 @@ mod tests {
     where
         Value<F>: TensorType,
     {
-        type Config = ConvConfig<F, OUT_CHANNELS, STRIDE, IN_CHANNELS, PADDING>;
+        type Config = ConvConfig<F, STRIDE, IN_CHANNELS, PADDING>;
         type FloorPlanner = SimpleFloorPlanner;
 
         fn without_witnesses(&self) -> Self {
