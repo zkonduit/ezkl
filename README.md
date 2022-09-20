@@ -25,7 +25,7 @@ cargo run --release --example mlp_4d
 
 ### Running onnx example
 
-To run the example which loads parameters from ONNX you need to enable the onnx build feature:
+To run the example which loads parameters from an ONNX model file you need to enable the `onnx` build feature:
 
 ```bash
 cargo run --release --example smallonnx --features onnx
