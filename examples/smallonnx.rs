@@ -38,7 +38,7 @@ mod onnx_example {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let onnx_model = OnnxModel::new("onnx_models/ff.onnx");
+            let onnx_model = OnnxModel::new("examples/onnx_models/ff.onnx");
             let l0_kernel = onnx_model.get_tensor_by_node_name("fc1.weight", 0f32, 256f32);
             let shape = l0_kernel.dims();
             let in_dims = shape[1];
@@ -112,7 +112,7 @@ mod onnx_example {
     pub fn run() {
         let k = 15; //2^k rows
 
-        let onnx_model = OnnxModel::new("onnx_models/ff.onnx");
+        let onnx_model = OnnxModel::new("examples/onnx_models/ff.onnx");
 
         let l0_kernel = onnx_model.get_tensor_by_node_name("fc1.weight", 0f32, 256f32);
         let mut l0_bias = onnx_model.get_tensor_by_node_name("fc1.bias", 0f32, 256f32);

@@ -52,7 +52,7 @@ struct Config<
 > where
     Value<F>: TensorType,
 {
-    l0: ConvConfig<F, OUT_CHANNELS, STRIDE, IN_CHANNELS, PADDING>,
+    l0: ConvConfig<F, STRIDE, IN_CHANNELS, PADDING>,
     l0q: EltwiseConfig<F, BITS, DivideBy<F, 32>>,
     l1: EltwiseConfig<F, BITS, ReLu<F>>,
     l2: Affine1dConfig<F>,
@@ -155,15 +155,7 @@ where
             .into();
         kernel.reshape(&[KERNEL_WIDTH, KERNEL_HEIGHT]);
 
-        let l0 = ConvConfig::<
-            F,
-
-            OUT_CHANNELS,
-            STRIDE,
-    
-            IN_CHANNELS,
-            PADDING,
-        >::configure(
+        let l0 = ConvConfig::<F, STRIDE, IN_CHANNELS, PADDING>::configure(
             cs,
             &[VarTensor::from(kernel)],
             advices.get_slice(&[0..IMAGE_WIDTH], &[IMAGE_WIDTH, IMAGE_HEIGHT]),

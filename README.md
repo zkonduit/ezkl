@@ -6,6 +6,12 @@ This is a proof-of-concept implementation of inference for deep learning models 
 
 We give an example of proving inference with a model that achieves 97.5% accuracy on MNIST in the examples.
 
+
+Note that the library requires a nightly version of the rust toolchain. You can change the default toolchain by running:
+```bash
+rustup override set nightly         
+```
+
 ## Running examples
 
 The MNIST inference example is contained in `examples/conv2d_mnist`. To run it:
@@ -17,7 +23,10 @@ We also provide an example which runs an MLP on input data with four dimensions.
 cargo run --release --example mlp_4d
 ```
 
-Note that the library requires a nightly version of the rust toolchain. You can change the default toolchain by running:
+### Running onnx example
+
+To run the example which loads parameters from ONNX you need to enable the onnx build feature:
+
 ```bash
-rustup override set nightly         
+cargo run --release --example smallonnx --features onnx
 ```

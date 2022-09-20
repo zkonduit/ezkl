@@ -13,28 +13,10 @@ pub trait Nonlinearity<F: FieldExt> {
 }
 
 #[derive(Clone, Debug)]
-pub struct Nonlin1d<F: FieldExt + TensorType, const LEN: usize, NL: Nonlinearity<F>> {
+pub struct Nonlin1d<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
     pub input: ValTensor<F>,
     pub output: ValTensor<F>,
     pub _marker: PhantomData<(F, NL)>,
-}
-impl<F: FieldExt + TensorType, const LEN: usize, NL: Nonlinearity<F>> Nonlin1d<F, LEN, NL> {
-    pub fn fill<Func>(mut f: Func) -> Self
-    where
-        Func: FnMut(Tensor<usize>) -> ValTensor<F>,
-    {
-        Nonlin1d {
-            input: f(Tensor::from(0..LEN)),
-            output: f(Tensor::from(0..LEN)),
-            _marker: PhantomData,
-        }
-    }
-    pub fn without_witnesses() -> Nonlin1d<F, LEN, NL> {
-        Nonlin1d::<F, LEN, NL>::fill(|x| {
-            let t: Tensor<Value<F>> = x.map(|_| Value::default());
-            ValTensor::from(t)
-        })
-    }
 }
 
 // Table that should be reused across all lookups (so no Clone)
@@ -254,7 +236,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
 #[derive(Clone)]
 struct NLCircuit<F: FieldExt + TensorType, const LEN: usize, const BITS: usize, NL: Nonlinearity<F>>
 {
-    assigned: Nonlin1d<F, LEN, NL>,
+    assigned: Nonlin1d<F, NL>,
     _marker: PhantomData<NL>, //    nonlinearity: Box<dyn Fn(F) -> F>,
 }
 
@@ -346,7 +328,7 @@ mod tests {
         let k = 9; //2^k rows
         let output = Tensor::<i32>::new(Some(&[1, 2, 3, 4]), &[4]).unwrap();
         let relu_v: Tensor<Value<F>> = output.into();
-        let assigned: Nonlin1d<F, 4, ReLu<F>> = Nonlin1d {
+        let assigned: Nonlin1d<F, ReLu<F>> = Nonlin1d {
             input: ValTensor::from(relu_v.clone()),
             output: ValTensor::from(relu_v),
             _marker: PhantomData,
