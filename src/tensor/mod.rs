@@ -344,7 +344,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// ```
     /// use halo2deeplearning::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
-    /// let mut c = a.enum_map(|i, x| i32::pow(x + i as i32, 2));
+    /// let mut c = a.mc_enum_map(|i, x| i32::pow(x + i[0] as i32, 2));
     /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
     /// ```
     pub fn mc_enum_map<F: FnMut(&[usize], T) -> G, G: TensorType>(&self, mut f: F) -> Tensor<G> {
