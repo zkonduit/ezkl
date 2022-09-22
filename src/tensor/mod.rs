@@ -339,6 +339,28 @@ impl<T: Clone + TensorType> Tensor<T> {
         t.reshape(self.dims());
         t
     }
+
+    /// Maps a function to tensors and enumerates using multi cartesian coordinates
+    /// ```
+    /// use halo2deeplearning::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
+    /// let mut c = a.enum_map(|i, x| i32::pow(x + i as i32, 2));
+    /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
+    /// ```
+    pub fn mc_enum_map<F: FnMut(&[usize], T) -> G, G: TensorType>(&self, mut f: F) -> Tensor<G> {
+        let mut indices = Vec::new();
+        for i in self.dims.clone() {
+            indices.push(0..i);
+        }
+        println!("indices {:?}", indices);
+
+        let mut res = Vec::new();
+        for coord in indices.iter().cloned().multi_cartesian_product() {
+            res.push(f(&coord, self.get(&coord)));
+        }
+
+        Tensor::new(Some(&res), self.dims()).unwrap()
+    }
 }
 
 impl<T: Clone + TensorType> Tensor<Tensor<T>> {

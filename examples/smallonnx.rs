@@ -41,8 +41,7 @@ mod onnx_example {
             let onnx_model = OnnxModel::new("examples/onnx_models/ff.onnx");
             let l0_kernel = onnx_model.get_tensor_by_node_name("fc1.weight", 0f32, 256f32);
             let shape = l0_kernel.dims();
-            let in_dims = shape[1];
-            let out_dims = shape[0];
+            let (out_dims, in_dims) = (shape[0], shape[1]);
 
             let advices = VarTensor::from(Tensor::from((0..out_dims + 3).map(|_| {
                 let col = cs.advice_column();

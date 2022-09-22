@@ -6,6 +6,7 @@ use halo2_proofs::{
     plonk::{Assigned, ConstraintSystem, Expression, Selector, VirtualCells},
     poly::Rotation,
 };
+use std::cmp::max;
 use std::marker::PhantomData;
 
 #[derive(Debug, Clone)]
@@ -16,16 +17,7 @@ pub struct IOConfig<F: FieldExt + TensorType> {
 }
 
 impl<F: FieldExt + TensorType> IOConfig<F> {
-    pub fn configure(meta: &mut ConstraintSystem<F>, mut values: VarTensor) -> Self {
-        match values.dims().len() {
-            1 => values.reshape(&[1, values.dims()[0]]),
-            2 => {}
-            _ => panic!(
-                "input of dims {:?} should be 1 or 2 dimensional",
-                values.dims()
-            ),
-        }
-        assert!(values.dims().len() == 2);
+    pub fn configure(meta: &mut ConstraintSystem<F>, values: VarTensor) -> Self {
         Self {
             values,
             selector: meta.selector(),
@@ -43,7 +35,7 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
             VarTensor::Advice { inner: a, dims: d } => a
                 .map(|column| {
                     Tensor::from(
-                        (0..d[1])
+                        (0..*d.last().unwrap())
                             .map(|i| meta.query_advice(column, Rotation(offset as i32 + i as i32))),
                     )
                 })
@@ -73,49 +65,62 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
         &self,
         region: &mut Region<'_, F>,
         offset: usize,
-        mut kernel: ValTensor<F>,
+        kernel: ValTensor<F>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
-        match kernel.dims().len() {
-            1 => kernel.reshape(&[1, kernel.dims()[0]]),
-            2 => {}
-            _ => panic!(
-                "kernel of dims {:?} should be 1 or 2 dimensional",
-                kernel.dims()
-            ),
-        }
-
         match kernel {
-            ValTensor::Value { inner: v, dims: d } => v.enum_map(|i, k| {
-                let coord = [i / d[1], i % d[1]];
-                match &self.values {
+            ValTensor::Value { inner: v, dims: _ } => {
+                v.mc_enum_map(|coord, k| match &self.values {
                     VarTensor::Fixed { inner: f, dims: _ } => region
                         .assign_fixed(|| "k", f.get(&coord), offset, || k.into())
                         .unwrap(),
-                    VarTensor::Advice { inner: a, dims: _ } => region
-                        .assign_advice(|| "k", a.get(&[coord[0]]), offset + coord[1], || k.into())
-                        .unwrap(),
-                }
-            }),
-            ValTensor::PrevAssigned { inner: v, dims: d } => v.enum_map(|i, x| {
-                let coord = [i / d[1], i % d[1]];
-                match &self.values {
+                    VarTensor::Advice { inner: a, dims: _ } => {
+                        let last = coord.len() - 1;
+                        println!("{:?}, {:?} {:?}", a.dims(), coord, last);
+                        // 1D advice doesn't match to 1D iterates
+                        region
+                            .assign_advice(
+                                || "k",
+                                a.get(&coord[0..max(last, 1)]),
+                                offset + coord[last],
+                                || k.into(),
+                            )
+                            .unwrap()
+                    }
+                })
+            }
+            ValTensor::PrevAssigned { inner: v, dims: _ } => {
+                v.mc_enum_map(|coord, x| match &self.values {
                     VarTensor::Fixed { inner: _, dims: _ } => panic!("not implemented"),
-                    VarTensor::Advice { inner: a, dims: _ } => x
-                        .copy_advice(|| "k", region, a.get(&[coord[0]]), offset + coord[1])
-                        .unwrap(),
-                }
-            }),
-            ValTensor::AssignedValue { inner: v, dims: d } => v.enum_map(|i, k| {
-                let coord = [i / d[1], i % d[1]];
-                match &self.values {
+                    VarTensor::Advice { inner: a, dims: _ } => {
+                        let last = coord.len();
+                        x.copy_advice(
+                            || "k",
+                            region,
+                            a.get(&coord[0..max(last, 1)]),
+                            offset + coord[last],
+                        )
+                        .unwrap()
+                    }
+                })
+            }
+            ValTensor::AssignedValue { inner: v, dims: _ } => {
+                v.mc_enum_map(|coord, k| match &self.values {
                     VarTensor::Fixed { inner: f, dims: _ } => region
                         .assign_fixed(|| "k", f.get(&coord), offset, || k)
                         .unwrap(),
-                    VarTensor::Advice { inner: a, dims: _ } => region
-                        .assign_advice(|| "k", a.get(&[coord[0]]), offset + coord[1], || k)
-                        .unwrap(),
-                }
-            }),
+                    VarTensor::Advice { inner: a, dims: _ } => {
+                        let last = coord.len();
+                        region
+                            .assign_advice(
+                                || "k",
+                                a.get(&coord[0..max(last, 1)]),
+                                offset + coord[last],
+                                || k.into(),
+                            )
+                            .unwrap()
+                    }
+                })
+            }
         }
     }
 
