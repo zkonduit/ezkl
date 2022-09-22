@@ -87,6 +87,23 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         }
     }
 
+    pub fn flatten(&mut self) {
+        match self {
+            ValTensor::Value { inner: v, dims: d } => {
+                v.flatten();
+                *d = v.dims().to_vec();
+            }
+            ValTensor::AssignedValue { inner: v, dims: d } => {
+                v.flatten();
+                *d = v.dims().to_vec();
+            }
+            ValTensor::PrevAssigned { inner: v, dims: d } => {
+                v.flatten();
+                *d = v.dims().to_vec();
+            }
+        }
+    }
+
     pub fn dims(&self) -> &[usize] {
         match self {
             ValTensor::Value { inner: _, dims: d } => d,

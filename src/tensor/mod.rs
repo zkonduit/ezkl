@@ -305,6 +305,17 @@ impl<T: Clone + TensorType> Tensor<T> {
         self.dims = Vec::from(new_dims);
     }
 
+    ///Flatten the tensor shape
+    /// ```
+    /// use halo2deeplearning::tensor::Tensor;
+    /// let mut a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
+    /// a.flatten();
+    /// assert_eq!(a.dims(), &[27]);
+    /// ```
+    pub fn flatten(&mut self) {
+        self.dims = Vec::from([self.dims.iter().product::<usize>()]);
+    }
+
     /// Maps a function to tensors
     /// ```
     /// use halo2deeplearning::tensor::Tensor;
@@ -337,10 +348,10 @@ impl<T: Clone + TensorType> Tensor<Tensor<T>> {
     /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
     /// let mut b = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
     /// let mut c = Tensor::new(Some(&[a,b]), &[2]).unwrap();
-    /// let mut d = c.flatten();
+    /// let mut d = c.combine();
     /// assert_eq!(d.dims(), &[8]);
     /// ```
-    pub fn flatten(&self) -> Tensor<T> {
+    pub fn combine(&self) -> Tensor<T> {
         let mut dims = 0;
         let mut inner = Vec::new();
         for mut t in self.inner.clone().into_iter() {

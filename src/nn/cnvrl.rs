@@ -153,7 +153,7 @@ where
                 &[kernel.get_slice(&[i..i + 1])],
             )
         }));
-        let mut t = t.flatten();
+        let mut t = t.combine();
         t.reshape(&[out_channels, horz, vert]);
         ValTensor::from(t)
     }

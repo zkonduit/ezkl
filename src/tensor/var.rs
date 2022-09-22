@@ -44,6 +44,19 @@ impl VarTensor {
         }
     }
 
+    pub fn reshape(&mut self, new_dims: &[usize]) {
+        match self {
+            VarTensor::Advice { inner: _, dims: d } => {
+                assert!(d.iter().product::<usize>() == new_dims.iter().product());
+                *d = new_dims.to_vec();
+            }
+            VarTensor::Fixed { inner: _, dims: d } => {
+                assert!(d.iter().product::<usize>() == new_dims.iter().product());
+                *d = new_dims.to_vec();
+            }
+        }
+    }
+
     pub fn enable_equality<F: FieldExt>(&self, meta: &mut ConstraintSystem<F>) {
         match self {
             VarTensor::Advice {

@@ -16,7 +16,15 @@ pub struct IOConfig<F: FieldExt + TensorType> {
 }
 
 impl<F: FieldExt + TensorType> IOConfig<F> {
-    pub fn configure(meta: &mut ConstraintSystem<F>, values: VarTensor) -> Self {
+    pub fn configure(meta: &mut ConstraintSystem<F>, mut values: VarTensor) -> Self {
+        match values.dims().len() {
+            1 => values.reshape(&[1, values.dims()[0]]),
+            2 => {}
+            _ => panic!(
+                "input of dims {:?} should be 1 or 2 dimensional",
+                values.dims()
+            ),
+        }
         assert!(values.dims().len() == 2);
         Self {
             values,
@@ -39,7 +47,7 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
                             .map(|i| meta.query_advice(column, Rotation(offset as i32 + i as i32))),
                     )
                 })
-                .flatten(),
+                .combine(),
         };
         t.reshape(self.values.dims());
         t
@@ -65,8 +73,17 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
         &self,
         region: &mut Region<'_, F>,
         offset: usize,
-        kernel: ValTensor<F>,
+        mut kernel: ValTensor<F>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+        match kernel.dims().len() {
+            1 => kernel.reshape(&[1, kernel.dims()[0]]),
+            2 => {}
+            _ => panic!(
+                "kernel of dims {:?} should be 1 or 2 dimensional",
+                kernel.dims()
+            ),
+        }
+
         match kernel {
             ValTensor::Value { inner: v, dims: d } => v.enum_map(|i, k| {
                 let coord = [i / d[1], i % d[1]];
@@ -88,10 +105,7 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
                         .unwrap(),
                 }
             }),
-            ValTensor::AssignedValue {
-                inner: v,
-                dims: d,
-            } => v.enum_map(|i, k| {
+            ValTensor::AssignedValue { inner: v, dims: d } => v.enum_map(|i, k| {
                 let coord = [i / d[1], i % d[1]];
                 match &self.values {
                     VarTensor::Fixed { inner: f, dims: _ } => region

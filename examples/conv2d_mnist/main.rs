@@ -163,18 +163,18 @@ where
         );
 
         let l0q: EltwiseConfig<F, BITS, DivideBy<F, 32>> =
-            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[1, LEN]), None);
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[LEN]), None);
         let l1: EltwiseConfig<F, BITS, ReLu<F>> =
-            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[1, LEN]), None);
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[LEN]), None);
 
         let l2: Affine1dConfig<F> = Affine1dConfig::configure(
             cs,
             &[
                 advices.get_slice(&[0..CLASSES], &[CLASSES, LEN]),
-                advices.get_slice(&[LEN + 2..LEN + 3], &[1, CLASSES]),
+                advices.get_slice(&[LEN + 2..LEN + 3], &[CLASSES]),
             ],
-            advices.get_slice(&[LEN..LEN + 1], &[1, LEN]),
-            advices.get_slice(&[CLASSES + 1..CLASSES + 2], &[1, CLASSES]),
+            advices.get_slice(&[LEN..LEN + 1], &[LEN]),
+            advices.get_slice(&[CLASSES + 1..CLASSES + 2], &[CLASSES]),
         );
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -201,7 +201,7 @@ where
         );
         let l0qout = config.l0q.layout(&mut layouter, l0out);
         let mut l1out = config.l1.layout(&mut layouter, l0qout);
-        l1out.reshape(&[1, LEN]);
+        l1out.flatten();
         let l2out = config.l2.layout(
             &mut layouter,
             l1out,
@@ -294,14 +294,14 @@ pub fn runconv() {
 
     kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_WIDTH, KERNEL_HEIGHT]);
 
-    let mut l2biases = Tensor::<i32>::from(myparams.biases.into_iter().map(|fl| {
+    let l2biases = Tensor::<i32>::from(myparams.biases.into_iter().map(|fl| {
         let dx = fl * (32 as f32);
         let rounded = dx.round();
         let integral: i32 = unsafe { rounded.to_int_unchecked() };
         integral
     }));
 
-    l2biases.reshape(&[1, CLASSES]);
+    // l2biases.reshape(&[1, CLASSES]);
 
     let mut l2weights = Tensor::<i32>::from(myparams.weights.into_iter().flatten().map(|fl| {
         let dx = fl * (32 as f32);
