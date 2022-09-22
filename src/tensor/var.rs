@@ -38,7 +38,6 @@ impl VarTensor {
                 if new_dims.len() > 1 {
                     new_inner.reshape(&new_dims[0..new_dims.len() - 1]);
                 }
-                println!("after {:?}", new_inner);
                 VarTensor::Advice {
                     inner: new_inner,
                     dims: new_dims.to_vec(),

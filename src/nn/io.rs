@@ -6,7 +6,6 @@ use halo2_proofs::{
     plonk::{Assigned, ConstraintSystem, Expression, Selector, VirtualCells},
     poly::Rotation,
 };
-use std::cmp::max;
 use std::marker::PhantomData;
 
 #[derive(Debug, Clone)]
@@ -74,13 +73,13 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
                         .assign_fixed(|| "k", f.get(&coord), offset, || k.into())
                         .unwrap(),
                     VarTensor::Advice { inner: a, dims: _ } => {
+                        let coord = format_advice_coord(coord);
                         let last = coord.len() - 1;
-                        println!("{:?}, {:?} {:?}", a.dims(), coord, last);
                         // 1D advice doesn't match to 1D iterates
                         region
                             .assign_advice(
                                 || "k",
-                                a.get(&coord[0..max(last, 1)]),
+                                a.get(&coord[0..last]),
                                 offset + coord[last],
                                 || k.into(),
                             )
@@ -92,14 +91,10 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
                 v.mc_enum_map(|coord, x| match &self.values {
                     VarTensor::Fixed { inner: _, dims: _ } => panic!("not implemented"),
                     VarTensor::Advice { inner: a, dims: _ } => {
-                        let last = coord.len();
-                        x.copy_advice(
-                            || "k",
-                            region,
-                            a.get(&coord[0..max(last, 1)]),
-                            offset + coord[last],
-                        )
-                        .unwrap()
+                        let coord = format_advice_coord(coord);
+                        let last = coord.len() - 1;
+                        x.copy_advice(|| "k", region, a.get(&coord[0..last]), offset + coord[last])
+                            .unwrap()
                     }
                 })
             }
@@ -109,11 +104,12 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
                         .assign_fixed(|| "k", f.get(&coord), offset, || k)
                         .unwrap(),
                     VarTensor::Advice { inner: a, dims: _ } => {
-                        let last = coord.len();
+                        let coord = format_advice_coord(coord);
+                        let last = coord.len() - 1;
                         region
                             .assign_advice(
                                 || "k",
-                                a.get(&coord[0..max(last, 1)]),
+                                a.get(&coord[0..last]),
                                 offset + coord[last],
                                 || k.into(),
                             )
@@ -144,4 +140,13 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
             },
         )
     }
+}
+
+pub fn format_advice_coord(coord: &[usize]) -> Vec<usize> {
+    let last = coord.len() - 1;
+    let mut v = coord.to_vec();
+    if last == 0 {
+        v.insert(0, 0);
+    }
+    v
 }

@@ -57,17 +57,9 @@ where
             let image = config.image.query(meta, 0);
             let kernel = config.kernel.query(meta, 0);
 
-            println!("{:?}, {:?}", image.dims(), kernel.dims());
-
             let expected_output = convolution::<_, PADDING, STRIDE>(kernel, image);
 
             let witnessed_output = config.output.query(meta, image_width);
-
-            println!(
-                "{:?}, {:?}",
-                expected_output.dims(),
-                witnessed_output.dims()
-            );
 
             let constraints = witnessed_output.enum_map(|i, o| o - expected_output[i].clone());
 
@@ -83,7 +75,7 @@ where
         input: ValTensor<F>,
         params: &[ValTensor<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
-        assert!(params.len() == 1);
+        assert_eq!(params.len(), 1);
         let kernel = params[0].clone();
         let image_width = input.dims()[2];
         layouter
@@ -134,7 +126,7 @@ where
         let mut t = self.assign(
             &mut layouter.namespace(|| format!("filter")),
             input.clone(),
-            &[kernel.clone()],
+            params,
         );
         t.reshape(&[out_channels, horz, vert]);
         ValTensor::from(t)

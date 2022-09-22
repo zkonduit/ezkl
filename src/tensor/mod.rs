@@ -352,8 +352,6 @@ impl<T: Clone + TensorType> Tensor<T> {
         for i in self.dims.clone() {
             indices.push(0..i);
         }
-        println!("indices {:?}", indices);
-
         let mut res = Vec::new();
         for coord in indices.iter().cloned().multi_cartesian_product() {
             res.push(f(&coord, self.get(&coord)));

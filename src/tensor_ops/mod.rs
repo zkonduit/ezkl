@@ -48,8 +48,6 @@ pub fn convolution<
 
     let padded_image = pad::<T, PADDING>(image.clone());
 
-    println!("{:?} {:?}", padded_image.dims(), image_dims);
-
     let horz_slides = (image_height + 2 * PADDING - kernel_height) / STRIDE + 1;
     let vert_slides = (image_width + 2 * PADDING - kernel_width) / STRIDE + 1;
 
