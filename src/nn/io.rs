@@ -142,7 +142,7 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
     }
 }
 
-pub fn format_advice_coord(coord: &[usize]) -> Vec<usize> {
+fn format_advice_coord(coord: &[usize]) -> Vec<usize> {
     let last = coord.len() - 1;
     let mut v = coord.to_vec();
     if last == 0 {
