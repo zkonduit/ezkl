@@ -15,7 +15,6 @@ pub fn ndarray_to_quantized(
     shift: f32,
     scale: f32,
 ) -> Result<Tensor<i32>, TensorError> {
-    //    let order = arr.ndim();
     let dims: Vec<usize> = arr.shape().to_vec();
     let scaled = scale * arr + shift;
     let inner: Vec<i32> = scaled
@@ -29,7 +28,6 @@ pub fn ndarray_to_quantized(
 impl OnnxModel {
     pub fn new(path: impl AsRef<Path>) -> Self {
         let model = tract_onnx::onnx().model_for_path(path).unwrap();
-        //        println!("loaded model {:?}", model);
         OnnxModel { model }
     }
 
@@ -37,12 +35,8 @@ impl OnnxModel {
         &self,
         name: impl AsRef<str>,
     ) -> ndarray::ArrayBase<ndarray::OwnedRepr<f32>, ndarray::Dim<ndarray::IxDynImpl>> {
-        //        let model = tract_onnx::onnx().model_for_path("data/ff.o").unwrap();
-
         let node = self.model.node_by_name(name).unwrap();
-        //        let fact = &self.model.nodes[1].outputs[0].fact;
         let fact = &node.outputs[0].fact;
-        //        let shape = fact.shape.clone().as_concrete_finite().unwrap().unwrap();
 
         let nav = fact
             .value
@@ -52,7 +46,6 @@ impl OnnxModel {
             .unwrap()
             .to_owned();
         nav
-        //    println!("{:?}", nav);
     }
 
     pub fn get_tensor_by_node_name(
