@@ -52,7 +52,7 @@ struct Config<
 > where
     Value<F>: TensorType,
 {
-    l0: ConvConfig<F, STRIDE, IN_CHANNELS, PADDING>,
+    l0: ConvConfig<F, STRIDE, PADDING>,
     l0q: EltwiseConfig<F, BITS, DivideBy<F, 32>>,
     l1: EltwiseConfig<F, BITS, ReLu<F>>,
     l2: Affine1dConfig<F>,
@@ -142,7 +142,10 @@ where
         let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
-        let num_advices = max(max(output_width, IMAGE_WIDTH), LEN + 3);
+        let num_advices = max(
+            max(output_height * OUT_CHANNELS, IMAGE_HEIGHT * IN_CHANNELS),
+            LEN + 3,
+        );
 
         let advices = VarTensor::from(Tensor::from((0..num_advices).map(|_| {
             let col = cs.advice_column();
@@ -150,31 +153,38 @@ where
             col
         })));
 
-        let mut kernel: Tensor<Column<Fixed>> = (0..KERNEL_WIDTH * KERNEL_HEIGHT)
-            .map(|_| cs.fixed_column())
-            .into();
-        kernel.reshape(&[KERNEL_WIDTH, KERNEL_HEIGHT]);
+        let mut kernel: Tensor<Column<Fixed>> =
+            (0..OUT_CHANNELS * IN_CHANNELS * KERNEL_WIDTH * KERNEL_HEIGHT)
+                .map(|_| cs.fixed_column())
+                .into();
+        kernel.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
 
-        let l0 = ConvConfig::<F, STRIDE, IN_CHANNELS, PADDING>::configure(
+        let l0 = ConvConfig::<F, STRIDE, PADDING>::configure(
             cs,
             &[VarTensor::from(kernel)],
-            advices.get_slice(&[0..IMAGE_WIDTH], &[IMAGE_WIDTH, IMAGE_HEIGHT]),
-            advices.get_slice(&[0..output_width], &[output_width, output_height]),
+            advices.get_slice(
+                &[0..IMAGE_HEIGHT * IN_CHANNELS],
+                &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
+            ),
+            advices.get_slice(
+                &[0..output_height * OUT_CHANNELS],
+                &[OUT_CHANNELS, output_height, output_width],
+            ),
         );
 
         let l0q: EltwiseConfig<F, BITS, DivideBy<F, 32>> =
-            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[1, LEN]), None);
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[LEN]), None);
         let l1: EltwiseConfig<F, BITS, ReLu<F>> =
-            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[1, LEN]), None);
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[LEN]), None);
 
         let l2: Affine1dConfig<F> = Affine1dConfig::configure(
             cs,
             &[
                 advices.get_slice(&[0..CLASSES], &[CLASSES, LEN]),
-                advices.get_slice(&[LEN + 2..LEN + 3], &[1, CLASSES]),
+                advices.get_slice(&[LEN + 2..LEN + 3], &[CLASSES]),
             ],
-            advices.get_slice(&[LEN..LEN + 1], &[1, LEN]),
-            advices.get_slice(&[CLASSES + 1..CLASSES + 2], &[1, CLASSES]),
+            advices.get_slice(&[LEN..LEN + 1], &[LEN]),
+            advices.get_slice(&[CLASSES + 1..CLASSES + 2], &[CLASSES]),
         );
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -201,7 +211,7 @@ where
         );
         let l0qout = config.l0q.layout(&mut layouter, l0out);
         let mut l1out = config.l1.layout(&mut layouter, l0qout);
-        l1out.reshape(&[1, LEN]);
+        l1out.flatten();
         let l2out = config.l2.layout(
             &mut layouter,
             l1out,
@@ -258,7 +268,6 @@ pub fn runconv() {
         .test_set_length(10_000)
         .finalize();
 
-    // Can use an Array2 or Array3 here (Array3 for visualization)
     let mut train_data = Tensor::from(trn_img.iter().map(|x| i32_to_felt::<F>(*x as i32 / 16)));
     train_data.reshape(&[50_000, 28, 28]);
 
@@ -292,16 +301,16 @@ pub fn runconv() {
     );
     // tensorflow is in KHxKWxINxOUT we are OUTxINxWxH?
 
-    kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_WIDTH, KERNEL_HEIGHT]);
+    kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
 
-    let mut l2biases = Tensor::<i32>::from(myparams.biases.into_iter().map(|fl| {
+    let l2biases = Tensor::<i32>::from(myparams.biases.into_iter().map(|fl| {
         let dx = fl * (32 as f32);
         let rounded = dx.round();
         let integral: i32 = unsafe { rounded.to_int_unchecked() };
         integral
     }));
 
-    l2biases.reshape(&[1, CLASSES]);
+    // l2biases.reshape(&[1, CLASSES]);
 
     let mut l2weights = Tensor::<i32>::from(myparams.weights.into_iter().flatten().map(|fl| {
         let dx = fl * (32 as f32);

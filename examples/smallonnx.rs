@@ -41,8 +41,7 @@ mod onnx_example {
             let onnx_model = OnnxModel::new("examples/onnx_models/ff.onnx");
             let l0_kernel = onnx_model.get_tensor_by_node_name("fc1.weight", 0f32, 256f32);
             let shape = l0_kernel.dims();
-            let in_dims = shape[1];
-            let out_dims = shape[0];
+            let (out_dims, in_dims) = (shape[0], shape[1]);
 
             let advices = VarTensor::from(Tensor::from((0..out_dims + 3).map(|_| {
                 let col = cs.advice_column();
@@ -51,20 +50,17 @@ mod onnx_example {
             })));
 
             let kernel = advices.get_slice(&[0..out_dims], &[out_dims, in_dims]);
-            let bias = advices.get_slice(&[out_dims + 2..out_dims + 3], &[1, out_dims]);
+            let bias = advices.get_slice(&[out_dims + 2..out_dims + 3], &[out_dims]);
 
             let l0 = Affine1dConfig::<F>::configure(
                 cs,
                 &[kernel, bias],
-                advices.get_slice(&[out_dims..out_dims + 1], &[1, in_dims]),
-                advices.get_slice(&[out_dims + 1..out_dims + 2], &[1, out_dims]),
+                advices.get_slice(&[out_dims..out_dims + 1], &[in_dims]),
+                advices.get_slice(&[out_dims + 1..out_dims + 2], &[out_dims]),
             );
 
-            let l1: EltwiseConfig<F, BITS, ReLu<F>> = EltwiseConfig::configure(
-                cs,
-                advices.get_slice(&[0..out_dims], &[1, out_dims]),
-                None,
-            );
+            let l1: EltwiseConfig<F, BITS, ReLu<F>> =
+                EltwiseConfig::configure(cs, advices.get_slice(&[0..out_dims], &[out_dims]), None);
 
             let public_output: Column<Instance> = cs.instance_column();
             cs.enable_equality(public_output);
@@ -115,11 +111,9 @@ mod onnx_example {
         let onnx_model = OnnxModel::new("examples/onnx_models/ff.onnx");
 
         let l0_kernel = onnx_model.get_tensor_by_node_name("fc1.weight", 0f32, 256f32);
-        let mut l0_bias = onnx_model.get_tensor_by_node_name("fc1.bias", 0f32, 256f32);
-        l0_bias.reshape(&[1, 4]);
+        let l0_bias = onnx_model.get_tensor_by_node_name("fc1.bias", 0f32, 256f32);
 
-        let mut input = Tensor::<i32>::new(Some(&[-30, -21, 11]), &[1, 3]).unwrap();
-        input.reshape(&[1, 3]);
+        let input = Tensor::<i32>::new(Some(&[-30, -21, 11]), &[3]).unwrap();
 
         let circuit = MyCircuit::<F, 14> {
             input,

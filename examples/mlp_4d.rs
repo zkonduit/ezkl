@@ -61,29 +61,29 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         })));
 
         let kernel = advices.get_slice(&[0..LEN], &[LEN, LEN]);
-        let bias = advices.get_slice(&[LEN + 2..LEN + 3], &[1, LEN]);
+        let bias = advices.get_slice(&[LEN + 2..LEN + 3], &[LEN]);
 
         let l0 = Affine1dConfig::<F>::configure(
             cs,
             &[kernel.clone(), bias.clone()],
-            advices.get_slice(&[LEN..LEN + 1], &[1, LEN]),
-            advices.get_slice(&[LEN + 1..LEN + 2], &[1, LEN]),
+            advices.get_slice(&[LEN..LEN + 1], &[LEN]),
+            advices.get_slice(&[LEN + 1..LEN + 2], &[LEN]),
         );
 
         let l2 = Affine1dConfig::<F>::configure(
             cs,
             &[kernel, bias],
-            advices.get_slice(&[LEN..LEN + 1], &[1, LEN]),
-            advices.get_slice(&[LEN + 1..LEN + 2], &[1, LEN]),
+            advices.get_slice(&[LEN..LEN + 1], &[LEN]),
+            advices.get_slice(&[LEN + 1..LEN + 2], &[LEN]),
         );
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
         let [l1, l3]: [EltwiseConfig<F, BITS, ReLu<F>>; 2] =
-            EltwiseConfig::configure_multiple(cs, advices.get_slice(&[0..LEN], &[1, LEN]));
+            EltwiseConfig::configure_multiple(cs, advices.get_slice(&[0..LEN], &[LEN]));
 
         // sets up a new Divide by table
         let l4: EltwiseConfig<F, BITS, DivideBy<F, 128>> =
-            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[1, LEN]), None);
+            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[LEN]), None);
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -145,7 +145,7 @@ pub fn runmlp() {
         &[4, 4],
     )
     .unwrap();
-    let l0_bias = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[1, 4]).unwrap();
+    let l0_bias = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[4]).unwrap();
 
     let l2_kernel = Tensor::<i32>::new(
         Some(&[0, 3, 10, -1, 0, 10, 1, 0, 0, 1, 0, 12, 1, -2, 32, 0]),
@@ -153,8 +153,8 @@ pub fn runmlp() {
     )
     .unwrap();
     // input data, with 1 padding to allow for bias
-    let input = Tensor::<i32>::new(Some(&[-30, -21, 11, 40]), &[1, 4]).unwrap();
-    let l2_bias = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[1, 4]).unwrap();
+    let input = Tensor::<i32>::new(Some(&[-30, -21, 11, 40]), &[4]).unwrap();
+    let l2_bias = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[4]).unwrap();
 
     let circuit = MyCircuit::<F, 4, 14> {
         input,

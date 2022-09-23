@@ -305,6 +305,17 @@ impl<T: Clone + TensorType> Tensor<T> {
         self.dims = Vec::from(new_dims);
     }
 
+    ///Flatten the tensor shape
+    /// ```
+    /// use halo2deeplearning::tensor::Tensor;
+    /// let mut a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
+    /// a.flatten();
+    /// assert_eq!(a.dims(), &[27]);
+    /// ```
+    pub fn flatten(&mut self) {
+        self.dims = Vec::from([self.dims.iter().product::<usize>()]);
+    }
+
     /// Maps a function to tensors
     /// ```
     /// use halo2deeplearning::tensor::Tensor;
@@ -328,6 +339,26 @@ impl<T: Clone + TensorType> Tensor<T> {
         t.reshape(self.dims());
         t
     }
+
+    /// Maps a function to tensors and enumerates using multi cartesian coordinates
+    /// ```
+    /// use halo2deeplearning::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
+    /// let mut c = a.mc_enum_map(|i, x| i32::pow(x + i[0] as i32, 2));
+    /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
+    /// ```
+    pub fn mc_enum_map<F: FnMut(&[usize], T) -> G, G: TensorType>(&self, mut f: F) -> Tensor<G> {
+        let mut indices = Vec::new();
+        for i in self.dims.clone() {
+            indices.push(0..i);
+        }
+        let mut res = Vec::new();
+        for coord in indices.iter().cloned().multi_cartesian_product() {
+            res.push(f(&coord, self.get(&coord)));
+        }
+
+        Tensor::new(Some(&res), self.dims()).unwrap()
+    }
 }
 
 impl<T: Clone + TensorType> Tensor<Tensor<T>> {
@@ -337,10 +368,10 @@ impl<T: Clone + TensorType> Tensor<Tensor<T>> {
     /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
     /// let mut b = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
     /// let mut c = Tensor::new(Some(&[a,b]), &[2]).unwrap();
-    /// let mut d = c.flatten();
+    /// let mut d = c.combine();
     /// assert_eq!(d.dims(), &[8]);
     /// ```
-    pub fn flatten(&self) -> Tensor<T> {
+    pub fn combine(&self) -> Tensor<T> {
         let mut dims = 0;
         let mut inner = Vec::new();
         for mut t in self.inner.clone().into_iter() {

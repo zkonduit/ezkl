@@ -17,7 +17,6 @@ pub struct IOConfig<F: FieldExt + TensorType> {
 
 impl<F: FieldExt + TensorType> IOConfig<F> {
     pub fn configure(meta: &mut ConstraintSystem<F>, values: VarTensor) -> Self {
-        assert!(values.dims().len() == 2);
         Self {
             values,
             selector: meta.selector(),
@@ -35,11 +34,11 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
             VarTensor::Advice { inner: a, dims: d } => a
                 .map(|column| {
                     Tensor::from(
-                        (0..d[1])
+                        (0..*d.last().unwrap())
                             .map(|i| meta.query_advice(column, Rotation(offset as i32 + i as i32))),
                     )
                 })
-                .flatten(),
+                .combine(),
         };
         t.reshape(self.values.dims());
         t
@@ -68,40 +67,56 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
         kernel: ValTensor<F>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         match kernel {
-            ValTensor::Value { inner: v, dims: d } => v.enum_map(|i, k| {
-                let coord = [i / d[1], i % d[1]];
-                match &self.values {
+            ValTensor::Value { inner: v, dims: _ } => {
+                v.mc_enum_map(|coord, k| match &self.values {
                     VarTensor::Fixed { inner: f, dims: _ } => region
                         .assign_fixed(|| "k", f.get(&coord), offset, || k.into())
                         .unwrap(),
-                    VarTensor::Advice { inner: a, dims: _ } => region
-                        .assign_advice(|| "k", a.get(&[coord[0]]), offset + coord[1], || k.into())
-                        .unwrap(),
-                }
-            }),
-            ValTensor::PrevAssigned { inner: v, dims: d } => v.enum_map(|i, x| {
-                let coord = [i / d[1], i % d[1]];
-                match &self.values {
+                    VarTensor::Advice { inner: a, dims: _ } => {
+                        let coord = format_advice_coord(coord);
+                        let last = coord.len() - 1;
+                        // 1D advice doesn't match to 1D iterates
+                        region
+                            .assign_advice(
+                                || "k",
+                                a.get(&coord[0..last]),
+                                offset + coord[last],
+                                || k.into(),
+                            )
+                            .unwrap()
+                    }
+                })
+            }
+            ValTensor::PrevAssigned { inner: v, dims: _ } => {
+                v.mc_enum_map(|coord, x| match &self.values {
                     VarTensor::Fixed { inner: _, dims: _ } => panic!("not implemented"),
-                    VarTensor::Advice { inner: a, dims: _ } => x
-                        .copy_advice(|| "k", region, a.get(&[coord[0]]), offset + coord[1])
-                        .unwrap(),
-                }
-            }),
-            ValTensor::AssignedValue {
-                inner: v,
-                dims: d,
-            } => v.enum_map(|i, k| {
-                let coord = [i / d[1], i % d[1]];
-                match &self.values {
+                    VarTensor::Advice { inner: a, dims: _ } => {
+                        let coord = format_advice_coord(coord);
+                        let last = coord.len() - 1;
+                        x.copy_advice(|| "k", region, a.get(&coord[0..last]), offset + coord[last])
+                            .unwrap()
+                    }
+                })
+            }
+            ValTensor::AssignedValue { inner: v, dims: _ } => {
+                v.mc_enum_map(|coord, k| match &self.values {
                     VarTensor::Fixed { inner: f, dims: _ } => region
                         .assign_fixed(|| "k", f.get(&coord), offset, || k)
                         .unwrap(),
-                    VarTensor::Advice { inner: a, dims: _ } => region
-                        .assign_advice(|| "k", a.get(&[coord[0]]), offset + coord[1], || k)
-                        .unwrap(),
-                }
-            }),
+                    VarTensor::Advice { inner: a, dims: _ } => {
+                        let coord = format_advice_coord(coord);
+                        let last = coord.len() - 1;
+                        region
+                            .assign_advice(
+                                || "k",
+                                a.get(&coord[0..last]),
+                                offset + coord[last],
+                                || k.into(),
+                            )
+                            .unwrap()
+                    }
+                })
+            }
         }
     }
 
@@ -125,4 +140,13 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
             },
         )
     }
+}
+
+fn format_advice_coord(coord: &[usize]) -> Vec<usize> {
+    let last = coord.len() - 1;
+    let mut v = coord.to_vec();
+    if last == 0 {
+        v.insert(0, 0);
+    }
+    v
 }

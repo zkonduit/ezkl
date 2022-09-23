@@ -28,13 +28,14 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
         output: VarTensor,
     ) -> Self {
         assert!(params.len() == 2);
-        let in_dim = input.dims()[1];
 
         let (kernel, bias) = (params[0].clone(), params[1].clone());
 
-        assert_eq!(kernel.dims()[1], in_dim);
-        assert_eq!(kernel.dims()[0], output.dims()[1]);
-        assert_eq!(kernel.dims()[0], bias.dims()[1]);
+        assert_eq!(kernel.dims()[1], input.dims()[0]);
+        assert_eq!(kernel.dims()[0], output.dims()[0]);
+        assert_eq!(kernel.dims()[0], bias.dims()[0]);
+
+        let in_dim = input.dims()[0];
 
         let config = Self {
             selector: meta.selector(),
@@ -74,8 +75,7 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
         input: ValTensor<F>,
         params: &[ValTensor<F>],
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
-        assert!(params.len() == 2);
-        let out_dim = params[1].dims()[1];
+        assert_eq!(params.len(), 2);
 
         let (kernel, bias) = (params[0].clone(), params[1].clone());
         layouter
@@ -84,20 +84,19 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
                 |mut region| {
                     let offset = 0;
                     self.selector.enable(&mut region, offset)?;
-
                     let input = self.input.assign(&mut region, offset, input.clone());
                     let weights = self.kernel.assign(&mut region, offset, kernel.clone());
-
                     let bias = self.bias.assign(&mut region, offset, bias.clone());
                     // calculate value of output
                     let mut output: Tensor<Value<Assigned<F>>> =
-                        Tensor::new(None, &[1, out_dim]).unwrap();
+                        Tensor::new(None, &[kernel.dims()[0]]).unwrap();
 
                     output = output.enum_map(|i, mut o| {
-                        for (j, x) in input.iter().enumerate() {
+                        input.enum_map(|j, x| {
                             o = o + x.value_field() * weights.get(&[i, j]).value_field();
-                        }
-                        o + bias.get(&[0, i]).value_field()
+                        });
+
+                        o + bias.get(&[i]).value_field()
                     });
 
                     Ok(self
