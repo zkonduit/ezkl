@@ -342,6 +342,23 @@ pub fn runconv() {
         l2_params: [l2weights, l2biases],
     };
 
+    #[cfg(feature = "dev-graph")]
+    {
+        println!("Plotting");
+        use plotters::prelude::*;
+
+        let root = BitMapBackend::new("conv2dmnist-layout.png", (2048, 7680)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+        let root = root
+            .titled("Conv -> ReLu -> Affine -> Relu", ("sans-serif", 60))
+            .unwrap();
+
+        halo2_proofs::dev::CircuitLayout::default()
+            .render(13, &circuit, &root)
+            .unwrap();
+        return;
+    }
+
     let public_input: Tensor<i32> = vec![
         -25124i32, -19304, -16668, -4399, -6209, -4548, -2317, -8349, -6117, -23461,
     ]
