@@ -2,8 +2,8 @@ use crate::fieldutils::{self, felt_to_i32, i32_to_felt};
 use crate::tensor::*;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
-    plonk::{Assigned, Circuit, ConstraintSystem, Error, Selector, TableColumn},
+    circuit::{AssignedCell, Layouter, Value},
+    plonk::{Assigned, ConstraintSystem, Selector, TableColumn},
     poly::Rotation,
 };
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
@@ -233,46 +233,6 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
     }
 }
 
-#[derive(Clone)]
-struct NLCircuit<F: FieldExt + TensorType, const LEN: usize, const BITS: usize, NL: Nonlinearity<F>>
-{
-    assigned: Nonlin1d<F, NL>,
-    _marker: PhantomData<NL>, //    nonlinearity: Box<dyn Fn(F) -> F>,
-}
-
-impl<
-        F: FieldExt + TensorType,
-        const LEN: usize,
-        const BITS: usize,
-        NL: 'static + Nonlinearity<F> + Clone,
-    > Circuit<F> for NLCircuit<F, LEN, BITS, NL>
-{
-    type Config = EltwiseConfig<F, BITS, NL>;
-    type FloorPlanner = SimpleFloorPlanner;
-
-    fn without_witnesses(&self) -> Self {
-        self.clone()
-    }
-
-    fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let advices = VarTensor::Advice {
-            inner: (0..LEN).map(|_| cs.advice_column()).into(),
-            dims: [LEN].to_vec(),
-        };
-        Self::Config::configure(cs, advices, None)
-    }
-
-    fn synthesize(
-        &self,
-        config: Self::Config,
-        mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
-    ) -> Result<(), Error> {
-        config.layout(&mut layouter, self.assigned.input.clone());
-
-        Ok(())
-    }
-}
-
 // Now implement nonlinearity functions like this
 #[derive(Clone)]
 pub struct ReLu<F> {
@@ -320,8 +280,56 @@ impl<F: FieldExt, const D: usize> Nonlinearity<F> for DivideBy<F, D> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use halo2_proofs::dev::MockProver;
+    use halo2_proofs::{
+        circuit::SimpleFloorPlanner,
+        dev::MockProver,
+        plonk::{Circuit, Error},
+    };
     use halo2curves::pasta::Fp as F;
+
+    #[derive(Clone)]
+    struct NLCircuit<
+        F: FieldExt + TensorType,
+        const LEN: usize,
+        const BITS: usize,
+        NL: Nonlinearity<F>,
+    > {
+        assigned: Nonlin1d<F, NL>,
+        _marker: PhantomData<NL>, //    nonlinearity: Box<dyn Fn(F) -> F>,
+    }
+
+    impl<
+            F: FieldExt + TensorType,
+            const LEN: usize,
+            const BITS: usize,
+            NL: 'static + Nonlinearity<F> + Clone,
+        > Circuit<F> for NLCircuit<F, LEN, BITS, NL>
+    {
+        type Config = EltwiseConfig<F, BITS, NL>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let advices = VarTensor::Advice {
+                inner: (0..LEN).map(|_| cs.advice_column()).into(),
+                dims: [LEN].to_vec(),
+            };
+            Self::Config::configure(cs, advices, None)
+        }
+
+        fn synthesize(
+            &self,
+            config: Self::Config,
+            mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
+        ) -> Result<(), Error> {
+            config.layout(&mut layouter, self.assigned.input.clone());
+
+            Ok(())
+        }
+    }
 
     #[test]
     fn test_eltrelunl() {
