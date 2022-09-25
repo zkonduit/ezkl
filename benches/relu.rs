@@ -2,7 +2,7 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{Layouter, Value, SimpleFloorPlanner},
+    circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error},
 };
 use halo2curves::pasta::Fp as F;
@@ -53,34 +53,32 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
 
 fn runrelu(c: &mut Criterion) {
     let mut group = c.benchmark_group("relu");
-    for size in [1, 2, 4, 8, 16, 32].iter() {
-        let len = unsafe {
-            LEN = size * 4;
-            LEN
+    let k = 9;
+
+    let mut rng = rand::thread_rng();
+
+    for &len in [4, 8, 16, 32, 64, 128].iter() {
+        unsafe {
+            LEN = len;
         };
+
+        let input: Tensor<Value<F>> =
+            Tensor::<i32>::from((0..len).map(|_| rng.gen_range(0..10))).into();
+
+        let assigned: Nonlin1d<F, ReLu<F>> = Nonlin1d {
+            input: ValTensor::from(input.clone()),
+            output: ValTensor::from(input),
+            _marker: PhantomData,
+        };
+
+        let circuit = NLCircuit::<F, ReLu<F>> {
+            assigned,
+            _marker: PhantomData,
+        };
+
         group.throughput(Throughput::Elements(len as u64));
         group.bench_with_input(BenchmarkId::from_parameter(len), &len, |b, &_| {
             b.iter(|| {
-                let k = 9; //2^k rows
-                           // parameters
-                let mut rng = rand::thread_rng();
-
-                let input = (0..len).map(|_| rng.gen_range(0..10)).collect::<Vec<_>>();
-                // input data, with 1 padding to allow for bias
-                let input = Tensor::<i32>::new(Some(&input), &[len]).unwrap();
-
-                let relu_v: Tensor<Value<F>> = input.into();
-                let assigned: Nonlin1d<F, ReLu<F>> = Nonlin1d {
-                    input: ValTensor::from(relu_v.clone()),
-                    output: ValTensor::from(relu_v),
-                    _marker: PhantomData,
-                };
-
-                let circuit = NLCircuit::<F, ReLu<F>> {
-                    assigned,
-                    _marker: PhantomData,
-                };
-
                 let prover = MockProver::run(k, &circuit, vec![]).unwrap();
                 prover.assert_satisfied();
             });
@@ -89,5 +87,9 @@ fn runrelu(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, runrelu);
+criterion_group! {
+  name = benches;
+  config = Criterion::default().with_plots();
+  targets = runrelu
+}
 criterion_main!(benches);

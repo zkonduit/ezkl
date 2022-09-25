@@ -280,74 +280,14 @@ impl<F: FieldExt, const D: usize> Nonlinearity<F> for DivideBy<F, D> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use halo2_proofs::{
-        circuit::SimpleFloorPlanner,
-        dev::MockProver,
-        plonk::{Circuit, Error},
-    };
     use halo2curves::pasta::Fp as F;
-
-    #[derive(Clone)]
-    struct NLCircuit<
-        F: FieldExt + TensorType,
-        const LEN: usize,
-        const BITS: usize,
-        NL: Nonlinearity<F>,
-    > {
-        assigned: Nonlin1d<F, NL>,
-        _marker: PhantomData<NL>, //    nonlinearity: Box<dyn Fn(F) -> F>,
-    }
-
-    impl<
-            F: FieldExt + TensorType,
-            const LEN: usize,
-            const BITS: usize,
-            NL: 'static + Nonlinearity<F> + Clone,
-        > Circuit<F> for NLCircuit<F, LEN, BITS, NL>
-    {
-        type Config = EltwiseConfig<F, BITS, NL>;
-        type FloorPlanner = SimpleFloorPlanner;
-
-        fn without_witnesses(&self) -> Self {
-            self.clone()
-        }
-
-        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let advices = VarTensor::Advice {
-                inner: (0..LEN).map(|_| cs.advice_column()).into(),
-                dims: [LEN].to_vec(),
-            };
-            Self::Config::configure(cs, advices, None)
-        }
-
-        fn synthesize(
-            &self,
-            config: Self::Config,
-            mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
-        ) -> Result<(), Error> {
-            config.layout(&mut layouter, self.assigned.input.clone());
-
-            Ok(())
-        }
-    }
 
     #[test]
     fn test_eltrelunl() {
-        let k = 9; //2^k rows
-        let output = Tensor::<i32>::new(Some(&[1, 2, 3, 4]), &[4]).unwrap();
-        let relu_v: Tensor<Value<F>> = output.into();
-        let assigned: Nonlin1d<F, ReLu<F>> = Nonlin1d {
-            input: ValTensor::from(relu_v.clone()),
-            output: ValTensor::from(relu_v),
-            _marker: PhantomData,
-        };
-
-        let circuit = NLCircuit::<F, 4, 8, ReLu<F>> {
-            assigned,
-            _marker: PhantomData,
-        };
-        let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        for i in -127..127 {
+            let _r = <ReLu<F> as Nonlinearity<F>>::nonlinearity(i);
+            //            println!("{i}, {:?}", r);
+        }
     }
 
     #[test]

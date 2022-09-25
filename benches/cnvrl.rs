@@ -84,36 +84,37 @@ where
 
 fn runcnvrl(c: &mut Criterion) {
     let mut group = c.benchmark_group("cnvrl");
+
+    let k = 8;
+
     for size in [1, 2, 4, 8, 16, 32].iter() {
         unsafe {
-            KERNEL_HEIGHT = size * 4;
-            KERNEL_WIDTH = size * 4;
+            KERNEL_HEIGHT = size * 3;
+            KERNEL_WIDTH = size * 3;
             IMAGE_HEIGHT = size * 8;
             IMAGE_WIDTH = size * 8;
             IN_CHANNELS = 3;
             OUT_CHANNELS = 3;
 
+            let mut image = Tensor::from(
+                (0..IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH)
+                    .map(|_| Value::known(pallas::Base::random(OsRng))),
+            );
+            image.reshape(&[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH]);
+            let mut kernels = Tensor::from(
+                (0..{ OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH })
+                    .map(|_| Value::known(pallas::Base::random(OsRng))),
+            );
+            kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
+
+            let circuit = MyCircuit::<pallas::Base> {
+                image: ValTensor::from(image),
+                kernels: ValTensor::from(kernels),
+            };
+
             group.throughput(Throughput::Elements((IMAGE_HEIGHT * IMAGE_WIDTH) as u64));
             group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &_size| {
                 b.iter(|| {
-                    let mut image = Tensor::from(
-                        (0..IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH)
-                            .map(|_| Value::known(pallas::Base::random(OsRng))),
-                    );
-                    image.reshape(&[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH]);
-                    let mut kernels = Tensor::from(
-                        (0..{ OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH })
-                            .map(|_| Value::known(pallas::Base::random(OsRng))),
-                    );
-                    kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
-
-                    let circuit = MyCircuit::<pallas::Base> {
-                        image: ValTensor::from(image),
-                        kernels: ValTensor::from(kernels),
-                    };
-
-                    let k = 8;
-
                     let prover = MockProver::run(k, &circuit, vec![]).unwrap();
                     prover.assert_satisfied();
                 });
@@ -123,5 +124,9 @@ fn runcnvrl(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, runcnvrl);
+criterion_group! {
+  name = benches;
+  config = Criterion::default().with_plots();
+  targets = runcnvrl
+}
 criterion_main!(benches);
