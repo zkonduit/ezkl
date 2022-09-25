@@ -22,7 +22,7 @@ mod loadonnx_example {
         let k = 15; //2^k rows
                     //        let input = Tensor::<i32>::new(Some(&[-30, -21, 11]), &[3]).unwrap();
         let input = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
-        let public_input: Vec<i32> = vec![0, 0, 0, 0];
+        let public_input: Vec<i32> = vec![148, 0, 139, 0];
         println!("public input {:?}", public_input);
 
         let circuit = OnnxCircuit::<F, 14> {

@@ -247,7 +247,7 @@ impl OnnxModel {
         //    let node = OnnxNode::new(self.model.nodes[node_idx].clone());
         let node = &self.onnx_nodes[node_idx];
 
-        println!("Configure Node {}, a {:?}", node_idx, node.opkind());
+        //        println!("Configure Node {}, a {:?}", node_idx, node.opkind());
 
         // Figure out, find, and load the params
         match node.opkind() {
@@ -279,13 +279,13 @@ impl OnnxModel {
                 // let mut bias: Tensor<Column<Fixed>> =
                 //     (0..out_dim).map(|_| meta.fixed_column()).into();
                 // bias.reshape?
-                let weight_fixeds = advices.get_slice(&[0..out_dim], &[out_dim, in_dim]);
+                let weight_fixeds = advices.get_slice(&[0..out_dim], &[out_dim, in_dim]); //&[0..out_dim], &[out_dim, in_dim]
                 let bias_fixeds = advices.get_slice(&[out_dim + 1..out_dim + 2], &[out_dim]);
                 let params = [weight_fixeds, bias_fixeds];
                 // let input = advices.get_slice(&[in_dim..in_dim + 1], &[in_dim]);
                 // let output = advices.get_slice(&[out_dim + 1..out_dim + 2], &[out_dim]);
-                let input = advices.get_slice(&[0..1], &[in_dim]);
-                let output = advices.get_slice(&[1..2], &[out_dim]);
+                let input = advices.get_slice(&[out_dim + 2..out_dim + 3], &[in_dim]);
+                let output = advices.get_slice(&[out_dim + 3..out_dim + 4], &[out_dim]);
                 let conf = Affine1dConfig::configure(meta, &params, input, output);
                 Ok(OnnxNodeConfig::Affine(conf))
             }
@@ -352,7 +352,7 @@ impl OnnxModel {
                     match vt.clone() {
                         ValTensor::PrevAssigned { inner: v, dims: _ } => {
                             let r: Tensor<i32> = v.clone().into();
-                            println!("LAYER OUT {:?}", r);
+                            println!("Node {} out: {:?}", node_idx, r);
                         }
                         _ => panic!("Should be assigned"),
                     };
@@ -392,9 +392,9 @@ impl OnnxModel {
         //        let node = OnnxNode::new(self.model.nodes[node_idx].clone());
         let input_outlets = &node.node.inputs;
 
-        println!("Layout Node {}, {:?}", node_idx, node.opkind());
+        //        println!("Layout Node {}, {:?}", node_idx, node.opkind());
         //        let nice: Tensor<i32> = input.into();
-        println!("Node {} input tensor {:?}", node_idx, &input.clone());
+        //        println!("Node {} input tensor {:?}", node_idx, &input.clone());
 
         // The node kind and the config should be the same.
         match (node.opkind(), config) {
@@ -412,15 +412,16 @@ impl OnnxModel {
                     (input_outlets[1].node, input_outlets[1].slot);
                 let (bias_node_ix, bias_node_slot) = (input_outlets[2].node, input_outlets[2].slot);
                 let weight_node = OnnxNode::new(self.nodes()[weight_node_ix].clone());
-                let weight_value = weight_node.output_tensor_by_slot(weight_node_slot, 0f32, 2f32);
-                println!("Weight: {:?}", weight_value);
+                let weight_value =
+                    weight_node.output_tensor_by_slot(weight_node_slot, 0f32, 256f32);
+                //                println!("Weight: {:?}", weight_value);
                 // let in_dim = weight_value.dims()[1];
                 // let out_dim = weight_value.dims()[0];
                 let weight_vt =
                     ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(weight_value));
                 //                let weight_vt = ValTensor::from(weight_value);
                 let bias_node = OnnxNode::new(self.nodes()[bias_node_ix].clone());
-                let bias_value = bias_node.output_tensor_by_slot(bias_node_slot, 0f32, 0f32);
+                let bias_value = bias_node.output_tensor_by_slot(bias_node_slot, 0f32, 256f32);
                 let bias_vt =
                     ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(bias_value));
                 // println!(
@@ -430,7 +431,7 @@ impl OnnxModel {
                 //     bias_vt.dims()
                 // );
                 let out = ac.layout(layouter, input, &[weight_vt, bias_vt]);
-                println!("Node {} out {:?}", node_idx, out);
+                //                println!("Node {} out {:?}", node_idx, out);
                 Some(out)
             }
             (OpKind::Convolution, OnnxNodeConfig::Conv(cc)) => {
@@ -505,7 +506,7 @@ impl OnnxModel {
                 }
             }
         }
-        Ok(max)
+        Ok(max + 5)
     }
 
     pub fn get_node_output_shape_by_name_and_rank(

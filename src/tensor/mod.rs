@@ -286,7 +286,10 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// assert_eq!(a.get_index(&[1, 0, 1]), 10);
     /// ```
     pub fn get_index(&self, indices: &[usize]) -> usize {
-        assert!(self.dims.len() == indices.len());
+        // if self.dims.len() != indices.len() {
+        //     println!("{:?} vs {:?}", self.dims, indices);
+        // }
+        assert_eq!(self.dims.len(), indices.len());
         let mut index = 0;
         let mut d = 1;
         for i in (0..indices.len()).rev() {
