@@ -18,6 +18,21 @@ tensorflow = {version = "0.18.0", features = ["eager"], optional = true }
 plotters = { version = "0.3.0", optional = true }
 tract-onnx = { version = "0.17.7", optional = true }
 
+[dev-dependencies]
+criterion = {version = "0.3",  features = ["html_reports"]}
+
+
+[[bench]]
+name = "affine"
+harness = false
+
+[[bench]]
+name = "cnvrl"
+harness = false
+
+[[bench]]
+name = "relu"
+harness = false
 
 
 [features]

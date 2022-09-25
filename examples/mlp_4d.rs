@@ -14,11 +14,7 @@ use std::marker::PhantomData;
 
 // A columnar ReLu MLP
 #[derive(Clone)]
-struct MyConfig<
-    F: FieldExt + TensorType,
-    const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust
-    const BITS: usize,
-> {
+struct MyConfig<F: FieldExt + TensorType, const BITS: usize> {
     l0: Affine1dConfig<F>,
     l1: EltwiseConfig<F, BITS, ReLu<F>>,
     l2: Affine1dConfig<F>,
@@ -44,7 +40,7 @@ struct MyCircuit<
 impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     for MyCircuit<F, LEN, BITS>
 {
-    type Config = MyConfig<F, LEN, BITS>;
+    type Config = MyConfig<F, BITS>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
