@@ -40,7 +40,7 @@ struct MyCircuit<
 impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     for MyCircuit<F, LEN, BITS>
 {
-    type Config = MyConfig<F, LEN, BITS>;
+    type Config = MyConfig<F, BITS>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
