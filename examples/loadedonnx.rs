@@ -20,7 +20,6 @@ mod loadonnx_example {
         let args: Vec<String> = env::args().collect();
         println!("{:?}", args);
         let k = 15; //2^k rows
-                    //        let input = Tensor::<i32>::new(Some(&[-30, -21, 11]), &[3]).unwrap();
         let input = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
         let public_input: Vec<i32> = vec![148, 0, 139, 0];
         println!("public input {:?}", public_input);
