@@ -52,10 +52,21 @@ impl VarTensor {
                     dims: new_dims.to_vec(),
                 }
             }
-            VarTensor::Fixed { inner: v, dims: _ } => VarTensor::Fixed {
-                inner: v.get_slice(indices),
-                dims: new_dims.to_vec(),
-            },
+	    VarTensor::Fixed { inner: v, dims: _ } => {
+                let mut new_inner = v.get_slice(indices);
+                if new_dims.len() > 1 {
+                    new_inner.reshape(&new_dims[0..new_dims.len() - 1]);
+                }
+                VarTensor::Fixed {
+                    inner: new_inner,
+                    dims: new_dims.to_vec(),
+                }
+            }
+
+            // VarTensor::Fixed { inner: v, dims: _ } => VarTensor::Fixed {
+            //     inner: v.get_slice(indices),
+            //     dims: new_dims.to_vec(),
+            // },
         }
     }
 
