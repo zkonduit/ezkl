@@ -2,24 +2,19 @@ use crate::nn::affine::Affine1dConfig;
 use crate::nn::cnvrl::ConvConfig;
 use crate::tensor::{Tensor, TensorError, ValTensor, VarTensor};
 use crate::tensor_ops::eltwise::{EltwiseConfig, ReLu, Sigmoid};
-use std::path::Path;
-use tract_onnx;
-use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node, OutletId};
-use tract_onnx::tract_hir::infer::Factoid;
-
-use tract_onnx::tract_hir::internal::InferenceOp;
-//
 use anyhow::Result;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
-    plonk::{Advice, Assigned, Circuit, Column, ConstraintSystem, Error, Fixed, Instance},
+    circuit::{Layouter, SimpleFloorPlanner, Value},
+    plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
 use std::env;
 use std::marker::PhantomData;
+use std::path::Path;
+use tract_onnx;
+use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node, OutletId};
+use tract_onnx::tract_hir::{infer::Factoid, internal::InferenceOp};
 
-//
-use crate::fieldutils::felt_to_i32;
 use crate::nn::LayerConfig;
 use crate::tensor::TensorType;
 
@@ -242,11 +237,9 @@ impl OnnxModel {
         node_idx: usize,
         meta: &mut ConstraintSystem<F>,
         advices: VarTensor,
-        fixeds: VarTensor,
+        fixeds: VarTensor, // Should use fixeds, but currently buggy
     ) -> Result<OnnxNodeConfig<F, BITS>> {
-        //    let node = OnnxNode::new(self.model.nodes[node_idx].clone());
         let node = &self.onnx_nodes[node_idx];
-
         //        println!("Configure Node {}, a {:?}", node_idx, node.opkind());
 
         // Figure out, find, and load the params
@@ -259,17 +252,17 @@ impl OnnxModel {
                 // the tensor guarantees that assign will work if there are errors or ambiguityies in the shape
                 // data).
                 let input_outlets = &node.node.inputs;
-                let (input_node_ix, input_node_slot) =
+                let (_input_node_ix, _input_node_slot) =
                     (input_outlets[0].node, input_outlets[0].slot);
 
                 let (weight_node_ix, weight_node_slot) =
                     (input_outlets[1].node, input_outlets[1].slot);
-                let (bias_node_ix, bias_node_slot) = (input_outlets[2].node, input_outlets[2].slot);
+                let (_bias_node_ix, _bias_node_slot) =
+                    (input_outlets[2].node, input_outlets[2].slot);
                 let weight_node = OnnxNode::new(self.nodes()[weight_node_ix].clone());
                 let weight_value =
                     weight_node.output_tensor_by_slot(weight_node_slot, 0f32, 256f32);
-                // let bias_node = OnnxNode::new(self.nodes()[bias_node_ix].clone());
-                // let bias_value = bias_node.output_tensor_by_slot(bias_node_slot, 0f32, 256f32);
+
                 let in_dim = weight_value.dims()[1];
                 let out_dim = weight_value.dims()[0];
                 // If we don't want to resue the columns:
@@ -282,8 +275,6 @@ impl OnnxModel {
                 let weight_fixeds = advices.get_slice(&[0..out_dim], &[out_dim, in_dim]); //&[0..out_dim], &[out_dim, in_dim]
                 let bias_fixeds = advices.get_slice(&[out_dim + 1..out_dim + 2], &[out_dim]);
                 let params = [weight_fixeds, bias_fixeds];
-                // let input = advices.get_slice(&[in_dim..in_dim + 1], &[in_dim]);
-                // let output = advices.get_slice(&[out_dim + 1..out_dim + 2], &[out_dim]);
                 let input = advices.get_slice(&[out_dim + 2..out_dim + 3], &[in_dim]);
                 let output = advices.get_slice(&[out_dim + 3..out_dim + 4], &[out_dim]);
                 let conf = Affine1dConfig::configure(meta, &params, input, output);
@@ -329,8 +320,6 @@ impl OnnxModel {
                 unimplemented!()
             }
         }
-
-        // Figure out the input and output
     }
 
     pub fn layout<F: FieldExt + TensorType, const BITS: usize>(
@@ -349,6 +338,7 @@ impl OnnxModel {
                 config.configs[node_idx].clone(),
             ) {
                 Some(vt) => {
+                    // This is just to log the layer output
                     match vt.clone() {
                         ValTensor::PrevAssigned { inner: v, dims: _ } => {
                             let r: Tensor<i32> = v.clone().into();
@@ -357,18 +347,6 @@ impl OnnxModel {
                         _ => panic!("Should be assigned"),
                     };
 
-                    // if let ValTensor::AssignedValue { inner, dims } = vt.clone() {
-                    //     //                        let ti: Tensor<i32> = Tensor::<i32>::from(inner); //does not work
-                    //     let mut output = Vec::new();
-                    //     let it = inner.map(|x| {
-                    //         x.evaluate().map(|y| {
-                    //             let e = felt_to_i32(y);
-                    //             output.push(e);
-                    //             //                                e
-                    //         })
-                    //     });
-                    //     println!("output: {:?}", output);
-                    // }
                     vt
                 }
                 None => x, // Some nodes don't produce tensor output, we skip these
@@ -378,7 +356,7 @@ impl OnnxModel {
     }
 
     // Takes an input ValTensor; alternatively we could recursively layout all the predecessor tensors
-    // (more likely to be correct).
+    // (which may be more correct for some graphs).
     // Does not take parameters, instead looking them up in the network.
     // At the Source level, the input will be fed by the prover.
     fn layout_node<F: FieldExt + TensorType, const BITS: usize>(
@@ -389,7 +367,6 @@ impl OnnxModel {
         config: OnnxNodeConfig<F, BITS>,
     ) -> Option<ValTensor<F>> {
         let node = &self.onnx_nodes[node_idx];
-        //        let node = OnnxNode::new(self.model.nodes[node_idx].clone());
         let input_outlets = &node.node.inputs;
 
         //        println!("Layout Node {}, {:?}", node_idx, node.opkind());
@@ -405,7 +382,7 @@ impl OnnxModel {
                 // The first input is the activations, second is the weight matrix, and the third the bias.
                 // Determine the input, and recursively assign the input node.
 
-                let (input_node_ix, input_node_slot) =
+                let (_input_node_ix, _input_node_slot) =
                     (input_outlets[0].node, input_outlets[0].slot);
                 // Properly we should check that weight and bias are Const ops
                 let (weight_node_ix, weight_node_slot) =
@@ -439,13 +416,10 @@ impl OnnxModel {
             }
             (OpKind::ReLU, OnnxNodeConfig::ReLU(rc)) => {
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
-                let length = node.output_shapes().unwrap()[0].as_ref().unwrap()[1]; //  shape is vec![1,LEN]
+                //                let length = node.output_shapes().unwrap()[0].as_ref().unwrap()[1]; //  shape is vec![1,LEN]
                 Some(rc.layout(layouter, input))
             }
-            (OpKind::Sigmoid, OnnxNodeConfig::Sigmoid(sc)) => {
-                let length = node.output_shapes().unwrap()[0].as_ref().unwrap()[1]; //  shape is vec![1,LEN]
-                Some(sc.layout(layouter, input))
-            }
+            (OpKind::Sigmoid, OnnxNodeConfig::Sigmoid(sc)) => Some(sc.layout(layouter, input)),
 
             _ => {
                 None //panic!("Node Op and Config mismatch, or unknown Op.")
