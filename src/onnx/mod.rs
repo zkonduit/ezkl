@@ -30,7 +30,7 @@ impl<F: FieldExt + TensorType, const BITS: usize> Circuit<F> for OnnxCircuit<F, 
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        let onnx_model = OnnxModel::from_arg();
+        let mut onnx_model = OnnxModel::from_arg();
         let num_advices = onnx_model.max_advices_width().unwrap();
         let num_fixeds = onnx_model.max_fixeds_width().unwrap();
         let advices = VarTensor::from(Tensor::from((0..num_advices + 3).map(|_| {

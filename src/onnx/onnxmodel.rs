@@ -1,5 +1,7 @@
 use crate::nn::affine::Affine1dConfig;
 use crate::nn::cnvrl::ConvConfig;
+use crate::nn::LayerConfig;
+use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
 use crate::tensor_ops::eltwise::{EltwiseConfig, ReLu, Sigmoid};
 use anyhow::Result;
@@ -11,11 +13,9 @@ use halo2_proofs::{
 use std::env;
 use std::path::Path;
 use tract_onnx;
+
 use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node, OutletId};
 use tract_onnx::tract_hir::{infer::Factoid, internal::InferenceOp};
-
-use crate::nn::LayerConfig;
-use crate::tensor::TensorType;
 
 use super::utilities::{ndarray_to_quantized, node_output_shapes};
 
@@ -127,17 +127,23 @@ impl OnnxNode {
 pub struct OnnxModel {
     pub model: Graph<InferenceFact, Box<dyn InferenceOp>>, // The raw Tract data structure
     pub onnx_nodes: Vec<OnnxNode>, // Wrapped nodes with additional methods and potentially data (e.g. quantization)
+    pub last_shape: Vec<usize>,
 }
 
 impl OnnxModel {
     pub fn new(path: impl AsRef<Path>) -> Self {
         let model = tract_onnx::onnx().model_for_path(path).unwrap();
+
         let onnx_nodes: Vec<OnnxNode> = model
             .nodes()
             .iter()
             .map(|n| OnnxNode::new(n.clone()))
             .collect();
-        OnnxModel { model, onnx_nodes }
+        OnnxModel {
+            model,
+            onnx_nodes,
+            last_shape: Vec::from([0]),
+        }
     }
     pub fn from_arg() -> Self {
         let args: Vec<String> = env::args().collect();
@@ -146,7 +152,7 @@ impl OnnxModel {
     }
 
     pub fn configure<F: FieldExt + TensorType, const BITS: usize>(
-        &self,
+        &mut self,
         meta: &mut ConstraintSystem<F>,
         advices: VarTensor,
         fixeds: VarTensor,
@@ -172,7 +178,7 @@ impl OnnxModel {
     /// Infer the params, input, and output, and configure against the provided meta and Advice and Fixed columns.
     /// Note that we require the context of the Graph to complete this task.
     fn configure_node<F: FieldExt + TensorType, const BITS: usize>(
-        &self,
+        &mut self,
         node_idx: usize,
         meta: &mut ConstraintSystem<F>,
         advices: VarTensor,
@@ -217,11 +223,12 @@ impl OnnxModel {
                 let input = advices.get_slice(&[out_dim + 2..out_dim + 3], &[in_dim]);
                 let output = advices.get_slice(&[out_dim + 3..out_dim + 4], &[out_dim]);
                 let conf = Affine1dConfig::configure(meta, &params, input, output);
+                self.last_shape = Vec::from([out_dim]);
                 Ok(OnnxNodeConfig::Affine(conf))
             }
             OpKind::ReLU => {
-                // Here,   node.output_shapes().unwrap()[0].as_ref().unwrap() == vec![1,LEN]
-                let length = node.output_shapes().unwrap()[0].as_ref().unwrap()[1];
+                let length = self.last_shape.clone().into_iter().product();
+
                 let conf: EltwiseConfig<F, BITS, ReLu<F>> = EltwiseConfig::configure(
                     meta,
                     advices.get_slice(&[0..length], &[length]),
