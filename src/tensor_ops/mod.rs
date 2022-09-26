@@ -1,6 +1,7 @@
 pub mod eltwise;
 use crate::tensor::{Tensor, TensorType};
 pub use std::ops::{Add, Mul};
+pub use std::cmp::Ord;
 
 pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     kernel: Tensor<T>,
@@ -70,6 +71,65 @@ pub fn convolution<
                             cs..(cs + kernel_width),
                         ]),
                     ),
+                );
+            }
+        }
+    }
+    output
+}
+
+/// Applies 2D max pooling over a 3D tensor of shape C x H x W.
+/// ```
+/// use halo2deeplearning::tensor::Tensor;
+/// use halo2deeplearning::tensor_ops::max_pool2d;
+///
+/// let x = Tensor::<i32>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[1, 3, 3],
+/// ).unwrap();
+/// const PADDING: usize = 0;
+/// const POOL_H: usize = 2;
+/// const POOL_W: usize = 2;
+/// const STRIDE: usize = 1;
+/// let pooled = max_pool2d::<i32, PADDING, POOL_H, POOL_W, STRIDE>(x);
+/// let expected = Tensor::<i32>::new(Some(&[5, 4, 4, 6]), &[1, 2, 2]).unwrap();
+/// assert_eq!(pooled, expected);
+/// ```
+pub fn max_pool2d<
+    T: TensorType + Ord,
+    const PADDING: usize,
+    const POOL_H: usize,
+    const POOL_W: usize,
+    const STRIDE: usize,
+>(
+    image: Tensor<T>,
+) -> Tensor<T> {
+    let image_dims = image.dims();
+    assert_eq!(image_dims.len(), 3);
+
+    let input_channels = image_dims[0];
+    let (image_height, image_width) = (image_dims[1], image_dims[2]);
+
+    let padded_image = pad::<T, PADDING>(image.clone());
+
+    let horz_slides = (image_height + 2 * PADDING - POOL_H) / STRIDE + 1;
+    let vert_slides = (image_width + 2 * PADDING - POOL_W) / STRIDE + 1;
+
+    let mut output: Tensor<T> =
+        Tensor::new(None, &[input_channels, horz_slides, vert_slides]).unwrap();
+
+    for i in 0..input_channels {
+        for j in 0..horz_slides {
+            let rs = j * STRIDE;
+            for k in 0..vert_slides {
+                let cs = k * STRIDE;
+                output.set(
+                    &[i, j, k],
+                    padded_image.get_slice(&[
+                        i..(i + 1),
+                        rs..(rs + POOL_H),
+                        cs..(cs + POOL_W),
+                    ]).into_iter().max().unwrap(),
                 );
             }
         }
