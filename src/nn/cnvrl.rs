@@ -1,8 +1,8 @@
-use crate::tensor::{Tensor, TensorType};
+use crate::tensor::{TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, Value},
-    plonk::{Assigned, ConstraintSystem, Constraints, Selector},
+    circuit::{Layouter, Value},
+    plonk::{ConstraintSystem, Constraints, Selector},
 };
 
 use super::*;
@@ -70,16 +70,22 @@ where
         config
     }
 
-    fn assign(
+    fn layout(
         &self,
         layouter: &mut impl Layouter<F>,
         input: ValTensor<F>,
         params: &[ValTensor<F>],
-    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+    ) -> ValTensor<F> {
         assert_eq!(params.len(), 1);
         let kernel = params[0].clone();
-        let image_width = input.dims()[2];
-        layouter
+        let (image_height, image_width) = (input.dims()[1], input.dims()[2]);
+        let (out_channels, kernel_height, kernel_width) =
+            (kernel.dims()[0], kernel.dims()[2], kernel.dims()[3]);
+
+        let horz = (image_height + 2 * PADDING - kernel_height) / STRIDE + 1;
+        let vert = (image_width + 2 * PADDING - kernel_width) / STRIDE + 1;
+
+        let mut t = layouter
             .assign_region(
                 || "assign image and kernel",
                 |mut region| {
@@ -106,29 +112,7 @@ where
                         .assign(&mut region, image_width, ValTensor::from(output)))
                 },
             )
-            .unwrap()
-    }
-
-    fn layout(
-        &self,
-        layouter: &mut impl Layouter<F>,
-        input: ValTensor<F>,
-        params: &[ValTensor<F>],
-    ) -> ValTensor<F> {
-        assert_eq!(params.len(), 1);
-        let kernel = params[0].clone();
-        let (image_height, image_width) = (input.dims()[1], input.dims()[2]);
-        let (out_channels, kernel_height, kernel_width) =
-            (kernel.dims()[0], kernel.dims()[2], kernel.dims()[3]);
-
-        let horz = (image_height + 2 * PADDING - kernel_height) / STRIDE + 1;
-        let vert = (image_width + 2 * PADDING - kernel_width) / STRIDE + 1;
-
-        let mut t = self.assign(
-            &mut layouter.namespace(|| format!("filter")),
-            input.clone(),
-            params,
-        );
+            .unwrap();
         t.reshape(&[out_channels, horz, vert]);
         ValTensor::from(t)
     }

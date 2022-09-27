@@ -3,7 +3,7 @@ use crate::nn::io::*;
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, Value},
+    circuit::{Layouter, Value},
     plonk::{Assigned, ConstraintSystem, Constraints, Expression, Selector},
 };
 use std::marker::PhantomData;
@@ -71,16 +71,15 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
         config
     }
 
-    fn assign(
+    fn layout(
         &self,
         layouter: &mut impl Layouter<F>,
         input: ValTensor<F>,
         params: &[ValTensor<F>],
-    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
-        assert_eq!(params.len(), 2);
-
+    ) -> ValTensor<F> {
+        assert!(params.len() == 2);
         let (kernel, bias) = (params[0].clone(), params[1].clone());
-        layouter
+        let t = layouter
             .assign_region(
                 || "assign image and kernel",
                 |mut region| {
@@ -107,15 +106,7 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
                         .assign(&mut region, offset, ValTensor::from(output)))
                 },
             )
-            .unwrap()
-    }
-    fn layout(
-        &self,
-        layouter: &mut impl Layouter<F>,
-        input: ValTensor<F>,
-        params: &[ValTensor<F>],
-    ) -> ValTensor<F> {
-        assert!(params.len() == 2);
-        ValTensor::from(self.assign(layouter, input, params))
+            .unwrap();
+        ValTensor::from(t)
     }
 }
