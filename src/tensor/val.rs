@@ -1,5 +1,7 @@
 use super::*;
 
+/// A wrapper around a tensor where the inner type is one of
+/// Halo2's Value<F>, Value<Assigned<F>, AssignedCell<Assigned<F>, F>.
 #[derive(Debug, Clone)]
 pub enum ValTensor<F: FieldExt + TensorType> {
     Value {

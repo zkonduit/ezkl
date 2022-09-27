@@ -18,6 +18,7 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
 
+/// The (inner) type of tensor elements.
 pub trait TensorType: Clone + Debug + 'static {
     /// Returns the zero value.
     fn zero() -> Option<Self> {
@@ -172,7 +173,6 @@ impl<F: FieldExt + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> {
 
 impl<T: Clone + TensorType> Tensor<T> {
     /// Sets (copies) the tensor values to the provided ones.
-    /// ```
     pub fn new(values: Option<&[T]>, dims: &[usize]) -> Result<Self, TensorError> {
         let total_dims: usize = dims.iter().product();
         match values {
@@ -194,10 +194,11 @@ impl<T: Clone + TensorType> Tensor<T> {
         }
     }
 
+    /// Returns the number of elements in the tensor.
     pub fn len(&mut self) -> usize {
         self.dims().iter().product::<usize>()
     }
-
+    /// Checks if the number of elements in tensor is 0.
     pub fn is_empty(&mut self) -> bool {
         self.dims().iter().product::<usize>() == 0
     }
