@@ -1,4 +1,4 @@
-use crate::tensor::{TensorType};
+use crate::tensor::TensorType;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
@@ -46,9 +46,9 @@ where
 
         let config = Self {
             selector: meta.selector(),
-            kernel: IOConfig::configure(meta, kernel),
-            image: IOConfig::configure(meta, input),
-            output: IOConfig::configure(meta, output),
+            kernel: IOConfig::configure(kernel),
+            image: IOConfig::configure(input),
+            output: IOConfig::configure(output),
         };
 
         meta.create_gate("convolution", |meta| {

@@ -41,11 +41,11 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
 
         let config = Self {
             selector: meta.selector(),
-            kernel: IOConfig::configure(meta, kernel),
-            bias: IOConfig::configure(meta, bias),
+            kernel: IOConfig::configure(kernel),
+            bias: IOConfig::configure(bias),
             // add 1 to incorporate bias !
-            input: IOConfig::configure(meta, input),
-            output: IOConfig::configure(meta, output),
+            input: IOConfig::configure(input),
+            output: IOConfig::configure(output),
             _marker: PhantomData,
         };
 

@@ -177,7 +177,6 @@ pub fn runmlp() {
             .iter()
             .map(|x| i32_to_felt::<F>(*x).into())
             .collect()],
-        //            vec![vec![(4).into(), (1).into(), (35).into(), (22).into()]],
     )
     .unwrap();
     prover.assert_satisfied();

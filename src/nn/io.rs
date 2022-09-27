@@ -2,8 +2,8 @@ use super::*;
 use crate::tensor::{ValTensor, VarTensor};
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, Region, Value},
-    plonk::{Assigned, ConstraintSystem, Expression, Selector, VirtualCells},
+    circuit::{AssignedCell, Region, },
+    plonk::{Assigned, Expression, VirtualCells},
     poly::Rotation,
 };
 use std::marker::PhantomData;
@@ -11,15 +11,13 @@ use std::marker::PhantomData;
 #[derive(Debug, Clone)]
 pub struct IOConfig<F: FieldExt + TensorType> {
     pub values: VarTensor,
-    selector: Selector,
     marker: PhantomData<F>,
 }
 
 impl<F: FieldExt + TensorType> IOConfig<F> {
-    pub fn configure(meta: &mut ConstraintSystem<F>, values: VarTensor) -> Self {
+    pub fn configure(values: VarTensor) -> Self {
         Self {
             values,
-            selector: meta.selector(),
             marker: PhantomData,
         }
     }
@@ -118,27 +116,6 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
                 })
             }
         }
-    }
-
-    pub fn layout(
-        &self,
-        layouter: &mut impl Layouter<F>,
-        raw_input: Tensor<i32>,
-    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, halo2_proofs::plonk::Error> {
-        layouter.assign_region(
-            || "Input",
-            |mut region| {
-                let offset = 0;
-                self.selector.enable(&mut region, offset)?;
-                Ok(self.assign(
-                    &mut region,
-                    offset,
-                    ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(
-                        raw_input.clone(),
-                    )),
-                ))
-            },
-        )
     }
 }
 

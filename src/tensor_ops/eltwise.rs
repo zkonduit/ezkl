@@ -2,8 +2,8 @@ use crate::fieldutils::{self, felt_to_i32, i32_to_felt};
 use crate::tensor::*;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, Value},
-    plonk::{Assigned, ConstraintSystem, Selector, TableColumn},
+    circuit::{Layouter, Value},
+    plonk::{ConstraintSystem, Selector, TableColumn},
     poly::Rotation,
 };
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
@@ -86,7 +86,7 @@ pub struct EltwiseConfig<F: FieldExt + TensorType, const BITS: usize, NL: Nonlin
 impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
     EltwiseConfig<F, BITS, NL>
 {
-    /// Configures multiple element-wise non-linearities at once. 
+    /// Configures multiple element-wise non-linearities at once.
     pub fn configure_multiple<const NUM: usize>(
         cs: &mut ConstraintSystem<F>,
         input: VarTensor,
@@ -150,87 +150,83 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
         }
     }
 
-    fn assign(
-        &self,
-        layouter: &mut impl Layouter<F>,
-        input: ValTensor<F>,
-    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
-        layouter
-            .assign_region(
-                || "Elementwise", // the name of the region
-                |mut region| {
-                    let offset = 0;
-                    self.qlookup.enable(&mut region, offset)?;
-
-                    let w = match &input {
-                        ValTensor::AssignedValue { inner: v, dims: _ } => match &self.input {
-                            VarTensor::Advice {
-                                inner: advice,
-                                dims: _,
-                            } => v.enum_map(|i, x| {
-                                // assign the advice
-                                region
-                                    .assign_advice(|| "input", advice[i], offset, || x)
-                                    .unwrap()
-                            }),
-                            _ => panic!("not yet implemented"),
-                        },
-                        ValTensor::PrevAssigned { inner: v, dims: _ } => match &self.input {
-                            VarTensor::Advice {
-                                inner: advice,
-                                dims: _,
-                            } =>
-                            //copy the advice
-                            {
-                                v.enum_map(|i, x| {
-                                    x.copy_advice(|| "input", &mut region, advice[i], offset)
-                                        .unwrap()
-                                })
-                            }
-                            _ => panic!("not yet implemented"),
-                        },
-                        ValTensor::Value { inner: v, dims: _ } => match &self.input {
-                            VarTensor::Advice {
-                                inner: advice,
-                                dims: _,
-                            } => v.enum_map(|i, x| {
-                                // assign the advice
-                                region
-                                    .assign_advice(|| "input", advice[i], offset, || x.into())
-                                    .unwrap()
-                            }),
-                            _ => panic!("not yet implemented"),
-                        },
-                    };
-
-                    let output = Tensor::from(w.iter().map(|acaf| acaf.value_field()).map(|vaf| {
-                        vaf.map(|f| {
-                            <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate())).into()
-                        })
-                    }));
-
-                    match &self.input {
-                        VarTensor::Advice {
-                            inner: advice,
-                            dims: _,
-                        } => Ok(output.enum_map(|i, o| {
-                            region
-                                .assign_advice(|| format!("nl_{i}"), advice[i], 1, || o)
-                                .unwrap()
-                        })),
-
-                        _ => panic!("not yet implemented"),
-                    }
-                },
-            )
-            .unwrap()
-    }
-
     pub fn layout(&self, layouter: &mut impl Layouter<F>, input: ValTensor<F>) -> ValTensor<F> {
         if !self.table.borrow().is_assigned {
             self.table.borrow_mut().layout(layouter)
         }
-        let mut t = ValTensor::from(self.assign(layouter, input.clone()));
+        let mut t = ValTensor::from(
+            layouter
+                .assign_region(
+                    || "Elementwise", // the name of the region
+                    |mut region| {
+                        let offset = 0;
+                        self.qlookup.enable(&mut region, offset)?;
+
+                        let w = match &input {
+                            ValTensor::AssignedValue { inner: v, dims: _ } => match &self.input {
+                                VarTensor::Advice {
+                                    inner: advice,
+                                    dims: _,
+                                } => v.enum_map(|i, x| {
+                                    // assign the advice
+                                    region
+                                        .assign_advice(|| "input", advice[i], offset, || x)
+                                        .unwrap()
+                                }),
+                                _ => panic!("not yet implemented"),
+                            },
+                            ValTensor::PrevAssigned { inner: v, dims: _ } => match &self.input {
+                                VarTensor::Advice {
+                                    inner: advice,
+                                    dims: _,
+                                } =>
+                                //copy the advice
+                                {
+                                    v.enum_map(|i, x| {
+                                        x.copy_advice(|| "input", &mut region, advice[i], offset)
+                                            .unwrap()
+                                    })
+                                }
+                                _ => panic!("not yet implemented"),
+                            },
+                            ValTensor::Value { inner: v, dims: _ } => match &self.input {
+                                VarTensor::Advice {
+                                    inner: advice,
+                                    dims: _,
+                                } => v.enum_map(|i, x| {
+                                    // assign the advice
+                                    region
+                                        .assign_advice(|| "input", advice[i], offset, || x.into())
+                                        .unwrap()
+                                }),
+                                _ => panic!("not yet implemented"),
+                            },
+                        };
+
+                        let output =
+                            Tensor::from(w.iter().map(|acaf| acaf.value_field()).map(|vaf| {
+                                vaf.map(|f| {
+                                    <NL as Nonlinearity<F>>::nonlinearity(felt_to_i32(f.evaluate()))
+                                        .into()
+                                })
+                            }));
+
+                        match &self.input {
+                            VarTensor::Advice {
+                                inner: advice,
+                                dims: _,
+                            } => Ok(output.enum_map(|i, o| {
+                                region
+                                    .assign_advice(|| format!("nl_{i}"), advice[i], 1, || o)
+                                    .unwrap()
+                            })),
+
+                            _ => panic!("not yet implemented"),
+                        }
+                    },
+                )
+                .unwrap(),
+        );
         t.reshape(input.dims());
         t
     }
