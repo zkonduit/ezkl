@@ -9,6 +9,7 @@ use super::*;
 use crate::nn::io::*;
 use crate::tensor_ops::*;
 
+/// Configuration for a convolutional layer which convolves a kernel with an input (image).
 #[derive(Debug, Clone)]
 pub struct ConvConfig<F: FieldExt + TensorType, const STRIDE: usize, const PADDING: usize>
 where

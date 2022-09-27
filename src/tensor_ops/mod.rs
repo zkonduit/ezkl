@@ -2,6 +2,23 @@ pub mod eltwise;
 use crate::tensor::{Tensor, TensorType};
 pub use std::ops::{Add, Mul};
 
+/// Multiplies two 2D tensors
+/// ```
+/// use halo2deeplearning::tensor::Tensor;
+/// use halo2deeplearning::tensor_ops::matmul;
+///
+/// let x = Tensor::<i32>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[3, 3],
+/// ).unwrap();
+/// let k = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = matmul(k, x);
+/// let expected = Tensor::<i32>::new(Some(&[18, 2, 19, 10, 3, 10]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
 pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     kernel: Tensor<T>,
     input: Tensor<T>,
@@ -9,20 +26,41 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     let input_dims = input.dims();
     let kernel_dims = kernel.dims();
 
-    assert!(input_dims[1] == kernel_dims[1]);
+    assert!(input_dims[0] == kernel_dims[1]);
 
     // calculate value of output
-    let mut output: Tensor<T> = Tensor::new(None, &[1, kernel_dims[0]]).unwrap();
+    let mut output: Tensor<T> = Tensor::new(None, &[kernel_dims[0], input_dims[1]]).unwrap();
 
     for i in 0..kernel_dims[0] {
-        output.set(
-            &[0, i],
-            dot_product(kernel.get_slice(&[i..i + 1]), input.get_slice(&[0..1])),
-        );
+        for j in 0..input_dims[1] {
+            output.set(
+                &[i, j],
+                dot_product(kernel.get_slice(&[i..i + 1]), input.get_slice(&[j..j + 1])),
+            );
+        }
     }
     output
 }
 
+/// Applies convolution over a 3D tensor of shape C x H x W.
+/// ```
+/// use halo2deeplearning::tensor::Tensor;
+/// use halo2deeplearning::tensor_ops::convolution;
+///
+/// let x = Tensor::<i32>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[1, 3, 3],
+/// ).unwrap();
+/// let k = Tensor::<i32>::new(
+///     Some(&[5, 1, 1, 1]),
+///     &[1, 1, 2, 2],
+/// ).unwrap();
+/// const PADDING: usize = 0;
+/// const STRIDE: usize = 1;
+/// let result = convolution::<i32, PADDING, STRIDE>(k, x);
+/// let expected = Tensor::<i32>::new(Some(&[31, 16, 8, 26]), &[1, 2, 2]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
 pub fn convolution<
     T: TensorType + Mul<Output = T> + Add<Output = T>,
     const PADDING: usize,
@@ -77,6 +115,21 @@ pub fn convolution<
     output
 }
 
+/// Dot product of two tensors
+/// ```
+/// use halo2deeplearning::tensor::Tensor;
+/// use halo2deeplearning::tensor_ops::dot_product;
+///
+/// let x = Tensor::<i32>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[1, 3, 3],
+/// ).unwrap();
+/// let y = Tensor::<i32>::new(
+///     Some(&[5, 5, 10, -4, 2, -1, 2, 0, 1]),
+///     &[1, 3, 3],
+/// ).unwrap();
+/// assert_eq!(dot_product(x, y), 86);
+/// ```
 pub fn dot_product<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     w: Tensor<T>,
     x: Tensor<T>,
@@ -86,7 +139,24 @@ pub fn dot_product<T: TensorType + Mul<Output = T> + Add<Output = T>>(
         .fold(T::zero().unwrap(), |acc, (k, i)| acc + k.clone() * i)
 }
 
-fn pad<T: TensorType, const PADDING: usize>(image: Tensor<T>) -> Tensor<T> {
+/// Pads a 3D tensor of shape C x H x W to a tensor of shape C x (H + 2*PADDING) x (W + 2*PADDING) with 0 values.
+/// ```
+/// use halo2deeplearning::tensor::Tensor;
+/// use halo2deeplearning::tensor_ops::pad;
+///
+/// let x = Tensor::<i32>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[1, 3, 3],
+/// ).unwrap();
+/// const PADDING: usize = 1;
+/// let result = pad::<i32, PADDING>(x);
+/// let expected = Tensor::<i32>::new(
+///     Some(&[0, 0, 0, 0, 0, 0, 5, 2, 3, 0, 0, 0, 4, -1, 0, 0, 3, 1, 6, 0, 0, 0, 0, 0, 0]),
+///     &[1, 5, 5],
+/// ).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn pad<T: TensorType, const PADDING: usize>(image: Tensor<T>) -> Tensor<T> {
     assert_eq!(image.dims().len(), 3);
     let (channels, height, width) = (image.dims()[0], image.dims()[1], image.dims()[2]);
     let padded_height = height + 2 * PADDING;
@@ -107,10 +177,4 @@ fn pad<T: TensorType, const PADDING: usize>(image: Tensor<T>) -> Tensor<T> {
 
     output.reshape(&[channels, padded_height, padded_width]);
     output
-}
-
-pub fn op<T: TensorType>(images: Vec<Tensor<T>>, f: impl Fn(T, T) -> T + Clone) -> Tensor<T> {
-    images.iter().skip(1).fold(images[0].clone(), |acc, image| {
-        acc.enum_map(|i, e| f(e, image[i].clone()))
-    })
 }

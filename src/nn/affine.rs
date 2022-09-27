@@ -8,6 +8,8 @@ use halo2_proofs::{
 };
 use std::marker::PhantomData;
 
+/// Configuration for an affine layer which performs matrix multiplication with an input
+/// and adds a bias term to the result.
 #[derive(Clone)]
 pub struct Affine1dConfig<F: FieldExt + TensorType> {
     // kernel is weights and biases concatenated
@@ -57,8 +59,8 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
                 for j in 0..in_dim {
                     c = c + config.kernel.query_idx(meta, i, j) * config.input.query_idx(meta, 0, j)
                 }
-                c + config.bias.query_idx(meta, 0, i)
                 // add the bias
+                c + config.bias.query_idx(meta, 0, i)
             });
 
             let constraints = witnessed_output.enum_map(|i, o| o - expected_output[i].clone());
@@ -92,10 +94,11 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
                         Tensor::new(None, &[kernel.dims()[0]]).unwrap();
 
                     output = output.enum_map(|i, mut o| {
+                        // multiply input row with weight column
                         input.enum_map(|j, x| {
                             o = o + x.value_field() * weights.get(&[i, j]).value_field();
                         });
-
+                        // adds bias
                         o + bias.get(&[i]).value_field()
                     });
 

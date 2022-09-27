@@ -19,6 +19,7 @@ pub struct Nonlin1d<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
     pub _marker: PhantomData<(F, NL)>,
 }
 
+/// Halo2 lookup table for element wise non-linearities.
 // Table that should be reused across all lookups (so no Clone)
 #[derive(Clone, Debug)]
 pub struct EltwiseTable<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> {
@@ -73,6 +74,7 @@ impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, 
     }
 }
 
+/// Configuration for element-wise non-linearities.
 #[derive(Clone, Debug)]
 pub struct EltwiseConfig<F: FieldExt + TensorType, const BITS: usize, NL: Nonlinearity<F>> {
     pub input: VarTensor,
@@ -84,6 +86,7 @@ pub struct EltwiseConfig<F: FieldExt + TensorType, const BITS: usize, NL: Nonlin
 impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
     EltwiseConfig<F, BITS, NL>
 {
+    /// Configures multiple element-wise non-linearities at once. 
     pub fn configure_multiple<const NUM: usize>(
         cs: &mut ConstraintSystem<F>,
         input: VarTensor,
