@@ -52,4 +52,4 @@ criterion_group! {
 
 ## Docs
 
-Use `cargo doc --open` to compile and open the docs in your default browser. 
+Use `cargo doc --open --feature onnx` to compile and open the docs in your default browser. 
