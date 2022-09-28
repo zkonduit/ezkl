@@ -6,8 +6,8 @@ use halo2_proofs::{
 };
 
 use super::*;
-use crate::nn::io::*;
 use crate::tensor_ops::*;
+use std::marker::PhantomData;
 
 /// Configuration for a convolutional layer which convolves a kernel with an input (image).
 #[derive(Debug, Clone)]
@@ -16,9 +16,10 @@ where
     Value<F>: TensorType,
 {
     selector: Selector,
-    kernel: IOConfig<F>,
-    image: IOConfig<F>,
-    pub output: IOConfig<F>,
+    kernel: VarTensor,
+    input: VarTensor,
+    pub output: VarTensor,
+    _marker: PhantomData<F>,
 }
 
 impl<F: FieldExt + TensorType, const STRIDE: usize, const PADDING: usize> LayerConfig<F>
@@ -48,16 +49,17 @@ where
 
         let config = Self {
             selector: meta.selector(),
-            kernel: IOConfig::configure(kernel),
-            image: IOConfig::configure(input),
-            output: IOConfig::configure(output),
+            kernel,
+            input,
+            output,
+            _marker: PhantomData,
         };
 
         meta.create_gate("convolution", |meta| {
             let selector = meta.query_selector(config.selector);
 
             // Get output expressions for each input channel
-            let image = config.image.query(meta, 0);
+            let image = config.input.query(meta, 0);
             let kernel = config.kernel.query(meta, 0);
 
             let expected_output = convolution::<_, PADDING, STRIDE>(kernel, image);
@@ -95,7 +97,7 @@ where
                     self.selector.enable(&mut region, 0)?;
 
                     self.kernel.assign(&mut region, 0, kernel.clone());
-                    self.image.assign(&mut region, 0, input.clone());
+                    self.input.assign(&mut region, 0, input.clone());
 
                     let output = match input.clone() {
                         ValTensor::Value {

@@ -1,5 +1,4 @@
 use super::*;
-use crate::nn::io::*;
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -12,10 +11,10 @@ use std::marker::PhantomData;
 /// a bias vector to the result.
 #[derive(Clone)]
 pub struct Affine1dConfig<F: FieldExt + TensorType> {
-    pub kernel: IOConfig<F>,
-    pub bias: IOConfig<F>,
-    pub input: IOConfig<F>,
-    pub output: IOConfig<F>,
+    pub kernel: VarTensor,
+    pub bias: VarTensor,
+    pub input: VarTensor,
+    pub output: VarTensor,
     pub selector: Selector,
     _marker: PhantomData<F>,
 }
@@ -41,10 +40,10 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
 
         let config = Self {
             selector: meta.selector(),
-            kernel: IOConfig::configure(kernel),
-            bias: IOConfig::configure(bias),
-            input: IOConfig::configure(input),
-            output: IOConfig::configure(output),
+            kernel,
+            bias,
+            input,
+            output,
             _marker: PhantomData,
         };
 

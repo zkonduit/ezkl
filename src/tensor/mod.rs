@@ -10,8 +10,9 @@ use crate::fieldutils::{felt_to_i32, i32_to_felt};
 
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Value},
-    plonk::{Advice, Assigned, Column, ConstraintSystem, Expression, Fixed},
+    circuit::{AssignedCell, Value, Region},
+    plonk::{Advice, Assigned, Column, ConstraintSystem, Expression, Fixed, VirtualCells},
+    poly::Rotation,
 };
 use itertools::Itertools;
 use std::fmt::Debug;
