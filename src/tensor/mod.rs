@@ -80,6 +80,9 @@ impl TensorType for halo2curves::pasta::Fp {
 #[derive(Debug)]
 pub struct TensorError(String);
 
+/// A generic multi-dimensional array representation of a Tensor.
+/// The inner attribute contains a vector of values whereas dims corresponds to the dimensionality of the array
+/// and as such determines how we index, query for values, or slice a Tensor.
 #[derive(Clone, Debug, Eq)]
 pub struct Tensor<T: TensorType> {
     inner: Vec<T>,

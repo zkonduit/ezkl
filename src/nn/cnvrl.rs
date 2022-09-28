@@ -26,6 +26,8 @@ impl<F: FieldExt + TensorType, const STRIDE: usize, const PADDING: usize> LayerC
 where
     Value<F>: TensorType,
 {
+    /// Configures and creates a convolution gate within a circuit.
+    /// Also constrains the output of the gate.
     fn configure(
         meta: &mut ConstraintSystem<F>,
         params: &[VarTensor],
@@ -70,6 +72,7 @@ where
         config
     }
 
+     /// Assigns values to the convolution gate variables created when calling configure().
     fn layout(
         &self,
         layouter: &mut impl Layouter<F>,

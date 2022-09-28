@@ -2,28 +2,33 @@ use super::*;
 use crate::tensor::{ValTensor, VarTensor};
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Region, },
+    circuit::{AssignedCell, Region},
     plonk::{Assigned, Expression, VirtualCells},
     poly::Rotation,
 };
 use std::marker::PhantomData;
 
+/// A type which wraps a VarTensor and provides method for laying it out and assigning to it within a circuit.
+/// This could represent for instance a kernel of weight parameters, a bias vector, input data, or output variables we want to constrain
+/// within a circuit.
 #[derive(Debug, Clone)]
 pub struct IOConfig<F: FieldExt + TensorType> {
-    pub values: VarTensor,
+    pub kernel: VarTensor,
     marker: PhantomData<F>,
 }
 
 impl<F: FieldExt + TensorType> IOConfig<F> {
-    pub fn configure(values: VarTensor) -> Self {
+    pub fn configure(kernel: VarTensor) -> Self {
         Self {
-            values,
+            kernel,
             marker: PhantomData,
         }
     }
 
+    /// Retrieve the values represented within the columns of the VarTensor (recall that VarTensor
+    /// is a Tensor of columns).
     pub fn query(&self, meta: &mut VirtualCells<'_, F>, offset: usize) -> Tensor<Expression<F>> {
-        let mut t = match &self.values {
+        let mut t = match &self.kernel {
             // when fixed we have 1 col per param
             VarTensor::Fixed { inner: f, dims: _ } => {
                 f.map(|c| meta.query_fixed(c, Rotation(offset as i32)))
@@ -38,17 +43,19 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
                 })
                 .combine(),
         };
-        t.reshape(self.values.dims());
+        t.reshape(self.kernel.dims());
         t
     }
 
+    /// Retrieve the value represented at a specific index within the columns of the VarTensor (recall that VarTensor
+    /// is a Tensor of columns).
     pub fn query_idx(
         &self,
         meta: &mut VirtualCells<'_, F>,
         idx: usize,
         offset: usize,
     ) -> Expression<F> {
-        match &self.values {
+        match &self.kernel {
             VarTensor::Fixed { inner: f, dims: _ } => {
                 meta.query_fixed(f[idx], Rotation(offset as i32))
             }
@@ -58,22 +65,22 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
         }
     }
 
+    /// Assigns specific values to the inner VarTensor (kernel attribute).
     pub fn assign(
         &self,
         region: &mut Region<'_, F>,
         offset: usize,
-        kernel: ValTensor<F>,
+        values: ValTensor<F>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
-        match kernel {
+        match values {
             ValTensor::Value { inner: v, dims: _ } => {
-                v.mc_enum_map(|coord, k| match &self.values {
+                v.mc_enum_map(|coord, k| match &self.kernel {
                     VarTensor::Fixed { inner: f, dims: _ } => region
                         .assign_fixed(|| "k", f.get(&coord), offset, || k.into())
                         .unwrap(),
                     VarTensor::Advice { inner: a, dims: _ } => {
                         let coord = format_advice_coord(coord);
                         let last = coord.len() - 1;
-                        // 1D advice doesn't match to 1D iterates
                         region
                             .assign_advice(
                                 || "k",
@@ -86,7 +93,7 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
                 })
             }
             ValTensor::PrevAssigned { inner: v, dims: _ } => {
-                v.mc_enum_map(|coord, x| match &self.values {
+                v.mc_enum_map(|coord, x| match &self.kernel {
                     VarTensor::Fixed { inner: _, dims: _ } => panic!("not implemented"),
                     VarTensor::Advice { inner: a, dims: _ } => {
                         let coord = format_advice_coord(coord);
@@ -97,7 +104,7 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
                 })
             }
             ValTensor::AssignedValue { inner: v, dims: _ } => {
-                v.mc_enum_map(|coord, k| match &self.values {
+                v.mc_enum_map(|coord, k| match &self.kernel {
                     VarTensor::Fixed { inner: f, dims: _ } => region
                         .assign_fixed(|| "k", f.get(&coord), offset, || k)
                         .unwrap(),
@@ -117,6 +124,7 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
             }
         }
     }
+
 }
 
 fn format_advice_coord(coord: &[usize]) -> Vec<usize> {
