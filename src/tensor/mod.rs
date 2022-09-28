@@ -1,4 +1,6 @@
+/// A wrapper around a tensor of circuit variables / advices.
 pub mod val;
+/// A wrapper around a tensor of Halo2 Value types.
 pub mod var;
 
 pub use val::*;
@@ -8,8 +10,9 @@ use crate::fieldutils::{felt_to_i32, i32_to_felt};
 
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Value},
-    plonk::{Advice, Assigned, Column, ConstraintSystem, Expression, Fixed},
+    circuit::{AssignedCell, Value, Region},
+    plonk::{Advice, Assigned, Column, ConstraintSystem, Expression, Fixed, VirtualCells},
+    poly::Rotation,
 };
 use itertools::Itertools;
 use std::fmt::Debug;
@@ -18,6 +21,7 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
 
+/// The (inner) type of tensor elements.
 pub trait TensorType: Clone + Debug + 'static {
     /// Returns the zero value.
     fn zero() -> Option<Self> {
@@ -79,6 +83,9 @@ impl TensorType for halo2curves::pasta::Fp {
 #[derive(Debug)]
 pub struct TensorError(String);
 
+/// A generic multi-dimensional array representation of a Tensor.
+/// The `inner` attribute contains a vector of values whereas `dims` corresponds to the dimensionality of the array
+/// and as such determines how we index, query for values, or slice a Tensor.
 #[derive(Clone, Debug, Eq)]
 pub struct Tensor<T: TensorType> {
     inner: Vec<T>,
@@ -172,7 +179,6 @@ impl<F: FieldExt + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> {
 
 impl<T: Clone + TensorType> Tensor<T> {
     /// Sets (copies) the tensor values to the provided ones.
-    /// ```
     pub fn new(values: Option<&[T]>, dims: &[usize]) -> Result<Self, TensorError> {
         let total_dims: usize = dims.iter().product();
         match values {
@@ -194,10 +200,11 @@ impl<T: Clone + TensorType> Tensor<T> {
         }
     }
 
+    /// Returns the number of elements in the tensor.
     pub fn len(&mut self) -> usize {
         self.dims().iter().product::<usize>()
     }
-
+    /// Checks if the number of elements in tensor is 0.
     pub fn is_empty(&mut self) -> bool {
         self.dims().iter().product::<usize>() == 0
     }

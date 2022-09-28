@@ -1,5 +1,9 @@
 use super::*;
 
+/// A wrapper around a tensor where the inner type is one of
+/// Halo2's `Value<F>`, `Value<Assigned<F>>`, `AssignedCell<Assigned<F>, F>`.
+/// This enum is generally used to assign values to variables / advices already configured in a Halo2 circuit (usually represented as a `VarTensor`).
+/// For instance a `ValTensor` can represent pre-trained neural network weights; or a known input to a network.
 #[derive(Debug, Clone)]
 pub enum ValTensor<F: FieldExt + TensorType> {
     Value {
@@ -44,6 +48,7 @@ impl<F: FieldExt + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>> for Va
 }
 
 impl<F: FieldExt + TensorType> ValTensor<F> {
+    /// Calls `get_slice` on the inner tensor.
     pub fn get_slice(&self, indices: &[Range<usize>]) -> ValTensor<F> {
         match self {
             ValTensor::Value { inner: v, dims: _ } => {
@@ -70,6 +75,7 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         }
     }
 
+    /// Sets the `ValTensor`'s shape.
     pub fn reshape(&mut self, new_dims: &[usize]) {
         match self {
             ValTensor::Value { inner: _, dims: d } => {
@@ -87,6 +93,7 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         }
     }
 
+    /// Calls `flatten` on the inner tensor.
     pub fn flatten(&mut self) {
         match self {
             ValTensor::Value { inner: v, dims: d } => {
@@ -104,6 +111,7 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         }
     }
 
+    /// Returns the `dims` attribute of the `ValTensor`.
     pub fn dims(&self) -> &[usize] {
         match self {
             ValTensor::Value { inner: _, dims: d } => d,

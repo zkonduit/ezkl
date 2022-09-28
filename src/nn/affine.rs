@@ -1,26 +1,27 @@
 use super::*;
-use crate::nn::io::*;
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, Value},
+    circuit::{Layouter, Value},
     plonk::{Assigned, ConstraintSystem, Constraints, Expression, Selector},
 };
 use std::marker::PhantomData;
 
+/// Configuration for an affine layer which (mat)multiplies a weight kernel to an input and adds
+/// a bias vector to the result.
 #[derive(Clone)]
 pub struct Affine1dConfig<F: FieldExt + TensorType> {
-    // kernel is weights and biases concatenated
-    pub kernel: IOConfig<F>,
-    pub bias: IOConfig<F>,
-    pub input: IOConfig<F>,
-    pub output: IOConfig<F>,
+    pub kernel: VarTensor,
+    pub bias: VarTensor,
+    pub input: VarTensor,
+    pub output: VarTensor,
     pub selector: Selector,
     _marker: PhantomData<F>,
 }
 
 impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
-    // Takes the layer's input tensor as an argument, and completes the advice by generating new for the rest
+    /// Configures and creates an affine gate within a circuit.
+    /// Also constrains the output of the gate.
     fn configure(
         meta: &mut ConstraintSystem<F>,
         params: &[VarTensor],
@@ -39,11 +40,10 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
 
         let config = Self {
             selector: meta.selector(),
-            kernel: IOConfig::configure(meta, kernel),
-            bias: IOConfig::configure(meta, bias),
-            // add 1 to incorporate bias !
-            input: IOConfig::configure(meta, input),
-            output: IOConfig::configure(meta, output),
+            kernel,
+            bias,
+            input,
+            output,
             _marker: PhantomData,
         };
 
@@ -69,16 +69,17 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
         config
     }
 
-    fn assign(
+    /// Assigns values to the affine gate variables created when calling `configure`.
+    fn layout(
         &self,
         layouter: &mut impl Layouter<F>,
         input: ValTensor<F>,
         params: &[ValTensor<F>],
-    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+    ) -> ValTensor<F> {
         assert_eq!(params.len(), 2);
 
         let (kernel, bias) = (params[0].clone(), params[1].clone());
-        layouter
+        let t = layouter
             .assign_region(
                 || "assign image and kernel",
                 |mut region| {
@@ -104,15 +105,8 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
                         .assign(&mut region, offset, ValTensor::from(output)))
                 },
             )
-            .unwrap()
-    }
-    fn layout(
-        &self,
-        layouter: &mut impl Layouter<F>,
-        input: ValTensor<F>,
-        params: &[ValTensor<F>],
-    ) -> ValTensor<F> {
-        assert!(params.len() == 2);
-        ValTensor::from(self.assign(layouter, input, params))
+            .unwrap();
+
+        ValTensor::from(t)
     }
 }
