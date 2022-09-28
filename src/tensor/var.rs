@@ -7,7 +7,7 @@ use super::*;
 /// only be of dimension `[3]` we can set the VarTensor's dimension to `[3,3]` to capture information
 /// about the column layout. This enum is generally used to configure and layout circuit variables / advices.
 /// For instance can be used to represent neural network parameters within a circuit that we later assign to
-/// using a `ValTensor`.
+/// using a the `assign` method called on a `ValTensor`.
 #[derive(Clone, Debug)]
 pub enum VarTensor {
     Advice {
