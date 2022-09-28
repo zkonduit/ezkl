@@ -1,4 +1,6 @@
+/// A wrapper around a tensor of circuit variables / advices.
 pub mod val;
+/// A wrapper around a tensor of Halo2 Value types.
 pub mod var;
 
 pub use val::*;
@@ -81,7 +83,7 @@ impl TensorType for halo2curves::pasta::Fp {
 pub struct TensorError(String);
 
 /// A generic multi-dimensional array representation of a Tensor.
-/// The inner attribute contains a vector of values whereas dims corresponds to the dimensionality of the array
+/// The `inner` attribute contains a vector of values whereas `dims` corresponds to the dimensionality of the array
 /// and as such determines how we index, query for values, or slice a Tensor.
 #[derive(Clone, Debug, Eq)]
 pub struct Tensor<T: TensorType> {

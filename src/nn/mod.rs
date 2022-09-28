@@ -1,8 +1,11 @@
 use crate::tensor::*;
 use halo2_proofs::{arithmetic::FieldExt, circuit::Layouter, plonk::ConstraintSystem};
 
+/// Structs and methods for configuring and assigning to an affine gate within a Halo2 circuit.
 pub mod affine;
+/// Structs and methods for configuring and assigning to a convolutional gate within a Halo2 circuit.
 pub mod cnvrl;
+/// Helper structs and methods to assign values (`ValTensor`) to circuit variables/advices (`ValTensor`).
 pub mod io;
 
 /// Trait for configuring neural network layers in a Halo2 circuit.

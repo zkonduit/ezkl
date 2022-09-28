@@ -1,8 +1,9 @@
+/// Element-wise operations.
 pub mod eltwise;
 use crate::tensor::{Tensor, TensorType};
 pub use std::ops::{Add, Mul};
 
-/// Multiplies two 2D tensors
+/// Matrix multiplies two 2D tensors.
 /// ```
 /// use halo2deeplearning::tensor::Tensor;
 /// use halo2deeplearning::tensor_ops::matmul;
@@ -115,7 +116,7 @@ pub fn convolution<
     output
 }
 
-/// Dot product of two tensors
+/// Dot product of two tensors.
 /// ```
 /// use halo2deeplearning::tensor::Tensor;
 /// use halo2deeplearning::tensor_ops::dot_product;
@@ -139,7 +140,7 @@ pub fn dot_product<T: TensorType + Mul<Output = T> + Add<Output = T>>(
         .fold(T::zero().unwrap(), |acc, (k, i)| acc + k.clone() * i)
 }
 
-/// Pads a 3D tensor of shape C x H x W to a tensor of shape C x (H + 2*PADDING) x (W + 2*PADDING) with 0 values.
+/// Pads a 3D tensor of shape `C x H x W` to a tensor of shape `C x (H + 2xPADDING) x (W + 2*PADDING)` using 0 values.
 /// ```
 /// use halo2deeplearning::tensor::Tensor;
 /// use halo2deeplearning::tensor_ops::pad;

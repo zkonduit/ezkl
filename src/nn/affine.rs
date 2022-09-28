@@ -70,7 +70,7 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
         config
     }
 
-    /// Assigns values to the affine gate variables created when calling configure().
+    /// Assigns values to the affine gate variables created when calling `configure`.
     fn layout(
         &self,
         layouter: &mut impl Layouter<F>,

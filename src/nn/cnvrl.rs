@@ -72,7 +72,7 @@ where
         config
     }
 
-     /// Assigns values to the convolution gate variables created when calling configure().
+    /// Assigns values to the convolution gate variables created when calling `configure`.
     fn layout(
         &self,
         layouter: &mut impl Layouter<F>,

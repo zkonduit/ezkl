@@ -1,3 +1,4 @@
+/// Utilities for converting from Halo2 Field types to integers (and vice-versa).
 use halo2_proofs::arithmetic::FieldExt;
 pub fn i32_to_felt<F: FieldExt>(x: i32) -> F {
     if x >= 0 {

@@ -8,7 +8,7 @@ use halo2_proofs::{
 };
 use std::marker::PhantomData;
 
-/// A type which wraps a VarTensor and provides method for laying it out and assigning to it within a circuit.
+/// A type which wraps a `VarTensor` and provides method for configuring it within a circuit and assigning `ValTensors` to it.
 /// This could represent for instance a kernel of weight parameters, a bias vector, input data, or output variables we want to constrain
 /// within a circuit.
 #[derive(Debug, Clone)]
@@ -124,7 +124,6 @@ impl<F: FieldExt + TensorType> IOConfig<F> {
             }
         }
     }
-
 }
 
 fn format_advice_coord(coord: &[usize]) -> Vec<usize> {

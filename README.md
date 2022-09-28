@@ -49,3 +49,7 @@ criterion_group! {
   targets = runrelu
 }
 ```
+
+## Docs
+
+Use `cargo doc --open` to compile and open the docs in your default browser. 
