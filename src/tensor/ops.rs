@@ -4,7 +4,7 @@ pub use std::ops::{Add, Mul};
 /// Matrix multiplies two 2D tensors.
 /// ```
 /// use halo2deeplearning::tensor::Tensor;
-/// use halo2deeplearning::tensor_ops::matmul;
+/// use halo2deeplearning::tensor::ops::matmul;
 ///
 /// let x = Tensor::<i32>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -44,7 +44,7 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// Applies convolution over a 3D tensor of shape C x H x W.
 /// ```
 /// use halo2deeplearning::tensor::Tensor;
-/// use halo2deeplearning::tensor_ops::convolution;
+/// use halo2deeplearning::tensor::ops::convolution;
 ///
 /// let x = Tensor::<i32>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -117,7 +117,7 @@ pub fn convolution<
 /// Dot product of two tensors.
 /// ```
 /// use halo2deeplearning::tensor::Tensor;
-/// use halo2deeplearning::tensor_ops::dot_product;
+/// use halo2deeplearning::tensor::ops::dot_product;
 ///
 /// let x = Tensor::<i32>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -141,7 +141,7 @@ pub fn dot_product<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// Pads a 3D tensor of shape `C x H x W` to a tensor of shape `C x (H + 2xPADDING) x (W + 2*PADDING)` using 0 values.
 /// ```
 /// use halo2deeplearning::tensor::Tensor;
-/// use halo2deeplearning::tensor_ops::pad;
+/// use halo2deeplearning::tensor::ops::pad;
 ///
 /// let x = Tensor::<i32>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),

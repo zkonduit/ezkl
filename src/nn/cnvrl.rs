@@ -1,6 +1,6 @@
 use super::*;
+use crate::tensor::ops::*;
 use crate::tensor::TensorType;
-use crate::tensor_ops::*;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
