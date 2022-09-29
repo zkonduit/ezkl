@@ -138,7 +138,7 @@ pub fn dot_product<T: TensorType + Mul<Output = T> + Add<Output = T>>(
         .fold(T::zero().unwrap(), |acc, (k, i)| acc + k.clone() * i)
 }
 
-/// Pads a 3D tensor of shape `C x H x W` to a tensor of shape `C x (H + 2xPADDING) x (W + 2*PADDING)` using 0 values.
+/// Pads a 3D tensor of shape `C x H x W` to a tensor of shape `C x (H + 2xPADDING) x (W + 2xPADDING)` using 0 values.
 /// ```
 /// use halo2deeplearning::tensor::Tensor;
 /// use halo2deeplearning::tensor::ops::pad;

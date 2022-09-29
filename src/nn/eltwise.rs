@@ -110,6 +110,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
         }
     }
 
+    /// Configures and creates an elementwise operation within a circuit using a supplied lookup table.
     fn configure_with_table(
         cs: &mut ConstraintSystem<F>,
         variables: &[VarTensor],
@@ -153,11 +154,15 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
 impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>> LayerConfig<F>
     for EltwiseConfig<F, BITS, NL>
 {
+    /// Configures and creates an elementwise operation within a circuit.
+    /// Variables are supplied as a 1-element array of `[input]` VarTensors.
     fn configure(cs: &mut ConstraintSystem<F>, variables: &[VarTensor]) -> Self {
         let table = Rc::new(RefCell::new(EltwiseTable::<F, BITS, NL>::configure(cs)));
         Self::configure_with_table(cs, variables, table)
     }
 
+    /// Assigns values to the variables created when calling `configure`.
+    /// Values are supplied as a 1-element array of `[input]` VarTensors.
     fn layout(&self, layouter: &mut impl Layouter<F>, values: &[ValTensor<F>]) -> ValTensor<F> {
         if !self.table.borrow().is_assigned {
             self.table.borrow_mut().layout(layouter)

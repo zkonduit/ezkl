@@ -27,7 +27,7 @@ where
     Value<F>: TensorType,
 {
     /// Configures and creates a convolution gate within a circuit.
-    /// Also constrains the output of the gate.
+    /// Variables are supplied as a 3-element array of `[kernel, input, output]` VarTensors.
     fn configure(meta: &mut ConstraintSystem<F>, variables: &[VarTensor]) -> Self {
         assert_eq!(variables.len(), 3);
         let (kernel, input, output) = (
@@ -73,6 +73,7 @@ where
     }
 
     /// Assigns values to the convolution gate variables created when calling `configure`.
+    /// Values are supplied as a 2-element array of `[kernel, input]` VarTensors.
     fn layout(&self, layouter: &mut impl Layouter<F>, values: &[ValTensor<F>]) -> ValTensor<F> {
         assert_eq!(values.len(), 2);
 
