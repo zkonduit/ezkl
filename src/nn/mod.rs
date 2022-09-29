@@ -9,8 +9,8 @@ pub mod eltwise;
 
 /// Trait for configuring neural network layers in a Halo2 circuit.
 pub trait LayerConfig<F: FieldExt + TensorType> {
-    /// Takes in VarTensor input and params, creates a series of operations (gates in Halo2 circuit nomenclature)
-    /// using both input and params to produce an output to which we can add equality constraints (for proving).
+    /// Takes in VarTensors and creates a series of operations (gates in Halo2 circuit nomenclature)
+    /// to which we can add equality constraints (for proving).
     /// Produces a layer object with attributes we can then assign to when calling layout().
     fn configure(_meta: &mut ConstraintSystem<F>, variables: &[VarTensor]) -> Self;
     /// Takes in ValTensor inputs and assigns them to the variables created when calling configure().
