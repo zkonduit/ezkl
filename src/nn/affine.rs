@@ -22,15 +22,15 @@ pub struct Affine1dConfig<F: FieldExt + TensorType> {
 impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
     /// Configures and creates an affine gate within a circuit.
     /// Also constrains the output of the gate.
-    fn configure(
-        meta: &mut ConstraintSystem<F>,
-        params: &[VarTensor],
-        input: VarTensor,
-        output: VarTensor,
-    ) -> Self {
-        assert!(params.len() == 2);
+    fn configure(meta: &mut ConstraintSystem<F>, variables: &[VarTensor]) -> Self {
+        assert_eq!(variables.len(), 4);
 
-        let (kernel, bias) = (params[0].clone(), params[1].clone());
+        let (kernel, bias, input, output) = (
+            variables[0].clone(),
+            variables[1].clone(),
+            variables[2].clone(),
+            variables[3].clone(),
+        );
 
         assert_eq!(kernel.dims()[1], input.dims()[0]);
         assert_eq!(kernel.dims()[0], output.dims()[0]);
@@ -70,15 +70,10 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
     }
 
     /// Assigns values to the affine gate variables created when calling `configure`.
-    fn layout(
-        &self,
-        layouter: &mut impl Layouter<F>,
-        input: ValTensor<F>,
-        params: &[ValTensor<F>],
-    ) -> ValTensor<F> {
-        assert_eq!(params.len(), 2);
+    fn layout(&self, layouter: &mut impl Layouter<F>, inputs: &[ValTensor<F>]) -> ValTensor<F> {
+        assert_eq!(inputs.len(), 3);
 
-        let (kernel, bias) = (params[0].clone(), params[1].clone());
+        let (input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
         let t = layouter
             .assign_region(
                 || "assign image and kernel",

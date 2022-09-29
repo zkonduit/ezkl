@@ -59,15 +59,17 @@ where
 
             Self::Config::configure(
                 meta,
-                &[VarTensor::from(kernel)],
-                advices.get_slice(
-                    &[0..IMAGE_HEIGHT * IN_CHANNELS],
-                    &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
-                ),
-                advices.get_slice(
-                    &[0..output_height * OUT_CHANNELS],
-                    &[OUT_CHANNELS, output_height, output_width],
-                ),
+                &[
+                    VarTensor::from(kernel),
+                    advices.get_slice(
+                        &[0..IMAGE_HEIGHT * IN_CHANNELS],
+                        &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
+                    ),
+                    advices.get_slice(
+                        &[0..output_height * OUT_CHANNELS],
+                        &[OUT_CHANNELS, output_height, output_width],
+                    ),
+                ],
             )
         }
     }
@@ -77,7 +79,7 @@ where
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let _output = config.layout(&mut layouter, self.image.clone(), &[self.kernels.clone()]);
+        let _output = config.layout(&mut layouter, &[self.image.clone(), self.kernels.clone()]);
         Ok(())
     }
 }

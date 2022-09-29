@@ -1,5 +1,3 @@
-/// Element-wise operations.
-pub mod eltwise;
 use crate::tensor::{Tensor, TensorType};
 pub use std::ops::{Add, Mul};
 

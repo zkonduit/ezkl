@@ -6,8 +6,9 @@ use halo2_proofs::{
     plonk::{Circuit, ConstraintSystem, Error},
 };
 use halo2curves::pasta::Fp as F;
+use halo2deeplearning::nn::eltwise::{EltwiseConfig, Nonlin1d, Nonlinearity, ReLu};
+use halo2deeplearning::nn::LayerConfig;
 use halo2deeplearning::tensor::*;
-use halo2deeplearning::tensor_ops::eltwise::{EltwiseConfig, Nonlin1d, Nonlinearity, ReLu};
 use rand::Rng;
 use std::marker::PhantomData;
 
@@ -36,7 +37,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
                 inner: (0..LEN).map(|_| cs.advice_column()).into(),
                 dims: [LEN].to_vec(),
             };
-            Self::Config::configure(cs, advices, None)
+            Self::Config::configure(cs, &[advices])
         }
     }
 
@@ -45,7 +46,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
         config: Self::Config,
         mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
     ) -> Result<(), Error> {
-        config.layout(&mut layouter, self.assigned.input.clone());
+        config.layout(&mut layouter, &[self.assigned.input.clone()]);
 
         Ok(())
     }

@@ -40,12 +40,12 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
 
         let kernel = advices.get_slice(&[0..len], &[len, len]);
         let bias = advices.get_slice(&[len + 2..len + 3], &[len]);
+        let input = advices.get_slice(&[len..len + 1], &[len]);
+        let output = advices.get_slice(&[len + 1..len + 2], &[len]);
 
         Self::Config::configure(
             cs,
-            &[kernel.clone(), bias.clone()],
-            advices.get_slice(&[len..len + 1], &[len]),
-            advices.get_slice(&[len + 1..len + 2], &[len]),
+            &[kernel.clone(), bias.clone(), input.clone(), output.clone()],
         )
     }
 
@@ -54,7 +54,14 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        config.layout(&mut layouter, self.input.clone(), &self.l0_params);
+        config.layout(
+            &mut layouter,
+            &[
+                self.input.clone(),
+                self.l0_params[0].clone(),
+                self.l0_params[1].clone(),
+            ],
+        );
         Ok(())
     }
 }

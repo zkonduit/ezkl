@@ -1,12 +1,11 @@
+use super::*;
 use crate::tensor::TensorType;
+use crate::tensor_ops::*;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
     plonk::{ConstraintSystem, Constraints, Selector},
 };
-
-use super::*;
-use crate::tensor_ops::*;
 use std::marker::PhantomData;
 
 /// Configuration for a convolutional layer which convolves a kernel with an input (image).
@@ -29,18 +28,17 @@ where
 {
     /// Configures and creates a convolution gate within a circuit.
     /// Also constrains the output of the gate.
-    fn configure(
-        meta: &mut ConstraintSystem<F>,
-        params: &[VarTensor],
-        input: VarTensor,
-        output: VarTensor,
-    ) -> Self {
-        assert_eq!(params.len(), 1);
+    fn configure(meta: &mut ConstraintSystem<F>, variables: &[VarTensor]) -> Self {
+        assert_eq!(variables.len(), 3);
+        let (kernel, input, output) = (
+            variables[0].clone(),
+            variables[1].clone(),
+            variables[2].clone(),
+        );
         assert_eq!(input.dims().len(), 3);
         assert_eq!(output.dims().len(), 3);
-        assert_eq!(params[0].dims().len(), 4);
+        assert_eq!(kernel.dims().len(), 4);
 
-        let kernel = params[0].clone();
         kernel.enable_equality(meta);
         input.enable_equality(meta);
         output.enable_equality(meta);
@@ -75,14 +73,10 @@ where
     }
 
     /// Assigns values to the convolution gate variables created when calling `configure`.
-    fn layout(
-        &self,
-        layouter: &mut impl Layouter<F>,
-        input: ValTensor<F>,
-        params: &[ValTensor<F>],
-    ) -> ValTensor<F> {
-        assert_eq!(params.len(), 1);
-        let kernel = params[0].clone();
+    fn layout(&self, layouter: &mut impl Layouter<F>, inputs: &[ValTensor<F>]) -> ValTensor<F> {
+        assert_eq!(inputs.len(), 2);
+
+        let (input, kernel) = (inputs[0].clone(), inputs[1].clone());
         let (image_height, image_width) = (input.dims()[1], input.dims()[2]);
         let (out_channels, kernel_height, kernel_width) =
             (kernel.dims()[0], kernel.dims()[2], kernel.dims()[3]);

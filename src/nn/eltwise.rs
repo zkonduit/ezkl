@@ -1,5 +1,5 @@
+use super::*;
 use crate::fieldutils::{self, felt_to_i32, i32_to_felt};
-use crate::tensor::*;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
@@ -89,12 +89,15 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
     /// Configures multiple element-wise non-linearities at once.
     pub fn configure_multiple<const NUM: usize>(
         cs: &mut ConstraintSystem<F>,
-        input: VarTensor,
-    ) -> [EltwiseConfig<F, BITS, NL>; NUM] {
-        let mut table = None;
+        variables: &[VarTensor],
+    ) -> [Self; NUM] {
+        let mut table: Option<Rc<RefCell<EltwiseTable<F, BITS, NL>>>> = None;
         let configs = (0..NUM)
             .map(|_| {
-                let l = Self::configure(cs, input.clone(), table.clone());
+                let l = match &table {
+                    None => Self::configure(cs, variables),
+                    Some(t) => Self::configure_with_table(cs, variables, t.clone()),
+                };
                 table = Some(l.table.clone());
                 l
             })
@@ -106,18 +109,14 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
             Err(_) => panic!("failed to initialize layers"),
         }
     }
-    pub fn configure(
+
+    fn configure_with_table(
         cs: &mut ConstraintSystem<F>,
-        input: VarTensor,
-        table: Option<Rc<RefCell<EltwiseTable<F, BITS, NL>>>>,
-    ) -> EltwiseConfig<F, BITS, NL> {
+        variables: &[VarTensor],
+        table: Rc<RefCell<EltwiseTable<F, BITS, NL>>>,
+    ) -> Self {
         let qlookup = cs.complex_selector();
-
-        let table = match table {
-            Some(t) => t,
-            None => Rc::new(RefCell::new(EltwiseTable::<F, BITS, NL>::configure(cs))),
-        };
-
+        let input = variables[0].clone();
         match &input {
             VarTensor::Advice {
                 inner: advice,
@@ -149,8 +148,17 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
             _marker: PhantomData,
         }
     }
+}
 
-    pub fn layout(&self, layouter: &mut impl Layouter<F>, input: ValTensor<F>) -> ValTensor<F> {
+impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>> LayerConfig<F>
+    for EltwiseConfig<F, BITS, NL>
+{
+    fn configure(cs: &mut ConstraintSystem<F>, variables: &[VarTensor]) -> Self {
+        let table = Rc::new(RefCell::new(EltwiseTable::<F, BITS, NL>::configure(cs)));
+        Self::configure_with_table(cs, variables, table)
+    }
+
+    fn layout(&self, layouter: &mut impl Layouter<F>, inputs: &[ValTensor<F>]) -> ValTensor<F> {
         if !self.table.borrow().is_assigned {
             self.table.borrow_mut().layout(layouter)
         }
@@ -162,7 +170,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                         let offset = 0;
                         self.qlookup.enable(&mut region, offset)?;
 
-                        let w = match &input {
+                        let w = match &inputs[0] {
                             ValTensor::AssignedValue { inner: v, dims: _ } => match &self.input {
                                 VarTensor::Advice {
                                     inner: advice,
@@ -227,7 +235,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                 )
                 .unwrap(),
         );
-        t.reshape(input.dims());
+        t.reshape(inputs[0].dims());
         t
     }
 }
