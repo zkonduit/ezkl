@@ -16,15 +16,3 @@ pub trait LayerConfig<F: FieldExt + TensorType> {
     /// Takes in ValTensor inputs and assigns them to the variables created when calling configure().
     fn layout(&self, layouter: &mut impl Layouter<F>, inputs: &[ValTensor<F>]) -> ValTensor<F>;
 }
-
-pub enum LayerType<
-    F: FieldExt + TensorType,
-    const STRIDE: usize,
-    const PADDING: usize,
-    const BITS: usize,
-    NL: eltwise::Nonlinearity<F>,
-> {
-    Conv(cnvrl::ConvConfig<F, STRIDE, PADDING>),
-    Affine(affine::Affine1dConfig<F>),
-    Eltwise(eltwise::EltwiseConfig<F, BITS, NL>),
-}
