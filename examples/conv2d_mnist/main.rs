@@ -270,14 +270,15 @@ pub fn runconv() {
 
     println!("The first digit is a {:?}", train_labels[0]);
 
-    let mut image = train_data
+    let mut input: ValTensor<F> = train_data
         .get_slice(&[0..1, 0..28, 0..28])
-        .map(|d| Value::known(d));
+        .map(|d| Value::known(d))
+        .into();
 
-    image.reshape(&[1, 28, 28]);
+    input.reshape(&[1, 28, 28]);
 
     let myparams = params::Params::new();
-    let mut kernels: ValTensor<F> = Tensor::<Value<F>>::from(
+    let mut l0_params: ValTensor<F> = Tensor::<Value<F>>::from(
         myparams
             .kernels
             .clone()
@@ -294,34 +295,31 @@ pub fn runconv() {
             }),
     )
     .into();
-    // tensorflow is in KHxKWxINxOUT we are OUTxINxWxH?
 
-    kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
+    l0_params.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
 
-    let l2biases: Tensor<Value<F>> = Tensor::<i32>::from(myparams.biases.into_iter().map(|fl| {
+    let l2biases: ValTensor<F> = Tensor::<Value<F>>::from(myparams.biases.into_iter().map(|fl| {
         let dx = fl * (32 as f32);
         let rounded = dx.round();
         let integral: i32 = unsafe { rounded.to_int_unchecked() };
-        integral
+        let felt = fieldutils::i32_to_felt(integral);
+        Value::known(felt)
     }))
     .into();
 
     // l2biases.reshape(&[1, CLASSES]);
 
-    let mut l2weights: Tensor<Value<F>> =
-        Tensor::<i32>::from(myparams.weights.into_iter().flatten().map(|fl| {
+    let mut l2weights: ValTensor<F> =
+        Tensor::<Value<F>>::from(myparams.weights.into_iter().flatten().map(|fl| {
             let dx = fl * (32 as f32);
             let rounded = dx.round();
             let integral: i32 = unsafe { rounded.to_int_unchecked() };
-            integral
+            let felt = fieldutils::i32_to_felt(integral);
+            Value::known(felt)
         }))
         .into();
 
     l2weights.reshape(&[CLASSES, LEN]);
-
-    let input = image.into();
-    let l0_params = kernels.into();
-    let l2_params = [l2weights.into(), l2biases.into()];
 
     let circuit = MyCircuit::<
         F,
@@ -339,7 +337,7 @@ pub fn runconv() {
     > {
         input,
         l0_params,
-        l2_params,
+        l2_params: [l2weights, l2biases],
     };
 
     let public_input: Tensor<i32> = vec![
