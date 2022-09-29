@@ -12,7 +12,7 @@ mod onnx_example {
     use halo2deeplearning::nn::*;
     use halo2deeplearning::onnx::OnnxModel;
     use halo2deeplearning::tensor::{Tensor, TensorType, ValTensor, VarTensor};
-    use halo2deeplearning::tensor_ops::eltwise::{EltwiseConfig, ReLu};
+    use halo2deeplearning::nn::eltwise::{EltwiseConfig, ReLu};
     use std::marker::PhantomData;
 
     #[derive(Clone)]
@@ -23,9 +23,9 @@ mod onnx_example {
     }
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt, const BITS: usize> {
-        input: Tensor<i32>,
-        l0_params: [Tensor<i32>; 2],
+    struct MyCircuit<F: FieldExt + TensorType, const BITS: usize> {
+        input: ValTensor<F>,
+        l0_params: [ValTensor<F>; 2],
         _marker: PhantomData<F>,
     }
 
@@ -54,13 +54,16 @@ mod onnx_example {
 
             let l0 = Affine1dConfig::<F>::configure(
                 cs,
-                &[kernel, bias],
-                advices.get_slice(&[out_dims..out_dims + 1], &[in_dims]),
-                advices.get_slice(&[out_dims + 1..out_dims + 2], &[out_dims]),
+                &[
+                    kernel,
+                    bias,
+                    advices.get_slice(&[out_dims..out_dims + 1], &[in_dims]),
+                    advices.get_slice(&[out_dims + 1..out_dims + 2], &[out_dims]),
+                ],
             );
 
             let l1: EltwiseConfig<F, BITS, ReLu<F>> =
-                EltwiseConfig::configure(cs, advices.get_slice(&[0..out_dims], &[out_dims]), None);
+                EltwiseConfig::configure(cs, &[advices.get_slice(&[0..out_dims], &[out_dims])]);
 
             let public_output: Column<Instance> = cs.instance_column();
             cs.enable_equality(public_output);
@@ -77,21 +80,16 @@ mod onnx_example {
             config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let x: Tensor<Value<F>> = self.input.clone().into();
-
             let x = config.l0.layout(
                 &mut layouter,
-                ValTensor::from(x),
-                &self
-                    .l0_params
-                    .iter()
-                    .map(|a| {
-                        ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(a.clone()))
-                    })
-                    .collect::<Vec<ValTensor<F>>>(),
+                &[
+                    self.input.clone(),
+                    self.l0_params[0].clone(),
+                    self.l0_params[1].clone(),
+                ],
             );
 
-            let x = config.l1.layout(&mut layouter, x);
+            let x = config.l1.layout(&mut layouter, &[x]);
 
             match x {
                 ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|i, x| {
@@ -110,14 +108,20 @@ mod onnx_example {
 
         let onnx_model = OnnxModel::new("examples/onnx_models/ff.onnx");
 
-        let l0_kernel = onnx_model.get_tensor_by_node_name("fc1.weight", 0f32, 256f32);
-        let l0_bias = onnx_model.get_tensor_by_node_name("fc1.bias", 0f32, 256f32);
+        let l0_kernel: Tensor<Value<F>> = onnx_model
+            .get_tensor_by_node_name("fc1.weight", 0f32, 256f32)
+            .into();
+        let l0_bias: Tensor<Value<F>> = onnx_model
+            .get_tensor_by_node_name("fc1.bias", 0f32, 256f32)
+            .into();
 
-        let input = Tensor::<i32>::new(Some(&[-30, -21, 11]), &[3]).unwrap();
+        let input: Tensor<Value<F>> = Tensor::<i32>::new(Some(&[-30, -21, 11]), &[3])
+            .unwrap()
+            .into();
 
         let circuit = MyCircuit::<F, 14> {
-            input,
-            l0_params: [l0_kernel, l0_bias],
+            input: input.into(),
+            l0_params: [l0_kernel.into(), l0_bias.into()],
             _marker: PhantomData,
         };
 
