@@ -9,10 +9,10 @@ mod onnx_example {
     use halo2curves::pasta::Fp as F;
     use halo2deeplearning::fieldutils::i32_to_felt;
     use halo2deeplearning::nn::affine::Affine1dConfig;
+    use halo2deeplearning::nn::eltwise::{EltwiseConfig, ReLu};
     use halo2deeplearning::nn::*;
     use halo2deeplearning::onnx::OnnxModel;
     use halo2deeplearning::tensor::{Tensor, TensorType, ValTensor, VarTensor};
-    use halo2deeplearning::nn::eltwise::{EltwiseConfig, ReLu};
     use std::marker::PhantomData;
 
     #[derive(Clone)]
@@ -83,9 +83,10 @@ mod onnx_example {
             let x = config.l0.layout(
                 &mut layouter,
                 &[
-                    self.input.clone(),
+
                     self.l0_params[0].clone(),
                     self.l0_params[1].clone(),
+                    self.input.clone(),
                 ],
             );
 

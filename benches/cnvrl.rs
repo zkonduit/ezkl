@@ -79,7 +79,7 @@ where
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let _output = config.layout(&mut layouter, &[self.image.clone(), self.kernels.clone()]);
+        let _output = config.layout(&mut layouter, &[self.kernels.clone(), self.image.clone()]);
         Ok(())
     }
 }

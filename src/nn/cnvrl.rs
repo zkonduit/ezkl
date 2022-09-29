@@ -73,10 +73,10 @@ where
     }
 
     /// Assigns values to the convolution gate variables created when calling `configure`.
-    fn layout(&self, layouter: &mut impl Layouter<F>, inputs: &[ValTensor<F>]) -> ValTensor<F> {
-        assert_eq!(inputs.len(), 2);
+    fn layout(&self, layouter: &mut impl Layouter<F>, values: &[ValTensor<F>]) -> ValTensor<F> {
+        assert_eq!(values.len(), 2);
 
-        let (input, kernel) = (inputs[0].clone(), inputs[1].clone());
+        let (kernel, input) = (values[0].clone(), values[1].clone());
         let (image_height, image_width) = (input.dims()[1], input.dims()[2]);
         let (out_channels, kernel_height, kernel_width) =
             (kernel.dims()[0], kernel.dims()[2], kernel.dims()[3]);

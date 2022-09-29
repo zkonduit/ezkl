@@ -207,13 +207,13 @@ where
     ) -> Result<(), Error> {
         let x = config
             .l0
-            .layout(&mut layouter, &[self.input.clone(), self.l0_params.clone()]);
+            .layout(&mut layouter, &[self.l0_params.clone(), self.input.clone()]);
         let x = config.l0q.layout(&mut layouter, &[x]);
         let mut x = config.l1.layout(&mut layouter, &[x]);
         x.flatten();
         let l2out = config.l2.layout(
             &mut layouter,
-            &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
+            &[self.l2_params[0].clone(), self.l2_params[1].clone(), x],
         );
 
         match l2out {

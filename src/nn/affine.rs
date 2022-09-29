@@ -70,10 +70,10 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
     }
 
     /// Assigns values to the affine gate variables created when calling `configure`.
-    fn layout(&self, layouter: &mut impl Layouter<F>, inputs: &[ValTensor<F>]) -> ValTensor<F> {
-        assert_eq!(inputs.len(), 3);
+    fn layout(&self, layouter: &mut impl Layouter<F>, values: &[ValTensor<F>]) -> ValTensor<F> {
+        assert_eq!(values.len(), 3);
 
-        let (input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
+        let (kernel, bias, input, ) = (values[0].clone(), values[1].clone(), values[2].clone());
         let t = layouter
             .assign_region(
                 || "assign image and kernel",

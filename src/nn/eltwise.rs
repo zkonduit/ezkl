@@ -158,7 +158,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
         Self::configure_with_table(cs, variables, table)
     }
 
-    fn layout(&self, layouter: &mut impl Layouter<F>, inputs: &[ValTensor<F>]) -> ValTensor<F> {
+    fn layout(&self, layouter: &mut impl Layouter<F>, values: &[ValTensor<F>]) -> ValTensor<F> {
         if !self.table.borrow().is_assigned {
             self.table.borrow_mut().layout(layouter)
         }
@@ -170,7 +170,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                         let offset = 0;
                         self.qlookup.enable(&mut region, offset)?;
 
-                        let w = match &inputs[0] {
+                        let w = match &values[0] {
                             ValTensor::AssignedValue { inner: v, dims: _ } => match &self.input {
                                 VarTensor::Advice {
                                     inner: advice,
@@ -235,7 +235,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                 )
                 .unwrap(),
         );
-        t.reshape(inputs[0].dims());
+        t.reshape(values[0].dims());
         t
     }
 }

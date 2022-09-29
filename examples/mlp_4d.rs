@@ -97,15 +97,15 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let x = config.l0.layout(
             &mut layouter,
             &[
-                self.input.clone(),
                 self.l0_params[0].clone(),
                 self.l0_params[1].clone(),
+                self.input.clone(),
             ],
         );
         let x = config.l1.layout(&mut layouter, &[x]);
         let x = config.l2.layout(
             &mut layouter,
-            &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
+            &[ self.l2_params[0].clone(), self.l2_params[1].clone(), x],
         );
         let x = config.l3.layout(&mut layouter, &[x]);
         let x = config.l4.layout(&mut layouter, &[x]);

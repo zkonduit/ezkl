@@ -14,5 +14,5 @@ pub trait LayerConfig<F: FieldExt + TensorType> {
     /// Produces a layer object with attributes we can then assign to when calling layout().
     fn configure(_meta: &mut ConstraintSystem<F>, variables: &[VarTensor]) -> Self;
     /// Takes in ValTensor inputs and assigns them to the variables created when calling configure().
-    fn layout(&self, layouter: &mut impl Layouter<F>, inputs: &[ValTensor<F>]) -> ValTensor<F>;
+    fn layout(&self, layouter: &mut impl Layouter<F>, values: &[ValTensor<F>]) -> ValTensor<F>;
 }
