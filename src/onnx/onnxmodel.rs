@@ -1,9 +1,9 @@
 use crate::nn::affine::Affine1dConfig;
 use crate::nn::cnvrl::ConvConfig;
+use crate::nn::eltwise::{EltwiseConfig, ReLu, Sigmoid};
 use crate::nn::LayerConfig;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
-use crate::tensor_ops::eltwise::{EltwiseConfig, ReLu, Sigmoid};
 use anyhow::Result;
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -38,9 +38,9 @@ pub enum OpKind {
 #[derive(Clone)]
 pub enum OnnxNodeConfig<F: FieldExt + TensorType, const BITS: usize> {
     Affine(Affine1dConfig<F>),
-    Conv(ConvConfig<F, 2, 0>),
-    ReLU(EltwiseConfig<F, BITS, ReLu<F>>),
-    Sigmoid(EltwiseConfig<F, BITS, Sigmoid<F, 128, 128>>),
+    Conv(ConvConfig<F>),
+    ReLU(EltwiseConfig<F, ReLu<F>>),
+    Sigmoid(EltwiseConfig<F, Sigmoid<F, 128, 128>>),
     Const,
     Source,
     Input,
@@ -219,30 +219,33 @@ impl OnnxModel {
                 // bias.reshape?
                 let weight_fixeds = advices.get_slice(&[0..out_dim], &[out_dim, in_dim]); //&[0..out_dim], &[out_dim, in_dim]
                 let bias_fixeds = advices.get_slice(&[out_dim + 1..out_dim + 2], &[out_dim]);
-                let params = [weight_fixeds, bias_fixeds];
                 let input = advices.get_slice(&[out_dim + 2..out_dim + 3], &[in_dim]);
                 let output = advices.get_slice(&[out_dim + 3..out_dim + 4], &[out_dim]);
-                let conf = Affine1dConfig::configure(meta, &params, input, output);
+                let conf = Affine1dConfig::configure(
+                    meta,
+                    &[weight_fixeds, bias_fixeds, input, output],
+                    None,
+                );
                 self.last_shape = Vec::from([out_dim]);
                 Ok(OnnxNodeConfig::Affine(conf))
             }
             OpKind::ReLU => {
                 let length = self.last_shape.clone().into_iter().product();
 
-                let conf: EltwiseConfig<F, BITS, ReLu<F>> = EltwiseConfig::configure(
+                let conf: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
                     meta,
-                    advices.get_slice(&[0..length], &[length]),
-                    None,
+                    &[advices.get_slice(&[0..length], &[length])],
+                    Some(&[BITS]),
                 );
                 Ok(OnnxNodeConfig::ReLU(conf))
             }
             OpKind::Sigmoid => {
                 // Here,   node.output_shapes().unwrap()[0].as_ref().unwrap() == vec![1,LEN]
                 let length = node.output_shapes().unwrap()[0].as_ref().unwrap()[1];
-                let conf: EltwiseConfig<F, BITS, Sigmoid<F, 128, 128>> = EltwiseConfig::configure(
+                let conf: EltwiseConfig<F, Sigmoid<F, 128, 128>> = EltwiseConfig::configure(
                     meta,
-                    advices.get_slice(&[0..length], &[length]),
-                    None,
+                    &[advices.get_slice(&[0..length], &[length])],
+                    Some(&[BITS]),
                 );
                 Ok(OnnxNodeConfig::Sigmoid(conf))
             }
@@ -353,7 +356,7 @@ impl OnnxModel {
                 //     weight_vt.dims(),
                 //     bias_vt.dims()
                 // );
-                let out = ac.layout(layouter, input, &[weight_vt, bias_vt]);
+                let out = ac.layout(layouter, &[weight_vt, bias_vt, input]);
                 //                println!("Node {} out {:?}", node_idx, out);
                 Some(out)
             }
@@ -363,9 +366,9 @@ impl OnnxModel {
             (OpKind::ReLU, OnnxNodeConfig::ReLU(rc)) => {
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
                 //                let length = node.output_shapes().unwrap()[0].as_ref().unwrap()[1]; //  shape is vec![1,LEN]
-                Some(rc.layout(layouter, input))
+                Some(rc.layout(layouter, &[input]))
             }
-            (OpKind::Sigmoid, OnnxNodeConfig::Sigmoid(sc)) => Some(sc.layout(layouter, input)),
+            (OpKind::Sigmoid, OnnxNodeConfig::Sigmoid(sc)) => Some(sc.layout(layouter, &[input])),
 
             _ => {
                 None //panic!("Node Op and Config mismatch, or unknown Op.")
