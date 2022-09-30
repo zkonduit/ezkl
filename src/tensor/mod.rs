@@ -1,3 +1,5 @@
+/// Implementations of common operations on tensors.
+pub mod ops;
 /// A wrapper around a tensor of circuit variables / advices.
 pub mod val;
 /// A wrapper around a tensor of Halo2 Value types.
@@ -10,7 +12,7 @@ use crate::fieldutils::{felt_to_i32, i32_to_felt};
 
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Value, Region},
+    circuit::{AssignedCell, Region, Value},
     plonk::{Advice, Assigned, Column, ConstraintSystem, Expression, Fixed, VirtualCells},
     poly::Rotation,
 };

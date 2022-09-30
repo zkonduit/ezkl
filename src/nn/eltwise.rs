@@ -1,5 +1,5 @@
+use super::*;
 use crate::fieldutils::{self, felt_to_i32, i32_to_felt};
-use crate::tensor::*;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
@@ -22,27 +22,29 @@ pub struct Nonlin1d<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
 /// Halo2 lookup table for element wise non-linearities.
 // Table that should be reused across all lookups (so no Clone)
 #[derive(Clone, Debug)]
-pub struct EltwiseTable<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> {
+pub struct EltwiseTable<F: FieldExt, NL: Nonlinearity<F>> {
     pub table_input: TableColumn,
     pub table_output: TableColumn,
     pub is_assigned: bool,
+    pub bits: usize,
     _marker: PhantomData<(F, NL)>,
 }
 
-impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, NL> {
-    pub fn configure(cs: &mut ConstraintSystem<F>) -> EltwiseTable<F, BITS, NL> {
+impl<F: FieldExt, NL: Nonlinearity<F>> EltwiseTable<F, NL> {
+    pub fn configure(cs: &mut ConstraintSystem<F>, bits: usize) -> EltwiseTable<F, NL> {
         EltwiseTable {
             table_input: cs.lookup_table_column(),
             table_output: cs.lookup_table_column(),
             is_assigned: false,
+            bits,
             _marker: PhantomData,
         }
     }
     pub fn layout(&mut self, layouter: &mut impl Layouter<F>) {
         assert!(!self.is_assigned);
         let base = 2i32;
-        let smallest = -base.pow(BITS as u32 - 1);
-        let largest = base.pow(BITS as u32 - 1);
+        let smallest = -base.pow(self.bits as u32 - 1);
+        let largest = base.pow(self.bits as u32 - 1);
         layouter
             .assign_table(
                 || "nl table",
@@ -76,29 +78,31 @@ impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, 
 
 /// Configuration for element-wise non-linearities.
 #[derive(Clone, Debug)]
-pub struct EltwiseConfig<F: FieldExt + TensorType, const BITS: usize, NL: Nonlinearity<F>> {
+pub struct EltwiseConfig<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
     pub input: VarTensor,
-    pub table: Rc<RefCell<EltwiseTable<F, BITS, NL>>>,
+    pub table: Rc<RefCell<EltwiseTable<F, NL>>>,
     qlookup: Selector,
     _marker: PhantomData<(NL, F)>,
 }
 
-impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
-    EltwiseConfig<F, BITS, NL>
-{
+impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, NL> {
     /// Configures multiple element-wise non-linearities at once.
     pub fn configure_multiple<const NUM: usize>(
         cs: &mut ConstraintSystem<F>,
-        input: VarTensor,
-    ) -> [EltwiseConfig<F, BITS, NL>; NUM] {
-        let mut table = None;
+        variables: &[VarTensor],
+        eltwise_params: Option<&[usize]>,
+    ) -> [Self; NUM] {
+        let mut table: Option<Rc<RefCell<EltwiseTable<F, NL>>>> = None;
         let configs = (0..NUM)
             .map(|_| {
-                let l = Self::configure(cs, input.clone(), table.clone());
+                let l = match &table {
+                    None => Self::configure(cs, variables, eltwise_params),
+                    Some(t) => Self::configure_with_table(cs, variables, t.clone()),
+                };
                 table = Some(l.table.clone());
                 l
             })
-            .collect::<Vec<EltwiseConfig<F, BITS, NL>>>()
+            .collect::<Vec<EltwiseConfig<F, NL>>>()
             .try_into();
 
         match configs {
@@ -106,18 +110,15 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
             Err(_) => panic!("failed to initialize layers"),
         }
     }
-    pub fn configure(
+
+    /// Configures and creates an elementwise operation within a circuit using a supplied lookup table.
+    fn configure_with_table(
         cs: &mut ConstraintSystem<F>,
-        input: VarTensor,
-        table: Option<Rc<RefCell<EltwiseTable<F, BITS, NL>>>>,
-    ) -> EltwiseConfig<F, BITS, NL> {
+        variables: &[VarTensor],
+        table: Rc<RefCell<EltwiseTable<F, NL>>>,
+    ) -> Self {
         let qlookup = cs.complex_selector();
-
-        let table = match table {
-            Some(t) => t,
-            None => Rc::new(RefCell::new(EltwiseTable::<F, BITS, NL>::configure(cs))),
-        };
-
+        let input = variables[0].clone();
         match &input {
             VarTensor::Advice {
                 inner: advice,
@@ -139,7 +140,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                     });
                 });
             }
-            _ => panic!("not yet implemented"),
+            _ => todo!(),
         }
 
         Self {
@@ -149,8 +150,29 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
             _marker: PhantomData,
         }
     }
+}
 
-    pub fn layout(&self, layouter: &mut impl Layouter<F>, input: ValTensor<F>) -> ValTensor<F> {
+impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> LayerConfig<F>
+    for EltwiseConfig<F, NL>
+{
+    /// Configures and creates an elementwise operation within a circuit.
+    /// Variables are supplied as a 1-element array of `[input]` VarTensors.
+    fn configure(
+        cs: &mut ConstraintSystem<F>,
+        variables: &[VarTensor],
+        eltwise_params: Option<&[usize]>,
+    ) -> Self {
+        // will fail if not supplied
+        let params = eltwise_params.unwrap();
+        assert_eq!(params.len(), 1);
+        let bits = params[0];
+        let table = Rc::new(RefCell::new(EltwiseTable::<F, NL>::configure(cs, bits)));
+        Self::configure_with_table(cs, variables, table)
+    }
+
+    /// Assigns values to the variables created when calling `configure`.
+    /// Values are supplied as a 1-element array of `[input]` VarTensors.
+    fn layout(&self, layouter: &mut impl Layouter<F>, values: &[ValTensor<F>]) -> ValTensor<F> {
         if !self.table.borrow().is_assigned {
             self.table.borrow_mut().layout(layouter)
         }
@@ -162,7 +184,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                         let offset = 0;
                         self.qlookup.enable(&mut region, offset)?;
 
-                        let w = match &input {
+                        let w = match &values[0] {
                             ValTensor::AssignedValue { inner: v, dims: _ } => match &self.input {
                                 VarTensor::Advice {
                                     inner: advice,
@@ -173,7 +195,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                                         .assign_advice(|| "input", advice[i], offset, || x)
                                         .unwrap()
                                 }),
-                                _ => panic!("not yet implemented"),
+                                _ => todo!(),
                             },
                             ValTensor::PrevAssigned { inner: v, dims: _ } => match &self.input {
                                 VarTensor::Advice {
@@ -187,7 +209,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                                             .unwrap()
                                     })
                                 }
-                                _ => panic!("not yet implemented"),
+                                _ => todo!(),
                             },
                             ValTensor::Value { inner: v, dims: _ } => match &self.input {
                                 VarTensor::Advice {
@@ -199,7 +221,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                                         .assign_advice(|| "input", advice[i], offset, || x.into())
                                         .unwrap()
                                 }),
-                                _ => panic!("not yet implemented"),
+                                _ => todo!(),
                             },
                         };
 
@@ -221,13 +243,13 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                                     .unwrap()
                             })),
 
-                            _ => panic!("not yet implemented"),
+                            _ => todo!(),
                         }
                     },
                 )
                 .unwrap(),
         );
-        t.reshape(input.dims());
+        t.reshape(values[0].dims());
         t
     }
 }

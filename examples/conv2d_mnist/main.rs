@@ -24,9 +24,9 @@ use halo2deeplearning::fieldutils;
 use halo2deeplearning::fieldutils::i32_to_felt;
 use halo2deeplearning::nn::affine::Affine1dConfig;
 use halo2deeplearning::nn::cnvrl::ConvConfig;
+use halo2deeplearning::nn::eltwise::{DivideBy, EltwiseConfig, ReLu};
 use halo2deeplearning::nn::*;
 use halo2deeplearning::tensor::*;
-use halo2deeplearning::tensor_ops::eltwise::{DivideBy, EltwiseConfig, ReLu};
 use mnist::*;
 use rand::rngs::OsRng;
 use std::cmp::max;
@@ -52,16 +52,16 @@ struct Config<
 > where
     Value<F>: TensorType,
 {
-    l0: ConvConfig<F, STRIDE, PADDING>,
-    l0q: EltwiseConfig<F, BITS, DivideBy<F, 32>>,
-    l1: EltwiseConfig<F, BITS, ReLu<F>>,
+    l0: ConvConfig<F>,
+    l0q: EltwiseConfig<F, DivideBy<F, 32>>,
+    l1: EltwiseConfig<F, ReLu<F>>,
     l2: Affine1dConfig<F>,
     public_output: Column<Instance>,
 }
 
 #[derive(Clone)]
 struct MyCircuit<
-    F: FieldExt,
+    F: FieldExt + TensorType,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened
     const CLASSES: usize,
     const BITS: usize,
@@ -79,9 +79,9 @@ struct MyCircuit<
 {
     // Given the stateless ConvConfig type information, a DNN trace is determined by its input and the parameters of its layers.
     // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
-    input: Tensor<Value<F>>,
-    l0_params: Tensor<Value<F>>,
-    l2_params: [Tensor<i32>; 2],
+    input: ValTensor<F>,
+    l0_params: ValTensor<F>,
+    l2_params: [ValTensor<F>; 2],
 }
 
 impl<
@@ -159,32 +159,36 @@ where
                 .into();
         kernel.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
 
-        let l0 = ConvConfig::<F, STRIDE, PADDING>::configure(
+        let l0 = ConvConfig::<F>::configure(
             cs,
-            &[VarTensor::from(kernel)],
-            advices.get_slice(
-                &[0..IMAGE_HEIGHT * IN_CHANNELS],
-                &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
-            ),
-            advices.get_slice(
-                &[0..output_height * OUT_CHANNELS],
-                &[OUT_CHANNELS, output_height, output_width],
-            ),
+            &[
+                VarTensor::from(kernel),
+                advices.get_slice(
+                    &[0..IMAGE_HEIGHT * IN_CHANNELS],
+                    &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
+                ),
+                advices.get_slice(
+                    &[0..output_height * OUT_CHANNELS],
+                    &[OUT_CHANNELS, output_height, output_width],
+                ),
+            ],
+            Some(&[PADDING, STRIDE]),
         );
 
-        let l0q: EltwiseConfig<F, BITS, DivideBy<F, 32>> =
-            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[LEN]), None);
-        let l1: EltwiseConfig<F, BITS, ReLu<F>> =
-            EltwiseConfig::configure(cs, advices.get_slice(&[0..LEN], &[LEN]), None);
+        let l0q: EltwiseConfig<F, DivideBy<F, 32>> =
+            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])], Some(&[BITS]));
+        let l1: EltwiseConfig<F, ReLu<F>> =
+            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])], Some(&[BITS]));
 
         let l2: Affine1dConfig<F> = Affine1dConfig::configure(
             cs,
             &[
                 advices.get_slice(&[0..CLASSES], &[CLASSES, LEN]),
                 advices.get_slice(&[LEN + 2..LEN + 3], &[CLASSES]),
+                advices.get_slice(&[LEN..LEN + 1], &[LEN]),
+                advices.get_slice(&[CLASSES + 1..CLASSES + 2], &[CLASSES]),
             ],
-            advices.get_slice(&[LEN..LEN + 1], &[LEN]),
-            advices.get_slice(&[CLASSES + 1..CLASSES + 2], &[CLASSES]),
+            Some(&[PADDING, STRIDE]),
         );
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -203,23 +207,15 @@ where
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let x: Tensor<Value<F>> = self.input.clone().into();
-        let l0out = config.l0.layout(
-            &mut layouter,
-            ValTensor::from(x),
-            &[ValTensor::from(self.l0_params.clone())],
-        );
-        let l0qout = config.l0q.layout(&mut layouter, l0out);
-        let mut l1out = config.l1.layout(&mut layouter, l0qout);
-        l1out.flatten();
+        let x = config
+            .l0
+            .layout(&mut layouter, &[self.l0_params.clone(), self.input.clone()]);
+        let x = config.l0q.layout(&mut layouter, &[x]);
+        let mut x = config.l1.layout(&mut layouter, &[x]);
+        x.flatten();
         let l2out = config.l2.layout(
             &mut layouter,
-            l1out,
-            &self
-                .l2_params
-                .iter()
-                .map(|a| ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(a.clone())))
-                .collect::<Vec<ValTensor<F>>>(),
+            &[self.l2_params[0].clone(), self.l2_params[1].clone(), x],
         );
 
         match l2out {
@@ -276,14 +272,15 @@ pub fn runconv() {
 
     println!("The first digit is a {:?}", train_labels[0]);
 
-    let mut image = train_data
+    let mut input: ValTensor<F> = train_data
         .get_slice(&[0..1, 0..28, 0..28])
-        .map(|d| Value::known(d));
+        .map(|d| Value::known(d))
+        .into();
 
-    image.reshape(&[1, 28, 28]);
+    input.reshape(&[1, 28, 28]);
 
     let myparams = params::Params::new();
-    let mut kernels = Tensor::from(
+    let mut l0_params: ValTensor<F> = Tensor::<Value<F>>::from(
         myparams
             .kernels
             .clone()
@@ -298,32 +295,33 @@ pub fn runconv() {
                 let felt = fieldutils::i32_to_felt(integral);
                 Value::known(felt)
             }),
-    );
-    // tensorflow is in KHxKWxINxOUT we are OUTxINxWxH?
+    )
+    .into();
 
-    kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
+    l0_params.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
 
-    let l2biases = Tensor::<i32>::from(myparams.biases.into_iter().map(|fl| {
+    let l2biases: ValTensor<F> = Tensor::<Value<F>>::from(myparams.biases.into_iter().map(|fl| {
         let dx = fl * (32 as f32);
         let rounded = dx.round();
         let integral: i32 = unsafe { rounded.to_int_unchecked() };
-        integral
-    }));
+        let felt = fieldutils::i32_to_felt(integral);
+        Value::known(felt)
+    }))
+    .into();
 
     // l2biases.reshape(&[1, CLASSES]);
 
-    let mut l2weights = Tensor::<i32>::from(myparams.weights.into_iter().flatten().map(|fl| {
-        let dx = fl * (32 as f32);
-        let rounded = dx.round();
-        let integral: i32 = unsafe { rounded.to_int_unchecked() };
-        integral
-    }));
+    let mut l2weights: ValTensor<F> =
+        Tensor::<Value<F>>::from(myparams.weights.into_iter().flatten().map(|fl| {
+            let dx = fl * (32 as f32);
+            let rounded = dx.round();
+            let integral: i32 = unsafe { rounded.to_int_unchecked() };
+            let felt = fieldutils::i32_to_felt(integral);
+            Value::known(felt)
+        }))
+        .into();
 
     l2weights.reshape(&[CLASSES, LEN]);
-
-    let input = image;
-    let l0_params = kernels;
-    let l2_params = [l2weights, l2biases];
 
     let circuit = MyCircuit::<
         F,
@@ -341,7 +339,7 @@ pub fn runconv() {
     > {
         input,
         l0_params,
-        l2_params,
+        l2_params: [l2weights, l2biases],
     };
 
     let public_input: Tensor<i32> = vec![

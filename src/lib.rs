@@ -10,5 +10,3 @@ pub mod nn;
 pub mod onnx;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
-/// Implementations of common operations on tensors.
-pub mod tensor_ops;

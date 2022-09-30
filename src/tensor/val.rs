@@ -78,17 +78,20 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     /// Sets the `ValTensor`'s shape.
     pub fn reshape(&mut self, new_dims: &[usize]) {
         match self {
-            ValTensor::Value { inner: _, dims: d } => {
+            ValTensor::Value { inner: v, dims: d } => {
                 assert!(d.iter().product::<usize>() == new_dims.iter().product());
-                *d = new_dims.to_vec();
+                v.reshape(new_dims);
+                *d = v.dims().to_vec();
             }
-            ValTensor::AssignedValue { inner: _, dims: d } => {
+            ValTensor::AssignedValue { inner: v, dims: d } => {
                 assert!(d.iter().product::<usize>() == new_dims.iter().product());
-                *d = new_dims.to_vec();
+                v.reshape(new_dims);
+                *d = v.dims().to_vec();
             }
-            ValTensor::PrevAssigned { inner: _, dims: d } => {
+            ValTensor::PrevAssigned { inner: v, dims: d } => {
                 assert!(d.iter().product::<usize>() == new_dims.iter().product());
-                *d = new_dims.to_vec();
+                v.reshape(new_dims);
+                *d = v.dims().to_vec();
             }
         }
     }
