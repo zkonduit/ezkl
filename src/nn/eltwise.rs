@@ -139,7 +139,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                     });
                 });
             }
-            _ => panic!("not yet implemented"),
+            _ => todo!(),
         }
 
         Self {
@@ -186,7 +186,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                                         .assign_advice(|| "input", advice[i], offset, || x)
                                         .unwrap()
                                 }),
-                                _ => panic!("not yet implemented"),
+                                _ => todo!(),
                             },
                             ValTensor::PrevAssigned { inner: v, dims: _ } => match &self.input {
                                 VarTensor::Advice {
@@ -200,7 +200,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                                             .unwrap()
                                     })
                                 }
-                                _ => panic!("not yet implemented"),
+                                _ => todo!(),
                             },
                             ValTensor::Value { inner: v, dims: _ } => match &self.input {
                                 VarTensor::Advice {
@@ -212,7 +212,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                                         .assign_advice(|| "input", advice[i], offset, || x.into())
                                         .unwrap()
                                 }),
-                                _ => panic!("not yet implemented"),
+                                _ => todo!(),
                             },
                         };
 
@@ -234,7 +234,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
                                     .unwrap()
                             })),
 
-                            _ => panic!("not yet implemented"),
+                            _ => todo!(),
                         }
                     },
                 )

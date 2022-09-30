@@ -102,9 +102,9 @@ where
                             ValTensor::Value { inner: k, dims: _ } => {
                                 convolution::<_, PADDING, STRIDE>(k, img)
                             }
-                            _ => panic!("not implemented"),
+                            _ => todo!(),
                         },
-                        _ => panic!("not implemented"),
+                        _ => todo!(),
                     };
 
                     Ok(self
