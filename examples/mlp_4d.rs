@@ -14,12 +14,12 @@ use std::marker::PhantomData;
 
 // A columnar ReLu MLP
 #[derive(Clone)]
-struct MyConfig<F: FieldExt + TensorType, const BITS: usize> {
+struct MyConfig<F: FieldExt + TensorType> {
     l0: Affine1dConfig<F>,
-    l1: EltwiseConfig<F, BITS, ReLu<F>>,
+    l1: EltwiseConfig<F, ReLu<F>>,
     l2: Affine1dConfig<F>,
-    l3: EltwiseConfig<F, BITS, ReLu<F>>,
-    l4: EltwiseConfig<F, BITS, DivideBy<F, 128>>,
+    l3: EltwiseConfig<F, ReLu<F>>,
+    l4: EltwiseConfig<F, DivideBy<F, 128>>,
     public_output: Column<Instance>,
 }
 
@@ -40,7 +40,7 @@ struct MyCircuit<
 impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     for MyCircuit<F, LEN, BITS>
 {
-    type Config = MyConfig<F, BITS>;
+    type Config = MyConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -64,18 +64,18 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let l0 = Affine1dConfig::<F>::configure(
             cs,
             &[kernel.clone(), bias.clone(), input.clone(), output.clone()],
-            None
+            None,
         );
 
         let l2 = Affine1dConfig::<F>::configure(cs, &[kernel, bias, input, output], None);
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
-        let [l1, l3]: [EltwiseConfig<F, BITS, ReLu<F>>; 2] =
-            EltwiseConfig::configure_multiple(cs, &[advices.get_slice(&[0..LEN], &[LEN])]);
+        let [l1, l3]: [EltwiseConfig<F, ReLu<F>>; 2] =
+            EltwiseConfig::configure_multiple(cs, &[advices.get_slice(&[0..LEN], &[LEN])], Some(&[BITS]));
 
         // sets up a new Divide by table
-        let l4: EltwiseConfig<F, BITS, DivideBy<F, 128>> =
-            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])], None);
+        let l4: EltwiseConfig<F, DivideBy<F, 128>> =
+            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])], Some(&[BITS]));
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);

@@ -18,7 +18,7 @@ mod onnx_example {
     #[derive(Clone)]
     struct MyConfig<F: FieldExt + TensorType, const BITS: usize> {
         l0: Affine1dConfig<F>,
-        l1: EltwiseConfig<F, BITS, ReLu<F>>,
+        l1: EltwiseConfig<F, ReLu<F>>,
         public_output: Column<Instance>,
     }
 
@@ -63,10 +63,10 @@ mod onnx_example {
                 None,
             );
 
-            let l1: EltwiseConfig<F, BITS, ReLu<F>> = EltwiseConfig::configure(
+            let l1: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
                 cs,
                 &[advices.get_slice(&[0..out_dims], &[out_dims])],
-                None,
+                Some(&[BITS]),
             );
 
             let public_output: Column<Instance> = cs.instance_column();

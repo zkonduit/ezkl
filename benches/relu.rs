@@ -24,7 +24,7 @@ struct NLCircuit<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
 impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
     for NLCircuit<F, NL>
 {
-    type Config = EltwiseConfig<F, BITS, NL>;
+    type Config = EltwiseConfig<F, NL>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -37,7 +37,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
                 inner: (0..LEN).map(|_| cs.advice_column()).into(),
                 dims: [LEN].to_vec(),
             };
-            Self::Config::configure(cs, &[advices], None)
+            Self::Config::configure(cs, &[advices], Some(&[BITS]))
         }
     }
 

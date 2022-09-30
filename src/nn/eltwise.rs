@@ -22,27 +22,29 @@ pub struct Nonlin1d<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
 /// Halo2 lookup table for element wise non-linearities.
 // Table that should be reused across all lookups (so no Clone)
 #[derive(Clone, Debug)]
-pub struct EltwiseTable<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> {
+pub struct EltwiseTable<F: FieldExt, NL: Nonlinearity<F>> {
     pub table_input: TableColumn,
     pub table_output: TableColumn,
     pub is_assigned: bool,
+    pub bits: usize,
     _marker: PhantomData<(F, NL)>,
 }
 
-impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, NL> {
-    pub fn configure(cs: &mut ConstraintSystem<F>) -> EltwiseTable<F, BITS, NL> {
+impl<F: FieldExt, NL: Nonlinearity<F>> EltwiseTable<F, NL> {
+    pub fn configure(cs: &mut ConstraintSystem<F>, bits: usize) -> EltwiseTable<F, NL> {
         EltwiseTable {
             table_input: cs.lookup_table_column(),
             table_output: cs.lookup_table_column(),
             is_assigned: false,
+            bits,
             _marker: PhantomData,
         }
     }
     pub fn layout(&mut self, layouter: &mut impl Layouter<F>) {
         assert!(!self.is_assigned);
         let base = 2i32;
-        let smallest = -base.pow(BITS as u32 - 1);
-        let largest = base.pow(BITS as u32 - 1);
+        let smallest = -base.pow(self.bits as u32 - 1);
+        let largest = base.pow(self.bits as u32 - 1);
         layouter
             .assign_table(
                 || "nl table",
@@ -76,32 +78,31 @@ impl<F: FieldExt, const BITS: usize, NL: Nonlinearity<F>> EltwiseTable<F, BITS, 
 
 /// Configuration for element-wise non-linearities.
 #[derive(Clone, Debug)]
-pub struct EltwiseConfig<F: FieldExt + TensorType, const BITS: usize, NL: Nonlinearity<F>> {
+pub struct EltwiseConfig<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
     pub input: VarTensor,
-    pub table: Rc<RefCell<EltwiseTable<F, BITS, NL>>>,
+    pub table: Rc<RefCell<EltwiseTable<F, NL>>>,
     qlookup: Selector,
     _marker: PhantomData<(NL, F)>,
 }
 
-impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
-    EltwiseConfig<F, BITS, NL>
-{
+impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, NL> {
     /// Configures multiple element-wise non-linearities at once.
     pub fn configure_multiple<const NUM: usize>(
         cs: &mut ConstraintSystem<F>,
         variables: &[VarTensor],
+        eltwise_params: Option<&[usize]>,
     ) -> [Self; NUM] {
-        let mut table: Option<Rc<RefCell<EltwiseTable<F, BITS, NL>>>> = None;
+        let mut table: Option<Rc<RefCell<EltwiseTable<F, NL>>>> = None;
         let configs = (0..NUM)
             .map(|_| {
                 let l = match &table {
-                    None => Self::configure(cs, variables, None),
+                    None => Self::configure(cs, variables, eltwise_params),
                     Some(t) => Self::configure_with_table(cs, variables, t.clone()),
                 };
                 table = Some(l.table.clone());
                 l
             })
-            .collect::<Vec<EltwiseConfig<F, BITS, NL>>>()
+            .collect::<Vec<EltwiseConfig<F, NL>>>()
             .try_into();
 
         match configs {
@@ -114,7 +115,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
     fn configure_with_table(
         cs: &mut ConstraintSystem<F>,
         variables: &[VarTensor],
-        table: Rc<RefCell<EltwiseTable<F, BITS, NL>>>,
+        table: Rc<RefCell<EltwiseTable<F, NL>>>,
     ) -> Self {
         let qlookup = cs.complex_selector();
         let input = variables[0].clone();
@@ -151,17 +152,21 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
     }
 }
 
-impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>> LayerConfig<F>
-    for EltwiseConfig<F, BITS, NL>
+impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> LayerConfig<F>
+    for EltwiseConfig<F, NL>
 {
     /// Configures and creates an elementwise operation within a circuit.
     /// Variables are supplied as a 1-element array of `[input]` VarTensors.
     fn configure(
         cs: &mut ConstraintSystem<F>,
         variables: &[VarTensor],
-        _: Option<&[usize]>,
+        eltwise_params: Option<&[usize]>,
     ) -> Self {
-        let table = Rc::new(RefCell::new(EltwiseTable::<F, BITS, NL>::configure(cs)));
+        // will fail if not supplied
+        let params = eltwise_params.unwrap();
+        assert_eq!(params.len(), 1);
+        let bits = params[0];
+        let table = Rc::new(RefCell::new(EltwiseTable::<F, NL>::configure(cs, bits)));
         Self::configure_with_table(cs, variables, table)
     }
 

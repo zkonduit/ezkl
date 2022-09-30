@@ -53,8 +53,8 @@ struct Config<
     Value<F>: TensorType,
 {
     l0: ConvConfig<F>,
-    l0q: EltwiseConfig<F, BITS, DivideBy<F, 32>>,
-    l1: EltwiseConfig<F, BITS, ReLu<F>>,
+    l0q: EltwiseConfig<F, DivideBy<F, 32>>,
+    l1: EltwiseConfig<F, ReLu<F>>,
     l2: Affine1dConfig<F>,
     public_output: Column<Instance>,
 }
@@ -175,10 +175,10 @@ where
             Some(&[PADDING, STRIDE]),
         );
 
-        let l0q: EltwiseConfig<F, BITS, DivideBy<F, 32>> =
-            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])], None);
-        let l1: EltwiseConfig<F, BITS, ReLu<F>> =
-            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])], None);
+        let l0q: EltwiseConfig<F, DivideBy<F, 32>> =
+            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])], Some(&[BITS]));
+        let l1: EltwiseConfig<F, ReLu<F>> =
+            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])], Some(&[BITS]));
 
         let l2: Affine1dConfig<F> = Affine1dConfig::configure(
             cs,
