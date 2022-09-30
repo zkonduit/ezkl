@@ -119,8 +119,6 @@ where
             )
             .unwrap();
 
-        println!("{:?}", t.dims());
-
         ValTensor::from(t)
     }
 }
