@@ -60,10 +60,14 @@ mod onnx_example {
                     advices.get_slice(&[out_dims..out_dims + 1], &[in_dims]),
                     advices.get_slice(&[out_dims + 1..out_dims + 2], &[out_dims]),
                 ],
+                None,
             );
 
-            let l1: EltwiseConfig<F, BITS, ReLu<F>> =
-                EltwiseConfig::configure(cs, &[advices.get_slice(&[0..out_dims], &[out_dims])]);
+            let l1: EltwiseConfig<F, BITS, ReLu<F>> = EltwiseConfig::configure(
+                cs,
+                &[advices.get_slice(&[0..out_dims], &[out_dims])],
+                None,
+            );
 
             let public_output: Column<Instance> = cs.instance_column();
             cs.enable_equality(public_output);
@@ -83,7 +87,6 @@ mod onnx_example {
             let x = config.l0.layout(
                 &mut layouter,
                 &[
-
                     self.l0_params[0].clone(),
                     self.l0_params[1].clone(),
                     self.input.clone(),

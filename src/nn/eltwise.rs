@@ -95,7 +95,7 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
         let configs = (0..NUM)
             .map(|_| {
                 let l = match &table {
-                    None => Self::configure(cs, variables),
+                    None => Self::configure(cs, variables, None),
                     Some(t) => Self::configure_with_table(cs, variables, t.clone()),
                 };
                 table = Some(l.table.clone());
@@ -156,7 +156,11 @@ impl<F: FieldExt + TensorType, const BITS: usize, NL: 'static + Nonlinearity<F>>
 {
     /// Configures and creates an elementwise operation within a circuit.
     /// Variables are supplied as a 1-element array of `[input]` VarTensors.
-    fn configure(cs: &mut ConstraintSystem<F>, variables: &[VarTensor]) -> Self {
+    fn configure(
+        cs: &mut ConstraintSystem<F>,
+        variables: &[VarTensor],
+        _: Option<&[usize]>,
+    ) -> Self {
         let table = Rc::new(RefCell::new(EltwiseTable::<F, BITS, NL>::configure(cs)));
         Self::configure_with_table(cs, variables, table)
     }

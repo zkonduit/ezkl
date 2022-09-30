@@ -64,9 +64,10 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let l0 = Affine1dConfig::<F>::configure(
             cs,
             &[kernel.clone(), bias.clone(), input.clone(), output.clone()],
+            None
         );
 
-        let l2 = Affine1dConfig::<F>::configure(cs, &[kernel, bias, input, output]);
+        let l2 = Affine1dConfig::<F>::configure(cs, &[kernel, bias, input, output], None);
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
         let [l1, l3]: [EltwiseConfig<F, BITS, ReLu<F>>; 2] =
@@ -74,7 +75,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
 
         // sets up a new Divide by table
         let l4: EltwiseConfig<F, BITS, DivideBy<F, 128>> =
-            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])]);
+            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])], None);
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -105,7 +106,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let x = config.l1.layout(&mut layouter, &[x]);
         let x = config.l2.layout(
             &mut layouter,
-            &[ self.l2_params[0].clone(), self.l2_params[1].clone(), x],
+            &[self.l2_params[0].clone(), self.l2_params[1].clone(), x],
         );
         let x = config.l3.layout(&mut layouter, &[x]);
         let x = config.l4.layout(&mut layouter, &[x]);

@@ -34,7 +34,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F>
 where
     Value<F>: TensorType,
 {
-    type Config = ConvConfig<F, STRIDE, PADDING>;
+    type Config = ConvConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -70,6 +70,7 @@ where
                         &[OUT_CHANNELS, output_height, output_width],
                     ),
                 ],
+                Some(&[PADDING, STRIDE]),
             )
         }
     }

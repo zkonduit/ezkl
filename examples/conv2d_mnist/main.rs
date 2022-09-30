@@ -52,7 +52,7 @@ struct Config<
 > where
     Value<F>: TensorType,
 {
-    l0: ConvConfig<F, STRIDE, PADDING>,
+    l0: ConvConfig<F>,
     l0q: EltwiseConfig<F, BITS, DivideBy<F, 32>>,
     l1: EltwiseConfig<F, BITS, ReLu<F>>,
     l2: Affine1dConfig<F>,
@@ -159,7 +159,7 @@ where
                 .into();
         kernel.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
 
-        let l0 = ConvConfig::<F, STRIDE, PADDING>::configure(
+        let l0 = ConvConfig::<F>::configure(
             cs,
             &[
                 VarTensor::from(kernel),
@@ -172,12 +172,13 @@ where
                     &[OUT_CHANNELS, output_height, output_width],
                 ),
             ],
+            Some(&[PADDING, STRIDE]),
         );
 
         let l0q: EltwiseConfig<F, BITS, DivideBy<F, 32>> =
-            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])]);
+            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])], None);
         let l1: EltwiseConfig<F, BITS, ReLu<F>> =
-            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])]);
+            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])], None);
 
         let l2: Affine1dConfig<F> = Affine1dConfig::configure(
             cs,
@@ -187,6 +188,7 @@ where
                 advices.get_slice(&[LEN..LEN + 1], &[LEN]),
                 advices.get_slice(&[CLASSES + 1..CLASSES + 2], &[CLASSES]),
             ],
+            Some(&[PADDING, STRIDE]),
         );
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);

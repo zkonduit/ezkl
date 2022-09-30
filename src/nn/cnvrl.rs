@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 
 /// Configuration for a convolutional layer which convolves a kernel with an input (image).
 #[derive(Debug, Clone)]
-pub struct ConvConfig<F: FieldExt + TensorType, const STRIDE: usize, const PADDING: usize>
+pub struct ConvConfig<F: FieldExt + TensorType>
 where
     Value<F>: TensorType,
 {
@@ -18,17 +18,22 @@ where
     kernel: VarTensor,
     input: VarTensor,
     pub output: VarTensor,
+    conv_params: [usize; 2],
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType, const STRIDE: usize, const PADDING: usize> LayerConfig<F>
-    for ConvConfig<F, STRIDE, PADDING>
+impl<F: FieldExt + TensorType> LayerConfig<F> for ConvConfig<F>
 where
     Value<F>: TensorType,
 {
     /// Configures and creates a convolution gate within a circuit.
     /// Variables are supplied as a 3-element array of `[kernel, input, output]` VarTensors.
-    fn configure(meta: &mut ConstraintSystem<F>, variables: &[VarTensor]) -> Self {
+    /// Takes in conv layer params as a 2-element array of `[padding, stride]` `usize` elements.
+    fn configure(
+        meta: &mut ConstraintSystem<F>,
+        variables: &[VarTensor],
+        conv_params: Option<&[usize]>,
+    ) -> Self {
         assert_eq!(variables.len(), 3);
         let (kernel, input, output) = (
             variables[0].clone(),
@@ -38,6 +43,10 @@ where
         assert_eq!(input.dims().len(), 3);
         assert_eq!(output.dims().len(), 3);
         assert_eq!(kernel.dims().len(), 4);
+
+        // should fail if None
+        let conv_params = conv_params.unwrap();
+        assert_eq!(conv_params.len(), 2);
 
         kernel.enable_equality(meta);
         input.enable_equality(meta);
@@ -50,6 +59,7 @@ where
             kernel,
             input,
             output,
+            conv_params: conv_params[..2].try_into().unwrap(),
             _marker: PhantomData,
         };
 
@@ -60,7 +70,7 @@ where
             let image = config.input.query(meta, 0);
             let kernel = config.kernel.query(meta, 0);
 
-            let expected_output = convolution::<_, PADDING, STRIDE>(kernel, image);
+            let expected_output = convolution(kernel, image, conv_params);
 
             let witnessed_output = config.output.query(meta, image_width);
 
@@ -78,14 +88,9 @@ where
         assert_eq!(values.len(), 2);
 
         let (kernel, input) = (values[0].clone(), values[1].clone());
-        let (image_height, image_width) = (input.dims()[1], input.dims()[2]);
-        let (out_channels, kernel_height, kernel_width) =
-            (kernel.dims()[0], kernel.dims()[2], kernel.dims()[3]);
+        let image_width = input.dims()[2];
 
-        let horz = (image_height + 2 * PADDING - kernel_height) / STRIDE + 1;
-        let vert = (image_width + 2 * PADDING - kernel_width) / STRIDE + 1;
-
-        let mut t = layouter
+        let t = layouter
             .assign_region(
                 || "assign image and kernel",
                 |mut region| {
@@ -100,7 +105,7 @@ where
                             dims: _,
                         } => match kernel.clone() {
                             ValTensor::Value { inner: k, dims: _ } => {
-                                convolution::<_, PADDING, STRIDE>(k, img)
+                                convolution::<_>(k, img, &self.conv_params)
                             }
                             _ => todo!(),
                         },
@@ -113,7 +118,9 @@ where
                 },
             )
             .unwrap();
-        t.reshape(&[out_channels, horz, vert]);
+
+        println!("{:?}", t.dims());
+
         ValTensor::from(t)
     }
 }

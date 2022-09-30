@@ -12,7 +12,11 @@ pub trait LayerConfig<F: FieldExt + TensorType> {
     /// Takes in VarTensors and creates a series of operations (gates in Halo2 circuit nomenclature)
     /// to which we can add equality constraints (for proving).
     /// Produces a layer object with attributes we can then assign to when calling layout().
-    fn configure(_meta: &mut ConstraintSystem<F>, variables: &[VarTensor]) -> Self;
+    fn configure(
+        _meta: &mut ConstraintSystem<F>,
+        variables: &[VarTensor],
+        layer_params: Option<&[usize]>,
+    ) -> Self;
     /// Takes in ValTensor inputs and assigns them to the variables created when calling configure().
     fn layout(&self, layouter: &mut impl Layouter<F>, values: &[ValTensor<F>]) -> ValTensor<F>;
 }

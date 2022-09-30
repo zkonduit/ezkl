@@ -22,7 +22,11 @@ pub struct Affine1dConfig<F: FieldExt + TensorType> {
 impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
     /// Configures and creates an affine gate within a circuit.
     /// Variables are supplied as a 4-element array of `[weights, bias, input, output]` VarTensors.
-    fn configure(meta: &mut ConstraintSystem<F>, variables: &[VarTensor]) -> Self {
+    fn configure(
+        meta: &mut ConstraintSystem<F>,
+        variables: &[VarTensor],
+        _: Option<&[usize]>,
+    ) -> Self {
         assert_eq!(variables.len(), 4);
 
         let (kernel, bias, input, output) = (

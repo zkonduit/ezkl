@@ -45,7 +45,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
 
         Self::Config::configure(
             cs,
-            &[kernel.clone(), bias.clone(), input.clone(), output.clone()],
+            &[kernel.clone(), bias.clone(), input.clone(), output.clone()], None
         )
     }
 

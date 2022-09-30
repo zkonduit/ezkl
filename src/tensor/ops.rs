@@ -54,25 +54,24 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[5, 1, 1, 1]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap();
-/// const PADDING: usize = 0;
-/// const STRIDE: usize = 1;
-/// let result = convolution::<i32, PADDING, STRIDE>(k, x);
+/// let result = convolution::<i32>(k, x, &[0 as usize, 1 as usize]);
 /// let expected = Tensor::<i32>::new(Some(&[31, 16, 8, 26]), &[1, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn convolution<
-    T: TensorType + Mul<Output = T> + Add<Output = T>,
-    const PADDING: usize,
-    const STRIDE: usize,
->(
+pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     kernel: Tensor<T>,
     image: Tensor<T>,
+    params: &[usize],
 ) -> Tensor<T> {
     let image_dims = image.dims();
     let kernel_dims = kernel.dims();
     assert_eq!(image_dims.len(), 3);
     assert_eq!(kernel_dims.len(), 4);
     assert_eq!(image_dims[0], kernel_dims[1]);
+
+    assert_eq!(params.len(), 2);
+
+    let (padding, stride) = (params[0], params[1]);
 
     let (output_channels, input_channels, kernel_height, kernel_width) = (
         kernel_dims[0],
@@ -83,10 +82,10 @@ pub fn convolution<
 
     let (image_height, image_width) = (image_dims[1], image_dims[2]);
 
-    let padded_image = pad::<T, PADDING>(image.clone());
+    let padded_image = pad::<T>(image.clone(), padding);
 
-    let horz_slides = (image_height + 2 * PADDING - kernel_height) / STRIDE + 1;
-    let vert_slides = (image_width + 2 * PADDING - kernel_width) / STRIDE + 1;
+    let horz_slides = (image_height + 2 * padding - kernel_height) / stride + 1;
+    let vert_slides = (image_width + 2 * padding - kernel_width) / stride + 1;
 
     // calculate value of output
     let mut output: Tensor<T> =
@@ -94,9 +93,9 @@ pub fn convolution<
 
     for i in 0..output_channels {
         for j in 0..horz_slides {
-            let rs = j * STRIDE;
+            let rs = j * stride;
             for k in 0..vert_slides {
-                let cs = k * STRIDE;
+                let cs = k * stride;
                 output.set(
                     &[i, j, k],
                     dot_product(
@@ -147,19 +146,18 @@ pub fn dot_product<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 3, 3],
 /// ).unwrap();
-/// const PADDING: usize = 1;
-/// let result = pad::<i32, PADDING>(x);
+/// let result = pad::<i32>(x, 1 as usize);
 /// let expected = Tensor::<i32>::new(
 ///     Some(&[0, 0, 0, 0, 0, 0, 5, 2, 3, 0, 0, 0, 4, -1, 0, 0, 3, 1, 6, 0, 0, 0, 0, 0, 0]),
 ///     &[1, 5, 5],
 /// ).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn pad<T: TensorType, const PADDING: usize>(image: Tensor<T>) -> Tensor<T> {
+pub fn pad<T: TensorType>(image: Tensor<T>, padding: usize) -> Tensor<T> {
     assert_eq!(image.dims().len(), 3);
     let (channels, height, width) = (image.dims()[0], image.dims()[1], image.dims()[2]);
-    let padded_height = height + 2 * PADDING;
-    let padded_width = width + 2 * PADDING;
+    let padded_height = height + 2 * padding;
+    let padded_width = width + 2 * padding;
 
     let mut output = Tensor::<T>::new(None, &[channels, padded_height, padded_width]).unwrap();
 
@@ -167,7 +165,7 @@ pub fn pad<T: TensorType, const PADDING: usize>(image: Tensor<T>) -> Tensor<T> {
         for col in 0..height {
             for row in 0..width {
                 output.set(
-                    &[channel, col + PADDING, row + PADDING],
+                    &[channel, col + padding, row + padding],
                     image.get(&[channel, col, row]).clone(),
                 );
             }
