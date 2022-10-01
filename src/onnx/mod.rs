@@ -22,7 +22,7 @@ pub struct OnnxCircuit<F: FieldExt, const BITS: usize> {
 }
 
 impl<F: FieldExt + TensorType, const BITS: usize> Circuit<F> for OnnxCircuit<F, BITS> {
-    type Config = OnnxModelConfig<F, BITS>;
+    type Config = OnnxModelConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {

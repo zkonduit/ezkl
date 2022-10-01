@@ -36,7 +36,7 @@ pub enum OpKind {
 }
 
 #[derive(Clone)]
-pub enum OnnxNodeConfig<F: FieldExt + TensorType, const BITS: usize> {
+pub enum OnnxNodeConfig<F: FieldExt + TensorType> {
     Affine(Affine1dConfig<F>),
     Conv(ConvConfig<F>),
     ReLU(EltwiseConfig<F, ReLu<F>>),
@@ -48,19 +48,30 @@ pub enum OnnxNodeConfig<F: FieldExt + TensorType, const BITS: usize> {
 }
 
 #[derive(Clone)]
-pub struct OnnxModelConfig<F: FieldExt + TensorType, const BITS: usize> {
-    configs: Vec<OnnxNodeConfig<F, BITS>>,
+pub struct OnnxModelConfig<F: FieldExt + TensorType> {
+    configs: Vec<OnnxNodeConfig<F>>,
     pub public_output: Column<Instance>,
 }
 
 #[derive(Clone, Debug)]
 pub struct OnnxNode {
-    node: Node<InferenceFact, Box<dyn InferenceOp>>,
+    node: Node<InferenceFact, Box<dyn InferenceOp>>, // the raw Tract Node data structure
+    output_max: f32, // an inferred maximum value that can appear in the output tensor given previous quantization choices
+    // Inferred shapes for input and output tensors. The first coordinate is the Onnx "slot" and the second is the tensor.
+    // None indicates unknown, so input_shapes = Some(vec![None, Some(vec![3,4])]) indicates that we
+    // know something, there are two slots, and the first tensor has unknown shape, while the second has shape [3,4].
+    input_shapes: Option<Vec<Option<Vec<usize>>>>,
+    output_shapes: Option<Vec<Option<Vec<usize>>>>,
 }
 
 impl OnnxNode {
     pub fn new(node: Node<InferenceFact, Box<dyn InferenceOp>>) -> Self {
-        OnnxNode { node }
+        OnnxNode {
+            node,
+            output_max: f32::INFINITY,
+            input_shapes: None,
+            output_shapes: None,
+        }
     }
 
     pub fn output_shapes(&self) -> Result<Vec<Option<Vec<usize>>>> {
@@ -126,7 +137,8 @@ impl OnnxNode {
 #[derive(Clone, Debug)]
 pub struct OnnxModel {
     pub model: Graph<InferenceFact, Box<dyn InferenceOp>>, // The raw Tract data structure
-    pub onnx_nodes: Vec<OnnxNode>, // Wrapped nodes with additional methods and potentially data (e.g. quantization)
+    pub onnx_nodes: Vec<OnnxNode>, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
+    pub bits: usize,
     pub last_shape: Vec<usize>,
 }
 
@@ -142,6 +154,7 @@ impl OnnxModel {
         OnnxModel {
             model,
             onnx_nodes,
+            bits: 14,
             last_shape: Vec::from([0]),
         }
     }
@@ -151,16 +164,15 @@ impl OnnxModel {
         OnnxModel::new(filename)
     }
 
-    pub fn configure<F: FieldExt + TensorType, const BITS: usize>(
+    pub fn configure<F: FieldExt + TensorType>(
         &mut self,
         meta: &mut ConstraintSystem<F>,
         advices: VarTensor,
         fixeds: VarTensor,
-    ) -> Result<OnnxModelConfig<F, BITS>> {
+    ) -> Result<OnnxModelConfig<F>> {
         // Note that the order of the nodes, and the eval_order, is not stable between model loads
         let order = self.eval_order()?;
-        let mut configs: Vec<OnnxNodeConfig<F, BITS>> =
-            vec![OnnxNodeConfig::NotConfigured; order.len()];
+        let mut configs: Vec<OnnxNodeConfig<F>> = vec![OnnxNodeConfig::NotConfigured; order.len()];
         for node_idx in order {
             configs[node_idx] =
                 self.configure_node(node_idx, meta, advices.clone(), fixeds.clone())?;
@@ -177,13 +189,13 @@ impl OnnxModel {
 
     /// Infer the params, input, and output, and configure against the provided meta and Advice and Fixed columns.
     /// Note that we require the context of the Graph to complete this task.
-    fn configure_node<F: FieldExt + TensorType, const BITS: usize>(
+    fn configure_node<F: FieldExt + TensorType>(
         &mut self,
         node_idx: usize,
         meta: &mut ConstraintSystem<F>,
         advices: VarTensor,
         fixeds: VarTensor, // Should use fixeds, but currently buggy
-    ) -> Result<OnnxNodeConfig<F, BITS>> {
+    ) -> Result<OnnxNodeConfig<F>> {
         let node = &self.onnx_nodes[node_idx];
         //        println!("Configure Node {}, a {:?}", node_idx, node.opkind());
 
@@ -194,7 +206,7 @@ impl OnnxModel {
                 // two inputs which are Const(..) that have the f32s, and one variable input which are the activations.
                 // The first input is the activations, second is the weight matrix, and the third the bias.
                 // Consider using shape information only here, rather than loading the param tensor (although loading
-                // the tensor guarantees that assign will work if there are errors or ambiguityies in the shape
+                // the tensor guarantees that assign will work if there are errors or ambiguities in the shape
                 // data).
                 let input_outlets = &node.node.inputs;
                 let (_input_node_ix, _input_node_slot) =
@@ -235,7 +247,7 @@ impl OnnxModel {
                 let conf: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
                     meta,
                     &[advices.get_slice(&[0..length], &[length])],
-                    Some(&[BITS]),
+                    Some(&[self.bits]),
                 );
                 Ok(OnnxNodeConfig::ReLU(conf))
             }
@@ -245,7 +257,7 @@ impl OnnxModel {
                 let conf: EltwiseConfig<F, Sigmoid<F, 128, 128>> = EltwiseConfig::configure(
                     meta,
                     &[advices.get_slice(&[0..length], &[length])],
-                    Some(&[BITS]),
+                    Some(&[self.bits]),
                 );
                 Ok(OnnxNodeConfig::Sigmoid(conf))
             }
@@ -271,9 +283,9 @@ impl OnnxModel {
         }
     }
 
-    pub fn layout<F: FieldExt + TensorType, const BITS: usize>(
+    pub fn layout<F: FieldExt + TensorType>(
         &self,
-        config: OnnxModelConfig<F, BITS>,
+        config: OnnxModelConfig<F>,
         layouter: &mut impl Layouter<F>,
         input: ValTensor<F>,
     ) -> Result<ValTensor<F>> {
@@ -287,14 +299,15 @@ impl OnnxModel {
                 config.configs[node_idx].clone(),
             ) {
                 Some(vt) => {
+                    println!("Node {} out: {}", node_idx, vt.show());
                     // This is just to log the layer output
-                    match vt.clone() {
-                        ValTensor::PrevAssigned { inner: v, dims: _ } => {
-                            let r: Tensor<i32> = v.clone().into();
-                            println!("Node {} out: {:?}", node_idx, r);
-                        }
-                        _ => panic!("Should be assigned"),
-                    };
+                    // match vt.clone() {
+                    //     ValTensor::PrevAssigned { inner: v, dims: _ } => {
+                    //         let r: Tensor<i32> = v.clone().into();
+                    //         println!("Node {} out: {:?}", node_idx, r);
+                    //     }
+                    //     _ => panic!("Should be assigned"),
+                    // };
 
                     vt
                 }
@@ -308,12 +321,12 @@ impl OnnxModel {
     // (which may be more correct for some graphs).
     // Does not take parameters, instead looking them up in the network.
     // At the Source level, the input will be fed by the prover.
-    fn layout_node<F: FieldExt + TensorType, const BITS: usize>(
+    fn layout_node<F: FieldExt + TensorType>(
         &self,
         node_idx: usize,
         layouter: &mut impl Layouter<F>,
         input: ValTensor<F>,
-        config: OnnxNodeConfig<F, BITS>,
+        config: OnnxNodeConfig<F>,
     ) -> Option<ValTensor<F>> {
         let node = &self.onnx_nodes[node_idx];
         let input_outlets = &node.node.inputs;
