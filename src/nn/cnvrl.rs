@@ -75,7 +75,7 @@ where
             // Get output expressions for each input channel
             let image = config.input.query(meta, 0);
             let kernel = config.kernel.query(meta, 0);
-            let mut bias = config.bias.query(meta, 0);
+            let bias = config.bias.query(meta, 0);
 
             let expected_output = convolution(kernel, bias, image, config.padding, config.stride);
 
@@ -101,27 +101,23 @@ where
             .assign_region(
                 || "assign image and kernel",
                 |mut region| {
+                    let offset = 0;
                     self.selector.enable(&mut region, 0)?;
 
-                    self.kernel.assign(&mut region, 0, kernel.clone());
-                    self.bias.assign(&mut region, 0, bias.clone());
-                    self.input.assign(&mut region, 0, input.clone());
+                    let inp = self
+                        .input
+                        .assign(&mut region, offset, input.clone())
+                        .map(|e| e.value_field());
+                    let k = self
+                        .kernel
+                        .assign(&mut region, offset, kernel.clone())
+                        .map(|e| e.value_field());
+                    let b = self
+                        .bias
+                        .assign(&mut region, offset, bias.clone())
+                        .map(|e| e.value_field());
 
-                    let output = match input.clone() {
-                        ValTensor::Value {
-                            inner: img,
-                            dims: _,
-                        } => match kernel.clone() {
-                            ValTensor::Value { inner: k, dims: _ } => match bias.clone() {
-                                ValTensor::Value { inner: b, dims: _ } => {
-                                    convolution::<_>(k, b, img, self.padding, self.stride)
-                                }
-                                _ => todo!(),
-                            },
-                            _ => todo!(),
-                        },
-                        _ => todo!(),
-                    };
+                    let output = convolution(k, b, inp, self.padding, self.stride);
 
                     Ok(self
                         .output
