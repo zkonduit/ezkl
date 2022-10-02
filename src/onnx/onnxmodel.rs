@@ -101,11 +101,11 @@ impl OnnxNode {
             _ => OpKind::Unknown,
         };
 
-        // println!(
-        //     "Classified {:?} as {:?}",
-        //     self.node.op().name().as_ref(),
-        //     res
-        // );
+        println!(
+            "Classified {:?} as {:?}",
+            self.node.op().name().as_ref(),
+            res
+        );
         res
     }
 
