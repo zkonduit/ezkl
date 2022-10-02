@@ -1,31 +1,43 @@
 use crate::tensor::{Tensor, TensorType};
 pub use std::ops::{Add, Mul};
 
-/// Matrix multiplies two 2D tensors.
+/// Matrix multiplies two 2D tensors (and adds an offset).
 /// ```
 /// use halo2deeplearning::tensor::Tensor;
 /// use halo2deeplearning::tensor::ops::matmul;
 ///
 /// let x = Tensor::<i32>::new(
-///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
-///     &[3, 3],
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 2, 1, 1]),
+///     &[3, 4],
 /// ).unwrap();
 /// let k = Tensor::<i32>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = matmul(k, x);
-/// let expected = Tensor::<i32>::new(Some(&[18, 2, 19, 10, 3, 10]), &[2, 3]).unwrap();
+/// let b = Tensor::<i32>::new(
+///     Some(&[0, 0]),
+///     &[2],
+/// ).unwrap();
+/// let result = matmul(k, b, x);
+/// let expected = Tensor::<i32>::new(Some(&[26, 7, 11, 3, 15, 3, 7, 2]), &[2, 4]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     kernel: Tensor<T>,
-    input: Tensor<T>,
+    bias: Tensor<T>,
+    mut input: Tensor<T>,
 ) -> Tensor<T> {
+    assert_eq!(bias.dims()[0], kernel.dims()[0]);
+    assert_eq!(input.dims()[0], kernel.dims()[1]);
+
+    // does matrix to vector multiplication
+    match input.dims().len() {
+        1 => input.reshape(&[input.dims()[0], 1]),
+        _ => {}
+    }
+
     let input_dims = input.dims();
     let kernel_dims = kernel.dims();
-
-    assert!(input_dims[0] == kernel_dims[1]);
 
     // calculate value of output
     let mut output: Tensor<T> = Tensor::new(None, &[kernel_dims[0], input_dims[1]]).unwrap();
@@ -34,14 +46,17 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
         for j in 0..input_dims[1] {
             output.set(
                 &[i, j],
-                dot_product(kernel.get_slice(&[i..i + 1]), input.get_slice(&[j..j + 1])),
+                dot_product(
+                    kernel.get_slice(&[i..i + 1]),
+                    input.get_slice(&[0..input_dims[0], j..j + 1]),
+                ) + bias[i].clone(),
             );
         }
     }
     output
 }
 
-/// Applies convolution over a 3D tensor of shape C x H x W.
+/// Applies convolution over a 3D tensor of shape C x H x W (and adds a bias).
 /// ```
 /// use halo2deeplearning::tensor::Tensor;
 /// use halo2deeplearning::tensor::ops::convolution;
@@ -54,23 +69,29 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[5, 1, 1, 1]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap();
-/// let result = convolution::<i32>(k, x, &[0, 0, 1, 1]);
+/// let b = Tensor::<i32>::new(
+///     Some(&[0]),
+///     &[1],
+/// ).unwrap();
+/// let result = convolution::<i32>(k, b, x, (0, 0), (1, 1));
 /// let expected = Tensor::<i32>::new(Some(&[31, 16, 8, 26]), &[1, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     kernel: Tensor<T>,
+    bias: Tensor<T>,
     image: Tensor<T>,
     padding: (usize, usize),
     stride: (usize, usize),
 ) -> Tensor<T> {
     assert_eq!(image.dims().len(), 3);
     assert_eq!(kernel.dims().len(), 4);
+    assert_eq!(bias.dims().len(), 1);
     assert_eq!(image.dims()[0], kernel.dims()[1]);
+    assert_eq!(bias.dims()[0], kernel.dims()[0]);
 
     let image_dims = image.dims();
     let kernel_dims = kernel.dims();
-
 
     let (output_channels, input_channels, kernel_height, kernel_width) = (
         kernel_dims[0],
@@ -104,7 +125,7 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
                             rs..(rs + kernel_height),
                             cs..(cs + kernel_width),
                         ]),
-                    ),
+                    ) + bias[i].clone(),
                 );
             }
         }

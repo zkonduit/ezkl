@@ -16,6 +16,7 @@ where
 {
     selector: Selector,
     kernel: VarTensor,
+    bias: VarTensor,
     input: VarTensor,
     pub output: VarTensor,
     padding: (usize, usize),
@@ -35,15 +36,17 @@ where
         variables: &[VarTensor],
         conv_params: Option<&[usize]>,
     ) -> Self {
-        assert_eq!(variables.len(), 3);
-        let (kernel, input, output) = (
+        assert_eq!(variables.len(), 4);
+        let (kernel, bias, input, output) = (
             variables[0].clone(),
             variables[1].clone(),
             variables[2].clone(),
+            variables[3].clone(),
         );
         assert_eq!(input.dims().len(), 3);
         assert_eq!(output.dims().len(), 3);
         assert_eq!(kernel.dims().len(), 4);
+        assert_eq!(bias.dims().len(), 1);
 
         // should fail if None
         let conv_params = conv_params.unwrap();
@@ -58,6 +61,7 @@ where
         let config = Self {
             selector: meta.selector(),
             kernel,
+            bias,
             input,
             output,
             padding: (conv_params[0], conv_params[1]),
@@ -71,8 +75,9 @@ where
             // Get output expressions for each input channel
             let image = config.input.query(meta, 0);
             let kernel = config.kernel.query(meta, 0);
+            let mut bias = config.bias.query(meta, 0);
 
-            let expected_output = convolution(kernel, image, config.padding, config.stride);
+            let expected_output = convolution(kernel, bias, image, config.padding, config.stride);
 
             let witnessed_output = config.output.query(meta, image_width);
 
@@ -87,9 +92,9 @@ where
     /// Assigns values to the convolution gate variables created when calling `configure`.
     /// Values are supplied as a 2-element array of `[kernel, input]` VarTensors.
     fn layout(&self, layouter: &mut impl Layouter<F>, values: &[ValTensor<F>]) -> ValTensor<F> {
-        assert_eq!(values.len(), 2);
+        assert_eq!(values.len(), 3);
 
-        let (kernel, input) = (values[0].clone(), values[1].clone());
+        let (kernel, bias, input) = (values[0].clone(), values[1].clone(), values[2].clone());
         let image_width = input.dims()[2];
 
         let t = layouter
@@ -99,6 +104,7 @@ where
                     self.selector.enable(&mut region, 0)?;
 
                     self.kernel.assign(&mut region, 0, kernel.clone());
+                    self.bias.assign(&mut region, 0, bias.clone());
                     self.input.assign(&mut region, 0, input.clone());
 
                     let output = match input.clone() {
@@ -106,9 +112,12 @@ where
                             inner: img,
                             dims: _,
                         } => match kernel.clone() {
-                            ValTensor::Value { inner: k, dims: _ } => {
-                                convolution::<_>(k, img, self.padding, self.stride)
-                            }
+                            ValTensor::Value { inner: k, dims: _ } => match bias.clone() {
+                                ValTensor::Value { inner: b, dims: _ } => {
+                                    convolution::<_>(k, b, img, self.padding, self.stride)
+                                }
+                                _ => todo!(),
+                            },
                             _ => todo!(),
                         },
                         _ => todo!(),

@@ -336,7 +336,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// assert_eq!(c, Tensor::from([1, 16].into_iter()))
     /// ```
     pub fn map<F: FnMut(T) -> G, G: TensorType>(&self, mut f: F) -> Tensor<G> {
-        Tensor::from(self.inner.iter().map(|e| f(e.clone())))
+        let mut t = Tensor::from(self.inner.iter().map(|e| f(e.clone())));
+        t.reshape(self.dims());
+        t
     }
 
     /// Maps a function to tensors and enumerates

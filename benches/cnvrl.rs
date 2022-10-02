@@ -27,7 +27,8 @@ where
     Value<F>: TensorType,
 {
     image: ValTensor<F>,
-    kernels: ValTensor<F>,
+    kernel: ValTensor<F>,
+    bias: ValTensor<F>,
 }
 
 impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F>
@@ -57,10 +58,13 @@ where
             );
             kernel.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
 
+            let bias = Tensor::from((0..OUT_CHANNELS).map(|_| meta.fixed_column()));
+
             Self::Config::configure(
                 meta,
                 &[
                     VarTensor::from(kernel),
+                    VarTensor::from(bias),
                     advices.get_slice(
                         &[0..IMAGE_HEIGHT * IN_CHANNELS],
                         &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
@@ -80,7 +84,10 @@ where
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let _output = config.layout(&mut layouter, &[self.kernels.clone(), self.image.clone()]);
+        let _output = config.layout(
+            &mut layouter,
+            &[self.kernel.clone(), self.bias.clone(), self.image.clone()],
+        );
         Ok(())
     }
 }
@@ -110,9 +117,14 @@ fn runcnvrl(c: &mut Criterion) {
             );
             kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
 
+            let bias = Tensor::from(
+                (0..{ OUT_CHANNELS }).map(|_| Value::known(pallas::Base::random(OsRng))),
+            );
+
             let circuit = MyCircuit::<pallas::Base> {
                 image: ValTensor::from(image),
-                kernels: ValTensor::from(kernels),
+                kernel: ValTensor::from(kernels),
+                bias: ValTensor::from(bias),
             };
 
             group.throughput(Throughput::Elements((IMAGE_HEIGHT * IMAGE_WIDTH) as u64));
