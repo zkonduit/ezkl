@@ -172,7 +172,7 @@ where
                     &[OUT_CHANNELS, output_height, output_width],
                 ),
             ],
-            Some(&[PADDING, STRIDE]),
+            Some(&[PADDING, PADDING, STRIDE, STRIDE]),
         );
 
         let l0q: EltwiseConfig<F, DivideBy<F, 32>> =
@@ -188,7 +188,7 @@ where
                 advices.get_slice(&[LEN..LEN + 1], &[LEN]),
                 advices.get_slice(&[CLASSES + 1..CLASSES + 2], &[CLASSES]),
             ],
-            Some(&[PADDING, STRIDE]),
+            None,
         );
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);

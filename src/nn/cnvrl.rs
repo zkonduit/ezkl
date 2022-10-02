@@ -18,7 +18,7 @@ where
     kernel: VarTensor,
     input: VarTensor,
     pub output: VarTensor,
-    conv_params: [usize; 2],
+    conv_params: Vec<usize>,
     _marker: PhantomData<F>,
 }
 
@@ -28,7 +28,7 @@ where
 {
     /// Configures and creates a convolution gate within a circuit.
     /// Variables are supplied as a 3-element array of `[kernel, input, output]` VarTensors.
-    /// Takes in conv layer params as a 2-element array of `[padding, stride]` `usize` elements.
+    /// Takes in conv layer params as a 4-element array of `[padding_x, padding_y, stride_x, stride_y]` `usize` elements.
     fn configure(
         meta: &mut ConstraintSystem<F>,
         variables: &[VarTensor],
@@ -46,7 +46,7 @@ where
 
         // should fail if None
         let conv_params = conv_params.unwrap();
-        assert_eq!(conv_params.len(), 2);
+        assert_eq!(conv_params.len(), 4);
 
         kernel.enable_equality(meta);
         input.enable_equality(meta);
@@ -59,7 +59,7 @@ where
             kernel,
             input,
             output,
-            conv_params: conv_params[..2].try_into().unwrap(),
+            conv_params: conv_params.to_vec(),
             _marker: PhantomData,
         };
 

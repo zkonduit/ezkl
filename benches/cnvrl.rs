@@ -70,7 +70,7 @@ where
                         &[OUT_CHANNELS, output_height, output_width],
                     ),
                 ],
-                Some(&[PADDING, STRIDE]),
+                Some(&[PADDING, PADDING, STRIDE, STRIDE]),
             )
         }
     }
