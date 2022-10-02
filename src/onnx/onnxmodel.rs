@@ -53,25 +53,59 @@ pub struct OnnxModelConfig<F: FieldExt + TensorType> {
     pub public_output: Column<Instance>,
 }
 
+/// Fields:
+/// node is the raw Tract Node data structure
+/// output_max is an inferred maximum value that can appear in the output tensor given previous quantization choices.
+/// opkind: OpKind
+/// scale: usize, // Scale begins at 1.0. When a weight or activation is multiplied by a, scale*=a. Except that scale is always a power of two, and this is that power; multiplication is usually multiplication, while division typically happens in a lookup.  Scale is a runtime type, in that tensors of differing scales should not be combined.
+/// input_shapes and output_shapes  are Option<Vec<Option<Vec<usize>>>>.  These are the inferred shapes for input and output tensors. The first coordinate is the Onnx "slot" and the second is the tensor.
+/// None indicates unknown, so input_shapes = Some(vec![None, Some(vec![3,4])]) indicates that we
+/// know something, there are two slots, and the first tensor has unknown shape, while the second has shape [3,4].
 #[derive(Clone, Debug)]
 pub struct OnnxNode {
     node: Node<InferenceFact, Box<dyn InferenceOp>>, // the raw Tract Node data structure
-    output_max: f32, // an inferred maximum value that can appear in the output tensor given previous quantization choices
+    pub opkind: OpKind,
+    output_max: f32, //
+    qscale: usize, // Scale begins at 1.0. When a weight or activation is multiplied by a, scale*=a. Except that scale is always a power of two, and this qscale is that power.
     // Inferred shapes for input and output tensors. The first coordinate is the Onnx "slot" and the second is the tensor.
     // None indicates unknown, so input_shapes = Some(vec![None, Some(vec![3,4])]) indicates that we
     // know something, there are two slots, and the first tensor has unknown shape, while the second has shape [3,4].
     input_shapes: Option<Vec<Option<Vec<usize>>>>,
     output_shapes: Option<Vec<Option<Vec<usize>>>>,
+    // Usually there is a simple in and out shape of the node as an operator.  For example, an Affine node has three input_shapes (one for the input, weight, and bias),
+    // but in_dim is [in], out_dim is [out]
+    in_dim: Option<Vec<usize>>,
+    out_dim: Option<Vec<usize>>,
 }
 
 impl OnnxNode {
     pub fn new(node: Node<InferenceFact, Box<dyn InferenceOp>>) -> Self {
-        OnnxNode {
+        let opkind = match node.op().name().as_ref() {
+            "Gemm" => OpKind::Affine,
+            "Conv" => OpKind::Convolution,
+            "Clip" => OpKind::ReLU,
+            "Sigmoid" => OpKind::Sigmoid,
+            "Const" => OpKind::Const,
+            "Source" => OpKind::Input,
+            "input" => OpKind::Input,
+            _ => OpKind::Unknown,
+        };
+        let output_shapes = match node_output_shapes(&node) {
+            Ok(s) => Some(s),
+            _ => None,
+        };
+        let on = OnnxNode {
             node,
+            opkind,
             output_max: f32::INFINITY,
+            qscale: 0,
             input_shapes: None,
-            output_shapes: None,
-        }
+            output_shapes,
+	    None,
+	    None,
+        };
+        println!("{:?}", on);
+        on
     }
 
     pub fn output_shapes(&self) -> Result<Vec<Option<Vec<usize>>>> {
@@ -89,25 +123,6 @@ impl OnnxNode {
         Ok(shapes)
     }
 
-    pub fn opkind(&self) -> OpKind {
-        let res = match self.node.op().name().as_ref() {
-            "Gemm" => OpKind::Affine,
-            "Conv" => OpKind::Convolution,
-            "Clip" => OpKind::ReLU,
-            "Sigmoid" => OpKind::Sigmoid,
-            "Const" => OpKind::Const,
-            "Source" => OpKind::Input,
-            "input" => OpKind::Input,
-            _ => OpKind::Unknown,
-        };
-
-        println!(
-            "Classified {:?} as {:?}",
-            self.node.op().name().as_ref(),
-            res
-        );
-        res
-    }
 
     pub fn name(&self) -> String {
         self.node.name.clone().into()
@@ -132,6 +147,8 @@ impl OnnxNode {
         let arr = self.output_ndarray_by_slot(slot);
         ndarray_to_quantized(arr, shift, scale).unwrap()
     }
+
+
 }
 
 #[derive(Clone, Debug)]
@@ -200,7 +217,7 @@ impl OnnxModel {
         //        println!("Configure Node {}, a {:?}", node_idx, node.opkind());
 
         // Figure out, find, and load the params
-        match node.opkind() {
+        match node.opkind {
             OpKind::Affine => {
                 // The parameters are assumed to be fixed kernel and bias. This node should have three inputs in total:
                 // two inputs which are Const(..) that have the f32s, and one variable input which are the activations.
@@ -299,6 +316,7 @@ impl OnnxModel {
                 config.configs[node_idx].clone(),
             ) {
                 Some(vt) => {
+                    println!("Applying {:?}", self.onnx_nodes[node_idx]);
                     println!("Node {} out: {}", node_idx, vt.show());
                     // This is just to log the layer output
                     // match vt.clone() {
@@ -336,7 +354,7 @@ impl OnnxModel {
         //        println!("Node {} input tensor {:?}", node_idx, &input.clone());
 
         // The node kind and the config should be the same.
-        match (node.opkind(), config) {
+        match (node.opkind, config) {
             (OpKind::Affine, OnnxNodeConfig::Affine(ac)) => {
                 // This node should have three inputs in total:
                 // two inputs which are Const(..) that have the f32s,
@@ -389,6 +407,34 @@ impl OnnxModel {
         }
     }
 
+    /// Make a forward pass over the graph to determine tensor shapes and quantization strategy
+    pub fn forward_shape_and_quantize_pass(&self) -> Result<()> {
+        let order = self.eval_order()?;
+        let mut last_output: Vec<usize> = Vec::new();
+        let mut qscale = 0usize;
+        let mut maximum_activation = 1.0f32;
+        for node_idx in order {
+            let mut this_node = &self.onnx_nodes[node_idx];
+	    match this_node.opkind {
+		OpKind::Affine => {
+		    
+		    maximum_activation = maximum_activation*this_node.qscale*;
+		    
+		}
+
+
+	    };
+
+
+
+	    
+        }
+
+        Ok(())
+    }
+
+    // Make a recursive backward pass to shape and quantize?
+
     /// Get a linear extension of the model (an evaluation order), for example to feed to circuit construction.
     /// Note that this order is not stable over multiple reloads of the model.  For example, it will freely
     /// interchange the order of evaluation of fixed parameters.   For example weight could have id 1 on one load,
@@ -415,7 +461,8 @@ impl OnnxModel {
         let mut shapes = Vec::new();
 
         for OutletId { node, slot } in &self.model.nodes()[node_idx].inputs {
-            let prec = OnnxNode::new(self.model.nodes()[*node].clone());
+            //            let prec = OnnxNode::new(self.model.nodes()[*node].clone());
+            let prec = &self.onnx_nodes[*node];
             let shapevec = prec.output_shapes()?;
             shapes.push(shapevec[*slot].clone());
         }
