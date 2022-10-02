@@ -61,17 +61,16 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     kernel: Tensor<T>,
     image: Tensor<T>,
-    params: &[usize],
+    padding: (usize, usize),
+    stride: (usize, usize),
 ) -> Tensor<T> {
     assert_eq!(image.dims().len(), 3);
     assert_eq!(kernel.dims().len(), 4);
     assert_eq!(image.dims()[0], kernel.dims()[1]);
-    assert_eq!(params.len(), 4);
 
     let image_dims = image.dims();
     let kernel_dims = kernel.dims();
-    let padding = (params[0], params[1]);
-    let stride = (params[2], params[3]);
+
 
     let (output_channels, input_channels, kernel_height, kernel_width) = (
         kernel_dims[0],

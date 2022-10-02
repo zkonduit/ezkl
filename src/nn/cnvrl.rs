@@ -18,7 +18,8 @@ where
     kernel: VarTensor,
     input: VarTensor,
     pub output: VarTensor,
-    conv_params: Vec<usize>,
+    padding: (usize, usize),
+    stride: (usize, usize),
     _marker: PhantomData<F>,
 }
 
@@ -59,7 +60,8 @@ where
             kernel,
             input,
             output,
-            conv_params: conv_params.to_vec(),
+            padding: (conv_params[0], conv_params[1]),
+            stride: (conv_params[2], conv_params[3]),
             _marker: PhantomData,
         };
 
@@ -70,7 +72,7 @@ where
             let image = config.input.query(meta, 0);
             let kernel = config.kernel.query(meta, 0);
 
-            let expected_output = convolution(kernel, image, conv_params);
+            let expected_output = convolution(kernel, image, config.padding, config.stride);
 
             let witnessed_output = config.output.query(meta, image_width);
 
@@ -105,7 +107,7 @@ where
                             dims: _,
                         } => match kernel.clone() {
                             ValTensor::Value { inner: k, dims: _ } => {
-                                convolution::<_>(k, img, &self.conv_params)
+                                convolution::<_>(k, img, self.padding, self.stride)
                             }
                             _ => todo!(),
                         },
