@@ -255,7 +255,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> LayerConfig<F>
 }
 
 // Now implement nonlinearity functions like this
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ReLu<F> {
     _marker: PhantomData<F>,
 }
@@ -269,7 +269,7 @@ impl<F: FieldExt> Nonlinearity<F> for ReLu<F> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Sigmoid<F, const L: usize, const K: usize> {
     _marker: PhantomData<F>,
 }
@@ -285,7 +285,7 @@ impl<F: FieldExt, const L: usize, const K: usize> Nonlinearity<F> for Sigmoid<F,
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DivideBy<F, const D: usize> {
     _marker: PhantomData<F>,
 }
@@ -295,6 +295,40 @@ impl<F: FieldExt, const D: usize> Nonlinearity<F> for DivideBy<F, D> {
         let rounded = d_inv_x.round();
         let integral: i32 = unsafe { rounded.to_int_unchecked() };
         fieldutils::i32_to_felt(integral)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ReLu64<F> {
+    _marker: PhantomData<F>,
+}
+impl<F: FieldExt> Nonlinearity<F> for ReLu64<F> {
+    fn nonlinearity(x: i32) -> F {
+        if x < 0 {
+            F::zero()
+        } else {
+            let d_inv_x = (x as f32) / 64f32;
+            let rounded = d_inv_x.round();
+            let integral: i32 = unsafe { rounded.to_int_unchecked() };
+            i32_to_felt(integral)
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ReLu128<F> {
+    _marker: PhantomData<F>,
+}
+impl<F: FieldExt> Nonlinearity<F> for ReLu128<F> {
+    fn nonlinearity(x: i32) -> F {
+        if x < 0 {
+            F::zero()
+        } else {
+            let d_inv_x = (x as f32) / 128f32;
+            let rounded = d_inv_x.round();
+            let integral: i32 = unsafe { rounded.to_int_unchecked() };
+            i32_to_felt(integral)
+        }
     }
 }
 

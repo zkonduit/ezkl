@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 
 /// Configuration for an affine layer which (mat)multiplies a weight kernel to an input and adds
 /// a bias vector to the result.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Affine1dConfig<F: FieldExt + TensorType> {
     pub kernel: VarTensor,
     pub bias: VarTensor,

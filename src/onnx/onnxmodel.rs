@@ -1,10 +1,10 @@
 use crate::nn::affine::Affine1dConfig;
 use crate::nn::cnvrl::ConvConfig;
-use crate::nn::eltwise::{EltwiseConfig, ReLu, Sigmoid};
+use crate::nn::eltwise::{EltwiseConfig, ReLu, ReLu128, ReLu64, Sigmoid};
 use crate::nn::LayerConfig;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
-use anyhow::Result;
+use anyhow::{anyhow, Context, Result};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
@@ -28,6 +28,8 @@ pub enum OpKind {
     Affine,
     Convolution,
     ReLU,
+    ReLU64,
+    ReLU128,
     Sigmoid,
     Source,
     Const,
@@ -35,11 +37,13 @@ pub enum OpKind {
     Unknown,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum OnnxNodeConfig<F: FieldExt + TensorType> {
     Affine(Affine1dConfig<F>),
     Conv(ConvConfig<F>),
     ReLU(EltwiseConfig<F, ReLu<F>>),
+    ReLU64(EltwiseConfig<F, ReLu64<F>>),
+    ReLU128(EltwiseConfig<F, ReLu128<F>>),
     Sigmoid(EltwiseConfig<F, Sigmoid<F, 128, 128>>),
     Const,
     Source,
@@ -54,28 +58,27 @@ pub struct OnnxModelConfig<F: FieldExt + TensorType> {
 }
 
 /// Fields:
-/// node is the raw Tract Node data structure
+/// node is the raw Tract Node data structure.
+/// opkind: OpKind is our op enum.
 /// output_max is an inferred maximum value that can appear in the output tensor given previous quantization choices.
-/// opkind: OpKind
-/// scale: usize, // Scale begins at 1.0. When a weight or activation is multiplied by a, scale*=a. Except that scale is always a power of two, and this is that power; multiplication is usually multiplication, while division typically happens in a lookup.  Scale is a runtime type, in that tensors of differing scales should not be combined.
-/// input_shapes and output_shapes  are Option<Vec<Option<Vec<usize>>>>.  These are the inferred shapes for input and output tensors. The first coordinate is the Onnx "slot" and the second is the tensor.
+/// qscale: usize  Scale begins at 1.0. When a weight or activation is multiplied by a, scale*=a. Except that scale is always a power of two, and this is that power; multiplication is usually multiplication, while division typically happens in a lookup.  Scale is a runtime type, in that tensors of differing scales should not be combined.
+/// input_shapes and output_shapes  are Option<Vec<Option<Vec<usize>>>>.  These are the inferred shapes for input and output tensors. The first coordinate is the Onnx "slot" and the second is the tensor.  The input_shape includes all the parameters, not just the activations that will flow into the node.
 /// None indicates unknown, so input_shapes = Some(vec![None, Some(vec![3,4])]) indicates that we
 /// know something, there are two slots, and the first tensor has unknown shape, while the second has shape [3,4].
+/// in_dims and out_dims are the shape of the activations only which enter and leave the node.
 #[derive(Clone, Debug)]
 pub struct OnnxNode {
-    node: Node<InferenceFact, Box<dyn InferenceOp>>, // the raw Tract Node data structure
+    node: Node<InferenceFact, Box<dyn InferenceOp>>,
     pub opkind: OpKind,
-    output_max: f32, //
-    qscale: usize, // Scale begins at 1.0. When a weight or activation is multiplied by a, scale*=a. Except that scale is always a power of two, and this qscale is that power.
-    // Inferred shapes for input and output tensors. The first coordinate is the Onnx "slot" and the second is the tensor.
-    // None indicates unknown, so input_shapes = Some(vec![None, Some(vec![3,4])]) indicates that we
-    // know something, there are two slots, and the first tensor has unknown shape, while the second has shape [3,4].
+    output_max: f32,
+    qscale: usize,
+    constant_value: Option<Tensor<i32>>, // float value * 2^qscale if applicable.
     input_shapes: Option<Vec<Option<Vec<usize>>>>,
     output_shapes: Option<Vec<Option<Vec<usize>>>>,
     // Usually there is a simple in and out shape of the node as an operator.  For example, an Affine node has three input_shapes (one for the input, weight, and bias),
     // but in_dim is [in], out_dim is [out]
-    in_dim: Option<Vec<usize>>,
-    out_dim: Option<Vec<usize>>,
+    in_dims: Option<Vec<usize>>,
+    out_dims: Option<Vec<usize>>,
 }
 
 impl OnnxNode {
@@ -87,24 +90,59 @@ impl OnnxNode {
             "Sigmoid" => OpKind::Sigmoid,
             "Const" => OpKind::Const,
             "Source" => OpKind::Input,
-            "input" => OpKind::Input,
+            //            "input" => OpKind::Input,
             _ => OpKind::Unknown,
         };
         let output_shapes = match node_output_shapes(&node) {
             Ok(s) => Some(s),
             _ => None,
         };
+
+        // Set some default values, then figure out more specific values if possible based on the opkind.
+        let mut constant_value = None;
+        let mut qscale = 0usize;
+        let mut in_dims = None;
+        let mut out_dims = None;
+        let mut output_max = f32::INFINITY;
+
+        match opkind {
+            OpKind::Const => {
+                let fact = &node.outputs[0].fact;
+                let nav = fact
+                    .value
+                    .concretize()
+                    .unwrap()
+                    .to_array_view::<f32>()
+                    .unwrap()
+                    .to_owned();
+                let t = ndarray_to_quantized(nav, 0f32, 128f32).unwrap();
+                out_dims = Some(t.dims().clone().to_vec());
+                qscale = 8;
+                output_max = t.iter().map(|x| x.abs()).max().unwrap() as f32;
+                constant_value = Some(t);
+            }
+            OpKind::Input => {
+                if let Some([Some(v)]) = output_shapes.as_deref() {
+                    out_dims = Some(v.to_vec());
+                }
+                output_max = 256.0;
+                qscale = 8;
+            }
+            _ => {}
+        };
+
         let on = OnnxNode {
             node,
             opkind,
-            output_max: f32::INFINITY,
-            qscale: 0,
+            output_max,
+            qscale,
+            constant_value,
             input_shapes: None,
             output_shapes,
-	    None,
-	    None,
+            in_dims,
+            out_dims,
         };
-        println!("{:?}", on);
+        //        println!("New{:?}", on);
         on
     }
 
@@ -122,7 +160,6 @@ impl OnnxNode {
         }
         Ok(shapes)
     }
-
 
     pub fn name(&self) -> String {
         self.node.name.clone().into()
@@ -147,8 +184,6 @@ impl OnnxNode {
         let arr = self.output_ndarray_by_slot(slot);
         ndarray_to_quantized(arr, shift, scale).unwrap()
     }
-
-
 }
 
 #[derive(Clone, Debug)]
@@ -168,12 +203,14 @@ impl OnnxModel {
             .iter()
             .map(|n| OnnxNode::new(n.clone()))
             .collect();
-        OnnxModel {
+        let mut om = OnnxModel {
             model,
             onnx_nodes,
-            bits: 14,
+            bits: 15,
             last_shape: Vec::from([0]),
-        }
+        };
+        om.forward_shape_and_quantize_pass().unwrap();
+        om
     }
     pub fn from_arg() -> Self {
         let args: Vec<String> = env::args().collect();
@@ -195,6 +232,7 @@ impl OnnxModel {
                 self.configure_node(node_idx, meta, advices.clone(), fixeds.clone())?;
         }
 
+        println!("Configured: {:?}", configs);
         let public_output: Column<Instance> = meta.instance_column();
         meta.enable_equality(public_output);
 
@@ -233,9 +271,13 @@ impl OnnxModel {
                     (input_outlets[1].node, input_outlets[1].slot);
                 let (_bias_node_ix, _bias_node_slot) =
                     (input_outlets[2].node, input_outlets[2].slot);
-                let weight_node = OnnxNode::new(self.nodes()[weight_node_ix].clone());
-                let weight_value =
-                    weight_node.output_tensor_by_slot(weight_node_slot, 0f32, 256f32);
+                let weight_node = &self.onnx_nodes[weight_node_ix];
+                let weight_value = weight_node
+                    .constant_value
+                    .clone()
+                    .context("Tensor<i32> should already be loaded")?;
+                // let weight_value =
+                //     weight_node.output_tensor_by_slot(weight_node_slot, 0f32, 128f32);
 
                 let in_dim = weight_value.dims()[1];
                 let out_dim = weight_value.dims()[0];
@@ -268,6 +310,27 @@ impl OnnxModel {
                 );
                 Ok(OnnxNodeConfig::ReLU(conf))
             }
+            OpKind::ReLU64 => {
+                let length = self.last_shape.clone().into_iter().product();
+
+                let conf: EltwiseConfig<F, ReLu64<F>> = EltwiseConfig::configure(
+                    meta,
+                    &[advices.get_slice(&[0..length], &[length])],
+                    Some(&[self.bits]),
+                );
+                Ok(OnnxNodeConfig::ReLU64(conf))
+            }
+            OpKind::ReLU128 => {
+                let length = self.last_shape.clone().into_iter().product();
+
+                let conf: EltwiseConfig<F, ReLu128<F>> = EltwiseConfig::configure(
+                    meta,
+                    &[advices.get_slice(&[0..length], &[length])],
+                    Some(&[self.bits]),
+                );
+                Ok(OnnxNodeConfig::ReLU128(conf))
+            }
+
             OpKind::Sigmoid => {
                 // Here,   node.output_shapes().unwrap()[0].as_ref().unwrap() == vec![1,LEN]
                 let length = node.output_shapes().unwrap()[0].as_ref().unwrap()[1];
@@ -309,27 +372,23 @@ impl OnnxModel {
         let order = self.eval_order()?;
         let mut x = input;
         for node_idx in order {
+            println!("Applying {:?}", self.onnx_nodes[node_idx]);
             x = match self.layout_node(
                 node_idx,
                 layouter,
                 x.clone(),
                 config.configs[node_idx].clone(),
-            ) {
+            )? {
                 Some(vt) => {
-                    println!("Applying {:?}", self.onnx_nodes[node_idx]);
+                    //                    println!("Applying {:?}", self.onnx_nodes[node_idx]);
                     println!("Node {} out: {}", node_idx, vt.show());
-                    // This is just to log the layer output
-                    // match vt.clone() {
-                    //     ValTensor::PrevAssigned { inner: v, dims: _ } => {
-                    //         let r: Tensor<i32> = v.clone().into();
-                    //         println!("Node {} out: {:?}", node_idx, r);
-                    //     }
-                    //     _ => panic!("Should be assigned"),
-                    // };
 
                     vt
                 }
-                None => x, // Some nodes don't produce tensor output, we skip these
+                None => {
+                    println!("Node {} out: {:?}", node_idx, x.show());
+                    x
+                } // Some nodes don't produce tensor output, we skip these
             }
         }
         Ok(x)
@@ -345,7 +404,7 @@ impl OnnxModel {
         layouter: &mut impl Layouter<F>,
         input: ValTensor<F>,
         config: OnnxNodeConfig<F>,
-    ) -> Option<ValTensor<F>> {
+    ) -> Result<Option<ValTensor<F>>> {
         let node = &self.onnx_nodes[node_idx];
         let input_outlets = &node.node.inputs;
 
@@ -354,7 +413,7 @@ impl OnnxModel {
         //        println!("Node {} input tensor {:?}", node_idx, &input.clone());
 
         // The node kind and the config should be the same.
-        match (node.opkind, config) {
+        Ok(match (node.opkind, config.clone()) {
             (OpKind::Affine, OnnxNodeConfig::Affine(ac)) => {
                 // This node should have three inputs in total:
                 // two inputs which are Const(..) that have the f32s,
@@ -368,17 +427,24 @@ impl OnnxModel {
                 let (weight_node_ix, weight_node_slot) =
                     (input_outlets[1].node, input_outlets[1].slot);
                 let (bias_node_ix, bias_node_slot) = (input_outlets[2].node, input_outlets[2].slot);
-                let weight_node = OnnxNode::new(self.nodes()[weight_node_ix].clone());
-                let weight_value =
-                    weight_node.output_tensor_by_slot(weight_node_slot, 0f32, 256f32);
-                //                println!("Weight: {:?}", weight_value);
+                let weight_node = &self.onnx_nodes[weight_node_ix];
+                let weight_value = weight_node
+                    .constant_value
+                    .clone()
+                    .context("Tensor<i32> should already be loaded")?;
+
                 // let in_dim = weight_value.dims()[1];
                 // let out_dim = weight_value.dims()[0];
                 let weight_vt =
                     ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(weight_value));
                 //                let weight_vt = ValTensor::from(weight_value);
-                let bias_node = OnnxNode::new(self.nodes()[bias_node_ix].clone());
-                let bias_value = bias_node.output_tensor_by_slot(bias_node_slot, 0f32, 256f32);
+                let bias_node = &self.onnx_nodes[bias_node_ix];
+                let bias_value = bias_node
+                    .constant_value
+                    .clone()
+                    .context("Tensor<i32> should already be loaded")?;
+                //                let bias_node = OnnxNode::new(self.nodes()[bias_node_ix].clone());
+                //                let bias_value = bias_node.output_tensor_by_slot(bias_node_slot, 0f32, 256f32);
                 let bias_vt =
                     ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(bias_value));
                 // println!(
@@ -399,35 +465,89 @@ impl OnnxModel {
                 //                let length = node.output_shapes().unwrap()[0].as_ref().unwrap()[1]; //  shape is vec![1,LEN]
                 Some(rc.layout(layouter, &[input]))
             }
+            (OpKind::ReLU64, OnnxNodeConfig::ReLU64(rc)) => {
+                // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
+                //                let length = node.output_shapes().unwrap()[0].as_ref().unwrap()[1]; //  shape is vec![1,LEN]
+                Some(rc.layout(layouter, &[input]))
+            }
+            (OpKind::ReLU128, OnnxNodeConfig::ReLU128(rc)) => {
+                // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
+                //                let length = node.output_shapes().unwrap()[0].as_ref().unwrap()[1]; //  shape is vec![1,LEN]
+                Some(rc.layout(layouter, &[input]))
+            }
             (OpKind::Sigmoid, OnnxNodeConfig::Sigmoid(sc)) => Some(sc.layout(layouter, &[input])),
 
+            (OpKind::Input, OnnxNodeConfig::Input) => None,
+            (OpKind::Const, OnnxNodeConfig::Const) => None,
             _ => {
-                None //panic!("Node Op and Config mismatch, or unknown Op.")
+                panic!(
+                    "Node Op and Config mismatch, or unknown Op. {:?} vs {:?}",
+                    node.opkind, config
+                )
             }
-        }
+        })
     }
 
     /// Make a forward pass over the graph to determine tensor shapes and quantization strategy
-    pub fn forward_shape_and_quantize_pass(&self) -> Result<()> {
+    /// Mutates the nodes.
+    pub fn forward_shape_and_quantize_pass(&mut self) -> Result<()> {
         let order = self.eval_order()?;
         let mut last_output: Vec<usize> = Vec::new();
         let mut qscale = 0usize;
-        let mut maximum_activation = 1.0f32;
         for node_idx in order {
-            let mut this_node = &self.onnx_nodes[node_idx];
-	    match this_node.opkind {
-		OpKind::Affine => {
-		    
-		    maximum_activation = maximum_activation*this_node.qscale*;
-		    
-		}
+            // mutate a copy of the node, referring to other nodes in the vec, then swap modified node in at the end
+            let mut this_node = self.onnx_nodes[node_idx].clone();
+            match this_node.opkind {
+                OpKind::Affine => {
+                    let input_outlets = &this_node.node.inputs;
+                    let (input_node_ix, _input_node_slot) =
+                        (input_outlets[0].node, input_outlets[0].slot);
+                    let (weight_node_ix, weight_node_slot) =
+                        (input_outlets[1].node, input_outlets[1].slot);
+                    let (bias_node_ix, _bias_node_slot) =
+                        (input_outlets[2].node, input_outlets[2].slot);
+                    let input_node = &self.onnx_nodes[input_node_ix];
+                    let weight_node = &self.onnx_nodes[weight_node_ix];
+                    let bias_node = &self.onnx_nodes[bias_node_ix];
+                    let in_dim = weight_node.out_dims.as_ref().unwrap()[1];
+                    let out_dim = weight_node.out_dims.as_ref().unwrap()[0];
+                    this_node.in_dims = Some(vec![in_dim]);
+                    this_node.out_dims = Some(vec![out_dim]);
 
+                    this_node.output_max =
+                        input_node.output_max * weight_node.output_max * (in_dim as f32);
 
-	    };
+                    this_node.qscale = weight_node.qscale + input_node.qscale;
+                }
+                OpKind::ReLU => {
+                    let input_outlets = &this_node.node.inputs;
+                    let (input_node_ix, _input_node_slot) =
+                        (input_outlets[0].node, input_outlets[0].slot);
+                    let input_node = &self.onnx_nodes[input_node_ix];
+                    this_node.in_dims = input_node.out_dims.clone();
+                    this_node.out_dims = input_node.out_dims.clone();
+                    if this_node.input_shapes == None {
+                        this_node.input_shapes = Some(vec![this_node.in_dims.clone()]);
+                    }
+                    if this_node.output_shapes == None {
+                        this_node.output_shapes = Some(vec![this_node.out_dims.clone()]);
+                    }
+                    this_node.output_max = input_node.output_max;
 
-
-
-	    
+                    if this_node.output_max > 65536f32 {
+                        this_node.opkind = OpKind::ReLU128;
+                        this_node.output_max = input_node.output_max / 128f32;
+                        //                        this_node.qscale -= 7;
+                    } else if this_node.output_max > 16384f32 {
+                        this_node.opkind = OpKind::ReLU64;
+                        this_node.output_max = input_node.output_max / 64f32;
+                        //                        this_node.qscale -= 6;
+                    }
+                }
+                _ => {}
+            };
+            println!("mod{:?}", this_node);
+            self.onnx_nodes[node_idx] = this_node;
         }
 
         Ok(())

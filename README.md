@@ -27,7 +27,7 @@ cargo run --release --example mlp_4d
 
 To run an example which loads the graph and parameters from an ONNX model file, enable the `onnx` feature:
 ```bash
-cargo run --example loadedonnx examples/onnx_models/ff.onnx --features onnx
+cargo run --example loadedonnx examples/onnx_models/three.onnx --features onnx
 ```
 
 To run the example which loads only the parameters from an ONNX model file, enable the `onnx` build feature:
