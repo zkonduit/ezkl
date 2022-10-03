@@ -15,8 +15,8 @@ mod loadonnx_example {
         let filename = args[1].clone().split('/').last().unwrap().to_string();
 
         let public_input = match filename.as_str() {
-            "ff.onnx" => vec![120, 0, 0, 0],
-            "three.onnx" => vec![19, 42],
+            "ff.onnx" => vec![60, 0, 0, 0],
+            "three.onnx" => vec![10, 21],
             "3lffOOR.onnx" => vec![0, 11, 28, 50],
             _ => todo!(),
         };

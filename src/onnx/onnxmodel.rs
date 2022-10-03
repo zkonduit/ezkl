@@ -31,7 +31,7 @@ pub enum OpKind {
     ReLU64,
     ReLU128,
     Sigmoid,
-    Source,
+    //    Source,
     Const,
     Input,
     Unknown,
@@ -46,7 +46,7 @@ pub enum OnnxNodeConfig<F: FieldExt + TensorType> {
     ReLU128(EltwiseConfig<F, ReLu128<F>>),
     Sigmoid(EltwiseConfig<F, Sigmoid<F, 128, 128>>),
     Const,
-    Source,
+    //    Source,
     Input,
     NotConfigured,
 }
@@ -71,7 +71,8 @@ pub struct OnnxNode {
     node: Node<InferenceFact, Box<dyn InferenceOp>>,
     pub opkind: OpKind,
     output_max: f32,
-    qscale: usize,
+    in_scale: i32,
+    out_scale: i32,
     constant_value: Option<Tensor<i32>>, // float value * 2^qscale if applicable.
     input_shapes: Option<Vec<Option<Vec<usize>>>>,
     output_shapes: Option<Vec<Option<Vec<usize>>>>,
@@ -90,7 +91,6 @@ impl OnnxNode {
             "Sigmoid" => OpKind::Sigmoid,
             "Const" => OpKind::Const,
             "Source" => OpKind::Input,
-            //            "input" => OpKind::Input,
             _ => OpKind::Unknown,
         };
         let output_shapes = match node_output_shapes(&node) {
@@ -100,7 +100,8 @@ impl OnnxNode {
 
         // Set some default values, then figure out more specific values if possible based on the opkind.
         let mut constant_value = None;
-        let mut qscale = 0usize;
+        let mut in_scale = 0i32;
+        let mut out_scale = 0i32;
         let mut in_dims = None;
         let mut out_dims = None;
         let mut output_max = f32::INFINITY;
@@ -115,9 +116,10 @@ impl OnnxNode {
                     .to_array_view::<f32>()
                     .unwrap()
                     .to_owned();
-                let t = ndarray_to_quantized(nav, 0f32, 128f32).unwrap();
+                out_scale = 7;
+                let t = ndarray_to_quantized(nav, 0f32, (i32::pow(2, out_scale as u32) as f32))
+                    .unwrap();
                 out_dims = Some(t.dims().clone().to_vec());
-                qscale = 8;
                 output_max = t.iter().map(|x| x.abs()).max().unwrap() as f32;
                 constant_value = Some(t);
             }
@@ -126,7 +128,8 @@ impl OnnxNode {
                     out_dims = Some(v.to_vec());
                 }
                 output_max = 256.0;
-                qscale = 8;
+                in_scale = 7;
+                out_scale = 7;
             }
             _ => {}
         };
@@ -135,7 +138,8 @@ impl OnnxNode {
             node,
             opkind,
             output_max,
-            qscale,
+            in_scale,
+            out_scale,
             constant_value,
             input_shapes: None,
             output_shapes,
@@ -346,11 +350,11 @@ impl OnnxModel {
                 // Currently this is handled in the consuming node(s), but will be moved here.
                 Ok(OnnxNodeConfig::Const)
             }
-            OpKind::Source => {
-                // This is the input to the model (e.g. the image).
-                // Currently this is handled in the consuming node(s), but will be moved here.
-                Ok(OnnxNodeConfig::Source)
-            }
+            // OpKind::Source => {
+            //     // This is the input to the model (e.g. the image).
+            //     // Currently this is handled in the consuming node(s), but will be moved here.
+            //     Ok(OnnxNodeConfig::Source)
+            // }
             OpKind::Input => {
                 // This is the input to the model (e.g. the image).
                 // Currently this is handled in the consuming node(s), but will be moved here.
@@ -493,7 +497,8 @@ impl OnnxModel {
     pub fn forward_shape_and_quantize_pass(&mut self) -> Result<()> {
         let order = self.eval_order()?;
         let mut last_output: Vec<usize> = Vec::new();
-        let mut qscale = 0usize;
+        let mut in_scale = 0;
+        let mut out_scale = 0;
         for node_idx in order {
             // mutate a copy of the node, referring to other nodes in the vec, then swap modified node in at the end
             let mut this_node = self.onnx_nodes[node_idx].clone();
@@ -516,8 +521,10 @@ impl OnnxModel {
 
                     this_node.output_max =
                         input_node.output_max * weight_node.output_max * (in_dim as f32);
-
-                    this_node.qscale = weight_node.qscale + input_node.qscale;
+                    assert_eq!(input_node.out_scale, weight_node.out_scale);
+                    assert_eq!(input_node.out_scale, bias_node.out_scale);
+                    this_node.in_scale = input_node.out_scale;
+                    this_node.out_scale = weight_node.out_scale + input_node.out_scale;
                 }
                 OpKind::ReLU => {
                     let input_outlets = &this_node.node.inputs;
@@ -526,6 +533,7 @@ impl OnnxModel {
                     let input_node = &self.onnx_nodes[input_node_ix];
                     this_node.in_dims = input_node.out_dims.clone();
                     this_node.out_dims = input_node.out_dims.clone();
+
                     if this_node.input_shapes == None {
                         this_node.input_shapes = Some(vec![this_node.in_dims.clone()]);
                     }
@@ -533,16 +541,23 @@ impl OnnxModel {
                         this_node.output_shapes = Some(vec![this_node.out_dims.clone()]);
                     }
                     this_node.output_max = input_node.output_max;
+                    this_node.in_scale = input_node.out_scale;
 
-                    if this_node.output_max > 65536f32 {
+                    if this_node.in_scale == 14 {
                         this_node.opkind = OpKind::ReLU128;
                         this_node.output_max = input_node.output_max / 128f32;
-                        //                        this_node.qscale -= 7;
-                    } else if this_node.output_max > 16384f32 {
-                        this_node.opkind = OpKind::ReLU64;
-                        this_node.output_max = input_node.output_max / 64f32;
-                        //                        this_node.qscale -= 6;
+                        this_node.out_scale = this_node.in_scale - 7;
                     }
+
+                    // if this_node.output_max > 65536f32 {
+                    //     this_node.opkind = OpKind::ReLU128;
+                    //     this_node.output_max = input_node.output_max / 128f32;
+                    //     this_node.out_scale = input_node.out_scale - 7;
+                    // } else if this_node.output_max > 16384f32 {
+                    //       this_node.opkind = OpKind::ReLU64;
+                    //       this_node.output_max = input_node.output_max / 64f32;
+                    //       this_node.out_scale = input_node.out_scale - 6;
+                    // }
                 }
                 _ => {}
             };
