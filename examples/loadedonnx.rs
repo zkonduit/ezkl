@@ -23,7 +23,7 @@ mod loadonnx_example {
 
         println!("public input (network output) {:?}", public_input);
 
-        let circuit = OnnxCircuit::<F, 14> {
+        let circuit = OnnxCircuit::<F> {
             input,
             _marker: PhantomData,
         };

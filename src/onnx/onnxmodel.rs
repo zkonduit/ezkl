@@ -4,7 +4,7 @@ use crate::nn::eltwise::{EltwiseConfig, ReLu, ReLu128, ReLu64, Sigmoid};
 use crate::nn::LayerConfig;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
@@ -31,7 +31,6 @@ pub enum OpKind {
     ReLU64,
     ReLU128,
     Sigmoid,
-    //    Source,
     Const,
     Input,
     Unknown,
@@ -46,7 +45,6 @@ pub enum OnnxNodeConfig<F: FieldExt + TensorType> {
     ReLU128(EltwiseConfig<F, ReLu128<F>>),
     Sigmoid(EltwiseConfig<F, Sigmoid<F, 128, 128>>),
     Const,
-    //    Source,
     Input,
     NotConfigured,
 }
@@ -61,7 +59,7 @@ pub struct OnnxModelConfig<F: FieldExt + TensorType> {
 /// node is the raw Tract Node data structure.
 /// opkind: OpKind is our op enum.
 /// output_max is an inferred maximum value that can appear in the output tensor given previous quantization choices.
-/// qscale: usize  Scale begins at 1.0. When a weight or activation is multiplied by a, scale*=a. Except that scale is always a power of two, and this is that power; multiplication is usually multiplication, while division typically happens in a lookup.  Scale is a runtime type, in that tensors of differing scales should not be combined.
+/// in_scale and out_scale track the denominator in the fixed point representation. Tensors of differing scales should not be combined.
 /// input_shapes and output_shapes  are Option<Vec<Option<Vec<usize>>>>.  These are the inferred shapes for input and output tensors. The first coordinate is the Onnx "slot" and the second is the tensor.  The input_shape includes all the parameters, not just the activations that will flow into the node.
 /// None indicates unknown, so input_shapes = Some(vec![None, Some(vec![3,4])]) indicates that we
 /// know something, there are two slots, and the first tensor has unknown shape, while the second has shape [3,4].
@@ -102,7 +100,7 @@ impl OnnxNode {
         let mut constant_value = None;
         let mut in_scale = 0i32;
         let mut out_scale = 0i32;
-        let mut in_dims = None;
+        let in_dims = None;
         let mut out_dims = None;
         let mut output_max = f32::INFINITY;
 
@@ -271,7 +269,7 @@ impl OnnxModel {
                 let (_input_node_ix, _input_node_slot) =
                     (input_outlets[0].node, input_outlets[0].slot);
 
-                let (weight_node_ix, weight_node_slot) =
+                let (weight_node_ix, _weight_node_slot) =
                     (input_outlets[1].node, input_outlets[1].slot);
                 let (_bias_node_ix, _bias_node_slot) =
                     (input_outlets[2].node, input_outlets[2].slot);
@@ -350,11 +348,6 @@ impl OnnxModel {
                 // Currently this is handled in the consuming node(s), but will be moved here.
                 Ok(OnnxNodeConfig::Const)
             }
-            // OpKind::Source => {
-            //     // This is the input to the model (e.g. the image).
-            //     // Currently this is handled in the consuming node(s), but will be moved here.
-            //     Ok(OnnxNodeConfig::Source)
-            // }
             OpKind::Input => {
                 // This is the input to the model (e.g. the image).
                 // Currently this is handled in the consuming node(s), but will be moved here.
@@ -428,37 +421,27 @@ impl OnnxModel {
                 let (_input_node_ix, _input_node_slot) =
                     (input_outlets[0].node, input_outlets[0].slot);
                 // Properly we should check that weight and bias are Const ops
-                let (weight_node_ix, weight_node_slot) =
+                let (weight_node_ix, _weight_node_slot) =
                     (input_outlets[1].node, input_outlets[1].slot);
-                let (bias_node_ix, bias_node_slot) = (input_outlets[2].node, input_outlets[2].slot);
+                let (bias_node_ix, _bias_node_slot) =
+                    (input_outlets[2].node, input_outlets[2].slot);
                 let weight_node = &self.onnx_nodes[weight_node_ix];
                 let weight_value = weight_node
                     .constant_value
                     .clone()
                     .context("Tensor<i32> should already be loaded")?;
 
-                // let in_dim = weight_value.dims()[1];
-                // let out_dim = weight_value.dims()[0];
                 let weight_vt =
                     ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(weight_value));
-                //                let weight_vt = ValTensor::from(weight_value);
+
                 let bias_node = &self.onnx_nodes[bias_node_ix];
                 let bias_value = bias_node
                     .constant_value
                     .clone()
                     .context("Tensor<i32> should already be loaded")?;
-                //                let bias_node = OnnxNode::new(self.nodes()[bias_node_ix].clone());
-                //                let bias_value = bias_node.output_tensor_by_slot(bias_node_slot, 0f32, 256f32);
                 let bias_vt =
                     ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(bias_value));
-                // println!(
-                //     "input {:?} W {:?} b {:?}",
-                //     input.dims(),
-                //     weight_vt.dims(),
-                //     bias_vt.dims()
-                // );
                 let out = ac.layout(layouter, &[weight_vt, bias_vt, input]);
-                //                println!("Node {} out {:?}", node_idx, out);
                 Some(out)
             }
             (OpKind::Convolution, OnnxNodeConfig::Conv(cc)) => {
@@ -496,9 +479,6 @@ impl OnnxModel {
     /// Mutates the nodes.
     pub fn forward_shape_and_quantize_pass(&mut self) -> Result<()> {
         let order = self.eval_order()?;
-        let mut last_output: Vec<usize> = Vec::new();
-        let mut in_scale = 0;
-        let mut out_scale = 0;
         for node_idx in order {
             // mutate a copy of the node, referring to other nodes in the vec, then swap modified node in at the end
             let mut this_node = self.onnx_nodes[node_idx].clone();
@@ -507,7 +487,7 @@ impl OnnxModel {
                     let input_outlets = &this_node.node.inputs;
                     let (input_node_ix, _input_node_slot) =
                         (input_outlets[0].node, input_outlets[0].slot);
-                    let (weight_node_ix, weight_node_slot) =
+                    let (weight_node_ix, _weight_node_slot) =
                         (input_outlets[1].node, input_outlets[1].slot);
                     let (bias_node_ix, _bias_node_slot) =
                         (input_outlets[2].node, input_outlets[2].slot);
@@ -543,6 +523,7 @@ impl OnnxModel {
                     this_node.output_max = input_node.output_max;
                     this_node.in_scale = input_node.out_scale;
 
+                    // We can also consider adjusting the scale of all inputs and the output in a more custom way.
                     if this_node.in_scale == 14 {
                         this_node.opkind = OpKind::ReLU128;
                         this_node.output_max = input_node.output_max / 128f32;
@@ -561,7 +542,7 @@ impl OnnxModel {
                 }
                 _ => {}
             };
-            println!("mod{:?}", this_node);
+            //            println!("mod{:?}", this_node);
             self.onnx_nodes[node_idx] = this_node;
         }
 

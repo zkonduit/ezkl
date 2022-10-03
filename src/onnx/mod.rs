@@ -16,12 +16,12 @@ pub mod onnxmodel;
 pub use onnxmodel::*;
 
 #[derive(Clone, Debug)]
-pub struct OnnxCircuit<F: FieldExt, const BITS: usize> {
+pub struct OnnxCircuit<F: FieldExt> {
     pub input: Tensor<i32>,
     pub _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType, const BITS: usize> Circuit<F> for OnnxCircuit<F, BITS> {
+impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
     type Config = OnnxModelConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
