@@ -8,12 +8,11 @@ use anyhow::{Context, Result};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
-    plonk::{Column, ConstraintSystem, Instance},
+    plonk::{Column, ConstraintSystem, Fixed, Instance},
 };
 use std::env;
 use std::path::Path;
 use tract_onnx;
-
 use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node, OutletId};
 use tract_onnx::tract_hir::{infer::Factoid, internal::InferenceOp};
 
@@ -85,6 +84,7 @@ impl OnnxNode {
         let opkind = match node.op().name().as_ref() {
             "Gemm" => OpKind::Affine,
             "Conv" => OpKind::Convolution,
+            "ConvHir" => OpKind::Convolution,
             "Clip" => OpKind::ReLU,
             "Sigmoid" => OpKind::Sigmoid,
             "Const" => OpKind::Const,
@@ -270,7 +270,8 @@ impl OnnxModel {
         fixeds: VarTensor, // Should use fixeds, but currently buggy
     ) -> Result<OnnxNodeConfig<F>> {
         let node = &self.onnx_nodes[node_idx];
-        //        println!("Configure Node {}, a {:?}", node_idx, node.opkind());
+        
+        println!("Configuring Node {}, a {:?}", node_idx, node.opkind);
 
         // Figure out, find, and load the params
         match node.opkind {
