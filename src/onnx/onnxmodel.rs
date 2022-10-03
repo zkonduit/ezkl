@@ -437,7 +437,25 @@ impl OnnxModel {
                 Some(out)
             }
             (OpKind::Convolution, OnnxNodeConfig::Conv(cc)) => {
-                todo!()
+                let inputs = self.extract_node_inputs(node);
+                let (weight_node, bias_node) = (inputs[1], inputs[2]);
+
+                let weight_value = weight_node
+                    .constant_value
+                    .clone()
+                    .context("Tensor<i32> should already be loaded")?;
+                let weight_vt =
+                    ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(weight_value));
+
+                let bias_value = bias_node
+                    .constant_value
+                    .clone()
+                    .context("Tensor<i32> should already be loaded")?;
+                let bias_vt =
+                    ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(bias_value));
+
+                let out = cc.layout(layouter, &[weight_vt, bias_vt, input]);
+                Some(out)
             }
             (OpKind::ReLU, OnnxNodeConfig::ReLU(rc)) => {
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
