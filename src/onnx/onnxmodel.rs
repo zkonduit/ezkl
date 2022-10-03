@@ -244,20 +244,20 @@ impl OnnxModel {
         })
     }
 
-    fn extract_node_parameters(&self, node: &OnnxNode) -> (&OnnxNode, &OnnxNode) {
-        // The parameters are assumed to be fixed kernel and bias. This node should have three inputs in total:
+    fn extract_node_inputs(&self, node: &OnnxNode) -> Vec<&OnnxNode> {
+        // The parameters are assumed to be fixed kernel and bias. Affine and Conv nodes should have three inputs in total:
         // two inputs which are Const(..) that have the f32s, and one variable input which are the activations.
         // The first input is the activations, second is the weight matrix, and the third the bias.
         // Consider using shape information only here, rather than loading the param tensor (although loading
         // the tensor guarantees that assign will work if there are errors or ambiguities in the shape
         // data).
+        // Other layers such as non-linearities only have a single input (activations).
         let input_outlets = &node.node.inputs;
-        // Index 0 is the input node so we start at index 1.
-        let (weight_node_ix, _weight_node_slot) = (input_outlets[1].node, input_outlets[1].slot);
-        let (bias_node_ix, _bias_node_slot) = (input_outlets[2].node, input_outlets[2].slot);
-        let weight_node = &self.onnx_nodes[weight_node_ix];
-        let bias_node = &self.onnx_nodes[bias_node_ix];
-        (weight_node, bias_node)
+        let mut inputs = Vec::<&OnnxNode>::new();
+        for i in input_outlets.iter() {
+            inputs.push(&self.onnx_nodes[i.node]);
+        }
+        inputs
     }
 
     /// Infer the params, input, and output, and configure against the provided meta and Advice and Fixed columns.
@@ -275,7 +275,7 @@ impl OnnxModel {
         // Figure out, find, and load the params
         match node.opkind {
             OpKind::Affine => {
-                let (weight_node, _) = self.extract_node_parameters(node);
+                let weight_node = self.extract_node_inputs(node)[1];
                 let weight_value = weight_node
                     .constant_value
                     .clone()
@@ -416,7 +416,8 @@ impl OnnxModel {
         // The node kind and the config should be the same.
         Ok(match (node.opkind, config.clone()) {
             (OpKind::Affine, OnnxNodeConfig::Affine(ac)) => {
-                let (weight_node, bias_node) = self.extract_node_parameters(node);
+                let inputs = self.extract_node_inputs(node);
+                let (weight_node, bias_node) = (inputs[1], inputs[2]);
 
                 let weight_value = weight_node
                     .constant_value
@@ -475,16 +476,9 @@ impl OnnxModel {
             let mut this_node = self.onnx_nodes[node_idx].clone();
             match this_node.opkind {
                 OpKind::Affine => {
-                    let input_outlets = &this_node.node.inputs;
-                    let (input_node_ix, _input_node_slot) =
-                        (input_outlets[0].node, input_outlets[0].slot);
-                    let (weight_node_ix, _weight_node_slot) =
-                        (input_outlets[1].node, input_outlets[1].slot);
-                    let (bias_node_ix, _bias_node_slot) =
-                        (input_outlets[2].node, input_outlets[2].slot);
-                    let input_node = &self.onnx_nodes[input_node_ix];
-                    let weight_node = &self.onnx_nodes[weight_node_ix];
-                    let bias_node = &self.onnx_nodes[bias_node_ix];
+                    let inputs = self.extract_node_inputs(&this_node);
+                    let (input_node, weight_node, bias_node) = (inputs[0], inputs[1], inputs[2]);
+
                     let in_dim = weight_node.out_dims.as_ref().unwrap()[1];
                     let out_dim = weight_node.out_dims.as_ref().unwrap()[0];
                     this_node.in_dims = Some(vec![in_dim]);
@@ -498,10 +492,7 @@ impl OnnxModel {
                     this_node.out_scale = weight_node.out_scale + input_node.out_scale;
                 }
                 OpKind::ReLU => {
-                    let input_outlets = &this_node.node.inputs;
-                    let (input_node_ix, _input_node_slot) =
-                        (input_outlets[0].node, input_outlets[0].slot);
-                    let input_node = &self.onnx_nodes[input_node_ix];
+                    let input_node = self.extract_node_inputs(&this_node)[0];
                     this_node.in_dims = input_node.out_dims.clone();
                     this_node.out_dims = input_node.out_dims.clone();
 
