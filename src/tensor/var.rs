@@ -74,11 +74,11 @@ impl VarTensor {
     pub fn reshape(&mut self, new_dims: &[usize]) {
         match self {
             VarTensor::Advice { inner: _, dims: d } => {
-                assert!(d.iter().product::<usize>() == new_dims.iter().product());
+                assert_eq!(d.iter().product::<usize>(), new_dims.iter().product::<usize>());
                 *d = new_dims.to_vec();
             }
             VarTensor::Fixed { inner: _, dims: d } => {
-                assert!(d.iter().product::<usize>() == new_dims.iter().product());
+                assert_eq!(d.iter().product::<usize>(),new_dims.iter().product::<usize>());
                 *d = new_dims.to_vec();
             }
         }

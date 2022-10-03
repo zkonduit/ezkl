@@ -1,3 +1,4 @@
+use super::utilities::{ndarray_to_quantized, node_output_shapes};
 use crate::nn::affine::Affine1dConfig;
 use crate::nn::cnvrl::ConvConfig;
 use crate::nn::eltwise::{EltwiseConfig, ReLu, ReLu128, ReLu64, Sigmoid};
@@ -8,16 +9,20 @@ use anyhow::{Context, Result};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
-    plonk::{Column, ConstraintSystem, Fixed, Instance},
+    plonk::{Column, ConstraintSystem, Instance},
 };
 use std::env;
 use std::path::Path;
 use tract_onnx;
 use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node, OutletId};
-use tract_onnx::tract_hir::{infer::Factoid, internal::InferenceOp};
-
-use super::utilities::{ndarray_to_quantized, node_output_shapes};
-
+use tract_onnx::tract_hir::{
+    infer::Factoid,
+    internal::InferenceOp,
+    ops::cnn::Conv,
+    ops::expandable::Expansion,
+    ops::nn::DataFormat,
+    tract_core::ops::cnn::{conv::KernelFormat, PaddingSpec},
+};
 // Initially, some of these OpKinds will be folded into others (for example, Const nodes that
 // contain parameters will be handled at the consuming node.
 // Eventually, though, we probably want to keep them and treat them directly (layouting and configuring
@@ -59,9 +64,9 @@ pub struct OnnxModelConfig<F: FieldExt + TensorType> {
 /// opkind: OpKind is our op enum.
 /// output_max is an inferred maximum value that can appear in the output tensor given previous quantization choices.
 /// in_scale and out_scale track the denominator in the fixed point representation. Tensors of differing scales should not be combined.
-/// input_shapes and output_shapes  are Option<Vec<Option<Vec<usize>>>>.  These are the inferred shapes for input and output tensors. The first coordinate is the Onnx "slot" and the second is the tensor.  The input_shape includes all the parameters, not just the activations that will flow into the node.
-/// None indicates unknown, so input_shapes = Some(vec![None, Some(vec![3,4])]) indicates that we
-/// know something, there are two slots, and the first tensor has unknown shape, while the second has shape [3,4].
+/// input_shapes and output_shapes are of type `Option<Vec<Option<Vec<usize>>>>`.  These are the inferred shapes for input and output tensors. The first coordinate is the Onnx "slot" and the second is the tensor.  The input_shape includes all the parameters, not just the activations that will flow into the node.
+/// None indicates unknown, so `input_shapes = Some(vec![None, Some(vec![3,4])])` indicates that we
+/// know something, there are two slots, and the first tensor has unknown shape, while the second has shape `[3,4]`.
 /// in_dims and out_dims are the shape of the activations only which enter and leave the node.
 #[derive(Clone, Debug)]
 pub struct OnnxNode {
@@ -270,8 +275,12 @@ impl OnnxModel {
         fixeds: VarTensor, // Should use fixeds, but currently buggy
     ) -> Result<OnnxNodeConfig<F>> {
         let node = &self.onnx_nodes[node_idx];
-        
-        println!("Configuring Node {}, a {:?}", node_idx, node.opkind);
+
+        println!(
+            "Configuring Node {}, a {:?}",
+            node_idx,
+            node.node.op().name()
+        );
 
         // Figure out, find, and load the params
         match node.opkind {
@@ -306,6 +315,30 @@ impl OnnxModel {
                 Ok(OnnxNodeConfig::Affine(conf))
             }
             OpKind::Convolution => {
+                let inputs = self.extract_node_inputs(node);
+                let (input_node, weight_node, bias_node) = (inputs[0], inputs[1], inputs[2]);
+
+                let op = Box::new(node.node.op());
+
+                let conv_node: &Conv = match op.downcast_ref::<Box<dyn Expansion>>() {
+                    Some(b) => match (*b).as_any().downcast_ref() {
+                        Some(b) => b,
+                        None => panic!("not a conv!"),
+                    },
+                    None => panic!("op isn't an Expansion!"),
+                };
+
+                // only support pytorch type formatting for now
+                assert_eq!(conv_node.data_format, DataFormat::NCHW);
+                assert_eq!(conv_node.kernel_fmt, KernelFormat::OIHW);
+
+                let stride = conv_node.strides.clone().unwrap();
+                let padding = match &conv_node.padding {
+                    PaddingSpec::Explicit(p, _, _) => p,
+                    _ => panic!("padding is not explicitly specified"),
+                };
+                // let padding = conv_node.padding.clone().unwrap();
+
                 todo!()
             }
             OpKind::ReLU => {
