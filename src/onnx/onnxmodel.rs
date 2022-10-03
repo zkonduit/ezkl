@@ -244,6 +244,22 @@ impl OnnxModel {
         })
     }
 
+    fn extract_node_parameters(&self, node: &OnnxNode) -> (&OnnxNode, &OnnxNode) {
+        // The parameters are assumed to be fixed kernel and bias. This node should have three inputs in total:
+        // two inputs which are Const(..) that have the f32s, and one variable input which are the activations.
+        // The first input is the activations, second is the weight matrix, and the third the bias.
+        // Consider using shape information only here, rather than loading the param tensor (although loading
+        // the tensor guarantees that assign will work if there are errors or ambiguities in the shape
+        // data).
+        let input_outlets = &node.node.inputs;
+        // Index 0 is the input node so we start at index 1.
+        let (weight_node_ix, _weight_node_slot) = (input_outlets[1].node, input_outlets[1].slot);
+        let (bias_node_ix, _bias_node_slot) = (input_outlets[2].node, input_outlets[2].slot);
+        let weight_node = &self.onnx_nodes[weight_node_ix];
+        let bias_node = &self.onnx_nodes[bias_node_ix];
+        (weight_node, bias_node)
+    }
+
     /// Infer the params, input, and output, and configure against the provided meta and Advice and Fixed columns.
     /// Note that we require the context of the Graph to complete this task.
     fn configure_node<F: FieldExt + TensorType>(
@@ -259,21 +275,7 @@ impl OnnxModel {
         // Figure out, find, and load the params
         match node.opkind {
             OpKind::Affine => {
-                // The parameters are assumed to be fixed kernel and bias. This node should have three inputs in total:
-                // two inputs which are Const(..) that have the f32s, and one variable input which are the activations.
-                // The first input is the activations, second is the weight matrix, and the third the bias.
-                // Consider using shape information only here, rather than loading the param tensor (although loading
-                // the tensor guarantees that assign will work if there are errors or ambiguities in the shape
-                // data).
-                let input_outlets = &node.node.inputs;
-                let (_input_node_ix, _input_node_slot) =
-                    (input_outlets[0].node, input_outlets[0].slot);
-
-                let (weight_node_ix, _weight_node_slot) =
-                    (input_outlets[1].node, input_outlets[1].slot);
-                let (_bias_node_ix, _bias_node_slot) =
-                    (input_outlets[2].node, input_outlets[2].slot);
-                let weight_node = &self.onnx_nodes[weight_node_ix];
+                let (weight_node, _) = self.extract_node_parameters(node);
                 let weight_value = weight_node
                     .constant_value
                     .clone()
@@ -301,6 +303,9 @@ impl OnnxModel {
                 );
                 self.last_shape = Vec::from([out_dim]);
                 Ok(OnnxNodeConfig::Affine(conf))
+            }
+            OpKind::Convolution => {
+                todo!()
             }
             OpKind::ReLU => {
                 let length = self.last_shape.clone().into_iter().product();
@@ -403,7 +408,6 @@ impl OnnxModel {
         config: OnnxNodeConfig<F>,
     ) -> Result<Option<ValTensor<F>>> {
         let node = &self.onnx_nodes[node_idx];
-        let input_outlets = &node.node.inputs;
 
         //        println!("Layout Node {}, {:?}", node_idx, node.opkind());
         //        let nice: Tensor<i32> = input.into();
@@ -412,35 +416,22 @@ impl OnnxModel {
         // The node kind and the config should be the same.
         Ok(match (node.opkind, config.clone()) {
             (OpKind::Affine, OnnxNodeConfig::Affine(ac)) => {
-                // This node should have three inputs in total:
-                // two inputs which are Const(..) that have the f32s,
-                // and one variable input which are the activations.
-                // The first input is the activations, second is the weight matrix, and the third the bias.
-                // Determine the input, and recursively assign the input node.
+                let (weight_node, bias_node) = self.extract_node_parameters(node);
 
-                let (_input_node_ix, _input_node_slot) =
-                    (input_outlets[0].node, input_outlets[0].slot);
-                // Properly we should check that weight and bias are Const ops
-                let (weight_node_ix, _weight_node_slot) =
-                    (input_outlets[1].node, input_outlets[1].slot);
-                let (bias_node_ix, _bias_node_slot) =
-                    (input_outlets[2].node, input_outlets[2].slot);
-                let weight_node = &self.onnx_nodes[weight_node_ix];
                 let weight_value = weight_node
                     .constant_value
                     .clone()
                     .context("Tensor<i32> should already be loaded")?;
-
                 let weight_vt =
                     ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(weight_value));
 
-                let bias_node = &self.onnx_nodes[bias_node_ix];
                 let bias_value = bias_node
                     .constant_value
                     .clone()
                     .context("Tensor<i32> should already be loaded")?;
                 let bias_vt =
                     ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(bias_value));
+
                 let out = ac.layout(layouter, &[weight_vt, bias_vt, input]);
                 Some(out)
             }
