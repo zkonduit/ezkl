@@ -285,30 +285,18 @@ impl OnnxModel {
         // Figure out, find, and load the params
         match node.opkind {
             OpKind::Affine => {
-                let weight_node = self.extract_node_inputs(node)[1];
-                let weight_value = weight_node
-                    .constant_value
-                    .clone()
-                    .context("Tensor<i32> should already be loaded")?;
-                // let weight_value =
-                //     weight_node.output_tensor_by_slot(weight_node_slot, 0f32, 128f32);
+                let in_dim = node.clone().in_dims.unwrap()[0];
+                let out_dim = node.clone().out_dims.unwrap()[0];
 
-                let in_dim = weight_value.dims()[1];
-                let out_dim = weight_value.dims()[0];
-                // If we don't want to resue the columns:
-                // let mut weight: Tensor<Column<Fixed>> =
-                //     (0..in_dim * out_dim).map(|_| meta.fixed_column()).into();
-                // weight.reshape(&weight_value.dims());
-                // let mut bias: Tensor<Column<Fixed>> =
-                //     (0..out_dim).map(|_| meta.fixed_column()).into();
-                // bias.reshape?
-                let weight_fixeds = advices.get_slice(&[0..out_dim], &[out_dim, in_dim]); //&[0..out_dim], &[out_dim, in_dim]
-                let bias_fixeds = advices.get_slice(&[out_dim + 1..out_dim + 2], &[out_dim]);
-                let input = advices.get_slice(&[out_dim + 2..out_dim + 3], &[in_dim]);
-                let output = advices.get_slice(&[out_dim + 3..out_dim + 4], &[out_dim]);
                 let conf = Affine1dConfig::configure(
                     meta,
-                    &[weight_fixeds, bias_fixeds, input, output],
+                    // weights, bias, input, output
+                    &[
+                        advices.get_slice(&[0..out_dim], &[out_dim, in_dim]),
+                        advices.get_slice(&[out_dim + 1..out_dim + 2], &[out_dim]),
+                        advices.get_slice(&[out_dim + 2..out_dim + 3], &[in_dim]),
+                        advices.get_slice(&[out_dim + 3..out_dim + 4], &[out_dim]),
+                    ],
                     None,
                 );
                 self.last_shape = Vec::from([out_dim]);
@@ -317,6 +305,7 @@ impl OnnxModel {
             OpKind::Convolution => {
                 let inputs = self.extract_node_inputs(node);
                 let (input_node, weight_node, bias_node) = (inputs[0], inputs[1], inputs[2]);
+
 
                 let op = Box::new(node.node.op());
 
@@ -337,7 +326,7 @@ impl OnnxModel {
                     PaddingSpec::Explicit(p, _, _) => p,
                     _ => panic!("padding is not explicitly specified"),
                 };
-                // let padding = conv_node.padding.clone().unwrap();
+
 
                 todo!()
             }
