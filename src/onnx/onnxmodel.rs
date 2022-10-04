@@ -323,8 +323,6 @@ impl OnnxModel {
             .map(|n| OnnxNode::new(n.clone()))
             .collect();
 
-        debug!("{}", Table::new(onnx_nodes.clone()).to_string());
-
         let mut om = OnnxModel {
             model,
             onnx_nodes,
@@ -332,6 +330,9 @@ impl OnnxModel {
             last_shape: Vec::from([0]),
         };
         om.forward_shape_and_quantize_pass().unwrap();
+
+        debug!("{}", Table::new(om.onnx_nodes.clone()).to_string());
+
         om
     }
     pub fn from_arg() -> Self {
@@ -802,11 +803,7 @@ impl OnnxModel {
     }
 
     pub fn max_node_advices(&self) -> usize {
-        self.onnx_nodes
-            .iter()
-            .map(|n| n.min_cols)
-            .max()
-            .unwrap()
+        self.onnx_nodes.iter().map(|n| n.min_cols).max().unwrap()
     }
 
     pub fn max_advices_width(&self) -> Result<usize> {
