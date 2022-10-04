@@ -40,7 +40,7 @@ For examples of such files see `examples/onnx_models`.
 
 To run a simple example using the cli:
 ```bash
-cargo run --bin ezkl -- -D ./examples/onnx_models/ff_input.json -M ./examples/onnx_models/ff.onnx
+cargo run --release --bin ezkl -- -D ./examples/onnx_models/ff_input.json -M ./examples/onnx_models/ff.onnx
 ```
 
 
@@ -57,10 +57,6 @@ cargo run --release --example mlp_4d
 
 ### Running onnx example
 
-To run an example which loads the graph and parameters from an ONNX model file, enable the `onnx` feature:
-```bash
-cargo run --example loadedonnx examples/onnx_models/three.onnx --features onnx
-```
 
 To run the example which loads only the parameters from an ONNX model file, enable the `onnx` build feature:
 
