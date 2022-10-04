@@ -492,7 +492,6 @@ impl OnnxModel {
                 };
                 let conf = ConvConfig::<F>::configure(meta, variables, Some(&params));
 
-
                 Ok(OnnxNodeConfig::Conv(conf))
             }
             OpKind::ReLU => {
@@ -785,7 +784,8 @@ impl OnnxModel {
                     //       this_node.output_max = input_node.output_max / 64f32;
                     //       this_node.out_scale = input_node.out_scale - 6;
                     // }
-                    this_node.min_cols = max(1, this_node.in_dims.as_ref().unwrap()[0]);
+                    this_node.min_cols =
+                        max(1, this_node.in_dims.as_ref().unwrap().iter().product());
                 }
                 _ => {}
             };
