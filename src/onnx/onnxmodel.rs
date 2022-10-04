@@ -14,8 +14,10 @@ use halo2_proofs::{
 };
 use log::{debug, error, info, warn};
 use std::cmp::max;
+use std::fmt;
 use std::io::{stdin, stdout, Write};
 use std::path::Path;
+use tabled::{Table, Tabled};
 use tract_onnx;
 use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node, OutletId};
 use tract_onnx::tract_hir::{
@@ -42,6 +44,22 @@ pub enum OpKind {
     Const,
     Input,
     Unknown,
+}
+
+impl fmt::Display for OpKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            OpKind::Affine => write!(f, "affine"),
+            OpKind::Convolution => write!(f, "conv"),
+            OpKind::ReLU => write!(f, "relu"),
+            OpKind::ReLU64 => write!(f, "relu64"),
+            OpKind::ReLU128 => write!(f, "relu128"),
+            OpKind::Sigmoid => write!(f, "sigmoid"),
+            OpKind::Const => write!(f, "const"),
+            OpKind::Input => write!(f, "input"),
+            OpKind::Unknown => write!(f, "?"),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -75,6 +93,40 @@ pub struct Cli {
     pub model: String,
 }
 
+fn display_option<T: fmt::Debug>(o: &Option<T>) -> String {
+    match o {
+        Some(s) => format!("{:?}", s),
+        None => format!(""),
+    }
+}
+
+fn display_tensor(o: &Option<Tensor<i32>>) -> String {
+    match o {
+        Some(s) => format!("[{:#?}...]", s[0]),
+        None => format!(""),
+    }
+}
+
+#[derive(Clone, Debug)]
+enum LayerParams {
+    Conv {
+        padding: (usize, usize),
+        stride: (usize, usize),
+    },
+    None,
+}
+
+impl fmt::Display for LayerParams {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            LayerParams::Conv { padding, stride } => {
+                write!(f, "padding: {:?}, stride: {:?}", padding, stride)
+            }
+            LayerParams::None => write!(f, ""),
+        }
+    }
+}
+
 /// Fields:
 /// node is the raw Tract Node data structure.
 /// opkind: OpKind is our op enum.
@@ -84,22 +136,27 @@ pub struct Cli {
 /// None indicates unknown, so `input_shapes = Some(vec![None, Some(vec![3,4])])` indicates that we
 /// know something, there are two slots, and the first tensor has unknown shape, while the second has shape `[3,4]`.
 /// in_dims and out_dims are the shape of the activations only which enter and leave the node.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Tabled)]
 pub struct OnnxNode {
     node: Node<InferenceFact, Box<dyn InferenceOp>>,
     pub opkind: OpKind,
     output_max: f32,
-    min_advice_cols: usize,
+    min_cols: usize,
     in_scale: i32,
     out_scale: i32,
-    constant_value: Option<Tensor<i32>>, // float value * 2^qscale if applicable.
+    #[tabled(display_with = "display_tensor")]
+    const_value: Option<Tensor<i32>>, // float value * 2^qscale if applicable.
+    #[tabled(display_with = "display_option")]
     input_shapes: Option<Vec<Option<Vec<usize>>>>,
+    #[tabled(display_with = "display_option")]
     output_shapes: Option<Vec<Option<Vec<usize>>>>,
     // Usually there is a simple in and out shape of the node as an operator.  For example, an Affine node has three input_shapes (one for the input, weight, and bias),
     // but in_dim is [in], out_dim is [out]
+    #[tabled(display_with = "display_option")]
     in_dims: Option<Vec<usize>>,
+    #[tabled(display_with = "display_option")]
     out_dims: Option<Vec<usize>>,
-    layer_hyperparams: Option<Vec<usize>>,
+    hyperparams: LayerParams,
 }
 
 impl OnnxNode {
@@ -123,14 +180,14 @@ impl OnnxNode {
         };
 
         // Set some default values, then figure out more specific values if possible based on the opkind.
-        let min_advice_cols = 1;
-        let mut constant_value = None;
+        let min_cols = 1;
+        let mut const_value = None;
         let mut in_scale = 0i32;
         let mut out_scale = 0i32;
         let in_dims = None;
         let mut out_dims = None;
         let mut output_max = f32::INFINITY;
-        let mut layer_hyperparams = None;
+        let mut hyperparams = LayerParams::None;
 
         match opkind {
             OpKind::Const => {
@@ -147,7 +204,7 @@ impl OnnxNode {
                     ndarray_to_quantized(nav, 0f32, i32::pow(2, out_scale as u32) as f32).unwrap();
                 out_dims = Some(t.dims().clone().to_vec());
                 output_max = t.iter().map(|x| x.abs()).max().unwrap() as f32;
-                constant_value = Some(t);
+                const_value = Some(t);
             }
             OpKind::Input => {
                 if let Some([Some(v)]) = output_shapes.as_deref() {
@@ -203,7 +260,10 @@ impl OnnxNode {
                     _ => panic!("padding is not explicitly specified"),
                 };
 
-                layer_hyperparams = Some(vec![padding[0], padding[1], stride[0], stride[1]]);
+                hyperparams = LayerParams::Conv {
+                    padding: (padding[0], padding[1]),
+                    stride: (stride[0], stride[1]),
+                };
             }
             _ => {}
         };
@@ -212,15 +272,15 @@ impl OnnxNode {
             node,
             opkind,
             output_max,
-            min_advice_cols,
+            min_cols,
             in_scale,
             out_scale,
-            constant_value,
+            const_value,
             input_shapes: None,
             output_shapes,
             in_dims,
             out_dims,
-            layer_hyperparams,
+            hyperparams,
         };
         on
     }
@@ -262,6 +322,9 @@ impl OnnxModel {
             .iter()
             .map(|n| OnnxNode::new(n.clone()))
             .collect();
+
+        debug!("{}", Table::new(onnx_nodes.clone()).to_string());
+
         let mut om = OnnxModel {
             model,
             onnx_nodes,
@@ -420,8 +483,16 @@ impl OnnxModel {
                     ),
                 ];
 
-                let lhp = node.layer_hyperparams.as_ref().unwrap();
-                let conf = ConvConfig::<F>::configure(meta, variables, Some(lhp.as_slice()));
+                let params = match node.hyperparams {
+                    LayerParams::Conv { padding, stride } => {
+                        [padding.0, padding.1, stride.0, stride.1]
+                    }
+                    _ => {
+                        error!("mismatch between hyperparam and layer types ");
+                        panic!()
+                    }
+                };
+                let conf = ConvConfig::<F>::configure(meta, variables, Some(&params));
 
                 self.last_shape = output_dims;
 
@@ -527,14 +598,14 @@ impl OnnxModel {
                 let (weight_node, bias_node) = (inputs[1], inputs[2]);
 
                 let weight_value = weight_node
-                    .constant_value
+                    .const_value
                     .clone()
                     .context("Tensor<i32> should already be loaded")?;
                 let weight_vt =
                     ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(weight_value));
 
                 let bias_value = bias_node
-                    .constant_value
+                    .const_value
                     .clone()
                     .context("Tensor<i32> should already be loaded")?;
                 let bias_vt =
@@ -548,14 +619,14 @@ impl OnnxModel {
                 let (weight_node, bias_node) = (inputs[1], inputs[2]);
 
                 let weight_value = weight_node
-                    .constant_value
+                    .const_value
                     .clone()
                     .context("Tensor<i32> should already be loaded")?;
                 let weight_vt =
                     ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(weight_value));
 
                 let bias_value = bias_node
-                    .constant_value
+                    .const_value
                     .clone()
                     .context("Tensor<i32> should already be loaded")?;
                 let bias_vt =
@@ -620,7 +691,7 @@ impl OnnxModel {
                     assert_eq!(input_node.out_scale, bias_node.out_scale);
                     this_node.in_scale = input_node.out_scale;
                     this_node.out_scale = weight_node.out_scale + input_node.out_scale;
-                    this_node.min_advice_cols = max(in_dim, out_dim);
+                    this_node.min_cols = max(in_dim, out_dim);
                 }
                 OpKind::Convolution => {
                     let inputs = self.extract_node_inputs(&this_node);
@@ -630,9 +701,15 @@ impl OnnxModel {
                     let (out_channels, in_channels, kernel_height, kernel_width) =
                         (oihw[0], oihw[1], oihw[2], oihw[3]);
 
-                    let lhp = this_node.layer_hyperparams.as_ref().unwrap();
-                    let (padding_h, padding_w, stride_h, stride_w) =
-                        (lhp[0], lhp[1], lhp[2], lhp[3]);
+                    let (padding_h, padding_w, stride_h, stride_w) = match this_node.hyperparams {
+                        LayerParams::Conv { padding, stride } => {
+                            (padding.0, padding.1, stride.0, stride.1)
+                        }
+                        _ => {
+                            error!("mismatch between hyperparam and layer types ");
+                            panic!()
+                        }
+                    };
 
                     this_node.in_dims = input_node.out_dims.clone();
 
@@ -651,7 +728,7 @@ impl OnnxModel {
                     assert_eq!(input_node.out_scale, bias_node.out_scale);
                     this_node.in_scale = input_node.out_scale;
                     this_node.out_scale = weight_node.out_scale + input_node.out_scale;
-                    this_node.min_advice_cols = max(
+                    this_node.min_cols = max(
                         1,
                         max(out_height * out_channels, input_height * in_channels),
                     );
@@ -687,7 +764,7 @@ impl OnnxModel {
                     //       this_node.output_max = input_node.output_max / 64f32;
                     //       this_node.out_scale = input_node.out_scale - 6;
                     // }
-                    this_node.min_advice_cols = max(1, this_node.in_dims.as_ref().unwrap()[0]);
+                    this_node.min_cols = max(1, this_node.in_dims.as_ref().unwrap()[0]);
                 }
                 _ => {}
             };
@@ -727,7 +804,7 @@ impl OnnxModel {
     pub fn max_node_advices(&self) -> usize {
         self.onnx_nodes
             .iter()
-            .map(|n| n.min_advice_cols)
+            .map(|n| n.min_cols)
             .max()
             .unwrap()
     }
