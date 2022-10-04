@@ -286,7 +286,10 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// assert_eq!(a.get_index(&[1, 0, 1]), 10);
     /// ```
     pub fn get_index(&self, indices: &[usize]) -> usize {
-        assert!(self.dims.len() == indices.len());
+        // if self.dims.len() != indices.len() {
+        //     println!("{:?} vs {:?}", self.dims, indices);
+        // }
+        assert_eq!(self.dims.len(), indices.len());
         let mut index = 0;
         let mut d = 1;
         for i in (0..indices.len()).rev() {
@@ -333,7 +336,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// assert_eq!(c, Tensor::from([1, 16].into_iter()))
     /// ```
     pub fn map<F: FnMut(T) -> G, G: TensorType>(&self, mut f: F) -> Tensor<G> {
-        Tensor::from(self.inner.iter().map(|e| f(e.clone())))
+        let mut t = Tensor::from(self.inner.iter().map(|e| f(e.clone())));
+        t.reshape(self.dims());
+        t
     }
 
     /// Maps a function to tensors and enumerates

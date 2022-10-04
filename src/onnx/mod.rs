@@ -1,60 +1,75 @@
-use crate::tensor::{Tensor, TensorError};
-use std::path::Path;
-use tract_onnx;
-use tract_onnx::prelude::{Framework, Graph, InferenceFact};
-use tract_onnx::tract_hir::infer::Factoid;
-use tract_onnx::tract_hir::internal::InferenceOp;
+use crate::tensor::TensorType;
+use crate::tensor::{Tensor, ValTensor, VarTensor};
+use anyhow::Result;
+use halo2_proofs::{
+    arithmetic::FieldExt,
+    circuit::{Layouter, SimpleFloorPlanner, Value},
+    plonk::{Circuit, ConstraintSystem, Error},
+};
+use std::marker::PhantomData;
+pub mod utilities;
+use std::cmp::max;
+pub use utilities::*;
+pub mod onnxmodel;
+pub use onnxmodel::*;
 
-pub struct OnnxModel {
-    model: Graph<InferenceFact, Box<dyn InferenceOp>>,
+#[derive(Clone, Debug)]
+pub struct OnnxCircuit<F: FieldExt> {
+    pub input: Tensor<i32>,
+    pub _marker: PhantomData<F>,
 }
 
-// Warning: currently ignores stride information
-pub fn ndarray_to_quantized(
-    arr: ndarray::ArrayBase<ndarray::OwnedRepr<f32>, ndarray::Dim<ndarray::IxDynImpl>>,
-    shift: f32,
-    scale: f32,
-) -> Result<Tensor<i32>, TensorError> {
-    let dims: Vec<usize> = arr.shape().to_vec();
-    let scaled = scale * arr + shift;
-    let inner: Vec<i32> = scaled
-        .into_raw_vec()
-        .iter()
-        .map(|float| unsafe { float.round().to_int_unchecked::<i32>() })
-        .collect();
-    Tensor::new(Some(&inner), &dims)
-}
+impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
+    type Config = OnnxModelConfig<F>;
+    type FloorPlanner = SimpleFloorPlanner;
 
-impl OnnxModel {
-    pub fn new(path: impl AsRef<Path>) -> Self {
-        let model = tract_onnx::onnx().model_for_path(path).unwrap();
-        OnnxModel { model }
+    fn without_witnesses(&self) -> Self {
+        self.clone()
     }
 
-    pub fn get_ndarray_by_node_name(
-        &self,
-        name: impl AsRef<str>,
-    ) -> ndarray::ArrayBase<ndarray::OwnedRepr<f32>, ndarray::Dim<ndarray::IxDynImpl>> {
-        let node = self.model.node_by_name(name).unwrap();
-        let fact = &node.outputs[0].fact;
+    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+        let mut onnx_model = OnnxModel::from_arg();
+        let num_advices = max(
+            onnx_model.max_node_advices(),
+            onnx_model.max_advices_width().unwrap(),
+        );
+        let num_fixeds = onnx_model.max_fixeds_width().unwrap();
+        let advices = VarTensor::from(Tensor::from((0..num_advices + 3).map(|_| {
+            let col = meta.advice_column();
+            meta.enable_equality(col);
+            col
+        })));
+        let fixeds = VarTensor::from(Tensor::from((0..num_fixeds + 3).map(|_| {
+            let col = meta.fixed_column();
+            meta.enable_equality(col);
+            col
+        })));
 
-        let nav = fact
-            .value
-            .concretize()
-            .unwrap()
-            .to_array_view::<f32>()
-            .unwrap()
-            .to_owned();
-        nav
+        onnx_model.configure(meta, advices, fixeds).unwrap()
     }
 
-    pub fn get_tensor_by_node_name(
+    fn synthesize(
         &self,
-        name: impl AsRef<str>,
-        shift: f32,
-        scale: f32,
-    ) -> Tensor<i32> {
-        let arr = self.get_ndarray_by_node_name(name);
-        ndarray_to_quantized(arr, shift, scale).unwrap()
+        config: Self::Config,
+        mut layouter: impl Layouter<F>,
+    ) -> Result<(), Error> {
+        let input = ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(
+            self.input.clone(),
+        ));
+
+        let output = config
+            .model
+            .layout(config.clone(), &mut layouter, input)
+            .unwrap();
+
+        match output {
+            ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|i, x| {
+                layouter
+                    .constrain_instance(x.cell(), config.public_output, i)
+                    .unwrap()
+            }),
+            _ => panic!("Should be assigned"),
+        };
+        Ok(())
     }
 }

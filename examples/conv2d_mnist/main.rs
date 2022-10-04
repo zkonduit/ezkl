@@ -172,7 +172,7 @@ where
                     &[OUT_CHANNELS, output_height, output_width],
                 ),
             ],
-            Some(&[PADDING, STRIDE]),
+            Some(&[PADDING, PADDING, STRIDE, STRIDE]),
         );
 
         let l0q: EltwiseConfig<F, DivideBy<F, 32>> =
@@ -188,7 +188,7 @@ where
                 advices.get_slice(&[LEN..LEN + 1], &[LEN]),
                 advices.get_slice(&[CLASSES + 1..CLASSES + 2], &[CLASSES]),
             ],
-            Some(&[PADDING, STRIDE]),
+            None,
         );
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -341,6 +341,23 @@ pub fn runconv() {
         l0_params,
         l2_params: [l2weights, l2biases],
     };
+
+    #[cfg(feature = "dev-graph")]
+    {
+        println!("Plotting");
+        use plotters::prelude::*;
+
+        let root = BitMapBackend::new("conv2dmnist-layout.png", (2048, 7680)).into_drawing_area();
+        root.fill(&WHITE).unwrap();
+        let root = root
+            .titled("Conv -> ReLu -> Affine -> Relu", ("sans-serif", 60))
+            .unwrap();
+
+        halo2_proofs::dev::CircuitLayout::default()
+            .render(13, &circuit, &root)
+            .unwrap();
+        return;
+    }
 
     let public_input: Tensor<i32> = vec![
         -25124i32, -19304, -16668, -4399, -6209, -4548, -2317, -8349, -6117, -23461,

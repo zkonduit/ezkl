@@ -1,15 +1,16 @@
 use super::*;
+use crate::tensor::ops::*;
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{Layouter, Value},
-    plonk::{Assigned, ConstraintSystem, Constraints, Expression, Selector},
+    circuit::Layouter,
+    plonk::{ConstraintSystem, Constraints, Expression, Selector},
 };
 use std::marker::PhantomData;
 
 /// Configuration for an affine layer which (mat)multiplies a weight kernel to an input and adds
 /// a bias vector to the result.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Affine1dConfig<F: FieldExt + TensorType> {
     pub kernel: VarTensor,
     pub bias: VarTensor,
@@ -40,8 +41,6 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
         assert_eq!(kernel.dims()[0], output.dims()[0]);
         assert_eq!(kernel.dims()[0], bias.dims()[0]);
 
-        let in_dim = input.dims()[0];
-
         let config = Self {
             selector: meta.selector(),
             kernel,
@@ -53,17 +52,16 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
 
         meta.create_gate("affine", |meta| {
             let selector = meta.query_selector(config.selector);
+
+            // Now we compute the linear expression,  and add it to constraints
+            let input = config.input.query(meta, 0);
+            let kernel = config.kernel.query(meta, 0);
+            let bias = config.bias.query(meta, 0);
+
+            let witnessed_output = matmul(kernel, bias, input);
+
             // Get output expressions for each input channel
             let expected_output: Tensor<Expression<F>> = config.output.query(meta, 0);
-            // Now we compute the linear expression,  and add it to constraints
-            let witnessed_output = expected_output.enum_map(|i, _| {
-                let mut c = Expression::Constant(<F as TensorType>::zero().unwrap());
-                for j in 0..in_dim {
-                    c = c + config.kernel.query_idx(meta, i, j) * config.input.query_idx(meta, 0, j)
-                }
-                c + config.bias.query_idx(meta, 0, i)
-                // add the bias
-            });
 
             let constraints = witnessed_output.enum_map(|i, o| o - expected_output[i].clone());
 
@@ -85,20 +83,21 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
                 |mut region| {
                     let offset = 0;
                     self.selector.enable(&mut region, offset)?;
-                    let input = self.input.assign(&mut region, offset, input.clone());
-                    let weights = self.kernel.assign(&mut region, offset, kernel.clone());
-                    let bias = self.bias.assign(&mut region, offset, bias.clone());
-                    // calculate value of output
-                    let mut output: Tensor<Value<Assigned<F>>> =
-                        Tensor::new(None, &[kernel.dims()[0]]).unwrap();
+                    let inp = self
+                        .input
+                        .assign(&mut region, offset, input.clone())
+                        .map(|e| e.value_field());
+                    let k = self
+                        .kernel
+                        .assign(&mut region, offset, kernel.clone())
+                        .map(|e| e.value_field());
+                    let b = self
+                        .bias
+                        .assign(&mut region, offset, bias.clone())
+                        .map(|e| e.value_field());
 
-                    output = output.enum_map(|i, mut o| {
-                        input.enum_map(|j, x| {
-                            o = o + x.value_field() * weights.get(&[i, j]).value_field();
-                        });
-
-                        o + bias.get(&[i]).value_field()
-                    });
+                    let mut output = matmul(k, b, inp);
+                    output.flatten();
 
                     Ok(self
                         .output

@@ -79,17 +79,23 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     pub fn reshape(&mut self, new_dims: &[usize]) {
         match self {
             ValTensor::Value { inner: v, dims: d } => {
-                assert!(d.iter().product::<usize>() == new_dims.iter().product());
+                assert_eq!(
+                    d.iter().product::<usize>(),
+                    new_dims.iter().product::<usize>()
+                );
                 v.reshape(new_dims);
                 *d = v.dims().to_vec();
             }
             ValTensor::AssignedValue { inner: v, dims: d } => {
-                assert!(d.iter().product::<usize>() == new_dims.iter().product());
+                assert_eq!(
+                    d.iter().product::<usize>(),
+                    new_dims.iter().product::<usize>()
+                );
                 v.reshape(new_dims);
                 *d = v.dims().to_vec();
             }
             ValTensor::PrevAssigned { inner: v, dims: d } => {
-                assert!(d.iter().product::<usize>() == new_dims.iter().product());
+                assert_eq!(d.iter().product::<usize>(),new_dims.iter().product::<usize>());
                 v.reshape(new_dims);
                 *d = v.dims().to_vec();
             }
@@ -120,6 +126,15 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
             ValTensor::Value { inner: _, dims: d } => d,
             ValTensor::AssignedValue { inner: _, dims: d } => d,
             ValTensor::PrevAssigned { inner: _, dims: d } => d,
+        }
+    }
+    pub fn show(&self) -> String {
+        match self.clone() {
+            ValTensor::PrevAssigned { inner: v, dims: _ } => {
+                let r: Tensor<i32> = v.clone().into();
+                format!("PrevAssigned {:?}", r)
+            }
+            _ => "Unassigned ValTensor".into(),
         }
     }
 }

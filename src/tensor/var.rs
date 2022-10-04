@@ -52,10 +52,21 @@ impl VarTensor {
                     dims: new_dims.to_vec(),
                 }
             }
-            VarTensor::Fixed { inner: v, dims: _ } => VarTensor::Fixed {
-                inner: v.get_slice(indices),
-                dims: new_dims.to_vec(),
-            },
+	    VarTensor::Fixed { inner: v, dims: _ } => {
+                let mut new_inner = v.get_slice(indices);
+                if new_dims.len() > 1 {
+                    new_inner.reshape(&new_dims[0..new_dims.len() - 1]);
+                }
+                VarTensor::Fixed {
+                    inner: new_inner,
+                    dims: new_dims.to_vec(),
+                }
+            }
+
+            // VarTensor::Fixed { inner: v, dims: _ } => VarTensor::Fixed {
+            //     inner: v.get_slice(indices),
+            //     dims: new_dims.to_vec(),
+            // },
         }
     }
 
@@ -63,11 +74,11 @@ impl VarTensor {
     pub fn reshape(&mut self, new_dims: &[usize]) {
         match self {
             VarTensor::Advice { inner: _, dims: d } => {
-                assert!(d.iter().product::<usize>() == new_dims.iter().product());
+                assert_eq!(d.iter().product::<usize>(), new_dims.iter().product::<usize>());
                 *d = new_dims.to_vec();
             }
             VarTensor::Fixed { inner: _, dims: d } => {
-                assert!(d.iter().product::<usize>() == new_dims.iter().product());
+                assert_eq!(d.iter().product::<usize>(),new_dims.iter().product::<usize>());
                 *d = new_dims.to_vec();
             }
         }
