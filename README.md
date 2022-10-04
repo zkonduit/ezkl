@@ -12,6 +12,38 @@ Note that the library requires a nightly version of the rust toolchain. You can 
 rustup override set nightly         
 ```
 
+## `ezkl` command line interface
+
+The `ezkl` cli provides a simple interface to load ONNX neural networks, convert them into a Halo2 circuit, then run a proof (given a public input).
+
+Usage:
+
+```bash
+Usage: ezkl [OPTIONS]
+
+Options:
+  -D, --data <DATA>    The path to .json data file [default: ]
+  -M, --model <MODEL>  The path to .onnx model file [default: ]
+  -h, --help           Print help information
+  -V, --version        Print version information
+```
+If `-D` and `-M` are not provided the cli will query the user to manually enter the path(s). `.onnx` can be generated using pytorch or tensorflow. The data json file is structured as follows:
+
+```
+{
+    "input_data": [1, 5, 6 ...], // array of integers which represents the (private) inputs we run the proof on
+    "input_shape": [3, 3, ..],, // array of integers which represents the shape of model inputs (excluding batch size)
+    "public_input": [1, 5, 6 ...],, // array of integers which represents the public input (model output for now)
+}
+```
+For examples of such files see `examples/onnx_models`.
+
+To run a simple example using the cli:
+```bash
+cargo run --bin ezkl -- -D ./examples/onnx_models/ff_input.json -M ./examples/onnx_models/ff.onnx
+```
+
+
 ## Running examples
 
 The MNIST inference example is contained in `examples/conv2d_mnist`. To run it:
@@ -57,4 +89,4 @@ criterion_group! {
 
 ## Docs
 
-Use `cargo doc --open --feature onnx` to compile and open the docs in your default browser. 
+Use `cargo doc --open --feature onnx` to compile and open the docs in your default browser.

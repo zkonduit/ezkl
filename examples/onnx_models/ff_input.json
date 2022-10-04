@@ -1,0 +1,5 @@
+{
+  "input_data": [100, 20, 30],
+  "input_shape": [3],
+  "public_input": [60, 0, 0, 0]
+}

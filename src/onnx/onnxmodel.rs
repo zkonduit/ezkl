@@ -6,24 +6,27 @@ use crate::nn::LayerConfig;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
 use anyhow::{Context, Result};
+use clap::Parser;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
     plonk::{Column, ConstraintSystem, Fixed, Instance},
 };
+use log::{debug, error, info, warn};
 use std::cmp::max;
-use std::env;
+use std::io::{stdin, stdout, Write};
 use std::path::Path;
 use tract_onnx;
-use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node, OutletId, TDim};
+use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node, OutletId};
 use tract_onnx::tract_hir::{
-    infer::{Factoid, GenericFactoid},
+    infer::Factoid,
     internal::InferenceOp,
     ops::cnn::Conv,
     ops::expandable::Expansion,
     ops::nn::DataFormat,
     tract_core::ops::cnn::{conv::KernelFormat, PaddingSpec},
 };
+
 // Initially, some of these OpKinds will be folded into others (for example, Const nodes that
 // contain parameters will be handled at the consuming node.
 // Eventually, though, we probably want to keep them and treat them directly (layouting and configuring
@@ -57,7 +60,19 @@ pub enum OnnxNodeConfig<F: FieldExt + TensorType> {
 #[derive(Clone)]
 pub struct OnnxModelConfig<F: FieldExt + TensorType> {
     configs: Vec<OnnxNodeConfig<F>>,
+    pub model: OnnxModel,
     pub public_output: Column<Instance>,
+}
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+pub struct Cli {
+    /// The path to the .json data file
+    #[arg(short = 'D', long, default_value = "")]
+    pub data: String,
+    /// The path to the .onnx model file
+    #[arg(short = 'M', long, default_value = "")]
+    pub model: String,
 }
 
 /// Fields:
@@ -97,7 +112,10 @@ impl OnnxNode {
             "Sigmoid" => OpKind::Sigmoid,
             "Const" => OpKind::Const,
             "Source" => OpKind::Input,
-            _ => OpKind::Unknown,
+            c => {
+                warn!("{:?} is not currently supported", c);
+                OpKind::Unknown
+            }
         };
         let output_shapes = match node_output_shapes(&node) {
             Ok(s) => Some(s),
@@ -105,7 +123,7 @@ impl OnnxNode {
         };
 
         // Set some default values, then figure out more specific values if possible based on the opkind.
-        let mut min_advice_cols = 1;
+        let min_advice_cols = 1;
         let mut constant_value = None;
         let mut in_scale = 0i32;
         let mut out_scale = 0i32;
@@ -125,8 +143,8 @@ impl OnnxNode {
                     .unwrap()
                     .to_owned();
                 out_scale = 7;
-                let t = ndarray_to_quantized(nav, 0f32, (i32::pow(2, out_scale as u32) as f32))
-                    .unwrap();
+                let t =
+                    ndarray_to_quantized(nav, 0f32, i32::pow(2, out_scale as u32) as f32).unwrap();
                 out_dims = Some(t.dims().clone().to_vec());
                 output_max = t.iter().map(|x| x.abs()).max().unwrap() as f32;
                 constant_value = Some(t);
@@ -164,9 +182,15 @@ impl OnnxNode {
                 let conv_node: &Conv = match op.downcast_ref::<Box<dyn Expansion>>() {
                     Some(b) => match (*b).as_any().downcast_ref() {
                         Some(b) => b,
-                        None => panic!("not a conv!"),
+                        None => {
+                            error!("not a conv!");
+                            panic!()
+                        }
                     },
-                    None => panic!("op isn't an Expansion!"),
+                    None => {
+                        error!("op is not a Tract Expansion!");
+                        panic!()
+                    }
                 };
 
                 // only support pytorch type formatting for now
@@ -179,7 +203,7 @@ impl OnnxNode {
                     _ => panic!("padding is not explicitly specified"),
                 };
 
-                layer_hyperparams = Some(vec![padding[0], padding[0], stride[0], stride[0]]);
+                layer_hyperparams = Some(vec![padding[0], padding[1], stride[0], stride[1]]);
             }
             _ => {}
         };
@@ -198,7 +222,6 @@ impl OnnxNode {
             out_dims,
             layer_hyperparams,
         };
-        //        println!("New{:?}", on);
         on
     }
 
@@ -269,9 +292,26 @@ impl OnnxModel {
         om
     }
     pub fn from_arg() -> Self {
-        let args: Vec<String> = env::args().collect();
-        let filename: String = args[1].clone();
-        OnnxModel::new(filename)
+        let args = Cli::parse();
+        let mut s = String::new();
+
+        let model_path = match args.model.is_empty() {
+            false => {
+                info!("loading model from {}", args.model.clone());
+                Path::new(&args.model)
+            }
+            true => {
+                info!("please enter a path to a .onnx file containing a model: ");
+                let _ = stdout().flush();
+                let _ = &stdin()
+                    .read_line(&mut s)
+                    .expect("did not enter a correct string");
+                s.truncate(s.len() - 1);
+                Path::new(&s)
+            }
+        };
+        assert!(model_path.exists());
+        OnnxModel::new(model_path)
     }
 
     pub fn configure<F: FieldExt + TensorType>(
@@ -280,6 +320,7 @@ impl OnnxModel {
         advices: VarTensor,
         fixeds: VarTensor,
     ) -> Result<OnnxModelConfig<F>> {
+        info!("configuring model");
         // Note that the order of the nodes, and the eval_order, is not stable between model loads
         let order = self.eval_order()?;
         let mut configs: Vec<OnnxNodeConfig<F>> = vec![OnnxNodeConfig::NotConfigured; order.len()];
@@ -288,12 +329,12 @@ impl OnnxModel {
                 self.configure_node(node_idx, meta, advices.clone(), fixeds.clone())?;
         }
 
-        //        println!("Configured: {:?}", configs);
         let public_output: Column<Instance> = meta.instance_column();
         meta.enable_equality(public_output);
 
         Ok(OnnxModelConfig {
             configs,
+            model: self.clone(),
             public_output,
         })
     }
@@ -321,15 +362,15 @@ impl OnnxModel {
         node_idx: usize,
         meta: &mut ConstraintSystem<F>,
         advices: VarTensor,
-        fixeds: VarTensor, // Should use fixeds, but currently buggy
+        _fixeds: VarTensor, // Should use fixeds, but currently buggy
     ) -> Result<OnnxNodeConfig<F>> {
         let node = &self.onnx_nodes[node_idx];
 
-        // println!(
-        //     "Configuring Node {}, a {:?}",
-        //     node_idx,
-        //     node.node.op().name()
-        // );
+        debug!(
+            "configuring node {}, a {:?}",
+            node_idx,
+            node.node.op().name()
+        );
 
         // Figure out, find, and load the params
         match node.opkind {
@@ -353,7 +394,7 @@ impl OnnxModel {
             }
             OpKind::Convolution => {
                 let inputs = self.extract_node_inputs(node);
-                let (input_node, weight_node, bias_node) = (inputs[0], inputs[1], inputs[2]);
+                let weight_node = inputs[1];
 
                 let input_dims = node.in_dims.clone().unwrap(); //NCHW
                 let output_dims = node.out_dims.clone().unwrap(); //NCHW
@@ -401,6 +442,8 @@ impl OnnxModel {
 
                 let lhp = node.layer_hyperparams.as_ref().unwrap();
                 let conf = ConvConfig::<F>::configure(meta, variables, Some(lhp.as_slice()));
+
+                self.last_shape = output_dims;
 
                 Ok(OnnxNodeConfig::Conv(conf))
             }
@@ -471,23 +514,14 @@ impl OnnxModel {
         let order = self.eval_order()?;
         let mut x = input;
         for node_idx in order {
-            //            println!("Applying {:?}", self.onnx_nodes[node_idx]);
             x = match self.layout_node(
                 node_idx,
                 layouter,
                 x.clone(),
                 config.configs[node_idx].clone(),
             )? {
-                Some(vt) => {
-                    //                    println!("Applying {:?}", self.onnx_nodes[node_idx]);
-                    println!("Node {} out: {}", node_idx, vt.show());
-
-                    vt
-                }
-                None => {
-                    println!("Node {} out: {:?}", node_idx, x.show());
-                    x
-                } // Some nodes don't produce tensor output, we skip these
+                Some(vt) => vt,
+                None => x, // Some nodes don't produce tensor output, we skip these
             }
         }
         Ok(x)
@@ -505,10 +539,6 @@ impl OnnxModel {
         config: OnnxNodeConfig<F>,
     ) -> Result<Option<ValTensor<F>>> {
         let node = &self.onnx_nodes[node_idx];
-
-        //        println!("Layout Node {}, {:?}", node_idx, node.opkind());
-        //        let nice: Tensor<i32> = input.into();
-        //        println!("Node {} input tensor {:?}", node_idx, &input.clone());
 
         // The node kind and the config should be the same.
         Ok(match (node.opkind, config.clone()) {
@@ -550,7 +580,7 @@ impl OnnxModel {
                     .context("Tensor<i32> should already be loaded")?;
                 let bias_vt =
                     ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(bias_value));
-                println!("INPUT FOR LAYOUT {:?}", input);
+                info!("input shape {:?}", input.dims());
                 let out = cc.layout(layouter, &[weight_vt, bias_vt, input]);
                 Some(out)
             }
@@ -585,6 +615,7 @@ impl OnnxModel {
     /// Make a forward pass over the graph to determine tensor shapes and quantization strategy
     /// Mutates the nodes.
     pub fn forward_shape_and_quantize_pass(&mut self) -> Result<()> {
+        info!("quantizing model activations");
         let order = self.eval_order()?;
         for node_idx in order {
             // mutate a copy of the node, referring to other nodes in the vec, then swap modified node in at the end
@@ -605,8 +636,8 @@ impl OnnxModel {
 
                     this_node.output_max =
                         input_node.output_max * weight_node.output_max * (in_dim as f32);
-                    // assert_eq!(input_node.out_scale, weight_node.out_scale);
-                    // assert_eq!(input_node.out_scale, bias_node.out_scale);
+                    assert_eq!(input_node.out_scale, weight_node.out_scale);
+                    assert_eq!(input_node.out_scale, bias_node.out_scale);
                     this_node.in_scale = input_node.out_scale;
                     this_node.out_scale = weight_node.out_scale + input_node.out_scale;
                     this_node.min_advice_cols = max(in_dim, out_dim);
@@ -636,8 +667,8 @@ impl OnnxModel {
                     this_node.output_max = input_node.output_max
                         * weight_node.output_max
                         * ((kernel_height * kernel_width) as f32);
-                    // assert_eq!(input_node.out_scale, weight_node.out_scale);
-                    // assert_eq!(input_node.out_scale, bias_node.out_scale);
+                    assert_eq!(input_node.out_scale, weight_node.out_scale);
+                    assert_eq!(input_node.out_scale, bias_node.out_scale);
                     this_node.in_scale = input_node.out_scale;
                     this_node.out_scale = weight_node.out_scale + input_node.out_scale;
                     this_node.min_advice_cols = max(
@@ -680,7 +711,6 @@ impl OnnxModel {
                 }
                 _ => {}
             };
-            //            println!("mod{:?}", this_node);
             self.onnx_nodes[node_idx] = this_node;
         }
 

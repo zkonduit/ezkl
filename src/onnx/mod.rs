@@ -1,6 +1,5 @@
-use crate::tensor::{Tensor, ValTensor, VarTensor};
-
 use crate::tensor::TensorType;
+use crate::tensor::{Tensor, ValTensor, VarTensor};
 use anyhow::Result;
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -8,7 +7,6 @@ use halo2_proofs::{
     plonk::{Circuit, ConstraintSystem, Error},
 };
 use std::marker::PhantomData;
-
 pub mod utilities;
 use std::cmp::max;
 pub use utilities::*;
@@ -55,13 +53,12 @@ impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let onnx_model = OnnxModel::from_arg();
         let input = ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(
             self.input.clone(),
         ));
-        // let input: Tensor<F> = self.input.clone().into();
-        // let input = ValTensor::from(input);
-        let output = onnx_model
+
+        let output = config
+            .model
             .layout(config.clone(), &mut layouter, input)
             .unwrap();
 
