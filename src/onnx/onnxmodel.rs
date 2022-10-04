@@ -1,18 +1,18 @@
 use super::utilities::{ndarray_to_quantized, node_output_shapes};
 use crate::nn::affine::Affine1dConfig;
 use crate::nn::cnvrl::ConvConfig;
-use crate::nn::eltwise::{EltwiseConfig, ReLu, ReLu128, ReLu64, Sigmoid};
+use crate::nn::eltwise::{DivideBy, EltwiseConfig, ReLu, ReLu128, ReLu64, Sigmoid};
 use crate::nn::LayerConfig;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
     plonk::{Column, ConstraintSystem, Fixed, Instance},
 };
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use std::cmp::max;
 use std::fmt;
 use std::io::{stdin, stdout, Write};
@@ -35,8 +35,10 @@ use tract_onnx::tract_hir::{
 // at each type of node)
 #[derive(Clone, Debug, Copy)]
 pub enum OpKind {
+    Rescaled,
     Affine,
     Convolution,
+    Convolution128,
     ReLU,
     ReLU64,
     ReLU128,
@@ -49,8 +51,10 @@ pub enum OpKind {
 impl fmt::Display for OpKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            OpKind::Rescaled => write!(f, "rescaled"),
             OpKind::Affine => write!(f, "affine"),
             OpKind::Convolution => write!(f, "conv"),
+            OpKind::Convolution128 => write!(f, "conv128"),
             OpKind::ReLU => write!(f, "relu"),
             OpKind::ReLU64 => write!(f, "relu64"),
             OpKind::ReLU128 => write!(f, "relu128"),
@@ -64,8 +68,10 @@ impl fmt::Display for OpKind {
 
 #[derive(Clone, Debug)]
 pub enum OnnxNodeConfig<F: FieldExt + TensorType> {
+    Rescaled(usize, Box<OnnxNodeConfig<F>>),
     Affine(Affine1dConfig<F>),
     Conv(ConvConfig<F>),
+    Conv128(EltwiseConfig<F, DivideBy<F, 128>>, ConvConfig<F>),
     ReLU(EltwiseConfig<F, ReLu<F>>),
     ReLU64(EltwiseConfig<F, ReLu64<F>>),
     ReLU128(EltwiseConfig<F, ReLu128<F>>),
@@ -414,8 +420,15 @@ impl OnnxModel {
             node.node.op().name()
         );
 
+        let (scale, main_opkind) = match node.opkind {
+            OpKind::Convolution128 => (7, OpKind::Convolution),
+            _ => (0, node.opkind),
+        };
+
         // Figure out, find, and load the params
-        match node.opkind {
+        //        let main_opkind = node.opkind;
+
+        let configuration: OnnxNodeConfig<F> = match main_opkind {
             OpKind::Affine => {
                 let in_dim = node.clone().in_dims.unwrap()[0];
                 let out_dim = node.clone().out_dims.unwrap()[0];
@@ -431,7 +444,7 @@ impl OnnxModel {
                     ],
                     None,
                 );
-                Ok(OnnxNodeConfig::Affine(conf))
+                Ok::<OnnxNodeConfig<F>, anyhow::Error>(OnnxNodeConfig::Affine(conf))
             }
             OpKind::Convolution => {
                 let inputs = self.extract_node_inputs(node);
@@ -486,10 +499,11 @@ impl OnnxModel {
                         [padding.0, padding.1, stride.0, stride.1]
                     }
                     _ => {
-                        error!("mismatch between hyperparam and layer types ");
+                        anyhow!("mismatch between hyperparam and layer types ");
                         panic!()
                     }
                 };
+
                 let conf = ConvConfig::<F>::configure(meta, variables, Some(&params));
 
                 Ok(OnnxNodeConfig::Conv(conf))
@@ -516,7 +530,7 @@ impl OnnxModel {
                 let dims = match &node.in_dims {
                     Some(v) => v,
                     None => {
-                        error!("relu layer has no input shape");
+                        anyhow!("relu layer has no input shape");
                         panic!()
                     }
                 };
@@ -534,7 +548,7 @@ impl OnnxModel {
                 let dims = match &node.in_dims {
                     Some(v) => v,
                     None => {
-                        error!("relu layer has no input shape");
+                        anyhow!("relu layer has no input shape");
                         panic!()
                     }
                 };
@@ -573,6 +587,34 @@ impl OnnxModel {
             _ => {
                 unimplemented!()
             }
+        }?;
+
+        match node.opkind {
+            OpKind::Convolution128 => {
+                let dims = match &node.in_dims {
+                    Some(v) => v,
+                    None => {
+                        error!("layer has no input shape");
+                        panic!()
+                    }
+                };
+
+                let length = dims.clone().into_iter().product();
+
+                let divconf: EltwiseConfig<F, DivideBy<F, 128>> = EltwiseConfig::configure(
+                    meta,
+                    &[advices.get_slice(&[0..length], &[length])],
+                    //&[advices.get_slice(&[0..length], dims)],
+                    Some(&[self.bits]),
+                );
+
+                if let OnnxNodeConfig::Conv(convconf) = configuration {
+                    Ok(OnnxNodeConfig::Conv128(divconf, convconf))
+                } else {
+                    Err(anyhow!("Wrong OnnxNodeConfig"))
+                }
+            }
+            _ => Ok(configuration),
         }
     }
 
@@ -655,6 +697,30 @@ impl OnnxModel {
                 let out = cc.layout(layouter, &[weight_vt, bias_vt, input]);
                 Some(out)
             }
+            (OpKind::Convolution128, OnnxNodeConfig::Conv128(dc, cc)) => {
+                let inputs = self.extract_node_inputs(node);
+                let (weight_node, bias_node) = (inputs[1], inputs[2]);
+
+                let weight_value = weight_node
+                    .const_value
+                    .clone()
+                    .context("Tensor<i32> should already be loaded")?;
+                let weight_vt =
+                    ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(weight_value));
+
+                let bias_value = bias_node
+                    .const_value
+                    .clone()
+                    .context("Tensor<i32> should already be loaded")?;
+                let bias_vt =
+                    ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(bias_value));
+                info!("input shape {:?}", input.dims());
+
+                let rescaled_input = dc.layout(layouter, &[input]);
+                let out = cc.layout(layouter, &[weight_vt, bias_vt, rescaled_input]);
+                Some(out)
+            }
+
             (OpKind::ReLU, OnnxNodeConfig::ReLU(rc)) => {
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
                 //                let length = node.output_shapes().unwrap()[0].as_ref().unwrap()[1]; //  shape is vec![1,LEN]
@@ -744,10 +810,19 @@ impl OnnxModel {
                     this_node.output_max = input_node.output_max
                         * weight_node.output_max
                         * ((kernel_height * kernel_width) as f32);
-                    assert_eq!(input_node.out_scale, weight_node.out_scale);
-                    assert_eq!(input_node.out_scale, bias_node.out_scale);
+
                     this_node.in_scale = input_node.out_scale;
-                    this_node.out_scale = weight_node.out_scale + input_node.out_scale;
+
+                    if input_node.out_scale - weight_node.out_scale == 7 {
+                        this_node.opkind = OpKind::Convolution128; // now the input will be scaled down to match
+                        this_node.output_max = this_node.output_max / 128f32;
+                        this_node.out_scale = weight_node.out_scale + input_node.out_scale - 7;
+                    } else {
+                        assert_eq!(input_node.out_scale, weight_node.out_scale);
+                        assert_eq!(input_node.out_scale, bias_node.out_scale);
+                        this_node.out_scale = weight_node.out_scale + input_node.out_scale;
+                    }
+
                     this_node.min_cols = max(
                         1,
                         max(out_height * out_channels, input_height * in_channels),

@@ -32,7 +32,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
         let num_advices = max(
             onnx_model.max_node_advices(),
             onnx_model.max_advices_width().unwrap(),
-        );
+        ) + 3000;
         let num_fixeds = onnx_model.max_fixeds_width().unwrap();
         let advices = VarTensor::from(Tensor::from((0..num_advices + 3).map(|_| {
             let col = meta.advice_column();
