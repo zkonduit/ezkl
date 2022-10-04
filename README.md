@@ -29,11 +29,11 @@ Options:
 ```
 If `-D` and `-M` are not provided the cli will query the user to manually enter the path(s). `.onnx` can be generated using pytorch or tensorflow. The data json file is structured as follows:
 
-```
+```json
 {
     "input_data": [1, 5, 6 ...], // array of integers which represents the (private) inputs we run the proof on
-    "input_shape": [3, 3, ..],, // array of integers which represents the shape of model inputs (excluding batch size)
-    "public_input": [1, 5, 6 ...],, // array of integers which represents the public input (model output for now)
+    "input_shape": [3, 3, ..], // array of integers which represents the shape of model inputs (excluding batch size)
+    "public_input": [1, 5, 6 ...], // array of integers which represents the public input (model output for now)
 }
 ```
 For examples of such files see `examples/onnx_models`.
@@ -42,6 +42,8 @@ To run a simple example using the cli:
 ```bash
 cargo run --release --bin ezkl -- -D ./examples/onnx_models/ff_input.json -M ./examples/onnx_models/ff.onnx
 ```
+
+To display a table of loaded Onnx nodes, and their associated parameters, set `RUST_LOG=DEBUG`. 
 
 
 ## Running examples
