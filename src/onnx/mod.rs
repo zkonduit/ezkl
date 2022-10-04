@@ -10,8 +10,8 @@ use halo2_proofs::{
 use std::marker::PhantomData;
 
 pub mod utilities;
+use std::cmp::max;
 pub use utilities::*;
-
 pub mod onnxmodel;
 pub use onnxmodel::*;
 
@@ -31,7 +31,10 @@ impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         let mut onnx_model = OnnxModel::from_arg();
-        let num_advices = onnx_model.max_advices_width().unwrap();
+        let num_advices = max(
+            onnx_model.max_node_advices(),
+            onnx_model.max_advices_width().unwrap(),
+        );
         let num_fixeds = onnx_model.max_fixeds_width().unwrap();
         let advices = VarTensor::from(Tensor::from((0..num_advices + 3).map(|_| {
             let col = meta.advice_column();

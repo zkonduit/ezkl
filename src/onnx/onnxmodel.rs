@@ -9,14 +9,15 @@ use anyhow::{Context, Result};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
-    plonk::{Column, ConstraintSystem, Instance},
+    plonk::{Column, ConstraintSystem, Fixed, Instance},
 };
+use std::cmp::max;
 use std::env;
 use std::path::Path;
 use tract_onnx;
-use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node, OutletId};
+use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node, OutletId, TDim};
 use tract_onnx::tract_hir::{
-    infer::Factoid,
+    infer::{Factoid, GenericFactoid},
     internal::InferenceOp,
     ops::cnn::Conv,
     ops::expandable::Expansion,
@@ -73,6 +74,7 @@ pub struct OnnxNode {
     node: Node<InferenceFact, Box<dyn InferenceOp>>,
     pub opkind: OpKind,
     output_max: f32,
+    min_advice_cols: usize,
     in_scale: i32,
     out_scale: i32,
     constant_value: Option<Tensor<i32>>, // float value * 2^qscale if applicable.
@@ -82,6 +84,7 @@ pub struct OnnxNode {
     // but in_dim is [in], out_dim is [out]
     in_dims: Option<Vec<usize>>,
     out_dims: Option<Vec<usize>>,
+    layer_hyperparams: Option<Vec<usize>>,
 }
 
 impl OnnxNode {
@@ -102,12 +105,14 @@ impl OnnxNode {
         };
 
         // Set some default values, then figure out more specific values if possible based on the opkind.
+        let mut min_advice_cols = 1;
         let mut constant_value = None;
         let mut in_scale = 0i32;
         let mut out_scale = 0i32;
         let in_dims = None;
         let mut out_dims = None;
         let mut output_max = f32::INFINITY;
+        let mut layer_hyperparams = None;
 
         match opkind {
             OpKind::Const => {
@@ -129,10 +134,52 @@ impl OnnxNode {
             OpKind::Input => {
                 if let Some([Some(v)]) = output_shapes.as_deref() {
                     out_dims = Some(v.to_vec());
+                } else {
+                    // Turn  `outputs: [?,3,32,32,F32 >3/0]` into `vec![3,32,32]`  in two steps
+                    let the_shape: Result<Vec<i64>> = node.outputs[0]
+                        .fact
+                        .shape
+                        .dims()
+                        .map(|x| x.concretize())
+                        .flatten()
+                        .map(|x| x.to_i64())
+                        .collect();
+
+                    let the_shape: Vec<usize> = the_shape
+                        .unwrap()
+                        .iter()
+                        .map(|x| (*x as i32) as usize)
+                        .collect();
+                    out_dims = Some(the_shape);
                 }
+
                 output_max = 256.0;
                 in_scale = 7;
                 out_scale = 7;
+            }
+            OpKind::Convolution => {
+                // Extract the padding and stride layer hyperparams
+                let op = Box::new(node.op());
+
+                let conv_node: &Conv = match op.downcast_ref::<Box<dyn Expansion>>() {
+                    Some(b) => match (*b).as_any().downcast_ref() {
+                        Some(b) => b,
+                        None => panic!("not a conv!"),
+                    },
+                    None => panic!("op isn't an Expansion!"),
+                };
+
+                // only support pytorch type formatting for now
+                assert_eq!(conv_node.data_format, DataFormat::NCHW);
+                assert_eq!(conv_node.kernel_fmt, KernelFormat::OIHW);
+
+                let stride = conv_node.strides.clone().unwrap();
+                let padding = match &conv_node.padding {
+                    PaddingSpec::Explicit(p, _, _) => p,
+                    _ => panic!("padding is not explicitly specified"),
+                };
+
+                layer_hyperparams = Some(vec![padding[0], padding[0], stride[0], stride[0]]);
             }
             _ => {}
         };
@@ -141,6 +188,7 @@ impl OnnxNode {
             node,
             opkind,
             output_max,
+            min_advice_cols,
             in_scale,
             out_scale,
             constant_value,
@@ -148,6 +196,7 @@ impl OnnxNode {
             output_shapes,
             in_dims,
             out_dims,
+            layer_hyperparams,
         };
         //        println!("New{:?}", on);
         on
@@ -239,7 +288,7 @@ impl OnnxModel {
                 self.configure_node(node_idx, meta, advices.clone(), fixeds.clone())?;
         }
 
-        println!("Configured: {:?}", configs);
+        //        println!("Configured: {:?}", configs);
         let public_output: Column<Instance> = meta.instance_column();
         meta.enable_equality(public_output);
 
@@ -276,11 +325,11 @@ impl OnnxModel {
     ) -> Result<OnnxNodeConfig<F>> {
         let node = &self.onnx_nodes[node_idx];
 
-        println!(
-            "Configuring Node {}, a {:?}",
-            node_idx,
-            node.node.op().name()
-        );
+        // println!(
+        //     "Configuring Node {}, a {:?}",
+        //     node_idx,
+        //     node.node.op().name()
+        // );
 
         // Figure out, find, and load the params
         match node.opkind {
@@ -306,29 +355,54 @@ impl OnnxModel {
                 let inputs = self.extract_node_inputs(node);
                 let (input_node, weight_node, bias_node) = (inputs[0], inputs[1], inputs[2]);
 
+                let input_dims = node.in_dims.clone().unwrap(); //NCHW
+                let output_dims = node.out_dims.clone().unwrap(); //NCHW
+                let (
+                    //_batchsize,
+                    in_channels,
+                    in_height,
+                    in_width,
+                ) = (input_dims[0], input_dims[1], input_dims[2]);
+                let (
+                    //_batchsize,
+                    out_channels,
+                    out_height,
+                    out_width,
+                ) = (output_dims[0], output_dims[1], output_dims[2]);
 
-                let op = Box::new(node.node.op());
+                let oihw = weight_node.out_dims.as_ref().unwrap();
+                let (ker_o, ker_i, kernel_height, kernel_width) =
+                    (oihw[0], oihw[1], oihw[2], oihw[3]);
+                assert_eq!(ker_i, in_channels);
+                assert_eq!(ker_o, out_channels);
 
-                let conv_node: &Conv = match op.downcast_ref::<Box<dyn Expansion>>() {
-                    Some(b) => match (*b).as_any().downcast_ref() {
-                        Some(b) => b,
-                        None => panic!("not a conv!"),
-                    },
-                    None => panic!("op isn't an Expansion!"),
-                };
+                let mut kernel: Tensor<Column<Fixed>> =
+                    (0..out_channels * in_channels * kernel_width * kernel_height)
+                        .map(|_| meta.fixed_column())
+                        .into();
+                kernel.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
 
-                // only support pytorch type formatting for now
-                assert_eq!(conv_node.data_format, DataFormat::NCHW);
-                assert_eq!(conv_node.kernel_fmt, KernelFormat::OIHW);
+                let mut bias: Tensor<Column<Fixed>> =
+                    (0..out_channels).map(|_| meta.fixed_column()).into();
+                bias.reshape(&[out_channels]);
 
-                let stride = conv_node.strides.clone().unwrap();
-                let padding = match &conv_node.padding {
-                    PaddingSpec::Explicit(p, _, _) => p,
-                    _ => panic!("padding is not explicitly specified"),
-                };
+                let variables = &[
+                    VarTensor::from(kernel),
+                    VarTensor::from(bias),
+                    advices.get_slice(
+                        &[0..in_height * in_channels],
+                        &[in_channels, in_height, in_width],
+                    ),
+                    advices.get_slice(
+                        &[0..out_height * out_channels],
+                        &[out_channels, out_height, out_width],
+                    ),
+                ];
 
+                let lhp = node.layer_hyperparams.as_ref().unwrap();
+                let conf = ConvConfig::<F>::configure(meta, variables, Some(lhp.as_slice()));
 
-                todo!()
+                Ok(OnnxNodeConfig::Conv(conf))
             }
             OpKind::ReLU => {
                 let length = self.last_shape.clone().into_iter().product();
@@ -397,7 +471,7 @@ impl OnnxModel {
         let order = self.eval_order()?;
         let mut x = input;
         for node_idx in order {
-            println!("Applying {:?}", self.onnx_nodes[node_idx]);
+            //            println!("Applying {:?}", self.onnx_nodes[node_idx]);
             x = match self.layout_node(
                 node_idx,
                 layouter,
@@ -476,7 +550,7 @@ impl OnnxModel {
                     .context("Tensor<i32> should already be loaded")?;
                 let bias_vt =
                     ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(bias_value));
-
+                println!("INPUT FOR LAYOUT {:?}", input);
                 let out = cc.layout(layouter, &[weight_vt, bias_vt, input]);
                 Some(out)
             }
@@ -516,6 +590,10 @@ impl OnnxModel {
             // mutate a copy of the node, referring to other nodes in the vec, then swap modified node in at the end
             let mut this_node = self.onnx_nodes[node_idx].clone();
             match this_node.opkind {
+                // OpKind::Input => {
+                //     this_node.node.outputs
+
+                // }
                 OpKind::Affine => {
                     let inputs = self.extract_node_inputs(&this_node);
                     let (input_node, weight_node, bias_node) = (inputs[0], inputs[1], inputs[2]);
@@ -527,11 +605,47 @@ impl OnnxModel {
 
                     this_node.output_max =
                         input_node.output_max * weight_node.output_max * (in_dim as f32);
-                    assert_eq!(input_node.out_scale, weight_node.out_scale);
-                    assert_eq!(input_node.out_scale, bias_node.out_scale);
+                    // assert_eq!(input_node.out_scale, weight_node.out_scale);
+                    // assert_eq!(input_node.out_scale, bias_node.out_scale);
                     this_node.in_scale = input_node.out_scale;
                     this_node.out_scale = weight_node.out_scale + input_node.out_scale;
+                    this_node.min_advice_cols = max(in_dim, out_dim);
                 }
+                OpKind::Convolution => {
+                    let inputs = self.extract_node_inputs(&this_node);
+                    let (input_node, weight_node, bias_node) = (inputs[0], inputs[1], inputs[2]);
+
+                    let oihw = weight_node.out_dims.as_ref().unwrap();
+                    let (out_channels, in_channels, kernel_height, kernel_width) =
+                        (oihw[0], oihw[1], oihw[2], oihw[3]);
+
+                    let lhp = this_node.layer_hyperparams.as_ref().unwrap();
+                    let (padding_h, padding_w, stride_h, stride_w) =
+                        (lhp[0], lhp[1], lhp[2], lhp[3]);
+
+                    this_node.in_dims = input_node.out_dims.clone();
+
+                    let input_height = this_node.in_dims.as_ref().unwrap()[1];
+                    let input_width = this_node.in_dims.as_ref().unwrap()[2];
+
+                    let out_height = (input_height + 2 * padding_h - kernel_height) / stride_h + 1;
+                    let out_width = (input_width + 2 * padding_w - kernel_width) / stride_w + 1;
+
+                    this_node.out_dims = Some(vec![out_channels, out_height, out_width]);
+
+                    this_node.output_max = input_node.output_max
+                        * weight_node.output_max
+                        * ((kernel_height * kernel_width) as f32);
+                    // assert_eq!(input_node.out_scale, weight_node.out_scale);
+                    // assert_eq!(input_node.out_scale, bias_node.out_scale);
+                    this_node.in_scale = input_node.out_scale;
+                    this_node.out_scale = weight_node.out_scale + input_node.out_scale;
+                    this_node.min_advice_cols = max(
+                        1,
+                        max(out_height * out_channels, input_height * in_channels),
+                    );
+                }
+
                 OpKind::ReLU => {
                     let input_node = self.extract_node_inputs(&this_node)[0];
                     this_node.in_dims = input_node.out_dims.clone();
@@ -562,6 +676,7 @@ impl OnnxModel {
                     //       this_node.output_max = input_node.output_max / 64f32;
                     //       this_node.out_scale = input_node.out_scale - 6;
                     // }
+                    this_node.min_advice_cols = max(1, this_node.in_dims.as_ref().unwrap()[0]);
                 }
                 _ => {}
             };
@@ -610,6 +725,14 @@ impl OnnxModel {
 
     pub fn max_fixeds_width(&self) -> Result<usize> {
         self.max_advices_width() //todo, improve this computation
+    }
+
+    pub fn max_node_advices(&self) -> usize {
+        self.onnx_nodes
+            .iter()
+            .map(|n| n.min_advice_cols)
+            .max()
+            .unwrap()
     }
 
     pub fn max_advices_width(&self) -> Result<usize> {
