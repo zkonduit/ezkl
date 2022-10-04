@@ -55,15 +55,6 @@ We also provide an example which runs an MLP on input data with four dimensions.
 cargo run --release --example mlp_4d
 ```
 
-### Running onnx example
-
-
-To run the example which loads only the parameters from an ONNX model file, enable the `onnx` build feature:
-
-```bash
-cargo run --release --example smallonnx --features onnx
-```
-
 ## Running benchmarks
 
 We include proof generation time benchmarks for some of the implemented layers including the affine, convolutional, and ReLu operations (more to come).

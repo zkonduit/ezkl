@@ -243,26 +243,6 @@ impl OnnxNode {
     pub fn name(&self) -> String {
         self.node.name.clone().into()
     }
-
-    pub fn output_ndarray_by_slot(
-        &self,
-        slot: usize,
-    ) -> ndarray::ArrayBase<ndarray::OwnedRepr<f32>, ndarray::Dim<ndarray::IxDynImpl>> {
-        let fact = &self.node.outputs[slot].fact;
-        let nav = fact
-            .value
-            .concretize()
-            .unwrap()
-            .to_array_view::<f32>()
-            .unwrap()
-            .to_owned();
-        nav
-    }
-
-    pub fn output_tensor_by_slot(&self, slot: usize, shift: f32, scale: f32) -> Tensor<i32> {
-        let arr = self.output_ndarray_by_slot(slot);
-        ndarray_to_quantized(arr, shift, scale).unwrap()
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -740,19 +720,6 @@ impl OnnxModel {
         Ok(self.model.output_outlets()?.to_vec())
     }
 
-    // In general we need to determine the input shapes by looking up the input tensors in the predeccesor nodes
-    pub fn input_shapes_by_node_idx(&self, node_idx: usize) -> Result<Vec<Option<Vec<usize>>>> {
-        let mut shapes = Vec::new();
-
-        for OutletId { node, slot } in &self.model.nodes()[node_idx].inputs {
-            //            let prec = OnnxNode::new(self.model.nodes()[*node].clone());
-            let prec = &self.onnx_nodes[*node];
-            let shapevec = prec.output_shapes()?;
-            shapes.push(shapevec[*slot].clone());
-        }
-        Ok(shapes)
-    }
-
     pub fn max_fixeds_width(&self) -> Result<usize> {
         self.max_advices_width() //todo, improve this computation
     }
@@ -782,43 +749,5 @@ impl OnnxModel {
             }
         }
         Ok(max + 5)
-    }
-
-    pub fn get_node_output_shape_by_name_and_rank(
-        &self,
-        name: impl AsRef<str>,
-        rank: usize,
-    ) -> Vec<usize> {
-        let node = self.model.node_by_name(name).unwrap();
-        let fact = &node.outputs[rank].fact;
-        let shape = fact.shape.clone().as_concrete_finite().unwrap().unwrap();
-        shape.to_vec()
-    }
-
-    pub fn get_ndarray_by_node_name(
-        &self,
-        name: impl AsRef<str>,
-    ) -> ndarray::ArrayBase<ndarray::OwnedRepr<f32>, ndarray::Dim<ndarray::IxDynImpl>> {
-        let node = self.model.node_by_name(name).unwrap();
-        let fact = &node.outputs[0].fact;
-
-        let nav = fact
-            .value
-            .concretize()
-            .unwrap()
-            .to_array_view::<f32>()
-            .unwrap()
-            .to_owned();
-        nav
-    }
-
-    pub fn get_tensor_by_node_name(
-        &self,
-        name: impl AsRef<str>,
-        shift: f32,
-        scale: f32,
-    ) -> Tensor<i32> {
-        let arr = self.get_ndarray_by_node_name(name);
-        ndarray_to_quantized(arr, shift, scale).unwrap()
     }
 }
