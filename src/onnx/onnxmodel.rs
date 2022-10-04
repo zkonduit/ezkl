@@ -310,7 +310,6 @@ pub struct OnnxModel {
     pub model: Graph<InferenceFact, Box<dyn InferenceOp>>, // The raw Tract data structure
     pub onnx_nodes: Vec<OnnxNode>, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
     pub bits: usize,
-    pub last_shape: Vec<usize>,
 }
 
 impl OnnxModel {
@@ -327,7 +326,6 @@ impl OnnxModel {
             model,
             onnx_nodes,
             bits: 15,
-            last_shape: Vec::from([0]),
         };
         om.forward_shape_and_quantize_pass().unwrap();
 
@@ -433,7 +431,6 @@ impl OnnxModel {
                     ],
                     None,
                 );
-                self.last_shape = Vec::from([out_dim]);
                 Ok(OnnxNodeConfig::Affine(conf))
             }
             OpKind::Convolution => {
@@ -495,12 +492,19 @@ impl OnnxModel {
                 };
                 let conf = ConvConfig::<F>::configure(meta, variables, Some(&params));
 
-                self.last_shape = output_dims;
 
                 Ok(OnnxNodeConfig::Conv(conf))
             }
             OpKind::ReLU => {
-                let length = self.last_shape.clone().into_iter().product();
+                let dims = match &node.in_dims {
+                    Some(v) => v,
+                    None => {
+                        error!("relu layer has no input shape");
+                        panic!()
+                    }
+                };
+
+                let length = dims.clone().into_iter().product();
 
                 let conf: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
                     meta,
@@ -510,7 +514,15 @@ impl OnnxModel {
                 Ok(OnnxNodeConfig::ReLU(conf))
             }
             OpKind::ReLU64 => {
-                let length = self.last_shape.clone().into_iter().product();
+                let dims = match &node.in_dims {
+                    Some(v) => v,
+                    None => {
+                        error!("relu layer has no input shape");
+                        panic!()
+                    }
+                };
+
+                let length = dims.clone().into_iter().product();
 
                 let conf: EltwiseConfig<F, ReLu64<F>> = EltwiseConfig::configure(
                     meta,
@@ -520,7 +532,15 @@ impl OnnxModel {
                 Ok(OnnxNodeConfig::ReLU64(conf))
             }
             OpKind::ReLU128 => {
-                let length = self.last_shape.clone().into_iter().product();
+                let dims = match &node.in_dims {
+                    Some(v) => v,
+                    None => {
+                        error!("relu layer has no input shape");
+                        panic!()
+                    }
+                };
+
+                let length = dims.clone().into_iter().product();
 
                 let conf: EltwiseConfig<F, ReLu128<F>> = EltwiseConfig::configure(
                     meta,
