@@ -708,13 +708,14 @@ impl OnnxModel {
                         this_node.opkind = OpKind::Rescaled(Box::new(OpKind::Affine), 128); // now the input will be scaled down to match
                         this_node.output_max /= 128f32;
                         this_node.out_scale = weight_node.out_scale + input_node.out_scale - 7;
+                        this_node.min_cols =
+                            max(1, this_node.in_dims.as_ref().unwrap().iter().product());
                     } else {
                         assert_eq!(input_node.out_scale, weight_node.out_scale);
                         assert_eq!(input_node.out_scale, bias_node.out_scale);
                         this_node.out_scale = weight_node.out_scale + input_node.out_scale;
+                        this_node.min_cols = max(in_dim, out_dim);
                     }
-
-                    this_node.min_cols = max(in_dim, out_dim);
                 }
                 OpKind::Convolution => {
                     let (input_node, weight_node, bias_node) = (inputs[0], inputs[1], inputs[2]);
@@ -753,16 +754,17 @@ impl OnnxModel {
                         this_node.opkind = OpKind::Rescaled(Box::new(OpKind::Convolution), 128); // now the input will be scaled down to match
                         this_node.output_max /= 128f32;
                         this_node.out_scale = weight_node.out_scale + input_node.out_scale - 7;
+                        this_node.min_cols =
+                            max(1, this_node.in_dims.as_ref().unwrap().iter().product());
                     } else {
                         assert_eq!(input_node.out_scale, weight_node.out_scale);
                         assert_eq!(input_node.out_scale, bias_node.out_scale);
                         this_node.out_scale = weight_node.out_scale + input_node.out_scale;
+                        this_node.min_cols = max(
+                            1,
+                            max(out_height * out_channels, input_height * in_channels),
+                        );
                     }
-
-                    this_node.min_cols = max(
-                        1,
-                        max(out_height * out_channels, input_height * in_channels),
-                    );
                 }
 
                 OpKind::Sigmoid(_) => {
