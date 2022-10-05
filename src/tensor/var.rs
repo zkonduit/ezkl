@@ -163,7 +163,7 @@ impl VarTensor {
         &self,
         region: &mut Region<'_, F>,
         offset: usize,
-        values: ValTensor<F>,
+        values: &ValTensor<F>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         match values {
             ValTensor::Value { inner: v, dims: _ } => v.mc_enum_map(|coord, k| match &self {

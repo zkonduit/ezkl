@@ -104,52 +104,38 @@ where
                     let offset = 0;
                     self.selector.enable(&mut region, 0)?;
 
-                    let inp = self
-                        .input
-                        .assign(&mut region, offset, input.clone())
-                        .map(|e| e.value_field());
-                    let k = self
-                        .kernel
-                        .assign(&mut region, offset, kernel.clone())
-                        .map(|e| e.value_field());
-                    let b = self
-                        .bias
-                        .assign(&mut region, offset, bias.clone())
-                        .map(|e| e.value_field());
+                    let k = utils::value_muxer(
+                        &self.kernel,
+                        &self
+                            .kernel
+                            .assign(&mut region, offset, &kernel)
+                            .map(|e| e.value_field().evaluate()),
+                        &kernel,
+                    );
 
-                    let output1: ValTensor<F> =
+                    let b = utils::value_muxer(
+                        &self.bias,
+                        &self
+                            .bias
+                            .assign(&mut region, offset, &bias)
+                            .map(|e| e.value_field().evaluate()),
+                        &bias,
+                    );
+
+                    let inp = utils::value_muxer(
+                        &self.input,
+                        &self
+                            .input
+                            .assign(&mut region, offset, &input)
+                            .map(|e| e.value_field().evaluate()),
+                        &input,
+                    );
+
+                    let output: ValTensor<F> =
                         convolution(k.clone(), b.clone(), inp.clone(), self.padding, self.stride)
                             .into();
 
-                    println!("method a {:?} {:?} {:?}", inp[0], k[0], b[0]);
-
-                    let output: ValTensor<F> = match input.clone() {
-                        ValTensor::Value {
-                            inner: img,
-                            dims: _,
-                        } => match kernel.clone() {
-                            ValTensor::Value { inner: k, dims: _ } => match bias.clone() {
-                                ValTensor::Value { inner: b, dims: _ } => {
-                                    let o = convolution(
-                                        k.clone(),
-                                        b.clone(),
-                                        img.clone(),
-                                        self.padding,
-                                        self.stride,
-                                    );
-                                    println!("method b {:?} {:?} {:?}", img[0], k[0], b[0]);
-                                    o.into()
-                                }
-                                _ => unimplemented!(),
-                            },
-                            _ => unimplemented!(),
-                        },
-                        _ => unimplemented!(),
-                    };
-
-    
-
-                    Ok(self.output.assign(&mut region, image_width, output1))
+                    Ok(self.output.assign(&mut region, image_width, &output))
                 },
             )
             .unwrap();
