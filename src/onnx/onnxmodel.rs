@@ -405,7 +405,7 @@ impl OnnxModel {
         _fixeds: VarTensor, // Should use fixeds, but currently buggy
     ) -> OnnxNodeConfig<F> {
         match op {
-            OpKind::Rescaled(op, _) => {
+            OpKind::Rescaled(op, scale) => {
                 let dims = match &node.in_dims {
                     Some(v) => v,
                     None => {
@@ -418,7 +418,7 @@ impl OnnxModel {
                     meta,
                     &[advices.get_slice(&[0..length], &[length])],
                     //&[advices.get_slice(&[0..length], dims)],
-                    Some(&[self.bits]),
+                    Some(&[self.bits, *scale]),
                 );
 
                 let inner_config = self.configure_node(op, node, meta, advices, _fixeds);
@@ -554,11 +554,6 @@ impl OnnxModel {
                 unimplemented!()
             }
         }
-
-        // if scale == 7 {
-        // } else {
-        //     Ok(configuration)
-        // }
     }
 
     pub fn layout<F: FieldExt + TensorType>(
@@ -675,7 +670,6 @@ impl OnnxModel {
             (OpKind::Rescaled(op, _), OnnxNodeConfig::Rescaled(_, config)) => {
                 self.config_matches(op, &*config)
             }
-
             (OpKind::ReLU(_), OnnxNodeConfig::ReLU(_)) => true,
             (OpKind::Sigmoid(_), OnnxNodeConfig::Sigmoid(_)) => true,
 
