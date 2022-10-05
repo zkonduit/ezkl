@@ -37,7 +37,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
                 inner: (0..LEN).map(|_| cs.advice_column()).into(),
                 dims: [LEN].to_vec(),
             };
-            Self::Config::configure(cs, &[advices], Some(&[BITS]))
+            Self::Config::configure(cs, &[advices], Some(&[BITS, 128]))
         }
     }
 
