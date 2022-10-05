@@ -131,7 +131,7 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     pub fn show(&self) -> String {
         match self.clone() {
             ValTensor::PrevAssigned { inner: v, dims: _ } => {
-                let r: Tensor<i32> = v.clone().into();
+                let r: Tensor<i32> = v.into();
                 format!("PrevAssigned {:?}", r)
             }
             _ => "Unassigned ValTensor".into(),

@@ -110,7 +110,7 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
                         &input,
                     );
 
-                    let mut output: ValTensor<F> = matmul(k.clone(), b.clone(), inp.clone()).into();
+                    let mut output: ValTensor<F> = matmul(k, b, inp).into();
                     output.flatten();
 
                     Ok(self.output.assign(&mut region, offset, &output))

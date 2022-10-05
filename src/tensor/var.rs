@@ -168,7 +168,7 @@ impl VarTensor {
         match values {
             ValTensor::Value { inner: v, dims: _ } => v.mc_enum_map(|coord, k| match &self {
                 VarTensor::Fixed { inner: f, dims: _ } => region
-                    .assign_fixed(|| "k", f.get(&coord), offset, || k.into())
+                    .assign_fixed(|| "k", f.get(coord), offset, || k.into())
                     .unwrap(),
                 VarTensor::Advice { inner: a, dims: _ } => {
                     let coord = format_advice_coord(coord);
@@ -197,7 +197,7 @@ impl VarTensor {
             ValTensor::AssignedValue { inner: v, dims: _ } => {
                 v.mc_enum_map(|coord, k| match &self {
                     VarTensor::Fixed { inner: f, dims: _ } => region
-                        .assign_fixed(|| "k", f.get(&coord), offset, || k)
+                        .assign_fixed(|| "k", f.get(coord), offset, || k)
                         .unwrap(),
                     VarTensor::Advice { inner: a, dims: _ } => {
                         let coord = format_advice_coord(coord);
@@ -207,7 +207,7 @@ impl VarTensor {
                                 || "k",
                                 a.get(&coord[0..last]),
                                 offset + coord[last],
-                                || k.into(),
+                                || k,
                             )
                             .unwrap()
                     }

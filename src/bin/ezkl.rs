@@ -1,14 +1,11 @@
 use clap::Parser;
-use colog;
 use halo2_proofs::dev::MockProver;
 use halo2curves::pasta::Fp as F;
 use halo2deeplearning::fieldutils::i32_to_felt;
 use halo2deeplearning::onnx::{Cli, OnnxCircuit};
 use halo2deeplearning::tensor::Tensor;
 use log::info;
-use serde;
 use serde::Deserialize;
-use serde_json;
 use std::fs::File;
 use std::io::{stdin, stdout, Read, Write};
 use std::marker::PhantomData;
@@ -32,7 +29,7 @@ pub fn main() {
     let data_path = match args.data.is_empty() {
         false => {
             info!("loading data from {}", args.data.clone());
-            args.data = args.data.replace(" ", "");
+            args.data = args.data.replace(' ', "");
             Path::new(&args.data)
         }
         true => {

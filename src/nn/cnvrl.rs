@@ -132,7 +132,7 @@ where
                     );
 
                     let output: ValTensor<F> =
-                        convolution(k.clone(), b.clone(), inp.clone(), self.padding, self.stride)
+                        convolution(k, b, inp, self.padding, self.stride)
                             .into();
 
                     Ok(self.output.assign(&mut region, image_width, &output))
