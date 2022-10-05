@@ -64,6 +64,7 @@ impl<F: FieldExt> TensorType for Assigned<F> {
     }
 }
 
+
 impl<F: FieldExt> TensorType for Expression<F> {
     fn zero() -> Option<Self> {
         Some(Expression::Constant(F::zero()))

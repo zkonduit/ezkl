@@ -117,11 +117,39 @@ where
                         .assign(&mut region, offset, bias.clone())
                         .map(|e| e.value_field());
 
-                    let output = convolution(k, b, inp, self.padding, self.stride);
+                    let output1: ValTensor<F> =
+                        convolution(k.clone(), b.clone(), inp.clone(), self.padding, self.stride)
+                            .into();
 
-                    Ok(self
-                        .output
-                        .assign(&mut region, image_width, ValTensor::from(output)))
+                    println!("method a {:?} {:?} {:?}", inp[0], k[0], b[0]);
+
+                    let output: ValTensor<F> = match input.clone() {
+                        ValTensor::Value {
+                            inner: img,
+                            dims: _,
+                        } => match kernel.clone() {
+                            ValTensor::Value { inner: k, dims: _ } => match bias.clone() {
+                                ValTensor::Value { inner: b, dims: _ } => {
+                                    let o = convolution(
+                                        k.clone(),
+                                        b.clone(),
+                                        img.clone(),
+                                        self.padding,
+                                        self.stride,
+                                    );
+                                    println!("method b {:?} {:?} {:?}", img[0], k[0], b[0]);
+                                    o.into()
+                                }
+                                _ => unimplemented!(),
+                            },
+                            _ => unimplemented!(),
+                        },
+                        _ => unimplemented!(),
+                    };
+
+    
+
+                    Ok(self.output.assign(&mut region, image_width, output1))
                 },
             )
             .unwrap();

@@ -96,12 +96,10 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
                         .assign(&mut region, offset, bias.clone())
                         .map(|e| e.value_field());
 
-                    let mut output = matmul(k, b, inp);
+                    let mut output: ValTensor<F> = matmul(k, b, inp).into();
                     output.flatten();
 
-                    Ok(self
-                        .output
-                        .assign(&mut region, offset, ValTensor::from(output)))
+                    Ok(self.output.assign(&mut region, offset, output))
                 },
             )
             .unwrap();

@@ -1,7 +1,7 @@
 use super::utilities::{ndarray_to_quantized, node_output_shapes};
 use crate::nn::affine::Affine1dConfig;
 use crate::nn::cnvrl::ConvConfig;
-use crate::nn::eltwise::{DivideBy, EltwiseConfig, ReLu, ReLu128, ReLu64, Sigmoid};
+use crate::nn::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
 use crate::nn::LayerConfig;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
@@ -12,7 +12,7 @@ use halo2_proofs::{
     circuit::{Layouter, Value},
     plonk::{Column, ConstraintSystem, Fixed, Instance},
 };
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, warn};
 use std::cmp::max;
 use std::fmt;
 use std::io::{stdin, stdout, Write};
@@ -35,12 +35,10 @@ use tract_onnx::tract_hir::{
 // at each type of node)
 #[derive(Clone, Debug)]
 pub enum OpKind {
-    Rescaled(Box<OpKind>),
+    Rescaled(Box<OpKind>, usize),
     Affine,
     Convolution,
     ReLU,
-    ReLU64,
-    ReLU128,
     Sigmoid,
     Const,
     Input,
@@ -50,12 +48,10 @@ pub enum OpKind {
 impl fmt::Display for OpKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &*self {
-            OpKind::Rescaled(l) => write!(f, "rescaled {}", (*l)),
+            OpKind::Rescaled(l, _) => write!(f, "rescaled {}", (*l)),
             OpKind::Affine => write!(f, "affine"),
             OpKind::Convolution => write!(f, "conv"),
             OpKind::ReLU => write!(f, "relu"),
-            OpKind::ReLU64 => write!(f, "relu64"),
-            OpKind::ReLU128 => write!(f, "relu128"),
             OpKind::Sigmoid => write!(f, "sigmoid"),
             OpKind::Const => write!(f, "const"),
             OpKind::Input => write!(f, "input"),
@@ -66,13 +62,11 @@ impl fmt::Display for OpKind {
 
 #[derive(Clone, Debug)]
 pub enum OnnxNodeConfig<F: FieldExt + TensorType> {
-    Rescaled(EltwiseConfig<F, DivideBy<F, 128>>, Box<OnnxNodeConfig<F>>),
+    Rescaled(EltwiseConfig<F, DivideBy<F>>, Box<OnnxNodeConfig<F>>),
     Affine(Affine1dConfig<F>),
     Conv(ConvConfig<F>),
     ReLU(EltwiseConfig<F, ReLu<F>>),
-    ReLU64(EltwiseConfig<F, ReLu64<F>>),
-    ReLU128(EltwiseConfig<F, ReLu128<F>>),
-    Sigmoid(EltwiseConfig<F, Sigmoid<F, 128, 128>>),
+    Sigmoid(EltwiseConfig<F, Sigmoid<F>>),
     Const,
     Input,
     NotConfigured,
@@ -413,8 +407,7 @@ impl OnnxModel {
         _fixeds: VarTensor, // Should use fixeds, but currently buggy
     ) -> OnnxNodeConfig<F> {
         match op {
-            OpKind::Rescaled(op) => {
-                let inner_config = self.configure_node(&op, node, meta, advices.clone(), _fixeds);
+            OpKind::Rescaled(op, scale) => {
                 let dims = match &node.in_dims {
                     Some(v) => v,
                     None => {
@@ -423,12 +416,14 @@ impl OnnxModel {
                     }
                 };
                 let length = dims.clone().into_iter().product();
-                let divconf: EltwiseConfig<F, DivideBy<F, 128>> = EltwiseConfig::configure(
+                let divconf: EltwiseConfig<F, DivideBy<F>> = EltwiseConfig::configure(
                     meta,
                     &[advices.get_slice(&[0..length], &[length])],
                     //&[advices.get_slice(&[0..length], dims)],
                     Some(&[self.bits]),
                 );
+
+                let inner_config = self.configure_node(&op, node, meta, advices, _fixeds);
 
                 OnnxNodeConfig::Rescaled(divconf, Box::new(inner_config))
             }
@@ -529,47 +524,17 @@ impl OnnxModel {
                 );
                 OnnxNodeConfig::ReLU(conf)
             }
-            OpKind::ReLU64 => {
-                let dims = match &node.in_dims {
-                    Some(v) => v,
-                    None => {
-                        anyhow!("relu layer has no input shape");
-                        panic!()
-                    }
-                };
-
-                let length = dims.clone().into_iter().product();
-
-                let conf: EltwiseConfig<F, ReLu64<F>> = EltwiseConfig::configure(
-                    meta,
-                    &[advices.get_slice(&[0..length], &[length])],
-                    Some(&[self.bits]),
-                );
-                OnnxNodeConfig::ReLU64(conf)
-            }
-            OpKind::ReLU128 => {
-                let dims = match &node.in_dims {
-                    Some(v) => v,
-                    None => {
-                        anyhow!("relu layer has no input shape");
-                        panic!()
-                    }
-                };
-
-                let length = dims.clone().into_iter().product();
-
-                let conf: EltwiseConfig<F, ReLu128<F>> = EltwiseConfig::configure(
-                    meta,
-                    &[advices.get_slice(&[0..length], &[length])],
-                    Some(&[self.bits]),
-                );
-                OnnxNodeConfig::ReLU128(conf)
-            }
-
             OpKind::Sigmoid => {
-                // Here,   node.output_shapes().unwrap()[0].as_ref().unwrap() == vec![1,LEN]
-                let length = node.output_shapes().unwrap()[0].as_ref().unwrap()[1];
-                let conf: EltwiseConfig<F, Sigmoid<F, 128, 128>> = EltwiseConfig::configure(
+                let dims = match &node.in_dims {
+                    Some(v) => v,
+                    None => {
+                        anyhow!("sigmoid layer has no input shape");
+                        panic!()
+                    }
+                };
+
+                let length = dims.clone().into_iter().product();
+                let conf: EltwiseConfig<F, Sigmoid<F>> = EltwiseConfig::configure(
                     meta,
                     &[advices.get_slice(&[0..length], &[length])],
                     Some(&[self.bits]),
@@ -689,16 +654,6 @@ impl OnnxModel {
                 //                let length = node.output_shapes().unwrap()[0].as_ref().unwrap()[1]; //  shape is vec![1,LEN]
                 Some(rc.layout(layouter, &[input]))
             }
-            OnnxNodeConfig::ReLU64(rc) => {
-                // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
-                //                let length = node.output_shapes().unwrap()[0].as_ref().unwrap()[1]; //  shape is vec![1,LEN]
-                Some(rc.layout(layouter, &[input]))
-            }
-            OnnxNodeConfig::ReLU128(rc) => {
-                // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
-                //                let length = node.output_shapes().unwrap()[0].as_ref().unwrap()[1]; //  shape is vec![1,LEN]
-                Some(rc.layout(layouter, &[input]))
-            }
             OnnxNodeConfig::Sigmoid(sc) => Some(sc.layout(layouter, &[input])),
 
             OnnxNodeConfig::Input => None,
@@ -719,13 +674,11 @@ impl OnnxModel {
         match (op, config.clone()) {
             (OpKind::Affine, OnnxNodeConfig::Affine(_)) => true,
             (OpKind::Convolution, OnnxNodeConfig::Conv(_)) => true,
-            (OpKind::Rescaled(op), OnnxNodeConfig::Rescaled(_, config)) => {
+            (OpKind::Rescaled(op, _), OnnxNodeConfig::Rescaled(_, config)) => {
                 self.config_matches(&*op, &*config)
             }
 
             (OpKind::ReLU, OnnxNodeConfig::ReLU(_)) => true,
-            (OpKind::ReLU64, OnnxNodeConfig::ReLU64(_)) => true,
-            (OpKind::ReLU128, OnnxNodeConfig::ReLU128(_)) => true,
             (OpKind::Sigmoid, OnnxNodeConfig::Sigmoid(_)) => true,
 
             (OpKind::Input, OnnxNodeConfig::Input) => true,
@@ -742,13 +695,11 @@ impl OnnxModel {
         for node_idx in order {
             // mutate a copy of the node, referring to other nodes in the vec, then swap modified node in at the end
             let mut this_node = self.onnx_nodes[node_idx].clone();
-            match this_node.opkind {
-                // OpKind::Input => {
-                //     this_node.node.outputs
 
-                // }
+            let inputs = self.extract_node_inputs(&this_node);
+
+            match this_node.opkind {
                 OpKind::Affine => {
-                    let inputs = self.extract_node_inputs(&this_node);
                     let (input_node, weight_node, bias_node) = (inputs[0], inputs[1], inputs[2]);
 
                     let in_dim = weight_node.out_dims.as_ref().unwrap()[1];
@@ -765,7 +716,6 @@ impl OnnxModel {
                     this_node.min_cols = max(in_dim, out_dim);
                 }
                 OpKind::Convolution => {
-                    let inputs = self.extract_node_inputs(&this_node);
                     let (input_node, weight_node, bias_node) = (inputs[0], inputs[1], inputs[2]);
 
                     let oihw = weight_node.out_dims.as_ref().unwrap();
@@ -799,7 +749,7 @@ impl OnnxModel {
                     this_node.in_scale = input_node.out_scale;
 
                     if input_node.out_scale - weight_node.out_scale == 7 {
-                        this_node.opkind = OpKind::Rescaled(Box::new(OpKind::Convolution)); // now the input will be scaled down to match
+                        this_node.opkind = OpKind::Rescaled(Box::new(OpKind::Convolution), 128); // now the input will be scaled down to match
                         this_node.output_max = this_node.output_max / 128f32;
                         this_node.out_scale = weight_node.out_scale + input_node.out_scale - 7;
                     } else {
@@ -814,15 +764,15 @@ impl OnnxModel {
                     );
                 }
 
-                OpKind::ReLU => {
-                    let input_node = self.extract_node_inputs(&this_node)[0];
+                OpKind::Sigmoid => {
+                    let input_node = inputs[0];
                     this_node.in_dims = input_node.out_dims.clone();
                     this_node.out_dims = input_node.out_dims.clone();
 
-                    if this_node.input_shapes == None {
+                    if this_node.input_shapes.is_none() {
                         this_node.input_shapes = Some(vec![this_node.in_dims.clone()]);
                     }
-                    if this_node.output_shapes == None {
+                    if this_node.output_shapes.is_none() {
                         this_node.output_shapes = Some(vec![this_node.out_dims.clone()]);
                     }
                     this_node.output_max = input_node.output_max;
@@ -830,7 +780,32 @@ impl OnnxModel {
 
                     // We can also consider adjusting the scale of all inputs and the output in a more custom way.
                     if this_node.in_scale == 14 {
-                        this_node.opkind = OpKind::ReLU128;
+                        this_node.opkind = OpKind::Rescaled(Box::new(OpKind::Sigmoid), 128); // now the input will be scaled down to match
+                        this_node.output_max = input_node.output_max / 128f32;
+                        this_node.out_scale = this_node.in_scale - 7;
+                    }
+
+                    this_node.min_cols =
+                        max(1, this_node.in_dims.as_ref().unwrap().iter().product());
+                }
+
+                OpKind::ReLU => {
+                    let input_node = inputs[0];
+                    this_node.in_dims = input_node.out_dims.clone();
+                    this_node.out_dims = input_node.out_dims.clone();
+
+                    if this_node.input_shapes.is_none() {
+                        this_node.input_shapes = Some(vec![this_node.in_dims.clone()]);
+                    }
+                    if this_node.output_shapes.is_none() {
+                        this_node.output_shapes = Some(vec![this_node.out_dims.clone()]);
+                    }
+                    this_node.output_max = input_node.output_max;
+                    this_node.in_scale = input_node.out_scale;
+
+                    // We can also consider adjusting the scale of all inputs and the output in a more custom way.
+                    if this_node.in_scale == 14 {
+                        this_node.opkind = OpKind::Rescaled(Box::new(OpKind::ReLU), 128); // now the input will be scaled down to match
                         this_node.output_max = input_node.output_max / 128f32;
                         this_node.out_scale = this_node.in_scale - 7;
                     }
