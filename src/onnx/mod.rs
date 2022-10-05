@@ -28,7 +28,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        let mut onnx_model = OnnxModel::from_arg();
+        let onnx_model = OnnxModel::from_arg();
         let num_advices = max(
             onnx_model.max_node_advices(),
             onnx_model.max_advices_width().unwrap(),
