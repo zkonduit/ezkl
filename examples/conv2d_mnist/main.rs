@@ -53,7 +53,7 @@ struct Config<
     Value<F>: TensorType,
 {
     l0: ConvConfig<F>,
-    l0q: EltwiseConfig<F, DivideBy<F, 32>>,
+    l0q: EltwiseConfig<F, DivideBy<F>>,
     l1: EltwiseConfig<F, ReLu<F>>,
     l2: Affine1dConfig<F>,
     public_output: Column<Instance>,
@@ -80,7 +80,7 @@ struct MyCircuit<
     // Given the stateless ConvConfig type information, a DNN trace is determined by its input and the parameters of its layers.
     // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
     input: ValTensor<F>,
-    l0_params: ValTensor<F>,
+    l0_params: [ValTensor<F>; 2],
     l2_params: [ValTensor<F>; 2],
 }
 
@@ -159,10 +159,13 @@ where
                 .into();
         kernel.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
 
+        let bias: Tensor<Column<Fixed>> = (0..OUT_CHANNELS).map(|_| cs.fixed_column()).into();
+
         let l0 = ConvConfig::<F>::configure(
             cs,
             &[
                 VarTensor::from(kernel),
+                VarTensor::from(bias),
                 advices.get_slice(
                     &[0..IMAGE_HEIGHT * IN_CHANNELS],
                     &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
@@ -175,10 +178,16 @@ where
             Some(&[PADDING, PADDING, STRIDE, STRIDE]),
         );
 
-        let l0q: EltwiseConfig<F, DivideBy<F, 32>> =
-            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])], Some(&[BITS]));
-        let l1: EltwiseConfig<F, ReLu<F>> =
-            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])], Some(&[BITS]));
+        let l0q: EltwiseConfig<F, DivideBy<F>> = EltwiseConfig::configure(
+            cs,
+            &[advices.get_slice(&[0..LEN], &[LEN])],
+            Some(&[BITS, 32]),
+        );
+        let l1: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
+            cs,
+            &[advices.get_slice(&[0..LEN], &[LEN])],
+            Some(&[BITS, 32]),
+        );
 
         let l2: Affine1dConfig<F> = Affine1dConfig::configure(
             cs,
@@ -207,9 +216,14 @@ where
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let x = config
-            .l0
-            .layout(&mut layouter, &[self.l0_params.clone(), self.input.clone()]);
+        let x = config.l0.layout(
+            &mut layouter,
+            &[
+                self.l0_params[0].clone(),
+                self.l0_params[1].clone(),
+                self.input.clone(),
+            ],
+        );
         let x = config.l0q.layout(&mut layouter, &[x]);
         let mut x = config.l1.layout(&mut layouter, &[x]);
         x.flatten();
@@ -280,7 +294,7 @@ pub fn runconv() {
     input.reshape(&[1, 28, 28]);
 
     let myparams = params::Params::new();
-    let mut l0_params: ValTensor<F> = Tensor::<Value<F>>::from(
+    let mut l0_kernels: ValTensor<F> = Tensor::<Value<F>>::from(
         myparams
             .kernels
             .clone()
@@ -298,9 +312,14 @@ pub fn runconv() {
     )
     .into();
 
-    l0_params.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
+    l0_kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
 
-    let l2biases: ValTensor<F> = Tensor::<Value<F>>::from(myparams.biases.into_iter().map(|fl| {
+    let l0_bias: ValTensor<F> = Tensor::<Value<F>>::from(
+        (0..OUT_CHANNELS).map(|_| Value::known(fieldutils::i32_to_felt(0))),
+    )
+    .into();
+
+    let l2_biases: ValTensor<F> = Tensor::<Value<F>>::from(myparams.biases.into_iter().map(|fl| {
         let dx = fl * (32 as f32);
         let rounded = dx.round();
         let integral: i32 = unsafe { rounded.to_int_unchecked() };
@@ -309,9 +328,7 @@ pub fn runconv() {
     }))
     .into();
 
-    // l2biases.reshape(&[1, CLASSES]);
-
-    let mut l2weights: ValTensor<F> =
+    let mut l2_weights: ValTensor<F> =
         Tensor::<Value<F>>::from(myparams.weights.into_iter().flatten().map(|fl| {
             let dx = fl * (32 as f32);
             let rounded = dx.round();
@@ -321,7 +338,7 @@ pub fn runconv() {
         }))
         .into();
 
-    l2weights.reshape(&[CLASSES, LEN]);
+    l2_weights.reshape(&[CLASSES, LEN]);
 
     let circuit = MyCircuit::<
         F,
@@ -338,8 +355,8 @@ pub fn runconv() {
         PADDING,
     > {
         input,
-        l0_params,
-        l2_params: [l2weights, l2biases],
+        l0_params: [l0_kernels, l0_bias],
+        l2_params: [l2_weights, l2_biases],
     };
 
     #[cfg(feature = "dev-graph")]

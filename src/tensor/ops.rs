@@ -31,10 +31,7 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     assert_eq!(input.dims()[0], kernel.dims()[1]);
 
     // does matrix to vector multiplication
-    match input.dims().len() {
-        1 => input.reshape(&[input.dims()[0], 1]),
-        _ => {}
-    }
+    if input.dims().len() == 1 { input.reshape(&[input.dims()[0], 1]) }
 
     let input_dims = input.dims();
     let kernel_dims = kernel.dims();

@@ -104,24 +104,38 @@ where
                     let offset = 0;
                     self.selector.enable(&mut region, 0)?;
 
-                    let inp = self
-                        .input
-                        .assign(&mut region, offset, input.clone())
-                        .map(|e| e.value_field());
-                    let k = self
-                        .kernel
-                        .assign(&mut region, offset, kernel.clone())
-                        .map(|e| e.value_field());
-                    let b = self
-                        .bias
-                        .assign(&mut region, offset, bias.clone())
-                        .map(|e| e.value_field());
+                    let k = utils::value_muxer(
+                        &self.kernel,
+                        &self
+                            .kernel
+                            .assign(&mut region, offset, &kernel)
+                            .map(|e| e.value_field().evaluate()),
+                        &kernel,
+                    );
 
-                    let output = convolution(k, b, inp, self.padding, self.stride);
+                    let b = utils::value_muxer(
+                        &self.bias,
+                        &self
+                            .bias
+                            .assign(&mut region, offset, &bias)
+                            .map(|e| e.value_field().evaluate()),
+                        &bias,
+                    );
 
-                    Ok(self
-                        .output
-                        .assign(&mut region, image_width, ValTensor::from(output)))
+                    let inp = utils::value_muxer(
+                        &self.input,
+                        &self
+                            .input
+                            .assign(&mut region, offset, &input)
+                            .map(|e| e.value_field().evaluate()),
+                        &input,
+                    );
+
+                    let output: ValTensor<F> =
+                        convolution(k, b, inp, self.padding, self.stride)
+                            .into();
+
+                    Ok(self.output.assign(&mut region, image_width, &output))
                 },
             )
             .unwrap();

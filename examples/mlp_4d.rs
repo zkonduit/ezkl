@@ -19,7 +19,7 @@ struct MyConfig<F: FieldExt + TensorType> {
     l1: EltwiseConfig<F, ReLu<F>>,
     l2: Affine1dConfig<F>,
     l3: EltwiseConfig<F, ReLu<F>>,
-    l4: EltwiseConfig<F, DivideBy<F, 128>>,
+    l4: EltwiseConfig<F, DivideBy<F>>,
     public_output: Column<Instance>,
 }
 
@@ -70,12 +70,18 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let l2 = Affine1dConfig::<F>::configure(cs, &[kernel, bias, input, output], None);
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
-        let [l1, l3]: [EltwiseConfig<F, ReLu<F>>; 2] =
-            EltwiseConfig::configure_multiple(cs, &[advices.get_slice(&[0..LEN], &[LEN])], Some(&[BITS]));
+        let [l1, l3]: [EltwiseConfig<F, ReLu<F>>; 2] = EltwiseConfig::configure_multiple(
+            cs,
+            &[advices.get_slice(&[0..LEN], &[LEN])],
+            Some(&[BITS, 32]),
+        );
 
         // sets up a new Divide by table
-        let l4: EltwiseConfig<F, DivideBy<F, 128>> =
-            EltwiseConfig::configure(cs, &[advices.get_slice(&[0..LEN], &[LEN])], Some(&[BITS]));
+        let l4: EltwiseConfig<F, DivideBy<F>> = EltwiseConfig::configure(
+            cs,
+            &[advices.get_slice(&[0..LEN], &[LEN])],
+            Some(&[BITS, 128]),
+        );
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);

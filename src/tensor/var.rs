@@ -74,11 +74,17 @@ impl VarTensor {
     pub fn reshape(&mut self, new_dims: &[usize]) {
         match self {
             VarTensor::Advice { inner: _, dims: d } => {
-                assert_eq!(d.iter().product::<usize>(), new_dims.iter().product::<usize>());
+                assert_eq!(
+                    d.iter().product::<usize>(),
+                    new_dims.iter().product::<usize>()
+                );
                 *d = new_dims.to_vec();
             }
             VarTensor::Fixed { inner: _, dims: d } => {
-                assert_eq!(d.iter().product::<usize>(),new_dims.iter().product::<usize>());
+                assert_eq!(
+                    d.iter().product::<usize>(),
+                    new_dims.iter().product::<usize>()
+                );
                 *d = new_dims.to_vec();
             }
         }
@@ -157,12 +163,12 @@ impl VarTensor {
         &self,
         region: &mut Region<'_, F>,
         offset: usize,
-        values: ValTensor<F>,
+        values: &ValTensor<F>,
     ) -> Tensor<AssignedCell<Assigned<F>, F>> {
         match values {
             ValTensor::Value { inner: v, dims: _ } => v.mc_enum_map(|coord, k| match &self {
                 VarTensor::Fixed { inner: f, dims: _ } => region
-                    .assign_fixed(|| "k", f.get(&coord), offset, || k.into())
+                    .assign_fixed(|| "k", f.get(coord), offset, || k.into())
                     .unwrap(),
                 VarTensor::Advice { inner: a, dims: _ } => {
                     let coord = format_advice_coord(coord);
@@ -179,7 +185,7 @@ impl VarTensor {
             }),
             ValTensor::PrevAssigned { inner: v, dims: _ } => {
                 v.mc_enum_map(|coord, x| match &self {
-                    VarTensor::Fixed { inner: _, dims: _ } => panic!("not implemented"),
+                    VarTensor::Fixed { inner: _, dims: _ } => todo!(),
                     VarTensor::Advice { inner: a, dims: _ } => {
                         let coord = format_advice_coord(coord);
                         let last = coord.len() - 1;
@@ -191,7 +197,7 @@ impl VarTensor {
             ValTensor::AssignedValue { inner: v, dims: _ } => {
                 v.mc_enum_map(|coord, k| match &self {
                     VarTensor::Fixed { inner: f, dims: _ } => region
-                        .assign_fixed(|| "k", f.get(&coord), offset, || k)
+                        .assign_fixed(|| "k", f.get(coord), offset, || k)
                         .unwrap(),
                     VarTensor::Advice { inner: a, dims: _ } => {
                         let coord = format_advice_coord(coord);
@@ -201,7 +207,7 @@ impl VarTensor {
                                 || "k",
                                 a.get(&coord[0..last]),
                                 offset + coord[last],
-                                || k.into(),
+                                || k,
                             )
                             .unwrap()
                     }

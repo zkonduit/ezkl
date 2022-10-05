@@ -6,6 +6,8 @@ pub mod affine;
 pub mod cnvrl;
 /// Element-wise operations.
 pub mod eltwise;
+/// Utility functions for building layers.
+pub mod utils;
 
 /// Trait for configuring neural network layers in a Halo2 circuit.
 pub trait LayerConfig<F: FieldExt + TensorType> {

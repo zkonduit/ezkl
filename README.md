@@ -32,7 +32,7 @@ If `-D` and `-M` are not provided the cli will query the user to manually enter 
 ```json
 {
     "input_data": [1, 5, 6 ...], // array of integers which represents the (private) inputs we run the proof on
-    "input_shape": [3, 3, ..], // array of integers which represents the shape of model inputs (excluding batch size)
+    "input_shape": [3, 3, ...], // array of integers which represents the shape of model inputs (excluding batch size)
     "public_input": [1, 5, 6 ...], // array of integers which represents the public input (model output for now)
 }
 ```
@@ -43,7 +43,7 @@ To run a simple example using the cli:
 cargo run --release --bin ezkl -- -D ./examples/onnx_models/ff_input.json -M ./examples/onnx_models/ff.onnx
 ```
 
-To display a table of loaded Onnx nodes, and their associated parameters, set `RUST_LOG=DEBUG`. 
+To display a table of loaded Onnx nodes, and their associated parameters, set `RUST_LOG=DEBUG`.
 
 
 ## Running examples

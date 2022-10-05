@@ -83,25 +83,37 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
                 |mut region| {
                     let offset = 0;
                     self.selector.enable(&mut region, offset)?;
-                    let inp = self
-                        .input
-                        .assign(&mut region, offset, input.clone())
-                        .map(|e| e.value_field());
-                    let k = self
-                        .kernel
-                        .assign(&mut region, offset, kernel.clone())
-                        .map(|e| e.value_field());
-                    let b = self
-                        .bias
-                        .assign(&mut region, offset, bias.clone())
-                        .map(|e| e.value_field());
+                    let k = utils::value_muxer(
+                        &self.kernel,
+                        &self
+                            .kernel
+                            .assign(&mut region, offset, &kernel)
+                            .map(|e| e.value_field().evaluate()),
+                        &kernel,
+                    );
 
-                    let mut output = matmul(k, b, inp);
+                    let b = utils::value_muxer(
+                        &self.bias,
+                        &self
+                            .bias
+                            .assign(&mut region, offset, &bias)
+                            .map(|e| e.value_field().evaluate()),
+                        &bias,
+                    );
+
+                    let inp = utils::value_muxer(
+                        &self.input,
+                        &self
+                            .input
+                            .assign(&mut region, offset, &input)
+                            .map(|e| e.value_field().evaluate()),
+                        &input,
+                    );
+
+                    let mut output: ValTensor<F> = matmul(k, b, inp).into();
                     output.flatten();
 
-                    Ok(self
-                        .output
-                        .assign(&mut region, offset, ValTensor::from(output)))
+                    Ok(self.output.assign(&mut region, offset, &output))
                 },
             )
             .unwrap();

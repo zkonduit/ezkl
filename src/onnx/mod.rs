@@ -11,6 +11,7 @@ pub mod utilities;
 use std::cmp::max;
 pub use utilities::*;
 pub mod onnxmodel;
+use log::info;
 pub use onnxmodel::*;
 
 #[derive(Clone, Debug)]
@@ -28,11 +29,12 @@ impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        let mut onnx_model = OnnxModel::from_arg();
+        let onnx_model = OnnxModel::from_arg();
         let num_advices = max(
             onnx_model.max_node_advices(),
             onnx_model.max_advices_width().unwrap(),
         );
+        info!("number of advices used: {:?}", num_advices);
         let num_fixeds = onnx_model.max_fixeds_width().unwrap();
         let advices = VarTensor::from(Tensor::from((0..num_advices + 3).map(|_| {
             let col = meta.advice_column();
@@ -68,7 +70,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
                     .constrain_instance(x.cell(), config.public_output, i)
                     .unwrap()
             }),
-            _ => panic!("Should be assigned"),
+            _ => panic!("should be assigned"),
         };
         Ok(())
     }
