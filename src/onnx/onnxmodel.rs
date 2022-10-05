@@ -38,8 +38,8 @@ pub enum OpKind {
     Rescaled(Box<OpKind>, usize),
     Affine,
     Convolution,
-    ReLU,
-    Sigmoid,
+    ReLU(usize),
+    Sigmoid(usize),
     Const,
     Input,
     Unknown,
@@ -51,8 +51,8 @@ impl fmt::Display for OpKind {
             OpKind::Rescaled(l, _) => write!(f, "rescaled {}", (*l)),
             OpKind::Affine => write!(f, "affine"),
             OpKind::Convolution => write!(f, "conv"),
-            OpKind::ReLU => write!(f, "relu"),
-            OpKind::Sigmoid => write!(f, "sigmoid"),
+            OpKind::ReLU(s) => write!(f, "relu {}", s),
+            OpKind::Sigmoid(s) => write!(f, "sigmoid {}", s),
             OpKind::Const => write!(f, "const"),
             OpKind::Input => write!(f, "input"),
             OpKind::Unknown => write!(f, "?"),
@@ -162,8 +162,8 @@ impl OnnxNode {
             "Gemm" => OpKind::Affine,
             "Conv" => OpKind::Convolution,
             "ConvHir" => OpKind::Convolution,
-            "Clip" => OpKind::ReLU,
-            "Sigmoid" => OpKind::Sigmoid,
+            "Clip" => OpKind::ReLU(32),
+            "Sigmoid" => OpKind::Sigmoid(32),
             "Const" => OpKind::Const,
             "Source" => OpKind::Input,
             c => {
@@ -407,7 +407,7 @@ impl OnnxModel {
         _fixeds: VarTensor, // Should use fixeds, but currently buggy
     ) -> OnnxNodeConfig<F> {
         match op {
-            OpKind::Rescaled(op, scale) => {
+            OpKind::Rescaled(op, _) => {
                 let dims = match &node.in_dims {
                     Some(v) => v,
                     None => {
@@ -506,7 +506,7 @@ impl OnnxModel {
 
                 OnnxNodeConfig::Conv(conf)
             }
-            OpKind::ReLU => {
+            OpKind::ReLU(s) => {
                 let dims = match &node.in_dims {
                     Some(v) => v,
                     None => {
@@ -520,11 +520,11 @@ impl OnnxModel {
                 let conf: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
                     meta,
                     &[advices.get_slice(&[0..length], &[length])],
-                    Some(&[self.bits]),
+                    Some(&[self.bits, *s]),
                 );
                 OnnxNodeConfig::ReLU(conf)
             }
-            OpKind::Sigmoid => {
+            OpKind::Sigmoid(s) => {
                 let dims = match &node.in_dims {
                     Some(v) => v,
                     None => {
@@ -537,7 +537,7 @@ impl OnnxModel {
                 let conf: EltwiseConfig<F, Sigmoid<F>> = EltwiseConfig::configure(
                     meta,
                     &[advices.get_slice(&[0..length], &[length])],
-                    Some(&[self.bits]),
+                    Some(&[self.bits, *s]),
                 );
                 OnnxNodeConfig::Sigmoid(conf)
             }
@@ -678,8 +678,8 @@ impl OnnxModel {
                 self.config_matches(&*op, &*config)
             }
 
-            (OpKind::ReLU, OnnxNodeConfig::ReLU(_)) => true,
-            (OpKind::Sigmoid, OnnxNodeConfig::Sigmoid(_)) => true,
+            (OpKind::ReLU(_), OnnxNodeConfig::ReLU(_)) => true,
+            (OpKind::Sigmoid(_), OnnxNodeConfig::Sigmoid(_)) => true,
 
             (OpKind::Input, OnnxNodeConfig::Input) => true,
             (OpKind::Const, OnnxNodeConfig::Const) => true,
@@ -709,10 +709,21 @@ impl OnnxModel {
 
                     this_node.output_max =
                         input_node.output_max * weight_node.output_max * (in_dim as f32);
-                    assert_eq!(input_node.out_scale, weight_node.out_scale);
-                    assert_eq!(input_node.out_scale, bias_node.out_scale);
+
+
                     this_node.in_scale = input_node.out_scale;
-                    this_node.out_scale = weight_node.out_scale + input_node.out_scale;
+
+                    if input_node.out_scale - weight_node.out_scale == 7 {
+                        this_node.opkind = OpKind::Rescaled(Box::new(OpKind::Affine), 128); // now the input will be scaled down to match
+                        this_node.output_max = this_node.output_max / 128f32;
+                        this_node.out_scale = weight_node.out_scale + input_node.out_scale - 7;
+                    } else {
+                        assert_eq!(input_node.out_scale, weight_node.out_scale);
+                        assert_eq!(input_node.out_scale, bias_node.out_scale);
+                        this_node.out_scale = weight_node.out_scale + input_node.out_scale;
+                    }
+
+
                     this_node.min_cols = max(in_dim, out_dim);
                 }
                 OpKind::Convolution => {
@@ -764,7 +775,7 @@ impl OnnxModel {
                     );
                 }
 
-                OpKind::Sigmoid => {
+                OpKind::Sigmoid(_) => {
                     let input_node = inputs[0];
                     this_node.in_dims = input_node.out_dims.clone();
                     this_node.out_dims = input_node.out_dims.clone();
@@ -780,7 +791,7 @@ impl OnnxModel {
 
                     // We can also consider adjusting the scale of all inputs and the output in a more custom way.
                     if this_node.in_scale == 14 {
-                        this_node.opkind = OpKind::Rescaled(Box::new(OpKind::Sigmoid), 128); // now the input will be scaled down to match
+                        this_node.opkind = OpKind::Sigmoid(128); // now the input will be scaled down to match
                         this_node.output_max = input_node.output_max / 128f32;
                         this_node.out_scale = this_node.in_scale - 7;
                     }
@@ -789,7 +800,7 @@ impl OnnxModel {
                         max(1, this_node.in_dims.as_ref().unwrap().iter().product());
                 }
 
-                OpKind::ReLU => {
+                OpKind::ReLU(_) => {
                     let input_node = inputs[0];
                     this_node.in_dims = input_node.out_dims.clone();
                     this_node.out_dims = input_node.out_dims.clone();
@@ -805,7 +816,7 @@ impl OnnxModel {
 
                     // We can also consider adjusting the scale of all inputs and the output in a more custom way.
                     if this_node.in_scale == 14 {
-                        this_node.opkind = OpKind::Rescaled(Box::new(OpKind::ReLU), 128); // now the input will be scaled down to match
+                        this_node.opkind = OpKind::ReLU(128); // now the input will be scaled down to match
                         this_node.output_max = input_node.output_max / 128f32;
                         this_node.out_scale = this_node.in_scale - 7;
                     }
