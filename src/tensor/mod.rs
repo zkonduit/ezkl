@@ -22,11 +22,16 @@ use std::iter::Iterator;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
+use std::cmp::max;
 
 /// The (inner) type of tensor elements.
 pub trait TensorType: Clone + Debug + 'static {
     /// Returns the zero value.
     fn zero() -> Option<Self> {
+        None
+    }
+
+    fn tmax(&self, other: &Self) -> Option<Self> {
         None
     }
 }
@@ -37,11 +42,31 @@ macro_rules! tensor_type {
             fn zero() -> Option<Self> {
                 Some($zero)
             }
+
+            fn tmax(&self, other: &Self) -> Option<Self> {
+                Some(max(*self, *other))
+            }
         }
     };
 }
 
-tensor_type!(f32, Float, 0.0);
+impl TensorType for f32 {
+    fn zero() -> Option<Self> {
+        Some(0.0)
+    }
+
+    // f32 doesnt impl Ord so we cant just use max like we can for i32, usize.
+    // A comparison between f32s needs to handle NAN values.
+    fn tmax(&self, other: &Self) -> Option<Self> {
+        match (self.is_nan(), other.is_nan()) {
+            (true, true) => Some(f32::NAN),
+            (true, false) => Some(other.clone()),
+            (false, true) => Some(self.clone()),
+            (false, false) => if self >= other {Some(self.clone())} else {Some(other.clone())},
+        }
+    }
+}
+
 tensor_type!(i32, Int32, 0);
 tensor_type!(usize, USize, 0);
 tensor_type!((), Empty, ());
@@ -50,11 +75,20 @@ impl<T: TensorType> TensorType for Tensor<T> {
     fn zero() -> Option<Self> {
         Some(Tensor::new(Some(&[T::zero().unwrap()]), &[1]).unwrap())
     }
+
 }
 
 impl<T: TensorType> TensorType for Value<T> {
     fn zero() -> Option<Self> {
         Some(Value::known(T::zero().unwrap()))
+    }
+
+    fn tmax(&self, other: &Self) -> Option<Self> {
+        Some(
+            (self.clone()).zip(other.clone()).map(|(a, b)| {
+                a.tmax(&b).unwrap()
+            })
+        )
     }
 }
 
@@ -62,23 +96,51 @@ impl<F: FieldExt> TensorType for Assigned<F> {
     fn zero() -> Option<Self> {
         Some(F::zero().into())
     }
+
+    fn tmax(&self, other: &Self) -> Option<Self> {
+        if self.evaluate() >= other.evaluate() {
+            Some(self.clone())
+        } else {
+            Some(other.clone())
+        }
+    }
 }
 
 impl<F: FieldExt> TensorType for Expression<F> {
     fn zero() -> Option<Self> {
         Some(Expression::Constant(F::zero()))
     }
+
+    fn tmax(&self, other: &Self) -> Option<Self> {
+        todo!()
+    }
 }
 
 impl TensorType for Column<Advice> {}
 impl TensorType for Column<Fixed> {}
 
-impl<F: FieldExt> TensorType for AssignedCell<Assigned<F>, F> {}
+impl<F: FieldExt> TensorType for AssignedCell<Assigned<F>, F> {
+    fn tmax(&self, other: &Self) -> Option<Self> {
+        let mut output: Option<Self> = None;
+        self.value_field().zip(other.value_field()).map(|(a, b)| {
+            if a.evaluate() >= b.evaluate() {
+                output = Some(self.clone());
+            } else {
+                output = Some(other.clone());
+            }
+        });
+        output
+    }
+}
 
 // specific types
 impl TensorType for halo2curves::pasta::Fp {
     fn zero() -> Option<Self> {
         Some(halo2curves::pasta::Fp::zero())
+    }
+
+    fn tmax(&self, other: &Self) -> Option<Self> {
+        Some(self.clone().max(other.clone()))
     }
 }
 
