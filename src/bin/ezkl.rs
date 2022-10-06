@@ -2,8 +2,7 @@ use clap::Parser;
 use halo2_proofs::dev::MockProver;
 use halo2curves::pasta::Fp as F;
 use halo2deeplearning::fieldutils::i32_to_felt;
-use halo2deeplearning::onnx::{Cli, OnnxCircuit};
-use halo2deeplearning::tensor::Tensor;
+use halo2deeplearning::onnx::{utilities::vector_to_quantized, Cli, OnnxCircuit};
 use log::info;
 use serde::Deserialize;
 use std::fs::File;
@@ -13,9 +12,9 @@ use std::path::Path;
 
 #[derive(Debug, Deserialize)]
 struct OnnxInput {
-    input_data: Vec<i32>,
+    input_data: Vec<f32>,
     input_shape: Vec<usize>,
-    public_input: Vec<i32>,
+    public_input: Vec<f32>,
 }
 
 pub fn main() {
@@ -64,12 +63,20 @@ pub fn main() {
 
     let data: OnnxInput = serde_json::from_str(&data).expect("JSON was not well-formatted");
 
-    let input = Tensor::<i32>::new(Some(&data.input_data), &data.input_shape).unwrap();
-
+    // quantize the supplied data using the provided scale.
+    let input = vector_to_quantized(&data.input_data, &data.input_shape, 0.0, args.scale).unwrap();
     info!(
         "public input length (network output) {:?}",
         data.public_input.len()
     );
+    // quantize the supplied data using the provided scale.
+    let public_input = vector_to_quantized(
+        &data.public_input,
+        &Vec::from([data.public_input.len()]),
+        0.0,
+        args.scale,
+    )
+    .unwrap();
 
     let circuit = OnnxCircuit::<F> {
         input,
@@ -79,11 +86,7 @@ pub fn main() {
     let prover = MockProver::run(
         k,
         &circuit,
-        vec![data
-            .public_input
-            .iter()
-            .map(|x| i32_to_felt::<F>(*x))
-            .collect()],
+        vec![public_input.iter().map(|x| i32_to_felt::<F>(*x)).collect()],
     )
     .unwrap();
     prover.assert_satisfied();

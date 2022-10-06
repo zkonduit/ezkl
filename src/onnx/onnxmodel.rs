@@ -12,7 +12,7 @@ use halo2_proofs::{
     circuit::{Layouter, Value},
     plonk::{Column, ConstraintSystem, Fixed, Instance},
 };
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, warn};
 use std::cmp::max;
 use std::fmt;
 use std::io::{stdin, stdout, Write};
@@ -88,6 +88,12 @@ pub struct Cli {
     /// The path to the .onnx model file
     #[arg(short = 'M', long, default_value = "")]
     pub model: String,
+    /// The denominator in the fixed point representation used when quantizing
+    #[arg(short = 'S', long)]
+    pub scale: i32,
+    /// The number of bits used in lookup tables
+    #[arg(short = 'B', long)]
+    pub bits: usize,
 }
 
 fn display_option<T: fmt::Debug>(o: &Option<T>) -> String {
@@ -157,7 +163,7 @@ pub struct OnnxNode {
 }
 
 impl OnnxNode {
-    pub fn new(node: Node<InferenceFact, Box<dyn InferenceOp>>) -> Self {
+    pub fn new(node: Node<InferenceFact, Box<dyn InferenceOp>>, scale: i32) -> Self {
         let opkind = match node.op().name().as_ref() {
             "Gemm" => OpKind::Affine,
             "Conv" => OpKind::Convolution,
@@ -179,7 +185,7 @@ impl OnnxNode {
         // Set some default values, then figure out more specific values if possible based on the opkind.
         let min_cols = 1;
         let mut const_value = None;
-        let mut in_scale = 0i32;
+        let mut in_scale = scale;
         let mut out_scale = 0i32;
         let in_dims = None;
         let mut out_dims = None;
@@ -189,7 +195,6 @@ impl OnnxNode {
         match opkind {
             OpKind::Const => {
                 let fact = &node.outputs[0].fact;
-                println!("node {:?}", node);
                 let nav = fact
                     .value
                     .concretize()
@@ -199,7 +204,7 @@ impl OnnxNode {
                     .to_owned();
                 let vec = nav.clone().into_raw_vec();
                 let dims = nav.shape().to_vec();
-                out_scale = 7;
+                out_scale = in_scale;
                 let t = vector_to_quantized(&vec, &dims, 0f32, out_scale).unwrap();
                 out_dims = Some(t.dims().to_vec());
                 output_max = t.iter().map(|x| x.abs()).max().unwrap() as f32;
@@ -227,8 +232,8 @@ impl OnnxNode {
                 }
 
                 output_max = 256.0;
-                in_scale = 7;
-                out_scale = 7;
+                in_scale = in_scale;
+                out_scale = in_scale;
             }
             OpKind::Convolution => {
                 // Extract the padding and stride layer hyperparams
@@ -307,22 +312,24 @@ pub struct OnnxModel {
     pub model: Graph<InferenceFact, Box<dyn InferenceOp>>, // The raw Tract data structure
     pub onnx_nodes: Vec<OnnxNode>, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
     pub bits: usize,
+    pub scale: i32,
 }
 
 impl OnnxModel {
-    pub fn new(path: impl AsRef<Path>) -> Self {
+    pub fn new(path: impl AsRef<Path>, scale: i32, bits: usize) -> Self {
         let model = tract_onnx::onnx().model_for_path(path).unwrap();
 
         let onnx_nodes: Vec<OnnxNode> = model
             .nodes()
             .iter()
-            .map(|n| OnnxNode::new(n.clone()))
+            .map(|n| OnnxNode::new(n.clone(), scale))
             .collect();
 
         let mut om = OnnxModel {
             model,
+            scale,
             onnx_nodes,
-            bits: 15,
+            bits,
         };
         om.forward_shape_and_quantize_pass().unwrap();
 
@@ -350,7 +357,7 @@ impl OnnxModel {
             }
         };
         assert!(model_path.exists());
-        OnnxModel::new(model_path)
+        OnnxModel::new(model_path, args.scale, args.bits)
     }
 
     pub fn configure<F: FieldExt + TensorType>(
@@ -524,7 +531,7 @@ impl OnnxModel {
                 );
                 OnnxNodeConfig::ReLU(conf)
             }
-            OpKind::Sigmoid(s) => {
+            OpKind::Sigmoid(denominator) => {
                 let dims = match &node.in_dims {
                     Some(v) => v,
                     None => {
@@ -537,7 +544,7 @@ impl OnnxModel {
                 let conf: EltwiseConfig<F, Sigmoid<F>> = EltwiseConfig::configure(
                     meta,
                     &[advices.get_slice(&[0..length], &[length])],
-                    Some(&[self.bits, *s]),
+                    Some(&[self.bits, *denominator, self.scale as usize]),
                 );
                 OnnxNodeConfig::Sigmoid(conf)
             }
@@ -579,8 +586,7 @@ impl OnnxModel {
             x = match self.layout_config(node, layouter, x.clone(), node_config)? {
                 Some(vt) => vt,
                 None => x, // Some nodes don't produce tensor output, we skip these
-            };
-            trace!("Node {} out: {:?}", node_idx, x.show());
+            }
         }
         Ok(x)
     }
@@ -674,7 +680,6 @@ impl OnnxModel {
             }
             (OpKind::ReLU(_), OnnxNodeConfig::ReLU(_)) => true,
             (OpKind::Sigmoid(_), OnnxNodeConfig::Sigmoid(_)) => true,
-
             (OpKind::Input, OnnxNodeConfig::Input) => true,
             (OpKind::Const, OnnxNodeConfig::Const) => true,
             _ => false,
@@ -789,7 +794,7 @@ impl OnnxModel {
                         this_node.output_shapes = Some(vec![this_node.out_dims.clone()]);
                     }
                     this_node.in_scale = input_node.out_scale;
-                    this_node.out_scale = 7;
+                    this_node.out_scale = self.scale;
                     let scale_diff = this_node.in_scale - this_node.out_scale;
                     if scale_diff > 0 {
                         let mult = scale_to_multiplier(scale_diff);
@@ -813,7 +818,7 @@ impl OnnxModel {
                     }
                     this_node.output_max = input_node.output_max;
                     this_node.in_scale = input_node.out_scale;
-                    this_node.out_scale = 7;
+                    this_node.out_scale = self.scale;
                     let scale_diff = this_node.in_scale - this_node.out_scale;
                     // We can also consider adjusting the scale of all inputs and the output in a more custom way.
                     if scale_diff > 0 {
