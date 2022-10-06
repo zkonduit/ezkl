@@ -12,7 +12,7 @@ use halo2_proofs::{
     circuit::{Layouter, Value},
     plonk::{Column, ConstraintSystem, Fixed, Instance},
 };
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use std::cmp::max;
 use std::fmt;
 use std::io::{stdin, stdout, Write};
@@ -579,7 +579,8 @@ impl OnnxModel {
             x = match self.layout_config(node, layouter, x.clone(), node_config)? {
                 Some(vt) => vt,
                 None => x, // Some nodes don't produce tensor output, we skip these
-            }
+            };
+            trace!("Node {} out: {:?}", node_idx, x.show());
         }
         Ok(x)
     }
