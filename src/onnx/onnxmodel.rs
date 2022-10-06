@@ -788,12 +788,13 @@ impl OnnxModel {
                         this_node.output_shapes = Some(vec![this_node.out_dims.clone()]);
                     }
                     this_node.in_scale = input_node.out_scale;
-                    let scale_diff = this_node.in_scale - 7;
+                    this_node.out_scale = 7;
+                    let scale_diff = this_node.in_scale - this_node.out_scale;
                     if scale_diff > 0 {
                         let mult = scale_to_multiplier(scale_diff);
                         this_node.opkind = OpKind::Sigmoid(mult as usize);
                     }
-                    this_node.out_scale = 7;
+
                     this_node.output_max = scale_to_multiplier(this_node.out_scale);
                     this_node.min_cols =
                         max(1, this_node.in_dims.as_ref().unwrap().iter().product());
@@ -811,14 +812,14 @@ impl OnnxModel {
                     }
                     this_node.output_max = input_node.output_max;
                     this_node.in_scale = input_node.out_scale;
-                    let scale_diff = this_node.in_scale - 7;
+                    this_node.out_scale = 7;
+                    let scale_diff = this_node.in_scale - this_node.out_scale;
                     // We can also consider adjusting the scale of all inputs and the output in a more custom way.
                     if scale_diff > 0 {
                         let mult = scale_to_multiplier(scale_diff);
                         this_node.opkind = OpKind::ReLU(mult as usize); // now the input will be scaled down to match
                         this_node.output_max = input_node.output_max / mult;
                     }
-                    this_node.out_scale = 7;
                     this_node.min_cols =
                         max(1, this_node.in_dims.as_ref().unwrap().iter().product());
                 }
