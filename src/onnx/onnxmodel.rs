@@ -778,13 +778,13 @@ impl OnnxModel {
                     if this_node.output_shapes.is_none() {
                         this_node.output_shapes = Some(vec![this_node.out_dims.clone()]);
                     }
-                    this_node.output_max = input_node.output_max;
+                    this_node.output_max = 32.0;
                     this_node.in_scale = input_node.out_scale;
 
                     // We can also consider adjusting the scale of all inputs and the output in a more custom way.
                     if this_node.in_scale == 14 {
                         this_node.opkind = OpKind::Sigmoid(128); // now the input will be scaled down to match
-                        this_node.output_max /= 128f32;
+                        this_node.output_max = 128.0;
                         this_node.out_scale = this_node.in_scale - 7;
                     }
 
