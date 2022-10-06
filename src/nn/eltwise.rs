@@ -275,16 +275,9 @@ impl<F: FieldExt> Nonlinearity<F> for ReLu<F> {
         if x < 0 {
             F::zero()
         } else {
-            
-            let integral = match scale {
-                32 => x,
-                _ => {
-                    let d_inv_x = (x as f32) / (scale as f32);
-                    let rounded = d_inv_x.round();
-                    let integral: i32 = unsafe { rounded.to_int_unchecked() };
-                    integral
-                }
-            };
+            let d_inv_x = (x as f32) / (scale as f32);
+            let rounded = d_inv_x.round();
+            let integral: i32 = unsafe { rounded.to_int_unchecked() };
             i32_to_felt(integral)
         }
     }
@@ -299,7 +292,7 @@ pub struct Sigmoid<F> {
 impl<F: FieldExt> Nonlinearity<F> for Sigmoid<F> {
     fn nonlinearity(x: i32, scale: usize) -> F {
         let kix = (x as f32) / (scale as f32);
-        let fout = (scale as f32) / (1.0 + (-kix).exp());
+        let fout = (128 as f32) / (1.0 + (-kix).exp());
         let rounded = fout.round();
         let xi: i32 = unsafe { rounded.to_int_unchecked() };
         fieldutils::i32_to_felt(xi)

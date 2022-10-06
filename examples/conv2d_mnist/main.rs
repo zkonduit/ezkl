@@ -24,7 +24,7 @@ use halo2deeplearning::fieldutils;
 use halo2deeplearning::fieldutils::i32_to_felt;
 use halo2deeplearning::nn::affine::Affine1dConfig;
 use halo2deeplearning::nn::cnvrl::ConvConfig;
-use halo2deeplearning::nn::eltwise::{DivideBy, EltwiseConfig, ReLu};
+use halo2deeplearning::nn::eltwise::{EltwiseConfig, ReLu};
 use halo2deeplearning::nn::*;
 use halo2deeplearning::tensor::*;
 use mnist::*;
@@ -53,7 +53,6 @@ struct Config<
     Value<F>: TensorType,
 {
     l0: ConvConfig<F>,
-    l0q: EltwiseConfig<F, DivideBy<F>>,
     l1: EltwiseConfig<F, ReLu<F>>,
     l2: Affine1dConfig<F>,
     public_output: Column<Instance>,
@@ -178,11 +177,6 @@ where
             Some(&[PADDING, PADDING, STRIDE, STRIDE]),
         );
 
-        let l0q: EltwiseConfig<F, DivideBy<F>> = EltwiseConfig::configure(
-            cs,
-            &[advices.get_slice(&[0..LEN], &[LEN])],
-            Some(&[BITS, 32]),
-        );
         let l1: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
             cs,
             &[advices.get_slice(&[0..LEN], &[LEN])],
@@ -204,7 +198,6 @@ where
 
         Config {
             l0,
-            l0q,
             l1,
             l2,
             public_output,
@@ -224,7 +217,6 @@ where
                 self.input.clone(),
             ],
         );
-        let x = config.l0q.layout(&mut layouter, &[x]);
         let mut x = config.l1.layout(&mut layouter, &[x]);
         x.flatten();
         let l2out = config.l2.layout(

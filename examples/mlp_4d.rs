@@ -73,7 +73,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let [l1, l3]: [EltwiseConfig<F, ReLu<F>>; 2] = EltwiseConfig::configure_multiple(
             cs,
             &[advices.get_slice(&[0..LEN], &[LEN])],
-            Some(&[BITS, 32]),
+            Some(&[BITS, 1]),
         );
 
         // sets up a new Divide by table
