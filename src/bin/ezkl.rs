@@ -86,5 +86,6 @@ pub fn main() {
             .collect()],
     )
     .unwrap();
+    info!("proof generated");
     prover.assert_satisfied();
 }
