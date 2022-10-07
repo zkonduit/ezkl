@@ -89,10 +89,10 @@ pub struct Cli {
     #[arg(short = 'M', long, default_value = "")]
     pub model: String,
     /// The denominator in the fixed point representation used when quantizing
-    #[arg(short = 'S', long)]
+    #[arg(short = 'S', long, default_value = "7")]
     pub scale: i32,
     /// The number of bits used in lookup tables
-    #[arg(short = 'B', long)]
+    #[arg(short = 'B', long, default_value = "14")]
     pub bits: usize,
 }
 
