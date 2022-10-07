@@ -36,6 +36,6 @@ fn test_1lcnvrl_example() {
 }
 
 #[test]
-fn test_relusig_example() {
+fn test_2lcnvrl_example() {
     test_onnx_example("2lcnvrl_sigmoid".to_string());
 }
