@@ -19,11 +19,25 @@ The `ezkl` cli provides a simple interface to load ONNX neural networks, convert
 Usage:
 
 ```bash
-Usage: ezkl [OPTIONS]
+[*]
+ |          ███████╗███████╗██╗  ██╗██╗
+ |          ██╔════╝╚══███╔╝██║ ██╔╝██║
+ |          █████╗    ███╔╝ █████╔╝ ██║
+ |          ██╔══╝   ███╔╝  ██╔═██╗ ██║
+ |          ███████╗███████╗██║  ██╗███████╗
+ |          ╚══════╝╚══════╝╚═╝  ╚═╝╚══════╝
+ |  
+ |          -----------------------------------------------------------
+ |          Easy Zero Knowledge for Neural Networks.
+ |          -----------------------------------------------------------
+ |          
+Usage: ezkl [OPTIONS] --scale <SCALE> --bits <BITS>
 
 Options:
-  -D, --data <DATA>    The path to .json data file [default: ]
-  -M, --model <MODEL>  The path to .onnx model file [default: ]
+  -D, --data <DATA>    The path to the .json data file [default: ]
+  -M, --model <MODEL>  The path to the .onnx model file [default: ]
+  -S, --scale <SCALE>  The denominator in the fixed point representation used when quantizing
+  -B, --bits <BITS>    The number of bits used in lookup tables
   -h, --help           Print help information
   -V, --version        Print version information
 ```
