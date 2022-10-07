@@ -39,7 +39,7 @@ Options:
   -h, --help              Print help information
   -V, --version           Print version information
 ```
-If `-D` and `-M` are not provided the cli will query the user to manually enter the path(s). Bits, scale, and logrows have default values `.onnx` can be generated using pytorch or tensorflow. The data json file is structured as follows:
+If `-D` and `-M` are not provided the cli will query the user to manually enter the path(s). Bits, scale, and logrows have default values. `.onnx` can be generated using pytorch or tensorflow. The data json file is structured as follows:
 
 ```json
 {
@@ -58,7 +58,7 @@ cargo run --release --bin ezkl -- -D ./examples/onnx_models/ff_input.json -M ./e
 To display a table of loaded Onnx nodes, and their associated parameters, set `RUST_LOG=DEBUG`.
 
 
-## Running examples
+## Running library examples
 
 The MNIST inference example using ezkl as a library is contained in `examples/conv2d_mnist`. To run it:
 ```bash
