@@ -3,7 +3,7 @@ use halo2_proofs::dev::MockProver;
 use halo2curves::pasta::Fp as F;
 use halo2deeplearning::fieldutils::i32_to_felt;
 use halo2deeplearning::onnx::{utilities::vector_to_quantized, Cli, OnnxCircuit};
-use log::info;
+use log::{info, trace};
 use serde::Deserialize;
 use std::fs::File;
 use std::io::{stdin, stdout, Read, Write};
@@ -77,6 +77,8 @@ pub fn main() {
         args.scale,
     )
     .unwrap();
+
+    trace!("{:?}", public_input);
 
     let circuit = OnnxCircuit::<F> {
         input,

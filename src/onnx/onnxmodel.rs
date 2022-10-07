@@ -12,7 +12,7 @@ use halo2_proofs::{
     circuit::{Layouter, Value},
     plonk::{Column, ConstraintSystem, Fixed, Instance},
 };
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use std::cmp::max;
 use std::fmt;
 use std::io::{stdin, stdout, Write};
@@ -42,7 +42,7 @@ pub enum OpKind {
     Sigmoid(usize),
     Const,
     Input,
-    Unknown,
+    Unknown(String),
 }
 
 impl fmt::Display for OpKind {
@@ -55,7 +55,7 @@ impl fmt::Display for OpKind {
             OpKind::Sigmoid(s) => write!(f, "sigmoid {}", s),
             OpKind::Const => write!(f, "const"),
             OpKind::Input => write!(f, "input"),
-            OpKind::Unknown => write!(f, "?"),
+            OpKind::Unknown(c) => write!(f, "? {}", c),
         }
     }
 }
@@ -174,7 +174,7 @@ impl OnnxNode {
             "Source" => OpKind::Input,
             c => {
                 warn!("{:?} is not currently supported", c);
-                OpKind::Unknown
+                OpKind::Unknown(c.to_string())
             }
         };
         let output_shapes = match node_output_shapes(&node) {
@@ -563,7 +563,8 @@ impl OnnxModel {
                 OnnxNodeConfig::Input
             }
 
-            _ => {
+            OpKind::Unknown(c) => {
+                error!("{:?} not yet implemented", c);
                 unimplemented!()
             }
         }
@@ -590,6 +591,16 @@ impl OnnxModel {
             x = match self.layout_config(node, layouter, x.clone(), node_config)? {
                 Some(vt) => vt,
                 None => x, // Some nodes don't produce tensor output, we skip these
+            };
+            match x {
+                ValTensor::PrevAssigned {
+                    inner: ref v,
+                    dims: _,
+                } => {
+                    let res: Tensor<i32> = v.clone().into();
+                    trace!("{:?}", res);
+                }
+                _ => {}
             };
         }
 

@@ -45,9 +45,9 @@ If `-D` and `-M` are not provided the cli will query the user to manually enter 
 
 ```json
 {
-    "input_data": [1, 5, 6 ...], // array of integers which represents the (private) inputs we run the proof on
+    "input_data": [1.0, 22.2, 0.12 ...], // array of floats which represents the (private) inputs we run the proof on
     "input_shape": [3, 3, ...], // array of integers which represents the shape of model inputs (excluding batch size)
-    "public_input": [1, 5, 6 ...], // array of integers which represents the public input (model output for now)
+    "public_input": [1.0, 5.0, 6.3 ...], // array of flaots which represents the public input (model output for now)
 }
 ```
 For examples of such files see `examples/onnx_models`.
