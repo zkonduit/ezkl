@@ -94,6 +94,9 @@ pub struct Cli {
     /// The number of bits used in lookup tables
     #[arg(short = 'B', long, default_value = "14")]
     pub bits: usize,
+    /// The log_2 number of rows
+    #[arg(short = 'K', long, default_value = "16")]
+    pub logrows: u32,
 }
 
 fn display_option<T: fmt::Debug>(o: &Option<T>) -> String {

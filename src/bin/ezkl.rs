@@ -35,11 +35,10 @@ pub fn main() {
         "
     );
 
-    let k = 16; //2^k rows
     let mut args = Cli::parse();
     // load
     let mut s = String::new();
-
+    let k = args.logrows;
     let data_path = match args.data.is_empty() {
         false => {
             info!("loading data from {}", args.data.clone());
