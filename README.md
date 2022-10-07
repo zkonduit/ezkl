@@ -1,4 +1,4 @@
-# Halo2 Deep Learning
+# EZKL
 
 [![Test](https://github.com/zkonduit/ezkl/workflows/Rust/badge.svg)](https://github.com/zkonduit/ezkl/actions?query=workflow%3ARust)
 
