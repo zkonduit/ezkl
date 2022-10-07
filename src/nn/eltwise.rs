@@ -3,13 +3,17 @@ use crate::fieldutils::{self, felt_to_i32, i32_to_felt};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
-    plonk::{ConstraintSystem, Selector, TableColumn},
+    plonk::{ConstraintSystem, Expression, Selector, TableColumn},
     poly::Rotation,
 };
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 pub trait Nonlinearity<F: FieldExt> {
-    fn nonlinearity(x: i32, scales: usize) -> F;
+    fn nonlinearity(x: i32, scales: &[usize]) -> F;
+    /// a value which is always in the table
+    fn default_pair(scales: &[usize]) -> (F, F) {
+        (F::zero(), Self::nonlinearity(0, scales))
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -26,7 +30,7 @@ pub struct EltwiseTable<F: FieldExt, NL: Nonlinearity<F>> {
     pub table_input: TableColumn,
     pub table_output: TableColumn,
     pub is_assigned: bool,
-    pub scale: usize,
+    pub scaling_params: Vec<usize>,
     pub bits: usize,
     _marker: PhantomData<(F, NL)>,
 }
@@ -35,13 +39,13 @@ impl<F: FieldExt, NL: Nonlinearity<F>> EltwiseTable<F, NL> {
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
         bits: usize,
-        scale: usize,
+        scaling_params: &[usize],
     ) -> EltwiseTable<F, NL> {
         EltwiseTable {
             table_input: cs.lookup_table_column(),
             table_output: cs.lookup_table_column(),
             is_assigned: false,
-            scale,
+            scaling_params: scaling_params.to_vec(),
             bits,
             _marker: PhantomData,
         }
@@ -70,7 +74,7 @@ impl<F: FieldExt, NL: Nonlinearity<F>> EltwiseTable<F, NL> {
                                 || format!("nl_o_col row {}", row_offset),
                                 self.table_output,
                                 row_offset,
-                                || Value::known(NL::nonlinearity(int_input, self.scale)),
+                                || Value::known(NL::nonlinearity(int_input, &self.scaling_params)),
                             )
                             .unwrap();
                     }
@@ -133,13 +137,18 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
                 advice.map(|a| {
                     let _ = cs.lookup("lk", |cs| {
                         let qlookup = cs.query_selector(qlookup);
+                        let not_qlookup = Expression::Constant(F::one()) - qlookup.clone();
+                        let (default_x, default_y) =
+                            NL::default_pair(table.borrow().scaling_params.as_slice());
                         vec![
                             (
-                                qlookup.clone() * cs.query_advice(a, Rotation::cur()),
+                                qlookup.clone() * cs.query_advice(a, Rotation::cur())
+                                    + not_qlookup.clone() * default_x,
                                 table.borrow().table_input,
                             ),
                             (
-                                qlookup * cs.query_advice(a, Rotation::next()),
+                                qlookup * cs.query_advice(a, Rotation::next())
+                                    + not_qlookup * default_y,
                                 table.borrow().table_output,
                             ),
                         ]
@@ -170,10 +179,11 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> LayerConfig<F>
     ) -> Self {
         // will fail if not supplied
         let params = eltwise_params.unwrap();
-        assert_eq!(params.len(), 2);
-        let (bits, scale) = (params[0], params[1]);
+        let bits = params[0];
         let table = Rc::new(RefCell::new(EltwiseTable::<F, NL>::configure(
-            cs, bits, scale,
+            cs,
+            bits,
+            &params[1..],
         )));
         Self::configure_with_table(cs, variables, table)
     }
@@ -238,7 +248,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> LayerConfig<F>
                                 vaf.map(|f| {
                                     <NL as Nonlinearity<F>>::nonlinearity(
                                         felt_to_i32(f.evaluate()),
-                                        self.table.borrow().scale,
+                                        &self.table.borrow().scaling_params,
                                     )
                                     .into()
                                 })
@@ -271,20 +281,13 @@ pub struct ReLu<F> {
     _marker: PhantomData<F>,
 }
 impl<F: FieldExt> Nonlinearity<F> for ReLu<F> {
-    fn nonlinearity(x: i32, scale: usize) -> F {
+    fn nonlinearity(x: i32, scale: &[usize]) -> F {
         if x < 0 {
             F::zero()
         } else {
-            
-            let integral = match scale {
-                32 => x,
-                _ => {
-                    let d_inv_x = (x as f32) / (scale as f32);
-                    let rounded = d_inv_x.round();
-                    let integral: i32 = unsafe { rounded.to_int_unchecked() };
-                    integral
-                }
-            };
+            let d_inv_x = (x as f32) / (scale[0] as f32);
+            let rounded = d_inv_x.round();
+            let integral: i32 = unsafe { rounded.to_int_unchecked() };
             i32_to_felt(integral)
         }
     }
@@ -297,9 +300,9 @@ pub struct Sigmoid<F> {
 // L is our implicit or explicit denominator (fixed point d)
 // Usually want K=L
 impl<F: FieldExt> Nonlinearity<F> for Sigmoid<F> {
-    fn nonlinearity(x: i32, scale: usize) -> F {
-        let kix = (x as f32) / (scale as f32);
-        let fout = (scale as f32) / (1.0 + (-kix).exp());
+    fn nonlinearity(x: i32, scale: &[usize]) -> F {
+        let kix = (x as f32) / (scale[0] as f32);
+        let fout = (scale[1] as f32) / (1.0 + (-kix).exp());
         let rounded = fout.round();
         let xi: i32 = unsafe { rounded.to_int_unchecked() };
         fieldutils::i32_to_felt(xi)
@@ -311,8 +314,8 @@ pub struct DivideBy<F> {
     _marker: PhantomData<F>,
 }
 impl<F: FieldExt> Nonlinearity<F> for DivideBy<F> {
-    fn nonlinearity(x: i32, scale: usize) -> F {
-        let d_inv_x = (x as f32) / (scale as f32);
+    fn nonlinearity(x: i32, scale: &[usize]) -> F {
+        let d_inv_x = (x as f32) / (scale[0] as f32);
         let rounded = d_inv_x.round();
         let integral: i32 = unsafe { rounded.to_int_unchecked() };
         fieldutils::i32_to_felt(integral)
@@ -327,21 +330,21 @@ mod tests {
     #[test]
     fn test_eltrelunl() {
         for i in -127..127 {
-            let _r = <ReLu<F> as Nonlinearity<F>>::nonlinearity(i, 32);
+            let _r = <ReLu<F> as Nonlinearity<F>>::nonlinearity(i, &[1]);
         }
     }
 
     #[test]
     fn test_eltsigmoid() {
         for i in -127..127 {
-            let _r = <Sigmoid<F> as Nonlinearity<F>>::nonlinearity(i, 32);
+            let _r = <Sigmoid<F> as Nonlinearity<F>>::nonlinearity(i, &[1, 1]);
         }
     }
 
     #[test]
     fn test_eltdivide() {
         for i in -127..127 {
-            let _r = <DivideBy<F> as Nonlinearity<F>>::nonlinearity(i, 32);
+            let _r = <DivideBy<F> as Nonlinearity<F>>::nonlinearity(i, &[1]);
         }
     }
 }
