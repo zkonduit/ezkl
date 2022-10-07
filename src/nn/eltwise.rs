@@ -330,21 +330,21 @@ mod tests {
     #[test]
     fn test_eltrelunl() {
         for i in -127..127 {
-            let _r = <ReLu<F> as Nonlinearity<F>>::nonlinearity(i, &[32]);
+            let _r = <ReLu<F> as Nonlinearity<F>>::nonlinearity(i, &[1]);
         }
     }
 
     #[test]
     fn test_eltsigmoid() {
         for i in -127..127 {
-            let _r = <Sigmoid<F> as Nonlinearity<F>>::nonlinearity(i, &[32]);
+            let _r = <Sigmoid<F> as Nonlinearity<F>>::nonlinearity(i, &[1, 1]);
         }
     }
 
     #[test]
     fn test_eltdivide() {
         for i in -127..127 {
-            let _r = <DivideBy<F> as Nonlinearity<F>>::nonlinearity(i, &[32]);
+            let _r = <DivideBy<F> as Nonlinearity<F>>::nonlinearity(i, &[1]);
         }
     }
 }
