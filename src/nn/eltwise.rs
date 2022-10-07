@@ -3,13 +3,17 @@ use crate::fieldutils::{self, felt_to_i32, i32_to_felt};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
-    plonk::{ConstraintSystem, Selector, TableColumn},
+    plonk::{ConstraintSystem, Expression, Selector, TableColumn},
     poly::Rotation,
 };
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 pub trait Nonlinearity<F: FieldExt> {
     fn nonlinearity(x: i32, scales: &[usize]) -> F;
+    /// a value which is always in the table
+    fn default_pair(scales: &[usize]) -> (F, F) {
+        (F::zero(), Self::nonlinearity(0, scales))
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -133,13 +137,18 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
                 advice.map(|a| {
                     let _ = cs.lookup("lk", |cs| {
                         let qlookup = cs.query_selector(qlookup);
+                        let not_qlookup = Expression::Constant(F::one()) - qlookup.clone();
+                        let (default_x, default_y) =
+                            NL::default_pair(table.borrow().scaling_params.as_slice());
                         vec![
                             (
-                                qlookup.clone() * cs.query_advice(a, Rotation::cur()),
+                                qlookup.clone() * cs.query_advice(a, Rotation::cur())
+                                    + not_qlookup.clone() * default_x,
                                 table.borrow().table_input,
                             ),
                             (
-                                qlookup * cs.query_advice(a, Rotation::next()),
+                                qlookup * cs.query_advice(a, Rotation::next())
+                                    + not_qlookup * default_y,
                                 table.borrow().table_output,
                             ),
                         ]
