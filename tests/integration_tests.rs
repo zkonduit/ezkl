@@ -31,11 +31,12 @@ fn test_relusig_example() {
 }
 
 #[test]
+#[ignore]
 fn test_1lcnvrl_example() {
     test_onnx_example("1lcnvrl".to_string());
 }
 
 #[test]
 fn test_2lcnvrl_example() {
-    test_onnx_example("2lcnvrl_sigmoid".to_string());
+    test_onnx_example("2lcnvrl_relusig".to_string());
 }
