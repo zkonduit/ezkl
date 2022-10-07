@@ -544,7 +544,11 @@ impl OnnxModel {
                 let conf: EltwiseConfig<F, Sigmoid<F>> = EltwiseConfig::configure(
                     meta,
                     &[advices.get_slice(&[0..length], &[length])],
-                    Some(&[self.bits, *denominator, self.scale as usize]),
+                    Some(&[
+                        self.bits,
+                        *denominator,
+                        scale_to_multiplier(self.scale) as usize,
+                    ]),
                 );
                 OnnxNodeConfig::Sigmoid(conf)
             }
@@ -586,8 +590,9 @@ impl OnnxModel {
             x = match self.layout_config(node, layouter, x.clone(), node_config)? {
                 Some(vt) => vt,
                 None => x, // Some nodes don't produce tensor output, we skip these
-            }
+            };
         }
+
         Ok(x)
     }
 
@@ -795,7 +800,7 @@ impl OnnxModel {
                     }
                     this_node.in_scale = input_node.out_scale;
                     this_node.out_scale = self.scale;
-                    let scale_diff = this_node.in_scale - this_node.out_scale;
+                    let scale_diff = this_node.in_scale;
                     if scale_diff > 0 {
                         let mult = scale_to_multiplier(scale_diff);
                         this_node.opkind = OpKind::Sigmoid(mult as usize);
