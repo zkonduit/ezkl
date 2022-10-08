@@ -1,5 +1,5 @@
 use crate::tensor::{Tensor, TensorType};
-pub use std::ops::{Add, Mul};
+pub use std::ops::{Add, Mul, Sub};
 
 /// Matrix multiplies two 2D tensors (and adds an offset).
 /// ```
@@ -55,7 +55,7 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     output
 }
 
-/// Adds two 2D tensors.
+/// Adds multiple tensors.
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::add;
@@ -67,11 +67,11 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = add(&vec![x, k]);
+/// let result = add(&vec![&x, &k]);
 /// let expected = Tensor::<i32>::new(Some(&[4, 4, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn add<T: TensorType + Mul<Output = T> + Add<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
+pub fn add<T: TensorType + Add<Output = T>>(t: &Vec<&Tensor<T>>) -> Tensor<T> {
     for e in t.iter() {
         assert_eq!(t[0].dims(), e.dims());
     }
@@ -87,7 +87,39 @@ pub fn add<T: TensorType + Mul<Output = T> + Add<Output = T>>(t: &Vec<Tensor<T>>
     output
 }
 
-/// Elementwise multiplies two 2D tensors.
+/// Subtracts multiple tensors.
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::sub;
+/// let x = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let k = Tensor::<i32>::new(
+///     Some(&[2, 3, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = sub(&vec![&x, &k]);
+/// let expected = Tensor::<i32>::new(Some(&[0, -2, 0, 0, 0, 0]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<&Tensor<T>>) -> Tensor<T> {
+    for e in t.iter() {
+        assert_eq!(t[0].dims(), e.dims());
+    }
+    // calculate value of output
+    let mut output: Tensor<T> = t[0].clone();
+
+    for e in t[1..].iter() {
+        for (i, e_i) in e.iter().enumerate() {
+            output[i] = output[i].clone() - e_i.clone()
+        }
+    }
+
+    output
+}
+
+/// Elementwise multiplies two tensors.
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::mult;
@@ -99,11 +131,11 @@ pub fn add<T: TensorType + Mul<Output = T> + Add<Output = T>>(t: &Vec<Tensor<T>>
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = mult(&vec![x, k]);
+/// let result = mult(&vec![&x, &k]);
 /// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 1, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn mult<T: TensorType + Mul<Output = T> + Add<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
+pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<&Tensor<T>>) -> Tensor<T> {
     for e in t.iter() {
         assert_eq!(t[0].dims(), e.dims());
     }
@@ -132,10 +164,7 @@ pub fn mult<T: TensorType + Mul<Output = T> + Add<Output = T>>(t: &Vec<Tensor<T>
 /// let expected = Tensor::<i32>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn const_mult<T: TensorType + Mul<Output = T> + Add<Output = T> + Copy>(
-    a: Tensor<T>,
-    b: T,
-) -> Tensor<T> {
+pub fn const_mult<T: TensorType + Mul<Output = T> + Copy>(a: Tensor<T>, b: T) -> Tensor<T> {
     // calculate value of output
     let mut output: Tensor<T> = a.clone();
 
@@ -154,14 +183,11 @@ pub fn const_mult<T: TensorType + Mul<Output = T> + Add<Output = T> + Copy>(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = pow(x, 3);
+/// let result = pow(&x, 3);
 /// let expected = Tensor::<i32>::new(Some(&[8, 3375, 8, 1, 1, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn pow<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-    a: Tensor<T>,
-    pow: usize,
-) -> Tensor<T> {
+pub fn pow<T: TensorType + Mul<Output = T>>(a: &Tensor<T>, pow: usize) -> Tensor<T> {
     // calculate value of output
     let mut output: Tensor<T> = a.clone();
     for (i, a_i) in a.iter().enumerate() {

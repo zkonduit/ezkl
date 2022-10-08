@@ -3,7 +3,7 @@ use crate::tensor::ops::*;
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{Layouter, Value},
+    circuit::Layouter,
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
 };
 use std::fmt;
@@ -12,6 +12,7 @@ use std::marker::PhantomData;
 #[derive(Clone, Debug, Copy)]
 pub enum BasicOp {
     Add,
+    Sub,
     Mult,
     Pow(usize),
 }
@@ -20,6 +21,7 @@ impl fmt::Display for BasicOp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             BasicOp::Add => write!(f, "add"),
+            BasicOp::Sub => write!(f, "sub"),
             BasicOp::Mult => write!(f, "mult"),
             BasicOp::Pow(s) => write!(f, "pow {}", s),
         }
@@ -27,12 +29,10 @@ impl fmt::Display for BasicOp {
 }
 
 #[derive(Clone, Debug)]
-pub struct BasicOpNode<F: FieldExt + TensorType> {
+pub struct BasicOpNode {
     pub op: BasicOp,
     pub input_idx: Vec<usize>,
     pub node_idx: Vec<usize>,
-    pub output_config: Option<Tensor<Expression<F>>>,
-    pub output_layout: Option<Tensor<Value<F>>>,
 }
 
 /// Configuration for an affine layer which (mat)multiplies a weight kernel to an input and adds
@@ -40,7 +40,7 @@ pub struct BasicOpNode<F: FieldExt + TensorType> {
 #[derive(Clone, Debug)]
 pub struct BasicConfig<F: FieldExt + TensorType> {
     pub inputs: Vec<VarTensor>,
-    nodes: Vec<BasicOpNode<F>>,
+    nodes: Vec<BasicOpNode>,
     pub output: VarTensor,
     pub selector: Selector,
     _marker: PhantomData<F>,
@@ -50,7 +50,7 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         variables: &[VarTensor],
-        nodes: &[BasicOpNode<F>],
+        nodes: &[BasicOpNode],
     ) -> Self {
         let inputs = variables[0..variables.len() - 1].to_vec();
         let output = variables[variables.len() - 1].clone();
@@ -75,33 +75,33 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
                 .iter()
                 .map(|input| input.query(meta, 0))
                 .collect::<Vec<_>>();
-
+            let mut config_outputs = vec![];
             for node in config.nodes.iter_mut() {
-                let mut op_inputs = node
-                    .input_idx
-                    .iter()
-                    .map(|i| qis[*i].clone())
-                    .collect::<Vec<_>>();
+                let mut op_inputs = node.input_idx.iter().map(|i| &qis[*i]).collect::<Vec<_>>();
+                println!("node {:?}", node);
                 let mut node_inputs = node
                     .node_idx
                     .iter()
-                    .map(|i| nodes[*i].clone().output_config.unwrap())
+                    .map(|i| &config_outputs[*i])
                     .collect::<Vec<_>>();
                 op_inputs.append(&mut node_inputs);
                 match node.op {
                     BasicOp::Add => {
-                        node.output_config = Some(add(&op_inputs));
+                        config_outputs.push(add(&op_inputs));
+                    }
+                    BasicOp::Sub => {
+                        config_outputs.push(sub(&op_inputs));
                     }
                     BasicOp::Mult => {
-                        node.output_config = Some(mult(&op_inputs));
+                        config_outputs.push(mult(&op_inputs));
                     }
                     BasicOp::Pow(u) => {
                         assert_eq!(op_inputs.len(), 1);
-                        node.output_config = Some(pow(op_inputs[0].clone(), u));
+                        config_outputs.push(pow(&op_inputs[0], u));
                     }
                 }
             }
-            let witnessed_output = nodes[nodes.len() - 1].clone().output_config.unwrap();
+            let witnessed_output = &config_outputs[config.nodes.len() - 1];
 
             // Get output expressions for each input channel
             let expected_output: Tensor<Expression<F>> = config.output.query(meta, 0);
@@ -114,8 +114,6 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
         config
     }
 
-    /// Assigns values to the affine gate variables created when calling `configure`.
-    /// Values are supplied as a 3-element array of `[weights, bias, input]` VarTensors.
     pub fn layout(
         &mut self,
         layouter: &mut impl Layouter<F>,
@@ -142,38 +140,37 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
                         inputs.push(inp);
                     }
 
-                    let mut nodes = self.nodes.clone();
+                    let mut layout_outputs = vec![];
 
-                    for node in nodes.iter_mut() {
+                    for node in self.nodes.iter_mut() {
                         let mut op_inputs = node
                             .input_idx
                             .iter()
-                            .map(|i| inputs[*i].clone())
+                            .map(|i| &inputs[*i])
                             .collect::<Vec<_>>();
                         let mut node_inputs = node
                             .node_idx
                             .iter()
-                            .map(|i| self.nodes[*i].clone().output_layout.unwrap())
+                            .map(|i| &layout_outputs[*i])
                             .collect::<Vec<_>>();
                         op_inputs.append(&mut node_inputs);
                         match node.op {
                             BasicOp::Add => {
-                                node.output_layout = Some(add(&op_inputs));
+                                layout_outputs.push(add(&op_inputs));
+                            }
+                            BasicOp::Sub => {
+                                layout_outputs.push(sub(&op_inputs));
                             }
                             BasicOp::Mult => {
-                                node.output_layout = Some(mult(&op_inputs));
+                                layout_outputs.push(mult(&op_inputs));
                             }
                             BasicOp::Pow(u) => {
                                 assert_eq!(op_inputs.len(), 1);
-                                node.output_layout = Some(pow(op_inputs[0].clone(), u));
+                                layout_outputs.push(pow(&op_inputs[0], u));
                             }
                         }
                     }
-                    let output: ValTensor<F> = self.nodes[self.nodes.len() - 1]
-                        .clone()
-                        .output_layout
-                        .unwrap()
-                        .into();
+                    let output: ValTensor<F> = layout_outputs[self.nodes.len() - 1].clone().into();
 
                     Ok(self.output.assign(&mut region, offset, &output))
                 },

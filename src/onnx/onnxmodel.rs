@@ -13,6 +13,7 @@ use halo2_proofs::{
     circuit::{Layouter, Value},
     plonk::{Column, ConstraintSystem, Fixed, Instance},
 };
+use itertools::Itertools;
 use log::{debug, error, info, trace, warn};
 use std::cmp::max;
 use std::fmt;
@@ -32,6 +33,7 @@ use tract_onnx::tract_hir::{
         konst::Const,
     },
 };
+
 // Initially, some of these OpKinds will be folded into others (for example, Const nodes that
 // contain parameters will be handled at the consuming node.
 // Eventually, though, we probably want to keep them and treat them directly (layouting and configuring
@@ -72,6 +74,7 @@ pub enum NodeConfigTypes<F: FieldExt + TensorType> {
     Conv(ConvConfig<F>),
     ReLU(EltwiseConfig<F, ReLu<F>>),
     Sigmoid(EltwiseConfig<F, Sigmoid<F>>),
+    Divide(EltwiseConfig<F, DivideBy<F>>),
     Basic(BasicConfig<F>, Vec<usize>),
     Const,
     Input,
@@ -81,7 +84,7 @@ pub enum NodeConfigTypes<F: FieldExt + TensorType> {
 #[derive(Clone, Debug)]
 pub struct NodeConfig<F: FieldExt + TensorType> {
     config: NodeConfigTypes<F>,
-    onnx_idx: usize,
+    onnx_idx: Vec<usize>,
 }
 
 #[derive(Clone)]
@@ -189,7 +192,8 @@ impl OnnxNode {
             "Const" => OpKind::Const,
             "Source" => OpKind::Input,
             "Add" => OpKind::Basic(BasicOp::Add),
-            "Mult" => OpKind::Basic(BasicOp::Mult),
+            "Sub" => OpKind::Basic(BasicOp::Sub),
+            "Mul" => OpKind::Basic(BasicOp::Mult),
             "Pow" => OpKind::Basic(BasicOp::Pow(1)),
             c => {
                 warn!("{:?} is not currently supported", c);
@@ -393,39 +397,60 @@ impl OnnxModel {
         // Note that the order of the nodes, and the eval_order, is not stable between model loads
         let order = self.eval_order()?;
         let mut configs: Vec<NodeConfig<F>> = vec![];
-        // let mut basic_node = vec![];
-        for node_idx in order {
+        let mut basic_nodes = vec![];
+        for node_idx in order.clone() {
             let node = &self.onnx_nodes[node_idx];
-            debug!("configuring node {}", node_idx);
-            let mut basic_nodes = vec![];
+            debug!("configuring node {} a {:?}", node_idx, &node);
             match &node.opkind {
                 OpKind::Basic(_) => basic_nodes.push(node_idx),
                 _ => {
-                    let config = if basic_nodes.len() > 1 {
-                        let c = self.fuse_basic_ops(
+                    if basic_nodes.len() > 0 {
+                        let config = self.fuse_basic_ops(
                             &basic_nodes,
                             meta,
                             advices.clone(),
                             fixeds.clone(),
                         );
+                        configs.push(NodeConfig {
+                            config,
+                            onnx_idx: basic_nodes,
+                        });
                         basic_nodes = vec![];
-                        c
                     } else {
-                        self.configure_node(
+                        let config = self.configure_node(
                             &node.opkind,
                             node,
                             meta,
                             advices.clone(),
                             fixeds.clone(),
-                        )
+                        );
+                        configs.push(NodeConfig {
+                            config,
+                            onnx_idx: vec![node_idx],
+                        });
                     };
-                    configs.push(NodeConfig {
-                        config,
-                        onnx_idx: node_idx,
-                    });
                 }
             }
         }
+        // one last cleanup
+        if basic_nodes.len() > 0 {
+            let config = self.fuse_basic_ops(&basic_nodes, meta, advices.clone(), fixeds.clone());
+            configs.push(NodeConfig {
+                config,
+                onnx_idx: vec![order[order.len() - 1]],
+            });
+        }
+        // // rescale output just in case final operation doesn't do it
+        // let scale_diff = self.onnx_nodes.last().unwrap().out_scale - self.scale;
+        // if scale_diff > 0 {
+        //     let node = self.onnx_nodes.last().unwrap();
+        //     let mult = scale_to_multiplier(scale_diff);
+        //     let divconf = self.configure_divide_by(node, meta, advices.clone(), &(mult as usize));
+        //     configs.push(NodeConfig {
+        //         config: NodeConfigTypes::Divide(divconf),
+        //         onnx_idx: vec![2000],
+        //     });
+        // }
 
         let public_output: Column<Instance> = meta.instance_column();
         meta.enable_equality(public_output);
@@ -472,7 +497,8 @@ impl OnnxModel {
                         let mut input_idx = vec![];
                         for (idx, input) in node.node.inputs.iter().enumerate() {
                             if indices.contains(&input.node) {
-                                node_idx.push(idx);
+                                node_idx
+                                    .push(indices.iter().position(|&r| r == input.node).unwrap());
                             } else {
                                 if !inputs.contains(&input.node) {
                                     input_idx.push(idx);
@@ -487,12 +513,10 @@ impl OnnxModel {
                                 }
                             }
                         }
-                        BasicOpNode::<F> {
+                        BasicOpNode {
                             op: op.clone(),
                             input_idx,
                             node_idx,
-                            output_config: None,
-                            output_layout: None,
                         }
                     }
                     s => {
@@ -505,16 +529,50 @@ impl OnnxModel {
                 }
             })
             .collect::<Vec<_>>();
+
+        // will panic on an empty None
+        let shape = input_shapes
+            .iter()
+            .tuple_windows()
+            .all(|(a, b)| a == b)
+            .then(|| &input_shapes[0])
+            .unwrap();
+
         let mut variables = vec![];
         let mut start = 0;
-        for shape in input_shapes {
-            let end = shape[0..shape.len() - 1].iter().product();
-            variables.push(advices.get_slice(&[start..end], &shape));
-            start = end;
+        let end: usize = shape[0..shape.len() - 1].iter().product();
+        // final iteration generates the output
+        for _ in 0..inputs.len() + 1 {
+            variables.push(advices.get_slice(&[start..start + end], &shape));
+            start += end;
         }
+
         NodeConfigTypes::Basic(
             BasicConfig::configure(meta, &variables, &basic_nodes),
             inputs,
+        )
+    }
+
+    fn configure_divide_by<F: FieldExt + TensorType>(
+        &self,
+        node: &OnnxNode,
+        meta: &mut ConstraintSystem<F>,
+        advices: VarTensor,
+        denom: &usize,
+    ) -> EltwiseConfig<F, DivideBy<F>> {
+        let dims = match &node.in_dims {
+            Some(v) => v,
+            None => {
+                error!("layer has no input shape");
+                panic!()
+            }
+        };
+        let length = dims.clone().into_iter().product();
+        EltwiseConfig::configure(
+            meta,
+            &[advices.get_slice(&[0..length], &[length])],
+            //&[advices.get_slice(&[0..length], dims)],
+            Some(&[self.bits, *denom]),
         )
     }
 
@@ -530,21 +588,8 @@ impl OnnxModel {
     ) -> NodeConfigTypes<F> {
         println!("{:?}", node);
         match op {
-            OpKind::Rescaled(op, scale) => {
-                let dims = match &node.in_dims {
-                    Some(v) => v,
-                    None => {
-                        error!("layer has no input shape");
-                        panic!()
-                    }
-                };
-                let length = dims.clone().into_iter().product();
-                let divconf: EltwiseConfig<F, DivideBy<F>> = EltwiseConfig::configure(
-                    meta,
-                    &[advices.get_slice(&[0..length], &[length])],
-                    //&[advices.get_slice(&[0..length], dims)],
-                    Some(&[self.bits, *scale]),
-                );
+            OpKind::Rescaled(op, denom) => {
+                let divconf = self.configure_divide_by(node, meta, advices.clone(), denom);
 
                 let inner_config = self.configure_node(op, node, meta, advices, _fixeds);
 
@@ -702,12 +747,24 @@ impl OnnxModel {
         info!("model layout");
         let mut x = input;
         for node_config in config.configs.iter() {
-            let node = &self.onnx_nodes[node_config.onnx_idx];
-            debug!(
-                "laying out node {}, a {:?}",
-                node_config.onnx_idx,
-                node.node.op().name()
-            );
+            let mut display: String = "".to_string();
+            for (i, idx) in node_config.onnx_idx[0..].iter().enumerate() {
+                let node = &self.onnx_nodes[*idx];
+                if i > 0 {
+                    display.push_str(&format!(
+                        "combined with node {}, a {:?}",
+                        idx,
+                        node.node.op().name()
+                    ));
+                } else {
+                    display.push_str(&format!(
+                        "laying out node {}, a {:?}",
+                        idx,
+                        node.node.op().name()
+                    ));
+                }
+            }
+            let node = &self.onnx_nodes[*node_config.onnx_idx.last().unwrap()];
             assert!(self.config_matches(&node.opkind, &node_config.config));
             x = match self.layout_config(node, layouter, x.clone(), &node_config.config)? {
                 Some(vt) => vt,
@@ -787,7 +844,7 @@ impl OnnxModel {
                 let out = dc.layout(layouter, &[input]);
                 return self.layout_config(node, layouter, out, &*op);
             }
-
+            NodeConfigTypes::Divide(dc) => Some(dc.layout(layouter, &[input])),
             NodeConfigTypes::ReLU(rc) => {
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
                 //                let length = node.output_shapes().unwrap()[0].as_ref().unwrap()[1]; //  shape is vec![1,LEN]
@@ -987,8 +1044,23 @@ impl OnnxModel {
                                 .unwrap()
                                 as f32)
                                 * (inputs.len() as f32);
-                            this_node.in_scale = input_node.out_scale;
-                            this_node.out_scale = self.scale;
+                            this_node.in_scale =
+                                inputs.iter().map(|input| input.out_scale).max().unwrap();
+                            this_node.out_scale = this_node.in_scale;
+                            this_node.min_cols =
+                                max(1, this_node.in_dims.as_ref().unwrap().iter().product());
+                        }
+                        BasicOp::Sub => {
+                            this_node.output_max = (inputs
+                                .iter()
+                                .map(|input| input.output_max.ceil() as i32)
+                                .max()
+                                .unwrap()
+                                as f32)
+                                * (inputs.len() as f32);
+                            this_node.in_scale =
+                                inputs.iter().map(|input| input.out_scale).max().unwrap();
+                            this_node.out_scale = this_node.in_scale;
                             this_node.min_cols =
                                 max(1, this_node.in_dims.as_ref().unwrap().iter().product());
                         }
@@ -1002,7 +1074,9 @@ impl OnnxModel {
                                 inputs.len() as f32,
                             );
                             this_node.in_scale = input_node.out_scale;
-                            this_node.out_scale = this_node.in_scale * (inputs.len() as i32);
+                            this_node.out_scale =
+                                inputs.iter().map(|input| input.out_scale).sum::<i32>();
+
                             this_node.min_cols =
                                 max(1, this_node.in_dims.as_ref().unwrap().iter().product());
                         }
