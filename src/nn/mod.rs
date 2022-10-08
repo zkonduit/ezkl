@@ -8,6 +8,8 @@ pub mod cnvrl;
 pub mod eltwise;
 /// Utility functions for building layers.
 pub mod utils;
+/// Utility functions for basic operation layers.
+pub mod basic;
 
 /// Trait for configuring neural network layers in a Halo2 circuit.
 pub trait LayerConfig<F: FieldExt + TensorType> {

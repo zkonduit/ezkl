@@ -1,6 +1,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use ezkl::nn::cnvrl::ConvConfig;
 use ezkl::nn::*;
+use ezkl::tensor::*;
 use halo2_proofs::{
     arithmetic::{Field, FieldExt},
     circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -8,7 +9,6 @@ use halo2_proofs::{
     plonk::{Circuit, ConstraintSystem, Error},
 };
 use halo2curves::pasta::pallas;
-use ezkl::tensor::*;
 use rand::rngs::OsRng;
 use std::cmp::max;
 

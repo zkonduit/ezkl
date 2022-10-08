@@ -55,6 +55,123 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     output
 }
 
+/// Adds two 2D tensors.
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::add;
+/// let x = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let k = Tensor::<i32>::new(
+///     Some(&[2, 3, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = add(&vec![x, k]);
+/// let expected = Tensor::<i32>::new(Some(&[4, 4, 4, 2, 2, 2]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn add<T: TensorType + Mul<Output = T> + Add<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
+    for e in t.iter() {
+        assert_eq!(t[0].dims(), e.dims());
+    }
+    // calculate value of output
+    let mut output: Tensor<T> = t[0].clone();
+
+    for e in t[1..].iter() {
+        for (i, e_i) in e.iter().enumerate() {
+            output[i] = output[i].clone() + e_i.clone()
+        }
+    }
+
+    output
+}
+
+/// Elementwise multiplies two 2D tensors.
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::mult;
+/// let x = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let k = Tensor::<i32>::new(
+///     Some(&[2, 3, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = mult(&vec![x, k]);
+/// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 1, 1, 1]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn mult<T: TensorType + Mul<Output = T> + Add<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
+    for e in t.iter() {
+        assert_eq!(t[0].dims(), e.dims());
+    }
+    // calculate value of output
+    let mut output: Tensor<T> = t[0].clone();
+
+    for e in t[1..].iter() {
+        for (i, e_i) in e.iter().enumerate() {
+            output[i] = output[i].clone() * e_i.clone()
+        }
+    }
+
+    output
+}
+
+/// Elementwise multiplies a tensor with a const element.
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::const_mult;
+/// let x = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let k = 2;
+/// let result = const_mult(x, k);
+/// let expected = Tensor::<i32>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn const_mult<T: TensorType + Mul<Output = T> + Add<Output = T> + Copy>(
+    a: Tensor<T>,
+    b: T,
+) -> Tensor<T> {
+    // calculate value of output
+    let mut output: Tensor<T> = a.clone();
+
+    for i in 0..output.len() {
+        output[i] = output[i] * b;
+    }
+
+    output
+}
+
+/// Elementwise raise a tensor to the nth power.
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::pow;
+/// let x = Tensor::<i32>::new(
+///     Some(&[2, 15, 2, 1, 1, 0]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = pow(x, 3);
+/// let expected = Tensor::<i32>::new(Some(&[8, 3375, 8, 1, 1, 0]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn pow<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+    a: Tensor<T>,
+    pow: usize,
+) -> Tensor<T> {
+    // calculate value of output
+    let mut output: Tensor<T> = a.clone();
+    for (i, a_i) in a.iter().enumerate() {
+        for _ in 1..pow {
+            output[i] = output[i].clone() * a_i.clone();
+        }
+    }
+    output
+}
+
 /// Applies convolution over a 3D tensor of shape C x H x W (and adds a bias).
 /// ```
 /// use ezkl::tensor::Tensor;
