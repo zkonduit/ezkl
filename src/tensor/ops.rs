@@ -3,8 +3,8 @@ pub use std::ops::{Add, Mul};
 
 /// Matrix multiplies two 2D tensors (and adds an offset).
 /// ```
-/// use halo2deeplearning::tensor::Tensor;
-/// use halo2deeplearning::tensor::ops::matmul;
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::matmul;
 ///
 /// let x = Tensor::<i32>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 2, 1, 1]),
@@ -31,7 +31,9 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     assert_eq!(input.dims()[0], kernel.dims()[1]);
 
     // does matrix to vector multiplication
-    if input.dims().len() == 1 { input.reshape(&[input.dims()[0], 1]) }
+    if input.dims().len() == 1 {
+        input.reshape(&[input.dims()[0], 1])
+    }
 
     let input_dims = input.dims();
     let kernel_dims = kernel.dims();
@@ -55,8 +57,8 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 
 /// Applies convolution over a 3D tensor of shape C x H x W (and adds a bias).
 /// ```
-/// use halo2deeplearning::tensor::Tensor;
-/// use halo2deeplearning::tensor::ops::convolution;
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::convolution;
 ///
 /// let x = Tensor::<i32>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -132,8 +134,8 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 
 /// Dot product of two tensors.
 /// ```
-/// use halo2deeplearning::tensor::Tensor;
-/// use halo2deeplearning::tensor::ops::dot_product;
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::dot_product;
 ///
 /// let x = Tensor::<i32>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -156,8 +158,8 @@ pub fn dot_product<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 
 /// Pads a 3D tensor of shape `C x H x W` to a tensor of shape `C x (H + 2xPADDING) x (W + 2xPADDING)` using 0 values.
 /// ```
-/// use halo2deeplearning::tensor::Tensor;
-/// use halo2deeplearning::tensor::ops::pad;
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::pad;
 ///
 /// let x = Tensor::<i32>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),

@@ -1,8 +1,8 @@
 use clap::Parser;
+use ezkl::fieldutils::i32_to_felt;
+use ezkl::onnx::{utilities::vector_to_quantized, Cli, OnnxCircuit};
 use halo2_proofs::dev::MockProver;
 use halo2curves::pasta::Fp as F;
-use halo2deeplearning::fieldutils::i32_to_felt;
-use halo2deeplearning::onnx::{utilities::vector_to_quantized, Cli, OnnxCircuit};
 use log::{info, trace};
 use serde::Deserialize;
 use std::fs::File;
