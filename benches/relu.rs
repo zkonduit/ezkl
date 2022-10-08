@@ -1,4 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use ezkl::nn::eltwise::{EltwiseConfig, Nonlin1d, Nonlinearity, ReLu};
+use ezkl::nn::LayerConfig;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -6,9 +8,7 @@ use halo2_proofs::{
     plonk::{Circuit, ConstraintSystem, Error},
 };
 use halo2curves::pasta::Fp as F;
-use halo2deeplearning::nn::eltwise::{EltwiseConfig, Nonlin1d, Nonlinearity, ReLu};
-use halo2deeplearning::nn::LayerConfig;
-use halo2deeplearning::tensor::*;
+use ezkl::tensor::*;
 use rand::Rng;
 use std::marker::PhantomData;
 
