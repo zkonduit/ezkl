@@ -64,7 +64,6 @@ impl<F: FieldExt> TensorType for Assigned<F> {
     }
 }
 
-
 impl<F: FieldExt> TensorType for Expression<F> {
     fn zero() -> Option<Self> {
         Some(Expression::Constant(F::zero()))
@@ -215,7 +214,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Set one single value on the tensor.
     ///
     /// ```
-    /// use halo2deeplearning::tensor::Tensor;
+    /// use ezkl::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(None, &[3, 3, 3]).unwrap();
     ///
     /// a.set(&[0, 0, 1], 10);
@@ -232,7 +231,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Get one single value from the Tensor.
     ///
     /// ```
-    /// use halo2deeplearning::tensor::Tensor;
+    /// use ezkl::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(None, &[2, 3, 5]).unwrap();
     ///
     /// a[1*15 + 1*5 + 1] = 5;
@@ -246,7 +245,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Get a slice from the Tensor.
     ///
     /// ```
-    /// use halo2deeplearning::tensor::Tensor;
+    /// use ezkl::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
     /// let mut b = Tensor::<i32>::new(Some(&[1, 2]), &[2]).unwrap();
     ///
@@ -278,7 +277,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Get the array index from rows / columns indices.
     ///
     /// ```
-    /// use halo2deeplearning::tensor::Tensor;
+    /// use ezkl::tensor::Tensor;
     /// let a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
     ///
     /// assert_eq!(a.get_index(&[2, 2, 2]), 26);
@@ -308,7 +307,7 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     ///Reshape the tensor
     /// ```
-    /// use halo2deeplearning::tensor::Tensor;
+    /// use ezkl::tensor::Tensor;
     /// let mut a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
     /// a.reshape(&[9, 3]);
     /// assert_eq!(a.dims(), &[9, 3]);
@@ -320,7 +319,7 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     ///Flatten the tensor shape
     /// ```
-    /// use halo2deeplearning::tensor::Tensor;
+    /// use ezkl::tensor::Tensor;
     /// let mut a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
     /// a.flatten();
     /// assert_eq!(a.dims(), &[27]);
@@ -331,7 +330,7 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     /// Maps a function to tensors
     /// ```
-    /// use halo2deeplearning::tensor::Tensor;
+    /// use ezkl::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
     /// let mut c = a.map(|x| i32::pow(x,2));
     /// assert_eq!(c, Tensor::from([1, 16].into_iter()))
@@ -344,7 +343,7 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     /// Maps a function to tensors and enumerates
     /// ```
-    /// use halo2deeplearning::tensor::Tensor;
+    /// use ezkl::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
     /// let mut c = a.enum_map(|i, x| i32::pow(x + i as i32, 2));
     /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
@@ -357,7 +356,7 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     /// Maps a function to tensors and enumerates using multi cartesian coordinates
     /// ```
-    /// use halo2deeplearning::tensor::Tensor;
+    /// use ezkl::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
     /// let mut c = a.mc_enum_map(|i, x| i32::pow(x + i[0] as i32, 2));
     /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
@@ -379,7 +378,7 @@ impl<T: Clone + TensorType> Tensor<T> {
 impl<T: Clone + TensorType> Tensor<Tensor<T>> {
     /// Flattens a tensor of tensors
     /// ```
-    /// use halo2deeplearning::tensor::Tensor;
+    /// use ezkl::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
     /// let mut b = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
     /// let mut c = Tensor::new(Some(&[a,b]), &[2]).unwrap();

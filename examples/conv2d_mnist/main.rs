@@ -1,3 +1,10 @@
+use ezkl::fieldutils;
+use ezkl::fieldutils::i32_to_felt;
+use ezkl::nn::affine::Affine1dConfig;
+use ezkl::nn::cnvrl::ConvConfig;
+use ezkl::nn::eltwise::{EltwiseConfig, ReLu};
+use ezkl::nn::*;
+use ezkl::tensor::*;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -20,13 +27,6 @@ use halo2_proofs::{
 };
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp as F;
-use halo2deeplearning::fieldutils;
-use halo2deeplearning::fieldutils::i32_to_felt;
-use halo2deeplearning::nn::affine::Affine1dConfig;
-use halo2deeplearning::nn::cnvrl::ConvConfig;
-use halo2deeplearning::nn::eltwise::{EltwiseConfig, ReLu};
-use halo2deeplearning::nn::*;
-use halo2deeplearning::tensor::*;
 use mnist::*;
 use rand::rngs::OsRng;
 use std::cmp::max;

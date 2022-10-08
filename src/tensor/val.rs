@@ -95,7 +95,10 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                 *d = v.dims().to_vec();
             }
             ValTensor::PrevAssigned { inner: v, dims: d } => {
-                assert_eq!(d.iter().product::<usize>(),new_dims.iter().product::<usize>());
+                assert_eq!(
+                    d.iter().product::<usize>(),
+                    new_dims.iter().product::<usize>()
+                );
                 v.reshape(new_dims);
                 *d = v.dims().to_vec();
             }

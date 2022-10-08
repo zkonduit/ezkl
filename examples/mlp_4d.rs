@@ -1,3 +1,8 @@
+use ezkl::fieldutils::i32_to_felt;
+use ezkl::nn::affine::Affine1dConfig;
+use ezkl::nn::eltwise::{DivideBy, EltwiseConfig, ReLu};
+use ezkl::nn::*;
+use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -5,11 +10,6 @@ use halo2_proofs::{
     plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
 use halo2curves::pasta::Fp as F;
-use halo2deeplearning::fieldutils::i32_to_felt;
-use halo2deeplearning::nn::affine::Affine1dConfig;
-use halo2deeplearning::nn::eltwise::{DivideBy, EltwiseConfig, ReLu};
-use halo2deeplearning::nn::*;
-use halo2deeplearning::tensor::*;
 use std::marker::PhantomData;
 
 // A columnar ReLu MLP
