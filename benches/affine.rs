@@ -1,4 +1,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use ezkl::nn::affine::Affine1dConfig;
+use ezkl::nn::*;
+use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::{Field, FieldExt},
@@ -7,9 +10,6 @@ use halo2_proofs::{
 };
 use halo2curves::pasta::pallas;
 use halo2curves::pasta::Fp as F;
-use halo2deeplearning::nn::affine::Affine1dConfig;
-use halo2deeplearning::nn::*;
-use halo2deeplearning::tensor::*;
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
 
@@ -45,7 +45,8 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
 
         Self::Config::configure(
             cs,
-            &[kernel.clone(), bias.clone(), input.clone(), output.clone()], None
+            &[kernel.clone(), bias.clone(), input.clone(), output.clone()],
+            None,
         )
     }
 
@@ -57,7 +58,6 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
         config.layout(
             &mut layouter,
             &[
-
                 self.l0_params[0].clone(),
                 self.l0_params[1].clone(),
                 self.input.clone(),
