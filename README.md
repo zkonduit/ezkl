@@ -9,7 +9,7 @@ Note that the library requires a nightly version of the rust toolchain. You can 
 rustup override set nightly         
 ```
 
-## `ezkl` command line interface
+## command line interface
 
 The `ezkl` cli provides a simple interface to load ONNX neural networks, convert them into a Halo2 circuit, then run a proof (given a public input).
 
@@ -31,15 +31,32 @@ Usage:
 Usage: ezkl [OPTIONS] --scale <SCALE> --bits <BITS>
 
 Options:
-  -D, --data <DATA>       The path to the .json data file [default: ]
-  -M, --model <MODEL>     The path to the .onnx model file [default: ]
-  -S, --scale <SCALE>     The denominator in the fixed point representation used when quantizing
-  -B, --bits <BITS>       The number of bits used in lookup tables
-  -K, --logrows <LOGROWS> 2^LOGROWS is the number of rows in the circuit
-  -h, --help              Print help information
-  -V, --version           Print version information
+Usage: ezkl [OPTIONS] <COMMAND>
+
+Commands:
+  table      Loads model and prints model table
+  mock       Loads model and input and runs mock prover (for testing)
+  fullprove  Loads model and input and runs full prover (for testing)
+  prove      Loads model and data, prepares vk and pk, and creates proof, saving proof in --output
+  verify     Verifies a proof, returning accept or reject
+  help       Print this message or the help of the given subcommand(s)
+
+Options:
+  -S, --scale <SCALE>      The denominator in the fixed point representation used when quantizing [default: 7]
+  -B, --bits <BITS>        The number of bits used in lookup tables [default: 14]
+  -K, --logrows <LOGROWS>  The log_2 number of rows [default: 16]
+  -h, --help               Print help information
+  -V, --version            Print version information
 ```
-If `-D` and `-M` are not provided the cli will query the user to manually enter the path(s). Bits, scale, and logrows have default values. `.onnx` can be generated using pytorch or tensorflow. The data json file is structured as follows:
+Bits, scale, and logrows have default values. `prove`, `mock`, `fullprove` all require `-D` and `-M` parameters, which if not provided, the cli will query the user to manually enter the path(s).
+```bash
+Usage: ezkl mock [OPTIONS]
+
+Options:
+  -D, --data <DATA>    The path to the .json data file [default: ]
+  -M, --model <MODEL>  The path to the .onnx model file [default: ]
+```
+The `.onnx` file can be generated using pytorch or tensorflow. The data json file is structured as follows:
 
 ```json
 {
