@@ -8,6 +8,7 @@ fn test_onnx_example(example_name: String) {
             "--bin",
             "ezkl",
             "--",
+            "mock",
             "-D",
             format!("./examples/onnx_models/{}_input.json", example_name).as_str(),
             "-M",
