@@ -1,10 +1,11 @@
 use crate::tensor::{Tensor, TensorType};
+use itertools::Itertools;
 pub use std::ops::{Add, Mul, Sub};
 
 /// Matrix multiplies two 2D tensors (and adds an offset).
 /// ```
 /// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::matmul;
+/// use ezkl::tensor::ops::affine;
 ///
 /// let x = Tensor::<i32>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 2, 1, 1]),
@@ -18,13 +19,14 @@ pub use std::ops::{Add, Mul, Sub};
 ///     Some(&[0, 0]),
 ///     &[2],
 /// ).unwrap();
-/// let result = matmul(k, b, x);
+/// let result = affine(&vec![&x, &k, &b]);
 /// let expected = Tensor::<i32>::new(Some(&[26, 7, 11, 3, 15, 3, 7, 2]), &[2, 4]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     inputs: &Vec<&Tensor<T>>,
 ) -> Tensor<T> {
+    assert_eq!(inputs.len(), 3);
     let (mut input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
     assert_eq!(bias.dims()[0], kernel.dims()[0]);
     assert_eq!(input.dims()[0], kernel.dims()[1]);
@@ -42,19 +44,70 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 
     for i in 0..kernel_dims[0] {
         for j in 0..input_dims[1] {
-            output.set(
-                &[i, j],
-                dot_product(
-                    kernel.get_slice(&[i..i + 1]),
-                    input.get_slice(&[0..input_dims[0], j..j + 1]),
-                ) + bias[i].clone(),
-            );
+            let prod = dot(&vec![
+                &kernel.get_slice(&[i..i + 1]),
+                &input.get_slice(&[0..input_dims[0], j..j + 1]),
+            ]);
+            output.set(&[i, j], prod[0].clone() + bias[i].clone());
         }
     }
     // does matrix to vector multiplication
     if output.dims()[1] == 1 {
         output.flatten();
     }
+    output
+}
+
+/// Matrix multiplies two 2D tensors.
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::matmul;
+///
+/// let x = Tensor::<i32>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 2, 1, 1]),
+///     &[3, 4],
+/// ).unwrap();
+/// let k = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = matmul(&vec![&k, &x]);
+/// let expected = Tensor::<i32>::new(Some(&[26, 7, 11, 3, 15, 3, 7, 2]), &[2, 4]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+    inputs: &Vec<&Tensor<T>>,
+) -> Tensor<T> {
+    assert_eq!(inputs.len(), 2);
+    let (a, b) = (inputs[0].clone(), inputs[1].clone());
+    assert_eq!(a.dims()[a.dims().len() - 1], b.dims()[a.dims().len() - 2]);
+    assert_eq!(
+        a.dims()[0..a.dims().len() - 2],
+        b.dims()[0..a.dims().len() - 2]
+    );
+
+    let mut dims = Vec::from(&a.dims()[0..a.dims().len() - 2]);
+    dims.push(a.dims()[a.dims().len() - 2]);
+    dims.push(b.dims()[a.dims().len() - 1]);
+    // calculate value of output
+    let mut output: Tensor<T> = Tensor::new(None, &dims).unwrap();
+
+    let indices = dims.iter().map(|d| 0..*d).collect::<Vec<_>>();
+
+    for coord in indices.iter().cloned().multi_cartesian_product() {
+        let row = coord[0..coord.len() - 1]
+            .iter()
+            .map(|&d| d..(d + 1))
+            .collect::<Vec<_>>();
+        let mut col = coord[0..coord.len()]
+            .iter()
+            .map(|&d| d..(d + 1))
+            .collect::<Vec<_>>();
+        col[coord.len() - 2] = 0..b.dims()[coord.len() - 2];
+        let prod = dot(&vec![&a.get_slice(&row[0..]), &b.get_slice(&col[0..])]);
+        output.set(&coord, prod[0].clone());
+    }
+
     output
 }
 
@@ -201,6 +254,25 @@ pub fn pow<T: TensorType + Mul<Output = T>>(a: &Tensor<T>, pow: usize) -> Tensor
     output
 }
 
+/// Sums a tensor.
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::sum;
+/// let x = Tensor::<i32>::new(
+///     Some(&[2, 15, 2, 1, 1, 0]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = sum(&x);
+/// let expected = 21;
+/// assert_eq!(result, expected);
+/// ```
+pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Tensor<T> {
+    // calculate value of output
+    let mut res = T::zero().unwrap();
+    a.map(|a_i| res = res.clone() + a_i.clone());
+    Tensor::new(Some(&vec![res]), &[1]).unwrap()
+}
+
 /// Applies convolution over a 3D tensor of shape C x H x W (and adds a bias).
 /// ```
 /// use ezkl::tensor::Tensor;
@@ -218,7 +290,7 @@ pub fn pow<T: TensorType + Mul<Output = T>>(a: &Tensor<T>, pow: usize) -> Tensor
 ///     Some(&[0]),
 ///     &[1],
 /// ).unwrap();
-/// let result = convolution::<i32>(k, b, x, (0, 0), (1, 1));
+/// let result = convolution::<i32>(&vec![&x, &k, &b], (0, 0), (1, 1));
 /// let expected = Tensor::<i32>::new(Some(&[31, 16, 8, 26]), &[1, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -227,7 +299,8 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     padding: (usize, usize),
     stride: (usize, usize),
 ) -> Tensor<T> {
-    let (mut image, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
+    assert_eq!(inputs.len(), 3);
+    let (image, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
     assert_eq!(image.dims().len(), 3);
     assert_eq!(kernel.dims().len(), 4);
     assert_eq!(bias.dims().len(), 1);
@@ -260,17 +333,15 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
             let rs = j * stride.0;
             for k in 0..horz_slides {
                 let cs = k * stride.1;
-                output.set(
-                    &[i, j, k],
-                    dot_product(
-                        kernel.get_slice(&[i..i + 1]).clone(),
-                        padded_image.get_slice(&[
-                            0..input_channels,
-                            rs..(rs + kernel_height),
-                            cs..(cs + kernel_width),
-                        ]),
-                    ) + bias[i].clone(),
-                );
+                let prod = dot(&vec![
+                    &kernel.get_slice(&[i..i + 1]).clone(),
+                    &padded_image.get_slice(&[
+                        0..input_channels,
+                        rs..(rs + kernel_height),
+                        cs..(cs + kernel_width),
+                    ]),
+                ]);
+                output.set(&[i, j, k], prod[0].clone() + bias[i].clone());
             }
         }
     }
@@ -280,7 +351,7 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// Dot product of two tensors.
 /// ```
 /// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::dot_product;
+/// use ezkl::tensor::ops::dot;
 ///
 /// let x = Tensor::<i32>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -290,15 +361,19 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[5, 5, 10, -4, 2, -1, 2, 0, 1]),
 ///     &[1, 3, 3],
 /// ).unwrap();
-/// assert_eq!(dot_product(x, y), 86);
+/// assert_eq!(dot(&vec![&x, &y]), 86);
 /// ```
-pub fn dot_product<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-    w: Tensor<T>,
-    x: Tensor<T>,
-) -> T {
-    w.iter()
-        .zip(x)
-        .fold(T::zero().unwrap(), |acc, (k, i)| acc + k.clone() * i)
+pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+    inputs: &Vec<&Tensor<T>>,
+) -> Tensor<T> {
+    assert_eq!(inputs.len(), 2);
+    assert_eq!(inputs[0].clone().len(), inputs[1].clone().len());
+    let (a, b): (Tensor<T>, Tensor<T>) = (inputs[0].clone(), inputs[1].clone());
+    let res = a
+        .iter()
+        .zip(b)
+        .fold(T::zero().unwrap(), |acc, (k, i)| acc + k.clone() * i);
+    Tensor::new(Some(&vec![res]), &[1]).unwrap()
 }
 
 /// Pads a 3D tensor of shape `C x H x W` to a tensor of shape `C x (H + 2xPADDING) x (W + 2xPADDING)` using 0 values.

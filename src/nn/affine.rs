@@ -58,7 +58,7 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
             let kernel = config.kernel.query(meta, 0);
             let bias = config.bias.query(meta, 0);
 
-            let witnessed_output = matmul(&vec![&input, &kernel, &bias]);
+            let witnessed_output = affine(&vec![&input, &kernel, &bias]);
 
             // Get output expressions for each input channel
             let expected_output: Tensor<Expression<F>> = config.output.query(meta, 0);
@@ -110,7 +110,7 @@ impl<F: FieldExt + TensorType> LayerConfig<F> for Affine1dConfig<F> {
                         &input,
                     );
 
-                    let mut output: ValTensor<F> = matmul(&vec![&inp, &k, &b]).into();
+                    let mut output: ValTensor<F> = affine(&vec![&inp, &k, &b]).into();
                     output.flatten();
 
                     Ok(self.output.assign(&mut region, offset, &output))

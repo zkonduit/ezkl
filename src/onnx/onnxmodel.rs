@@ -11,7 +11,7 @@ use clap::Parser;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
-    plonk::{Column, ConstraintSystem, Fixed, Instance},
+    plonk::{Column, ConstraintSystem, Instance},
 };
 use itertools::Itertools;
 use log::{debug, error, info, trace, warn};
@@ -165,6 +165,9 @@ impl OnnxNode {
             "Sub" => OpKind::Basic(BasicOp::Sub),
             "Mul" => OpKind::Basic(BasicOp::Mult),
             "Gemm" => OpKind::Basic(BasicOp::Affine),
+            "MatMulInference" => OpKind::Basic(BasicOp::Matmul),
+            "Dot" => OpKind::Basic(BasicOp::Dot),
+            "Reduce<Sum>" => OpKind::Basic(BasicOp::Sum),
             "Pow" => OpKind::Basic(BasicOp::Pow(1)),
             "Conv" => OpKind::Basic(BasicOp::Conv((1, 1), (1, 1))),
             "ConvHir" => OpKind::Basic(BasicOp::Conv((1, 1), (1, 1))),
@@ -436,17 +439,17 @@ impl OnnxModel {
             });
         }
         // rescale output just in case final operation doesn't do it
-        let scale_diff = self.onnx_nodes.last().unwrap().out_scale - self.scale;
-        if scale_diff > 0 {
-            let node = self.onnx_nodes.last().unwrap();
-            let mult = scale_to_multiplier(scale_diff);
-            let divconf = self.configure_divide_by(node, meta, advices.clone(), &(mult as usize));
-            results.configs.push(NodeConfig {
-                config: NodeConfigTypes::Divide(divconf),
-                onnx_idx: vec![0],
-            });
-        }
-
+        // let scale_diff = self.onnx_nodes.last().unwrap().out_scale - self.scale;
+        // if scale_diff > 0 {
+        //     let node = self.onnx_nodes.last().unwrap();
+        //     let mult = scale_to_multiplier(scale_diff);
+        //     let divconf = self.configure_divide_by(node, meta, advices.clone(), &(mult as usize));
+        //     results.configs.push(NodeConfig {
+        //         config: NodeConfigTypes::Divide(divconf),
+        //         onnx_idx: vec![0],
+        //     });
+        // }
+        //
         let public_output: Column<Instance> = meta.instance_column();
         meta.enable_equality(public_output);
 
@@ -674,60 +677,6 @@ impl OnnxModel {
             OpKind::Rescaled(inner_op, _) => {
                 self.configure_node(inner_op, node, meta, advices, _fixeds)
             }
-            // OpKind::Convolution => {
-            //     let inputs = self.extract_node_inputs(node);
-            //     let weight_node = inputs[1];
-            //
-            //     let input_dims = node.in_dims.clone().unwrap(); //NCHW
-            //     let output_dims = node.out_dims.clone().unwrap(); //NCHW
-            //     let (in_channels, in_height, in_width) =
-            //         (input_dims[0], input_dims[1], input_dims[2]);
-            //     let (out_channels, out_height, out_width) =
-            //         (output_dims[0], output_dims[1], output_dims[2]);
-            //
-            //     let oihw = weight_node.out_dims.as_ref().unwrap();
-            //     let (ker_o, ker_i, kernel_height, kernel_width) =
-            //         (oihw[0], oihw[1], oihw[2], oihw[3]);
-            //     assert_eq!(ker_i, in_channels);
-            //     assert_eq!(ker_o, out_channels);
-            //
-            //     let mut kernel: Tensor<Column<Fixed>> =
-            //         (0..out_channels * in_channels * kernel_width * kernel_height)
-            //             .map(|_| meta.fixed_column())
-            //             .into();
-            //     kernel.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
-            //
-            //     let mut bias: Tensor<Column<Fixed>> =
-            //         (0..out_channels).map(|_| meta.fixed_column()).into();
-            //     bias.reshape(&[out_channels]);
-            //
-            //     let variables = &[
-            //         VarTensor::from(kernel),
-            //         VarTensor::from(bias),
-            //         advices.get_slice(
-            //             &[0..in_height * in_channels],
-            //             &[in_channels, in_height, in_width],
-            //         ),
-            //         advices.get_slice(
-            //             &[0..out_height * out_channels],
-            //             &[out_channels, out_height, out_width],
-            //         ),
-            //     ];
-            //
-            //     let params = match node.hyperparams {
-            //         LayerParams::Conv { padding, stride } => {
-            //             [padding.0, padding.1, stride.0, stride.1]
-            //         }
-            //         _ => {
-            //             let _ = anyhow!("mismatch between hyperparam and layer types ");
-            //             panic!()
-            //         }
-            //     };
-            //
-            //     let conf = ConvConfig::<F>::configure(meta, variables, Some(&params));
-            //
-            //     NodeConfigTypes::Conv(conf)
-            // }
             OpKind::ReLU(s) => {
                 let dims = match &node.in_dims {
                     Some(v) => v,
@@ -842,7 +791,6 @@ impl OnnxModel {
         let res = match config.clone() {
             NodeConfigTypes::Basic(mut ac, idx) => {
                 let mut inputs = vec![input];
-                println!("Inputs {:?}", idx);
                 for i in idx[1..].iter() {
                     let node = &self.onnx_nodes[*i];
                     match node.opkind {
@@ -1002,6 +950,7 @@ impl OnnxModel {
                         .tuple_windows()
                         .all(|(a, b)| a.in_scale == b.in_scale);
                     match s {
+                        BasicOp::Dot => todo!(),
                         BasicOp::Conv(padding, stride) => {
                             let (input_node, weight_node, bias_node) =
                                 (inputs[0], inputs[1], inputs[2]);
@@ -1038,6 +987,24 @@ impl OnnxModel {
                                 max(out_height * out_channels, input_height * in_channels),
                             );
                         }
+                        BasicOp::Matmul => {
+                            let (a_node, b_node) = (inputs[0], inputs[1]);
+
+                            let in_dim = a_node.out_dims.as_ref().unwrap()[1];
+                            this_node.in_dims = Some(vec![in_dim]);
+                            this_node.out_dims = Some(vec![
+                                a_node.out_dims.as_ref().unwrap()[0],
+                                b_node.out_dims.as_ref().unwrap()[1],
+                            ]);
+
+                            this_node.output_max =
+                                input_node.output_max * a_node.output_max * (in_dim as f32);
+
+                            this_node.in_scale = input_node.out_scale;
+
+                            this_node.out_scale = a_node.out_scale + input_node.out_scale;
+                            this_node.min_cols = max(in_dim, a_node.out_dims.as_ref().unwrap()[0]);
+                        }
                         BasicOp::Affine => {
                             let (input_node, weight_node, bias_node) =
                                 (inputs[0], inputs[1], inputs[2]);
@@ -1067,6 +1034,21 @@ impl OnnxModel {
                             this_node.in_scale =
                                 inputs.iter().map(|input| input.out_scale).max().unwrap();
                             this_node.out_scale = this_node.in_scale;
+
+                        }
+                        BasicOp::Sum => {
+                            this_node.output_max = inputs
+                                .iter()
+                                .map(|input| {
+                                    input.output_max
+                                        * input.in_dims.clone().unwrap().iter().product::<usize>()
+                                            as f32
+                                })
+                                .sum::<f32>();
+                            this_node.in_scale =
+                                inputs.iter().map(|input| input.out_scale).max().unwrap();
+                            this_node.out_scale = this_node.in_scale;
+                            this_node.out_dims = Some(vec![1]);
                         }
                         BasicOp::Sub => {
                             this_node.output_max = (inputs

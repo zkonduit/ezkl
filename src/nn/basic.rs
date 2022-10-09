@@ -13,7 +13,10 @@ use std::marker::PhantomData;
 pub enum BasicOp {
     Add,
     Sub,
+    Sum,
     Mult,
+    Matmul,
+    Dot,
     Affine,
     Conv((usize, usize), (usize, usize)),
     Pow(usize),
@@ -24,7 +27,10 @@ impl fmt::Display for BasicOp {
         match self {
             BasicOp::Add => write!(f, "add"),
             BasicOp::Sub => write!(f, "sub"),
+            BasicOp::Sum => write!(f, "sum"),
             BasicOp::Mult => write!(f, "mult"),
+            BasicOp::Matmul => write!(f, "matmul"),
+            BasicOp::Dot => write!(f, "dot"),
             BasicOp::Affine => write!(f, "affine"),
             BasicOp::Conv(_, _) => write!(f, "conv"),
             BasicOp::Pow(s) => write!(f, "pow {}", s),
@@ -94,16 +100,24 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
                         config_outputs.push(mult(&op_inputs));
                     }
                     BasicOp::Affine => {
-                        assert_eq!(op_inputs.len(), 3);
+                        config_outputs.push(affine(&op_inputs));
+                    }
+                    BasicOp::Matmul => {
                         config_outputs.push(matmul(&op_inputs));
                     }
+                    BasicOp::Dot => {
+                        todo!();
+                    }
                     BasicOp::Conv(padding, stride) => {
-                        assert_eq!(op_inputs.len(), 3);
                         config_outputs.push(convolution(&op_inputs, padding, stride));
                     }
                     BasicOp::Pow(u) => {
                         assert_eq!(op_inputs.len(), 1);
                         config_outputs.push(pow(&op_inputs[0], u));
+                    }
+                    BasicOp::Sum => {
+                        assert_eq!(op_inputs.len(), 1);
+                        config_outputs.push(sum(op_inputs[0]));
                     }
                 }
             }
@@ -171,16 +185,24 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
                                 layout_outputs.push(mult(&op_inputs));
                             }
                             BasicOp::Affine => {
-                                assert_eq!(op_inputs.len(), 3);
+                                layout_outputs.push(affine(&op_inputs));
+                            }
+                            BasicOp::Matmul => {
                                 layout_outputs.push(matmul(&op_inputs));
                             }
+                            BasicOp::Dot => {
+                                todo!();
+                            }
                             BasicOp::Conv(padding, stride) => {
-                                assert_eq!(op_inputs.len(), 3);
                                 layout_outputs.push(convolution(&op_inputs, padding, stride));
                             }
                             BasicOp::Pow(u) => {
                                 assert_eq!(op_inputs.len(), 1);
                                 layout_outputs.push(pow(&op_inputs[0], u));
+                            }
+                            BasicOp::Sum => {
+                                assert_eq!(op_inputs.len(), 1);
+                                layout_outputs.push(sum(op_inputs[0]));
                             }
                         }
                     }
