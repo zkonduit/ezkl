@@ -137,7 +137,18 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                 let r: Tensor<i32> = v.into();
                 format!("PrevAssigned {:?}", r)
             }
-            _ => "Unassigned ValTensor".into(),
+            // ValTensor::Value { inner: v, dims: d } => {
+            //     //                if let Ok(r) = v.try_into() {
+            //     format!("Value {:?}", v)
+            //     // } else {
+            //     //     format!("Value Unknown of shape {:?}", d)
+            //     // }
+            // }
+
+            // ValTensor::AssignedValue { inner: v, dims: d } => {
+            //     format!("AssignedValue {:?}", v)
+            // }
+            _ => "ValTensor not PrevAssigned".into(),
         }
     }
 }
