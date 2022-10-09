@@ -1,4 +1,5 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
+use crate::commands::{model_path, Cli, Commands};
 use crate::nn::affine::Affine1dConfig;
 use crate::nn::basic::*;
 use crate::nn::cnvrl::ConvConfig;
@@ -17,7 +18,6 @@ use itertools::Itertools;
 use log::{debug, error, info, trace, warn};
 use std::cmp::max;
 use std::fmt;
-use std::io::{stdin, stdout, Write};
 use std::path::Path;
 use tabled::{Table, Tabled};
 use tract_onnx;
@@ -92,26 +92,6 @@ pub struct OnnxModelConfig<F: FieldExt + TensorType> {
     configs: Vec<NodeConfig<F>>,
     pub model: OnnxModel,
     pub public_output: Column<Instance>,
-}
-
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-pub struct Cli {
-    /// The path to the .json data file
-    #[arg(short = 'D', long, default_value = "")]
-    pub data: String,
-    /// The path to the .onnx model file
-    #[arg(short = 'M', long, default_value = "")]
-    pub model: String,
-    /// The denominator in the fixed point representation used when quantizing
-    #[arg(short = 'S', long, default_value = "7")]
-    pub scale: i32,
-    /// The number of bits used in lookup tables
-    #[arg(short = 'B', long, default_value = "14")]
-    pub bits: usize,
-    /// The log_2 number of rows
-    #[arg(short = 'K', long, default_value = "16")]
-    pub logrows: u32,
 }
 
 fn display_option<T: fmt::Debug>(o: &Option<T>) -> String {
@@ -366,25 +346,41 @@ impl OnnxModel {
     }
     pub fn from_arg() -> Self {
         let args = Cli::parse();
-        let mut s = String::new();
 
-        let model_path = match args.model.is_empty() {
-            false => {
-                info!("loading model from {}", args.model.clone());
-                Path::new(&args.model)
+        match args.command {
+            Commands::Table { model } => OnnxModel::new(model_path(model), args.scale, args.bits),
+            Commands::Mock { data: _, model } => {
+                OnnxModel::new(model_path(model), args.scale, args.bits)
             }
-            true => {
-                info!("please enter a path to a .onnx file containing a model: ");
-                let _ = stdout().flush();
-                let _ = &stdin()
-                    .read_line(&mut s)
-                    .expect("did not enter a correct string");
-                s.truncate(s.len() - 1);
-                Path::new(&s)
-            }
-        };
-        assert!(model_path.exists());
-        OnnxModel::new(model_path, args.scale, args.bits)
+            Commands::Fullprove {
+                data: _,
+                model,
+                pfsys: _,
+            } => OnnxModel::new(model_path(model), args.scale, args.bits),
+            // Commands::Vkey {
+            //     model,
+            //     output: _,
+            //     params: _,
+            //     pfsys: _,
+            // } => OnnxModel::new(model_path(model), args.scale, args.bits),
+            // Commands::Pkey {
+            //     model,
+            //     output: _,
+            //     params: _,
+            //     pfsys: _,
+            // } => OnnxModel::new(model_path(model), args.scale, args.bits),
+            Commands::Prove {
+                data: _,
+                model,
+                output: _,
+                pfsys: _,
+            } => OnnxModel::new(model_path(model), args.scale, args.bits),
+            Commands::Verify {
+                model,
+                proof: _,
+                pfsys: _,
+            } => OnnxModel::new(model_path(model), args.scale, args.bits),
+        }
     }
 
     pub fn configure<F: FieldExt + TensorType>(
@@ -770,16 +766,7 @@ impl OnnxModel {
                 Some(vt) => vt,
                 None => x, // Some nodes don't produce tensor output, we skip these
             };
-            match x {
-                ValTensor::PrevAssigned {
-                    inner: ref v,
-                    dims: _,
-                } => {
-                    let res: Tensor<i32> = v.clone().into();
-                    trace!("{:?}", res);
-                }
-                _ => {}
-            };
+            //            trace!("  output {}", x.show());  //only use with mock prover
         }
 
         Ok(x)
