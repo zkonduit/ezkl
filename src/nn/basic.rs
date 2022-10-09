@@ -69,7 +69,6 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
 
         meta.create_gate("basic_op", |meta| {
             let selector = meta.query_selector(config.selector);
-
             let qis = config
                 .inputs
                 .iter()
@@ -78,7 +77,6 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
             let mut config_outputs = vec![];
             for node in config.nodes.iter_mut() {
                 let mut op_inputs = node.input_idx.iter().map(|i| &qis[*i]).collect::<Vec<_>>();
-                println!("node {:?}", node);
                 let mut node_inputs = node
                     .node_idx
                     .iter()

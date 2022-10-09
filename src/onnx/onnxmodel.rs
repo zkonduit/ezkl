@@ -33,7 +33,6 @@ use tract_onnx::tract_hir::{
         konst::Const,
     },
 };
-
 // Initially, some of these OpKinds will be folded into others (for example, Const nodes that
 // contain parameters will be handled at the consuming node.
 // Eventually, though, we probably want to keep them and treat them directly (layouting and configuring
@@ -433,20 +432,20 @@ impl OnnxModel {
             let config = self.fuse_basic_ops(&basic_nodes, meta, advices.clone(), fixeds.clone());
             configs.push(NodeConfig {
                 config,
-                onnx_idx: vec![order[order.len() - 1]],
+                onnx_idx: vec![*order.last().unwrap()],
             });
         }
-        // // rescale output just in case final operation doesn't do it
-        // let scale_diff = self.onnx_nodes.last().unwrap().out_scale - self.scale;
-        // if scale_diff > 0 {
-        //     let node = self.onnx_nodes.last().unwrap();
-        //     let mult = scale_to_multiplier(scale_diff);
-        //     let divconf = self.configure_divide_by(node, meta, advices.clone(), &(mult as usize));
-        //     configs.push(NodeConfig {
-        //         config: NodeConfigTypes::Divide(divconf),
-        //         onnx_idx: vec![2000],
-        //     });
-        // }
+        // rescale output just in case final operation doesn't do it
+        let scale_diff = self.onnx_nodes.last().unwrap().out_scale - self.scale;
+        if scale_diff > 0 {
+            let node = self.onnx_nodes.last().unwrap();
+            let mult = scale_to_multiplier(scale_diff);
+            let divconf = self.configure_divide_by(node, meta, advices.clone(), &(mult as usize));
+            configs.push(NodeConfig {
+                config: NodeConfigTypes::Divide(divconf),
+                onnx_idx: vec![0],
+            });
+        }
 
         let public_output: Column<Instance> = meta.instance_column();
         meta.enable_equality(public_output);
@@ -509,6 +508,15 @@ impl OnnxModel {
                                 }
                             }
                         }
+                        match op {
+                            BasicOp::Pow(_) => {
+                                // the last node is just the const node for the power, which we have info for already
+                                input_idx.pop();
+                                inputs.pop();
+                                input_shapes.pop();
+                            }
+                            _ => {}
+                        }
                         BasicOpNode {
                             op: op.clone(),
                             input_idx,
@@ -526,20 +534,22 @@ impl OnnxModel {
             })
             .collect::<Vec<_>>();
 
+        println!("{:?}", input_shapes);
         // will panic on an empty None
-        let shape = input_shapes
+        let mut shape = input_shapes
             .iter()
             .tuple_windows()
             .all(|(a, b)| a == b)
-            .then(|| &input_shapes[0])
+            .then(|| input_shapes[0].clone())
             .unwrap();
+        shape.pop();
 
         let mut variables = vec![];
         let mut start = 0;
-        let end: usize = shape[0..shape.len() - 1].iter().product();
+        let end: usize = shape.iter().product();
         // final iteration generates the output
         for _ in 0..inputs.len() + 1 {
-            variables.push(advices.get_slice(&[start..start + end], &shape));
+            variables.push(advices.get_slice(&[start..start + end], &input_shapes[0]));
             start += end;
         }
 
@@ -766,7 +776,7 @@ impl OnnxModel {
                 Some(vt) => vt,
                 None => x, // Some nodes don't produce tensor output, we skip these
             };
-            //            trace!("  output {}", x.show());  //only use with mock prover
+            trace!("  output {}", x.show()); //only use with mock prover
         }
 
         Ok(x)
@@ -865,6 +875,7 @@ impl OnnxModel {
             (OpKind::Input, NodeConfigTypes::Input) => true,
             (OpKind::Basic(_), NodeConfigTypes::Basic(_, _)) => true,
             (OpKind::Const, NodeConfigTypes::Const) => true,
+            (_, NodeConfigTypes::Divide(_)) => true,
             _ => false,
         }
     }
@@ -1022,6 +1033,15 @@ impl OnnxModel {
                     if this_node.output_shapes.is_none() {
                         this_node.output_shapes = Some(vec![this_node.out_dims.clone()]);
                     }
+                    this_node.min_cols = 2 * inputs
+                        .iter()
+                        .map(|e| {
+                            let o = e.out_dims.clone().unwrap();
+                            // o.pop();
+                            o.iter().product::<usize>()
+                        })
+                        .sum::<usize>();
+
                     match s {
                         BasicOp::Add => {
                             this_node.output_max = (inputs
@@ -1034,8 +1054,6 @@ impl OnnxModel {
                             this_node.in_scale =
                                 inputs.iter().map(|input| input.out_scale).max().unwrap();
                             this_node.out_scale = this_node.in_scale;
-                            this_node.min_cols =
-                                max(1, this_node.in_dims.as_ref().unwrap().iter().product());
                         }
                         BasicOp::Sub => {
                             this_node.output_max = (inputs
@@ -1048,8 +1066,6 @@ impl OnnxModel {
                             this_node.in_scale =
                                 inputs.iter().map(|input| input.out_scale).max().unwrap();
                             this_node.out_scale = this_node.in_scale;
-                            this_node.min_cols =
-                                max(1, this_node.in_dims.as_ref().unwrap().iter().product());
                         }
                         BasicOp::Mult => {
                             this_node.output_max = f32::powf(
@@ -1063,23 +1079,22 @@ impl OnnxModel {
                             this_node.in_scale = input_node.out_scale;
                             this_node.out_scale =
                                 inputs.iter().map(|input| input.out_scale).sum::<i32>();
-
-                            this_node.min_cols =
-                                max(1, this_node.in_dims.as_ref().unwrap().iter().product());
                         }
-                        BasicOp::Pow(u) => {
+                        BasicOp::Pow(_) => {
+                            let mult = scale_to_multiplier(self.scale);
+                            let pow = inputs[1].output_max / mult;
                             this_node.output_max = f32::powf(
                                 inputs
                                     .iter()
                                     .map(|input| input.output_max.ceil() as i32)
                                     .max()
                                     .unwrap() as f32,
-                                u as f32,
+                                pow as f32,
                             );
                             this_node.in_scale = input_node.out_scale;
-                            this_node.out_scale = this_node.in_scale * (u as i32);
-                            this_node.min_cols =
-                                max(1, this_node.in_dims.as_ref().unwrap().iter().product());
+                            this_node.out_scale = this_node.in_scale * (pow as i32);
+
+                            this_node.opkind = OpKind::Basic(BasicOp::Pow(pow as usize));
                         }
                     }
                 }
