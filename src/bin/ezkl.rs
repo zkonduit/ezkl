@@ -15,22 +15,9 @@ use serde_json;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::marker::PhantomData;
-//use std::path::Path;
-
-//use ezkl::fieldutils;
-//use ezkl::tensor::*;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    //    circuit::{Layouter, SimpleFloorPlanner, Value},
-    plonk::{
-        create_proof,
-        keygen_pk,
-        keygen_vk,
-        verify_proof,
-        Circuit, //Column, ConstraintSystem, Error,
-                 // Fixed,
-                 // Instance,
-    },
+    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit},
     poly::{
         commitment::ParamsProver,
         ipa::{
@@ -92,11 +79,11 @@ pub fn main() {
             model: _,
             pfsys,
         } => {
-            info!("Full proof with {}", pfsys);
+            info!("full proof with {}", pfsys);
             let args = Cli::parse();
             let (circuit, public_input) = prepare_circuit_and_public_input(data);
             let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
-            trace!("Params computed");
+            trace!("params computed");
 
             let (pk, proof, _dims) = create_ipa_proof(circuit, public_input.clone(), &params);
 
@@ -114,7 +101,7 @@ pub fn main() {
                 &mut transcript
             )
             .is_ok());
-            info!("Verify took {}", now.elapsed().as_secs());
+            info!("verify took {}", now.elapsed().as_secs());
         }
         Commands::Prove {
             data,
@@ -122,11 +109,11 @@ pub fn main() {
             output,
             pfsys,
         } => {
-            info!("Proof with {}", pfsys);
+            info!("proof with {}", pfsys);
             let args = Cli::parse();
             let (circuit, public_input) = prepare_circuit_and_public_input(data);
             let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
-            trace!("Params computed");
+            trace!("params computed");
 
             let (_pk, proof, _input_dims) =
                 create_ipa_proof(circuit.clone(), public_input.clone(), &params);
@@ -156,7 +143,7 @@ pub fn main() {
             let proof: Proof = serde_json::from_str(&data).expect("JSON was not well-formatted");
 
             let result = verify_ipa_proof(proof);
-            println!("Verified: {}", result)
+            info!("verified: {}", result)
         }
     }
 }
@@ -216,7 +203,7 @@ fn create_ipa_proof(
 
     // Initialize the proving key
     let now = Instant::now();
-    trace!("Preparing VK");
+    trace!("preparing VK");
     let vk = keygen_vk(params, &empty_circuit).expect("keygen_vk should not fail");
     info!("VK took {}", now.elapsed().as_secs());
     let now = Instant::now();
@@ -277,7 +264,7 @@ fn verify_ipa_proof(proof: Proof) -> bool {
     let strategy = SingleStrategy::new(&params);
     let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof.proof[..]);
 
-    trace!("Params computed");
+    trace!("params computed");
 
     let result = verify_proof(
         &params,
@@ -287,7 +274,7 @@ fn verify_ipa_proof(proof: Proof) -> bool {
         &mut transcript,
     )
     .is_ok();
-    info!("Verify took {}", now.elapsed().as_secs());
+    info!("verify took {}", now.elapsed().as_secs());
     result
 }
 
