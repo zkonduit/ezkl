@@ -223,12 +223,11 @@ pub fn pow<T: TensorType + Mul<Output = T>>(a: &Tensor<T>, pow: usize) -> Tensor
 /// assert_eq!(result, expected);
 /// ```
 pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-    kernel: Tensor<T>,
-    bias: Tensor<T>,
-    image: Tensor<T>,
+    inputs: &Vec<&Tensor<T>>,
     padding: (usize, usize),
     stride: (usize, usize),
 ) -> Tensor<T> {
+    let (mut image, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
     assert_eq!(image.dims().len(), 3);
     assert_eq!(kernel.dims().len(), 4);
     assert_eq!(bias.dims().len(), 1);

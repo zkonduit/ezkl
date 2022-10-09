@@ -26,7 +26,7 @@ impl fmt::Display for BasicOp {
             BasicOp::Sub => write!(f, "sub"),
             BasicOp::Mult => write!(f, "mult"),
             BasicOp::Affine => write!(f, "affine"),
-            BasicOp::Conv(_, _) => write!(f, "conv "),
+            BasicOp::Conv(_, _) => write!(f, "conv"),
             BasicOp::Pow(s) => write!(f, "pow {}", s),
         }
     }
@@ -97,7 +97,10 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
                         assert_eq!(op_inputs.len(), 3);
                         config_outputs.push(matmul(&op_inputs));
                     }
-                    BasicOp::Conv(_, _) => todo!(),
+                    BasicOp::Conv(padding, stride) => {
+                        assert_eq!(op_inputs.len(), 3);
+                        config_outputs.push(convolution(&op_inputs, padding, stride));
+                    }
                     BasicOp::Pow(u) => {
                         assert_eq!(op_inputs.len(), 1);
                         config_outputs.push(pow(&op_inputs[0], u));
@@ -171,7 +174,10 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
                                 assert_eq!(op_inputs.len(), 3);
                                 layout_outputs.push(matmul(&op_inputs));
                             }
-                            BasicOp::Conv(_, _) => todo!(),
+                            BasicOp::Conv(padding, stride) => {
+                                assert_eq!(op_inputs.len(), 3);
+                                layout_outputs.push(convolution(&op_inputs, padding, stride));
+                            }
                             BasicOp::Pow(u) => {
                                 assert_eq!(op_inputs.len(), 1);
                                 layout_outputs.push(pow(&op_inputs[0], u));

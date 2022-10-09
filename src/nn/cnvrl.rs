@@ -77,7 +77,8 @@ where
             let kernel = config.kernel.query(meta, 0);
             let bias = config.bias.query(meta, 0);
 
-            let expected_output = convolution(kernel, bias, image, config.padding, config.stride);
+            let expected_output =
+                convolution(&vec![&image, &kernel, &bias], config.padding, config.stride);
 
             let witnessed_output = config.output.query(meta, image_width);
 
@@ -132,8 +133,7 @@ where
                     );
 
                     let output: ValTensor<F> =
-                        convolution(k, b, inp, self.padding, self.stride)
-                            .into();
+                        convolution(&vec![&inp, &k, &b], self.padding, self.stride).into();
 
                     Ok(self.output.assign(&mut region, image_width, &output))
                 },

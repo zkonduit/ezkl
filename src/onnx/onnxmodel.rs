@@ -39,7 +39,6 @@ use tract_onnx::tract_hir::{
 #[derive(Clone, Debug)]
 pub enum OpKind {
     Rescaled(Box<OpKind>, usize),
-    Convolution,
     ReLU(usize),
     Sigmoid(usize),
     Const,
@@ -52,12 +51,11 @@ impl fmt::Display for OpKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             OpKind::Rescaled(l, _) => write!(f, "rescaled {}", (*l)),
-            OpKind::Convolution => write!(f, "conv"),
             OpKind::ReLU(s) => write!(f, "relu {}", s),
             OpKind::Sigmoid(s) => write!(f, "sigmoid {}", s),
             OpKind::Const => write!(f, "const"),
             OpKind::Input => write!(f, "input"),
-            OpKind::Basic(s) => write!(f, "{:?}", s),
+            OpKind::Basic(s) => write!(f, "{}", s),
             OpKind::Unknown(c) => write!(f, "? {}", c),
         }
     }
@@ -158,9 +156,7 @@ pub struct OnnxNode {
 
 impl OnnxNode {
     pub fn new(node: Node<InferenceFact, Box<dyn InferenceOp>>, scale: i32, index: usize) -> Self {
-        let opkind = match node.op().name().as_ref() {
-            "Conv" => OpKind::Convolution,
-            "ConvHir" => OpKind::Convolution,
+        let mut opkind = match node.op().name().as_ref() {
             "Clip" => OpKind::ReLU(1),
             "Sigmoid" => OpKind::Sigmoid(1),
             "Const" => OpKind::Const,
@@ -170,6 +166,8 @@ impl OnnxNode {
             "Mul" => OpKind::Basic(BasicOp::Mult),
             "Gemm" => OpKind::Basic(BasicOp::Affine),
             "Pow" => OpKind::Basic(BasicOp::Pow(1)),
+            "Conv" => OpKind::Basic(BasicOp::Conv((1, 1), (1, 1))),
+            "ConvHir" => OpKind::Basic(BasicOp::Conv((1, 1), (1, 1))),
 
             c => {
                 warn!("{:?} is not currently supported", c);
@@ -243,7 +241,7 @@ impl OnnxNode {
                 in_scale = in_scale;
                 out_scale = in_scale;
             }
-            OpKind::Convolution => {
+            OpKind::Basic(BasicOp::Conv(_, _)) => {
                 // Extract the padding and stride layer hyperparams
                 let op = Box::new(node.op());
 
@@ -275,6 +273,11 @@ impl OnnxNode {
                     padding: (padding[0], padding[1]),
                     stride: (stride[0], stride[1]),
                 };
+
+                opkind = OpKind::Basic(BasicOp::Conv(
+                    (padding[0], padding[1]),
+                    (stride[0], stride[1]),
+                ));
             }
             _ => {}
         };
@@ -671,61 +674,60 @@ impl OnnxModel {
             OpKind::Rescaled(inner_op, _) => {
                 self.configure_node(inner_op, node, meta, advices, _fixeds)
             }
-            OpKind::Convolution => {
-                let inputs = self.extract_node_inputs(node);
-                let weight_node = inputs[1];
-
-                let input_dims = node.in_dims.clone().unwrap(); //NCHW
-                let output_dims = node.out_dims.clone().unwrap(); //NCHW
-                let (in_channels, in_height, in_width) =
-                    (input_dims[0], input_dims[1], input_dims[2]);
-                let (out_channels, out_height, out_width) =
-                    (output_dims[0], output_dims[1], output_dims[2]);
-
-                let oihw = weight_node.out_dims.as_ref().unwrap();
-                let (ker_o, ker_i, kernel_height, kernel_width) =
-                    (oihw[0], oihw[1], oihw[2], oihw[3]);
-                assert_eq!(ker_i, in_channels);
-                assert_eq!(ker_o, out_channels);
-
-                let mut kernel: Tensor<Column<Fixed>> =
-                    (0..out_channels * in_channels * kernel_width * kernel_height)
-                        .map(|_| meta.fixed_column())
-                        .into();
-                kernel.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
-
-                let mut bias: Tensor<Column<Fixed>> =
-                    (0..out_channels).map(|_| meta.fixed_column()).into();
-                bias.reshape(&[out_channels]);
-
-                let variables = &[
-                    VarTensor::from(kernel),
-                    VarTensor::from(bias),
-                    advices.get_slice(
-                        &[0..in_height * in_channels],
-                        &[in_channels, in_height, in_width],
-                    ),
-                    advices.get_slice(
-                        &[0..out_height * out_channels],
-                        &[out_channels, out_height, out_width],
-                    ),
-                ];
-
-                let params = match node.hyperparams {
-                    LayerParams::Conv { padding, stride } => {
-                        [padding.0, padding.1, stride.0, stride.1]
-                    }
-                    _ => {
-                        let _ = anyhow!("mismatch between hyperparam and layer types ");
-                        panic!()
-                    }
-                };
-
-                let conf = ConvConfig::<F>::configure(meta, variables, Some(&params));
-
-                NodeConfigTypes::Conv(conf)
-            }
-
+            // OpKind::Convolution => {
+            //     let inputs = self.extract_node_inputs(node);
+            //     let weight_node = inputs[1];
+            //
+            //     let input_dims = node.in_dims.clone().unwrap(); //NCHW
+            //     let output_dims = node.out_dims.clone().unwrap(); //NCHW
+            //     let (in_channels, in_height, in_width) =
+            //         (input_dims[0], input_dims[1], input_dims[2]);
+            //     let (out_channels, out_height, out_width) =
+            //         (output_dims[0], output_dims[1], output_dims[2]);
+            //
+            //     let oihw = weight_node.out_dims.as_ref().unwrap();
+            //     let (ker_o, ker_i, kernel_height, kernel_width) =
+            //         (oihw[0], oihw[1], oihw[2], oihw[3]);
+            //     assert_eq!(ker_i, in_channels);
+            //     assert_eq!(ker_o, out_channels);
+            //
+            //     let mut kernel: Tensor<Column<Fixed>> =
+            //         (0..out_channels * in_channels * kernel_width * kernel_height)
+            //             .map(|_| meta.fixed_column())
+            //             .into();
+            //     kernel.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
+            //
+            //     let mut bias: Tensor<Column<Fixed>> =
+            //         (0..out_channels).map(|_| meta.fixed_column()).into();
+            //     bias.reshape(&[out_channels]);
+            //
+            //     let variables = &[
+            //         VarTensor::from(kernel),
+            //         VarTensor::from(bias),
+            //         advices.get_slice(
+            //             &[0..in_height * in_channels],
+            //             &[in_channels, in_height, in_width],
+            //         ),
+            //         advices.get_slice(
+            //             &[0..out_height * out_channels],
+            //             &[out_channels, out_height, out_width],
+            //         ),
+            //     ];
+            //
+            //     let params = match node.hyperparams {
+            //         LayerParams::Conv { padding, stride } => {
+            //             [padding.0, padding.1, stride.0, stride.1]
+            //         }
+            //         _ => {
+            //             let _ = anyhow!("mismatch between hyperparam and layer types ");
+            //             panic!()
+            //         }
+            //     };
+            //
+            //     let conf = ConvConfig::<F>::configure(meta, variables, Some(&params));
+            //
+            //     NodeConfigTypes::Conv(conf)
+            // }
             OpKind::ReLU(s) => {
                 let dims = match &node.in_dims {
                     Some(v) => v,
@@ -904,7 +906,6 @@ impl OnnxModel {
     ) -> bool {
         // The node kind and the config should be the same.
         match (op, config.clone()) {
-            (OpKind::Convolution, NodeConfigTypes::Conv(_)) => true,
             (OpKind::Rescaled(op, _), NodeConfigTypes::Rescaled(_, config)) => {
                 self.config_matches(op, &*config)
             }
@@ -930,61 +931,6 @@ impl OnnxModel {
             let inputs = self.extract_node_inputs(&this_node);
 
             match this_node.opkind {
-                OpKind::Convolution => {
-                    let (input_node, weight_node, bias_node) = (inputs[0], inputs[1], inputs[2]);
-
-                    let oihw = weight_node.out_dims.as_ref().unwrap();
-                    let (out_channels, in_channels, kernel_height, kernel_width) =
-                        (oihw[0], oihw[1], oihw[2], oihw[3]);
-
-                    let (padding_h, padding_w, stride_h, stride_w) = match this_node.hyperparams {
-                        LayerParams::Conv { padding, stride } => {
-                            (padding.0, padding.1, stride.0, stride.1)
-                        }
-                        _ => {
-                            error!("mismatch between hyperparam and layer types ");
-                            panic!()
-                        }
-                    };
-
-                    this_node.in_dims = input_node.out_dims.clone();
-
-                    let input_height = this_node.in_dims.as_ref().unwrap()[1];
-                    let input_width = this_node.in_dims.as_ref().unwrap()[2];
-
-                    let out_height = (input_height + 2 * padding_h - kernel_height) / stride_h + 1;
-                    let out_width = (input_width + 2 * padding_w - kernel_width) / stride_w + 1;
-
-                    this_node.out_dims = Some(vec![out_channels, out_height, out_width]);
-
-                    this_node.output_max = input_node.output_max
-                        * weight_node.output_max
-                        * ((kernel_height * kernel_width) as f32);
-
-                    this_node.in_scale = input_node.out_scale;
-                    let scale_diff = input_node.out_scale - weight_node.out_scale;
-                    assert_eq!(weight_node.out_scale, bias_node.out_scale);
-
-                    if scale_diff > 0 {
-                        let mult = scale_to_multiplier(scale_diff);
-                        this_node.opkind =
-                            OpKind::Rescaled(Box::new(OpKind::Convolution), mult as usize); // now the input will be scaled down to match
-                        this_node.output_max /= mult;
-                        this_node.out_scale =
-                            weight_node.out_scale + input_node.out_scale - scale_diff;
-                        this_node.min_cols =
-                            max(1, this_node.in_dims.as_ref().unwrap().iter().product());
-                    } else {
-                        assert_eq!(input_node.out_scale, weight_node.out_scale);
-                        assert_eq!(input_node.out_scale, bias_node.out_scale);
-                        this_node.out_scale = weight_node.out_scale + input_node.out_scale;
-                        this_node.min_cols = max(
-                            1,
-                            max(out_height * out_channels, input_height * in_channels),
-                        );
-                    }
-                }
-
                 OpKind::Sigmoid(_) => {
                     let input_node = inputs[0];
                     this_node.in_dims = input_node.out_dims.clone();
@@ -1056,7 +1002,42 @@ impl OnnxModel {
                         .tuple_windows()
                         .all(|(a, b)| a.in_scale == b.in_scale);
                     match s {
-                        BasicOp::Conv(_,_) => todo!(),
+                        BasicOp::Conv(padding, stride) => {
+                            let (input_node, weight_node, bias_node) =
+                                (inputs[0], inputs[1], inputs[2]);
+
+                            let oihw = weight_node.out_dims.as_ref().unwrap();
+                            let (out_channels, in_channels, kernel_height, kernel_width) =
+                                (oihw[0], oihw[1], oihw[2], oihw[3]);
+
+                            let (padding_h, padding_w, stride_h, stride_w) =
+                                (padding.0, padding.1, stride.0, stride.1);
+
+                            this_node.in_dims = input_node.out_dims.clone();
+
+                            let input_height = this_node.in_dims.as_ref().unwrap()[1];
+                            let input_width = this_node.in_dims.as_ref().unwrap()[2];
+
+                            let out_height =
+                                (input_height + 2 * padding_h - kernel_height) / stride_h + 1;
+                            let out_width =
+                                (input_width + 2 * padding_w - kernel_width) / stride_w + 1;
+
+                            this_node.out_dims = Some(vec![out_channels, out_height, out_width]);
+
+                            this_node.output_max = input_node.output_max
+                                * weight_node.output_max
+                                * ((kernel_height * kernel_width) as f32);
+
+                            this_node.in_scale = input_node.out_scale;
+                            assert_eq!(weight_node.out_scale, bias_node.out_scale);
+
+                            this_node.out_scale = weight_node.out_scale + input_node.out_scale;
+                            this_node.min_cols = max(
+                                1,
+                                max(out_height * out_channels, input_height * in_channels),
+                            );
+                        }
                         BasicOp::Affine => {
                             let (input_node, weight_node, bias_node) =
                                 (inputs[0], inputs[1], inputs[2]);
