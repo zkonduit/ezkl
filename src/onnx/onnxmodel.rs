@@ -1056,6 +1056,7 @@ impl OnnxModel {
                         .tuple_windows()
                         .all(|(a, b)| a.in_scale == b.in_scale);
                     match s {
+                        BasicOp::Conv(_,_) => todo!(),
                         BasicOp::Affine => {
                             let (input_node, weight_node, bias_node) =
                                 (inputs[0], inputs[1], inputs[2]);
