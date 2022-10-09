@@ -6,15 +6,6 @@ use ezkl::onnx::{utilities::vector_to_quantized, OnnxCircuit, OnnxModel};
 use ezkl::tensor::Tensor;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::plonk::ProvingKey;
-use halo2curves::pasta::Fp;
-use halo2curves::pasta::{EqAffine, Fp as F};
-use log::{info, trace};
-use serde;
-use serde::{Deserialize, Serialize};
-use serde_json;
-use std::fs::File;
-use std::io::{Read, Write};
-use std::marker::PhantomData;
 use halo2_proofs::{
     arithmetic::FieldExt,
     plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit},
@@ -32,8 +23,17 @@ use halo2_proofs::{
     },
 };
 use halo2curves::pasta::vesta;
+use halo2curves::pasta::Fp;
+use halo2curves::pasta::{EqAffine, Fp as F};
+use log::{info, trace};
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
+use serde;
+use serde::{Deserialize, Serialize};
+use serde_json;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::marker::PhantomData;
 use std::time::Instant;
 use tabled::Table;
 
@@ -143,7 +143,8 @@ pub fn main() {
             let proof: Proof = serde_json::from_str(&data).expect("JSON was not well-formatted");
 
             let result = verify_ipa_proof(proof);
-            info!("verified: {}", result)
+            info!("verified: {}", result);
+            println!("Verified: {}", result)
         }
     }
 }
