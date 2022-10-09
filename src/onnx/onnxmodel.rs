@@ -432,17 +432,17 @@ impl OnnxModel {
                 onnx_idx: vec![*order.last().unwrap()],
             });
         }
-        // rescale output just in case final operation doesn't do it
-        let scale_diff = self.onnx_nodes.last().unwrap().out_scale - self.scale;
-        if scale_diff > 0 {
-            let node = self.onnx_nodes.last().unwrap();
-            let mult = scale_to_multiplier(scale_diff);
-            let divconf = self.configure_divide_by(node, meta, advices.clone(), &(mult as usize));
-            results.configs.push(NodeConfig {
-                config: NodeConfigTypes::Divide(divconf),
-                onnx_idx: vec![0],
-            });
-        }
+        // // rescale output just in case final operation doesn't do it
+        // let scale_diff = self.onnx_nodes.last().unwrap().out_scale - self.scale;
+        // if scale_diff > 0 {
+        //     let node = self.onnx_nodes.last().unwrap();
+        //     let mult = scale_to_multiplier(scale_diff);
+        //     let divconf = self.configure_divide_by(node, meta, advices.clone(), &(mult as usize));
+        //     results.configs.push(NodeConfig {
+        //         config: NodeConfigTypes::Divide(divconf),
+        //         onnx_idx: vec![0],
+        //     });
+        // }
 
         let public_output: Column<Instance> = meta.instance_column();
         meta.enable_equality(public_output);
@@ -677,18 +677,10 @@ impl OnnxModel {
 
                 let input_dims = node.in_dims.clone().unwrap(); //NCHW
                 let output_dims = node.out_dims.clone().unwrap(); //NCHW
-                let (
-                    //_batchsize,
-                    in_channels,
-                    in_height,
-                    in_width,
-                ) = (input_dims[0], input_dims[1], input_dims[2]);
-                let (
-                    //_batchsize,
-                    out_channels,
-                    out_height,
-                    out_width,
-                ) = (output_dims[0], output_dims[1], output_dims[2]);
+                let (in_channels, in_height, in_width) =
+                    (input_dims[0], input_dims[1], input_dims[2]);
+                let (out_channels, out_height, out_width) =
+                    (output_dims[0], output_dims[1], output_dims[2]);
 
                 let oihw = weight_node.out_dims.as_ref().unwrap();
                 let (ker_o, ker_i, kernel_height, kernel_width) =
@@ -848,13 +840,19 @@ impl OnnxModel {
         let res = match config.clone() {
             NodeConfigTypes::Basic(mut ac, idx) => {
                 let mut inputs = vec![input];
+                println!("Inputs {:?}", idx);
                 for i in idx[1..].iter() {
-                    let val = self.onnx_nodes[*i]
-                        .const_value
-                        .clone()
-                        .context("Tensor<i32> should already be loaded")?;
-                    debug!("input shape {:?}", val.dims());
-                    inputs.push(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(val).into());
+                    let node = &self.onnx_nodes[*i];
+                    match node.opkind {
+                        OpKind::Const => {
+                            let val = node
+                                .const_value
+                                .clone()
+                                .context("Tensor<i32> should already be loaded")?;
+                            inputs.push(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(val).into());
+                        }
+                        _ => {}
+                    }
                 }
                 Some(ac.layout(layouter, &inputs))
             }
@@ -1006,6 +1004,7 @@ impl OnnxModel {
                     }
 
                     this_node.output_max = scale_to_multiplier(this_node.out_scale);
+
                     this_node.min_cols =
                         max(1, this_node.in_dims.as_ref().unwrap().iter().product());
                 }
@@ -1071,24 +1070,9 @@ impl OnnxModel {
 
                             this_node.in_scale = input_node.out_scale;
 
-                            let scale_diff = input_node.out_scale - weight_node.out_scale;
                             assert_eq!(weight_node.out_scale, bias_node.out_scale);
-
-                            if scale_diff > 0 {
-                                let mult = scale_to_multiplier(scale_diff);
-                                this_node.opkind = OpKind::Rescaled(
-                                    Box::new(OpKind::Basic(BasicOp::Affine)),
-                                    mult as usize,
-                                ); // now the input will be scaled down to match
-                                this_node.output_max /= mult;
-                                this_node.out_scale =
-                                    weight_node.out_scale + input_node.out_scale - scale_diff;
-                                this_node.min_cols =
-                                    max(1, this_node.in_dims.as_ref().unwrap().iter().product());
-                            } else {
-                                this_node.out_scale = weight_node.out_scale + input_node.out_scale;
-                                this_node.min_cols = max(in_dim, out_dim);
-                            }
+                            this_node.out_scale = weight_node.out_scale + input_node.out_scale;
+                            this_node.min_cols = max(in_dim, out_dim);
                         }
                         BasicOp::Add => {
                             this_node.output_max = (inputs
@@ -1143,6 +1127,18 @@ impl OnnxModel {
 
                             this_node.opkind = OpKind::Basic(BasicOp::Pow(pow as usize));
                         }
+                    }
+                    let scale_diff = this_node.in_scale - self.scale;
+                    if scale_diff > 0 {
+                        let mult = scale_to_multiplier(scale_diff);
+                        this_node.opkind =
+                            OpKind::Rescaled(Box::new(OpKind::Basic(s)), mult as usize); // now the input will be scaled down to match
+                        this_node.output_max /= mult;
+                        this_node.out_scale -= scale_diff;
+                        this_node.min_cols = max(
+                            this_node.min_cols,
+                            this_node.in_dims.as_ref().unwrap().iter().product(),
+                        );
                     }
                 }
                 _ => {}
