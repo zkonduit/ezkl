@@ -349,7 +349,11 @@ impl OnnxModel {
                 data: _,
                 model,
                 output: _,
-                params: _,
+                pfsys: _,
+            } => OnnxModel::new(model_path(model), args.scale, args.bits),
+            Commands::Verify {
+                model,
+                proof: _,
                 pfsys: _,
             } => OnnxModel::new(model_path(model), args.scale, args.bits),
 

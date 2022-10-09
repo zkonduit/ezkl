@@ -4,11 +4,14 @@ use ezkl::commands::{data_path, Cli, Commands};
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::onnx::{utilities::vector_to_quantized, OnnxCircuit, OnnxModel};
 use ezkl::tensor::Tensor;
+use halo2_proofs::circuit;
 use halo2_proofs::dev::MockProver;
-use halo2curves::pasta::Fp as F;
+use halo2_proofs::plonk::ProvingKey;
+use halo2curves::pasta::Fp;
+use halo2curves::pasta::{EqAffine, Fp as F};
 use log::{debug, info, trace};
 use serde;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -18,7 +21,7 @@ use std::marker::PhantomData;
 //use ezkl::fieldutils;
 //use ezkl::tensor::*;
 use halo2_proofs::{
-    //    arithmetic::FieldExt,
+    arithmetic::FieldExt,
     //    circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{
         create_proof,
@@ -48,11 +51,18 @@ use rand::seq::SliceRandom;
 use std::time::Instant;
 use tabled::Table;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct OnnxInput {
     input_data: Vec<f32>,
     input_shape: Vec<usize>,
     public_input: Vec<f32>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct Proof {
+    input_shape: Vec<usize>,
+    public_input: Vec<i32>,
+    proof: Vec<u8>,
 }
 
 pub fn main() {
@@ -66,119 +76,33 @@ pub fn main() {
             println!("{}", Table::new(om.onnx_nodes.clone()).to_string());
         }
         Commands::Mock { data, model: _ } => {
+            info!("Mock proof");
             let args = Cli::parse();
-            let k = args.logrows;
-            let mut file = File::open(data_path(data)).unwrap();
-            let mut data = String::new();
-            file.read_to_string(&mut data).unwrap();
-            let data: OnnxInput = serde_json::from_str(&data).expect("JSON was not well-formatted");
-
-            // quantize the supplied data using the provided scale.
-            let input =
-                vector_to_quantized(&data.input_data, &data.input_shape, 0.0, args.scale).unwrap();
-            info!(
-                "public input length (network output) {:?}",
-                data.public_input.len()
-            );
-            // quantize the supplied data using the provided scale.
-            let public_input = vector_to_quantized(
-                &data.public_input,
-                &Vec::from([data.public_input.len()]),
-                0.0,
-                args.scale,
-            )
-            .unwrap();
-
-            trace!("{:?}", public_input);
-
-            let circuit = OnnxCircuit::<F> {
-                input,
-                _marker: PhantomData,
-            };
-
+            let (circuit, public_input) = prepare_circuit_and_public_input(data);
             let prover = MockProver::run(
-                k,
+                args.logrows,
                 &circuit,
                 vec![public_input.iter().map(|x| i32_to_felt::<F>(*x)).collect()],
             )
             .unwrap();
             prover.assert_satisfied();
         }
+
         Commands::Fullprove {
             data,
             model: _,
             pfsys,
         } => {
             info!("Full proof with {}", pfsys);
-            //            let proof = create_ipa_proof();
             let args = Cli::parse();
-            // load
-            let k = args.logrows;
-            let mut file = File::open(data_path(data)).unwrap();
-            let mut data = String::new();
-            file.read_to_string(&mut data).unwrap();
+            let (circuit, public_input) = prepare_circuit_and_public_input(data);
+            let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
+            trace!("Params computed");
 
-            let data: OnnxInput = serde_json::from_str(&data).expect("JSON was not well-formatted");
-
-            // quantize the supplied data using the provided scale.
-            let input =
-                vector_to_quantized(&data.input_data, &data.input_shape, 0.0, args.scale).unwrap();
-            info!(
-                "public input length (network output) {:?}",
-                data.public_input.len()
-            );
-            // quantize the supplied data using the provided scale.
-            let public_input = vector_to_quantized(
-                &data.public_input,
-                &Vec::from([data.public_input.len()]),
-                0.0,
-                args.scale,
-            )
-            .unwrap();
-
-            trace!("{:?}", public_input);
-
-            let circuit = OnnxCircuit::<F> {
-                input,
-                _marker: PhantomData,
-            };
-
-            //	Real proof
-            let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(k);
-            trace!("params computed");
-            let empty_circuit = circuit.without_witnesses();
-            trace!("without witnesses done:");
-            trace!("{:?}", empty_circuit);
-            // Initialize the proving key
-            let now = Instant::now();
-            trace!("Preparing VK");
-            let vk = keygen_vk(&params, &empty_circuit).expect("keygen_vk should not fail");
-            println!("VK took {}", now.elapsed().as_secs());
-            let now = Instant::now();
-            let pk =
-                keygen_pk(&params, vk.clone(), &empty_circuit).expect("keygen_pk should not fail");
-            println!("PK took {}", now.elapsed().as_secs());
-            let now = Instant::now();
-            let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-            let mut rng = OsRng;
+            let (pk, proof, dims) = create_ipa_proof(circuit, public_input.clone(), &params);
 
             let pi_inner: Tensor<F> = public_input.map(|x| i32_to_felt::<F>(x).into());
-            trace!("filling {:?}", pi_inner);
             let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner.into_iter().collect::<Vec<F>>()]];
-            trace!("pi for real prover {:?}", pi_for_real_prover);
-
-            create_proof::<IPACommitmentScheme<_>, ProverIPA<_>, _, _, _, _>(
-                &params,
-                &pk,
-                &[circuit],
-                pi_for_real_prover,
-                &mut rng,
-                &mut transcript,
-            )
-            .expect("proof generation should not fail");
-            let proof = transcript.finalize();
-            //println!("{:?}", proof);
-            println!("Proof took {}", now.elapsed().as_secs());
 
             let now = Instant::now();
             let strategy = SingleStrategy::new(&params);
@@ -191,81 +115,184 @@ pub fn main() {
                 &mut transcript
             )
             .is_ok());
-            println!("Verify took {}", now.elapsed().as_secs());
+            info!("Verify took {}", now.elapsed().as_secs());
         }
+        Commands::Prove {
+            data,
+            model,
+            output,
+            pfsys,
+        } => {
+            info!("Proof with {}", pfsys);
+            let args = Cli::parse();
+            let (circuit, public_input) = prepare_circuit_and_public_input(data);
+            let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
+            trace!("Params computed");
+
+            let (pk, proof, input_dims) =
+                create_ipa_proof(circuit.clone(), public_input.clone(), &params);
+
+            let pi: Vec<_> = public_input.clone().into_iter().collect();
+
+            let checkable_pf = Proof {
+                input_shape: circuit.input.dims().to_vec(),
+                public_input: pi,
+                proof,
+            };
+
+            let serialized = serde_json::to_string(&checkable_pf).unwrap();
+
+            let mut file = std::fs::File::create(output).expect("create failed");
+            file.write_all(&serialized.as_bytes())
+                .expect("write failed");
+        }
+        Commands::Verify {
+            model: _,
+            proof,
+            pfsys: _,
+        } => {
+            let mut file = File::open(proof).unwrap();
+            let mut data = String::new();
+            file.read_to_string(&mut data).unwrap();
+            let proof: Proof = serde_json::from_str(&data).expect("JSON was not well-formatted");
+
+            let result = verify_ipa_proof(proof);
+            println!("Verified: {}", result)
+        }
+
         _ => todo!(),
     }
 }
 
-// fn create_ipa_proof() -> Vec<u8> {
-//     let args = Cli::parse();
-//     // load
-//     let k = args.logrows;
-//     let mut file = File::open(data_path(data)).unwrap();
-//     let mut data = String::new();
-//     file.read_to_string(&mut data).unwrap();
+fn prepare_circuit_and_public_input<F: FieldExt>(data: String) -> (OnnxCircuit<F>, Tensor<i32>) {
+    let args = Cli::parse();
+    let data = prepare_data(data);
 
-//     let data: OnnxInput = serde_json::from_str(&data).expect("JSON was not well-formatted");
+    // quantize the supplied data using the provided scale.
+    let public_input = vector_to_quantized(
+        &data.public_input,
+        &Vec::from([data.public_input.len()]),
+        0.0,
+        args.scale,
+    )
+    .unwrap();
 
-//     // quantize the supplied data using the provided scale.
-//     let input = vector_to_quantized(&data.input_data, &data.input_shape, 0.0, args.scale).unwrap();
-//     info!(
-//         "public input length (network output) {:?}",
-//         data.public_input.len()
-//     );
-//     // quantize the supplied data using the provided scale.
-//     let public_input = vector_to_quantized(
-//         &data.public_input,
-//         &Vec::from([data.public_input.len()]),
-//         0.0,
-//         args.scale,
-//     )
-//     .unwrap();
+    trace!("{:?}", public_input);
+    let circuit = prepare_circuit(data);
+    (circuit, public_input)
+}
 
-//     trace!("{:?}", public_input);
+fn prepare_circuit<F: FieldExt>(data: OnnxInput) -> OnnxCircuit<F> {
+    let args = Cli::parse();
 
-//     let circuit = OnnxCircuit::<F> {
-//         input,
-//         _marker: PhantomData,
-//     };
+    // quantize the supplied data using the provided scale.
+    let input = vector_to_quantized(&data.input_data, &data.input_shape, 0.0, args.scale).unwrap();
+    let circuit = OnnxCircuit::<F> {
+        input,
+        _marker: PhantomData,
+    };
 
-//     //	Real proof
-//     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(k);
-//     trace!("params computed");
-//     let empty_circuit = circuit.without_witnesses();
-//     trace!("without witnesses done:");
-//     trace!("{:?}", empty_circuit);
-//     // Initialize the proving key
-//     let now = Instant::now();
-//     trace!("Preparing VK");
-//     let vk = keygen_vk(&params, &empty_circuit).expect("keygen_vk should not fail");
-//     println!("VK took {}", now.elapsed().as_secs());
-//     let now = Instant::now();
-//     let pk = keygen_pk(&params, vk.clone(), &empty_circuit).expect("keygen_pk should not fail");
-//     println!("PK took {}", now.elapsed().as_secs());
-//     let now = Instant::now();
-//     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
-//     let mut rng = OsRng;
+    circuit
+}
 
-//     let pi_inner: Tensor<F> = public_input.map(|x| i32_to_felt::<F>(x).into());
-//     trace!("filling {:?}", pi_inner);
-//     let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner.into_iter().collect::<Vec<F>>()]];
-//     trace!("pi for real prover {:?}", pi_for_real_prover);
+fn prepare_data(datapath: String) -> OnnxInput {
+    let mut file = File::open(data_path(datapath)).unwrap();
+    let mut data = String::new();
+    file.read_to_string(&mut data).unwrap();
+    let data: OnnxInput = serde_json::from_str(&data).expect("JSON was not well-formatted");
+    info!(
+        "public input length (network output) {:?}",
+        data.public_input.len()
+    );
 
-//     create_proof::<IPACommitmentScheme<_>, ProverIPA<_>, _, _, _, _>(
-//         &params,
-//         &pk,
-//         &[circuit],
-//         pi_for_real_prover,
-//         &mut rng,
-//         &mut transcript,
-//     )
-//     .expect("proof generation should not fail");
-//     let proof = transcript.finalize();
-//     //println!("{:?}", proof);
-//     println!("Proof took {}", now.elapsed().as_secs());
-//     proof
-// }
+    data
+}
+
+fn create_ipa_proof(
+    circuit: OnnxCircuit<Fp>,
+    public_input: Tensor<i32>,
+    params: &ParamsIPA<vesta::Affine>,
+) -> (ProvingKey<EqAffine>, Vec<u8>, Vec<usize>) {
+    let args = Cli::parse();
+    //	Real proof
+    let empty_circuit = circuit.without_witnesses();
+
+    // Initialize the proving key
+    let now = Instant::now();
+    trace!("Preparing VK");
+    let vk = keygen_vk(params, &empty_circuit).expect("keygen_vk should not fail");
+    info!("VK took {}", now.elapsed().as_secs());
+    let now = Instant::now();
+    let pk = keygen_pk(params, vk.clone(), &empty_circuit).expect("keygen_pk should not fail");
+    info!("PK took {}", now.elapsed().as_secs());
+    let now = Instant::now();
+    let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
+    let mut rng = OsRng;
+
+    let pi_inner: Tensor<F> = public_input.map(|x| i32_to_felt::<F>(x).into());
+    trace!("filling {:?}", pi_inner);
+    let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner.into_iter().collect::<Vec<F>>()]];
+    trace!("pi for real prover {:?}", pi_for_real_prover);
+
+    let dims = circuit.input.dims().clone().to_vec();
+
+    create_proof::<IPACommitmentScheme<_>, ProverIPA<_>, _, _, _, _>(
+        &params,
+        &pk,
+        &[circuit],
+        pi_for_real_prover,
+        &mut rng,
+        &mut transcript,
+    )
+    .expect("proof generation should not fail");
+    let proof = transcript.finalize();
+    //println!("{:?}", proof);
+    info!("Proof took {}", now.elapsed().as_secs());
+
+    (pk, proof, dims)
+}
+
+fn verify_ipa_proof(proof: Proof) -> bool {
+    let args = Cli::parse();
+    let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
+
+    let input = Tensor::new(
+        Some(&vec![0; proof.input_shape.iter().product()]),
+        &proof.input_shape,
+    )
+    .unwrap();
+    let circuit = OnnxCircuit::<F> {
+        input,
+        _marker: PhantomData,
+    };
+    let empty_circuit = circuit.without_witnesses();
+    let vk = keygen_vk(&params, &empty_circuit).expect("keygen_vk should not fail");
+    let pk = keygen_pk(&params, vk.clone(), &empty_circuit).expect("keygen_pk should not fail");
+
+    let pi_inner = proof
+        .public_input
+        .into_iter()
+        .map(|x| i32_to_felt::<F>(x).into())
+        .collect::<Vec<F>>();
+    let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner]];
+
+    let now = Instant::now();
+    let strategy = SingleStrategy::new(&params);
+    let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof.proof[..]);
+
+    trace!("Params computed");
+
+    let result = verify_proof(
+        &params,
+        pk.get_vk(),
+        strategy,
+        pi_for_real_prover,
+        &mut transcript,
+    )
+    .is_ok();
+    println!("Verify took {}", now.elapsed().as_secs());
+    result
+}
 
 fn banner() {
     let ell: Vec<&str> = vec![

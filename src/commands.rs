@@ -90,10 +90,9 @@ pub enum Commands {
         #[arg(short = 'O', long, default_value = "")]
         output: PathBuf,
 
-        /// The path to the Params for the proof system
-        #[arg(short = 'P', long, default_value = "")]
-        params: PathBuf,
-
+        // /// The path to the Params for the proof system
+        // #[arg(short = 'P', long, default_value = "")]
+        // params: PathBuf,
         #[arg(
             long,
 	    short = 'B',
@@ -108,18 +107,17 @@ pub enum Commands {
     },
     /// Verifies a proof, returning accept or reject
     Verify {
-        /// The path to the .json data file, which should include only the network output as public input to the proof
-        #[arg(short = 'D', long, default_value = "")]
-        data: String,
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long, default_value = "")]
+        model: String,
 
-        /// The path to the VerificationKey
-        #[arg(short = 'V', long, default_value = "")]
-        vkey: PathBuf,
-
-        /// The path to the Params for the proof system
+        /// The path to the proof file
         #[arg(short = 'P', long, default_value = "")]
-        params: PathBuf,
+        proof: PathBuf,
 
+        // /// The path to the Params for the proof system
+        // #[arg(short = 'P', long, default_value = "")]
+        // params: PathBuf,
         #[arg(
             long,
 	    short = 'B',
