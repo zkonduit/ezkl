@@ -1,11 +1,11 @@
 #![feature(slice_flatten)]
 
+/// Methods for configuring tensor operations and assigning values to them in a Halo2 circuit.
+pub mod circuit;
 /// Commands
 pub mod commands;
 /// Utilities for converting from Halo2 Field types to integers (and vice-versa).
 pub mod fieldutils;
-/// Methods for configuring neural network layers and assigning values to them in a Halo2 circuit.
-pub mod nn;
 /// Methods for loading onnx format models and automatically laying them out in
 /// a Halo2 circuit.
 #[cfg(feature = "onnx")]

@@ -264,7 +264,7 @@ pub fn pow<T: TensorType + Mul<Output = T>>(a: &Tensor<T>, pow: usize) -> Tensor
 /// ).unwrap();
 /// let result = sum(&x);
 /// let expected = 21;
-/// assert_eq!(result, expected);
+/// assert_eq!(result[0], expected);
 /// ```
 pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Tensor<T> {
     // calculate value of output
@@ -361,7 +361,7 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[5, 5, 10, -4, 2, -1, 2, 0, 1]),
 ///     &[1, 3, 3],
 /// ).unwrap();
-/// assert_eq!(dot(&vec![&x, &y]), 86);
+/// assert_eq!(dot(&vec![&x, &y])[0], 86);
 /// ```
 pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     inputs: &Vec<&Tensor<T>>,

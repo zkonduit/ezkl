@@ -1,9 +1,9 @@
 use ezkl::fieldutils;
 use ezkl::fieldutils::i32_to_felt;
-use ezkl::nn::affine::Affine1dConfig;
-use ezkl::nn::cnvrl::ConvConfig;
-use ezkl::nn::eltwise::{EltwiseConfig, ReLu};
-use ezkl::nn::*;
+use ezkl::circuit::affine::Affine1dConfig;
+use ezkl::circuit::cnvrl::ConvConfig;
+use ezkl::circuit::eltwise::{EltwiseConfig, ReLu};
+use ezkl::circuit::*;
 use ezkl::tensor::*;
 use halo2_proofs::{
     arithmetic::FieldExt,

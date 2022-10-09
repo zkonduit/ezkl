@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::nn::cnvrl::ConvConfig;
-use ezkl::nn::*;
+use ezkl::circuit::cnvrl::ConvConfig;
+use ezkl::circuit::*;
 use ezkl::tensor::*;
 use halo2_proofs::{
     arithmetic::{Field, FieldExt},

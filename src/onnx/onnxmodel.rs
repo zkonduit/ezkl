@@ -1,9 +1,9 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
+use crate::circuit::basic::*;
+use crate::circuit::cnvrl::ConvConfig;
+use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
+use crate::circuit::LayerConfig;
 use crate::commands::{model_path, Cli, Commands};
-use crate::nn::basic::*;
-use crate::nn::cnvrl::ConvConfig;
-use crate::nn::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
-use crate::nn::LayerConfig;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
 use anyhow::{anyhow, Context, Result};
@@ -1034,7 +1034,6 @@ impl OnnxModel {
                             this_node.in_scale =
                                 inputs.iter().map(|input| input.out_scale).max().unwrap();
                             this_node.out_scale = this_node.in_scale;
-
                         }
                         BasicOp::Sum => {
                             this_node.output_max = inputs

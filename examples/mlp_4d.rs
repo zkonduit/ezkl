@@ -1,7 +1,7 @@
 use ezkl::fieldutils::i32_to_felt;
-use ezkl::nn::affine::Affine1dConfig;
-use ezkl::nn::eltwise::{DivideBy, EltwiseConfig, ReLu};
-use ezkl::nn::*;
+use ezkl::circuit::affine::Affine1dConfig;
+use ezkl::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu};
+use ezkl::circuit::*;
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{

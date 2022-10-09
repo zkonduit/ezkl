@@ -1,5 +1,4 @@
-use std::fs::remove_file;
-use std::process::{Command, Output};
+use std::process::Command;
 
 fn test_onnx_example(example_name: String) {
     let status = Command::new("cargo")

@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::nn::eltwise::{EltwiseConfig, Nonlin1d, Nonlinearity, ReLu};
-use ezkl::nn::LayerConfig;
+use ezkl::circuit::eltwise::{EltwiseConfig, Nonlin1d, Nonlinearity, ReLu};
+use ezkl::circuit::LayerConfig;
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{

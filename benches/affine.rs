@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::nn::affine::Affine1dConfig;
-use ezkl::nn::*;
+use ezkl::circuit::affine::Affine1dConfig;
+use ezkl::circuit::*;
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
