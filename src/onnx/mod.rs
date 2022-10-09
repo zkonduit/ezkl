@@ -11,7 +11,7 @@ pub mod utilities;
 use std::cmp::max;
 pub use utilities::*;
 pub mod onnxmodel;
-use log::info;
+use log::{info, trace};
 pub use onnxmodel::*;
 
 #[derive(Clone, Debug)]
@@ -55,15 +55,17 @@ impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
+        trace!("Setting input in synthesize");
         let input = ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(
             self.input.clone(),
         ));
-
+        trace!("Setting output in synthesize");
         let output = config
             .model
             .layout(config.clone(), &mut layouter, input)
             .unwrap();
 
+        trace!("Laying out output in synthesize");
         match output {
             ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|i, x| {
                 layouter
