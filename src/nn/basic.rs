@@ -14,6 +14,7 @@ pub enum BasicOp {
     Add,
     Sub,
     Mult,
+    Affine,
     Pow(usize),
 }
 
@@ -23,6 +24,7 @@ impl fmt::Display for BasicOp {
             BasicOp::Add => write!(f, "add"),
             BasicOp::Sub => write!(f, "sub"),
             BasicOp::Mult => write!(f, "mult"),
+            BasicOp::Affine => write!(f, "affine"),
             BasicOp::Pow(s) => write!(f, "pow {}", s),
         }
     }
@@ -54,10 +56,6 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
     ) -> Self {
         let inputs = variables[0..variables.len() - 1].to_vec();
         let output = variables[variables.len() - 1].clone();
-
-        for input in inputs.iter() {
-            assert_eq!(input.dims(), output.dims());
-        }
 
         let mut config = Self {
             selector: meta.selector(),
@@ -92,6 +90,10 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
                     }
                     BasicOp::Mult => {
                         config_outputs.push(mult(&op_inputs));
+                    }
+                    BasicOp::Affine => {
+                        assert_eq!(op_inputs.len(), 3);
+                        config_outputs.push(matmul(&op_inputs));
                     }
                     BasicOp::Pow(u) => {
                         assert_eq!(op_inputs.len(), 1);
@@ -162,13 +164,17 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
                             BasicOp::Mult => {
                                 layout_outputs.push(mult(&op_inputs));
                             }
+                            BasicOp::Affine => {
+                                assert_eq!(op_inputs.len(), 3);
+                                layout_outputs.push(matmul(&op_inputs));
+                            }
                             BasicOp::Pow(u) => {
                                 assert_eq!(op_inputs.len(), 1);
                                 layout_outputs.push(pow(&op_inputs[0], u));
                             }
                         }
                     }
-                    let output: ValTensor<F> = layout_outputs[self.nodes.len() - 1].clone().into();
+                    let output: ValTensor<F> = layout_outputs.last().unwrap().clone().into();
 
                     Ok(self.output.assign(&mut region, offset, &output))
                 },

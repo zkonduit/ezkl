@@ -63,10 +63,6 @@ impl VarTensor {
                 }
             }
 
-            // VarTensor::Fixed { inner: v, dims: _ } => VarTensor::Fixed {
-            //     inner: v.get_slice(indices),
-            //     dims: new_dims.to_vec(),
-            // },
         }
     }
 

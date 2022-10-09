@@ -23,10 +23,9 @@ pub use std::ops::{Add, Mul, Sub};
 /// assert_eq!(result, expected);
 /// ```
 pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-    kernel: Tensor<T>,
-    bias: Tensor<T>,
-    mut input: Tensor<T>,
+    inputs: &Vec<&Tensor<T>>,
 ) -> Tensor<T> {
+    let (mut input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
     assert_eq!(bias.dims()[0], kernel.dims()[0]);
     assert_eq!(input.dims()[0], kernel.dims()[1]);
 
@@ -51,6 +50,10 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
                 ) + bias[i].clone(),
             );
         }
+    }
+    // does matrix to vector multiplication
+    if output.dims()[1] == 1 {
+        output.flatten();
     }
     output
 }
