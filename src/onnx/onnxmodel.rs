@@ -432,17 +432,17 @@ impl OnnxModel {
                 onnx_idx: vec![*order.last().unwrap()],
             });
         }
-        // // rescale output just in case final operation doesn't do it
-        // let scale_diff = self.onnx_nodes.last().unwrap().out_scale - self.scale;
-        // if scale_diff > 0 {
-        //     let node = self.onnx_nodes.last().unwrap();
-        //     let mult = scale_to_multiplier(scale_diff);
-        //     let divconf = self.configure_divide_by(node, meta, advices.clone(), &(mult as usize));
-        //     results.configs.push(NodeConfig {
-        //         config: NodeConfigTypes::Divide(divconf),
-        //         onnx_idx: vec![0],
-        //     });
-        // }
+        // rescale output just in case final operation doesn't do it
+        let scale_diff = self.onnx_nodes.last().unwrap().out_scale - self.scale;
+        if scale_diff > 0 {
+            let node = self.onnx_nodes.last().unwrap();
+            let mult = scale_to_multiplier(scale_diff);
+            let divconf = self.configure_divide_by(node, meta, advices.clone(), &(mult as usize));
+            results.configs.push(NodeConfig {
+                config: NodeConfigTypes::Divide(divconf),
+                onnx_idx: vec![0],
+            });
+        }
 
         let public_output: Column<Instance> = meta.instance_column();
         meta.enable_equality(public_output);
