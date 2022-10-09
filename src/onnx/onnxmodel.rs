@@ -356,8 +356,6 @@ impl OnnxModel {
                 proof: _,
                 pfsys: _,
             } => OnnxModel::new(model_path(model), args.scale, args.bits),
-
-            _ => todo!(),
         }
     }
 

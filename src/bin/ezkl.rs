@@ -4,12 +4,11 @@ use ezkl::commands::{data_path, Cli, Commands};
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::onnx::{utilities::vector_to_quantized, OnnxCircuit, OnnxModel};
 use ezkl::tensor::Tensor;
-use halo2_proofs::circuit;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::plonk::ProvingKey;
 use halo2curves::pasta::Fp;
 use halo2curves::pasta::{EqAffine, Fp as F};
-use log::{debug, info, trace};
+use log::{info, trace};
 use serde;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -99,7 +98,7 @@ pub fn main() {
             let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
             trace!("Params computed");
 
-            let (pk, proof, dims) = create_ipa_proof(circuit, public_input.clone(), &params);
+            let (pk, proof, _dims) = create_ipa_proof(circuit, public_input.clone(), &params);
 
             let pi_inner: Tensor<F> = public_input.map(|x| i32_to_felt::<F>(x).into());
             let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner.into_iter().collect::<Vec<F>>()]];
@@ -119,7 +118,7 @@ pub fn main() {
         }
         Commands::Prove {
             data,
-            model,
+            model: _,
             output,
             pfsys,
         } => {
@@ -129,7 +128,7 @@ pub fn main() {
             let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
             trace!("Params computed");
 
-            let (pk, proof, input_dims) =
+            let (_pk, proof, _input_dims) =
                 create_ipa_proof(circuit.clone(), public_input.clone(), &params);
 
             let pi: Vec<_> = public_input.clone().into_iter().collect();
@@ -159,8 +158,6 @@ pub fn main() {
             let result = verify_ipa_proof(proof);
             println!("Verified: {}", result)
         }
-
-        _ => todo!(),
     }
 }
 
@@ -213,7 +210,7 @@ fn create_ipa_proof(
     public_input: Tensor<i32>,
     params: &ParamsIPA<vesta::Affine>,
 ) -> (ProvingKey<EqAffine>, Vec<u8>, Vec<usize>) {
-    let args = Cli::parse();
+    //let args = Cli::parse();
     //	Real proof
     let empty_circuit = circuit.without_witnesses();
 
@@ -290,7 +287,7 @@ fn verify_ipa_proof(proof: Proof) -> bool {
         &mut transcript,
     )
     .is_ok();
-    println!("Verify took {}", now.elapsed().as_secs());
+    info!("Verify took {}", now.elapsed().as_secs());
     result
 }
 
