@@ -40,13 +40,15 @@ impl fmt::Display for BasicOp {
 
 #[derive(Clone, Debug)]
 pub struct BasicOpNode {
+    /// the type of operation
     pub op: BasicOp,
+    /// indices for the `VarTensor` inputs the operation should ingest.
     pub input_idx: Vec<usize>,
+    /// indices for the outputs of other nodes the operation should ingest.
     pub node_idx: Vec<usize>,
 }
 
-/// Configuration for an affine layer which (mat)multiplies a weight kernel to an input and adds
-/// a bias vector to the result.
+/// Configuration for a basic sequence of operations all fused together in a single gate.
 #[derive(Clone, Debug)]
 pub struct BasicConfig<F: FieldExt + TensorType> {
     pub inputs: Vec<VarTensor>,
@@ -56,6 +58,9 @@ pub struct BasicConfig<F: FieldExt + TensorType> {
     _marker: PhantomData<F>,
 }
 
+/// Configures the sequence of operations into a circuit gate, represented as an array of `BasicOpNode`.
+/// `variables` represents the potential inputs to each operation. `BasicOpNode`s index over these inputs using their `input_idx` attribute.
+/// They can also ingest the intermediate outputs of other nodes, as represented by the `node_idx` attribute. 
 impl<F: FieldExt + TensorType> BasicConfig<F> {
     pub fn configure(
         meta: &mut ConstraintSystem<F>,

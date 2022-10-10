@@ -1,8 +1,6 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
 use crate::circuit::basic::*;
-use crate::circuit::cnvrl::ConvConfig;
 use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
-use crate::circuit::LayerConfig;
 use crate::commands::{model_path, Cli, Commands};
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
@@ -64,7 +62,6 @@ impl fmt::Display for OpKind {
 #[derive(Clone, Debug)]
 pub enum NodeConfigTypes<F: FieldExt + TensorType> {
     Rescaled(EltwiseConfig<F, DivideBy<F>>, Box<NodeConfigTypes<F>>),
-    Conv(ConvConfig<F>),
     ReLU(EltwiseConfig<F, ReLu<F>>),
     Sigmoid(EltwiseConfig<F, Sigmoid<F>>),
     Divide(EltwiseConfig<F, DivideBy<F>>),
@@ -805,26 +802,6 @@ impl OnnxModel {
                     }
                 }
                 Some(ac.layout(layouter, &inputs))
-            }
-            NodeConfigTypes::Conv(cc) => {
-                let inputs = self.extract_node_inputs(node);
-                let (weight_node, bias_node) = (inputs[1], inputs[2]);
-
-                let weight_value = weight_node
-                    .const_value
-                    .clone()
-                    .context("Tensor<i32> should already be loaded")?;
-                let weight_vt =
-                    ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(weight_value));
-                let bias_value = bias_node
-                    .const_value
-                    .clone()
-                    .context("Tensor<i32> should already be loaded")?;
-                let bias_vt =
-                    ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(bias_value));
-                debug!("input shape {:?}", input.dims());
-                let out = cc.layout(layouter, &[weight_vt, bias_vt, input]);
-                Some(out)
             }
             NodeConfigTypes::Rescaled(dc, op) => {
                 let out = dc.layout(layouter, &[input]);

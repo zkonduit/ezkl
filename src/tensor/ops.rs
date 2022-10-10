@@ -128,6 +128,10 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// assert_eq!(result, expected);
 /// ```
 pub fn add<T: TensorType + Add<Output = T>>(t: &Vec<&Tensor<T>>) -> Tensor<T> {
+    // determines if we're multiplying by a 1D const
+    if t.len() == 2 && t[1].dims().len() == 1 && t[1].dims()[0] == 1 {
+        return const_add(t[0], t[1][0].clone());
+    }
     for e in t.iter() {
         assert_eq!(t[0].dims(), e.dims());
     }
@@ -138,6 +142,30 @@ pub fn add<T: TensorType + Add<Output = T>>(t: &Vec<&Tensor<T>>) -> Tensor<T> {
         for (i, e_i) in e.iter().enumerate() {
             output[i] = output[i].clone() + e_i.clone()
         }
+    }
+
+    output
+}
+
+/// Elementwise adds a tensor with a const element.
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::const_add;
+/// let x = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let k = 2;
+/// let result = const_add(&x, k);
+/// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 3, 3, 3]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn const_add<T: TensorType + Add<Output = T>>(a: &Tensor<T>, b: T) -> Tensor<T> {
+    // calculate value of output
+    let mut output: Tensor<T> = a.clone();
+
+    for i in 0..output.len() {
+        output[i] = output[i].clone() + b.clone();
     }
 
     output
@@ -160,6 +188,11 @@ pub fn add<T: TensorType + Add<Output = T>>(t: &Vec<&Tensor<T>>) -> Tensor<T> {
 /// assert_eq!(result, expected);
 /// ```
 pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<&Tensor<T>>) -> Tensor<T> {
+    // determines if we're multiplying by a 1D const
+    if t.len() == 2 && t[1].dims().len() == 1 && t[1].dims()[0] == 1 {
+        return const_sub(t[0], t[1][0].clone());
+    }
+
     for e in t.iter() {
         assert_eq!(t[0].dims(), e.dims());
     }
@@ -170,6 +203,30 @@ pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<&Tensor<T>>) -> Tensor<T> {
         for (i, e_i) in e.iter().enumerate() {
             output[i] = output[i].clone() - e_i.clone()
         }
+    }
+
+    output
+}
+
+/// Elementwise subtracts a tensor with a const element.
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::const_sub;
+/// let x = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let k = 2;
+/// let result = const_sub(&x, k);
+/// let expected = Tensor::<i32>::new(Some(&[0, -1, 0, -1, -1, -1]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn const_sub<T: TensorType + Sub<Output = T>>(a: &Tensor<T>, b: T) -> Tensor<T> {
+    // calculate value of output
+    let mut output: Tensor<T> = a.clone();
+
+    for i in 0..output.len() {
+        output[i] = output[i].clone() - b.clone();
     }
 
     output
@@ -192,6 +249,11 @@ pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<&Tensor<T>>) -> Tensor<T> {
 /// assert_eq!(result, expected);
 /// ```
 pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<&Tensor<T>>) -> Tensor<T> {
+    // determines if we're multiplying by a 1D const
+    if t.len() == 2 && t[1].dims().len() == 1 && t[1].dims()[0] == 1 {
+        return const_mult(t[0], t[1][0].clone());
+    }
+
     for e in t.iter() {
         assert_eq!(t[0].dims(), e.dims());
     }
@@ -216,16 +278,16 @@ pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<&Tensor<T>>) -> Tensor<T> {
 ///     &[2, 3],
 /// ).unwrap();
 /// let k = 2;
-/// let result = const_mult(x, k);
+/// let result = const_mult(&x, k);
 /// let expected = Tensor::<i32>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn const_mult<T: TensorType + Mul<Output = T> + Copy>(a: Tensor<T>, b: T) -> Tensor<T> {
+pub fn const_mult<T: TensorType + Mul<Output = T>>(a: &Tensor<T>, b: T) -> Tensor<T> {
     // calculate value of output
     let mut output: Tensor<T> = a.clone();
 
     for i in 0..output.len() {
-        output[i] = output[i] * b;
+        output[i] = output[i].clone() * b.clone();
     }
 
     output

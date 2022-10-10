@@ -1,7 +1,6 @@
-use ezkl::fieldutils::i32_to_felt;
-use ezkl::circuit::affine::Affine1dConfig;
+use ezkl::circuit::basic::*;
 use ezkl::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu};
-use ezkl::circuit::*;
+use ezkl::fieldutils::i32_to_felt;
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
@@ -15,9 +14,9 @@ use std::marker::PhantomData;
 // A columnar ReLu MLP
 #[derive(Clone)]
 struct MyConfig<F: FieldExt + TensorType> {
-    l0: Affine1dConfig<F>,
+    l0: BasicConfig<F>,
     l1: EltwiseConfig<F, ReLu<F>>,
-    l2: Affine1dConfig<F>,
+    l2: BasicConfig<F>,
     l3: EltwiseConfig<F, ReLu<F>>,
     l4: EltwiseConfig<F, DivideBy<F>>,
     public_output: Column<Instance>,
@@ -61,13 +60,24 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let input = advices.get_slice(&[LEN..LEN + 1], &[LEN]);
         let output = advices.get_slice(&[LEN + 1..LEN + 2], &[LEN]);
 
-        let l0 = Affine1dConfig::<F>::configure(
+        // tells the config layer to add an affine op to the circuit gate
+        let affine_node = BasicOpNode {
+            op: BasicOp::Affine,
+            input_idx: vec![0, 1, 2],
+            node_idx: vec![],
+        };
+
+        let l0 = BasicConfig::<F>::configure(
             cs,
-            &[kernel.clone(), bias.clone(), input.clone(), output.clone()],
-            None,
+            &[input.clone(), kernel.clone(), bias.clone(), output.clone()],
+            &[affine_node.clone()],
         );
 
-        let l2 = Affine1dConfig::<F>::configure(cs, &[kernel, bias, input, output], None);
+        let l2 = BasicConfig::<F>::configure(
+            cs,
+            &[input.clone(), kernel.clone(), bias.clone(), output.clone()],
+            &[affine_node],
+        );
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
         let [l1, l3]: [EltwiseConfig<F, ReLu<F>>; 2] = EltwiseConfig::configure_multiple(
@@ -98,21 +108,21 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
 
     fn synthesize(
         &self,
-        config: Self::Config,
+        mut config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         let x = config.l0.layout(
             &mut layouter,
             &[
+                self.input.clone(),
                 self.l0_params[0].clone(),
                 self.l0_params[1].clone(),
-                self.input.clone(),
             ],
         );
         let x = config.l1.layout(&mut layouter, &[x]);
         let x = config.l2.layout(
             &mut layouter,
-            &[self.l2_params[0].clone(), self.l2_params[1].clone(), x],
+            &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
         );
         let x = config.l3.layout(&mut layouter, &[x]);
         let x = config.l4.layout(&mut layouter, &[x]);

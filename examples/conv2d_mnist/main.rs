@@ -1,9 +1,7 @@
+use ezkl::circuit::basic::*;
+use ezkl::circuit::eltwise::{EltwiseConfig, ReLu};
 use ezkl::fieldutils;
 use ezkl::fieldutils::i32_to_felt;
-use ezkl::circuit::affine::Affine1dConfig;
-use ezkl::circuit::cnvrl::ConvConfig;
-use ezkl::circuit::eltwise::{EltwiseConfig, ReLu};
-use ezkl::circuit::*;
 use ezkl::tensor::*;
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -52,9 +50,11 @@ struct Config<
 > where
     Value<F>: TensorType,
 {
-    l0: ConvConfig<F>,
+    // this will be a conv layer
+    l0: BasicConfig<F>,
     l1: EltwiseConfig<F, ReLu<F>>,
-    l2: Affine1dConfig<F>,
+    // this will be an affine layer
+    l2: BasicConfig<F>,
     public_output: Column<Instance>,
 }
 
@@ -142,8 +142,8 @@ where
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
         let num_advices = max(
-            max(output_height * OUT_CHANNELS, IMAGE_HEIGHT * IN_CHANNELS),
-            LEN + 3,
+            LEN,
+            CLASSES + 3,
         );
 
         let advices = VarTensor::from(Tensor::from((0..num_advices).map(|_| {
@@ -152,30 +152,44 @@ where
             col
         })));
 
-        let mut kernel: Tensor<Column<Fixed>> =
-            (0..OUT_CHANNELS * IN_CHANNELS * KERNEL_WIDTH * KERNEL_HEIGHT)
-                .map(|_| cs.fixed_column())
-                .into();
-        kernel.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
-
-        let bias: Tensor<Column<Fixed>> = (0..OUT_CHANNELS).map(|_| cs.fixed_column()).into();
-
-        let l0 = ConvConfig::<F>::configure(
-            cs,
-            &[
-                VarTensor::from(kernel),
-                VarTensor::from(bias),
-                advices.get_slice(
-                    &[0..IMAGE_HEIGHT * IN_CHANNELS],
-                    &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
-                ),
-                advices.get_slice(
-                    &[0..output_height * OUT_CHANNELS],
-                    &[OUT_CHANNELS, output_height, output_width],
-                ),
-            ],
-            Some(&[PADDING, PADDING, STRIDE, STRIDE]),
+        let input = advices.get_slice(
+            &[0..IMAGE_HEIGHT * IN_CHANNELS],
+            &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
         );
+
+        let kernel = advices.get_slice(
+            &[IMAGE_HEIGHT * IN_CHANNELS
+                ..IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT],
+            &[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
+        );
+
+        let bias = advices.get_slice(
+            &[
+                IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
+                    ..IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT + 1,
+            ],
+            &[OUT_CHANNELS],
+        );
+
+        let output = advices.get_slice(
+            &[
+                IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT + 1
+                    ..IMAGE_HEIGHT * IN_CHANNELS
+                        + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
+                        + 1
+                        + output_height * OUT_CHANNELS,
+            ],
+            &[OUT_CHANNELS, output_height, output_width],
+        );
+
+        // tells the config layer to add a conv op to a circuit gate
+        let conv_node = BasicOpNode {
+            op: BasicOp::Conv((PADDING, PADDING), (STRIDE, STRIDE)),
+            input_idx: vec![0, 1, 2],
+            node_idx: vec![],
+        };
+
+        let l0 = BasicConfig::configure(cs, &[input, kernel, bias, output], &[conv_node]);
 
         let l1: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
             cs,
@@ -183,15 +197,26 @@ where
             Some(&[BITS, 32]),
         );
 
-        let l2: Affine1dConfig<F> = Affine1dConfig::configure(
+        // tells the config layer to add an affine op to the circuit gate
+        let affine_node = BasicOpNode {
+            op: BasicOp::Affine,
+            input_idx: vec![0, 1, 2],
+            node_idx: vec![],
+        };
+
+        let l2 = BasicConfig::configure(
             cs,
             &[
-                advices.get_slice(&[0..CLASSES], &[CLASSES, LEN]),
-                advices.get_slice(&[LEN + 2..LEN + 3], &[CLASSES]),
-                advices.get_slice(&[LEN..LEN + 1], &[LEN]),
+                // input
+                advices.get_slice(&[0..1], &[LEN]),
+                // weights
+                advices.get_slice(&[1..CLASSES + 1], &[CLASSES, LEN]),
+                // bias
                 advices.get_slice(&[CLASSES + 1..CLASSES + 2], &[CLASSES]),
+                // output
+                advices.get_slice(&[CLASSES + 2..CLASSES + 3], &[CLASSES]),
             ],
-            None,
+            &[affine_node],
         );
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -206,22 +231,22 @@ where
 
     fn synthesize(
         &self,
-        config: Self::Config,
+        mut config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         let x = config.l0.layout(
             &mut layouter,
             &[
+                self.input.clone(),
                 self.l0_params[0].clone(),
                 self.l0_params[1].clone(),
-                self.input.clone(),
             ],
         );
         let mut x = config.l1.layout(&mut layouter, &[x]);
         x.flatten();
         let l2out = config.l2.layout(
             &mut layouter,
-            &[self.l2_params[0].clone(), self.l2_params[1].clone(), x],
+            &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
         );
 
         match l2out {

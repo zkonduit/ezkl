@@ -1,6 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::circuit::cnvrl::ConvConfig;
-use ezkl::circuit::*;
+use ezkl::circuit::basic::*;
 use ezkl::tensor::*;
 use halo2_proofs::{
     arithmetic::{Field, FieldExt},
@@ -35,7 +34,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F>
 where
     Value<F>: TensorType,
 {
-    type Config = ConvConfig<F>;
+    type Config = BasicConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -47,46 +46,65 @@ where
             let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
             let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
-            let num_advices = max(output_height * OUT_CHANNELS, IMAGE_HEIGHT * IN_CHANNELS);
+            let num_advices = output_height * OUT_CHANNELS
+                + IMAGE_HEIGHT * IN_CHANNELS
+                + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
+                + 1;
 
             let advices =
                 VarTensor::from(Tensor::from((0..num_advices).map(|_| meta.advice_column())));
 
-            let mut kernel = Tensor::from(
-                (0..OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH)
-                    .map(|_| meta.fixed_column()),
+            let input = advices.get_slice(
+                &[0..IMAGE_HEIGHT * IN_CHANNELS],
+                &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
             );
-            kernel.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
 
-            let bias = Tensor::from((0..OUT_CHANNELS).map(|_| meta.fixed_column()));
+            let kernel = advices.get_slice(
+                &[IMAGE_HEIGHT * IN_CHANNELS
+                    ..IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT],
+                &[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
+            );
 
-            Self::Config::configure(
-                meta,
+            let bias = advices.get_slice(
                 &[
-                    VarTensor::from(kernel),
-                    VarTensor::from(bias),
-                    advices.get_slice(
-                        &[0..IMAGE_HEIGHT * IN_CHANNELS],
-                        &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
-                    ),
-                    advices.get_slice(
-                        &[0..output_height * OUT_CHANNELS],
-                        &[OUT_CHANNELS, output_height, output_width],
-                    ),
+                    IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
+                        ..IMAGE_HEIGHT * IN_CHANNELS
+                            + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
+                            + 1,
                 ],
-                Some(&[PADDING, PADDING, STRIDE, STRIDE]),
-            )
+                &[OUT_CHANNELS],
+            );
+
+            let output = advices.get_slice(
+                &[
+                    IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT + 1
+                        ..IMAGE_HEIGHT * IN_CHANNELS
+                            + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
+                            + 1
+                            + output_height * OUT_CHANNELS,
+                ],
+                &[OUT_CHANNELS, output_height, output_width],
+            );
+
+            // tells the config layer to add a conv op to a circuit gate
+            let conv_node = BasicOpNode {
+                op: BasicOp::Conv((PADDING, PADDING), (STRIDE, STRIDE)),
+                input_idx: vec![0, 1, 2],
+                node_idx: vec![],
+            };
+
+            Self::Config::configure(meta, &[input, kernel, bias, output], &[conv_node])
         }
     }
 
     fn synthesize(
         &self,
-        config: Self::Config,
+        mut config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         let _output = config.layout(
             &mut layouter,
-            &[self.kernel.clone(), self.bias.clone(), self.image.clone()],
+            &[self.image.clone(), self.kernel.clone(), self.bias.clone()],
         );
         Ok(())
     }
