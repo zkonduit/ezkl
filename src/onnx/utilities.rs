@@ -5,8 +5,8 @@ use tract_onnx::tract_hir::internal::InferenceOp;
 
 // Warning: currently ignores stride information
 pub fn vector_to_quantized(
-    vec: &Vec<f32>,
-    dims: &Vec<usize>,
+    vec: &[f32],
+    dims: &[usize],
     shift: f32,
     scale: i32,
 ) -> Result<Tensor<i32>, TensorError> {

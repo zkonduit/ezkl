@@ -331,8 +331,8 @@ pub fn pow<T: TensorType + Mul<Output = T>>(a: &Tensor<T>, pow: usize) -> Tensor
 pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Tensor<T> {
     // calculate value of output
     let mut res = T::zero().unwrap();
-    a.map(|a_i| res = res.clone() + a_i.clone());
-    Tensor::new(Some(&vec![res]), &[1]).unwrap()
+    a.map(|a_i| res = res.clone() + a_i);
+    Tensor::new(Some(&[res]), &[1]).unwrap()
 }
 
 /// Applies convolution over a 3D tensor of shape C x H x W (and adds a bias).
@@ -412,8 +412,8 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 
 /// Applies 2D max pooling over a 3D tensor of shape C x H x W.
 /// ```
-/// use halo2deeplearning::tensor::Tensor;
-/// use halo2deeplearning::tensor::ops::max_pool2d;
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::max_pool2d;
 /// use halo2_proofs::circuit::Value;
 /// use halo2_proofs::plonk::Assigned;
 /// use halo2curves::pasta::Fp as F;
@@ -422,20 +422,15 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 3, 3],
 /// ).unwrap();
-/// const POOL_H: usize = 2;
-/// const POOL_W: usize = 2;
-/// let pooled = max_pool2d::<i32, POOL_H, POOL_W>(x, (0, 0), (1, 1));
+/// let pooled = max_pool2d::<i32>(&x, (0, 0), (1, 1), (2, 2));
 /// let expected: Tensor<i32> = Tensor::<i32>::new(Some(&[5, 4, 4, 6]), &[1, 2, 2]).unwrap();
 /// assert_eq!(pooled, expected);
 /// ```
-pub fn max_pool2d<
-    T: TensorType,
-    const POOL_H: usize,
-    const POOL_W: usize,
->(
-    image: Tensor<T>,
+pub fn max_pool2d<T: TensorType>(
+    image: &Tensor<T>,
     padding: (usize, usize),
     stride: (usize, usize),
+    pool_dims: (usize, usize),
 ) -> Tensor<T> {
     let image_dims = image.dims();
     assert_eq!(image_dims.len(), 3);
@@ -445,8 +440,8 @@ pub fn max_pool2d<
 
     let padded_image = pad::<T>(image.clone(), padding);
 
-    let horz_slides = (image_height + 2 * padding.0 - POOL_H) / stride.0 + 1;
-    let vert_slides = (image_width + 2 * padding.1 - POOL_W) / stride.1 + 1;
+    let horz_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
+    let vert_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
 
     let mut output: Tensor<T> =
         Tensor::new(None, &[input_channels, horz_slides, vert_slides]).unwrap();
@@ -454,7 +449,7 @@ pub fn max_pool2d<
     let fmax = |acc: Option<T>, x: T| -> Option<T> {
         match (acc, x) {
             (None, x) => Some(x),
-            (Some(a), x) => a.tmax(&x)
+            (Some(a), x) => a.tmax(&x),
         }
     };
 
@@ -465,13 +460,11 @@ pub fn max_pool2d<
                 let cs = k * stride.1;
                 output.set(
                     &[i, j, k],
-                    padded_image.get_slice(&[
-                        i..(i + 1),
-                        rs..(rs + POOL_H),
-                        cs..(cs + POOL_W),
-                    ]).into_iter()
-                      .fold(None, fmax)
-                      .unwrap(),
+                    padded_image
+                        .get_slice(&[i..(i + 1), rs..(rs + pool_dims.0), cs..(cs + pool_dims.1)])
+                        .into_iter()
+                        .fold(None, fmax)
+                        .unwrap(),
                 );
             }
         }
@@ -504,7 +497,7 @@ pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
         .iter()
         .zip(b)
         .fold(T::zero().unwrap(), |acc, (k, i)| acc + k.clone() * i);
-    Tensor::new(Some(&vec![res]), &[1]).unwrap()
+    Tensor::new(Some(&[res]), &[1]).unwrap()
 }
 
 /// Pads a 3D tensor of shape `C x H x W` to a tensor of shape `C x (H + 2xPADDING) x (W + 2xPADDING)` using 0 values.

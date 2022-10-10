@@ -32,7 +32,9 @@ impl fmt::Display for BasicOp {
             BasicOp::Matmul => write!(f, "matmul"),
             BasicOp::Dot => write!(f, "dot"),
             BasicOp::Affine => write!(f, "affine"),
-            BasicOp::Conv(_, _) => write!(f, "conv"),
+            BasicOp::Conv(padding, stride) => {
+                write!(f, "conv w/ padding: {:?}, stride: {:?}", padding, stride)
+            }
             BasicOp::Pow(s) => write!(f, "pow {}", s),
         }
     }
@@ -60,7 +62,7 @@ pub struct BasicConfig<F: FieldExt + TensorType> {
 
 /// Configures the sequence of operations into a circuit gate, represented as an array of `BasicOpNode`.
 /// `variables` represents the potential inputs to each operation. `BasicOpNode`s index over these inputs using their `input_idx` attribute.
-/// They can also ingest the intermediate outputs of other nodes, as represented by the `node_idx` attribute. 
+/// They can also ingest the intermediate outputs of other nodes, as represented by the `node_idx` attribute.
 impl<F: FieldExt + TensorType> BasicConfig<F> {
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
@@ -118,7 +120,7 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
                     }
                     BasicOp::Pow(u) => {
                         assert_eq!(op_inputs.len(), 1);
-                        config_outputs.push(pow(&op_inputs[0], u));
+                        config_outputs.push(pow(op_inputs[0], u));
                     }
                     BasicOp::Sum => {
                         assert_eq!(op_inputs.len(), 1);
@@ -158,9 +160,9 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
                         let inp = utils::value_muxer(
                             &self.inputs[i],
                             &self.inputs[i]
-                                .assign(&mut region, offset, &input)
+                                .assign(&mut region, offset, input)
                                 .map(|e| e.value_field().evaluate()),
-                            &input,
+                            input,
                         );
                         inputs.push(inp);
                     }
@@ -203,7 +205,7 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
                             }
                             BasicOp::Pow(u) => {
                                 assert_eq!(op_inputs.len(), 1);
-                                layout_outputs.push(pow(&op_inputs[0], u));
+                                layout_outputs.push(pow(op_inputs[0], u));
                             }
                             BasicOp::Sum => {
                                 assert_eq!(op_inputs.len(), 1);

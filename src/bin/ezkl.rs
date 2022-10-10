@@ -1,5 +1,4 @@
 use clap::Parser;
-use colog;
 use ezkl::commands::{data_path, Cli, Commands};
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::onnx::{utilities::vector_to_quantized, OnnxCircuit, OnnxModel};
@@ -28,9 +27,7 @@ use halo2curves::pasta::{EqAffine, Fp as F};
 use log::{info, trace};
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
-use serde;
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::marker::PhantomData;
@@ -59,7 +56,7 @@ pub fn main() {
     match args.command {
         Commands::Table { model: _ } => {
             let om = OnnxModel::from_arg();
-            println!("{}", Table::new(om.onnx_nodes.clone()).to_string());
+            println!("{}", Table::new(om.onnx_nodes));
         }
         Commands::Mock { data, model: _ } => {
             info!("Mock proof");
@@ -87,7 +84,7 @@ pub fn main() {
 
             let (pk, proof, _dims) = create_ipa_proof(circuit, public_input.clone(), &params);
 
-            let pi_inner: Tensor<F> = public_input.map(|x| i32_to_felt::<F>(x).into());
+            let pi_inner: Tensor<F> = public_input.map(i32_to_felt::<F>);
             let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner.into_iter().collect::<Vec<F>>()]];
 
             let now = Instant::now();
@@ -118,7 +115,7 @@ pub fn main() {
             let (_pk, proof, _input_dims) =
                 create_ipa_proof(circuit.clone(), public_input.clone(), &params);
 
-            let pi: Vec<_> = public_input.clone().into_iter().collect();
+            let pi: Vec<_> = public_input.into_iter().collect();
 
             let checkable_pf = Proof {
                 input_shape: circuit.input.dims().to_vec(),
@@ -129,8 +126,7 @@ pub fn main() {
             let serialized = serde_json::to_string(&checkable_pf).unwrap();
 
             let mut file = std::fs::File::create(output).expect("create failed");
-            file.write_all(&serialized.as_bytes())
-                .expect("write failed");
+            file.write_all(serialized.as_bytes()).expect("write failed");
         }
         Commands::Verify {
             model: _,
@@ -172,12 +168,10 @@ fn prepare_circuit<F: FieldExt>(data: OnnxInput) -> OnnxCircuit<F> {
 
     // quantize the supplied data using the provided scale.
     let input = vector_to_quantized(&data.input_data, &data.input_shape, 0.0, args.scale).unwrap();
-    let circuit = OnnxCircuit::<F> {
+    OnnxCircuit::<F> {
         input,
         _marker: PhantomData,
-    };
-
-    circuit
+    }
 }
 
 fn prepare_data(datapath: String) -> OnnxInput {
@@ -208,21 +202,21 @@ fn create_ipa_proof(
     let vk = keygen_vk(params, &empty_circuit).expect("keygen_vk should not fail");
     info!("VK took {}", now.elapsed().as_secs());
     let now = Instant::now();
-    let pk = keygen_pk(params, vk.clone(), &empty_circuit).expect("keygen_pk should not fail");
+    let pk = keygen_pk(params, vk, &empty_circuit).expect("keygen_pk should not fail");
     info!("PK took {}", now.elapsed().as_secs());
     let now = Instant::now();
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
     let mut rng = OsRng;
 
-    let pi_inner: Tensor<F> = public_input.map(|x| i32_to_felt::<F>(x).into());
+    let pi_inner: Tensor<F> = public_input.map(i32_to_felt::<F>);
     trace!("filling {:?}", pi_inner);
     let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner.into_iter().collect::<Vec<F>>()]];
     trace!("pi for real prover {:?}", pi_for_real_prover);
 
-    let dims = circuit.input.dims().clone().to_vec();
+    let dims = circuit.input.dims().to_vec();
 
     create_proof::<IPACommitmentScheme<_>, ProverIPA<_>, _, _, _, _>(
-        &params,
+        params,
         &pk,
         &[circuit],
         pi_for_real_prover,
@@ -252,12 +246,12 @@ fn verify_ipa_proof(proof: Proof) -> bool {
     };
     let empty_circuit = circuit.without_witnesses();
     let vk = keygen_vk(&params, &empty_circuit).expect("keygen_vk should not fail");
-    let pk = keygen_pk(&params, vk.clone(), &empty_circuit).expect("keygen_pk should not fail");
+    let pk = keygen_pk(&params, vk, &empty_circuit).expect("keygen_pk should not fail");
 
     let pi_inner = proof
         .public_input
         .into_iter()
-        .map(|x| i32_to_felt::<F>(x).into())
+        .map(i32_to_felt::<F>)
         .collect::<Vec<F>>();
     let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner]];
 

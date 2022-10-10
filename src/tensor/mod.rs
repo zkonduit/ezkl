@@ -17,12 +17,12 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use itertools::Itertools;
+use std::cmp::max;
 use std::fmt::Debug;
 use std::iter::Iterator;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
-use std::cmp::max;
 
 /// The (inner) type of tensor elements.
 pub trait TensorType: Clone + Debug + 'static {
@@ -31,7 +31,7 @@ pub trait TensorType: Clone + Debug + 'static {
         None
     }
 
-    fn tmax(&self, other: &Self) -> Option<Self> {
+    fn tmax(&self, _: &Self) -> Option<Self> {
         None
     }
 }
@@ -60,9 +60,15 @@ impl TensorType for f32 {
     fn tmax(&self, other: &Self) -> Option<Self> {
         match (self.is_nan(), other.is_nan()) {
             (true, true) => Some(f32::NAN),
-            (true, false) => Some(other.clone()),
-            (false, true) => Some(self.clone()),
-            (false, false) => if self >= other {Some(self.clone())} else {Some(other.clone())},
+            (true, false) => Some(*other),
+            (false, true) => Some(*self),
+            (false, false) => {
+                if self >= other {
+                    Some(*self)
+                } else {
+                    Some(*other)
+                }
+            }
         }
     }
 }
@@ -75,7 +81,6 @@ impl<T: TensorType> TensorType for Tensor<T> {
     fn zero() -> Option<Self> {
         Some(Tensor::new(Some(&[T::zero().unwrap()]), &[1]).unwrap())
     }
-
 }
 
 impl<T: TensorType> TensorType for Value<T> {
@@ -85,9 +90,9 @@ impl<T: TensorType> TensorType for Value<T> {
 
     fn tmax(&self, other: &Self) -> Option<Self> {
         Some(
-            (self.clone()).zip(other.clone()).map(|(a, b)| {
-                a.tmax(&b).unwrap()
-            })
+            (self.clone())
+                .zip(other.clone())
+                .map(|(a, b)| a.tmax(&b).unwrap()),
         )
     }
 }
@@ -99,9 +104,9 @@ impl<F: FieldExt> TensorType for Assigned<F> {
 
     fn tmax(&self, other: &Self) -> Option<Self> {
         if self.evaluate() >= other.evaluate() {
-            Some(self.clone())
+            Some(*self)
         } else {
-            Some(other.clone())
+            Some(*other)
         }
     }
 }
@@ -111,7 +116,7 @@ impl<F: FieldExt> TensorType for Expression<F> {
         Some(Expression::Constant(F::zero()))
     }
 
-    fn tmax(&self, other: &Self) -> Option<Self> {
+    fn tmax(&self, _: &Self) -> Option<Self> {
         todo!()
     }
 }
@@ -140,7 +145,7 @@ impl TensorType for halo2curves::pasta::Fp {
     }
 
     fn tmax(&self, other: &Self) -> Option<Self> {
-        Some(self.clone().max(other.clone()))
+        Some((*self).max(*other))
     }
 }
 
