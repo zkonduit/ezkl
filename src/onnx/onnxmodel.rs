@@ -959,10 +959,10 @@ impl OnnxModel {
                             assert_eq!(weight_node.out_scale, bias_node.out_scale);
 
                             this_node.out_scale = weight_node.out_scale + input_node.out_scale;
-                            this_node.min_cols = max(
-                                1,
-                                max(out_height * out_channels, input_height * in_channels),
-                            );
+                            this_node.min_cols = out_height * out_channels
+                                + input_height * in_channels
+                                + out_channels * in_channels * kernel_height
+                                + 1
                         }
                         BasicOp::Matmul => {
                             let (a_node, b_node) = (inputs[0], inputs[1]);
