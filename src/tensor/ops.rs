@@ -410,6 +410,75 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     output
 }
 
+/// Applies 2D max pooling over a 3D tensor of shape C x H x W.
+/// ```
+/// use halo2deeplearning::tensor::Tensor;
+/// use halo2deeplearning::tensor::ops::max_pool2d;
+/// use halo2_proofs::circuit::Value;
+/// use halo2_proofs::plonk::Assigned;
+/// use halo2curves::pasta::Fp as F;
+///
+/// let x = Tensor::<i32>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[1, 3, 3],
+/// ).unwrap();
+/// const POOL_H: usize = 2;
+/// const POOL_W: usize = 2;
+/// let pooled = max_pool2d::<i32, POOL_H, POOL_W>(x, (0, 0), (1, 1));
+/// let expected: Tensor<i32> = Tensor::<i32>::new(Some(&[5, 4, 4, 6]), &[1, 2, 2]).unwrap();
+/// assert_eq!(pooled, expected);
+/// ```
+pub fn max_pool2d<
+    T: TensorType,
+    const POOL_H: usize,
+    const POOL_W: usize,
+>(
+    image: Tensor<T>,
+    padding: (usize, usize),
+    stride: (usize, usize),
+) -> Tensor<T> {
+    let image_dims = image.dims();
+    assert_eq!(image_dims.len(), 3);
+
+    let input_channels = image_dims[0];
+    let (image_height, image_width) = (image_dims[1], image_dims[2]);
+
+    let padded_image = pad::<T>(image.clone(), padding);
+
+    let horz_slides = (image_height + 2 * padding.0 - POOL_H) / stride.0 + 1;
+    let vert_slides = (image_width + 2 * padding.1 - POOL_W) / stride.1 + 1;
+
+    let mut output: Tensor<T> =
+        Tensor::new(None, &[input_channels, horz_slides, vert_slides]).unwrap();
+
+    let fmax = |acc: Option<T>, x: T| -> Option<T> {
+        match (acc, x) {
+            (None, x) => Some(x),
+            (Some(a), x) => a.tmax(&x)
+        }
+    };
+
+    for i in 0..input_channels {
+        for j in 0..horz_slides {
+            let rs = j * stride.0;
+            for k in 0..vert_slides {
+                let cs = k * stride.1;
+                output.set(
+                    &[i, j, k],
+                    padded_image.get_slice(&[
+                        i..(i + 1),
+                        rs..(rs + POOL_H),
+                        cs..(cs + POOL_W),
+                    ]).into_iter()
+                      .fold(None, fmax)
+                      .unwrap(),
+                );
+            }
+        }
+    }
+    output
+}
+
 /// Dot product of two tensors.
 /// ```
 /// use ezkl::tensor::Tensor;
