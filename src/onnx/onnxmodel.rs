@@ -355,15 +355,25 @@ impl NodeGraph<OnnxNode> {
 }
 
 #[derive(Clone, Debug)]
+pub enum Mode {
+    Table,
+    Mock,
+    Prove,
+    FullProve,
+    Verify,
+}
+
+#[derive(Clone, Debug)]
 pub struct OnnxModel {
     pub model: Graph<InferenceFact, Box<dyn InferenceOp>>, // The raw Tract data structure
     pub onnx_nodes: NodeGraph<OnnxNode>, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
     pub bits: usize,
     pub scale: i32,
+    pub mode: Mode,
 }
 
 impl OnnxModel {
-    pub fn new(path: impl AsRef<Path>, scale: i32, bits: usize) -> Self {
+    pub fn new(path: impl AsRef<Path>, scale: i32, bits: usize, mode: Mode) -> Self {
         let model = tract_onnx::onnx().model_for_path(path).unwrap();
 
         let onnx_nodes: Vec<OnnxNode> = model
@@ -380,6 +390,7 @@ impl OnnxModel {
             scale,
             onnx_nodes: NodeGraph(map),
             bits,
+            mode,
         };
 
         om.forward_shape_and_quantize_pass().unwrap();
@@ -392,38 +403,28 @@ impl OnnxModel {
         let args = Cli::parse();
 
         match args.command {
-            Commands::Table { model } => OnnxModel::new(model_path(model), args.scale, args.bits),
+            Commands::Table { model } => {
+                OnnxModel::new(model_path(model), args.scale, args.bits, Mode::Table)
+            }
             Commands::Mock { data: _, model } => {
-                OnnxModel::new(model_path(model), args.scale, args.bits)
+                OnnxModel::new(model_path(model), args.scale, args.bits, Mode::Mock)
             }
             Commands::Fullprove {
                 data: _,
                 model,
                 pfsys: _,
-            } => OnnxModel::new(model_path(model), args.scale, args.bits),
-            // Commands::Vkey {
-            //     model,
-            //     output: _,
-            //     params: _,
-            //     pfsys: _,
-            // } => OnnxModel::new(model_path(model), args.scale, args.bits),
-            // Commands::Pkey {
-            //     model,
-            //     output: _,
-            //     params: _,
-            //     pfsys: _,
-            // } => OnnxModel::new(model_path(model), args.scale, args.bits),
+            } => OnnxModel::new(model_path(model), args.scale, args.bits, Mode::FullProve),
             Commands::Prove {
                 data: _,
                 model,
                 output: _,
                 pfsys: _,
-            } => OnnxModel::new(model_path(model), args.scale, args.bits),
+            } => OnnxModel::new(model_path(model), args.scale, args.bits, Mode::Prove),
             Commands::Verify {
                 model,
                 proof: _,
                 pfsys: _,
-            } => OnnxModel::new(model_path(model), args.scale, args.bits),
+            } => OnnxModel::new(model_path(model), args.scale, args.bits, Mode::Verify),
         }
     }
 
@@ -696,9 +697,11 @@ impl OnnxModel {
                         info!("{}", display);
 
                         if let Some(vt) = self.layout_config(layouter, &mut results, &c.config)? {
-                            //only use with mock prover
                             results.insert(*i, vt);
-                            trace!("  output {:?}", results.get(i).unwrap().show());
+                            //only use with mock prover
+                            if matches!(self.mode, Mode::Mock) {
+                                trace!("  output {:?}", results.get(i).unwrap().show());
+                            }
                         }
                     }
                 }
@@ -756,9 +759,8 @@ impl OnnxModel {
                 Some(sc.layout(layouter, &[inputs.get(node).unwrap().clone()]))
             }
             NodeConfigTypes::Input => None,
-            NodeConfigTypes::Const => None,
-            _ => {
-                panic!("Node Op and Config mismatch, or unknown Op ",)
+            c => {
+                panic!("Not a configurable op {:?}", c)
             }
         };
         Ok(res)
