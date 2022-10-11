@@ -95,7 +95,7 @@ where
                 ],
             };
 
-            Self::Config::configure(meta, &[input, kernel, bias, output], &[conv_node])
+            Self::Config::configure(meta, &[input, kernel, bias], &output, &[conv_node])
         }
     }
 

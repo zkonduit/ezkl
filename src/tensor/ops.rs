@@ -363,6 +363,7 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ) -> Tensor<T> {
     assert_eq!(inputs.len(), 3);
     let (image, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
+
     assert_eq!(image.dims().len(), 3);
     assert_eq!(kernel.dims().len(), 4);
     assert_eq!(bias.dims().len(), 1);

@@ -56,7 +56,7 @@ pub fn main() {
     match args.command {
         Commands::Table { model: _ } => {
             let om = OnnxModel::from_arg();
-            println!("{}", Table::new(om.onnx_nodes));
+            println!("{}", Table::new(om.onnx_nodes.flatten()));
         }
         Commands::Mock { data, model: _ } => {
             info!("Mock proof");

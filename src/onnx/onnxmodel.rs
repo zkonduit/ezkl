@@ -14,6 +14,7 @@ use halo2_proofs::{
 use itertools::Itertools;
 use log::{debug, error, info, trace, warn};
 use std::cmp::max;
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 use std::fmt;
 use std::path::Path;
 use tabled::{Table, Tabled};
@@ -34,7 +35,7 @@ use tract_onnx::tract_hir::{
 // contain parameters will be handled at the consuming node.
 // Eventually, though, we probably want to keep them and treat them directly (layouting and configuring
 // at each type of node)
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum OpKind {
     Rescaled(Box<OpKind>, usize),
     ReLU(usize),
@@ -43,6 +44,12 @@ pub enum OpKind {
     Input,
     Fused(FusedOp),
     Unknown(String),
+}
+
+impl OpKind {
+    fn is_fused(&self) -> bool {
+        matches!(self, OpKind::Fused(_))
+    }
 }
 
 impl fmt::Display for OpKind {
@@ -59,19 +66,20 @@ impl fmt::Display for OpKind {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Default, Debug)]
 pub enum NodeConfigTypes<F: FieldExt + TensorType> {
     Rescaled(EltwiseConfig<F, DivideBy<F>>, Box<NodeConfigTypes<F>>),
-    ReLU(EltwiseConfig<F, ReLu<F>>),
-    Sigmoid(EltwiseConfig<F, Sigmoid<F>>),
+    ReLU(EltwiseConfig<F, ReLu<F>>, Vec<usize>),
+    Sigmoid(EltwiseConfig<F, Sigmoid<F>>, Vec<usize>),
     Divide(EltwiseConfig<F, DivideBy<F>>),
     Fused(FusedConfig<F>, Vec<usize>),
     Const,
     Input,
+    #[default]
     NotConfigured,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct NodeConfig<F: FieldExt + TensorType> {
     config: NodeConfigTypes<F>,
     onnx_idx: Vec<usize>,
@@ -79,7 +87,7 @@ pub struct NodeConfig<F: FieldExt + TensorType> {
 
 #[derive(Clone)]
 pub struct OnnxModelConfig<F: FieldExt + TensorType> {
-    configs: Vec<NodeConfig<F>>,
+    configs: NodeGraph<NodeConfig<F>>,
     pub model: OnnxModel,
     pub public_output: Column<Instance>,
 }
@@ -92,7 +100,7 @@ fn display_option<T: fmt::Debug>(o: &Option<T>) -> String {
 }
 
 fn display_inputs(o: &Vec<OutletId>) -> String {
-    if o.len() > 0 {
+    if !o.is_empty() {
         let mut nodes = vec![];
         for id in o.iter() {
             nodes.push(id.node);
@@ -136,7 +144,7 @@ pub struct OnnxNode {
     out_dims: Option<Vec<usize>>,
     idx: usize,
     #[tabled(display_with = "display_option")]
-    inter_idx: Option<usize>,
+    bucket: Option<usize>,
 }
 
 impl OnnxNode {
@@ -175,7 +183,7 @@ impl OnnxNode {
         let in_dims = None;
         let mut out_dims = None;
         let mut output_max = f32::INFINITY;
-        let inter_idx = None;
+        let bucket = None;
 
         match opkind {
             OpKind::Const => {
@@ -276,7 +284,7 @@ impl OnnxNode {
             in_dims,
             out_dims,
             idx,
-            inter_idx,
+            bucket,
         }
     }
 
@@ -300,25 +308,56 @@ impl OnnxNode {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-struct ConfigureParams<F: FieldExt + TensorType> {
-    basic_nodes: Vec<usize>,
-    rescale_conf: Option<EltwiseConfig<F, DivideBy<F>>>,
-    configs: Vec<NodeConfig<F>>,
+#[derive(Clone, Default, Debug)]
+pub struct NodeGraph<T: Clone>(HashMap<Option<usize>, Vec<T>>);
+
+impl<T: Clone> NodeGraph<T> {
+    pub fn new() -> Self {
+        NodeGraph(HashMap::new())
+    }
+
+    fn insert(&mut self, idx: Option<usize>, config: T) {
+        match self.0.entry(idx) {
+            Entry::Vacant(e) => {
+                e.insert(vec![config]);
+            }
+            Entry::Occupied(mut e) => {
+                e.get_mut().push(config);
+            }
+        }
+    }
 }
 
-#[derive(Clone, Debug, Default)]
-struct FuseParams {
-    shapes: Vec<Vec<usize>>,
-    nodes: Vec<FusedNode>,
-    inputs: Vec<usize>,
-    out_dim: Vec<usize>,
+impl NodeGraph<OnnxNode> {
+    pub fn flatten(&self) -> Vec<OnnxNode> {
+        let a = self.0.clone().into_values().collect::<Vec<Vec<OnnxNode>>>();
+        let mut c: Vec<OnnxNode> = a
+            .iter()
+            .flatten()
+            .collect::<Vec<&OnnxNode>>()
+            .iter()
+            .map(|e| (*e).clone())
+            .collect();
+
+        c.sort_by_key(|v| v.idx);
+        c
+    }
+
+    pub fn filter(&self, idx: usize) -> OnnxNode {
+        let a = self.flatten();
+        let c = &a
+            .iter()
+            .filter(|i| i.idx == idx)
+            .cloned()
+            .collect::<Vec<OnnxNode>>()[0];
+        c.clone()
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct OnnxModel {
     pub model: Graph<InferenceFact, Box<dyn InferenceOp>>, // The raw Tract data structure
-    pub onnx_nodes: Vec<OnnxNode>, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
+    pub onnx_nodes: NodeGraph<OnnxNode>, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
     pub bits: usize,
     pub scale: i32,
 }
@@ -334,15 +373,18 @@ impl OnnxModel {
             .map(|(i, n)| OnnxNode::new(n.clone(), scale, i))
             .collect();
 
+        let mut map = HashMap::new();
+        map.insert(None, onnx_nodes);
         let mut om = OnnxModel {
             model,
             scale,
-            onnx_nodes,
+            onnx_nodes: NodeGraph(map),
             bits,
         };
+
         om.forward_shape_and_quantize_pass().unwrap();
 
-        debug!("{}", Table::new(om.onnx_nodes.clone()).to_string());
+        debug!("{}", Table::new(om.onnx_nodes.flatten()).to_string());
 
         om
     }
@@ -391,257 +433,169 @@ impl OnnxModel {
         advices: VarTensor,
     ) -> Result<OnnxModelConfig<F>> {
         info!("configuring model");
-        // Note that the order of the nodes, and the eval_order, is not stable between model loads
-        let order = self.eval_order()?;
-        let mut results = ConfigureParams::<F>::default();
-        for node_idx in order.clone() {
-            let node = &self.onnx_nodes[node_idx];
-            debug!("configuring node {} a {:?}", node_idx, &node.opkind);
-            self.configure_muxer(&node.opkind, meta, &mut results, node, advices.clone());
+        let mut results = NodeGraph::default();
+
+        for (b, block_nodes) in self.onnx_nodes.0.iter() {
+            let ops: Vec<&OpKind> = block_nodes.iter().map(|n| &n.opkind).collect();
+            let idxs: Vec<usize> = block_nodes.iter().map(|n| n.idx).collect();
+            match ops[0] {
+                // these are fused nodes
+                OpKind::Fused(_) => {
+                    results.insert(
+                        *b,
+                        NodeConfig {
+                            config: self.fuse_ops(block_nodes.clone(), meta, advices.clone()),
+                            onnx_idx: block_nodes.iter().map(|n| n.idx).collect(),
+                        },
+                    );
+                }
+                OpKind::Unknown(_) => {
+                    unimplemented!()
+                }
+                _ => {
+                    // these are const nodes
+                    for (i, n) in idxs.iter().zip(block_nodes) {
+                        results.insert(
+                            *b,
+                            NodeConfig {
+                                config: self.configure_table(n, meta, advices.clone()),
+                                onnx_idx: vec![*i],
+                            },
+                        );
+                    }
+                }
+            }
         }
-        // one last cleanup
-        if !results.basic_nodes.is_empty() {
-            let config = self.configure_basic_ops(&results.basic_nodes, meta, advices);
-            results.configs.push(NodeConfig {
-                config,
-                onnx_idx: vec![*order.last().unwrap()],
-            });
-        }
-        // rescale output just in case final operation doesn't do it
-        // let scale_diff = self.onnx_nodes.last().unwrap().out_scale - self.scale;
-        // if scale_diff > 0 {
-        //     let node = self.onnx_nodes.last().unwrap();
-        //     let mult = scale_to_multiplier(scale_diff);
-        //     let divconf = self.configure_divide_by(node, meta, advices.clone(), &(mult as usize));
-        //     results.configs.push(NodeConfig {
-        //         config: NodeConfigTypes::Divide(divconf),
-        //         onnx_idx: vec![0],
-        //     });
-        // }
-        //
+
         let public_output: Column<Instance> = meta.instance_column();
         meta.enable_equality(public_output);
 
         Ok(OnnxModelConfig {
-            configs: results.configs,
+            configs: results,
             model: self.clone(),
             public_output,
         })
     }
 
-    fn configure_muxer<F: FieldExt + TensorType>(
+    fn fuse_ops<F: FieldExt + TensorType>(
         &self,
-        op: &OpKind,
-        meta: &mut ConstraintSystem<F>,
-        params: &mut ConfigureParams<F>,
-        node: &OnnxNode,
-        advices: VarTensor,
-    ) {
-        match op {
-            OpKind::Rescaled(inner_op, denom) => {
-                params.rescale_conf =
-                    Some(self.configure_divide_by(node, meta, advices.clone(), denom));
-                // when we divide by we start a new "basic" group of operations to fuse together
-                if !params.basic_nodes.is_empty() {
-                    let config =
-                        self.configure_basic_ops(&params.basic_nodes, meta, advices.clone());
-                    let config = NodeConfigTypes::Rescaled(
-                        params.rescale_conf.clone().unwrap(),
-                        Box::new(config),
-                    );
-                    params.configs.push(NodeConfig {
-                        config,
-                        onnx_idx: params.basic_nodes.clone(),
-                    });
-                    params.basic_nodes = vec![];
-                }
-                self.configure_muxer(inner_op, meta, params, node, advices);
-            }
-            OpKind::Fused(_) => params.basic_nodes.push(node.idx),
-            OpKind::Input => params.configs.push(NodeConfig {
-                config: self.configure_node(op, node, meta, advices),
-                onnx_idx: vec![node.idx],
-            }),
-            OpKind::Const => params.configs.push(NodeConfig {
-                config: self.configure_node(op, node, meta, advices),
-                onnx_idx: vec![node.idx],
-            }),
-            OpKind::Unknown(c) => {
-                error!("{:?} not yet implemented", c);
-                unimplemented!()
-            }
-            _ => {
-                if !params.basic_nodes.is_empty() {
-                    let config =
-                        self.configure_basic_ops(&params.basic_nodes, meta, advices.clone());
-                    params.configs.push(NodeConfig {
-                        config,
-                        onnx_idx: params.basic_nodes.clone(),
-                    });
-                    params.basic_nodes = vec![];
-                }
-                let config = self.configure_node(op, node, meta, advices);
-                let config = match params.rescale_conf.clone() {
-                    Some(s) => {
-                        params.rescale_conf = None;
-                        NodeConfigTypes::Rescaled(s, Box::new(config))
-                    }
-                    None => config,
-                };
-
-                params.configs.push(NodeConfig {
-                    config,
-                    onnx_idx: vec![node.idx],
-                });
-            }
-        }
-    }
-
-    fn extract_node_inputs(&self, node: &OnnxNode) -> Vec<&OnnxNode> {
-        // The parameters are assumed to be fixed kernel and bias. Affine and Conv nodes should have three inputs in total:
-        // two inputs which are Const(..) that have the f32s, and one variable input which are the activations.
-        // The first input is the activations, second is the weight matrix, and the third the bias.
-        // Consider using shape information only here, rather than loading the param tensor (although loading
-        // the tensor guarantees that assign will work if there are errors or ambiguities in the shape
-        // data).
-        // Other layers such as non-linearities only have a single input (activations).
-        let input_outlets = &node.node.inputs;
-        let mut inputs = Vec::<&OnnxNode>::new();
-        for i in input_outlets.iter() {
-            inputs.push(&self.onnx_nodes[i.node]);
-        }
-        inputs
-    }
-
-    fn configure_basic_ops<F: FieldExt + TensorType>(
-        &self,
-        indices: &[usize],
+        nodes: Vec<OnnxNode>,
         meta: &mut ConstraintSystem<F>,
         advices: VarTensor,
     ) -> NodeConfigTypes<F> {
-        let mut params = FuseParams::default();
-        let mut offset = 0;
-        for i in indices.iter() {
-            let node = &self.onnx_nodes[*i];
-            self.basic_op_muxer(
-                &node.opkind,
-                &mut params,
-                node,
-                indices,
-                meta,
-                advices.clone(),
-                &mut offset,
-            )
-        }
+        let ops: Vec<FusedOp> = nodes
+            .iter()
+            .map(|e| match e.opkind {
+                OpKind::Fused(f) => f,
+                _ => panic!(),
+            })
+            .collect();
 
-        let mut variables = vec![];
+        let node_ids: Vec<usize> = nodes.iter().map(|e| e.idx).collect();
+        let input_nodes: Vec<Vec<OnnxNode>> = nodes
+            .iter()
+            .map(|e| {
+                e.inputs
+                    .iter()
+                    .map(|i| self.onnx_nodes.filter(i.node))
+                    .collect_vec()
+            })
+            .collect_vec();
+        // This works because retain only keeps items for which the predicate returns true, and
+        // insert only returns true if the item was not previously present in the set.
+        // Since the vector is traversed in order, we end up keeping just the first occurrence of each item.
+        let mut seen = HashSet::new();
+        let inputs_to_fused_layer: Vec<usize> = input_nodes
+            .iter()
+            .flat_map(|e| {
+                e.iter()
+                    .filter(|i| !node_ids.contains(&i.idx) && seen.insert(i.idx))
+                    .map(|f| f.idx)
+                    .collect_vec()
+            })
+            .collect_vec();
+
+        let mut inter_counter = 0;
+        let input_order: Vec<Vec<FusedInputType>> = input_nodes
+            .iter()
+            .map(|inputs| {
+                inputs
+                    .iter()
+                    .map(|i| {
+                        if node_ids.contains(&i.idx) {
+                            inter_counter += 1;
+                            FusedInputType::Inter(inter_counter - 1)
+                        } else if inputs_to_fused_layer.contains(&i.idx) {
+                            FusedInputType::Input(
+                                inputs_to_fused_layer
+                                    .iter()
+                                    .position(|&r| r == i.idx)
+                                    .unwrap(),
+                            )
+                        } else {
+                            panic!()
+                        }
+                    })
+                    .collect_vec()
+            })
+            .collect_vec();
+
         let mut start = 0;
-        params.shapes.push(params.out_dim);
-        // final iteration generates the output
-        for s in params.shapes.iter() {
-            let end: usize = if s.len() > 1 {
-                s[0..s.len() - 1].iter().product()
-            } else {
-                1
-            };
-            variables.push(advices.get_slice(&[start..start + end], s));
-            start += end;
-        }
+        let mut shapes: Vec<Vec<usize>> = inputs_to_fused_layer
+            .iter()
+            .map(|i| self.onnx_nodes.filter(*i).out_dims.unwrap())
+            .collect();
+        // output node
+        shapes.push(
+            self.onnx_nodes
+                .filter(node_ids[node_ids.len() - 1])
+                .out_dims
+                .unwrap(),
+        );
+        let variables: Vec<VarTensor> = shapes
+            .iter()
+            .map(|s| {
+                let mut end = 1;
+                if s.len() > 1 {
+                    end = s[0..s.len() - 1].iter().product();
+                }
+                let a = advices.get_slice(&[start..start + end], s);
+                start += end;
+                a
+            })
+            .collect();
+
+        let mut fused_nodes = vec![];
+        ops.iter()
+            .zip(input_order)
+            .map(|(op, o)| {
+                fused_nodes.push(FusedNode {
+                    op: *op,
+                    input_order: o,
+                })
+            })
+            .collect_vec();
 
         NodeConfigTypes::Fused(
-            FusedConfig::configure(meta, &variables, &params.nodes),
-            params.inputs,
-        )
-    }
-
-    fn basic_op_muxer<F: FieldExt + TensorType>(
-        &self,
-        op: &OpKind,
-        params: &mut FuseParams,
-        node: &OnnxNode,
-        indices: &[usize],
-        meta: &mut ConstraintSystem<F>,
-        advices: VarTensor,
-        input_offset: &mut usize,
-    ) {
-        params.out_dim = node.out_dims.clone().unwrap();
-        match &op {
-            OpKind::Rescaled(inner_op, _) => {
-                self.basic_op_muxer(inner_op, params, node, indices, meta, advices, input_offset)
-            }
-            OpKind::Fused(op) => {
-                let mut input_order = vec![];
-                let mut inter_counter = 0;
-                for (idx, input) in node.node.inputs.iter().enumerate() {
-                    if indices.contains(&input.node) {
-                        input_order.push(FusedInputType::Inter(inter_counter));
-                        inter_counter += 1;
-                    } else if !params.inputs.contains(&input.node) {
-                        params.inputs.push(input.node);
-                        params
-                            .shapes
-                            .push(self.onnx_nodes[input.node].clone().out_dims.unwrap());
-                        input_order.push(FusedInputType::Input(*input_offset + idx));
-                    } else {
-                        input_order.push(FusedInputType::Input(
-                            params.inputs.iter().position(|&r| r == input.node).unwrap(),
-                        ));
-                    }
-                }
-                *input_offset = *input_offset + params.inputs.len() - 1;
-                if let FusedOp::Pow(_) = op {
-                    // the last node is just the const node for the power, which we have info for already
-                    input_order.pop();
-                    params.inputs.pop();
-                    params.shapes.pop();
-                }
-
-                params.nodes.push(FusedNode {
-                    op: *op,
-                    input_order,
-                })
-            }
-            s => {
-                error!("For {:?} call configure_node instead", s);
-                panic!();
-            }
-        }
-    }
-
-    fn configure_divide_by<F: FieldExt + TensorType>(
-        &self,
-        node: &OnnxNode,
-        meta: &mut ConstraintSystem<F>,
-        advices: VarTensor,
-        denom: &usize,
-    ) -> EltwiseConfig<F, DivideBy<F>> {
-        let dims = match &node.in_dims {
-            Some(v) => v,
-            None => {
-                error!("layer has no input shape");
-                panic!()
-            }
-        };
-        let length = dims.clone().into_iter().product();
-        EltwiseConfig::configure(
-            meta,
-            &[advices.get_slice(&[0..length], &[length])],
-            //&[advices.get_slice(&[0..length], dims)],
-            Some(&[self.bits, *denom]),
+            FusedConfig::configure(
+                meta,
+                &variables[0..variables.len() - 1],
+                variables.last().unwrap(),
+                &fused_nodes,
+            ),
+            inputs_to_fused_layer,
         )
     }
 
     /// Infer the params, input, and output, and configure against the provided meta and Advice and Fixed columns.
     /// Note that we require the context of the Graph to complete this task.
-    fn configure_node<F: FieldExt + TensorType>(
+    fn configure_table<F: FieldExt + TensorType>(
         &self,
-        op: &OpKind,
         node: &OnnxNode,
         meta: &mut ConstraintSystem<F>,
         advices: VarTensor,
     ) -> NodeConfigTypes<F> {
-        match op {
-            OpKind::Rescaled(inner_op, _) => self.configure_node(inner_op, node, meta, advices),
+        match &node.opkind {
             OpKind::ReLU(s) => {
                 let dims = match &node.in_dims {
                     Some(v) => v,
@@ -658,7 +612,8 @@ impl OnnxModel {
                     &[advices.get_slice(&[0..length], &[length])],
                     Some(&[self.bits, *s]),
                 );
-                NodeConfigTypes::ReLU(conf)
+                let inputs = node.inputs.iter().map(|e| e.node).collect();
+                NodeConfigTypes::ReLU(conf, inputs)
             }
             OpKind::Sigmoid(denominator) => {
                 let dims = match &node.in_dims {
@@ -679,7 +634,8 @@ impl OnnxModel {
                         scale_to_multiplier(self.scale) as usize,
                     ]),
                 );
-                NodeConfigTypes::Sigmoid(conf)
+                let inputs = node.inputs.iter().map(|e| e.node).collect();
+                NodeConfigTypes::Sigmoid(conf, inputs)
             }
             OpKind::Const => {
                 // Typically parameters for one or more layers.
@@ -699,6 +655,9 @@ impl OnnxModel {
                 error!("{:?} not yet implemented", c);
                 unimplemented!()
             }
+            _ => {
+                unimplemented!()
+            }
         }
     }
 
@@ -709,36 +668,45 @@ impl OnnxModel {
         input: ValTensor<F>,
     ) -> Result<ValTensor<F>> {
         info!("model layout");
-        let mut x = vec![input];
-        for node_config in config.configs.iter() {
-            let mut display: String = "".to_string();
-            for (i, idx) in node_config.onnx_idx[0..].iter().enumerate() {
-                let node = &self.onnx_nodes[*idx];
-                if i > 0 {
-                    display.push_str(&format!(
-                        "| combined with node {}, a {:?} |",
-                        idx,
-                        node.node.op().name()
-                    ));
-                } else {
-                    display.push_str(&format!(
-                        "laying out node {}, a {:?} ",
-                        idx,
-                        node.node.op().name()
-                    ));
+        let mut results = HashMap::new();
+        results.insert(0, input);
+        for (bucket, node_config) in config.configs.0.iter().sorted_by_key(|x| x.0) {
+            match bucket {
+                // assert!(self.config_matches(&node.opkind, &node_config.config));
+                Some(i) => {
+                    for c in node_config.iter() {
+                        let mut display: String = "".to_string();
+                        for (i, idx) in c.onnx_idx[0..].iter().enumerate() {
+                            let node = &self.onnx_nodes.filter(*idx);
+                            if i > 0 {
+                                display.push_str(&format!(
+                                    "| combined with node {}, a {:?} |",
+                                    idx,
+                                    node.node.op().name()
+                                ));
+                            } else {
+                                display.push_str(&format!(
+                                    "laying out node {}, a {:?} ",
+                                    idx,
+                                    node.node.op().name()
+                                ));
+                            }
+                        }
+
+                        info!("{}", display);
+
+                        if let Some(vt) = self.layout_config(layouter, &mut results, &c.config)? {
+                            //only use with mock prover
+                            results.insert(*i, vt);
+                            trace!("  output {:?}", results.get(i).unwrap().show());
+                        }
+                    }
                 }
-            }
-            info!("{}", display);
-            let node = &self.onnx_nodes[*node_config.onnx_idx.last().unwrap()];
-            // assert!(self.config_matches(&node.opkind, &node_config.config));
-            match self.layout_config(node, layouter, &mut x, &node_config.config)? {
-                Some(vt) => x.push(vt),
                 None => {} // Some nodes don't produce tensor output, we skip these
             };
-            trace!("  output {}", x.last().unwrap().show()); //only use with mock prover
         }
 
-        Ok(x.last().unwrap().clone())
+        Ok(results.get(&(results.len() - 1)).unwrap().clone())
     }
 
     // Takes an input ValTensor; alternatively we could recursively layout all the predecessor tensors
@@ -747,51 +715,46 @@ impl OnnxModel {
     // At the Source level, the input will be fed by the prover.
     fn layout_config<F: FieldExt + TensorType>(
         &self,
-        node: &OnnxNode,
         layouter: &mut impl Layouter<F>,
-        inputs: &mut Vec<ValTensor<F>>,
+        inputs: &mut HashMap<usize, ValTensor<F>>,
         config: &NodeConfigTypes<F>,
     ) -> Result<Option<ValTensor<F>>> {
         // The node kind and the config should be the same.
         let res = match config.clone() {
             NodeConfigTypes::Fused(mut ac, idx) => {
-                println!("{:?} {:?}", inputs.len(), idx);
-                let mut values = self
-                    .idx_to_inter_idx(&idx)
+                let values: Vec<ValTensor<F>> = idx
                     .iter()
-                    .map(|i| inputs[*i].clone())
+                    .map(|i| {
+                        let node = &self.onnx_nodes.filter(*i);
+                        match node.bucket {
+                            None => {
+                                let val = node
+                                    .const_value
+                                    .clone()
+                                    .context("Tensor<i32> should already be loaded")
+                                    .unwrap();
+                                <Tensor<i32> as Into<Tensor<Value<F>>>>::into(val).into()
+                            }
+                            Some(u) => inputs.get(&u).unwrap().clone(),
+                        }
+                    })
                     .collect_vec();
 
-                println!("{:?} {:?}", values.len(), idx);
-
-                for i in idx.iter() {
-                    let node = &self.onnx_nodes[*i];
-                    if let OpKind::Const = node.opkind {
-                        let val = node
-                            .const_value
-                            .clone()
-                            .context("Tensor<i32> should already be loaded")?;
-                        values.push(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(val).into());
-                    }
-                }
                 Some(ac.layout(layouter, &values))
             }
-            NodeConfigTypes::Rescaled(dc, op) => {
-                let last = inputs.last_mut().unwrap();
-                *last = dc.layout(layouter, &[last.clone()]);
-                return self.layout_config(node, layouter, inputs, &*op);
-            }
-            NodeConfigTypes::Divide(dc) => {
-                Some(dc.layout(layouter, &[inputs.last().unwrap().clone()]))
-            }
-            NodeConfigTypes::ReLU(rc) => {
+            NodeConfigTypes::ReLU(rc, idx) => {
+                assert_eq!(idx.len(), 1);
+                // input should not be a parameter and thus should have the intermediate index
+                let node = &self.onnx_nodes.filter(idx[0]).bucket.unwrap();
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
-                Some(rc.layout(layouter, &[inputs.last().unwrap().clone()]))
+                Some(rc.layout(layouter, &[inputs.get(node).unwrap().clone()]))
             }
-            NodeConfigTypes::Sigmoid(sc) => {
-                Some(sc.layout(layouter, &[inputs.last().unwrap().clone()]))
+            NodeConfigTypes::Sigmoid(sc, idx) => {
+                assert_eq!(idx.len(), 1);
+                // input should not be a parameter and thus should have the intermediate index
+                let node = &self.onnx_nodes.filter(idx[0]).bucket.unwrap();
+                Some(sc.layout(layouter, &[inputs.get(node).unwrap().clone()]))
             }
-
             NodeConfigTypes::Input => None,
             NodeConfigTypes::Const => None,
             _ => {
@@ -801,45 +764,27 @@ impl OnnxModel {
         Ok(res)
     }
 
-    // remove for now as matching has become more complex
-    // fn config_matches<F: FieldExt + TensorType>(
-    //     &self,
-    //     op: &OpKind,
-    //     config: &NodeConfigTypes<F>,
-    // ) -> bool {
-    //     // The node kind and the config should be the same.
-    //     match (op, config.clone()) {
-    //         (OpKind::Rescaled(op, _), NodeConfigTypes::Rescaled(_, config)) => {
-    //             self.config_matches(op, &*config)
-    //         }
-    //         (OpKind::ReLU(_), NodeConfigTypes::ReLU(_)) => true,
-    //         (OpKind::Sigmoid(_), NodeConfigTypes::Sigmoid(_)) => true,
-    //         (OpKind::Input, NodeConfigTypes::Input) => true,
-    //         (OpKind::Fused(_), NodeConfigTypes::Fused(_, _)) => true,
-    //         (OpKind::Const, NodeConfigTypes::Const) => true,
-    //         (_, NodeConfigTypes::Divide(_)) => true,
-    //         _ => false,
-    //     }
-    // }
-
     /// Make a forward pass over the graph to determine tensor shapes and quantization strategy
     /// Mutates the nodes.
     pub fn forward_shape_and_quantize_pass(&mut self) -> Result<()> {
         info!("quantizing model activations");
         let order = self.eval_order()?;
-        let order_len = order.len();
 
-        let mut inter_idx = 0;
+        let mut bucket = 0;
 
+        let mut bucketed_nodes = NodeGraph(HashMap::<Option<usize>, Vec<OnnxNode>>::new());
         for node_idx in order {
-            // mutate a copy of the node, referring to other nodes in the vec, then swap modified node in at the end
-            let mut node = self.onnx_nodes[node_idx].clone();
-
-            let inputs = self.extract_node_inputs(&node);
+            let mut node = self.onnx_nodes.filter(node_idx);
+            let inputs: Vec<OnnxNode> = node
+                .node
+                .inputs
+                .iter()
+                .map(|i| bucketed_nodes.filter(i.node))
+                .collect();
 
             match node.opkind {
                 OpKind::Sigmoid(_) => {
-                    let input_node = inputs[0];
+                    let input_node = &inputs[0];
                     node.in_dims = input_node.out_dims.clone();
                     node.out_dims = input_node.out_dims.clone();
                     node.in_scale = input_node.out_scale;
@@ -856,7 +801,7 @@ impl OnnxModel {
                 }
 
                 OpKind::ReLU(_) => {
-                    let input_node = inputs[0];
+                    let input_node = &inputs[0];
                     node.in_dims = input_node.out_dims.clone();
                     node.out_dims = input_node.out_dims.clone();
                     node.output_max = input_node.output_max;
@@ -872,7 +817,7 @@ impl OnnxModel {
                     node.min_cols = max(1, node.in_dims.as_ref().unwrap().iter().product());
                 }
                 OpKind::Fused(s) => {
-                    let input_node = inputs[0];
+                    let input_node = &inputs[0];
                     node.in_dims = input_node.out_dims.clone();
                     node.out_dims = input_node.out_dims.clone();
                     node.min_cols = inputs
@@ -890,7 +835,7 @@ impl OnnxModel {
                         FusedOp::Dot => todo!(),
                         FusedOp::Conv(padding, stride) => {
                             let (input_node, weight_node, bias_node) =
-                                (inputs[0], inputs[1], inputs[2]);
+                                (&inputs[0], &inputs[1], &inputs[2]);
 
                             let oihw = weight_node.out_dims.as_ref().unwrap();
                             let (out_channels, _, kernel_height, kernel_width) =
@@ -921,7 +866,7 @@ impl OnnxModel {
                             node.out_scale = weight_node.out_scale + input_node.out_scale;
                         }
                         FusedOp::Matmul => {
-                            let (a_node, b_node) = (inputs[0], inputs[1]);
+                            let (a_node, b_node) = (&inputs[0], &inputs[1]);
 
                             let in_dim = a_node.out_dims.as_ref().unwrap()[1];
                             node.in_dims = Some(vec![in_dim]);
@@ -943,7 +888,7 @@ impl OnnxModel {
                         }
                         FusedOp::Affine => {
                             let (input_node, weight_node, bias_node) =
-                                (inputs[0], inputs[1], inputs[2]);
+                                (&inputs[0], &inputs[1], &inputs[2]);
 
                             let in_dim = weight_node.out_dims.as_ref().unwrap()[1];
                             let out_dim = weight_node.out_dims.as_ref().unwrap()[0];
@@ -1009,6 +954,7 @@ impl OnnxModel {
                         }
                         FusedOp::Pow(_) => {
                             let mult = scale_to_multiplier(self.scale);
+                            node.inputs.pop();
                             let pow = inputs[1].output_max / mult;
                             node.output_max = f32::powf(
                                 inputs
@@ -1024,97 +970,52 @@ impl OnnxModel {
                             node.opkind = OpKind::Fused(FusedOp::Pow(pow as usize));
                         }
                     }
-                    let scale_diff = node.in_scale - self.scale;
                     // output size
                     node.min_cols += node.out_dims.clone().unwrap()
                         [0..node.out_dims.clone().unwrap().len() - 1]
                         .iter()
                         .product::<usize>()
                         + 1;
-                    if scale_diff > 0 {
-                        // new op node
-
-                        node.inter_idx = Some(inter_idx);
-                        let mult = scale_to_multiplier(scale_diff);
-                        node.opkind = OpKind::Rescaled(Box::new(OpKind::Fused(s)), mult as usize); // now the input will be scaled down to match
-                        node.output_max /= mult;
-                        node.out_scale -= scale_diff;
-                        node.min_cols = max(
-                            node.min_cols,
-                            node.in_dims.as_ref().unwrap().iter().product(),
-                        );
-                    }
                 }
                 OpKind::Input => {}
-                _ => node.inter_idx = None,
+                _ => node.bucket = None,
             };
 
-            self.calc_inter_idx(&mut node, &mut inter_idx, order_len, node_idx);
-            self.onnx_nodes[node_idx] = node;
+            match node.opkind {
+                OpKind::Const => node.bucket = None,
+                _ => node.bucket = Some(bucket),
+            }
+
+            let any_fused_inputs = node
+                .inputs
+                .iter()
+                .map(|i| self.onnx_nodes.filter(i.node))
+                .any(|n| n.opkind.is_fused());
+
+            match (&node.opkind, &any_fused_inputs) {
+                (OpKind::Const, _) => {}
+                (OpKind::Fused(_), true) => {}
+                (OpKind::Fused(_), false) => {
+                    // bucket += 1;
+                }
+                (_, false) => {
+                    bucket += 1;
+                }
+                (_, true) => {
+                    bucket += 1;
+                    node.bucket = Some(bucket);
+                    bucket += 1;
+                }
+            }
+
+            bucketed_nodes.insert(node.bucket, node.clone());
         }
+
+        self.onnx_nodes = bucketed_nodes;
 
         Ok(())
     }
 
-    pub fn calc_inter_idx(
-        &self,
-        node: &mut OnnxNode,
-        inter_idx: &mut usize,
-        num_nodes: usize,
-        node_idx: usize,
-    ) {
-        match node.opkind {
-            OpKind::Const => node.inter_idx = None,
-            _ => node.inter_idx = Some(*inter_idx),
-        }
-
-        if node_idx < num_nodes - 1 {
-            let mut next_node = &self.onnx_nodes[node_idx + 1];
-            for n in self.onnx_nodes[node_idx + 1..].iter() {
-                match n.opkind {
-                    OpKind::Const => continue,
-                    _ => {
-                        next_node = n;
-                        break;
-                    }
-                }
-            }
-            match (&node.opkind, &next_node.opkind) {
-                (OpKind::Const, _) => {}
-                (OpKind::Fused(_), OpKind::Fused(_)) => {}
-                (_, _) => *inter_idx += 1,
-            }
-        }
-
-        if node_idx > 0 {
-            let mut prev_node = &self.onnx_nodes[node_idx - 1];
-            for n in self.onnx_nodes[0..node_idx].iter().rev() {
-                match n.opkind {
-                    OpKind::Const => continue,
-                    _ => {
-                        prev_node = n;
-                        break;
-                    }
-                }
-            }
-            match (&prev_node.opkind, &node.opkind) {
-                (OpKind::Fused(_), OpKind::Rescaled(_, _)) => {
-                    node.inter_idx = Some(*inter_idx);
-                }
-                _ => {}
-            }
-        }
-    }
-
-    pub fn idx_to_inter_idx(&self, indices: &[usize]) -> Vec<usize> {
-        let mut result = vec![];
-        for i in indices {
-            if !self.onnx_nodes[*i].inter_idx.is_none() {
-                result.push(self.onnx_nodes[*i].inter_idx.unwrap());
-            }
-        }
-        result
-    }
     // Make a recursive backward pass to shape and quantize?
 
     /// Get a linear extension of the model (an evaluation order), for example to feed to circuit construction.
@@ -1143,7 +1044,12 @@ impl OnnxModel {
     }
 
     pub fn max_node_advices(&self) -> usize {
-        self.onnx_nodes.iter().map(|n| n.min_cols).max().unwrap()
+        self.onnx_nodes
+            .flatten()
+            .iter()
+            .map(|e| e.min_cols)
+            .max()
+            .unwrap()
     }
 
     pub fn max_advices_width(&self) -> Result<usize> {

@@ -10,7 +10,7 @@ use itertools::Itertools;
 use std::fmt;
 use std::marker::PhantomData;
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq, Copy)]
 pub enum FusedOp {
     Add,
     Sub,
@@ -71,17 +71,15 @@ pub struct FusedConfig<F: FieldExt + TensorType> {
 impl<F: FieldExt + TensorType> FusedConfig<F> {
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
-        variables: &[VarTensor],
+        inputs: &[VarTensor],
+        output: &VarTensor,
         nodes: &[FusedNode],
     ) -> Self {
-        let inputs = variables[0..variables.len() - 1].to_vec();
-        let output = variables[variables.len() - 1].clone();
-
         let mut config = Self {
             selector: meta.selector(),
             nodes: nodes.to_vec(),
-            inputs,
-            output,
+            inputs: inputs.to_vec(),
+            output: output.clone(),
             _marker: PhantomData,
         };
 

@@ -189,7 +189,7 @@ where
             ],
         };
 
-        let l0 = FusedConfig::configure(cs, &[input, kernel, bias, output], &[conv_node]);
+        let l0 = FusedConfig::configure(cs, &[input, kernel, bias], &output, &[conv_node]);
 
         let l1: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
             cs,
@@ -216,9 +216,9 @@ where
                 advices.get_slice(&[1..CLASSES + 1], &[CLASSES, LEN]),
                 // bias
                 advices.get_slice(&[CLASSES + 1..CLASSES + 2], &[CLASSES]),
-                // output
-                advices.get_slice(&[CLASSES + 2..CLASSES + 3], &[CLASSES]),
             ],
+            // output
+            &advices.get_slice(&[CLASSES + 2..CLASSES + 3], &[CLASSES]),
             &[affine_node],
         );
         let public_output: Column<Instance> = cs.instance_column();
