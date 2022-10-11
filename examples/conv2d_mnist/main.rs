@@ -8,7 +8,7 @@ use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, Column, ConstraintSystem, Error,
-        Fixed, Instance,
+        Instance,
     },
     poly::{
         commitment::ParamsProver,
@@ -51,10 +51,10 @@ struct Config<
     Value<F>: TensorType,
 {
     // this will be a conv layer
-    l0: BasicConfig<F>,
+    l0: FusedConfig<F>,
     l1: EltwiseConfig<F, ReLu<F>>,
     // this will be an affine layer
-    l2: BasicConfig<F>,
+    l2: FusedConfig<F>,
     public_output: Column<Instance>,
 }
 
@@ -141,10 +141,7 @@ where
         let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
-        let num_advices = max(
-            LEN,
-            CLASSES + 3,
-        );
+        let num_advices = max(LEN, CLASSES + 3);
 
         let advices = VarTensor::from(Tensor::from((0..num_advices).map(|_| {
             let col = cs.advice_column();
@@ -183,13 +180,16 @@ where
         );
 
         // tells the config layer to add a conv op to a circuit gate
-        let conv_node = BasicOpNode {
-            op: BasicOp::Conv((PADDING, PADDING), (STRIDE, STRIDE)),
-            input_idx: vec![0, 1, 2],
-            node_idx: vec![],
+        let conv_node = FusedNode {
+            op: FusedOp::Conv((PADDING, PADDING), (STRIDE, STRIDE)),
+            input_order: vec![
+                FusedInputType::Input(0),
+                FusedInputType::Input(1),
+                FusedInputType::Input(2),
+            ],
         };
 
-        let l0 = BasicConfig::configure(cs, &[input, kernel, bias, output], &[conv_node]);
+        let l0 = FusedConfig::configure(cs, &[input, kernel, bias, output], &[conv_node]);
 
         let l1: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
             cs,
@@ -198,13 +198,16 @@ where
         );
 
         // tells the config layer to add an affine op to the circuit gate
-        let affine_node = BasicOpNode {
-            op: BasicOp::Affine,
-            input_idx: vec![0, 1, 2],
-            node_idx: vec![],
+        let affine_node = FusedNode {
+            op: FusedOp::Affine,
+            input_order: vec![
+                FusedInputType::Input(0),
+                FusedInputType::Input(1),
+                FusedInputType::Input(2),
+            ],
         };
 
-        let l2 = BasicConfig::configure(
+        let l2 = FusedConfig::configure(
             cs,
             &[
                 // input

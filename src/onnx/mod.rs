@@ -35,19 +35,14 @@ impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
             onnx_model.max_advices_width().unwrap(),
         );
         info!("number of advices used: {:?}", num_advices);
-        let num_fixeds = onnx_model.max_fixeds_width().unwrap();
+        // let num_fixeds = onnx_model.max_fixeds_width().unwrap();
         let advices = VarTensor::from(Tensor::from((0..num_advices + 3).map(|_| {
             let col = meta.advice_column();
             meta.enable_equality(col);
             col
         })));
-        let fixeds = VarTensor::from(Tensor::from((0..num_fixeds + 3).map(|_| {
-            let col = meta.fixed_column();
-            meta.enable_equality(col);
-            col
-        })));
 
-        onnx_model.configure(meta, advices, fixeds).unwrap()
+        onnx_model.configure(meta, advices).unwrap()
     }
 
     fn synthesize(

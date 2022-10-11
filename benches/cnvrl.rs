@@ -9,7 +9,6 @@ use halo2_proofs::{
 };
 use halo2curves::pasta::pallas;
 use rand::rngs::OsRng;
-use std::cmp::max;
 
 static mut KERNEL_HEIGHT: usize = 2;
 static mut KERNEL_WIDTH: usize = 2;
@@ -34,7 +33,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F>
 where
     Value<F>: TensorType,
 {
-    type Config = BasicConfig<F>;
+    type Config = FusedConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -87,10 +86,13 @@ where
             );
 
             // tells the config layer to add a conv op to a circuit gate
-            let conv_node = BasicOpNode {
-                op: BasicOp::Conv((PADDING, PADDING), (STRIDE, STRIDE)),
-                input_idx: vec![0, 1, 2],
-                node_idx: vec![],
+            let conv_node = FusedNode {
+                op: FusedOp::Conv((PADDING, PADDING), (STRIDE, STRIDE)),
+                input_order: vec![
+                    FusedInputType::Input(0),
+                    FusedInputType::Input(1),
+                    FusedInputType::Input(2),
+                ],
             };
 
             Self::Config::configure(meta, &[input, kernel, bias, output], &[conv_node])

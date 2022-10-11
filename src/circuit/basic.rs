@@ -6,11 +6,12 @@ use halo2_proofs::{
     circuit::Layouter,
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
 };
+use itertools::Itertools;
 use std::fmt;
 use std::marker::PhantomData;
 
 #[derive(Clone, Debug, Copy)]
-pub enum BasicOp {
+pub enum FusedOp {
     Add,
     Sub,
     Sum,
@@ -22,52 +23,56 @@ pub enum BasicOp {
     Pow(usize),
 }
 
-impl fmt::Display for BasicOp {
+impl fmt::Display for FusedOp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            BasicOp::Add => write!(f, "add"),
-            BasicOp::Sub => write!(f, "sub"),
-            BasicOp::Sum => write!(f, "sum"),
-            BasicOp::Mult => write!(f, "mult"),
-            BasicOp::Matmul => write!(f, "matmul"),
-            BasicOp::Dot => write!(f, "dot"),
-            BasicOp::Affine => write!(f, "affine"),
-            BasicOp::Conv(padding, stride) => {
+            FusedOp::Add => write!(f, "add"),
+            FusedOp::Sub => write!(f, "sub"),
+            FusedOp::Sum => write!(f, "sum"),
+            FusedOp::Mult => write!(f, "mult"),
+            FusedOp::Matmul => write!(f, "matmul"),
+            FusedOp::Dot => write!(f, "dot"),
+            FusedOp::Affine => write!(f, "affine"),
+            FusedOp::Conv(padding, stride) => {
                 write!(f, "conv w/ padding: {:?}, stride: {:?}", padding, stride)
             }
-            BasicOp::Pow(s) => write!(f, "pow {}", s),
+            FusedOp::Pow(s) => write!(f, "pow {}", s),
         }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct BasicOpNode {
+pub enum FusedInputType {
+    Input(usize),
+    Inter(usize),
+}
+
+#[derive(Clone, Debug)]
+pub struct FusedNode {
     /// the type of operation
-    pub op: BasicOp,
-    /// indices for the `VarTensor` inputs the operation should ingest.
-    pub input_idx: Vec<usize>,
-    /// indices for the outputs of other nodes the operation should ingest.
-    pub node_idx: Vec<usize>,
+    pub op: FusedOp,
+    /// execution order.
+    pub input_order: Vec<FusedInputType>,
 }
 
 /// Configuration for a basic sequence of operations all fused together in a single gate.
 #[derive(Clone, Debug)]
-pub struct BasicConfig<F: FieldExt + TensorType> {
+pub struct FusedConfig<F: FieldExt + TensorType> {
     pub inputs: Vec<VarTensor>,
-    nodes: Vec<BasicOpNode>,
+    nodes: Vec<FusedNode>,
     pub output: VarTensor,
     pub selector: Selector,
     _marker: PhantomData<F>,
 }
 
-/// Configures the sequence of operations into a circuit gate, represented as an array of `BasicOpNode`.
-/// `variables` represents the potential inputs to each operation. `BasicOpNode`s index over these inputs using their `input_idx` attribute.
+/// Configures the sequence of operations into a circuit gate, represented as an array of `FusedOpNode`.
+/// `variables` represents the potential inputs to each operation. `FusedOpNode`s index over these inputs using their `input_idx` attribute.
 /// They can also ingest the intermediate outputs of other nodes, as represented by the `node_idx` attribute.
-impl<F: FieldExt + TensorType> BasicConfig<F> {
+impl<F: FieldExt + TensorType> FusedConfig<F> {
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         variables: &[VarTensor],
-        nodes: &[BasicOpNode],
+        nodes: &[FusedNode],
     ) -> Self {
         let inputs = variables[0..variables.len() - 1].to_vec();
         let output = variables[variables.len() - 1].clone();
@@ -87,42 +92,44 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
                 .iter()
                 .map(|input| input.query(meta, 0))
                 .collect::<Vec<_>>();
+
             let mut config_outputs = vec![];
             for node in config.nodes.iter_mut() {
-                let mut op_inputs = node.input_idx.iter().map(|i| &qis[*i]).collect::<Vec<_>>();
-                let mut node_inputs = node
-                    .node_idx
+                let op_inputs = node
+                    .input_order
                     .iter()
-                    .map(|i| &config_outputs[*i])
-                    .collect::<Vec<_>>();
-                op_inputs.append(&mut node_inputs);
+                    .map(|input| match input {
+                        FusedInputType::Input(u) => &qis[*u],
+                        FusedInputType::Inter(u) => &config_outputs[*u],
+                    })
+                    .collect_vec();
                 match node.op {
-                    BasicOp::Add => {
+                    FusedOp::Add => {
                         config_outputs.push(add(&op_inputs));
                     }
-                    BasicOp::Sub => {
+                    FusedOp::Sub => {
                         config_outputs.push(sub(&op_inputs));
                     }
-                    BasicOp::Mult => {
+                    FusedOp::Mult => {
                         config_outputs.push(mult(&op_inputs));
                     }
-                    BasicOp::Affine => {
+                    FusedOp::Affine => {
                         config_outputs.push(affine(&op_inputs));
                     }
-                    BasicOp::Matmul => {
+                    FusedOp::Matmul => {
                         config_outputs.push(matmul(&op_inputs));
                     }
-                    BasicOp::Dot => {
+                    FusedOp::Dot => {
                         todo!();
                     }
-                    BasicOp::Conv(padding, stride) => {
+                    FusedOp::Conv(padding, stride) => {
                         config_outputs.push(convolution(&op_inputs, padding, stride));
                     }
-                    BasicOp::Pow(u) => {
+                    FusedOp::Pow(u) => {
                         assert_eq!(op_inputs.len(), 1);
                         config_outputs.push(pow(op_inputs[0], u));
                     }
-                    BasicOp::Sum => {
+                    FusedOp::Sum => {
                         assert_eq!(op_inputs.len(), 1);
                         config_outputs.push(sum(op_inputs[0]));
                     }
@@ -170,44 +177,42 @@ impl<F: FieldExt + TensorType> BasicConfig<F> {
                     let mut layout_outputs = vec![];
 
                     for node in self.nodes.iter_mut() {
-                        let mut op_inputs = node
-                            .input_idx
+                        let op_inputs = node
+                            .input_order
                             .iter()
-                            .map(|i| &inputs[*i])
-                            .collect::<Vec<_>>();
-                        let mut node_inputs = node
-                            .node_idx
-                            .iter()
-                            .map(|i| &layout_outputs[*i])
-                            .collect::<Vec<_>>();
-                        op_inputs.append(&mut node_inputs);
+                            .map(|input| match input {
+                                FusedInputType::Input(u) => &inputs[*u],
+                                FusedInputType::Inter(u) => &layout_outputs[*u],
+                            })
+                            .collect_vec();
+
                         match node.op {
-                            BasicOp::Add => {
+                            FusedOp::Add => {
                                 layout_outputs.push(add(&op_inputs));
                             }
-                            BasicOp::Sub => {
+                            FusedOp::Sub => {
                                 layout_outputs.push(sub(&op_inputs));
                             }
-                            BasicOp::Mult => {
+                            FusedOp::Mult => {
                                 layout_outputs.push(mult(&op_inputs));
                             }
-                            BasicOp::Affine => {
+                            FusedOp::Affine => {
                                 layout_outputs.push(affine(&op_inputs));
                             }
-                            BasicOp::Matmul => {
+                            FusedOp::Matmul => {
                                 layout_outputs.push(matmul(&op_inputs));
                             }
-                            BasicOp::Dot => {
+                            FusedOp::Dot => {
                                 todo!();
                             }
-                            BasicOp::Conv(padding, stride) => {
+                            FusedOp::Conv(padding, stride) => {
                                 layout_outputs.push(convolution(&op_inputs, padding, stride));
                             }
-                            BasicOp::Pow(u) => {
+                            FusedOp::Pow(u) => {
                                 assert_eq!(op_inputs.len(), 1);
                                 layout_outputs.push(pow(op_inputs[0], u));
                             }
-                            BasicOp::Sum => {
+                            FusedOp::Sum => {
                                 assert_eq!(op_inputs.len(), 1);
                                 layout_outputs.push(sum(op_inputs[0]));
                             }

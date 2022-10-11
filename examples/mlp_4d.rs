@@ -14,9 +14,9 @@ use std::marker::PhantomData;
 // A columnar ReLu MLP
 #[derive(Clone)]
 struct MyConfig<F: FieldExt + TensorType> {
-    l0: BasicConfig<F>,
+    l0: FusedConfig<F>,
     l1: EltwiseConfig<F, ReLu<F>>,
-    l2: BasicConfig<F>,
+    l2: FusedConfig<F>,
     l3: EltwiseConfig<F, ReLu<F>>,
     l4: EltwiseConfig<F, DivideBy<F>>,
     public_output: Column<Instance>,
@@ -61,19 +61,22 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let output = advices.get_slice(&[LEN + 1..LEN + 2], &[LEN]);
 
         // tells the config layer to add an affine op to the circuit gate
-        let affine_node = BasicOpNode {
-            op: BasicOp::Affine,
-            input_idx: vec![0, 1, 2],
-            node_idx: vec![],
+        let affine_node = FusedNode {
+            op: FusedOp::Affine,
+            input_order: vec![
+                FusedInputType::Input(0),
+                FusedInputType::Input(1),
+                FusedInputType::Input(2),
+            ],
         };
 
-        let l0 = BasicConfig::<F>::configure(
+        let l0 = FusedConfig::<F>::configure(
             cs,
             &[input.clone(), kernel.clone(), bias.clone(), output.clone()],
             &[affine_node.clone()],
         );
 
-        let l2 = BasicConfig::<F>::configure(
+        let l2 = FusedConfig::<F>::configure(
             cs,
             &[input.clone(), kernel.clone(), bias.clone(), output.clone()],
             &[affine_node],
