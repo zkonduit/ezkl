@@ -1,4 +1,4 @@
-use ezkl::circuit::basic::*;
+use ezkl::circuit::fused::*;
 use ezkl::circuit::eltwise::{EltwiseConfig, ReLu};
 use ezkl::fieldutils;
 use ezkl::fieldutils::i32_to_felt;

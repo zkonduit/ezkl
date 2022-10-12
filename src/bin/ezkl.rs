@@ -36,14 +36,14 @@ use tabled::Table;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct OnnxInput {
-    input_data: Vec<f32>,
-    input_shape: Vec<usize>,
+    input_data: Vec<Vec<f32>>,
+    input_shapes: Vec<Vec<usize>>,
     public_input: Vec<f32>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Proof {
-    input_shape: Vec<usize>,
+    input_shapes: Vec<Vec<usize>>,
     public_input: Vec<i32>,
     proof: Vec<u8>,
 }
@@ -118,7 +118,7 @@ pub fn main() {
             let pi: Vec<_> = public_input.into_iter().collect();
 
             let checkable_pf = Proof {
-                input_shape: circuit.input.dims().to_vec(),
+                input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
                 public_input: pi,
                 proof,
             };
@@ -167,9 +167,15 @@ fn prepare_circuit<F: FieldExt>(data: OnnxInput) -> OnnxCircuit<F> {
     let args = Cli::parse();
 
     // quantize the supplied data using the provided scale.
-    let input = vector_to_quantized(&data.input_data, &data.input_shape, 0.0, args.scale).unwrap();
+    let inputs = data
+        .input_data
+        .iter()
+        .zip(data.input_shapes)
+        .map(|(i, s)| vector_to_quantized(&i, &s, 0.0, args.scale).unwrap())
+        .collect();
+    println!("inputs {:?}", inputs);
     OnnxCircuit::<F> {
-        input,
+        inputs,
         _marker: PhantomData,
     }
 }
@@ -191,7 +197,7 @@ fn create_ipa_proof(
     circuit: OnnxCircuit<Fp>,
     public_input: Tensor<i32>,
     params: &ParamsIPA<vesta::Affine>,
-) -> (ProvingKey<EqAffine>, Vec<u8>, Vec<usize>) {
+) -> (ProvingKey<EqAffine>, Vec<u8>, Vec<Vec<usize>>) {
     //let args = Cli::parse();
     //	Real proof
     let empty_circuit = circuit.without_witnesses();
@@ -213,7 +219,7 @@ fn create_ipa_proof(
     let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner.into_iter().collect::<Vec<F>>()]];
     trace!("pi for real prover {:?}", pi_for_real_prover);
 
-    let dims = circuit.input.dims().to_vec();
+    let dims = circuit.inputs.iter().map(|i| i.dims().to_vec()).collect();
 
     create_proof::<IPACommitmentScheme<_>, ProverIPA<_>, _, _, _, _>(
         params,
@@ -235,13 +241,13 @@ fn verify_ipa_proof(proof: Proof) -> bool {
     let args = Cli::parse();
     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
 
-    let input = Tensor::new(
-        Some(&vec![0; proof.input_shape.iter().product()]),
-        &proof.input_shape,
-    )
-    .unwrap();
+    let inputs = proof
+        .input_shapes
+        .iter()
+        .map(|s| Tensor::new(Some(&vec![0; s.iter().product()]), s).unwrap())
+        .collect();
     let circuit = OnnxCircuit::<F> {
-        input,
+        inputs,
         _marker: PhantomData,
     };
     let empty_circuit = circuit.without_witnesses();

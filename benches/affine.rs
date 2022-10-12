@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::circuit::basic::*;
+use ezkl::circuit::fused::*;
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
@@ -55,7 +55,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
         Self::Config::configure(
             cs,
             &[input.clone(), kernel.clone(), bias.clone()],
-            & output.clone(),
+            &output.clone(),
             &[affine_node],
         )
     }

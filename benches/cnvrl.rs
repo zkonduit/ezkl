@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::circuit::basic::*;
+use ezkl::circuit::fused::*;
 use ezkl::tensor::*;
 use halo2_proofs::{
     arithmetic::{Field, FieldExt},

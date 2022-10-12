@@ -1,6 +1,6 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
-use crate::circuit::basic::*;
 use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
+use crate::circuit::fused::*;
 use crate::commands::{model_path, Cli, Commands};
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
@@ -183,7 +183,7 @@ impl OnnxNode {
         let in_dims = None;
         let mut out_dims = None;
         let mut output_max = f32::INFINITY;
-        let bucket = None;
+        let mut bucket = None;
 
         match opkind {
             OpKind::Const => {
@@ -235,6 +235,8 @@ impl OnnxNode {
 
                 output_max = 256.0;
                 out_scale = in_scale;
+
+                bucket = Some(idx);
             }
             OpKind::Fused(FusedOp::Conv(_, _)) => {
                 // Extract the padding and stride layer hyperparams
@@ -649,7 +651,7 @@ impl OnnxModel {
                 NodeConfigTypes::Input
             }
             OpKind::Fused(s) => {
-                error!("For {:?} call fuse_basic_ops instead", s);
+                error!("For {:?} call fuse_fused_ops instead", s);
                 panic!();
             }
             OpKind::Unknown(c) => {
@@ -666,11 +668,13 @@ impl OnnxModel {
         &self,
         config: OnnxModelConfig<F>,
         layouter: &mut impl Layouter<F>,
-        input: ValTensor<F>,
+        inputs: &[ValTensor<F>],
     ) -> Result<ValTensor<F>> {
         info!("model layout");
         let mut results = HashMap::new();
-        results.insert(0, input);
+        for i in inputs.iter().enumerate() {
+            results.insert(i.0, i.1.clone());
+        }
         for (bucket, node_config) in config.configs.0.iter().sorted_by_key(|x| x.0) {
             match bucket {
                 // assert!(self.config_matches(&node.opkind, &node_config.config));
@@ -772,7 +776,14 @@ impl OnnxModel {
         info!("quantizing model activations");
         let order = self.eval_order()?;
 
-        let mut bucket = 0;
+        let mut bucket = order
+            .iter()
+            .map(|i| {
+                let n = self.onnx_nodes.filter(*i);
+                matches!(n.opkind, OpKind::Input)
+            })
+            .filter(|b| *b)
+            .count();
 
         let mut bucketed_nodes = NodeGraph(HashMap::<Option<usize>, Vec<OnnxNode>>::new());
         for node_idx in order {
@@ -979,12 +990,15 @@ impl OnnxModel {
                         .product::<usize>()
                         + 1;
                 }
-                OpKind::Input => {}
+                OpKind::Input => {
+                    node.bucket = Some(node.idx);
+                }
                 _ => node.bucket = None,
             };
 
             match node.opkind {
                 OpKind::Const => node.bucket = None,
+                OpKind::Input => {}
                 _ => node.bucket = Some(bucket),
             }
 
@@ -995,13 +1009,13 @@ impl OnnxModel {
                 .any(|n| n.opkind.is_fused());
 
             match (&node.opkind, &any_fused_inputs) {
+                (OpKind::Input, _) => {}
                 (OpKind::Const, _) => {}
                 (OpKind::Fused(_), true) => {}
-                (OpKind::Fused(_), false) => {
-                    // bucket += 1;
-                }
+                (OpKind::Fused(_), false) => {}
                 (_, false) => {
                     bucket += 1;
+                    // node.bucket = Some(bucket);
                 }
                 (_, true) => {
                     bucket += 1;

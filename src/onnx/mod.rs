@@ -16,7 +16,7 @@ pub use onnxmodel::*;
 
 #[derive(Clone, Debug)]
 pub struct OnnxCircuit<F: FieldExt> {
-    pub input: Tensor<i32>,
+    pub inputs: Vec<Tensor<i32>>,
     pub _marker: PhantomData<F>,
 }
 
@@ -51,13 +51,15 @@ impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         trace!("Setting input in synthesize");
-        let input = ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(
-            self.input.clone(),
-        ));
+        let inputs = self
+            .inputs
+            .iter()
+            .map(|i| ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(i.clone())))
+            .collect::<Vec<ValTensor<F>>>();
         trace!("Setting output in synthesize");
         let output = config
             .model
-            .layout(config.clone(), &mut layouter, input)
+            .layout(config.clone(), &mut layouter, &inputs)
             .unwrap();
 
         trace!("Laying out output in synthesize");
