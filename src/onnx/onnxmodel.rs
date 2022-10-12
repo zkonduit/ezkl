@@ -187,7 +187,7 @@ impl OnnxNode {
         let in_dims = None;
         let mut out_dims = None;
         let mut output_max = f32::INFINITY;
-        let mut bucket = None;
+        let bucket = None;
 
         match opkind {
             OpKind::Const => {
@@ -446,7 +446,6 @@ impl OnnxModel {
                 .filter(|n| !n.opkind.is_fused())
                 .collect();
 
-            // these are const nodes
             if !non_fused_ops.is_empty() {
                 let idxs: Vec<usize> = non_fused_ops.iter().map(|n| n.idx).collect();
                 for (i, n) in idxs.iter().zip(non_fused_ops) {
@@ -460,6 +459,7 @@ impl OnnxModel {
                 }
             }
 
+            // preserves ordering
             let fused_ops: Vec<&OnnxNode> =
                 block_nodes.iter().filter(|n| n.opkind.is_fused()).collect();
             if !fused_ops.is_empty() {
@@ -498,7 +498,6 @@ impl OnnxModel {
             .collect();
 
         let node_ids: Vec<usize> = nodes.iter().map(|e| e.idx).collect();
-        println!("node ids: {:?}", node_ids);
         let input_nodes: Vec<Vec<OnnxNode>> = nodes
             .iter()
             .map(|e| {
@@ -675,14 +674,14 @@ impl OnnxModel {
         inputs: &[ValTensor<F>],
     ) -> Result<ValTensor<F>> {
         info!("model layout");
-        let mut results = HashMap::new();
+        let mut results = HashMap::<usize, ValTensor<F>>::new();
         for i in inputs.iter().enumerate() {
             results.insert(i.0, i.1.clone());
         }
         for (bucket, node_config) in config.configs.0.iter().sorted_by_key(|x| x.0) {
             match bucket {
                 // assert!(self.config_matches(&node.opkind, &node_config.config));
-                Some(i) => {
+                Some(_b) => {
                     for c in node_config.iter() {
                         let mut display: String = "".to_string();
                         for (i, idx) in c.onnx_idx[0..].iter().enumerate() {
@@ -704,11 +703,13 @@ impl OnnxModel {
 
                         info!("{}", display);
 
-                        if let Some(vt) = self.layout_config(layouter, &mut results, &c.config)? {
-                            results.insert(*i, vt);
+                        if let Some(vt) = self.layout_config(layouter, &mut results, c)? {
+                            // we get the max as for fused nodes this corresponds to the node output
+                            let idx = *c.onnx_idx.iter().max().unwrap();
+                            results.insert(idx, vt);
                             //only use with mock prover
                             if matches!(self.mode, Mode::Mock) {
-                                trace!("  output {:?}", results.get(i).unwrap().show());
+                                trace!("  output {:?}", results.get(&idx).unwrap().show());
                             }
                         }
                     }
@@ -716,8 +717,10 @@ impl OnnxModel {
                 None => {} // Some nodes don't produce tensor output, we skip these
             };
         }
-
-        Ok(results.get(&(results.len() - 1)).unwrap().clone())
+        Ok(results
+            .get(&(results.keys().max().unwrap()))
+            .unwrap()
+            .clone())
     }
 
     // Takes an input ValTensor; alternatively we could recursively layout all the predecessor tensors
@@ -728,10 +731,10 @@ impl OnnxModel {
         &self,
         layouter: &mut impl Layouter<F>,
         inputs: &mut HashMap<usize, ValTensor<F>>,
-        config: &NodeConfigTypes<F>,
+        config: &NodeConfig<F>,
     ) -> Result<Option<ValTensor<F>>> {
         // The node kind and the config should be the same.
-        let res = match config.clone() {
+        let res = match config.config.clone() {
             NodeConfigTypes::Fused(mut ac, idx) => {
                 let values: Vec<ValTensor<F>> = idx
                     .iter()
@@ -746,7 +749,7 @@ impl OnnxModel {
                                     .unwrap();
                                 <Tensor<i32> as Into<Tensor<Value<F>>>>::into(val).into()
                             }
-                            Some(u) => inputs.get(&u).unwrap().clone(),
+                            Some(_b) => inputs.get(&i).unwrap().clone(),
                         }
                     })
                     .collect_vec();
@@ -755,16 +758,13 @@ impl OnnxModel {
             }
             NodeConfigTypes::ReLU(rc, idx) => {
                 assert_eq!(idx.len(), 1);
-                // input should not be a parameter and thus should have the intermediate index
-                let node = &self.onnx_nodes.filter(idx[0]).bucket.unwrap();
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
-                Some(rc.layout(layouter, &[inputs.get(node).unwrap().clone()]))
+                Some(rc.layout(layouter, &[inputs.get(&idx[0]).unwrap().clone()]))
             }
             NodeConfigTypes::Sigmoid(sc, idx) => {
                 assert_eq!(idx.len(), 1);
-                // input should not be a parameter and thus should have the intermediate index
-                let node = &self.onnx_nodes.filter(idx[0]).bucket.unwrap();
-                Some(sc.layout(layouter, &[inputs.get(node).unwrap().clone()]))
+
+                Some(sc.layout(layouter, &[inputs.get(&idx[0]).unwrap().clone()]))
             }
             NodeConfigTypes::Input => None,
             c => {
@@ -994,17 +994,7 @@ impl OnnxModel {
 
         let bucketed_nodes = self.assign_execution_buckets(nodes, order);
 
-        println!(
-            "{:?}",
-            bucketed_nodes.0.iter().map(|(b, _)| b).collect::<Vec<_>>()
-        );
-
         self.onnx_nodes = bucketed_nodes;
-
-        println!(
-            "{:?}",
-            self.onnx_nodes.0.iter().map(|(b, _)| b).collect::<Vec<_>>()
-        );
 
         Ok(())
     }
