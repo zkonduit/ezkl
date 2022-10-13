@@ -14,7 +14,7 @@ use halo2_proofs::{
 use itertools::Itertools;
 use log::{debug, error, info, trace, warn};
 use std::cmp::max;
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::collections::{hash_map::Entry, HashMap};
 use std::fmt;
 use std::path::Path;
 use tabled::{Table, Tabled};
@@ -313,20 +313,20 @@ impl OnnxNode {
 }
 
 #[derive(Clone, Default, Debug)]
-pub struct NodeGraph<T: Clone>(HashMap<Option<usize>, Vec<T>>);
+pub struct NodeGraph<T: Clone>(HashMap<Option<usize>, HashMap<usize, T>>);
 
 impl<T: Clone> NodeGraph<T> {
     pub fn new() -> Self {
         NodeGraph(HashMap::new())
     }
 
-    fn insert(&mut self, idx: Option<usize>, config: T) {
+    fn insert(&mut self, idx: Option<usize>, node_idx: usize, config: T) {
         match self.0.entry(idx) {
             Entry::Vacant(e) => {
-                e.insert(vec![config]);
+                e.insert(HashMap::from([(node_idx, config)]));
             }
             Entry::Occupied(mut e) => {
-                e.get_mut().push(config);
+                e.get_mut().insert(node_idx, config);
             }
         }
     }
@@ -334,7 +334,12 @@ impl<T: Clone> NodeGraph<T> {
 
 impl NodeGraph<OnnxNode> {
     pub fn flatten(&self) -> Vec<OnnxNode> {
-        let a = self.0.clone().into_values().collect::<Vec<Vec<OnnxNode>>>();
+        let a = self
+            .0
+            .clone()
+            .into_values()
+            .map(|d| d.into_values().collect())
+            .collect::<Vec<Vec<OnnxNode>>>();
         let mut c: Vec<OnnxNode> = a
             .iter()
             .flatten()
@@ -380,11 +385,11 @@ impl OnnxModel {
     pub fn new(path: impl AsRef<Path>, scale: i32, bits: usize, mode: Mode) -> Self {
         let model = tract_onnx::onnx().model_for_path(path).unwrap();
 
-        let onnx_nodes: Vec<OnnxNode> = model
+        let onnx_nodes: HashMap<usize, OnnxNode> = model
             .nodes()
             .iter()
             .enumerate()
-            .map(|(i, n)| OnnxNode::new(n.clone(), scale, i))
+            .map(|(i, n)| (i, OnnxNode::new(n.clone(), scale, i)))
             .collect();
 
         let mut map = HashMap::new();
@@ -441,33 +446,40 @@ impl OnnxModel {
         let mut results = NodeGraph::default();
 
         for (b, block_nodes) in self.onnx_nodes.0.iter() {
-            let non_fused_ops: Vec<&OnnxNode> = block_nodes
+            let non_fused_ops: HashMap<&usize, &OnnxNode> = block_nodes
                 .iter()
-                .filter(|n| !n.opkind.is_fused())
+                .filter(|(_, n)| !n.opkind.is_fused())
                 .collect();
 
             if !non_fused_ops.is_empty() {
-                let idxs: Vec<usize> = non_fused_ops.iter().map(|n| n.idx).collect();
-                for (i, n) in idxs.iter().zip(non_fused_ops) {
+                for (i, n) in non_fused_ops.iter() {
                     results.insert(
                         *b,
+                        **i,
                         NodeConfig {
                             config: self.configure_table(n, meta, advices.clone()),
-                            onnx_idx: vec![*i],
+                            onnx_idx: vec![**i],
                         },
                     );
                 }
             }
 
             // preserves ordering
-            let fused_ops: Vec<&OnnxNode> =
-                block_nodes.iter().filter(|n| n.opkind.is_fused()).collect();
+            let fused_ops: HashMap<&usize, &OnnxNode> = block_nodes
+                .iter()
+                .filter(|(_, n)| n.opkind.is_fused())
+                .collect();
             if !fused_ops.is_empty() {
                 results.insert(
                     *b,
+                    **fused_ops.keys().max().unwrap(),
                     NodeConfig {
-                        config: self.fuse_ops(fused_ops.clone(), meta, advices.clone()),
-                        onnx_idx: fused_ops.iter().map(|n| n.idx).collect(),
+                        config: self.fuse_ops(
+                            HashMap::from(fused_ops.clone()),
+                            meta,
+                            advices.clone(),
+                        ),
+                        onnx_idx: fused_ops.keys().map(|k| **k).sorted().collect_vec(),
                     },
                 );
             }
@@ -485,66 +497,63 @@ impl OnnxModel {
 
     fn fuse_ops<F: FieldExt + TensorType>(
         &self,
-        nodes: Vec<&OnnxNode>,
+        nodes: HashMap<&usize, &OnnxNode>,
         meta: &mut ConstraintSystem<F>,
         advices: VarTensor,
     ) -> NodeConfigTypes<F> {
-        let ops: Vec<FusedOp> = nodes
+        let input_nodes: HashMap<(&usize, FusedOp), Vec<OnnxNode>> = nodes
             .iter()
-            .map(|e| match e.opkind {
-                OpKind::Fused(f) => f,
-                _ => panic!(),
+            .map(|(i, e)| {
+                let op = match e.opkind {
+                    OpKind::Fused(f) => f.clone(),
+                    _ => panic!(),
+                };
+                (
+                    (*i, op),
+                    e.inputs
+                        .iter()
+                        .map(|i| self.onnx_nodes.filter(i.node))
+                        .collect_vec(),
+                )
             })
             .collect();
 
-        let node_ids: Vec<usize> = nodes.iter().map(|e| e.idx).collect();
-        let input_nodes: Vec<Vec<OnnxNode>> = nodes
-            .iter()
-            .map(|e| {
-                e.inputs
-                    .iter()
-                    .map(|i| self.onnx_nodes.filter(i.node))
-                    .collect_vec()
-            })
-            .collect_vec();
-        // This works because retain only keeps items for which the predicate returns true, and
-        // insert only returns true if the item was not previously present in the set.
-        // Since the vector is traversed in order, we end up keeping just the first occurrence of each item.
-        let mut seen = HashSet::new();
         let inputs_to_fused_layer: Vec<usize> = input_nodes
-            .iter()
+            .values()
             .flat_map(|e| {
                 e.iter()
-                    .filter(|i| !node_ids.contains(&i.idx) && seen.insert(i.idx))
+                    .filter(|i| !nodes.contains_key(&i.idx))
                     .map(|f| f.idx)
                     .collect_vec()
             })
             .collect_vec();
 
         let mut inter_counter = 0;
-        let input_order: Vec<Vec<FusedInputType>> = input_nodes
+        let input_order: HashMap<(&usize, FusedOp), Vec<FusedInputType>> = input_nodes
             .iter()
-            .map(|inputs| {
-                inputs
-                    .iter()
-                    .map(|i| {
-                        if node_ids.contains(&i.idx) {
-                            inter_counter += 1;
-                            FusedInputType::Inter(inter_counter - 1)
-                        } else if inputs_to_fused_layer.contains(&i.idx) {
-                            FusedInputType::Input(
-                                inputs_to_fused_layer
-                                    .iter()
-                                    .position(|&r| r == i.idx)
-                                    .unwrap(),
-                            )
-                        } else {
-                            panic!()
-                        }
-                    })
-                    .collect_vec()
+            .sorted_by_key(|x| x.0 .0)
+            .map(|(i, inputs)| {
+                (
+                    *i,
+                    inputs
+                        .iter()
+                        .map(|i| {
+                            if nodes.contains_key(&i.idx) {
+                                inter_counter += 1;
+                                FusedInputType::Inter(inter_counter - 1)
+                            } else {
+                                FusedInputType::Input(
+                                    inputs_to_fused_layer
+                                        .iter()
+                                        .position(|&r| r == i.idx)
+                                        .unwrap(),
+                                )
+                            }
+                        })
+                        .collect_vec(),
+                )
             })
-            .collect_vec();
+            .collect();
 
         let mut start = 0;
         let mut shapes: Vec<Vec<usize>> = inputs_to_fused_layer
@@ -554,7 +563,7 @@ impl OnnxModel {
         // output node
         shapes.push(
             self.onnx_nodes
-                .filter(node_ids[node_ids.len() - 1])
+                .filter(**nodes.keys().max().unwrap())
                 .out_dims
                 .unwrap(),
         );
@@ -572,12 +581,13 @@ impl OnnxModel {
             .collect();
 
         let mut fused_nodes = vec![];
-        ops.iter()
-            .zip(input_order)
-            .map(|(op, o)| {
+        input_order
+            .iter()
+            .sorted_by_key(|x| x.0 .0)
+            .map(|((_, op), order)| {
                 fused_nodes.push(FusedNode {
                     op: *op,
-                    input_order: o,
+                    input_order: order.clone(),
                 })
             })
             .collect_vec();
@@ -682,19 +692,19 @@ impl OnnxModel {
             match bucket {
                 // assert!(self.config_matches(&node.opkind, &node_config.config));
                 Some(_b) => {
-                    for c in node_config.iter() {
+                    for (idx, c) in node_config.iter().sorted_by_key(|x| x.0) {
                         let mut display: String = "".to_string();
                         for (i, idx) in c.onnx_idx[0..].iter().enumerate() {
                             let node = &self.onnx_nodes.filter(*idx);
                             if i > 0 {
                                 display.push_str(&format!(
-                                    "| combined with node {}, a {:?} |",
+                                    "| combined with node {} ({:?}) ",
                                     idx,
                                     node.node.op().name()
                                 ));
                             } else {
                                 display.push_str(&format!(
-                                    "laying out node {}, a {:?} ",
+                                    "laying out node {} ({:?}) ",
                                     idx,
                                     node.node.op().name()
                                 ));
@@ -705,8 +715,7 @@ impl OnnxModel {
 
                         if let Some(vt) = self.layout_config(layouter, &mut results, c)? {
                             // we get the max as for fused nodes this corresponds to the node output
-                            let idx = *c.onnx_idx.iter().max().unwrap();
-                            results.insert(idx, vt);
+                            results.insert(*idx, vt);
                             //only use with mock prover
                             if matches!(self.mode, Mode::Mock) {
                                 trace!("  output {:?}", results.get(&idx).unwrap().show());
@@ -762,6 +771,7 @@ impl OnnxModel {
                 Some(rc.layout(layouter, &[inputs.get(&idx[0]).unwrap().clone()]))
             }
             NodeConfigTypes::Sigmoid(sc, idx) => {
+                println!("idx {:?}", idx);
                 assert_eq!(idx.len(), 1);
 
                 Some(sc.layout(layouter, &[inputs.get(&idx[0]).unwrap().clone()]))
@@ -780,7 +790,7 @@ impl OnnxModel {
         info!("quantizing model activations");
         let order = self.eval_order()?;
 
-        let mut nodes = NodeGraph(HashMap::<Option<usize>, Vec<OnnxNode>>::new());
+        let mut nodes = NodeGraph(HashMap::<Option<usize>, HashMap<usize, OnnxNode>>::new());
         for node_idx in order.clone() {
             let mut node = self.onnx_nodes.filter(node_idx);
             let inputs: Vec<OnnxNode> = node
@@ -989,7 +999,7 @@ impl OnnxModel {
                 _ => {}
             };
 
-            nodes.insert(node.bucket, node.clone());
+            nodes.insert(node.bucket, node.idx, node.clone());
         }
 
         let bucketed_nodes = self.assign_execution_buckets(nodes, order);
@@ -1005,72 +1015,31 @@ impl OnnxModel {
         order: Vec<usize>,
     ) -> NodeGraph<OnnxNode> {
         info!("assigning execution buckets to operations");
-        let mut num_buckets = order
-            .iter()
-            .map(|i| {
-                let n = self.onnx_nodes.filter(*i);
-                matches!(n.opkind, OpKind::Input)
-            })
-            .filter(|b| *b)
-            .count()
-            - 1;
 
-        let mut bucketed_nodes = NodeGraph(HashMap::<Option<usize>, Vec<OnnxNode>>::new());
+        let mut bucketed_nodes =
+            NodeGraph(HashMap::<Option<usize>, HashMap<usize, OnnxNode>>::new());
 
         for node_idx in order.clone() {
             let mut node = nodes.filter(node_idx);
 
-            let any_fused_inputs = node
+            let prev_bucket: Option<usize> = node
                 .inputs
                 .iter()
-                .map(|i| self.onnx_nodes.filter(i.node))
-                .any(|n| n.opkind.is_fused());
+                .filter(|n| !bucketed_nodes.filter(n.node).opkind.is_const())
+                .map(|n| match bucketed_nodes.filter(n.node).bucket {
+                    Some(b) => b,
+                    None => panic!(),
+                })
+                .max();
 
-            match (&node.opkind, &any_fused_inputs) {
-                (OpKind::Input, _) => node.bucket = None,
-                (OpKind::Const, _) => node.bucket = None,
-                (OpKind::Fused(_), true) => {
-                    let prev_bucket: usize = node
-                        .inputs
-                        .iter()
-                        .filter(|n| nodes.filter(n.node).opkind.is_fused())
-                        .map(|n| match nodes.filter(n.node).bucket {
-                            Some(b) => b,
-                            None => num_buckets,
-                        })
-                        .max()
-                        .unwrap();
-                    node.bucket = Some(prev_bucket)
-                }
-                (_, _) => {
-                    let prev_bucket: usize = node
-                        .inputs
-                        .iter()
-                        .filter(|n| !nodes.filter(n.node).opkind.is_const())
-                        // should be able to unwrap safely
-                        .map(|n| match nodes.filter(n.node).bucket {
-                            Some(b) => b,
-                            None => num_buckets,
-                        })
-                        .max()
-                        .unwrap();
-                    num_buckets += 1;
-                    node.bucket = Some(prev_bucket + 1)
-                }
+            match &node.opkind {
+                OpKind::Input => node.bucket = Some(0),
+                OpKind::Const => node.bucket = None,
+                OpKind::Fused(_) => node.bucket = Some(prev_bucket.unwrap()),
+                _ => node.bucket = Some(prev_bucket.unwrap() + 1),
             }
-            bucketed_nodes.insert(node.bucket, node.clone());
+            bucketed_nodes.insert(node.bucket, node.idx, node.clone());
         }
-        // one final pass to assign buckets to input nodes
-        let _ = bucketed_nodes
-            .0
-            .get_mut(&None)
-            .unwrap()
-            .iter_mut()
-            .map(|n| match n.opkind {
-                OpKind::Input => n.bucket = Some(n.idx),
-                _ => {}
-            })
-            .collect::<Vec<_>>();
 
         bucketed_nodes
     }

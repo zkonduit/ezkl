@@ -10,7 +10,7 @@ use itertools::Itertools;
 use std::fmt;
 use std::marker::PhantomData;
 
-#[derive(Clone, Debug, PartialEq, Eq, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq, Copy, Hash)]
 pub enum FusedOp {
     Add,
     Sub,
