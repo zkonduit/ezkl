@@ -40,6 +40,7 @@ pub enum OpKind {
     Rescaled(Box<OpKind>, usize),
     ReLU(usize),
     Sigmoid(usize),
+    Div(usize),
     Const,
     Input,
     Fused(FusedOp),
@@ -61,6 +62,7 @@ impl fmt::Display for OpKind {
         match self {
             OpKind::Rescaled(l, _) => write!(f, "rescaled {}", (*l)),
             OpKind::ReLU(s) => write!(f, "relu {}", s),
+            OpKind::Div(s) => write!(f, "div {}", s),
             OpKind::Sigmoid(s) => write!(f, "sigmoid {}", s),
             OpKind::Const => write!(f, "const"),
             OpKind::Input => write!(f, "input"),
@@ -75,7 +77,7 @@ pub enum NodeConfigTypes<F: FieldExt + TensorType> {
     Rescaled(EltwiseConfig<F, DivideBy<F>>, Box<NodeConfigTypes<F>>),
     ReLU(EltwiseConfig<F, ReLu<F>>, Vec<usize>),
     Sigmoid(EltwiseConfig<F, Sigmoid<F>>, Vec<usize>),
-    Divide(EltwiseConfig<F, DivideBy<F>>),
+    Divide(EltwiseConfig<F, DivideBy<F>>, Vec<usize>),
     Fused(FusedConfig<F>, Vec<usize>),
     Const,
     Input,
@@ -156,6 +158,7 @@ impl OnnxNode {
         let mut opkind = match node.op().name().as_ref() {
             "Clip" => OpKind::ReLU(1),
             "Sigmoid" => OpKind::Sigmoid(1),
+            "Div" => OpKind::Div(1),
             "Const" => OpKind::Const,
             "Source" => OpKind::Input,
             "Add" => OpKind::Fused(FusedOp::Add),
@@ -598,6 +601,25 @@ impl OnnxModel {
         advices: VarTensor,
     ) -> NodeConfigTypes<F> {
         match &node.opkind {
+            OpKind::Div(s) => {
+                let dims = match &node.in_dims {
+                    Some(v) => v,
+                    None => {
+                        error!("relu layer has no input shape");
+                        panic!()
+                    }
+                };
+
+                let length = dims.clone().into_iter().product();
+
+                let conf: EltwiseConfig<F, DivideBy<F>> = EltwiseConfig::configure(
+                    meta,
+                    &[advices.get_slice(&[0..length], &[length])],
+                    Some(&[self.bits, *s]),
+                );
+                let inputs = node.inputs.iter().map(|e| e.node).collect();
+                NodeConfigTypes::Divide(conf, inputs)
+            }
             OpKind::ReLU(s) => {
                 let dims = match &node.in_dims {
                     Some(v) => v,
@@ -755,7 +777,10 @@ impl OnnxModel {
             }
             NodeConfigTypes::Sigmoid(sc, idx) => {
                 assert_eq!(idx.len(), 1);
-
+                Some(sc.layout(layouter, &[inputs.get(&idx[0]).unwrap().clone()]))
+            }
+            NodeConfigTypes::Divide(sc, idx) => {
+                assert_eq!(idx.len(), 1);
                 Some(sc.layout(layouter, &[inputs.get(&idx[0]).unwrap().clone()]))
             }
             NodeConfigTypes::Input => None,
@@ -813,6 +838,30 @@ impl OnnxModel {
                         let mult = scale_to_multiplier(scale_diff);
                         node.opkind = OpKind::ReLU(mult as usize); // now the input will be scaled down to match
                         node.output_max = input_node.output_max / mult;
+                    }
+                    node.min_cols = max(1, node.in_dims.as_ref().unwrap().iter().product());
+                }
+                OpKind::Div(_) => {
+                    let input_node = &inputs[0];
+                    node.in_dims = input_node.out_dims.clone();
+                    node.out_dims = input_node.out_dims.clone();
+
+                    // rescale the divider
+                    let mult = scale_to_multiplier(self.scale);
+                    node.inputs.pop();
+                    let div = inputs[1].output_max / mult;
+
+                    node.in_scale = input_node.out_scale;
+                    node.out_scale = self.scale;
+                    let scale_diff = node.in_scale - node.out_scale;
+                    // We can also consider adjusting the scale of all inputs and the output in a more custom way.
+                    if scale_diff > 0 {
+                        let mult = scale_to_multiplier(scale_diff);
+                        node.opkind = OpKind::ReLU((div * mult) as usize); // now the input will be scaled down to match
+                        node.output_max = input_node.output_max / (div * mult);
+                    } else {
+                        node.opkind = OpKind::ReLU(div as usize); // now the input will be scaled down to match
+                        node.output_max = input_node.output_max / (div);
                     }
                     node.min_cols = max(1, node.in_dims.as_ref().unwrap().iter().product());
                 }
