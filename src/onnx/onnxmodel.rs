@@ -313,14 +313,14 @@ impl OnnxNode {
 }
 
 #[derive(Clone, Default, Debug)]
-pub struct NodeGraph<T: Clone>(HashMap<Option<usize>, HashMap<usize, T>>);
+pub struct NodeGraph(HashMap<Option<usize>, HashMap<usize, OnnxNode>>);
 
-impl<T: Clone> NodeGraph<T> {
+impl NodeGraph {
     pub fn new() -> Self {
         NodeGraph(HashMap::new())
     }
 
-    fn insert(&mut self, idx: Option<usize>, node_idx: usize, config: T) {
+    fn insert(&mut self, idx: Option<usize>, node_idx: usize, config: OnnxNode) {
         match self.0.entry(idx) {
             Entry::Vacant(e) => {
                 e.insert(HashMap::from([(node_idx, config)]));
@@ -330,9 +330,7 @@ impl<T: Clone> NodeGraph<T> {
             }
         }
     }
-}
 
-impl NodeGraph<OnnxNode> {
     pub fn flatten(&self) -> Vec<OnnxNode> {
         let a = self
             .0
@@ -375,7 +373,7 @@ pub enum Mode {
 #[derive(Clone, Debug)]
 pub struct OnnxModel {
     pub model: Graph<InferenceFact, Box<dyn InferenceOp>>, // The raw Tract data structure
-    pub onnx_nodes: NodeGraph<OnnxNode>, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
+    pub onnx_nodes: NodeGraph, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
     pub bits: usize,
     pub scale: i32,
     pub mode: Mode,
@@ -764,10 +762,9 @@ impl OnnxModel {
     /// Mutates the nodes.
     pub fn forward_shape_and_quantize_pass(&mut self) -> Result<()> {
         info!("quantizing model activations");
-        let order = self.eval_order()?;
 
         let mut nodes = HashMap::<usize, OnnxNode>::new();
-        for node_idx in order.clone() {
+        for node_idx in 0..self.eval_order()?.len() {
             let mut node = self.onnx_nodes.filter(node_idx);
             let inputs: Vec<OnnxNode> = node
                 .node
@@ -977,7 +974,7 @@ impl OnnxModel {
             nodes.insert(node.idx, node.clone());
         }
 
-        self.onnx_nodes = self.assign_execution_buckets(nodes, order);
+        self.onnx_nodes = self.assign_execution_buckets(nodes)?;
 
         Ok(())
     }
@@ -985,14 +982,13 @@ impl OnnxModel {
     pub fn assign_execution_buckets(
         &self,
         mut nodes: HashMap<usize, OnnxNode>,
-        order: Vec<usize>,
-    ) -> NodeGraph<OnnxNode> {
+    ) -> Result<NodeGraph> {
         info!("assigning configuration buckets to operations");
 
         let mut bucketed_nodes =
             NodeGraph(HashMap::<Option<usize>, HashMap<usize, OnnxNode>>::new());
 
-        for node_idx in order {
+        for node_idx in 0..self.eval_order()?.len() {
             let mut node = nodes.get_mut(&node_idx).unwrap();
 
             let prev_bucket: Option<usize> = node
@@ -1014,7 +1010,7 @@ impl OnnxModel {
             bucketed_nodes.insert(node.bucket, node.idx, node.clone());
         }
 
-        bucketed_nodes
+        Ok(bucketed_nodes)
     }
 
     /// Get a linear extension of the model (an evaluation order), for example to feed to circuit construction.
