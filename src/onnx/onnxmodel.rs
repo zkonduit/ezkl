@@ -557,13 +557,13 @@ impl OnnxModel {
         let fused_nodes: Vec<FusedNode> = input_nodes
             .iter()
             .sorted_by_key(|x| x.0 .0)
-            .map(|(i, e)| {
+            .map(|(op, e)| {
                 let order = e
                     .iter()
-                    .map(|i| {
-                        if !nodes.contains_key(&i.idx) {
+                    .map(|n| {
+                        if !nodes.contains_key(&n.idx) {
                             FusedInputType::Input(
-                                inputs_to_layer.iter().position(|r| r.0 == i.idx).unwrap(),
+                                inputs_to_layer.iter().position(|r| r.0 == n.idx).unwrap(),
                             )
                         } else {
                             inter_counter += 1;
@@ -572,7 +572,7 @@ impl OnnxModel {
                     })
                     .collect_vec();
                 FusedNode {
-                    op: i.1,
+                    op: op.1,
                     input_order: order,
                 }
             })
