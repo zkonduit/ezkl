@@ -171,7 +171,7 @@ fn prepare_circuit<F: FieldExt>(data: OnnxInput) -> OnnxCircuit<F> {
         .input_data
         .iter()
         .zip(data.input_shapes)
-        .map(|(i, s)| vector_to_quantized(&i, &s, 0.0, args.scale).unwrap())
+        .map(|(i, s)| vector_to_quantized(i, &s, 0.0, args.scale).unwrap())
         .collect();
     println!("inputs {:?}", inputs);
     OnnxCircuit::<F> {
