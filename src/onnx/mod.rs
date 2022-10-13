@@ -64,10 +64,11 @@ impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
         trace!("laying out output in synthesize");
         let _: Vec<_> = outputs
             .iter()
-            .map(|o| match o {
+            .enumerate()
+            .map(|(out_idx, o)| match o {
                 ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|i, x| {
                     layouter
-                        .constrain_instance(x.cell(), config.public_output, i)
+                        .constrain_instance(x.cell(), config.public_outputs[out_idx], i)
                         .unwrap()
                 }),
                 _ => panic!("should be assigned"),

@@ -31,6 +31,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::marker::PhantomData;
+use std::ops::Deref;
 use std::time::Instant;
 use tabled::Table;
 
@@ -38,13 +39,13 @@ use tabled::Table;
 struct OnnxInput {
     input_data: Vec<Vec<f32>>,
     input_shapes: Vec<Vec<usize>>,
-    public_input: Vec<f32>,
+    public_inputs: Vec<Vec<f32>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Proof {
     input_shapes: Vec<Vec<usize>>,
-    public_input: Vec<i32>,
+    public_inputs: Vec<Vec<i32>>,
     proof: Vec<u8>,
 }
 
@@ -61,13 +62,14 @@ pub fn main() {
         Commands::Mock { data, model: _ } => {
             info!("Mock proof");
             let args = Cli::parse();
-            let (circuit, public_input) = prepare_circuit_and_public_input(data);
-            let prover = MockProver::run(
-                args.logrows,
-                &circuit,
-                vec![public_input.iter().map(|x| i32_to_felt::<F>(*x)).collect()],
-            )
-            .unwrap();
+            let (circuit, public_inputs) = prepare_circuit_and_public_input(data);
+
+            let pi: Vec<Vec<F>> = public_inputs
+                .into_iter()
+                .map(|i| i.into_iter().map(i32_to_felt::<F>).collect())
+                .collect();
+
+            let prover = MockProver::run(args.logrows, &circuit, pi).unwrap();
             prover.assert_satisfied();
         }
 
@@ -78,14 +80,18 @@ pub fn main() {
         } => {
             info!("full proof with {}", pfsys);
             let args = Cli::parse();
-            let (circuit, public_input) = prepare_circuit_and_public_input(data);
+            let (circuit, public_inputs) = prepare_circuit_and_public_input(data);
             let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
             trace!("params computed");
 
-            let (pk, proof, _dims) = create_ipa_proof(circuit, public_input.clone(), &params);
+            let (pk, proof, _dims) = create_ipa_proof(circuit, public_inputs.clone(), &params);
 
-            let pi_inner: Tensor<F> = public_input.map(i32_to_felt::<F>);
-            let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner.into_iter().collect::<Vec<F>>()]];
+            let pi_inner: Vec<Vec<F>> = public_inputs
+                .iter()
+                .map(|i| i.iter().map(|e| i32_to_felt::<F>(*e)).collect::<Vec<F>>())
+                .collect::<Vec<Vec<F>>>();
+            let pi_inner = pi_inner.iter().map(|e| e.deref()).collect::<Vec<&[F]>>();
+            let pi_for_real_prover: &[&[&[F]]] = &[&pi_inner];
 
             let now = Instant::now();
             let strategy = SingleStrategy::new(&params);
@@ -108,18 +114,21 @@ pub fn main() {
         } => {
             info!("proof with {}", pfsys);
             let args = Cli::parse();
-            let (circuit, public_input) = prepare_circuit_and_public_input(data);
+            let (circuit, public_inputs) = prepare_circuit_and_public_input(data);
             let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
             trace!("params computed");
 
             let (_pk, proof, _input_dims) =
-                create_ipa_proof(circuit.clone(), public_input.clone(), &params);
+                create_ipa_proof(circuit.clone(), public_inputs.clone(), &params);
 
-            let pi: Vec<_> = public_input.into_iter().collect();
+            let pi: Vec<_> = public_inputs
+                .into_iter()
+                .map(|i| i.into_iter().collect())
+                .collect();
 
             let checkable_pf = Proof {
                 input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
-                public_input: pi,
+                public_inputs: pi,
                 proof,
             };
 
@@ -145,22 +154,22 @@ pub fn main() {
     }
 }
 
-fn prepare_circuit_and_public_input<F: FieldExt>(data: String) -> (OnnxCircuit<F>, Tensor<i32>) {
+fn prepare_circuit_and_public_input<F: FieldExt>(
+    data: String,
+) -> (OnnxCircuit<F>, Vec<Tensor<i32>>) {
     let args = Cli::parse();
     let data = prepare_data(data);
 
     // quantize the supplied data using the provided scale.
-    let public_input = vector_to_quantized(
-        &data.public_input,
-        &Vec::from([data.public_input.len()]),
-        0.0,
-        args.scale,
-    )
-    .unwrap();
+    let public_inputs = data
+        .public_inputs
+        .iter()
+        .map(|i| vector_to_quantized(&i, &Vec::from([i.len()]), 0.0, args.scale).unwrap())
+        .collect();
 
-    trace!("{:?}", public_input);
+    trace!("{:?}", public_inputs);
     let circuit = prepare_circuit(data);
-    (circuit, public_input)
+    (circuit, public_inputs)
 }
 
 fn prepare_circuit<F: FieldExt>(data: OnnxInput) -> OnnxCircuit<F> {
@@ -185,8 +194,11 @@ fn prepare_data(datapath: String) -> OnnxInput {
     file.read_to_string(&mut data).unwrap();
     let data: OnnxInput = serde_json::from_str(&data).expect("JSON was not well-formatted");
     info!(
-        "public input length (network output) {:?}",
-        data.public_input.len()
+        "public inputs (network outputs) lengths: {:?}",
+        data.public_inputs
+            .iter()
+            .map(|i| i.len())
+            .collect::<Vec<usize>>()
     );
 
     data
@@ -194,7 +206,7 @@ fn prepare_data(datapath: String) -> OnnxInput {
 
 fn create_ipa_proof(
     circuit: OnnxCircuit<Fp>,
-    public_input: Tensor<i32>,
+    public_inputs: Vec<Tensor<i32>>,
     params: &ParamsIPA<vesta::Affine>,
 ) -> (ProvingKey<EqAffine>, Vec<u8>, Vec<Vec<usize>>) {
     //let args = Cli::parse();
@@ -213,9 +225,12 @@ fn create_ipa_proof(
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
     let mut rng = OsRng;
 
-    let pi_inner: Tensor<F> = public_input.map(i32_to_felt::<F>);
-    trace!("filling {:?}", pi_inner);
-    let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner.into_iter().collect::<Vec<F>>()]];
+    let pi_inner: Vec<Vec<F>> = public_inputs
+        .iter()
+        .map(|i| i.iter().map(|e| i32_to_felt::<F>(*e)).collect::<Vec<F>>())
+        .collect::<Vec<Vec<F>>>();
+    let pi_inner = pi_inner.iter().map(|e| e.deref()).collect::<Vec<&[F]>>();
+    let pi_for_real_prover: &[&[&[F]]] = &[&pi_inner];
     trace!("pi for real prover {:?}", pi_for_real_prover);
 
     let dims = circuit.inputs.iter().map(|i| i.dims().to_vec()).collect();
@@ -252,12 +267,14 @@ fn verify_ipa_proof(proof: Proof) -> bool {
     let vk = keygen_vk(&params, &empty_circuit).expect("keygen_vk should not fail");
     let pk = keygen_pk(&params, vk, &empty_circuit).expect("keygen_pk should not fail");
 
-    let pi_inner = proof
-        .public_input
-        .into_iter()
-        .map(i32_to_felt::<F>)
-        .collect::<Vec<F>>();
-    let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner]];
+    let pi_inner: Vec<Vec<F>> = proof
+        .public_inputs
+        .iter()
+        .map(|i| i.iter().map(|e| i32_to_felt::<F>(*e)).collect::<Vec<F>>())
+        .collect::<Vec<Vec<F>>>();
+    let pi_inner = pi_inner.iter().map(|e| e.deref()).collect::<Vec<&[F]>>();
+    let pi_for_real_prover: &[&[&[F]]] = &[&pi_inner];
+    trace!("pi for real prover {:?}", pi_for_real_prover);
 
     let now = Instant::now();
     let strategy = SingleStrategy::new(&params);

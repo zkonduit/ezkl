@@ -95,7 +95,7 @@ pub struct NodeConfig<F: FieldExt + TensorType> {
 pub struct OnnxModelConfig<F: FieldExt + TensorType> {
     configs: HashMap<usize, NodeConfig<F>>,
     pub model: OnnxModel,
-    pub public_output: Column<Instance>,
+    pub public_outputs: Vec<Column<Instance>>,
 }
 
 fn display_option<T: fmt::Debug>(o: &Option<T>) -> String {
@@ -480,13 +480,21 @@ impl OnnxModel {
             }
         }
 
-        let public_output: Column<Instance> = meta.instance_column();
-        meta.enable_equality(public_output);
+        let public_outputs = self
+            .model
+            .outputs
+            .iter()
+            .map(|_| {
+                let l = meta.instance_column();
+                meta.enable_equality(l);
+                l
+            })
+            .collect_vec();
 
         Ok(OnnxModelConfig {
             configs: results,
             model: self.clone(),
-            public_output,
+            public_outputs,
         })
     }
 
@@ -861,10 +869,10 @@ impl OnnxModel {
                     // We can also consider adjusting the scale of all inputs and the output in a more custom way.
                     if scale_diff > 0 {
                         let mult = scale_to_multiplier(scale_diff);
-                        node.opkind = OpKind::ReLU((div * mult) as usize); // now the input will be scaled down to match
+                        node.opkind = OpKind::Div((div * mult) as usize); // now the input will be scaled down to match
                         node.output_max = input_node.output_max / (div * mult);
                     } else {
-                        node.opkind = OpKind::ReLU(div as usize); // now the input will be scaled down to match
+                        node.opkind = OpKind::Div(div as usize); // now the input will be scaled down to match
                         node.output_max = input_node.output_max / (div);
                     }
                     node.min_cols = max(1, node.in_dims.as_ref().unwrap().iter().product());

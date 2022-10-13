@@ -1,5 +1,5 @@
 {
   "input_data": [[0.78125, 0.15625, 0.234375]],
   "input_shapes": [[3]],
-  "public_input": [0.46875, 0, 0, 0]
+  "public_inputs": [[0.46875, 0, 0, 0]]
 }
