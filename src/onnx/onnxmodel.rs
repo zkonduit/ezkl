@@ -567,9 +567,7 @@ impl OnnxModel {
                             )
                         } else {
                             inter_counter += 1;
-                            FusedInputType::Inter(
-                                inter_counter - 1,
-                            )
+                            FusedInputType::Inter(inter_counter - 1)
                         }
                     })
                     .collect_vec();
@@ -989,7 +987,7 @@ impl OnnxModel {
         mut nodes: HashMap<usize, OnnxNode>,
         order: Vec<usize>,
     ) -> NodeGraph<OnnxNode> {
-        info!("assigning execution buckets to operations");
+        info!("assigning configuration buckets to operations");
 
         let mut bucketed_nodes =
             NodeGraph(HashMap::<Option<usize>, HashMap<usize, OnnxNode>>::new());
