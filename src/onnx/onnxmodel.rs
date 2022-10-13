@@ -849,6 +849,10 @@ impl OnnxModel {
                     // rescale the divider
                     let mult = scale_to_multiplier(self.scale);
                     node.inputs.pop();
+                    if inputs[1].out_dims.clone().unwrap() != [1] {
+                        error!("ezkl currently only supports division by a constant");
+                        unimplemented!()
+                    }
                     let div = inputs[1].output_max / mult;
 
                     node.in_scale = input_node.out_scale;
@@ -1004,6 +1008,10 @@ impl OnnxModel {
                         FusedOp::Pow(_) => {
                             let mult = scale_to_multiplier(self.scale);
                             node.inputs.pop();
+                            if inputs[1].out_dims.clone().unwrap() != [1] {
+                                error!("ezkl currently only supports raising to the power by a constant");
+                                unimplemented!()
+                            }
                             let pow = inputs[1].output_max / mult;
                             node.output_max = f32::powf(
                                 inputs
