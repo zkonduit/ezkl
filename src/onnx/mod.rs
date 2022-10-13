@@ -35,7 +35,6 @@ impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
             onnx_model.max_advices_width().unwrap(),
         );
         info!("number of advices used: {:?}", num_advices);
-        // let num_fixeds = onnx_model.max_fixeds_width().unwrap();
         let advices = VarTensor::from(Tensor::from((0..num_advices + 3).map(|_| {
             let col = meta.advice_column();
             meta.enable_equality(col);
@@ -57,20 +56,23 @@ impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
             .map(|i| ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(i.clone())))
             .collect::<Vec<ValTensor<F>>>();
         trace!("Setting output in synthesize");
-        let output = config
+        let outputs = config
             .model
             .layout(config.clone(), &mut layouter, &inputs)
             .unwrap();
 
-        trace!("Laying out output in synthesize");
-        match output {
-            ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|i, x| {
-                layouter
-                    .constrain_instance(x.cell(), config.public_output, i)
-                    .unwrap()
-            }),
-            _ => panic!("should be assigned"),
-        };
+        trace!("laying out output in synthesize");
+        let _: Vec<_> = outputs
+            .iter()
+            .map(|o| match o {
+                ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|i, x| {
+                    layouter
+                        .constrain_instance(x.cell(), config.public_output, i)
+                        .unwrap()
+                }),
+                _ => panic!("should be assigned"),
+            })
+            .collect();
         Ok(())
     }
 }

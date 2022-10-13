@@ -668,7 +668,7 @@ impl OnnxModel {
         config: OnnxModelConfig<F>,
         layouter: &mut impl Layouter<F>,
         inputs: &[ValTensor<F>],
-    ) -> Result<ValTensor<F>> {
+    ) -> Result<Vec<ValTensor<F>>> {
         info!("model layout");
         let mut results = HashMap::<usize, ValTensor<F>>::new();
         for i in inputs.iter().enumerate() {
@@ -705,7 +705,16 @@ impl OnnxModel {
             }
         }
 
-        Ok(results.get(results.keys().max().unwrap()).unwrap().clone())
+        let output_nodes = self.model.outputs.iter();
+
+        info!(
+            "model outputs are nodes: {:?}",
+            output_nodes.clone().map(|o| o.node).collect_vec()
+        );
+
+        Ok(output_nodes
+            .map(|o| results.get(&o.node).unwrap().clone())
+            .collect_vec())
     }
 
     // Does not take parameters, instead looking them up in the network.
