@@ -173,7 +173,6 @@ fn prepare_circuit<F: FieldExt>(data: OnnxInput) -> OnnxCircuit<F> {
         .zip(data.input_shapes)
         .map(|(i, s)| vector_to_quantized(i, &s, 0.0, args.scale).unwrap())
         .collect();
-    println!("inputs {:?}", inputs);
     OnnxCircuit::<F> {
         inputs,
         _marker: PhantomData,
@@ -231,7 +230,6 @@ fn create_ipa_proof(
     )
     .expect("proof generation should not fail");
     let proof = transcript.finalize();
-    //println!("{:?}", proof);
     info!("Proof took {}", now.elapsed().as_secs());
 
     (pk, proof, dims)
