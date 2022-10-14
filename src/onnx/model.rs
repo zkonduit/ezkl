@@ -60,9 +60,9 @@ impl OpKind {
 impl fmt::Display for OpKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            OpKind::ReLU(s) => write!(f, "relu {}", s),
-            OpKind::Div(s) => write!(f, "div {}", s),
-            OpKind::Sigmoid(s) => write!(f, "sigmoid {}", s),
+            OpKind::ReLU(s) => write!(f, "relu w/ scaling: {}", s),
+            OpKind::Div(s) => write!(f, "div  w/ scaling: {}", s),
+            OpKind::Sigmoid(s) => write!(f, "sigmoid  w/ scaling: {}", s),
             OpKind::Const => write!(f, "const"),
             OpKind::Input => write!(f, "input"),
             OpKind::Fused(s) => write!(f, "{}", s),
@@ -1028,13 +1028,7 @@ impl OnnxModel {
                                     as f32)
                                     * (inputs.len() as f32);
                             } else {
-                                node.output_max = (inputs
-                                    .iter()
-                                    .map(|n| (n.output_max.ceil()) as i32)
-                                    .max()
-                                    .unwrap()
-                                    as f32)
-                                    * (inputs.len() as f32);
+                                error!("failed to homogenize input scalings for node {}", node.idx)
                             }
 
                             node.in_scale =
@@ -1065,13 +1059,7 @@ impl OnnxModel {
                                     as f32)
                                     * (inputs.len() as f32);
                             } else {
-                                node.output_max = (inputs
-                                    .iter()
-                                    .map(|n| (n.output_max.ceil()) as i32)
-                                    .max()
-                                    .unwrap()
-                                    as f32)
-                                    * (inputs.len() as f32);
+                                error!("failed to homogenize input scalings for node {}", node.idx)
                             }
                             node.in_scale =
                                 inputs.iter().map(|input| input.out_scale).max().unwrap();
@@ -1138,7 +1126,6 @@ impl OnnxModel {
         let out_scales = inputs.windows(1).map(|w| w[0].out_scale).collect_vec();
         if !out_scales.windows(2).all(|w| w[0] == w[1]) {
             let max_scale = out_scales.iter().max().unwrap();
-
             let _ = inputs
                 .iter()
                 .enumerate()
@@ -1157,16 +1144,13 @@ impl OnnxModel {
                 })
                 .collect_vec();
         }
-        if multipliers.iter().sum::<usize>() != inputs.len() {
-            if let OpKind::Fused(c) = &node.opkind {
-                node.opkind = OpKind::Fused(FusedOp::Rescaled(
-                    Box::new(c.clone()),
-                    (0..inputs.len()).zip(multipliers).collect_vec(),
-                ))
-            }
-            {
-                error!("should not homegenize input scales for non fused ops.")
-            }
+        if let OpKind::Fused(c) = &node.opkind {
+            node.opkind = OpKind::Fused(FusedOp::Rescaled(
+                Box::new(c.clone()),
+                (0..inputs.len()).zip(multipliers).collect_vec(),
+            ))
+        } else {
+            error!("should not homegenize input scales for non fused ops.")
         }
     }
 

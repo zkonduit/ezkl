@@ -35,7 +35,7 @@ use std::ops::Deref;
 use std::time::Instant;
 use tabled::Table;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct OnnxInput {
     input_data: Vec<Vec<f32>>,
     input_shapes: Vec<Vec<usize>>,
@@ -160,26 +160,26 @@ fn prepare_circuit_and_public_input<F: FieldExt>(
     let args = Cli::parse();
     let data = prepare_data(data);
 
+    let circuit = prepare_circuit(&data);
     // quantize the supplied data using the provided scale.
     let public_inputs = data
         .public_inputs
         .iter()
-        .map(|i| vector_to_quantized(i, &Vec::from([i.len()]), 0.0, args.scale).unwrap())
+        .enumerate()
+        .map(|(idx, v)| vector_to_quantized(v, &Vec::from([v.len()]), 0.0, args.scale).unwrap())
         .collect();
-
     trace!("{:?}", public_inputs);
-    let circuit = prepare_circuit(data);
     (circuit, public_inputs)
 }
 
-fn prepare_circuit<F: FieldExt>(data: OnnxInput) -> OnnxCircuit<F> {
+fn prepare_circuit<F: FieldExt>(data: &OnnxInput) -> OnnxCircuit<F> {
     let args = Cli::parse();
 
     // quantize the supplied data using the provided scale.
     let inputs = data
         .input_data
         .iter()
-        .zip(data.input_shapes)
+        .zip(data.input_shapes.clone())
         .map(|(i, s)| vector_to_quantized(i, &s, 0.0, args.scale).unwrap())
         .collect();
     OnnxCircuit::<F> {

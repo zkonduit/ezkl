@@ -38,7 +38,14 @@ impl fmt::Display for FusedOp {
                 write!(f, "conv w/ padding: {:?}, stride: {:?}", padding, stride)
             }
             FusedOp::Pow(s) => write!(f, "pow {}", s),
-            FusedOp::Rescaled(s, m) => write!(f, "{} with rescaled inputs {:?}", **s, m),
+            FusedOp::Rescaled(s, m) => {
+                write!(
+                    f,
+                    "{} w/ scalings: {:?}",
+                    **s,
+                    m.iter().map(|e| e.1).collect_vec()
+                )
+            }
         }
     }
 }
@@ -191,15 +198,18 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
             }
             FusedOp::Rescaled(op, m) => {
                 assert_eq!(m.len(), inputs.len());
-                for (i, ri) in inputs.iter_mut().enumerate() {
-                    assert_eq!(m[i].0, i);
-                    let mult = m[i].1;
-                    if mult > 1 {
-                        *ri = rescale(ri, mult);
-                    }
-                }
 
-                Self::match_op(*op, inputs)
+                Self::match_op(
+                    *op,
+                    inputs
+                        .iter_mut()
+                        .enumerate()
+                        .map(|(i, ri)| {
+                            assert_eq!(m[i].0, i);
+                            rescale(ri, m[i].1)
+                        })
+                        .collect_vec(),
+                )
             }
         }
     }
