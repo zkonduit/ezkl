@@ -509,28 +509,29 @@ impl OnnxModel {
         })
     }
 
-    fn configure_divide_by<F: FieldExt + TensorType>(
-        &self,
-        node: &OnnxNode,
-        meta: &mut ConstraintSystem<F>,
-        advices: VarTensor,
-        denom: &usize,
-    ) -> EltwiseConfig<F, DivideBy<F>> {
-        let dims = match &node.in_dims {
-            Some(v) => v,
-            None => {
-                error!("layer has no input shape");
-                panic!()
-            }
-        };
-        let length = dims.clone().into_iter().product();
-        EltwiseConfig::configure(
-            meta,
-            &[advices.get_slice(&[0..length], &[length])],
-            //&[advices.get_slice(&[0..length], dims)],
-            Some(&[self.bits, *denom]),
-        )
-    }
+    // // uncomment in case we want to configure output scale for users
+    // fn configure_divide_by<F: FieldExt + TensorType>(
+    //     &self,
+    //     node: &OnnxNode,
+    //     meta: &mut ConstraintSystem<F>,
+    //     advices: VarTensor,
+    //     denom: &usize,
+    // ) -> EltwiseConfig<F, DivideBy<F>> {
+    //     let dims = match &node.in_dims {
+    //         Some(v) => v,
+    //         None => {
+    //             error!("layer has no input shape");
+    //             panic!()
+    //         }
+    //     };
+    //     let length = dims.clone().into_iter().product();
+    //     EltwiseConfig::configure(
+    //         meta,
+    //         &[advices.get_slice(&[0..length], &[length])],
+    //         //&[advices.get_slice(&[0..length], dims)],
+    //         Some(&[self.bits, *denom]),
+    //     )
+    // }
 
     fn fuse_ops<F: FieldExt + TensorType>(
         &self,
