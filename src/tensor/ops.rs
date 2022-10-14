@@ -19,12 +19,12 @@ pub use std::ops::{Add, Mul, Sub};
 ///     Some(&[0, 0]),
 ///     &[2],
 /// ).unwrap();
-/// let result = affine(&vec![&x, &k, &b]);
+/// let result = affine(&vec![x, k, b]);
 /// let expected = Tensor::<i32>::new(Some(&[26, 7, 11, 3, 15, 3, 7, 2]), &[2, 4]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-    inputs: &Vec<&Tensor<T>>,
+    inputs: &Vec<Tensor<T>>,
 ) -> Tensor<T> {
     assert_eq!(inputs.len(), 3);
     let (mut input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
@@ -71,12 +71,12 @@ pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = matmul(&vec![&k, &x]);
+/// let result = matmul(&vec![k, x]);
 /// let expected = Tensor::<i32>::new(Some(&[26, 7, 11, 3, 15, 3, 7, 2]), &[2, 4]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-    inputs: &Vec<&Tensor<T>>,
+    inputs: &Vec<Tensor<T>>,
 ) -> Tensor<T> {
     assert_eq!(inputs.len(), 2);
     let (a, b) = (inputs[0].clone(), inputs[1].clone());
@@ -123,14 +123,14 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = add(&vec![&x, &k]);
+/// let result = add(&vec![x, k]);
 /// let expected = Tensor::<i32>::new(Some(&[4, 4, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn add<T: TensorType + Add<Output = T>>(t: &Vec<&Tensor<T>>) -> Tensor<T> {
+pub fn add<T: TensorType + Add<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
     // determines if we're multiplying by a 1D const
     if t.len() == 2 && t[1].dims().len() == 1 && t[1].dims()[0] == 1 {
-        return const_add(t[0], t[1][0].clone());
+        return const_add(&t[0], t[1][0].clone());
     }
     for e in t.iter() {
         assert_eq!(t[0].dims(), e.dims());
@@ -183,14 +183,14 @@ pub fn const_add<T: TensorType + Add<Output = T>>(a: &Tensor<T>, b: T) -> Tensor
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = sub(&vec![&x, &k]);
+/// let result = sub(&vec![x, k]);
 /// let expected = Tensor::<i32>::new(Some(&[0, -2, 0, 0, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<&Tensor<T>>) -> Tensor<T> {
+pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
     // determines if we're multiplying by a 1D const
     if t.len() == 2 && t[1].dims().len() == 1 && t[1].dims()[0] == 1 {
-        return const_sub(t[0], t[1][0].clone());
+        return const_sub(&t[0], t[1][0].clone());
     }
 
     for e in t.iter() {
@@ -244,14 +244,14 @@ pub fn const_sub<T: TensorType + Sub<Output = T>>(a: &Tensor<T>, b: T) -> Tensor
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = mult(&vec![&x, &k]);
+/// let result = mult(&vec![x, k]);
 /// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 1, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<&Tensor<T>>) -> Tensor<T> {
+pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
     // determines if we're multiplying by a 1D const
     if t.len() == 2 && t[1].dims().len() == 1 && t[1].dims()[0] == 1 {
-        return const_mult(t[0], t[1][0].clone());
+        return const_mult(&t[0], t[1][0].clone());
     }
 
     for e in t.iter() {
@@ -290,6 +290,30 @@ pub fn const_mult<T: TensorType + Mul<Output = T>>(a: &Tensor<T>, b: T) -> Tenso
         output[i] = output[i].clone() * b.clone();
     }
 
+    output
+}
+
+/// Rescale a tensor with a const integer (similar to const_mult).
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::rescale;
+/// let x = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let k = 2;
+/// let result = rescale(&x, k);
+/// let expected = Tensor::<i32>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn rescale<T: TensorType + Add<Output = T>>(a: &Tensor<T>, mult: usize) -> Tensor<T> {
+    // calculate value of output
+    let mut output: Tensor<T> = a.clone();
+    for (i, a_i) in a.iter().enumerate() {
+        for _ in 1..mult {
+            output[i] = output[i].clone() + a_i.clone();
+        }
+    }
     output
 }
 
@@ -352,12 +376,12 @@ pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Tensor<T> {
 ///     Some(&[0]),
 ///     &[1],
 /// ).unwrap();
-/// let result = convolution::<i32>(&vec![&x, &k, &b], (0, 0), (1, 1));
+/// let result = convolution::<i32>(&vec![x, k, b], (0, 0), (1, 1));
 /// let expected = Tensor::<i32>::new(Some(&[31, 16, 8, 26]), &[1, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-    inputs: &Vec<&Tensor<T>>,
+    inputs: &Vec<Tensor<T>>,
     padding: (usize, usize),
     stride: (usize, usize),
 ) -> Tensor<T> {

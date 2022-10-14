@@ -10,7 +10,7 @@ use itertools::Itertools;
 use std::fmt;
 use std::marker::PhantomData;
 
-#[derive(Clone, Debug, PartialEq, Eq, Copy, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum FusedOp {
     Add,
     Sub,
@@ -21,6 +21,7 @@ pub enum FusedOp {
     Affine,
     Conv((usize, usize), (usize, usize)),
     Pow(usize),
+    Rescaled(Box<FusedOp>, Vec<(usize, usize)>),
 }
 
 impl fmt::Display for FusedOp {
@@ -37,6 +38,7 @@ impl fmt::Display for FusedOp {
                 write!(f, "conv w/ padding: {:?}, stride: {:?}", padding, stride)
             }
             FusedOp::Pow(s) => write!(f, "pow {}", s),
+            FusedOp::Rescaled(s, m) => write!(f, "{} with rescaled inputs {:?}", **s, m),
         }
     }
 }
@@ -93,45 +95,7 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
 
             let mut config_outputs = vec![];
             for node in config.nodes.iter_mut() {
-                let op_inputs = node
-                    .input_order
-                    .iter()
-                    .map(|input| match input {
-                        FusedInputType::Input(u) => &qis[*u],
-                        FusedInputType::Inter(u) => &config_outputs[*u],
-                    })
-                    .collect_vec();
-                match node.op {
-                    FusedOp::Add => {
-                        config_outputs.push(add(&op_inputs));
-                    }
-                    FusedOp::Sub => {
-                        config_outputs.push(sub(&op_inputs));
-                    }
-                    FusedOp::Mult => {
-                        config_outputs.push(mult(&op_inputs));
-                    }
-                    FusedOp::Affine => {
-                        config_outputs.push(affine(&op_inputs));
-                    }
-                    FusedOp::Matmul => {
-                        config_outputs.push(matmul(&op_inputs));
-                    }
-                    FusedOp::Dot => {
-                        todo!();
-                    }
-                    FusedOp::Conv(padding, stride) => {
-                        config_outputs.push(convolution(&op_inputs, padding, stride));
-                    }
-                    FusedOp::Pow(u) => {
-                        assert_eq!(op_inputs.len(), 1);
-                        config_outputs.push(pow(op_inputs[0], u));
-                    }
-                    FusedOp::Sum => {
-                        assert_eq!(op_inputs.len(), 1);
-                        config_outputs.push(sum(op_inputs[0]));
-                    }
-                }
+                Self::apply_op(node, &qis, &mut config_outputs);
             }
             let witnessed_output = &config_outputs[config.nodes.len() - 1];
 
@@ -175,46 +139,7 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
                     let mut layout_outputs = vec![];
 
                     for node in self.nodes.iter_mut() {
-                        let op_inputs = node
-                            .input_order
-                            .iter()
-                            .map(|input| match input {
-                                FusedInputType::Input(u) => &inputs[*u],
-                                FusedInputType::Inter(u) => &layout_outputs[*u],
-                            })
-                            .collect_vec();
-
-                        match node.op {
-                            FusedOp::Add => {
-                                layout_outputs.push(add(&op_inputs));
-                            }
-                            FusedOp::Sub => {
-                                layout_outputs.push(sub(&op_inputs));
-                            }
-                            FusedOp::Mult => {
-                                layout_outputs.push(mult(&op_inputs));
-                            }
-                            FusedOp::Affine => {
-                                layout_outputs.push(affine(&op_inputs));
-                            }
-                            FusedOp::Matmul => {
-                                layout_outputs.push(matmul(&op_inputs));
-                            }
-                            FusedOp::Dot => {
-                                todo!();
-                            }
-                            FusedOp::Conv(padding, stride) => {
-                                layout_outputs.push(convolution(&op_inputs, padding, stride));
-                            }
-                            FusedOp::Pow(u) => {
-                                assert_eq!(op_inputs.len(), 1);
-                                layout_outputs.push(pow(op_inputs[0], u));
-                            }
-                            FusedOp::Sum => {
-                                assert_eq!(op_inputs.len(), 1);
-                                layout_outputs.push(sum(op_inputs[0]));
-                            }
-                        }
+                        Self::apply_op(node, &inputs, &mut layout_outputs);
                     }
                     let output: ValTensor<F> = layout_outputs.last().unwrap().clone().into();
 
@@ -224,5 +149,58 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
             .unwrap();
 
         ValTensor::from(t)
+    }
+
+    pub fn apply_op<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
+        node: &mut FusedNode,
+        inputs: &[Tensor<T>],
+        outputs: &mut Vec<Tensor<T>>,
+    ) {
+        let op_inputs = node
+            .input_order
+            .iter()
+            .map(|input| match input {
+                FusedInputType::Input(u) => inputs[*u].clone(),
+                FusedInputType::Inter(u) => outputs[*u].clone(),
+            })
+            .collect_vec();
+        outputs.push(Self::match_op(node.op.clone(), op_inputs));
+    }
+
+    fn match_op<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
+        op: FusedOp,
+        mut inputs: Vec<Tensor<T>>,
+    ) -> Tensor<T> {
+        match op {
+            FusedOp::Add => add(&inputs),
+            FusedOp::Sub => sub(&inputs),
+            FusedOp::Mult => mult(&inputs),
+            FusedOp::Affine => affine(&inputs),
+            FusedOp::Matmul => matmul(&inputs),
+            FusedOp::Dot => {
+                todo!();
+            }
+            FusedOp::Conv(padding, stride) => convolution(&inputs, padding, stride),
+            FusedOp::Pow(u) => {
+                assert_eq!(inputs.len(), 1);
+                pow(&inputs[0], u)
+            }
+            FusedOp::Sum => {
+                assert_eq!(inputs.len(), 1);
+                sum(&inputs[0])
+            }
+            FusedOp::Rescaled(op, m) => {
+                assert_eq!(m.len(), inputs.len());
+                for (i, ri) in inputs.iter_mut().enumerate() {
+                    assert_eq!(m[i].0, i);
+                    let mult = m[i].1;
+                    if mult > 1 {
+                        *ri = rescale(ri, mult);
+                    }
+                }
+
+                Self::match_op(*op, inputs)
+            }
+        }
     }
 }

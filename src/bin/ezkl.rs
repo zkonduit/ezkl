@@ -164,7 +164,7 @@ fn prepare_circuit_and_public_input<F: FieldExt>(
     let public_inputs = data
         .public_inputs
         .iter()
-        .map(|i| vector_to_quantized(&i, &Vec::from([i.len()]), 0.0, args.scale).unwrap())
+        .map(|i| vector_to_quantized(i, &Vec::from([i.len()]), 0.0, args.scale).unwrap())
         .collect();
 
     trace!("{:?}", public_inputs);

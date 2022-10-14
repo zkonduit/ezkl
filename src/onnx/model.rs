@@ -36,9 +36,8 @@ use tract_onnx::tract_hir::{
 // contain parameters will be handled at the consuming node.
 // Eventually, though, we probably want to keep them and treat them directly (layouting and configuring
 // at each type of node)
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OpKind {
-    Rescaled(Box<OpKind>, usize),
     ReLU(usize),
     Sigmoid(usize),
     Div(usize),
@@ -61,7 +60,6 @@ impl OpKind {
 impl fmt::Display for OpKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            OpKind::Rescaled(l, _) => write!(f, "rescaled {}", (*l)),
             OpKind::ReLU(s) => write!(f, "relu {}", s),
             OpKind::Div(s) => write!(f, "div {}", s),
             OpKind::Sigmoid(s) => write!(f, "sigmoid {}", s),
@@ -75,7 +73,6 @@ impl fmt::Display for OpKind {
 
 #[derive(Clone, Default, Debug)]
 pub enum NodeConfigTypes<F: FieldExt + TensorType> {
-    Rescaled(EltwiseConfig<F, DivideBy<F>>, Box<NodeConfigTypes<F>>),
     ReLU(EltwiseConfig<F, ReLu<F>>, Vec<usize>),
     Sigmoid(EltwiseConfig<F, Sigmoid<F>>, Vec<usize>),
     Divide(EltwiseConfig<F, DivideBy<F>>, Vec<usize>),
@@ -470,6 +467,7 @@ impl OnnxModel {
                 .iter()
                 .filter(|(_, n)| n.opkind.is_fused())
                 .collect();
+            // preserves ordering
             if !fused_ops.is_empty() {
                 results.insert(
                     **fused_ops.keys().max().unwrap(),
@@ -540,13 +538,13 @@ impl OnnxModel {
         meta: &mut ConstraintSystem<F>,
         advices: VarTensor,
     ) -> NodeConfigTypes<F> {
-        let input_nodes: HashMap<(&usize, FusedOp), Vec<OnnxNode>> = nodes
+        let input_nodes: HashMap<(&usize, &FusedOp), Vec<OnnxNode>> = nodes
             .iter()
             .map(|(i, e)| {
                 (
                     (
                         *i,
-                        match e.opkind {
+                        match &e.opkind {
                             OpKind::Fused(f) => f,
                             _ => panic!(),
                         },
@@ -617,7 +615,7 @@ impl OnnxModel {
                     })
                     .collect_vec();
                 FusedNode {
-                    op: op.1,
+                    op: op.1.clone(),
                     input_order: order,
                 }
             })
@@ -721,9 +719,6 @@ impl OnnxModel {
             }
             OpKind::Unknown(c) => {
                 error!("{:?} not yet implemented", c);
-                unimplemented!()
-            }
-            _ => {
                 unimplemented!()
             }
         }
@@ -845,7 +840,7 @@ impl OnnxModel {
         for (_, node) in self
             .onnx_nodes
             .0
-            .get_mut(&mut None)
+            .get_mut(&None)
             .unwrap()
             .iter_mut()
             .sorted_by_key(|x| x.0)
@@ -857,7 +852,7 @@ impl OnnxModel {
                 .map(|i| nodes.get(&i.node).unwrap().clone())
                 .collect();
 
-            match node.opkind {
+            match &node.opkind {
                 OpKind::Sigmoid(_) => {
                     let input_node = &inputs[0];
                     node.in_dims = input_node.out_dims.clone();
@@ -1019,42 +1014,65 @@ impl OnnxModel {
                                 input_node.output_max * weight_node.output_max * (in_dim as f32);
                         }
                         FusedOp::Add => {
-                            assert!(inputs.windows(2).all(|w| w[0].out_scale == w[1].out_scale));
+                            Self::homogenize_input_scales(node, inputs.clone());
 
-                            node.output_max = (inputs
-                                .iter()
-                                .map(|i| i.output_max.ceil() as i32)
-                                .max()
-                                .unwrap() as f32)
-                                * (inputs.len() as f32);
+                            if let OpKind::Fused(FusedOp::Rescaled(_, mult)) = &node.opkind {
+                                node.output_max = (inputs
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(idx, n)| {
+                                        ((mult[idx].1 as f32) * (n.output_max.ceil())) as i32
+                                    })
+                                    .max()
+                                    .unwrap()
+                                    as f32)
+                                    * (inputs.len() as f32);
+                            } else {
+                                node.output_max = (inputs
+                                    .iter()
+                                    .map(|n| (n.output_max.ceil()) as i32)
+                                    .max()
+                                    .unwrap()
+                                    as f32)
+                                    * (inputs.len() as f32);
+                            }
 
                             node.in_scale =
                                 inputs.iter().map(|input| input.out_scale).max().unwrap();
                             node.out_scale = node.in_scale;
                         }
                         FusedOp::Sum => {
-                            assert!(inputs.windows(2).all(|w| w[0].out_scale == w[1].out_scale));
-                            node.output_max = inputs
-                                .iter()
-                                .map(|input| {
-                                    input.output_max
-                                        * input.in_dims.clone().unwrap().iter().product::<usize>()
-                                            as f32
-                                })
-                                .sum::<f32>();
+                            assert!(inputs.len() == 1);
+                            node.output_max = inputs[0].output_max
+                                * inputs[0].in_dims.clone().unwrap().iter().product::<usize>()
+                                    as f32;
                             node.in_scale =
                                 inputs.iter().map(|input| input.out_scale).max().unwrap();
                             node.out_scale = node.in_scale;
                             node.out_dims = Some(vec![1]);
                         }
                         FusedOp::Sub => {
-                            assert!(inputs.windows(2).all(|w| w[0].out_scale == w[1].out_scale));
-                            node.output_max = (inputs
-                                .iter()
-                                .map(|input| input.output_max.ceil() as i32)
-                                .max()
-                                .unwrap() as f32)
-                                * (inputs.len() as f32);
+                            Self::homogenize_input_scales(node, inputs.clone());
+                            if let OpKind::Fused(FusedOp::Rescaled(_, mult)) = &node.opkind {
+                                node.output_max = (inputs
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(idx, n)| {
+                                        ((mult[idx].1 as f32) * (n.output_max.ceil())) as i32
+                                    })
+                                    .max()
+                                    .unwrap()
+                                    as f32)
+                                    * (inputs.len() as f32);
+                            } else {
+                                node.output_max = (inputs
+                                    .iter()
+                                    .map(|n| (n.output_max.ceil()) as i32)
+                                    .max()
+                                    .unwrap()
+                                    as f32)
+                                    * (inputs.len() as f32);
+                            }
                             node.in_scale =
                                 inputs.iter().map(|input| input.out_scale).max().unwrap();
                             node.out_scale = node.in_scale;
@@ -1093,6 +1111,9 @@ impl OnnxModel {
 
                             node.opkind = OpKind::Fused(FusedOp::Pow(pow as usize));
                         }
+                        FusedOp::Rescaled(_, _) => {
+                            error!("operations should not already be rescaled at this stage")
+                        }
                     }
                     // output size
                     node.min_cols += node.out_dims.clone().unwrap()
@@ -1112,6 +1133,43 @@ impl OnnxModel {
         Ok(())
     }
 
+    pub fn homogenize_input_scales(node: &mut OnnxNode, inputs: Vec<OnnxNode>) {
+        let mut multipliers = vec![1; inputs.len()];
+        let out_scales = inputs.windows(1).map(|w| w[0].out_scale).collect_vec();
+        if !out_scales.windows(2).all(|w| w[0] == w[1]) {
+            let max_scale = out_scales.iter().max().unwrap();
+
+            let _ = inputs
+                .iter()
+                .enumerate()
+                .map(|(idx, input)| {
+                    let scale_diff = max_scale - input.out_scale;
+                    if scale_diff > 0 {
+                        let mult = scale_to_multiplier(scale_diff);
+                        multipliers[idx] = mult as usize;
+                        info!(
+                            "------ scaled op node input {:?}: {:?} -> {:?}",
+                            input.idx,
+                            input.out_scale,
+                            input.out_scale + scale_diff
+                        );
+                    }
+                })
+                .collect_vec();
+        }
+        if multipliers.iter().sum::<usize>() != inputs.len() {
+            if let OpKind::Fused(c) = &node.opkind {
+                node.opkind = OpKind::Fused(FusedOp::Rescaled(
+                    Box::new(c.clone()),
+                    (0..inputs.len()).zip(multipliers).collect_vec(),
+                ))
+            }
+            {
+                error!("should not homegenize input scales for non fused ops.")
+            }
+        }
+    }
+
     pub fn scale_up_const_node(node: &mut OnnxNode, scale_diff: i32) -> &mut OnnxNode {
         assert!(matches!(node.opkind, OpKind::Const));
         if scale_diff > 0 {
@@ -1119,13 +1177,13 @@ impl OnnxModel {
                 let mult = scale_to_multiplier(scale_diff);
                 node.const_value = Some(const_mult(val, mult as i32));
                 info!(
-                    "------ scaled up const node {:?} from scale {:?} to scale {:?}",
+                    "------ scaled const node {:?}: {:?} -> {:?}",
                     node.idx,
                     node.in_scale,
                     node.out_scale + scale_diff
                 );
-                node.output_max = node.output_max * mult;
-                node.out_scale = node.out_scale + scale_diff;
+                node.output_max *= mult;
+                node.out_scale += scale_diff;
             }
         }
         node
