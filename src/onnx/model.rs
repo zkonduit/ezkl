@@ -752,7 +752,7 @@ impl OnnxModel {
                     ));
                 } else {
                     display.push_str(&format!(
-                        "laying out node {} ({:?}) ",
+                        "------ laying out node {} ({:?}) ",
                         idx,
                         node.node.op().name()
                     ));
@@ -766,7 +766,7 @@ impl OnnxModel {
                 results.insert(*idx, vt);
                 //only use with mock prover
                 if matches!(self.mode, Mode::Mock) {
-                    trace!("  output {:?}", results.get(idx).unwrap().show());
+                    trace!("------------ output {:?}", results.get(idx).unwrap().show());
                 }
             }
         }
@@ -940,8 +940,9 @@ impl OnnxModel {
                             let (input_node, weight_node, bias_node) =
                                 (&inputs[0], &inputs[1], &inputs[2]);
 
-                            let scale_diff =
-                                input_node.out_scale + weight_node.out_scale - bias_node.out_scale;
+                            node.in_scale = input_node.out_scale;
+                            node.out_scale = weight_node.out_scale + input_node.out_scale;
+                            let scale_diff = node.out_scale - bias_node.out_scale;
                             let mut bias_node = nodes.get_mut(&node.node.inputs[2].node).unwrap();
                             bias_node = Self::scale_up_const_node(bias_node, scale_diff);
 
@@ -972,11 +973,6 @@ impl OnnxModel {
                             node.output_max = input_node.output_max
                                 * weight_node.output_max
                                 * ((kernel_height * kernel_width) as f32);
-
-                            node.in_scale = input_node.out_scale;
-                            assert_eq!(weight_node.out_scale, bias_node.out_scale);
-
-                            node.out_scale = weight_node.out_scale + input_node.out_scale;
                         }
                         FusedOp::Matmul => {
                             let (a_node, b_node) = (&inputs[0], &inputs[1]);
@@ -1003,8 +999,9 @@ impl OnnxModel {
                             let (input_node, weight_node, bias_node) =
                                 (&inputs[0], &inputs[1], &inputs[2]);
 
-                            let scale_diff =
-                                input_node.out_scale + weight_node.out_scale - bias_node.out_scale;
+                            node.in_scale = input_node.out_scale;
+                            node.out_scale = weight_node.out_scale + input_node.out_scale;
+                            let scale_diff = node.out_scale - bias_node.out_scale;
                             let mut bias_node = nodes.get_mut(&node.node.inputs[2].node).unwrap();
                             bias_node = Self::scale_up_const_node(bias_node, scale_diff);
 
@@ -1020,10 +1017,6 @@ impl OnnxModel {
 
                             node.output_max =
                                 input_node.output_max * weight_node.output_max * (in_dim as f32);
-
-                            node.in_scale = input_node.out_scale;
-
-                            node.out_scale = weight_node.out_scale + input_node.out_scale;
                         }
                         FusedOp::Add => {
                             assert!(inputs.windows(2).all(|w| w[0].out_scale == w[1].out_scale));
@@ -1123,13 +1116,15 @@ impl OnnxModel {
         assert!(matches!(node.opkind, OpKind::Const));
         if scale_diff > 0 {
             if let Some(val) = &node.const_value {
-                node.const_value = Some(const_mult(val, scale_to_multiplier(scale_diff) as i32));
+                let mult = scale_to_multiplier(scale_diff);
+                node.const_value = Some(const_mult(val, mult as i32));
                 info!(
                     "------ scaled up const node {:?} from scale {:?} to scale {:?}",
                     node.idx,
                     node.in_scale,
                     node.out_scale + scale_diff
                 );
+                node.output_max = node.output_max * mult;
                 node.out_scale = node.out_scale + scale_diff;
             }
         }
