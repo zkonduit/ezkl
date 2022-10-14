@@ -10,9 +10,9 @@ use std::marker::PhantomData;
 pub mod utilities;
 use std::cmp::max;
 pub use utilities::*;
-pub mod onnxmodel;
+pub mod model;
 use log::{info, trace};
-pub use onnxmodel::*;
+pub use model::*;
 
 #[derive(Clone, Debug)]
 pub struct OnnxCircuit<F: FieldExt> {

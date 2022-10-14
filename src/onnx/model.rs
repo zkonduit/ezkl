@@ -2,6 +2,7 @@ use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quanti
 use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
 use crate::circuit::fused::*;
 use crate::commands::{model_path, Cli, Commands};
+use crate::tensor::ops::const_mult;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
 use anyhow::{anyhow, Context, Result};
@@ -491,11 +492,46 @@ impl OnnxModel {
             })
             .collect_vec();
 
+        // // rescale output just in case final operation doesn't do it
+        // let scale_diff = self.onnx_nodes.last().unwrap().out_scale - self.scale;
+        // if scale_diff > 0 {
+        //     let node = self.onnx_nodes.last().unwrap();
+        //     let mult = scale_to_multiplier(scale_diff);
+        //     let divconf = self.configure_divide_by(node, meta, advices.clone(), &(mult as usize));
+        //     results.configs.push(NodeConfig {
+        //         config: NodeConfigTypes::Divide(divconf),
+        //         onnx_idx: vec![0],
+        //     });
+        // }
+
         Ok(OnnxModelConfig {
             configs: results,
             model: self.clone(),
             public_outputs,
         })
+    }
+
+    fn configure_divide_by<F: FieldExt + TensorType>(
+        &self,
+        node: &OnnxNode,
+        meta: &mut ConstraintSystem<F>,
+        advices: VarTensor,
+        denom: &usize,
+    ) -> EltwiseConfig<F, DivideBy<F>> {
+        let dims = match &node.in_dims {
+            Some(v) => v,
+            None => {
+                error!("layer has no input shape");
+                panic!()
+            }
+        };
+        let length = dims.clone().into_iter().product();
+        EltwiseConfig::configure(
+            meta,
+            &[advices.get_slice(&[0..length], &[length])],
+            //&[advices.get_slice(&[0..length], dims)],
+            Some(&[self.bits, *denom]),
+        )
     }
 
     fn fuse_ops<F: FieldExt + TensorType>(
@@ -806,12 +842,18 @@ impl OnnxModel {
         info!("quantizing model activations");
 
         let mut nodes = HashMap::<usize, OnnxNode>::new();
-        for node_idx in 0..self.eval_order()?.len() {
-            let mut node = self.onnx_nodes.filter(node_idx);
+        for (_, node) in self
+            .onnx_nodes
+            .0
+            .get_mut(&mut None)
+            .unwrap()
+            .iter_mut()
+            .sorted_by_key(|x| x.0)
+        {
             let inputs: Vec<OnnxNode> = node
                 .node
                 .inputs
-                .iter()
+                .iter_mut()
                 .map(|i| nodes.get(&i.node).unwrap().clone())
                 .collect();
 
@@ -898,6 +940,16 @@ impl OnnxModel {
                             let (input_node, weight_node, bias_node) =
                                 (&inputs[0], &inputs[1], &inputs[2]);
 
+                            let scale_diff =
+                                input_node.out_scale + weight_node.out_scale - bias_node.out_scale;
+                            let mut bias_node = nodes.get_mut(&node.node.inputs[2].node).unwrap();
+                            bias_node = Self::scale_up_const_node(bias_node, scale_diff);
+
+                            assert_eq!(
+                                input_node.out_scale + weight_node.out_scale,
+                                bias_node.out_scale
+                            );
+
                             let oihw = weight_node.out_dims.as_ref().unwrap();
                             let (out_channels, _, kernel_height, kernel_width) =
                                 (oihw[0], oihw[1], oihw[2], oihw[3]);
@@ -932,8 +984,8 @@ impl OnnxModel {
                             let in_dim = a_node.out_dims.as_ref().unwrap()[1];
                             node.in_dims = Some(vec![in_dim]);
 
-                            let a_dims = a_node.clone().out_dims.unwrap();
-                            let b_dims = b_node.clone().out_dims.unwrap();
+                            let a_dims = a_node.out_dims.as_ref().unwrap();
+                            let b_dims = b_node.out_dims.as_ref().unwrap();
                             let mut dims = Vec::from(&a_dims[0..a_dims.len() - 2]);
                             dims.push(a_dims[a_dims.len() - 2]);
                             dims.push(b_dims[a_dims.len() - 1]);
@@ -951,6 +1003,16 @@ impl OnnxModel {
                             let (input_node, weight_node, bias_node) =
                                 (&inputs[0], &inputs[1], &inputs[2]);
 
+                            let scale_diff =
+                                input_node.out_scale + weight_node.out_scale - bias_node.out_scale;
+                            let mut bias_node = nodes.get_mut(&node.node.inputs[2].node).unwrap();
+                            bias_node = Self::scale_up_const_node(bias_node, scale_diff);
+
+                            assert_eq!(
+                                input_node.out_scale + weight_node.out_scale,
+                                bias_node.out_scale
+                            );
+
                             let in_dim = weight_node.out_dims.as_ref().unwrap()[1];
                             let out_dim = weight_node.out_dims.as_ref().unwrap()[0];
                             node.in_dims = Some(vec![in_dim]);
@@ -961,21 +1023,24 @@ impl OnnxModel {
 
                             node.in_scale = input_node.out_scale;
 
-                            assert_eq!(weight_node.out_scale, bias_node.out_scale);
                             node.out_scale = weight_node.out_scale + input_node.out_scale;
                         }
                         FusedOp::Add => {
+                            assert!(inputs.windows(2).all(|w| w[0].out_scale == w[1].out_scale));
+
                             node.output_max = (inputs
                                 .iter()
-                                .map(|input| input.output_max.ceil() as i32)
+                                .map(|i| i.output_max.ceil() as i32)
                                 .max()
                                 .unwrap() as f32)
                                 * (inputs.len() as f32);
+
                             node.in_scale =
                                 inputs.iter().map(|input| input.out_scale).max().unwrap();
                             node.out_scale = node.in_scale;
                         }
                         FusedOp::Sum => {
+                            assert!(inputs.windows(2).all(|w| w[0].out_scale == w[1].out_scale));
                             node.output_max = inputs
                                 .iter()
                                 .map(|input| {
@@ -990,6 +1055,7 @@ impl OnnxModel {
                             node.out_dims = Some(vec![1]);
                         }
                         FusedOp::Sub => {
+                            assert!(inputs.windows(2).all(|w| w[0].out_scale == w[1].out_scale));
                             node.output_max = (inputs
                                 .iter()
                                 .map(|input| input.output_max.ceil() as i32)
@@ -1053,8 +1119,25 @@ impl OnnxModel {
         Ok(())
     }
 
+    pub fn scale_up_const_node(node: &mut OnnxNode, scale_diff: i32) -> &mut OnnxNode {
+        assert!(matches!(node.opkind, OpKind::Const));
+        if scale_diff > 0 {
+            if let Some(val) = &node.const_value {
+                node.const_value = Some(const_mult(val, scale_to_multiplier(scale_diff) as i32));
+                info!(
+                    "------ scaled up const node {:?} from scale {:?} to scale {:?}",
+                    node.idx,
+                    node.in_scale,
+                    node.out_scale + scale_diff
+                );
+                node.out_scale = node.out_scale + scale_diff;
+            }
+        }
+        node
+    }
+
     pub fn assign_execution_buckets(
-        &self,
+        &mut self,
         mut nodes: HashMap<usize, OnnxNode>,
     ) -> Result<NodeGraph> {
         info!("assigning configuration buckets to operations");
@@ -1062,9 +1145,7 @@ impl OnnxModel {
         let mut bucketed_nodes =
             NodeGraph(HashMap::<Option<usize>, HashMap<usize, OnnxNode>>::new());
 
-        for node_idx in 0..self.eval_order()?.len() {
-            let mut node = nodes.get_mut(&node_idx).unwrap();
-
+        for (_, node) in nodes.iter_mut().sorted_by_key(|x| x.0) {
             let prev_bucket: Option<usize> = node
                 .inputs
                 .iter()
