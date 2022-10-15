@@ -1231,6 +1231,13 @@ impl OnnxModel {
         self.max_advices_width() //todo, improve this computation
     }
 
+    pub fn get_output_scales(&self) -> Vec<i32> {
+        let output_nodes = self.model.outputs.iter();
+        output_nodes
+            .map(|o| self.onnx_nodes.filter(o.node).out_scale)
+            .collect_vec()
+    }
+
     pub fn max_node_advices(&self) -> usize {
         self.onnx_nodes
             .flatten()

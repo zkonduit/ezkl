@@ -50,20 +50,19 @@ struct Proof {
 }
 
 pub fn main() {
-    colog::init();
     let args = Cli::parse();
     banner();
 
     match args.command {
         Commands::Table { model: _ } => {
+            colog::init();
             let om = OnnxModel::from_arg();
             println!("{}", Table::new(om.onnx_nodes.flatten()));
         }
         Commands::Mock { data, model: _ } => {
-            info!("Mock proof");
             let args = Cli::parse();
             let (circuit, public_inputs) = prepare_circuit_and_public_input(data);
-
+            info!("Mock proof");
             let pi: Vec<Vec<F>> = public_inputs
                 .into_iter()
                 .map(|i| i.into_iter().map(i32_to_felt::<F>).collect())
@@ -78,9 +77,9 @@ pub fn main() {
             model: _,
             pfsys,
         } => {
-            info!("full proof with {}", pfsys);
             let args = Cli::parse();
             let (circuit, public_inputs) = prepare_circuit_and_public_input(data);
+            info!("full proof with {}", pfsys);
             let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
             trace!("params computed");
 
@@ -112,9 +111,9 @@ pub fn main() {
             output,
             pfsys,
         } => {
-            info!("proof with {}", pfsys);
             let args = Cli::parse();
             let (circuit, public_inputs) = prepare_circuit_and_public_input(data);
+            info!("proof with {}", pfsys);
             let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
             trace!("params computed");
 
@@ -142,6 +141,7 @@ pub fn main() {
             proof,
             pfsys: _,
         } => {
+            colog::init();
             let mut file = File::open(proof).unwrap();
             let mut data = String::new();
             file.read_to_string(&mut data).unwrap();
@@ -160,12 +160,19 @@ fn prepare_circuit_and_public_input<F: FieldExt>(
     let args = Cli::parse();
     let data = prepare_data(data);
 
+    let onnx_model = OnnxModel::from_arg();
+    let out_scales = onnx_model.get_output_scales();
+        colog::init();
     let circuit = prepare_circuit(&data);
+
     // quantize the supplied data using the provided scale.
     let public_inputs = data
         .public_inputs
         .iter()
-        .map(|v| vector_to_quantized(v, &Vec::from([v.len()]), 0.0, args.scale).unwrap())
+        .enumerate()
+        .map(|(idx, v)| {
+            vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx]).unwrap()
+        })
         .collect();
     trace!("{:?}", public_inputs);
     (circuit, public_inputs)
@@ -181,6 +188,7 @@ fn prepare_circuit<F: FieldExt>(data: &OnnxInput) -> OnnxCircuit<F> {
         .zip(data.input_shapes.clone())
         .map(|(i, s)| vector_to_quantized(i, &s, 0.0, args.scale).unwrap())
         .collect();
+
     OnnxCircuit::<F> {
         inputs,
         _marker: PhantomData,
