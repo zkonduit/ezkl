@@ -157,12 +157,11 @@ pub fn main() {
 fn prepare_circuit_and_public_input<F: FieldExt>(
     data: String,
 ) -> (OnnxCircuit<F>, Vec<Tensor<i32>>) {
-    let args = Cli::parse();
     let data = prepare_data(data);
 
     let onnx_model = OnnxModel::from_arg();
     let out_scales = onnx_model.get_output_scales();
-        colog::init();
+    colog::init();
     let circuit = prepare_circuit(&data);
 
     // quantize the supplied data using the provided scale.
