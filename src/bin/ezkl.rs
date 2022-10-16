@@ -61,7 +61,8 @@ pub fn main() {
         }
         Commands::Mock { data, model: _ } => {
             let args = Cli::parse();
-            let (circuit, public_inputs) = prepare_circuit_and_public_input(data);
+            let data = prepare_data(data);
+            let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
             info!("Mock proof");
             let pi: Vec<Vec<F>> = public_inputs
                 .into_iter()
@@ -78,12 +79,15 @@ pub fn main() {
             pfsys,
         } => {
             let args = Cli::parse();
-            let (circuit, public_inputs) = prepare_circuit_and_public_input(data);
+            colog::init();
+            let data = prepare_data(data);
+            let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
             info!("full proof with {}", pfsys);
             let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
             trace!("params computed");
 
-            let (pk, proof, _dims) = create_ipa_proof(circuit, public_inputs.clone(), &params);
+            let (pk, proof, _dims) =
+                create_ipa_proof(circuit.clone(), public_inputs.clone(), &params);
 
             let pi_inner: Vec<Vec<F>> = public_inputs
                 .iter()
@@ -112,7 +116,8 @@ pub fn main() {
             pfsys,
         } => {
             let args = Cli::parse();
-            let (circuit, public_inputs) = prepare_circuit_and_public_input(data);
+            let data = prepare_data(data);
+            let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
             info!("proof with {}", pfsys);
             let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
             trace!("params computed");
@@ -149,19 +154,17 @@ pub fn main() {
 
             let result = verify_ipa_proof(proof);
             info!("verified: {}", result);
-            println!("Verified: {}", result)
+            assert!(result);
         }
     }
 }
 
 fn prepare_circuit_and_public_input<F: FieldExt>(
-    data: String,
+    data: &OnnxInput,
 ) -> (OnnxCircuit<F>, Vec<Tensor<i32>>) {
-    let data = prepare_data(data);
-
     let onnx_model = OnnxModel::from_arg();
     let out_scales = onnx_model.get_output_scales();
-    colog::init();
+
     let circuit = prepare_circuit(&data);
 
     // quantize the supplied data using the provided scale.
@@ -215,7 +218,6 @@ fn create_ipa_proof(
     public_inputs: Vec<Tensor<i32>>,
     params: &ParamsIPA<vesta::Affine>,
 ) -> (ProvingKey<EqAffine>, Vec<u8>, Vec<Vec<usize>>) {
-    //let args = Cli::parse();
     //	Real proof
     let empty_circuit = circuit.without_witnesses();
 

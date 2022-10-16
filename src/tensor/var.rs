@@ -1,13 +1,13 @@
 use super::*;
 
-/// A wrapper around a tensor where the inner type is one of Halo2's Column<Fixed> or Column<Advice>.
-/// The wrapper allows for VarTensor's dimensions to differ from that of the inner (wrapped) tensor.
+/// A wrapper around a tensor where the inner type is one of Halo2's `Column<Fixed>` or `Column<Advice>`.
+/// The wrapper allows for `VarTensor`'s dimensions to differ from that of the inner (wrapped) tensor.
 /// The inner tensor might, for instance, contain 3 Advice Columns. Each of those columns in turn
 /// might be representing 3 elements laid out in the circuit. As such, though the inner tensor might
 /// only be of dimension `[3]` we can set the VarTensor's dimension to `[3,3]` to capture information
 /// about the column layout. This enum is generally used to configure and layout circuit variables / advices.
 /// For instance can be used to represent neural network parameters within a circuit that we later assign to
-/// using a the `assign` method called on a `ValTensor`.
+/// using the `assign` method called on a [ValTensor].
 #[derive(Clone, Debug)]
 pub enum VarTensor {
     Advice {

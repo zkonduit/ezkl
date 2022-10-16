@@ -74,7 +74,7 @@ pub struct FusedNode {
 pub struct FusedConfig<F: FieldExt + TensorType> {
     /// the inputs to the fused operations.
     pub inputs: Vec<VarTensor>,
-    /// the set of [FusedNodes] represented in the operation.
+    /// the set of [FusedNode] represented in the operation.
     nodes: Vec<FusedNode>,
     /// the (currently singular) output of the fused operations.
     pub output: VarTensor,

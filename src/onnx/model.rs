@@ -92,7 +92,7 @@ pub struct NodeConfig<F: FieldExt + TensorType> {
     onnx_idx: Vec<usize>,
 }
 
-/// A circuit configuration for the entirety of a model loaded from an Onnx file. 
+/// A circuit configuration for the entirety of a model loaded from an Onnx file.
 #[derive(Clone)]
 pub struct OnnxModelConfig<F: FieldExt + TensorType> {
     configs: HashMap<usize, NodeConfig<F>>,
@@ -322,6 +322,7 @@ impl OnnxNode {
     }
 }
 
+/// Representation of an execution graph divided into execution 'buckets'.
 #[derive(Clone, Default, Debug)]
 pub struct NodeGraph(HashMap<Option<usize>, HashMap<usize, OnnxNode>>);
 
@@ -381,6 +382,7 @@ pub enum Mode {
     Verify,
 }
 
+/// A struct for loading from an Onnx file and converting a computational graph to a circuit.
 #[derive(Clone, Debug)]
 pub struct OnnxModel {
     pub model: Graph<InferenceFact, Box<dyn InferenceOp>>, // The raw Tract data structure
