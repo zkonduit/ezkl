@@ -36,6 +36,7 @@ use tract_onnx::tract_hir::{
 // contain parameters will be handled at the consuming node.
 // Eventually, though, we probably want to keep them and treat them directly (layouting and configuring
 // at each type of node)
+/// Enum of the different kinds of operations `ezkl` can support.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OpKind {
     ReLU(usize),
@@ -71,6 +72,7 @@ impl fmt::Display for OpKind {
     }
 }
 
+/// Enum of the different kinds of node configurations `ezkl` can support.
 #[derive(Clone, Default, Debug)]
 pub enum NodeConfigTypes<F: FieldExt + TensorType> {
     ReLU(EltwiseConfig<F, ReLu<F>>, Vec<usize>),
@@ -83,12 +85,14 @@ pub enum NodeConfigTypes<F: FieldExt + TensorType> {
     NotConfigured,
 }
 
+/// A circuit configuration for a single node.
 #[derive(Clone, Default, Debug)]
 pub struct NodeConfig<F: FieldExt + TensorType> {
     config: NodeConfigTypes<F>,
     onnx_idx: Vec<usize>,
 }
 
+/// A circuit configuration for the entirety of a model loaded from an Onnx file. 
 #[derive(Clone)]
 pub struct OnnxModelConfig<F: FieldExt + TensorType> {
     configs: HashMap<usize, NodeConfig<F>>,
@@ -122,12 +126,17 @@ fn display_tensor(o: &Option<Tensor<i32>>) -> String {
     }
 }
 
-/// Fields:
-/// node is the raw Tract Node data structure.
-/// opkind: OpKind is our op enum.
-/// output_max is an inferred maximum value that can appear in the output tensor given previous quantization choices.
-/// in_scale and out_scale track the denominator in the fixed point representation. Tensors of differing scales should not be combined.
-/// in_dims and out_dims are the shape of the activations only which enter and leave the node.
+/// A single operation in an [OnnxModel].
+/// # Arguments:
+/// * `node` - The raw Tract Node data structure.
+/// * `opkind` - [OpKind] enum, i.e what operation this node represents.
+/// * `output_max` - The inferred maximum value that can appear in the output tensor given previous quantization choices.
+/// * `in_scale, out_scale` - The denominator in the fixed point representation. Tensors of differing scales should not be combined.
+/// * `in_dims, out_dims` - The shape of the activations which enter and leave the node.
+/// * `inputs` - The indices of other nodes that feed into this node.
+/// * `const_value` - The constants potentially associated with this node.
+/// * `idx` - The node's unique identifier.
+/// * `bucket` - The execution bucket this node has been assigned to.
 #[derive(Clone, Debug, Tabled)]
 pub struct OnnxNode {
     node: Node<InferenceFact, Box<dyn InferenceOp>>,
@@ -362,6 +371,7 @@ impl NodeGraph {
     }
 }
 
+/// Mode we're using the model in.
 #[derive(Clone, Debug)]
 pub enum Mode {
     Table,
@@ -381,6 +391,13 @@ pub struct OnnxModel {
 }
 
 impl OnnxModel {
+    /// Creates an `OnnxModel` from a specified path to an Onnx file.
+    /// # Arguments
+    ///
+    /// * `path` - A path to an Onnx file.
+    /// * `scale` - The denominator used for fixed point arithmetic (relevant for quantizing input data and model parameters).
+    /// * `bits` - Number of bits to use.
+    /// * `mode` -The [Mode] we're using the model in.
     pub fn new(path: impl AsRef<Path>, scale: i32, bits: usize, mode: Mode) -> Self {
         let model = tract_onnx::onnx().model_for_path(path).unwrap();
 
@@ -407,6 +424,7 @@ impl OnnxModel {
 
         om
     }
+    /// Creates an `OnnxModel` based on CLI arguments
     pub fn from_arg() -> Self {
         let args = Cli::parse();
 
@@ -436,6 +454,13 @@ impl OnnxModel {
         }
     }
 
+    /// Configures an `OnnxModel`. Does so one execution `bucket` at a time. Each bucket holds either:
+    /// a) independent lookup operations (i.e operations that don't feed into one another so can be processed in parallel).
+    /// b) operations that can be fused together, i.e the output of one op might feed into another.
+    /// # Arguments
+    ///
+    /// * `meta` - Halo2 ConstraintSystem.
+    /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure all the nodes loaded in `self.onnx_nodes`.
     pub fn configure<F: FieldExt + TensorType>(
         &self,
         meta: &mut ConstraintSystem<F>,
@@ -444,8 +469,8 @@ impl OnnxModel {
         info!("configuring model");
         let mut results = HashMap::new();
 
-        for (_, block_nodes) in self.onnx_nodes.0.iter() {
-            let non_fused_ops: HashMap<&usize, &OnnxNode> = block_nodes
+        for (_, bucket_nodes) in self.onnx_nodes.0.iter() {
+            let non_fused_ops: HashMap<&usize, &OnnxNode> = bucket_nodes
                 .iter()
                 .filter(|(_, n)| !n.opkind.is_fused())
                 .collect();
@@ -463,7 +488,7 @@ impl OnnxModel {
             }
 
             // preserves ordering
-            let fused_ops: HashMap<&usize, &OnnxNode> = block_nodes
+            let fused_ops: HashMap<&usize, &OnnxNode> = bucket_nodes
                 .iter()
                 .filter(|(_, n)| n.opkind.is_fused())
                 .collect();
@@ -490,18 +515,6 @@ impl OnnxModel {
             })
             .collect_vec();
 
-        // // rescale output just in case final operation doesn't do it
-        // let scale_diff = self.onnx_nodes.last().unwrap().out_scale - self.scale;
-        // if scale_diff > 0 {
-        //     let node = self.onnx_nodes.last().unwrap();
-        //     let mult = scale_to_multiplier(scale_diff);
-        //     let divconf = self.configure_divide_by(node, meta, advices.clone(), &(mult as usize));
-        //     results.configs.push(NodeConfig {
-        //         config: NodeConfigTypes::Divide(divconf),
-        //         onnx_idx: vec![0],
-        //     });
-        // }
-
         Ok(OnnxModelConfig {
             configs: results,
             model: self.clone(),
@@ -509,30 +522,14 @@ impl OnnxModel {
         })
     }
 
-    // // uncomment in case we want to configure output scale for users
-    // fn configure_divide_by<F: FieldExt + TensorType>(
-    //     &self,
-    //     node: &OnnxNode,
-    //     meta: &mut ConstraintSystem<F>,
-    //     advices: VarTensor,
-    //     denom: &usize,
-    // ) -> EltwiseConfig<F, DivideBy<F>> {
-    //     let dims = match &node.in_dims {
-    //         Some(v) => v,
-    //         None => {
-    //             error!("layer has no input shape");
-    //             panic!()
-    //         }
-    //     };
-    //     let length = dims.clone().into_iter().product();
-    //     EltwiseConfig::configure(
-    //         meta,
-    //         &[advices.get_slice(&[0..length], &[length])],
-    //         //&[advices.get_slice(&[0..length], dims)],
-    //         Some(&[self.bits, *denom]),
-    //     )
-    // }
-
+    /// Configures a `HashMap` of 'fuseable' operations. These correspond to operations that are represented in
+    /// the `circuit::fused` module. A single configuration is output, representing the amalgamation of these operations into
+    /// a single Halo2 gate.
+    /// # Arguments
+    ///
+    /// * `nodes` - A `HashMap` of (node index, [OnnxNode] pairs). The [OnnxNode] must represent a fuseable op.
+    /// * `meta` - Halo2 ConstraintSystem.
+    /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure all the passed `nodes`.
     fn fuse_ops<F: FieldExt + TensorType>(
         &self,
         nodes: &HashMap<&usize, &OnnxNode>,
@@ -635,8 +632,13 @@ impl OnnxModel {
         )
     }
 
-    /// Infer the params, input, and output, and configure against the provided meta and Advice and Fixed columns.
-    /// Note that we require the context of the Graph to complete this task.
+    /// Configures a lookup table based operation. These correspond to operations that are represented in
+    /// the `circuit::eltwise` module.
+    /// # Arguments
+    ///
+    /// * `node` - The [OnnxNode] must represent a lookup based op.
+    /// * `meta` - Halo2 ConstraintSystem.
+    /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure the passed `node`.
     fn configure_table<F: FieldExt + TensorType>(
         &self,
         node: &OnnxNode,
@@ -725,6 +727,12 @@ impl OnnxModel {
         }
     }
 
+    /// Assigns values to the regions created when calling `configure`.
+    /// # Arguments
+    ///
+    /// * `config` - [OnnxModelConfig] holding all node configs.
+    /// * `layouter` - Halo2 Layouter.
+    /// * `inputs` - The values to feed into the circuit.
     pub fn layout<F: FieldExt + TensorType>(
         &self,
         config: OnnxModelConfig<F>,
@@ -779,8 +787,12 @@ impl OnnxModel {
             .collect_vec())
     }
 
-    // Does not take parameters, instead looking them up in the network.
-    // At the Source level, the input will be fed by the prover.
+    /// Assigns values to a single region, represented as a [NodeConfig].
+    /// # Arguments
+    ///
+    /// * `config` - [NodeConfig] the signle region we will layout.
+    /// * `layouter` - Halo2 Layouter.
+    /// * `inputs` - `HashMap` of values to feed into the NodeConfig, can also include previous intermediate results, i.e the output of other nodes.
     fn layout_config<F: FieldExt + TensorType>(
         &self,
         layouter: &mut impl Layouter<F>,
@@ -1122,6 +1134,7 @@ impl OnnxModel {
         Ok(())
     }
 
+    /// Ensures all inputs to a node have the same floating point denominator.
     pub fn homogenize_input_scales(node: &mut OnnxNode, inputs: Vec<OnnxNode>) {
         let mut multipliers = vec![1; inputs.len()];
         let out_scales = inputs.windows(1).map(|w| w[0].out_scale).collect_vec();
@@ -1155,6 +1168,7 @@ impl OnnxModel {
         }
     }
 
+    /// Re-quantizes a constant value node to a new scale.
     pub fn scale_up_const_node(node: &mut OnnxNode, scale_diff: i32) -> &mut OnnxNode {
         assert!(matches!(node.opkind, OpKind::Const));
         if scale_diff > 0 {
@@ -1174,6 +1188,15 @@ impl OnnxModel {
         node
     }
 
+    /// Iterates over OnnxNodes and assigns execution buckets to them.  Each bucket holds either:
+    /// a) independent lookup operations (i.e operations that don't feed into one another so can be processed in parallel).
+    /// b) operations that can be fused together, i.e the output of one op might feed into another.
+    /// The logic for bucket assignment is thus: we assign all data intake nodes to the 0 bucket.
+    /// We iterate over each node in turn. If the node is a fuseable op, assign to it the maximum bucket of it's inputs.
+    /// If the node is a lookup table, assign to it the maximum bucket of it's inputs incremented by 1.
+    /// # Arguments
+    ///
+    /// * `nodes` - `HashMap` of (node index, [OnnxNode]) pairs.
     pub fn assign_execution_buckets(
         &mut self,
         mut nodes: HashMap<usize, OnnxNode>,

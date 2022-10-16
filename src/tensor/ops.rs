@@ -3,6 +3,10 @@ use itertools::Itertools;
 pub use std::ops::{Add, Mul, Sub};
 
 /// Matrix multiplies two 2D tensors (and adds an offset).
+/// # Arguments
+///
+/// * `inputs` - A vector of tensors holding in order: input data, convolution kernel, convolution bias.
+/// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::affine;
@@ -59,6 +63,10 @@ pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 }
 
 /// Matrix multiplies two 2D tensors.
+/// # Arguments
+///
+/// * `inputs` - Vector of tensors of length 2
+/// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::matmul;
@@ -112,6 +120,10 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 }
 
 /// Adds multiple tensors.
+/// # Arguments
+///
+/// * `t` - Vector of tensors
+/// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::add;
@@ -148,6 +160,11 @@ pub fn add<T: TensorType + Add<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
 }
 
 /// Elementwise adds a tensor with a const element.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::const_add;
@@ -172,6 +189,11 @@ pub fn const_add<T: TensorType + Add<Output = T>>(a: &Tensor<T>, b: T) -> Tensor
 }
 
 /// Subtracts multiple tensors.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Tensor
+/// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::sub;
@@ -209,6 +231,11 @@ pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
 }
 
 /// Elementwise subtracts a tensor with a const element.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::const_sub;
@@ -233,6 +260,11 @@ pub fn const_sub<T: TensorType + Sub<Output = T>>(a: &Tensor<T>, b: T) -> Tensor
 }
 
 /// Elementwise multiplies two tensors.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Tensor
+/// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::mult;
@@ -270,6 +302,11 @@ pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
 }
 
 /// Elementwise multiplies a tensor with a const element.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::const_mult;
@@ -294,6 +331,11 @@ pub fn const_mult<T: TensorType + Mul<Output = T>>(a: &Tensor<T>, b: T) -> Tenso
 }
 
 /// Rescale a tensor with a const integer (similar to const_mult).
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::rescale;
@@ -318,6 +360,11 @@ pub fn rescale<T: TensorType + Add<Output = T>>(a: &Tensor<T>, mult: usize) -> T
 }
 
 /// Elementwise raise a tensor to the nth power.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::pow;
@@ -341,6 +388,11 @@ pub fn pow<T: TensorType + Mul<Output = T>>(a: &Tensor<T>, pow: usize) -> Tensor
 }
 
 /// Sums a tensor.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::sum;
@@ -360,6 +412,12 @@ pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Tensor<T> {
 }
 
 /// Applies convolution over a 3D tensor of shape C x H x W (and adds a bias).
+/// # Arguments
+///
+/// * `inputs` - A vector of tensors holding in order: input image, convolution kernel, convolution bias.
+/// * `padding` - Tuple of padding values in x and y directions.
+/// * `stride` - Tuple of stride values in x and y directions.
+/// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::convolution;
@@ -436,6 +494,13 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 }
 
 /// Applies 2D max pooling over a 3D tensor of shape C x H x W.
+/// # Arguments
+///
+/// * `image` - Tensor.
+/// * `padding` - Tuple of padding values in x and y directions.
+/// * `stride` - Tuple of stride values in x and y directions.
+/// * `pool_dims` - Tuple of pooling window size in x and y directions.
+/// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::max_pool2d;
@@ -498,6 +563,10 @@ pub fn max_pool2d<T: TensorType>(
 }
 
 /// Dot product of two tensors.
+/// # Arguments
+///
+/// * `inputs` - Vector of tensors of length 2.
+/// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::dot;
@@ -526,6 +595,11 @@ pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 }
 
 /// Pads a 3D tensor of shape `C x H x W` to a tensor of shape `C x (H + 2xPADDING) x (W + 2xPADDING)` using 0 values.
+/// # Arguments
+///
+/// * `image` - Tensor.
+/// * `padding` - Tuple of padding values in x and y directions.
+/// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::pad;

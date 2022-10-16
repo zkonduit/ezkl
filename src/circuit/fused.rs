@@ -10,6 +10,7 @@ use itertools::Itertools;
 use std::fmt;
 use std::marker::PhantomData;
 
+/// An enum representing the operations that can be merged into a single circuit gate.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum FusedOp {
     Add,
@@ -50,33 +51,42 @@ impl fmt::Display for FusedOp {
     }
 }
 
+/// Representation of a the inputs a [FusedNode] can ingest. The inner type indexes over each of the types.
 #[derive(Clone, Debug)]
 pub enum FusedInputType {
+    /// an explicit input to the operations
     Input(usize),
+    /// the intermediate output of a [FusedNode]
     Inter(usize),
 }
 
+/// Representation of a single fuseable operation.
 #[derive(Clone, Debug)]
 pub struct FusedNode {
     /// the type of operation
     pub op: FusedOp,
-    /// execution order.
+    /// execution order over explicit inputs and intermediate outputs.
     pub input_order: Vec<FusedInputType>,
 }
 
 /// Configuration for a basic sequence of operations all fused together in a single gate.
 #[derive(Clone, Debug)]
 pub struct FusedConfig<F: FieldExt + TensorType> {
+    /// the inputs to the fused operations.
     pub inputs: Vec<VarTensor>,
+    /// the set of [FusedNodes] represented in the operation.
     nodes: Vec<FusedNode>,
+    /// the (currently singular) output of the fused operations.
     pub output: VarTensor,
     pub selector: Selector,
     _marker: PhantomData<F>,
 }
 
-/// Configures the sequence of operations into a circuit gate, represented as an array of `FusedOpNode`.
-/// `variables` represents the potential inputs to each operation. `FusedOpNode`s index over these inputs using their `input_idx` attribute.
-/// They can also ingest the intermediate outputs of other nodes, as represented by the `node_idx` attribute.
+/// Configures the sequence of operations into a circuit gate, represented as an array of [FusedNode].
+/// # Arguments
+/// * `inputs` - The explicit inputs to the operations. [FusedNode]s index over these inputs using their `input_order` attribute. They can also index over the intermediate outputs of other [FusedNode]s.
+/// * `output` - The variable representing the (currently singular) output of the fused operations.
+/// * `nodes` - The sequence of operations (in order of execution) that constitute the fused operation.
 impl<F: FieldExt + TensorType> FusedConfig<F> {
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
@@ -117,6 +127,10 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
         config
     }
 
+    /// Assigns variables to the regions created when calling `configure`.
+    /// # Arguments
+    /// * `values` - The explicit values to the operations. [FusedNode]s index over these inputs using their `input_order` attribute. They can also index over the intermediate outputs of other [FusedNode]s.
+    /// * `layouter` - A Halo2 Layouter.
     pub fn layout(
         &mut self,
         layouter: &mut impl Layouter<F>,
@@ -158,6 +172,7 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
         ValTensor::from(t)
     }
 
+    /// Applies an operation represented by a [FusedOp] to the set of inputs (both explicit and intermediate results) it indexes over.
     pub fn apply_op<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
         node: &mut FusedNode,
         inputs: &[Tensor<T>],
@@ -174,6 +189,7 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
         outputs.push(Self::match_op(node.op.clone(), op_inputs));
     }
 
+    /// Matches a [FusedOp] to an operation in the `tensor::ops` module.
     fn match_op<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
         op: FusedOp,
         mut inputs: Vec<Tensor<T>>,

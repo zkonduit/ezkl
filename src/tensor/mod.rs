@@ -295,7 +295,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         self[index] = value;
     }
 
-    /// Get one single value from the Tensor.
+    /// Get a single value from the Tensor.
     ///
     /// ```
     /// use ezkl::tensor::Tensor;
