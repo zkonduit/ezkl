@@ -1,7 +1,6 @@
+use ezkl::circuit::fused::*;
+use ezkl::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu};
 use ezkl::fieldutils::i32_to_felt;
-use ezkl::nn::affine::Affine1dConfig;
-use ezkl::nn::eltwise::{DivideBy, EltwiseConfig, ReLu};
-use ezkl::nn::*;
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
@@ -15,9 +14,9 @@ use std::marker::PhantomData;
 // A columnar ReLu MLP
 #[derive(Clone)]
 struct MyConfig<F: FieldExt + TensorType> {
-    l0: Affine1dConfig<F>,
+    l0: FusedConfig<F>,
     l1: EltwiseConfig<F, ReLu<F>>,
-    l2: Affine1dConfig<F>,
+    l2: FusedConfig<F>,
     l3: EltwiseConfig<F, ReLu<F>>,
     l4: EltwiseConfig<F, DivideBy<F>>,
     public_output: Column<Instance>,
@@ -61,13 +60,29 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let input = advices.get_slice(&[LEN..LEN + 1], &[LEN]);
         let output = advices.get_slice(&[LEN + 1..LEN + 2], &[LEN]);
 
-        let l0 = Affine1dConfig::<F>::configure(
+        // tells the config layer to add an affine op to the circuit gate
+        let affine_node = FusedNode {
+            op: FusedOp::Affine,
+            input_order: vec![
+                FusedInputType::Input(0),
+                FusedInputType::Input(1),
+                FusedInputType::Input(2),
+            ],
+        };
+
+        let l0 = FusedConfig::<F>::configure(
             cs,
-            &[kernel.clone(), bias.clone(), input.clone(), output.clone()],
-            None,
+            &[input.clone(), kernel.clone(), bias.clone()],
+            &output.clone(),
+            &[affine_node.clone()],
         );
 
-        let l2 = Affine1dConfig::<F>::configure(cs, &[kernel, bias, input, output], None);
+        let l2 = FusedConfig::<F>::configure(
+            cs,
+            &[input.clone(), kernel.clone(), bias.clone()],
+            &output.clone(),
+            &[affine_node],
+        );
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
         let [l1, l3]: [EltwiseConfig<F, ReLu<F>>; 2] = EltwiseConfig::configure_multiple(
@@ -98,21 +113,21 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
 
     fn synthesize(
         &self,
-        config: Self::Config,
+        mut config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         let x = config.l0.layout(
             &mut layouter,
             &[
+                self.input.clone(),
                 self.l0_params[0].clone(),
                 self.l0_params[1].clone(),
-                self.input.clone(),
             ],
         );
         let x = config.l1.layout(&mut layouter, &[x]);
         let x = config.l2.layout(
             &mut layouter,
-            &[self.l2_params[0].clone(), self.l2_params[1].clone(), x],
+            &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
         );
         let x = config.l3.layout(&mut layouter, &[x]);
         let x = config.l4.layout(&mut layouter, &[x]);

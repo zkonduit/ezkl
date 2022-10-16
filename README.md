@@ -62,7 +62,7 @@ The `.onnx` file can be generated using pytorch or tensorflow. The data json fil
 {
     "input_data": [1.0, 22.2, 0.12 ...], // array of floats which represents the (private) inputs we run the proof on
     "input_shape": [3, 3, ...], // array of integers which represents the shape of model inputs (excluding batch size)
-    "public_input": [1.0, 5.0, 6.3 ...], // array of flaots which represents the public input (model output for now)
+    "public_inputs": [[1.0, 5.0, 6.3 ...]], // array arrays of floats which represents the public inputs (model outputs for now)
 }
 ```
 For examples of such files see `examples/onnx_models`.
@@ -107,4 +107,4 @@ criterion_group! {
 
 ## Docs
 
-Use `cargo doc --open --feature onnx` to compile and open the docs in your default browser.
+Use `cargo doc --open` to compile and open the docs in your default browser.

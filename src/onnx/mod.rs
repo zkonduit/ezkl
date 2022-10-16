@@ -10,13 +10,13 @@ use std::marker::PhantomData;
 pub mod utilities;
 use std::cmp::max;
 pub use utilities::*;
-pub mod onnxmodel;
+pub mod model;
 use log::{info, trace};
-pub use onnxmodel::*;
+pub use model::*;
 
 #[derive(Clone, Debug)]
 pub struct OnnxCircuit<F: FieldExt> {
-    pub input: Tensor<i32>,
+    pub inputs: Vec<Tensor<i32>>,
     pub _marker: PhantomData<F>,
 }
 
@@ -35,19 +35,13 @@ impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
             onnx_model.max_advices_width().unwrap(),
         );
         info!("number of advices used: {:?}", num_advices);
-        let num_fixeds = onnx_model.max_fixeds_width().unwrap();
         let advices = VarTensor::from(Tensor::from((0..num_advices + 3).map(|_| {
             let col = meta.advice_column();
             meta.enable_equality(col);
             col
         })));
-        let fixeds = VarTensor::from(Tensor::from((0..num_fixeds + 3).map(|_| {
-            let col = meta.fixed_column();
-            meta.enable_equality(col);
-            col
-        })));
 
-        onnx_model.configure(meta, advices, fixeds).unwrap()
+        onnx_model.configure(meta, advices).unwrap()
     }
 
     fn synthesize(
@@ -56,24 +50,30 @@ impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         trace!("Setting input in synthesize");
-        let input = ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(
-            self.input.clone(),
-        ));
+        let inputs = self
+            .inputs
+            .iter()
+            .map(|i| ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(i.clone())))
+            .collect::<Vec<ValTensor<F>>>();
         trace!("Setting output in synthesize");
-        let output = config
+        let outputs = config
             .model
-            .layout(config.clone(), &mut layouter, input)
+            .layout(config.clone(), &mut layouter, &inputs)
             .unwrap();
 
-        trace!("Laying out output in synthesize");
-        match output {
-            ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|i, x| {
-                layouter
-                    .constrain_instance(x.cell(), config.public_output, i)
-                    .unwrap()
-            }),
-            _ => panic!("should be assigned"),
-        };
+        trace!("laying out output in synthesize");
+        let _: Vec<_> = outputs
+            .iter()
+            .enumerate()
+            .map(|(out_idx, o)| match o {
+                ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|i, x| {
+                    layouter
+                        .constrain_instance(x.cell(), config.public_outputs[out_idx], i)
+                        .unwrap()
+                }),
+                _ => panic!("should be assigned"),
+            })
+            .collect();
         Ok(())
     }
 }

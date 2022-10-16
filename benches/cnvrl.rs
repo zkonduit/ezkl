@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::nn::cnvrl::ConvConfig;
-use ezkl::nn::*;
+use ezkl::circuit::fused::*;
+use ezkl::tensor::*;
 use halo2_proofs::{
     arithmetic::{Field, FieldExt},
     circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -8,9 +8,7 @@ use halo2_proofs::{
     plonk::{Circuit, ConstraintSystem, Error},
 };
 use halo2curves::pasta::pallas;
-use ezkl::tensor::*;
 use rand::rngs::OsRng;
-use std::cmp::max;
 
 static mut KERNEL_HEIGHT: usize = 2;
 static mut KERNEL_WIDTH: usize = 2;
@@ -35,7 +33,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F>
 where
     Value<F>: TensorType,
 {
-    type Config = ConvConfig<F>;
+    type Config = FusedConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -47,46 +45,68 @@ where
             let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
             let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
-            let num_advices = max(output_height * OUT_CHANNELS, IMAGE_HEIGHT * IN_CHANNELS);
+            let num_advices = output_height * OUT_CHANNELS
+                + IMAGE_HEIGHT * IN_CHANNELS
+                + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
+                + 1;
 
             let advices =
                 VarTensor::from(Tensor::from((0..num_advices).map(|_| meta.advice_column())));
 
-            let mut kernel = Tensor::from(
-                (0..OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH)
-                    .map(|_| meta.fixed_column()),
+            let input = advices.get_slice(
+                &[0..IMAGE_HEIGHT * IN_CHANNELS],
+                &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
             );
-            kernel.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
 
-            let bias = Tensor::from((0..OUT_CHANNELS).map(|_| meta.fixed_column()));
+            let kernel = advices.get_slice(
+                &[IMAGE_HEIGHT * IN_CHANNELS
+                    ..IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT],
+                &[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
+            );
 
-            Self::Config::configure(
-                meta,
+            let bias = advices.get_slice(
                 &[
-                    VarTensor::from(kernel),
-                    VarTensor::from(bias),
-                    advices.get_slice(
-                        &[0..IMAGE_HEIGHT * IN_CHANNELS],
-                        &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
-                    ),
-                    advices.get_slice(
-                        &[0..output_height * OUT_CHANNELS],
-                        &[OUT_CHANNELS, output_height, output_width],
-                    ),
+                    IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
+                        ..IMAGE_HEIGHT * IN_CHANNELS
+                            + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
+                            + 1,
                 ],
-                Some(&[PADDING, PADDING, STRIDE, STRIDE]),
-            )
+                &[OUT_CHANNELS],
+            );
+
+            let output = advices.get_slice(
+                &[
+                    IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT + 1
+                        ..IMAGE_HEIGHT * IN_CHANNELS
+                            + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
+                            + 1
+                            + output_height * OUT_CHANNELS,
+                ],
+                &[OUT_CHANNELS, output_height, output_width],
+            );
+
+            // tells the config layer to add a conv op to a circuit gate
+            let conv_node = FusedNode {
+                op: FusedOp::Conv((PADDING, PADDING), (STRIDE, STRIDE)),
+                input_order: vec![
+                    FusedInputType::Input(0),
+                    FusedInputType::Input(1),
+                    FusedInputType::Input(2),
+                ],
+            };
+
+            Self::Config::configure(meta, &[input, kernel, bias], &output, &[conv_node])
         }
     }
 
     fn synthesize(
         &self,
-        config: Self::Config,
+        mut config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         let _output = config.layout(
             &mut layouter,
-            &[self.kernel.clone(), self.bias.clone(), self.image.clone()],
+            &[self.image.clone(), self.kernel.clone(), self.bias.clone()],
         );
         Ok(())
     }

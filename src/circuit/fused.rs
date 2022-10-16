@@ -1,0 +1,232 @@
+use super::*;
+use crate::tensor::ops::*;
+use crate::tensor::{Tensor, TensorType};
+use halo2_proofs::{
+    arithmetic::FieldExt,
+    circuit::Layouter,
+    plonk::{ConstraintSystem, Constraints, Expression, Selector},
+};
+use itertools::Itertools;
+use std::fmt;
+use std::marker::PhantomData;
+
+/// An enum representing the operations that can be merged into a single circuit gate.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum FusedOp {
+    Add,
+    Sub,
+    Sum,
+    Mult,
+    Matmul,
+    Dot,
+    Affine,
+    Conv((usize, usize), (usize, usize)),
+    Pow(usize),
+    Rescaled(Box<FusedOp>, Vec<(usize, usize)>),
+}
+
+impl fmt::Display for FusedOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FusedOp::Add => write!(f, "add"),
+            FusedOp::Sub => write!(f, "sub"),
+            FusedOp::Sum => write!(f, "sum"),
+            FusedOp::Mult => write!(f, "mult"),
+            FusedOp::Matmul => write!(f, "matmul"),
+            FusedOp::Dot => write!(f, "dot"),
+            FusedOp::Affine => write!(f, "affine"),
+            FusedOp::Conv(padding, stride) => {
+                write!(f, "conv w/ padding: {:?}, stride: {:?}", padding, stride)
+            }
+            FusedOp::Pow(s) => write!(f, "pow {}", s),
+            FusedOp::Rescaled(s, m) => {
+                write!(
+                    f,
+                    "{} w/ scalings: {:?}",
+                    **s,
+                    m.iter().map(|e| e.1).collect_vec()
+                )
+            }
+        }
+    }
+}
+
+/// Representation of a the inputs a [FusedNode] can ingest. The inner type indexes over each of the types.
+#[derive(Clone, Debug)]
+pub enum FusedInputType {
+    /// an explicit input to the operations
+    Input(usize),
+    /// the intermediate output of a [FusedNode]
+    Inter(usize),
+}
+
+/// Representation of a single fuseable operation.
+#[derive(Clone, Debug)]
+pub struct FusedNode {
+    /// the type of operation
+    pub op: FusedOp,
+    /// execution order over explicit inputs and intermediate outputs.
+    pub input_order: Vec<FusedInputType>,
+}
+
+/// Configuration for a basic sequence of operations all fused together in a single gate.
+#[derive(Clone, Debug)]
+pub struct FusedConfig<F: FieldExt + TensorType> {
+    /// the inputs to the fused operations.
+    pub inputs: Vec<VarTensor>,
+    /// the set of [FusedNode] represented in the operation.
+    nodes: Vec<FusedNode>,
+    /// the (currently singular) output of the fused operations.
+    pub output: VarTensor,
+    pub selector: Selector,
+    _marker: PhantomData<F>,
+}
+
+/// Configures the sequence of operations into a circuit gate, represented as an array of [FusedNode].
+/// # Arguments
+/// * `inputs` - The explicit inputs to the operations. [FusedNode]s index over these inputs using their `input_order` attribute. They can also index over the intermediate outputs of other [FusedNode]s.
+/// * `output` - The variable representing the (currently singular) output of the fused operations.
+/// * `nodes` - The sequence of operations (in order of execution) that constitute the fused operation.
+impl<F: FieldExt + TensorType> FusedConfig<F> {
+    pub fn configure(
+        meta: &mut ConstraintSystem<F>,
+        inputs: &[VarTensor],
+        output: &VarTensor,
+        nodes: &[FusedNode],
+    ) -> Self {
+        let mut config = Self {
+            selector: meta.selector(),
+            nodes: nodes.to_vec(),
+            inputs: inputs.to_vec(),
+            output: output.clone(),
+            _marker: PhantomData,
+        };
+
+        meta.create_gate("basic_op", |meta| {
+            let selector = meta.query_selector(config.selector);
+            let qis = config
+                .inputs
+                .iter()
+                .map(|input| input.query(meta, 0))
+                .collect::<Vec<_>>();
+
+            let mut config_outputs = vec![];
+            for node in config.nodes.iter_mut() {
+                Self::apply_op(node, &qis, &mut config_outputs);
+            }
+            let witnessed_output = &config_outputs[config.nodes.len() - 1];
+
+            // Get output expressions for each input channel
+            let expected_output: Tensor<Expression<F>> = config.output.query(meta, 0);
+
+            let constraints = witnessed_output.enum_map(|i, o| o - expected_output[i].clone());
+
+            Constraints::with_selector(selector, constraints)
+        });
+
+        config
+    }
+
+    /// Assigns variables to the regions created when calling `configure`.
+    /// # Arguments
+    /// * `values` - The explicit values to the operations. [FusedNode]s index over these inputs using their `input_order` attribute. They can also index over the intermediate outputs of other [FusedNode]s.
+    /// * `layouter` - A Halo2 Layouter.
+    pub fn layout(
+        &mut self,
+        layouter: &mut impl Layouter<F>,
+        values: &[ValTensor<F>],
+    ) -> ValTensor<F> {
+        assert_eq!(values.len(), self.inputs.len());
+
+        let t = layouter
+            .assign_region(
+                || "assign inputs",
+                |mut region| {
+                    let offset = 0;
+                    self.selector.enable(&mut region, offset)?;
+
+                    let mut inputs = vec![];
+                    for (i, input) in values.iter().enumerate() {
+                        let inp = utils::value_muxer(
+                            &self.inputs[i],
+                            &self.inputs[i]
+                                .assign(&mut region, offset, input)
+                                .map(|e| e.value_field().evaluate()),
+                            input,
+                        );
+                        inputs.push(inp);
+                    }
+
+                    let mut layout_outputs = vec![];
+
+                    for node in self.nodes.iter_mut() {
+                        Self::apply_op(node, &inputs, &mut layout_outputs);
+                    }
+                    let output: ValTensor<F> = layout_outputs.last().unwrap().clone().into();
+
+                    Ok(self.output.assign(&mut region, offset, &output))
+                },
+            )
+            .unwrap();
+
+        ValTensor::from(t)
+    }
+
+    /// Applies an operation represented by a [FusedOp] to the set of inputs (both explicit and intermediate results) it indexes over.
+    pub fn apply_op<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
+        node: &mut FusedNode,
+        inputs: &[Tensor<T>],
+        outputs: &mut Vec<Tensor<T>>,
+    ) {
+        let op_inputs = node
+            .input_order
+            .iter()
+            .map(|input| match input {
+                FusedInputType::Input(u) => inputs[*u].clone(),
+                FusedInputType::Inter(u) => outputs[*u].clone(),
+            })
+            .collect_vec();
+        outputs.push(Self::match_op(node.op.clone(), op_inputs));
+    }
+
+    /// Matches a [FusedOp] to an operation in the `tensor::ops` module.
+    fn match_op<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
+        op: FusedOp,
+        mut inputs: Vec<Tensor<T>>,
+    ) -> Tensor<T> {
+        match op {
+            FusedOp::Add => add(&inputs),
+            FusedOp::Sub => sub(&inputs),
+            FusedOp::Mult => mult(&inputs),
+            FusedOp::Affine => affine(&inputs),
+            FusedOp::Matmul => matmul(&inputs),
+            FusedOp::Dot => {
+                todo!();
+            }
+            FusedOp::Conv(padding, stride) => convolution(&inputs, padding, stride),
+            FusedOp::Pow(u) => {
+                assert_eq!(inputs.len(), 1);
+                pow(&inputs[0], u)
+            }
+            FusedOp::Sum => {
+                assert_eq!(inputs.len(), 1);
+                sum(&inputs[0])
+            }
+            FusedOp::Rescaled(op, m) => {
+                assert_eq!(m.len(), inputs.len());
+
+                Self::match_op(
+                    *op,
+                    inputs
+                        .iter_mut()
+                        .enumerate()
+                        .map(|(i, ri)| {
+                            assert_eq!(m[i].0, i);
+                            rescale(ri, m[i].1)
+                        })
+                        .collect_vec(),
+                )
+            }
+        }
+    }
+}

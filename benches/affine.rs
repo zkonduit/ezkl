@@ -1,6 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::nn::affine::Affine1dConfig;
-use ezkl::nn::*;
+use ezkl::circuit::fused::*;
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
@@ -23,7 +22,7 @@ struct MyCircuit<F: FieldExt + TensorType> {
 }
 
 impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
-    type Config = Affine1dConfig<F>;
+    type Config = FusedConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -43,24 +42,35 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
         let input = advices.get_slice(&[len..len + 1], &[len]);
         let output = advices.get_slice(&[len + 1..len + 2], &[len]);
 
+        // tells the config layer to add an affine op to a circuit gate
+        let affine_node = FusedNode {
+            op: FusedOp::Affine,
+            input_order: vec![
+                FusedInputType::Input(0),
+                FusedInputType::Input(1),
+                FusedInputType::Input(2),
+            ],
+        };
+
         Self::Config::configure(
             cs,
-            &[kernel.clone(), bias.clone(), input.clone(), output.clone()],
-            None,
+            &[input.clone(), kernel.clone(), bias.clone()],
+            &output.clone(),
+            &[affine_node],
         )
     }
 
     fn synthesize(
         &self,
-        config: Self::Config,
+        mut config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         config.layout(
             &mut layouter,
             &[
+                self.input.clone(),
                 self.l0_params[0].clone(),
                 self.l0_params[1].clone(),
-                self.input.clone(),
             ],
         );
         Ok(())

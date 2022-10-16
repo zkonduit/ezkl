@@ -1,5 +1,4 @@
-use std::fs::remove_file;
-use std::process::{Command, Output};
+use std::process::Command;
 
 fn test_onnx_example(example_name: String) {
     let status = Command::new("cargo")
@@ -9,6 +8,10 @@ fn test_onnx_example(example_name: String) {
             "--bin",
             "ezkl",
             "--",
+            "--bits",
+            "16",
+            "-K",
+            "17",
             "mock",
             "-D",
             format!("./examples/onnx_models/{}_input.json", example_name).as_str(),
@@ -51,35 +54,19 @@ fn test_onnx_prove_and_verify(example_name: String) {
             "--bin",
             "ezkl",
             "--",
-            "prove",
+            "--bits",
+            "16",
+            "-K",
+            "17",
+            "fullprove",
             "-D",
             format!("./examples/onnx_models/{}_input.json", example_name).as_str(),
             "-M",
             format!("./examples/onnx_models/{}.onnx", example_name).as_str(),
-            "-O",
-            format!("pav_{}.pf", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");
     assert!(status.success());
-    let output = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--bin",
-            "ezkl",
-            "--",
-            "verify",
-            "-M",
-            format!("./examples/onnx_models/{}.onnx", example_name).as_str(),
-            "-P",
-            format!("pav_{}.pf", example_name).as_str(),
-        ])
-        .output()
-        .expect("failed to execute process");
-    let sout = String::from_utf8(output.stdout).unwrap();
-    println!("{}", sout);
-    assert_eq!("Verified: true\n", sout);
 }
 
 #[test]

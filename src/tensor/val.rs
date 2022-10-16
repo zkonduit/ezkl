@@ -1,9 +1,8 @@
 use super::*;
 
-/// A wrapper around a tensor where the inner type is one of
-/// Halo2's `Value<F>`, `Value<Assigned<F>>`, `AssignedCell<Assigned<F>, F>`.
-/// This enum is generally used to assign values to variables / advices already configured in a Halo2 circuit (usually represented as a `VarTensor`).
-/// For instance a `ValTensor` can represent pre-trained neural network weights; or a known input to a network.
+/// A wrapper around a tensor where the inner type is one of Halo2's `Value<F>`, `Value<Assigned<F>>`, `AssignedCell<Assigned<F>, F>`.
+/// This enum is generally used to assign values to variables / advices already configured in a Halo2 circuit (usually represented as a [VarTensor]).
+/// For instance can represent pre-trained neural network weights; or a known input to a network.
 #[derive(Debug, Clone)]
 pub enum ValTensor<F: FieldExt + TensorType> {
     Value {
@@ -137,17 +136,6 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                 let r: Tensor<i32> = v.into();
                 format!("PrevAssigned {:?}", r)
             }
-            // ValTensor::Value { inner: v, dims: d } => {
-            //     //                if let Ok(r) = v.try_into() {
-            //     format!("Value {:?}", v)
-            //     // } else {
-            //     //     format!("Value Unknown of shape {:?}", d)
-            //     // }
-            // }
-
-            // ValTensor::AssignedValue { inner: v, dims: d } => {
-            //     format!("AssignedValue {:?}", v)
-            // }
             _ => "ValTensor not PrevAssigned".into(),
         }
     }

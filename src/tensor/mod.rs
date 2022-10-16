@@ -17,6 +17,7 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use itertools::Itertools;
+use std::cmp::max;
 use std::fmt::Debug;
 use std::iter::Iterator;
 use std::ops::Deref;
@@ -29,6 +30,10 @@ pub trait TensorType: Clone + Debug + 'static {
     fn zero() -> Option<Self> {
         None
     }
+
+    fn tmax(&self, _: &Self) -> Option<Self> {
+        None
+    }
 }
 
 macro_rules! tensor_type {
@@ -37,11 +42,37 @@ macro_rules! tensor_type {
             fn zero() -> Option<Self> {
                 Some($zero)
             }
+
+            fn tmax(&self, other: &Self) -> Option<Self> {
+                Some(max(*self, *other))
+            }
         }
     };
 }
 
-tensor_type!(f32, Float, 0.0);
+impl TensorType for f32 {
+    fn zero() -> Option<Self> {
+        Some(0.0)
+    }
+
+    // f32 doesnt impl Ord so we cant just use max like we can for i32, usize.
+    // A comparison between f32s needs to handle NAN values.
+    fn tmax(&self, other: &Self) -> Option<Self> {
+        match (self.is_nan(), other.is_nan()) {
+            (true, true) => Some(f32::NAN),
+            (true, false) => Some(*other),
+            (false, true) => Some(*self),
+            (false, false) => {
+                if self >= other {
+                    Some(*self)
+                } else {
+                    Some(*other)
+                }
+            }
+        }
+    }
+}
+
 tensor_type!(i32, Int32, 0);
 tensor_type!(usize, USize, 0);
 tensor_type!((), Empty, ());
@@ -56,11 +87,27 @@ impl<T: TensorType> TensorType for Value<T> {
     fn zero() -> Option<Self> {
         Some(Value::known(T::zero().unwrap()))
     }
+
+    fn tmax(&self, other: &Self) -> Option<Self> {
+        Some(
+            (self.clone())
+                .zip(other.clone())
+                .map(|(a, b)| a.tmax(&b).unwrap()),
+        )
+    }
 }
 
 impl<F: FieldExt> TensorType for Assigned<F> {
     fn zero() -> Option<Self> {
         Some(F::zero().into())
+    }
+
+    fn tmax(&self, other: &Self) -> Option<Self> {
+        if self.evaluate() >= other.evaluate() {
+            Some(*self)
+        } else {
+            Some(*other)
+        }
     }
 }
 
@@ -68,17 +115,37 @@ impl<F: FieldExt> TensorType for Expression<F> {
     fn zero() -> Option<Self> {
         Some(Expression::Constant(F::zero()))
     }
+
+    fn tmax(&self, _: &Self) -> Option<Self> {
+        todo!()
+    }
 }
 
 impl TensorType for Column<Advice> {}
 impl TensorType for Column<Fixed> {}
 
-impl<F: FieldExt> TensorType for AssignedCell<Assigned<F>, F> {}
+impl<F: FieldExt> TensorType for AssignedCell<Assigned<F>, F> {
+    fn tmax(&self, other: &Self) -> Option<Self> {
+        let mut output: Option<Self> = None;
+        self.value_field().zip(other.value_field()).map(|(a, b)| {
+            if a.evaluate() >= b.evaluate() {
+                output = Some(self.clone());
+            } else {
+                output = Some(other.clone());
+            }
+        });
+        output
+    }
+}
 
 // specific types
 impl TensorType for halo2curves::pasta::Fp {
     fn zero() -> Option<Self> {
         Some(halo2curves::pasta::Fp::zero())
+    }
+
+    fn tmax(&self, other: &Self) -> Option<Self> {
+        Some((*self).max(*other))
     }
 }
 
@@ -228,7 +295,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         self[index] = value;
     }
 
-    /// Get one single value from the Tensor.
+    /// Get a single value from the Tensor.
     ///
     /// ```
     /// use ezkl::tensor::Tensor;
@@ -286,9 +353,6 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// assert_eq!(a.get_index(&[1, 0, 1]), 10);
     /// ```
     pub fn get_index(&self, indices: &[usize]) -> usize {
-        // if self.dims.len() != indices.len() {
-        //     println!("{:?} vs {:?}", self.dims, indices);
-        // }
         assert_eq!(self.dims.len(), indices.len());
         let mut index = 0;
         let mut d = 1;
