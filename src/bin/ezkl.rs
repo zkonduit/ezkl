@@ -79,7 +79,6 @@ pub fn main() {
             pfsys,
         } => {
             let args = Cli::parse();
-            colog::init();
             let data = prepare_data(data);
             let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
             info!("full proof with {}", pfsys);
