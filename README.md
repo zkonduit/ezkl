@@ -212,20 +212,19 @@ you should see the following table being displayed. This is a tabular representa
 | #5  power.exp  | const                                   | 32         | 1        | 4        | 4         | false     | [32...]     |            |           | [1]          | 5    |        |
 | #6 Pow         | pow 2                                   | 65536      | 20       | 4        | 8         | false     |             | [0]        | [3, 2, 2] | [3, 2, 2]    | 6    | 0      |
 | #7  MatMul     | matmul                                  | 131072     | 31       | 4        | 8         | false     |             | [1, 6]     | [2]       | [3, 2, 2]    | 7    | 0      |
-| #8 Add         | add w/ scalings: [1, 16]                | 262144     | 31       | 8        | 8         | false     |             | [7, 0]     | [3, 2, 2] | [3, 2, 2]    | 8    | 0      |
-| #9 Relu        | relu w/ scaling: 1                      | 256        | 12       | 4        | 4         | false     |             | [2]        | [3, 2, 2] | [3, 2, 2]    | 9    | 1      |
-| #10 Sub        | sub w/ scalings: [1, 16]                | 524288     | 31       | 8        | 8         | false     |             | [8, 9]     | [3, 2, 2] | [3, 2, 2]    | 10   | 1      |
-| #11  ConvHir   | conv w/ padding: (2, 2), stride: (1, 1) | 10485760   | 67       | 8        | 12        | false     |             | [10, 3, 4] | [3, 2, 2] | [3, 5, 5]    | 11   | 1      |
-| #12 Sigmoid    | sigmoid  w/ scaling: 4096               | 16         | 75       | 12       | 4         | false     |             | [11]       | [3, 5, 5] | [3, 5, 5]    | 12   | 2      |
+| #8 Add         | rescaled                                | 262144     | 31       | 8        | 8         | false     |             | [7, 0]     | [3, 2, 2] | [3, 2, 2]    | 8    | 0      |
+| #9 Relu        | rescaled rel                            | 256        | 12       | 4        | 4         | false     |             | [2]        | [3, 2, 2] | [3, 2, 2]    | 9    | 1      |
+| #10 Sub        | rescaled sub                            | 524288     | 31       | 8        | 8         | false     |             | [8, 9]     | [3, 2, 2] | [3, 2, 2]    | 10   | 1      |
+| #11  ConvHir   | conv                                    | 10485760   | 67       | 8        | 12        | false     |             | [10, 3, 4] | [3, 2, 2] | [3, 5, 5]    | 11   | 1      |
+| #12 Sigmoid    | rescaled sigmoid                        | 16         | 75       | 12       | 4         | false     |             | [11]       | [3, 5, 5] | [3, 5, 5]    | 12   | 2      |
 | #13 add.const  | const                                   | 32         | 1        | 4        | 4         | false     | [32...]     |            |           | [1]          | 13   |        |
-| #14 Add        | add w/ scalings: [1, 1]                 | 64         | 92       | 4        | 4         | true      |             | [12, 13]   | [3, 5, 5] | [3, 5, 5]    | 14   | 2      |
-| #15 Relu       | relu w/ scaling: 1                      | 256        | 12       | 4        | 4         | false     |             | [2]        | [3, 2, 2] | [3, 2, 2]    | 15   | 1      |
+| #14 Add        | rescaled add                            | 64         | 92       | 4        | 4         | true      |             | [12, 13]   | [3, 5, 5] | [3, 5, 5]    | 14   | 2      |
+| #15 Relu       | rescaled relu                           | 256        | 12       | 4        | 4         | false     |             | [2]        | [3, 2, 2] | [3, 2, 2]    | 15   | 1      |
 | #16  div.const | const                                   | 48         | 1        | 4        | 4         | false     | [48...]     |            |           | [1]          | 16   |        |
-| #17  Div       | div  w/ scaling: 3                      | 85.333336  | 12       | 4        | 4         | true      |             | [15]       | [3, 2, 2] | [3, 2, 2]    | 17   | 2      |
+| #17  Div       | rescaled div                            | 85.333336  | 12       | 4        | 4         | true      |             | [15]       | [3, 2, 2] | [3, 2, 2]    | 17   | 2      |
 
 From there we can run proofs on the generated files, but note that because of quantization errors the public inputs may need to be tweaked to match the output of the circuit and generate a valid proof !
 
 ``` bash
  RUST_LOG=debug cargo run --bin ezkl -- --scale 4 --bits 16 -K 17 mock  -D ./input.json -M ./network.onnx
 ```
-
