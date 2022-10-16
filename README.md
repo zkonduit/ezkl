@@ -193,9 +193,11 @@ def main():
     # Serialize data into file:
     json.dump( data, open( "input.json", 'w' ) )
 
-```
+if __name__ == "__main__":
+    main()
 
-Note that this also create the required input json file, whereby we use the outputs of the pytorch model as the public inputs to the circuit !
+```
+You can now run the file to generate a `.onnx` file. Note that this also create the required input json file, whereby we use the outputs of the pytorch model as the public inputs to the circuit !
 If you run the following command on the generated files:
 ```bash
 cargo run --bin ezkl -- --scale 4 --bits 16 -K 17 table  -M ./network.onnx
