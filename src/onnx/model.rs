@@ -145,6 +145,7 @@ pub struct OnnxNode {
     min_cols: usize,
     in_scale: i32,
     out_scale: i32,
+    is_output: bool,
     #[tabled(display_with = "display_tensor")]
     const_value: Option<Tensor<i32>>, // float value * 2^qscale if applicable.
     // Usually there is a simple in and out shape of the node as an operator.  For example, an Affine node has three input_shapes (one for the input, weight, and bias),
@@ -198,6 +199,7 @@ impl OnnxNode {
         let mut out_dims = None;
         let mut output_max = f32::INFINITY;
         let bucket = None;
+        let is_output = false;
 
         match opkind {
             OpKind::Const => {
@@ -291,6 +293,7 @@ impl OnnxNode {
             node,
             opkind,
             output_max,
+            is_output,
             min_cols,
             in_scale,
             out_scale,
@@ -852,6 +855,8 @@ impl OnnxModel {
         info!("quantizing model activations");
 
         let mut nodes = HashMap::<usize, OnnxNode>::new();
+        let output_nodes = self.model.outputs.iter().map(|o| o.node).collect_vec();
+
         for (_, node) in self
             .onnx_nodes
             .0
@@ -860,6 +865,10 @@ impl OnnxModel {
             .iter_mut()
             .sorted_by_key(|x| x.0)
         {
+            if output_nodes.contains(&node.idx) {
+                node.is_output = true;
+            }
+
             let inputs: Vec<OnnxNode> = node
                 .node
                 .inputs
