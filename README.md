@@ -8,6 +8,9 @@ Note that the library requires a nightly version of the rust toolchain. You can 
 ```bash
 rustup override set nightly         
 ```
+## docs
+
+Use `cargo doc --open` to compile and open the docs in your default browser.
 
 ## command line interface
 
@@ -16,21 +19,6 @@ The `ezkl` cli provides a simple interface to load Onnx files, which represent g
 Usage:
 
 ```bash
-[*]
- |          ███████╗███████╗██╗  ██╗██╗
- |          ██╔════╝╚══███╔╝██║ ██╔╝██║
- |          █████╗    ███╔╝ █████╔╝ ██║
- |          ██╔══╝   ███╔╝  ██╔═██╗ ██║
- |          ███████╗███████╗██║  ██╗███████╗
- |          ╚══════╝╚══════╝╚═╝  ╚═╝╚══════╝
- |  
- |          -----------------------------------------------------------
- |          Easy Zero Knowledge for Neural Networks.
- |          -----------------------------------------------------------
- |          
-Usage: ezkl [OPTIONS] --scale <SCALE> --bits <BITS>
-
-Options:
 Usage: ezkl [OPTIONS] <COMMAND>
 
 Commands:
@@ -48,7 +36,7 @@ Options:
   -h, --help               Print help information
   -V, --version            Print version information
 ```
-Bits, scale, and logrows have default values. `prove`, `mock`, `fullprove` all require `-D` and `-M` parameters, which if not provided, the cli will query the user to manually enter the path(s).
+`bits`, `scale`, and `logrows` have default values. `prove`, `mock`, `fullprove` all require `-D` and `-M` parameters, which if not provided, the cli will query the user to manually enter the path(s).
 ```bash
 Usage: ezkl mock [OPTIONS]
 
@@ -58,11 +46,11 @@ Options:
 ```
 The `.onnx` file can be generated using pytorch or tensorflow. The data json file is structured as follows:
 
-```json
+```javascript
 {
-    "input_data": [1.0, 22.2, 0.12 ...], // array of floats which represents the (private) inputs we run the proof on
-    "input_shape": [3, 3, ...], // array of integers which represents the shape of model inputs (excluding batch size)
-    "public_inputs": [[1.0, 5.0, 6.3 ...]], // array of arrays of floats which represents the public inputs (model outputs for now)
+    "input_data": [[1.0, 22.2, 0.12 ...]], // 2D arrays of floats which represents the (private) inputs we run the proof on
+    "input_shape": [[3, 3, ...]], // 2D array of integers which represents the shapes of model inputs (excluding batch size)
+    "public_inputs": [[1.0, 5.0, 6.3 ...]], // 2D arrays of floats which represents the public inputs (model outputs for now)
 }
 ```
 For examples of such files see `examples/onnx_models`.
@@ -77,16 +65,7 @@ To display a table of loaded Onnx nodes, and their associated parameters, set `R
 cargo run --release --bin ezkl -- table -M ./examples/onnx_models/ff.onnx
 
 ```
-## examples
 
-The MNIST inference example using ezkl as a library is contained in `examples/conv2d_mnist`. To run it:
-```bash
-cargo run --release --example conv2d_mnist
-```
-We also provide an example which runs an MLP on input data with four dimensions. To run it:
-```bash
-cargo run --release --example mlp_4d
-```
 
 ## benchmarks
 
@@ -107,9 +86,19 @@ criterion_group! {
 }
 ```
 
-## docs
 
-Use `cargo doc --open` to compile and open the docs in your default browser.
+
+## examples
+
+The MNIST inference example using ezkl as a library is contained in `examples/conv2d_mnist`. To run it:
+```bash
+cargo run --release --example conv2d_mnist
+```
+We also provide an example which runs an MLP on input data with four dimensions. To run it:
+```bash
+cargo run --release --example mlp_4d
+```
+We also provide onnx model files and their corresponding input json files in `examples/onnx_models`. These can be run using the cli commands listed above. 
 
 ## python tutorial
 
@@ -195,12 +184,12 @@ if __name__ == "__main__":
     main()
 
 ```
-You can now run the file to generate a `.onnx` file. Note that this also create the required input json file, whereby we use the outputs of the pytorch model as the public inputs to the circuit !
+You can now run the file to generate a `.onnx` file. Note that this also create the required input json file, whereby we use the outputs of the pytorch model as the public inputs to the circuit.
 If you run the following command on the generated files:
 ```bash
 cargo run --bin ezkl -- --scale 4 --bits 16 -K 17 table  -M ./network.onnx
 ```
-you should see the following table being displayed. This is a tabular representation of the Onnx graph, with some additional information required for circuit construction (like the number of advices to use, the fixed point representation denominator at the operation's input and output). You should see all the operations we created in `Circuit(nn.Module)` represented. Nodes 14 and 17 correspond to the output nodes here !
+you should see the following table being displayed. This is a tabular representation of the Onnx graph, with some additional information required for circuit construction (like the number of advices to use, the fixed point representation denominator at the operation's input and output). You should see all the operations we created in `Circuit(nn.Module)` represented. Nodes 14 and 17 correspond to the output nodes here. 
 
 ```bash
 | node           | output_max | min_cols | in_scale | out_scale | is_output | const_value | inputs     | in_dims   | out_dims     | idx  | Bucket |
@@ -223,7 +212,7 @@ you should see the following table being displayed. This is a tabular representa
 | Div            | 85.333336  | 12       | 4        | 4         | true      |             | [15]       | [3, 2, 2] | [3, 2, 2]    | 17   | 2      |
 ```
 
-From there we can run proofs on the generated files, but note that because of quantization errors the public inputs may need to be tweaked to match the output of the circuit and generate a valid proof !
+From there we can run proofs on the generated files, but note that because of quantization errors the public inputs may need to be tweaked to match the output of the circuit and generate a valid proof. The types of claims we can make with the setup of this tutorial are ones such as: "I ran my private model on data and produced the expected outputs (as dictated by the public inputs to the circuit)". 
 
 ``` bash
  RUST_LOG=debug cargo run --bin ezkl -- --scale 4 --bits 16 -K 17 mock  -D ./input.json -M ./network.onnx
