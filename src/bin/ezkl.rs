@@ -79,7 +79,6 @@ pub fn main() {
             pfsys,
         } => {
             let args = Cli::parse();
-            colog::init();
             let data = prepare_data(data);
             let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
             info!("full proof with {}", pfsys);
@@ -164,7 +163,7 @@ fn prepare_circuit_and_public_input<F: FieldExt>(
 ) -> (OnnxCircuit<F>, Vec<Tensor<i32>>) {
     let onnx_model = OnnxModel::from_arg();
     let out_scales = onnx_model.get_output_scales();
-
+    colog::init();
     let circuit = prepare_circuit(&data);
 
     // quantize the supplied data using the provided scale.
