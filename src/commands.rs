@@ -13,10 +13,10 @@ pub struct Cli {
     #[arg(short = 'S', long, default_value = "7")]
     pub scale: i32,
     /// The number of bits used in lookup tables
-    #[arg(short = 'B', long, default_value = "14")]
+    #[arg(short = 'B', long, default_value = "16")]
     pub bits: usize,
     /// The log_2 number of rows
-    #[arg(short = 'K', long, default_value = "16")]
+    #[arg(short = 'K', long, default_value = "17")]
     pub logrows: u32,
 }
 
