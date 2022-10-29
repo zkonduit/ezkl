@@ -57,7 +57,7 @@ fn format_verify_errors(f: &VerifyFailure) {
             lookup_index,
         } => {
             error!(
-                "lookup lk {:?} is out of range, try increasing 'bits' or reducing 'scale'",
+                "lookup {:?} is out of range, try increasing 'bits' or reducing 'scale'",
                 name
             );
             debug!("location {:?} at lookup index {:?}", location, lookup_index);
