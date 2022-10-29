@@ -49,6 +49,7 @@ struct Proof {
     proof: Vec<u8>,
 }
 
+/// Helper function for printing helpful error messages after verification failed.
 fn format_verify_errors(f: &VerifyFailure) {
     match f {
         VerifyFailure::Lookup {
@@ -126,8 +127,7 @@ pub fn main() {
             let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
             trace!("params computed");
 
-            let (pk, proof, _dims) =
-                create_ipa_proof(circuit.clone(), public_inputs.clone(), &params);
+            let (pk, proof, _dims) = create_ipa_proof(circuit, public_inputs.clone(), &params);
 
             let pi_inner: Vec<Vec<F>> = public_inputs
                 .iter()
@@ -205,7 +205,7 @@ fn prepare_circuit_and_public_input<F: FieldExt>(
     let onnx_model = OnnxModel::from_arg();
     let out_scales = onnx_model.get_output_scales();
     colog::init();
-    let circuit = prepare_circuit(&data);
+    let circuit = prepare_circuit(data);
 
     // quantize the supplied data using the provided scale.
     let public_inputs = data
