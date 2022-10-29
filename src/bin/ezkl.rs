@@ -109,7 +109,7 @@ pub fn main() {
                 }
                 Err(v) => {
                     for e in v.iter() {
-                        format_verify_errors(e)
+                        parse_prover_errors(e)
                     }
                 }
             }
