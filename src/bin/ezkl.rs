@@ -3,7 +3,7 @@ use ezkl::commands::{data_path, Cli, Commands};
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::onnx::{utilities::vector_to_quantized, OnnxCircuit, OnnxModel};
 use ezkl::tensor::Tensor;
-use halo2_proofs::dev::MockProver;
+use halo2_proofs::dev::{MockProver, VerifyFailure};
 use halo2_proofs::plonk::ProvingKey;
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -24,7 +24,7 @@ use halo2_proofs::{
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp;
 use halo2curves::pasta::{EqAffine, Fp as F};
-use log::{info, trace};
+use log::{debug, error, info, trace};
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
@@ -49,6 +49,38 @@ struct Proof {
     proof: Vec<u8>,
 }
 
+fn format_verify_errors(f: &VerifyFailure) {
+    match f {
+        VerifyFailure::Lookup {
+            name,
+            location,
+            lookup_index,
+        } => {
+            error!(
+                "lookup lk {:?} is out of range, try increasing 'bits' or reducing 'scale'",
+                name
+            );
+            debug!("location {:?} at lookup index {:?}", location, lookup_index);
+        }
+        VerifyFailure::ConstraintNotSatisfied {
+            constraint,
+            location,
+            cell_values,
+        } => {
+            error!("constraint {:?} was not satisfied", constraint);
+            debug!("location {:?} with values {:?}", location, cell_values);
+        }
+        VerifyFailure::ConstraintPoisoned { constraint } => {
+            error!("constraint {:?} was poisoned", constraint)
+        }
+        VerifyFailure::Permutation { column, location } => {
+            error!("permutation did not preserve column cell value (try increasing 'scale')");
+            debug!("column {:?}, at location {:?}", column, location);
+        }
+        e => error!("{:?}", e),
+    }
+}
+
 pub fn main() {
     let args = Cli::parse();
     banner();
@@ -70,7 +102,16 @@ pub fn main() {
                 .collect();
 
             let prover = MockProver::run(args.logrows, &circuit, pi).unwrap();
-            prover.assert_satisfied();
+            match prover.verify() {
+                Ok(_) => {
+                    info!("verify succeeded")
+                }
+                Err(v) => {
+                    for e in v.iter() {
+                        format_verify_errors(e)
+                    }
+                }
+            }
         }
 
         Commands::Fullprove {
