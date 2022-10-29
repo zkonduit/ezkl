@@ -49,8 +49,8 @@ struct Proof {
     proof: Vec<u8>,
 }
 
-/// Helper function for printing helpful error messages after verification failed.
-fn format_verify_errors(f: &VerifyFailure) {
+/// Helper function to print helpful error messages after verification has failed.
+fn parse_prover_errors(f: &VerifyFailure) {
     match f {
         VerifyFailure::Lookup {
             name,
