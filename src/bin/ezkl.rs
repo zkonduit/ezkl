@@ -1,4 +1,5 @@
 use clap::Parser;
+use ezkl::abort;
 use ezkl::commands::{data_path, Cli, Commands};
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::onnx::{utilities::vector_to_quantized, OnnxCircuit, OnnxModel};
@@ -24,7 +25,7 @@ use halo2_proofs::{
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp;
 use halo2curves::pasta::{EqAffine, Fp as F};
-use log::{debug, error, info, trace};
+use log::{error, info, trace};
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
@@ -57,28 +58,31 @@ fn parse_prover_errors(f: &VerifyFailure) {
             location,
             lookup_index,
         } => {
-            error!(
-                "lookup {:?} is out of range, try increasing 'bits' or reducing 'scale'",
-                name
-            );
-            debug!("location {:?} at lookup index {:?}", location, lookup_index);
+            error!("lookup {:?} is out of range, try increasing 'bits' or reducing 'scale' ({} and lookup index {}).",
+            name, location, lookup_index);
         }
         VerifyFailure::ConstraintNotSatisfied {
             constraint,
             location,
             cell_values,
         } => {
-            error!("constraint {:?} was not satisfied", constraint);
-            debug!("location {:?} with values {:?}", location, cell_values);
+            error!(
+                "constraint {:?} was not satisfied ({} with values {:?}).",
+                constraint, location, cell_values
+            );
         }
         VerifyFailure::ConstraintPoisoned { constraint } => {
-            error!("constraint {:?} was poisoned", constraint)
+            error!("constraint {:?} was poisoned", constraint);
         }
         VerifyFailure::Permutation { column, location } => {
-            error!("permutation did not preserve column cell value (try increasing 'scale')");
-            debug!("column {:?}, at location {:?}", column, location);
+            error!(
+                "permutation did not preserve column cell value (try increasing 'scale') ({} {}).",
+                column, location
+            );
         }
-        e => error!("{:?}", e),
+        e => {
+            error!("{:?}", e);
+        }
     }
 }
 
@@ -102,7 +106,12 @@ pub fn main() {
                 .map(|i| i.into_iter().map(i32_to_felt::<F>).collect())
                 .collect();
 
-            let prover = MockProver::run(args.logrows, &circuit, pi).unwrap();
+            let prover = match MockProver::run(args.logrows, &circuit, pi) {
+                Ok(p) => p,
+                Err(e) => {
+                    abort!("mock prover failed to run {:?}", e);
+                }
+            };
             match prover.verify() {
                 Ok(_) => {
                     info!("verify succeeded")
@@ -176,7 +185,12 @@ pub fn main() {
                 proof,
             };
 
-            let serialized = serde_json::to_string(&checkable_pf).unwrap();
+            let serialized = match serde_json::to_string(&checkable_pf) {
+                Ok(s) => s,
+                Err(e) => {
+                    abort!("failed to convert proof json to string {:?}", e);
+                }
+            };
 
             let mut file = std::fs::File::create(output).expect("create failed");
             file.write_all(serialized.as_bytes()).expect("write failed");
@@ -187,9 +201,19 @@ pub fn main() {
             pfsys: _,
         } => {
             colog::init();
-            let mut file = File::open(proof).unwrap();
+            let mut file = match File::open(proof) {
+                Ok(f) => f,
+                Err(e) => {
+                    abort!("failed to open proof file {:?}", e);
+                }
+            };
             let mut data = String::new();
-            file.read_to_string(&mut data).unwrap();
+            match file.read_to_string(&mut data) {
+                Ok(_) => {}
+                Err(e) => {
+                    abort!("failed to read file {:?}", e);
+                }
+            };
             let proof: Proof = serde_json::from_str(&data).expect("JSON was not well-formatted");
 
             let result = verify_ipa_proof(proof);
@@ -212,9 +236,14 @@ fn prepare_circuit_and_public_input<F: FieldExt>(
         .public_inputs
         .iter()
         .enumerate()
-        .map(|(idx, v)| {
-            vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx]).unwrap()
-        })
+        .map(
+            |(idx, v)| match vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx]) {
+                Ok(q) => q,
+                Err(e) => {
+                    abort!("failed to quantize vector {:?}", e);
+                }
+            },
+        )
         .collect();
     trace!("{:?}", public_inputs);
     (circuit, public_inputs)
@@ -228,7 +257,12 @@ fn prepare_circuit<F: FieldExt>(data: &OnnxInput) -> OnnxCircuit<F> {
         .input_data
         .iter()
         .zip(data.input_shapes.clone())
-        .map(|(i, s)| vector_to_quantized(i, &s, 0.0, args.scale).unwrap())
+        .map(|(i, s)| match vector_to_quantized(i, &s, 0.0, args.scale) {
+            Ok(q) => q,
+            Err(e) => {
+                abort!("failed to quantize vector {:?}", e);
+            }
+        })
         .collect();
 
     OnnxCircuit::<F> {
@@ -238,9 +272,19 @@ fn prepare_circuit<F: FieldExt>(data: &OnnxInput) -> OnnxCircuit<F> {
 }
 
 fn prepare_data(datapath: String) -> OnnxInput {
-    let mut file = File::open(data_path(datapath)).unwrap();
+    let mut file = match File::open(data_path(datapath)) {
+        Ok(t) => t,
+        Err(e) => {
+            abort!("failed to open data file {:?}", e);
+        }
+    };
     let mut data = String::new();
-    file.read_to_string(&mut data).unwrap();
+    match file.read_to_string(&mut data) {
+        Ok(_) => {}
+        Err(e) => {
+            abort!("failed to read file {:?}", e);
+        }
+    };
     let data: OnnxInput = serde_json::from_str(&data).expect("JSON was not well-formatted");
     info!(
         "public inputs (network outputs) lengths: {:?}",
@@ -305,7 +349,14 @@ fn verify_ipa_proof(proof: Proof) -> bool {
     let inputs = proof
         .input_shapes
         .iter()
-        .map(|s| Tensor::new(Some(&vec![0; s.iter().product()]), s).unwrap())
+        .map(
+            |s| match Tensor::new(Some(&vec![0; s.iter().product()]), s) {
+                Ok(t) => t,
+                Err(e) => {
+                    abort!("failed to initialize tensor {:?}", e);
+                }
+            },
+        )
         .collect();
     let circuit = OnnxCircuit::<F> {
         inputs,
