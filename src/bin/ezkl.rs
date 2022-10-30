@@ -58,7 +58,7 @@ fn parse_prover_errors(f: &VerifyFailure) {
             location,
             lookup_index,
         } => {
-            error!("lookup {:?} is out of range, try increasing 'bits' or reducing 'scale'. {} and lookup index {}",
+            error!("lookup {:?} is out of range, try increasing 'bits' or reducing 'scale' ({} and lookup index {}).",
             name, location, lookup_index);
         }
         VerifyFailure::ConstraintNotSatisfied {
@@ -67,7 +67,7 @@ fn parse_prover_errors(f: &VerifyFailure) {
             cell_values,
         } => {
             error!(
-                "constraint {:?} was not satisfied. location {} with values {:?}",
+                "constraint {:?} was not satisfied ({} with values {:?}).",
                 constraint, location, cell_values
             );
         }
@@ -75,7 +75,10 @@ fn parse_prover_errors(f: &VerifyFailure) {
             error!("constraint {:?} was poisoned", constraint);
         }
         VerifyFailure::Permutation { column, location } => {
-            error!("permutation did not preserve column cell value (try increasing 'scale'). {} {}", column, location);
+            error!(
+                "permutation did not preserve column cell value (try increasing 'scale') ({} {}).",
+                column, location
+            );
         }
         e => {
             error!("{:?}", e);
