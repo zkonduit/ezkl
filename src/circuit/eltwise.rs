@@ -1,4 +1,5 @@
 use super::*;
+use crate::abort;
 use crate::fieldutils::{self, felt_to_i32, i32_to_felt};
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -6,6 +7,7 @@ use halo2_proofs::{
     plonk::{ConstraintSystem, Expression, Selector, TableColumn},
     poly::Rotation,
 };
+use log::error;
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 pub trait Nonlinearity<F: FieldExt> {
@@ -55,33 +57,42 @@ impl<F: FieldExt, NL: Nonlinearity<F>> EltwiseTable<F, NL> {
         let base = 2i32;
         let smallest = -base.pow(self.bits as u32 - 1);
         let largest = base.pow(self.bits as u32 - 1);
-        layouter
-            .assign_table(
-                || "nl table",
-                |mut table| {
-                    for (row_offset, int_input) in (smallest..largest).enumerate() {
-                        let input: F = i32_to_felt(int_input);
-                        table
-                            .assign_cell(
-                                || format!("nl_i_col row {}", row_offset),
-                                self.table_input,
-                                row_offset,
-                                || Value::known(input),
-                            )
-                            .unwrap();
-                        table
-                            .assign_cell(
-                                || format!("nl_o_col row {}", row_offset),
-                                self.table_output,
-                                row_offset,
-                                || Value::known(NL::nonlinearity(int_input, &self.scaling_params)),
-                            )
-                            .unwrap();
+        match layouter.assign_table(
+            || "nl table",
+            |mut table| {
+                for (row_offset, int_input) in (smallest..largest).enumerate() {
+                    let input: F = i32_to_felt(int_input);
+                    match table.assign_cell(
+                        || format!("nl_i_col row {}", row_offset),
+                        self.table_input,
+                        row_offset,
+                        || Value::known(input),
+                    ) {
+                        Ok(a) => a,
+                        Err(e) => {
+                            abort!("failed to assign table cell {:?}", e);
+                        }
                     }
-                    Ok(())
-                },
-            )
-            .unwrap();
+                    match table.assign_cell(
+                        || format!("nl_o_col row {}", row_offset),
+                        self.table_output,
+                        row_offset,
+                        || Value::known(NL::nonlinearity(int_input, &self.scaling_params)),
+                    ) {
+                        Ok(a) => a,
+                        Err(e) => {
+                            abort!("failed to assign table cell {:?}", e);
+                        }
+                    }
+                }
+                Ok(())
+            },
+        ) {
+            Ok(a) => a,
+            Err(e) => {
+                abort!("failed to assign elt-wise table {:?}", e);
+            }
+        };
         self.is_assigned = true;
     }
 }
@@ -176,7 +187,12 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
         eltwise_params: Option<&[usize]>,
     ) -> Self {
         // will fail if not supplied
-        let params = eltwise_params.unwrap();
+        let params = match eltwise_params {
+            Some(p) => p,
+            None => {
+                panic!("failed to supply eltwise parameters")
+            }
+        };
         let bits = params[0];
         let table = Rc::new(RefCell::new(EltwiseTable::<F, NL>::configure(
             cs,
@@ -193,80 +209,101 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
             self.table.borrow_mut().layout(layouter)
         }
         let mut t = ValTensor::from(
-            layouter
-                .assign_region(
-                    || "Elementwise", // the name of the region
-                    |mut region| {
-                        let offset = 0;
-                        self.qlookup.enable(&mut region, offset)?;
+            match layouter.assign_region(
+                || "Elementwise", // the name of the region
+                |mut region| {
+                    let offset = 0;
+                    self.qlookup.enable(&mut region, offset)?;
 
-                        let w = match &values[0] {
-                            ValTensor::AssignedValue { inner: v, dims: _ } => match &self.input {
-                                VarTensor::Advice {
-                                    inner: advice,
-                                    dims: _,
-                                } => v.enum_map(|i, x| {
-                                    // assign the advice
-                                    region
-                                        .assign_advice(|| "input", advice[i], offset, || x)
-                                        .unwrap()
-                                }),
-                                _ => todo!(),
-                            },
-                            ValTensor::PrevAssigned { inner: v, dims: _ } => match &self.input {
-                                VarTensor::Advice {
-                                    inner: advice,
-                                    dims: _,
-                                } =>
-                                //copy the advice
-                                {
-                                    v.enum_map(|i, x| {
-                                        x.copy_advice(|| "input", &mut region, advice[i], offset)
-                                            .unwrap()
-                                    })
-                                }
-                                _ => todo!(),
-                            },
-                            ValTensor::Value { inner: v, dims: _ } => match &self.input {
-                                VarTensor::Advice {
-                                    inner: advice,
-                                    dims: _,
-                                } => v.enum_map(|i, x| {
-                                    // assign the advice
-                                    region
-                                        .assign_advice(|| "input", advice[i], offset, || x.into())
-                                        .unwrap()
-                                }),
-                                _ => todo!(),
-                            },
-                        };
-
-                        let output =
-                            Tensor::from(w.iter().map(|acaf| acaf.value_field()).map(|vaf| {
-                                vaf.map(|f| {
-                                    <NL as Nonlinearity<F>>::nonlinearity(
-                                        felt_to_i32(f.evaluate()),
-                                        &self.table.borrow().scaling_params,
-                                    )
-                                    .into()
-                                })
-                            }));
-
-                        match &self.input {
+                    let w = match &values[0] {
+                        ValTensor::AssignedValue { inner: v, dims: _ } => match &self.input {
                             VarTensor::Advice {
                                 inner: advice,
                                 dims: _,
-                            } => Ok(output.enum_map(|i, o| {
-                                region
-                                    .assign_advice(|| format!("nl_{i}"), advice[i], 1, || o)
-                                    .unwrap()
-                            })),
-
+                            } => v.enum_map(|i, x| {
+                                // assign the advice
+                                match region.assign_advice(|| "input", advice[i], offset, || x) {
+                                    Ok(a) => a,
+                                    Err(e) => {
+                                        abort!("failed to assign input advice {:?}", e);
+                                    }
+                                }
+                            }),
                             _ => todo!(),
-                        }
-                    },
-                )
-                .unwrap(),
+                        },
+                        ValTensor::PrevAssigned { inner: v, dims: _ } => match &self.input {
+                            VarTensor::Advice {
+                                inner: advice,
+                                dims: _,
+                            } =>
+                            //copy the advice
+                            {
+                                v.enum_map(|i, x| {
+                                    match x.copy_advice(|| "input", &mut region, advice[i], offset)
+                                    {
+                                        Ok(a) => a,
+                                        Err(e) => {
+                                            abort!("failed to copy input advice {:?}", e);
+                                        }
+                                    }
+                                })
+                            }
+                            _ => todo!(),
+                        },
+                        ValTensor::Value { inner: v, dims: _ } => match &self.input {
+                            VarTensor::Advice {
+                                inner: advice,
+                                dims: _,
+                            } => v.enum_map(|i, x| {
+                                // assign the advice
+                                match region.assign_advice(
+                                    || "input",
+                                    advice[i],
+                                    offset,
+                                    || x.into(),
+                                ) {
+                                    Ok(a) => a,
+                                    Err(e) => {
+                                        abort!("failed to assign input advice {:?}", e);
+                                    }
+                                }
+                            }),
+                            _ => todo!(),
+                        },
+                    };
+
+                    let output = Tensor::from(w.iter().map(|acaf| acaf.value_field()).map(|vaf| {
+                        vaf.map(|f| {
+                            <NL as Nonlinearity<F>>::nonlinearity(
+                                felt_to_i32(f.evaluate()),
+                                &self.table.borrow().scaling_params,
+                            )
+                            .into()
+                        })
+                    }));
+
+                    match &self.input {
+                        VarTensor::Advice {
+                            inner: advice,
+                            dims: _,
+                        } => Ok(output.enum_map(|i, o| {
+                            match region.assign_advice(|| format!("nl_{i}"), advice[i], 1, || o) {
+                                Ok(a) => a,
+                                Err(e) => {
+                                    abort!("failed to assign non-linearity advice {:?}", e);
+                                }
+                            }
+                        })),
+
+                        _ => todo!(),
+                    }
+                },
+            ) {
+                Ok(a) => a,
+                Err(e) => {
+                    abort!("failed to assign elt-wise region {:?}", e);
+                }
+            },
         );
         t.reshape(values[0].dims());
         t
