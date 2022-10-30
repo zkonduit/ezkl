@@ -7,7 +7,7 @@ use halo2_proofs::{
     plonk::{ConstraintSystem, Expression, Selector, TableColumn},
     poly::Rotation,
 };
-use log::{error};
+use log::error;
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 pub trait Nonlinearity<F: FieldExt> {

@@ -12,3 +12,12 @@ pub mod fieldutils;
 pub mod onnx;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
+
+/// A macro to abort concisely.
+#[macro_export]
+macro_rules! abort {
+    ($msg:literal $(, $ex:expr)*) => {
+        error!($msg, $($ex,)*);
+        panic!();
+    };
+}
