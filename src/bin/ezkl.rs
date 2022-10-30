@@ -3,7 +3,7 @@ use ezkl::commands::{data_path, Cli, Commands};
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::onnx::{utilities::vector_to_quantized, OnnxCircuit, OnnxModel};
 use ezkl::tensor::Tensor;
-use halo2_proofs::dev::MockProver;
+use halo2_proofs::dev::{MockProver, VerifyFailure};
 use halo2_proofs::plonk::ProvingKey;
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -24,7 +24,7 @@ use halo2_proofs::{
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp;
 use halo2curves::pasta::{EqAffine, Fp as F};
-use log::{info, trace};
+use log::{debug, error, info, trace};
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
@@ -49,6 +49,39 @@ struct Proof {
     proof: Vec<u8>,
 }
 
+/// Helper function to print helpful error messages after verification has failed.
+fn parse_prover_errors(f: &VerifyFailure) {
+    match f {
+        VerifyFailure::Lookup {
+            name,
+            location,
+            lookup_index,
+        } => {
+            error!(
+                "lookup {:?} is out of range, try increasing 'bits' or reducing 'scale'",
+                name
+            );
+            debug!("location {:?} at lookup index {:?}", location, lookup_index);
+        }
+        VerifyFailure::ConstraintNotSatisfied {
+            constraint,
+            location,
+            cell_values,
+        } => {
+            error!("constraint {:?} was not satisfied", constraint);
+            debug!("location {:?} with values {:?}", location, cell_values);
+        }
+        VerifyFailure::ConstraintPoisoned { constraint } => {
+            error!("constraint {:?} was poisoned", constraint)
+        }
+        VerifyFailure::Permutation { column, location } => {
+            error!("permutation did not preserve column cell value (try increasing 'scale')");
+            debug!("column {:?}, at location {:?}", column, location);
+        }
+        e => error!("{:?}", e),
+    }
+}
+
 pub fn main() {
     let args = Cli::parse();
     banner();
@@ -70,7 +103,16 @@ pub fn main() {
                 .collect();
 
             let prover = MockProver::run(args.logrows, &circuit, pi).unwrap();
-            prover.assert_satisfied();
+            match prover.verify() {
+                Ok(_) => {
+                    info!("verify succeeded")
+                }
+                Err(v) => {
+                    for e in v.iter() {
+                        parse_prover_errors(e)
+                    }
+                }
+            }
         }
 
         Commands::Fullprove {
@@ -85,8 +127,7 @@ pub fn main() {
             let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
             trace!("params computed");
 
-            let (pk, proof, _dims) =
-                create_ipa_proof(circuit.clone(), public_inputs.clone(), &params);
+            let (pk, proof, _dims) = create_ipa_proof(circuit, public_inputs.clone(), &params);
 
             let pi_inner: Vec<Vec<F>> = public_inputs
                 .iter()
@@ -164,7 +205,7 @@ fn prepare_circuit_and_public_input<F: FieldExt>(
     let onnx_model = OnnxModel::from_arg();
     let out_scales = onnx_model.get_output_scales();
     colog::init();
-    let circuit = prepare_circuit(&data);
+    let circuit = prepare_circuit(data);
 
     // quantize the supplied data using the provided scale.
     let public_inputs = data
