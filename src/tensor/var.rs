@@ -1,5 +1,6 @@
 use super::*;
-
+use crate::abort;
+use log::error;
 /// A wrapper around a tensor where the inner type is one of Halo2's `Column<Fixed>` or `Column<Advice>`.
 /// The wrapper allows for `VarTensor`'s dimensions to differ from that of the inner (wrapped) tensor.
 /// The inner tensor might, for instance, contain 3 Advice Columns. Each of those columns in turn
@@ -116,11 +117,13 @@ impl VarTensor {
         &self,
         meta: &mut VirtualCells<'_, F>,
         offset: usize,
-    ) -> Tensor<Expression<F>> {
-        let mut t = match &self {
+    ) -> Result<Tensor<Expression<F>>, TensorError> {
+        match &self {
             // when fixed we have 1 col per param
             VarTensor::Fixed { inner: f, dims: _ } => {
-                f.map(|c| meta.query_fixed(c, Rotation(offset as i32)))
+                let mut t = f.map(|c| meta.query_fixed(c, Rotation(offset as i32)));
+                t.reshape(self.dims());
+                Ok(t)
             }
             // when advice we have 1 col per row
             VarTensor::Advice { inner: a, dims: d } => a
@@ -131,9 +134,7 @@ impl VarTensor {
                     )
                 })
                 .combine(),
-        };
-        t.reshape(self.dims());
-        t
+        }
     }
 
     /// Retrieve the value represented at a specific index within the columns of the inner tensor.
@@ -159,23 +160,31 @@ impl VarTensor {
         region: &mut Region<'_, F>,
         offset: usize,
         values: &ValTensor<F>,
-    ) -> Tensor<AssignedCell<Assigned<F>, F>> {
+    ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, TensorError> {
         match values {
             ValTensor::Value { inner: v, dims: _ } => v.mc_enum_map(|coord, k| match &self {
-                VarTensor::Fixed { inner: f, dims: _ } => region
-                    .assign_fixed(|| "k", f.get(coord), offset, || k.into())
-                    .unwrap(),
+                VarTensor::Fixed { inner: f, dims: _ } => {
+                    match region.assign_fixed(|| "k", f.get(coord), offset, || k.into()) {
+                        Ok(a) => a,
+                        Err(e) => {
+                            abort!("failed to assign ValTensor to VarTensor {:?}", e);
+                        }
+                    }
+                }
                 VarTensor::Advice { inner: a, dims: _ } => {
                     let coord = format_advice_coord(coord);
                     let last = coord.len() - 1;
-                    region
-                        .assign_advice(
-                            || "k",
-                            a.get(&coord[0..last]),
-                            offset + coord[last],
-                            || k.into(),
-                        )
-                        .unwrap()
+                    match region.assign_advice(
+                        || "k",
+                        a.get(&coord[0..last]),
+                        offset + coord[last],
+                        || k.into(),
+                    ) {
+                        Ok(a) => a,
+                        Err(e) => {
+                            abort!("failed to assign ValTensor to VarTensor {:?}", e);
+                        }
+                    }
                 }
             }),
             ValTensor::PrevAssigned { inner: v, dims: _ } => {
@@ -184,27 +193,44 @@ impl VarTensor {
                     VarTensor::Advice { inner: a, dims: _ } => {
                         let coord = format_advice_coord(coord);
                         let last = coord.len() - 1;
-                        x.copy_advice(|| "k", region, a.get(&coord[0..last]), offset + coord[last])
-                            .unwrap()
+                        match x.copy_advice(
+                            || "k",
+                            region,
+                            a.get(&coord[0..last]),
+                            offset + coord[last],
+                        ) {
+                            Ok(a) => a,
+                            Err(e) => {
+                                abort!("failed to copy ValTensor to VarTensor {:?}", e);
+                            }
+                        }
                     }
                 })
             }
             ValTensor::AssignedValue { inner: v, dims: _ } => {
                 v.mc_enum_map(|coord, k| match &self {
-                    VarTensor::Fixed { inner: f, dims: _ } => region
-                        .assign_fixed(|| "k", f.get(coord), offset, || k)
-                        .unwrap(),
+                    VarTensor::Fixed { inner: f, dims: _ } => {
+                        match region.assign_fixed(|| "k", f.get(coord), offset, || k) {
+                            Ok(a) => a,
+                            Err(e) => {
+                                abort!("failed to assign ValTensor to VarTensor {:?}", e);
+                            }
+                        }
+                    }
                     VarTensor::Advice { inner: a, dims: _ } => {
                         let coord = format_advice_coord(coord);
                         let last = coord.len() - 1;
-                        region
-                            .assign_advice(
-                                || "k",
-                                a.get(&coord[0..last]),
-                                offset + coord[last],
-                                || k,
-                            )
-                            .unwrap()
+                        match region.assign_advice(
+                            || "k",
+                            a.get(&coord[0..last]),
+                            offset + coord[last],
+                            || k,
+                        ) {
+                            Ok(a) => a,
+                            Err(e) => {
+                                abort!("failed to assign ValTensor to VarTensor {:?}", e);
+                            }
+                        }
                     }
                 })
             }

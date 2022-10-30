@@ -422,10 +422,13 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
-    /// let mut c = a.mc_enum_map(|i, x| i32::pow(x + i[0] as i32, 2));
+    /// let mut c = a.mc_enum_map(|i, x| i32::pow(x + i[0] as i32, 2)).unwrap();
     /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
     /// ```
-    pub fn mc_enum_map<F: FnMut(&[usize], T) -> G, G: TensorType>(&self, mut f: F) -> Tensor<G> {
+    pub fn mc_enum_map<F: FnMut(&[usize], T) -> G, G: TensorType>(
+        &self,
+        mut f: F,
+    ) -> Result<Tensor<G>, TensorError> {
         let mut indices = Vec::new();
         for i in self.dims.clone() {
             indices.push(0..i);
@@ -435,7 +438,7 @@ impl<T: Clone + TensorType> Tensor<T> {
             res.push(f(&coord, self.get(&coord)));
         }
 
-        Tensor::new(Some(&res), self.dims()).unwrap()
+        Tensor::new(Some(&res), self.dims())
     }
 }
 
@@ -446,17 +449,17 @@ impl<T: Clone + TensorType> Tensor<Tensor<T>> {
     /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
     /// let mut b = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
     /// let mut c = Tensor::new(Some(&[a,b]), &[2]).unwrap();
-    /// let mut d = c.combine();
+    /// let mut d = c.combine().unwrap();
     /// assert_eq!(d.dims(), &[8]);
     /// ```
-    pub fn combine(&self) -> Tensor<T> {
+    pub fn combine(&self) -> Result<Tensor<T>, TensorError> {
         let mut dims = 0;
         let mut inner = Vec::new();
         for mut t in self.inner.clone().into_iter() {
             dims += t.len();
             inner.extend(t.inner);
         }
-        Tensor::new(Some(&inner), &[dims]).unwrap()
+        Tensor::new(Some(&inner), &[dims])
     }
 }
 
