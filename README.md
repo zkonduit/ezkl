@@ -101,6 +101,10 @@ criterion_group! {
 The MNIST inference example using ezkl as a library is contained in `examples/conv2d_mnist`. To run it:
 
 ```bash
+# download MNIST data
+chmod +x data.sh
+./data.sh
+# test the model (takes 600-700 seconds)
 cargo run --release --example conv2d_mnist
 ```
 
