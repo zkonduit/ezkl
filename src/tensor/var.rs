@@ -126,14 +126,29 @@ impl VarTensor {
                 Ok(t)
             }
             // when advice we have 1 col per row
-            VarTensor::Advice { inner: a, dims: d } => a
+            VarTensor::Advice { inner: a, dims: d } => match a
                 .map(|column| {
                     Tensor::from(
-                        (0..*d.last().unwrap())
+                        // this should fail if dims is empty, should be impossible
+                        (0..*match d.last() {
+                            Some(d) => d,
+                            None => {
+                                abort!("tensor dims should not be empty");
+                            }
+                        })
                             .map(|i| meta.query_advice(column, Rotation(offset as i32 + i as i32))),
                     )
                 })
-                .combine(),
+                .combine()
+            {
+                Ok(mut c) => {
+                    c.reshape(self.dims());
+                    Ok(c)
+                }
+                Err(e) => {
+                    abort!("failed to combine tensors {:?}", e);
+                }
+            },
         }
     }
 
