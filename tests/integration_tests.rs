@@ -79,6 +79,7 @@ fn test_ff_fullprove() {
 }
 
 #[test]
+#[ignore]
 fn test_relusig_fullprove() {
     test_onnx_fullprove("relusig".to_string());
 }
