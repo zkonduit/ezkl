@@ -15,7 +15,7 @@ use halo2_proofs::{
 use itertools::Itertools;
 use log::{debug, error, info, trace, warn};
 use std::cmp::max;
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::collections::{btree_map::Entry, BTreeMap, HashSet};
 use std::fmt;
 use std::path::Path;
 use tabled::{Table, Tabled};
@@ -95,7 +95,7 @@ pub struct NodeConfig<F: FieldExt + TensorType> {
 /// A circuit configuration for the entirety of a model loaded from an Onnx file.
 #[derive(Clone)]
 pub struct OnnxModelConfig<F: FieldExt + TensorType> {
-    configs: HashMap<usize, NodeConfig<F>>,
+    configs: BTreeMap<usize, NodeConfig<F>>,
     pub model: OnnxModel,
     pub public_outputs: Vec<Column<Instance>>,
 }
@@ -327,17 +327,17 @@ impl OnnxNode {
 
 /// Representation of an execution graph divided into execution 'buckets'.
 #[derive(Clone, Default, Debug)]
-pub struct NodeGraph(HashMap<Option<usize>, HashMap<usize, OnnxNode>>);
+pub struct NodeGraph(BTreeMap<Option<usize>, BTreeMap<usize, OnnxNode>>);
 
 impl NodeGraph {
     pub fn new() -> Self {
-        NodeGraph(HashMap::new())
+        NodeGraph(BTreeMap::new())
     }
 
     fn insert(&mut self, idx: Option<usize>, node_idx: usize, config: OnnxNode) {
         match self.0.entry(idx) {
             Entry::Vacant(e) => {
-                e.insert(HashMap::from([(node_idx, config)]));
+                e.insert(BTreeMap::from([(node_idx, config)]));
             }
             Entry::Occupied(mut e) => {
                 e.get_mut().insert(node_idx, config);
@@ -406,14 +406,14 @@ impl OnnxModel {
     pub fn new(path: impl AsRef<Path>, scale: i32, bits: usize, mode: Mode) -> Self {
         let model = tract_onnx::onnx().model_for_path(path).unwrap();
 
-        let onnx_nodes: HashMap<usize, OnnxNode> = model
+        let onnx_nodes: BTreeMap<usize, OnnxNode> = model
             .nodes()
             .iter()
             .enumerate()
             .map(|(i, n)| (i, OnnxNode::new(n.clone(), scale, i)))
             .collect();
 
-        let mut map = HashMap::new();
+        let mut map = BTreeMap::new();
         map.insert(None, onnx_nodes);
         let mut om = OnnxModel {
             model,
@@ -472,10 +472,10 @@ impl OnnxModel {
         advices: VarTensor,
     ) -> Result<OnnxModelConfig<F>> {
         info!("configuring model");
-        let mut results = HashMap::new();
+        let mut results = BTreeMap::new();
 
         for (_, bucket_nodes) in self.onnx_nodes.0.iter() {
-            let non_fused_ops: HashMap<&usize, &OnnxNode> = bucket_nodes
+            let non_fused_ops: BTreeMap<&usize, &OnnxNode> = bucket_nodes
                 .iter()
                 .filter(|(_, n)| !n.opkind.is_fused())
                 .collect();
@@ -493,7 +493,7 @@ impl OnnxModel {
             }
 
             // preserves ordering
-            let fused_ops: HashMap<&usize, &OnnxNode> = bucket_nodes
+            let fused_ops: BTreeMap<&usize, &OnnxNode> = bucket_nodes
                 .iter()
                 .filter(|(_, n)| n.opkind.is_fused())
                 .collect();
@@ -527,21 +527,21 @@ impl OnnxModel {
         })
     }
 
-    /// Configures a `HashMap` of 'fuseable' operations. These correspond to operations that are represented in
+    /// Configures a `BTreeMap` of 'fuseable' operations. These correspond to operations that are represented in
     /// the `circuit::fused` module. A single configuration is output, representing the amalgamation of these operations into
     /// a single Halo2 gate.
     /// # Arguments
     ///
-    /// * `nodes` - A `HashMap` of (node index, [OnnxNode] pairs). The [OnnxNode] must represent a fuseable op.
+    /// * `nodes` - A `BTreeMap` of (node index, [OnnxNode] pairs). The [OnnxNode] must represent a fuseable op.
     /// * `meta` - Halo2 ConstraintSystem.
     /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure all the passed `nodes`.
     fn fuse_ops<F: FieldExt + TensorType>(
         &self,
-        nodes: &HashMap<&usize, &OnnxNode>,
+        nodes: &BTreeMap<&usize, &OnnxNode>,
         meta: &mut ConstraintSystem<F>,
         advices: VarTensor,
     ) -> NodeConfigTypes<F> {
-        let input_nodes: HashMap<(&usize, &FusedOp), Vec<OnnxNode>> = nodes
+        let input_nodes: BTreeMap<(&usize, &FusedOp), Vec<OnnxNode>> = nodes
             .iter()
             .map(|(i, e)| {
                 (
@@ -568,7 +568,6 @@ impl OnnxModel {
         // impose an execution order here
         let inputs_to_layer: Vec<(usize, VarTensor)> = input_nodes
             .iter()
-            .sorted_by_key(|x| x.0 .0)
             .flat_map(|x| {
                 x.1.iter()
                     .filter(|i| !nodes.contains_key(&i.idx) && seen.insert(i.idx))
@@ -602,7 +601,6 @@ impl OnnxModel {
         let mut inter_counter = 0;
         let fused_nodes: Vec<FusedNode> = input_nodes
             .iter()
-            .sorted_by_key(|x| x.0 .0)
             .map(|(op, e)| {
                 let order = e
                     .iter()
@@ -745,11 +743,11 @@ impl OnnxModel {
         inputs: &[ValTensor<F>],
     ) -> Result<Vec<ValTensor<F>>> {
         info!("model layout");
-        let mut results = HashMap::<usize, ValTensor<F>>::new();
+        let mut results = BTreeMap::<usize, ValTensor<F>>::new();
         for i in inputs.iter().enumerate() {
             results.insert(i.0, i.1.clone());
         }
-        for (idx, c) in config.configs.iter().sorted_by_key(|x| x.0) {
+        for (idx, c) in config.configs.iter() {
             let mut display: String = "".to_string();
             for (i, idx) in c.onnx_idx[0..].iter().enumerate() {
                 let node = &self.onnx_nodes.filter(*idx);
@@ -797,11 +795,11 @@ impl OnnxModel {
     ///
     /// * `config` - [NodeConfig] the signle region we will layout.
     /// * `layouter` - Halo2 Layouter.
-    /// * `inputs` - `HashMap` of values to feed into the NodeConfig, can also include previous intermediate results, i.e the output of other nodes.
+    /// * `inputs` - `BTreeMap` of values to feed into the NodeConfig, can also include previous intermediate results, i.e the output of other nodes.
     fn layout_config<F: FieldExt + TensorType>(
         &self,
         layouter: &mut impl Layouter<F>,
-        inputs: &mut HashMap<usize, ValTensor<F>>,
+        inputs: &mut BTreeMap<usize, ValTensor<F>>,
         config: &NodeConfig<F>,
     ) -> Result<Option<ValTensor<F>>> {
         // The node kind and the config should be the same.
@@ -854,17 +852,10 @@ impl OnnxModel {
     pub fn forward_shape_and_quantize_pass(&mut self) -> Result<()> {
         info!("quantizing model activations");
 
-        let mut nodes = HashMap::<usize, OnnxNode>::new();
+        let mut nodes = BTreeMap::<usize, OnnxNode>::new();
         let output_nodes = self.model.outputs.iter().map(|o| o.node).collect_vec();
 
-        for (_, node) in self
-            .onnx_nodes
-            .0
-            .get_mut(&None)
-            .unwrap()
-            .iter_mut()
-            .sorted_by_key(|x| x.0)
-        {
+        for (_, node) in self.onnx_nodes.0.get_mut(&None).unwrap().iter_mut() {
             if output_nodes.contains(&node.idx) {
                 node.is_output = true;
             }
@@ -1207,17 +1198,17 @@ impl OnnxModel {
     /// If the node is a lookup table, assign to it the maximum bucket of it's inputs incremented by 1.
     /// # Arguments
     ///
-    /// * `nodes` - `HashMap` of (node index, [OnnxNode]) pairs.
+    /// * `nodes` - `BTreeMap` of (node index, [OnnxNode]) pairs.
     pub fn assign_execution_buckets(
         &mut self,
-        mut nodes: HashMap<usize, OnnxNode>,
+        mut nodes: BTreeMap<usize, OnnxNode>,
     ) -> Result<NodeGraph> {
         info!("assigning configuration buckets to operations");
 
         let mut bucketed_nodes =
-            NodeGraph(HashMap::<Option<usize>, HashMap<usize, OnnxNode>>::new());
+            NodeGraph(BTreeMap::<Option<usize>, BTreeMap<usize, OnnxNode>>::new());
 
-        for (_, node) in nodes.iter_mut().sorted_by_key(|x| x.0) {
+        for (_, node) in nodes.iter_mut() {
             let prev_bucket: Option<usize> = node
                 .inputs
                 .iter()

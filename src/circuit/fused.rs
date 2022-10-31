@@ -13,7 +13,7 @@ use std::fmt;
 use std::marker::PhantomData;
 
 /// An enum representing the operations that can be merged into a single circuit gate.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum FusedOp {
     Add,
     Sub,
