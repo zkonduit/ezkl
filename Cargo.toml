@@ -6,9 +6,13 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2", tag = "v2022_08_19"}
-halo2curves = { git = 'https://github.com/privacy-scaling-explorations/halo2curves', tag = "0.2.1" }
-nalgebra = "0.31"
+halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2", tag = "v2022_10_22"}
+halo2curves = { git = 'https://github.com/privacy-scaling-explorations/halo2curves', tag = "0.3.0" }
+ethereum_types = { package = "ethereum-types", version = "0.13.1", default-features = false, features = ["std"]}
+halo2_wrong_ecc = { git = "https://github.com/privacy-scaling-explorations/halo2wrong", tag = "v2022_10_22", package = "ecc"}
+plonk_verifier = {  git = "https://github.com/privacy-scaling-explorations/plonk-verifier.git", tag = "v2022_10_22" } 
+foundry_evm = { git = "https://github.com/foundry-rs/foundry", package = "foundry-evm", rev = "6b1ee60e" }
+# nalgebra = "0.31"
 rand = "0.8"
 mnist = "0.5"
 ndarray = "0.15"

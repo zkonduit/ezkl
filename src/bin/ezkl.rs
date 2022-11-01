@@ -1,27 +1,48 @@
 use clap::Parser;
 use ezkl::abort;
-use ezkl::commands::{data_path, Cli, Commands};
+//
+use ethereum_types::Address;
+use ezkl::aggregation;
+use foundry_evm::executor::{fork::MultiFork, Backend, ExecutorBuilder};
+use itertools::Itertools;
+use plonk_verifier::{
+    loader::{
+        evm::{encode_calldata, EvmLoader},
+        native::NativeLoader,
+    },
+    system::halo2::{compile, transcript::evm::EvmTranscript, Config},
+    verifier::PlonkVerifier,
+};
+use std::{io::Cursor, rc::Rc};
+//
+use ezkl::commands::{data_path, Cli, Commands, ProofSystem};
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::onnx::{utilities::vector_to_quantized, OnnxCircuit, OnnxModel};
 use ezkl::tensor::Tensor;
-use halo2_proofs::dev::{MockProver, VerifyFailure};
-use halo2_proofs::plonk::ProvingKey;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit},
+    dev::{MockProver, VerifyFailure},
+    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey},
     poly::{
-        commitment::ParamsProver,
+        commitment::{Params, ParamsProver},
         ipa::{
             commitment::{IPACommitmentScheme, ParamsIPA},
             multiopen::ProverIPA,
             strategy::SingleStrategy,
         },
+        kzg::{
+            commitment::{KZGCommitmentScheme, ParamsKZG},
+            multiopen::{ProverGWC, VerifierGWC},
+            strategy::AccumulatorStrategy,
+        },
         VerificationStrategy,
     },
     transcript::{
-        Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
+        Blake2bRead, Blake2bWrite, Challenge255, EncodedChallenge, TranscriptReadBuffer,
+        TranscriptWriterBuffer,
     },
 };
+use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine};
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp;
 use halo2curves::pasta::{EqAffine, Fp as F};
@@ -88,11 +109,11 @@ fn parse_prover_errors(f: &VerifyFailure) {
 
 pub fn main() {
     let args = Cli::parse();
+    colog::init();
     banner();
 
     match args.command {
         Commands::Table { model: _ } => {
-            colog::init();
             let om = OnnxModel::from_arg();
             println!("{}", Table::new(om.onnx_nodes.flatten()));
         }
@@ -133,30 +154,73 @@ pub fn main() {
             let data = prepare_data(data);
             let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
             info!("full proof with {}", pfsys);
-            let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
-            trace!("params computed");
 
-            let (pk, proof, _dims) = create_ipa_proof(circuit, public_inputs.clone(), &params);
+            match pfsys {
+                ProofSystem::IPA => {
+                    // A direct proof
+                    let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
+                    trace!("params computed");
 
-            let pi_inner: Vec<Vec<F>> = public_inputs
-                .iter()
-                .map(|i| i.iter().map(|e| i32_to_felt::<F>(*e)).collect::<Vec<F>>())
-                .collect::<Vec<Vec<F>>>();
-            let pi_inner = pi_inner.iter().map(|e| e.deref()).collect::<Vec<&[F]>>();
-            let pi_for_real_prover: &[&[&[F]]] = &[&pi_inner];
+                    let (pk, proof, _dims) =
+                        create_ipa_proof(circuit.clone(), public_inputs.clone(), &params);
 
-            let now = Instant::now();
-            let strategy = SingleStrategy::new(&params);
-            let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
-            assert!(verify_proof(
-                &params,
-                pk.get_vk(),
-                strategy,
-                pi_for_real_prover,
-                &mut transcript
-            )
-            .is_ok());
-            info!("verify took {}", now.elapsed().as_secs());
+                    let pi_inner: Vec<Vec<F>> = public_inputs
+                        .iter()
+                        .map(|i| i.iter().map(|e| i32_to_felt::<F>(*e)).collect::<Vec<F>>())
+                        .collect::<Vec<Vec<F>>>();
+                    let pi_inner = pi_inner.iter().map(|e| e.deref()).collect::<Vec<&[F]>>();
+                    let pi_for_real_prover: &[&[&[F]]] = &[&pi_inner];
+
+                    let now = Instant::now();
+                    let strategy = SingleStrategy::new(&params);
+                    let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
+                    assert!(verify_proof(
+                        &params,
+                        pk.get_vk(),
+                        strategy,
+                        pi_for_real_prover,
+                        &mut transcript
+                    )
+                    .is_ok());
+                    info!("verify took {}", now.elapsed().as_secs());
+                }
+                ProofSystem::KZG => {
+                    // We will need aggregator k > application k > bits
+                    //		    let application_logrows = args.logrows; //bits + 1;
+                    let aggregation_logrows = args.logrows + 6;
+
+                    let params = gen_srs(aggregation_logrows);
+                    let params_app = {
+                        let mut params = params.clone();
+                        params.downsize(args.logrows);
+                        params
+                    };
+                    let now = Instant::now();
+                    let snarks = [(); 1].map(|_| gen_application_snark(&params_app, &data));
+                    info!("Application proof took {}", now.elapsed().as_secs());
+                    let agg_circuit = aggregation::AggregationCircuit::new(&params, snarks);
+                    let pk = gen_pk(&params, &agg_circuit);
+                    let deployment_code = gen_aggregation_evm_verifier(
+                        &params,
+                        pk.get_vk(),
+                        aggregation::AggregationCircuit::num_instance(),
+                        aggregation::AggregationCircuit::accumulator_indices(),
+                    );
+                    let now = Instant::now();
+                    let proof = gen_kzg_proof::<
+                        _,
+                        _,
+                        EvmTranscript<G1Affine, _, _, _>,
+                        EvmTranscript<G1Affine, _, _, _>,
+                    >(
+                        &params, &pk, agg_circuit.clone(), agg_circuit.instances()
+                    );
+                    info!("Aggregation proof took {}", now.elapsed().as_secs());
+                    let now = Instant::now();
+                    evm_verify(deployment_code, agg_circuit.instances(), proof);
+                    info!("verify took {}", now.elapsed().as_secs());
+                }
+            }
         }
         Commands::Prove {
             data,
@@ -200,7 +264,6 @@ pub fn main() {
             proof,
             pfsys: _,
         } => {
-            colog::init();
             let mut file = match File::open(proof) {
                 Ok(f) => f,
                 Err(e) => {
@@ -228,7 +291,6 @@ fn prepare_circuit_and_public_input<F: FieldExt>(
 ) -> (OnnxCircuit<F>, Vec<Tensor<i32>>) {
     let onnx_model = OnnxModel::from_arg();
     let out_scales = onnx_model.get_output_scales();
-    colog::init();
     let circuit = prepare_circuit(data);
 
     // quantize the supplied data using the provided scale.
@@ -297,6 +359,7 @@ fn prepare_data(datapath: String) -> OnnxInput {
     data
 }
 
+// IPA
 fn create_ipa_proof(
     circuit: OnnxCircuit<Fp>,
     public_inputs: Vec<Tensor<i32>>,
@@ -391,6 +454,145 @@ fn verify_ipa_proof(proof: Proof) -> bool {
     .is_ok();
     info!("verify took {}", now.elapsed().as_secs());
     result
+}
+
+// KZG
+
+fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &OnnxInput) -> aggregation::Snark {
+    let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(data);
+
+    let pk = gen_pk(params, &circuit);
+    let number_instance = public_inputs.clone()[0].len();
+    trace!("number_instance {:?}", number_instance);
+    let protocol = compile(
+        params,
+        pk.get_vk(),
+        Config::kzg().with_num_instance(vec![number_instance]),
+    );
+    let pi_inner: Vec<Vec<Fr>> = public_inputs
+        .iter()
+        .map(|i| i.iter().map(|e| i32_to_felt::<Fr>(*e)).collect::<Vec<Fr>>())
+        .collect::<Vec<Vec<Fr>>>();
+    //    let pi_inner = pi_inner.iter().map(|e| e.deref()).collect::<Vec<&[Fr]>>();
+    trace!("pi_inner {:?}", pi_inner);
+    let proof = gen_kzg_proof::<
+        _,
+        _,
+        aggregation::PoseidonTranscript<NativeLoader, _>,
+        aggregation::PoseidonTranscript<NativeLoader, _>,
+    >(params, &pk, circuit.clone(), pi_inner.clone());
+    aggregation::Snark::new(protocol, pi_inner, proof)
+}
+
+fn gen_aggregation_evm_verifier(
+    params: &ParamsKZG<Bn256>,
+    vk: &VerifyingKey<G1Affine>,
+    num_instance: Vec<usize>,
+    accumulator_indices: Vec<(usize, usize)>,
+) -> Vec<u8> {
+    let svk = params.get_g()[0].into();
+    let dk = (params.g2(), params.s_g2()).into();
+    let protocol = compile(
+        params,
+        vk,
+        Config::kzg()
+            .with_num_instance(num_instance.clone())
+            .with_accumulator_indices(accumulator_indices),
+    );
+
+    let loader = EvmLoader::new::<Fq, Fr>();
+    let mut transcript = EvmTranscript::<_, Rc<EvmLoader>, _, _>::new(loader.clone());
+
+    let instances = transcript.load_instances(num_instance);
+    let proof =
+        aggregation::Plonk::read_proof(&svk, &protocol, &instances, &mut transcript).unwrap();
+    aggregation::Plonk::verify(&svk, &dk, &protocol, &instances, &proof).unwrap();
+
+    loader.deployment_code()
+}
+
+fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<u8>) {
+    let calldata = encode_calldata(&instances, &proof);
+    let success = {
+        let mut evm = ExecutorBuilder::default()
+            .with_gas_limit(u64::MAX.into())
+            .build(Backend::new(MultiFork::new().0, None));
+
+        let caller = Address::from_low_u64_be(0xfe);
+        let verifier = evm
+            .deploy(caller, deployment_code.into(), 0.into(), None)
+            .unwrap()
+            .address;
+        let result = evm
+            .call_raw(caller, verifier, calldata.into(), 0.into())
+            .unwrap();
+
+        dbg!(result.gas_used);
+
+        !result.reverted
+    };
+    assert!(success);
+}
+
+fn gen_srs(k: u32) -> ParamsKZG<Bn256> {
+    ParamsKZG::<Bn256>::setup(k, OsRng)
+}
+
+fn gen_pk<C: Circuit<Fr>>(params: &ParamsKZG<Bn256>, circuit: &C) -> ProvingKey<G1Affine> {
+    let vk = keygen_vk(params, circuit).unwrap();
+    keygen_pk(params, vk, circuit).unwrap()
+}
+
+/// Generates proof for either application circuit (model) or aggregation circuit.
+fn gen_kzg_proof<
+    C: Circuit<Fr>,
+    E: EncodedChallenge<G1Affine>,
+    TR: TranscriptReadBuffer<Cursor<Vec<u8>>, G1Affine, E>,
+    TW: TranscriptWriterBuffer<Vec<u8>, G1Affine, E>,
+>(
+    params: &ParamsKZG<Bn256>,
+    pk: &ProvingKey<G1Affine>,
+    circuit: C,
+    instances: Vec<Vec<Fr>>,
+) -> Vec<u8> {
+    MockProver::run(params.k(), &circuit, instances.clone())
+        .unwrap()
+        .assert_satisfied();
+
+    let instances = instances
+        .iter()
+        .map(|instances| instances.as_slice())
+        .collect_vec();
+    let proof = {
+        let mut transcript = TW::init(Vec::new());
+        create_proof::<KZGCommitmentScheme<Bn256>, ProverGWC<_>, _, _, TW, _>(
+            params,
+            pk,
+            &[circuit],
+            &[instances.as_slice()],
+            OsRng,
+            &mut transcript,
+        )
+        .unwrap();
+        transcript.finalize()
+    };
+
+    let accept = {
+        let mut transcript = TR::init(Cursor::new(proof.clone()));
+        VerificationStrategy::<_, VerifierGWC<_>>::finalize(
+            verify_proof::<_, VerifierGWC<_>, _, TR, _>(
+                params.verifier_params(),
+                pk.get_vk(),
+                AccumulatorStrategy::new(params.verifier_params()),
+                &[instances.as_slice()],
+                &mut transcript,
+            )
+            .unwrap(),
+        )
+    };
+    assert!(accept);
+
+    proof
 }
 
 fn banner() {
