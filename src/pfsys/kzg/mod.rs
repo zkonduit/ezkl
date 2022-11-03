@@ -1,27 +1,19 @@
+/// Aggregation circuit
+pub mod aggregation;
+
 use super::prepare_circuit_and_public_input;
 use super::OnnxInput;
-use crate::aggregation;
-use ethereum_types::Address;
-use foundry_evm::executor::{fork::MultiFork, Backend, ExecutorBuilder};
-use itertools::Itertools;
-use plonk_verifier::{
-    loader::{
-        evm::{encode_calldata, EvmLoader},
-        native::NativeLoader,
-    },
-    system::halo2::{compile, transcript::evm::EvmTranscript, Config},
-    verifier::PlonkVerifier,
-};
-use std::{io::Cursor, rc::Rc};
-//
-//use crate::commands::{data_path, Cli};
 use crate::fieldutils::i32_to_felt;
-//use crate::onnx::{utilities::vector_to_quantized, OnnxCircuit, OnnxModel};
-//use crate::tensor::Tensor;
+
+#[cfg(feature = "evm")]
+use ethereum_types::Address;
+#[cfg(feature = "evm")]
+use foundry_evm::executor::{fork::MultiFork, Backend, ExecutorBuilder};
+#[cfg(feature = "evm")]
+use halo2_proofs::plonk::VerifyingKey;
 use halo2_proofs::{
-    //    arithmetic::FieldExt,
     dev::MockProver,
-    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey},
+    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey},
     poly::{
         commitment::{Params, ParamsProver},
         kzg::{
@@ -33,9 +25,24 @@ use halo2_proofs::{
     },
     transcript::{EncodedChallenge, TranscriptReadBuffer, TranscriptWriterBuffer},
 };
-use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine};
+#[cfg(feature = "evm")]
+use halo2curves::bn256::Fq;
+use halo2curves::bn256::{Bn256, Fr, G1Affine};
+use itertools::Itertools;
 use log::trace;
+#[cfg(feature = "evm")]
+use plonk_verifier::{
+    loader::evm::{EvmLoader, encode_calldata}, system::halo2::transcript::evm::EvmTranscript, verifier::PlonkVerifier,
+};
+use plonk_verifier::{
+    loader::native::NativeLoader,
+    system::halo2::{compile, Config},
+};
+
 use rand::rngs::OsRng;
+use std::io::Cursor;
+#[cfg(feature = "evm")]
+use std::rc::Rc;
 
 pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &OnnxInput) -> aggregation::Snark {
     let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(data);
@@ -63,6 +70,7 @@ pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &OnnxInput) -> agg
     aggregation::Snark::new(protocol, pi_inner, proof)
 }
 
+#[cfg(feature = "evm")]
 pub fn gen_aggregation_evm_verifier(
     params: &ParamsKZG<Bn256>,
     vk: &VerifyingKey<G1Affine>,
@@ -90,6 +98,7 @@ pub fn gen_aggregation_evm_verifier(
     loader.deployment_code()
 }
 
+#[cfg(feature = "evm")]
 pub fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<u8>) {
     let calldata = encode_calldata(&instances, &proof);
     let success = {

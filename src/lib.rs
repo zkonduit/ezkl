@@ -1,7 +1,5 @@
 #![feature(slice_flatten)]
 
-/// Aggregation circuit
-pub mod aggregation;
 /// Methods for configuring tensor operations and assigning values to them in a Halo2 circuit.
 pub mod circuit;
 /// Commands

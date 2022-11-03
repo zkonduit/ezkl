@@ -1,32 +1,34 @@
 use clap::Parser;
 use ezkl::abort;
-use ezkl::aggregation;
-
 use ezkl::commands::{Cli, Commands, ProofSystem};
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::onnx::OnnxModel;
-
-//use ezkl::prove_verify::Proof;
-use ezkl::pfsys::ipa::{create_ipa_proof, verify_ipa_proof};
+#[cfg(feature = "evm")]
 use ezkl::pfsys::kzg::{
-    evm_verify, gen_aggregation_evm_verifier, gen_application_snark, gen_kzg_proof, gen_pk, gen_srs,
+    aggregation::AggregationCircuit, evm_verify, gen_aggregation_evm_verifier,
+    gen_application_snark, gen_kzg_proof, gen_pk, gen_srs,
 };
 use ezkl::pfsys::Proof;
 use ezkl::pfsys::{parse_prover_errors, prepare_circuit_and_public_input, prepare_data};
+use ezkl::pfsys::ipa::{create_ipa_proof, verify_ipa_proof};
+#[cfg(feature = "evm")]
+use halo2_proofs::poly::commitment::Params;
 use halo2_proofs::{
     dev::MockProver,
     plonk::verify_proof,
     poly::{
-        commitment::{Params, ParamsProver},
+        commitment::ParamsProver,
         ipa::{commitment::ParamsIPA, strategy::SingleStrategy},
         VerificationStrategy,
     },
     transcript::{Blake2bRead, Challenge255, TranscriptReadBuffer},
 };
+#[cfg(feature = "evm")]
 use halo2curves::bn256::G1Affine;
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp;
 use log::{error, info, trace};
+#[cfg(feature = "evm")]
 use plonk_verifier::system::halo2::transcript::evm::EvmTranscript;
 use rand::seq::SliceRandom;
 use std::fs::File;
@@ -90,7 +92,7 @@ pub fn main() {
                     trace!("params computed");
 
                     let (pk, proof, _dims) =
-                        create_ipa_proof(circuit.clone(), public_inputs.clone(), &params);
+                        create_ipa_proof(circuit, public_inputs.clone(), &params);
 
                     let pi_inner: Vec<Vec<Fp>> = public_inputs
                         .iter()
@@ -112,6 +114,9 @@ pub fn main() {
                     .is_ok());
                     info!("verify took {}", now.elapsed().as_secs());
                 }
+                #[cfg(not(feature = "evm"))]
+                ProofSystem::KZG => todo!(),
+                #[cfg(feature = "evm")]
                 ProofSystem::KZG => {
                     // We will need aggregator k > application k > bits
                     //		    let application_logrows = args.logrows; //bits + 1;
@@ -126,13 +131,13 @@ pub fn main() {
                     let now = Instant::now();
                     let snarks = [(); 1].map(|_| gen_application_snark(&params_app, &data));
                     info!("Application proof took {}", now.elapsed().as_secs());
-                    let agg_circuit = aggregation::AggregationCircuit::new(&params, snarks);
+                    let agg_circuit = AggregationCircuit::new(&params, snarks);
                     let pk = gen_pk(&params, &agg_circuit);
                     let deployment_code = gen_aggregation_evm_verifier(
                         &params,
                         pk.get_vk(),
-                        aggregation::AggregationCircuit::num_instance(),
-                        aggregation::AggregationCircuit::accumulator_indices(),
+                        AggregationCircuit::num_instance(),
+                        AggregationCircuit::accumulator_indices(),
                     );
                     let now = Instant::now();
                     let proof = gen_kzg_proof::<
@@ -160,34 +165,28 @@ pub fn main() {
             let data = prepare_data(data);
             let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
             info!("proof with {}", pfsys);
+            let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
+            trace!("params computed");
 
-            let serialized = match pfsys {
-                ProofSystem::IPA => {
-                    let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
-                    trace!("params computed");
+            let (_pk, proof, _input_dims) =
+                create_ipa_proof(circuit.clone(), public_inputs.clone(), &params);
 
-                    let (_pk, proof, _input_dims) =
-                        create_ipa_proof(circuit.clone(), public_inputs.clone(), &params);
+            let pi: Vec<_> = public_inputs
+                .into_iter()
+                .map(|i| i.into_iter().collect())
+                .collect();
 
-                    let pi: Vec<_> = public_inputs
-                        .into_iter()
-                        .map(|i| i.into_iter().collect())
-                        .collect();
+            let checkable_pf = Proof {
+                input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
+                public_inputs: pi,
+                proof,
+            };
 
-                    let checkable_pf = Proof {
-                        input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
-                        public_inputs: pi,
-                        proof,
-                    };
-
-                    match serde_json::to_string(&checkable_pf) {
-                        Ok(s) => s,
-                        Err(e) => {
-                            abort!("failed to convert proof json to string {:?}", e);
-                        }
-                    }
+            let serialized = match serde_json::to_string(&checkable_pf) {
+                Ok(s) => s,
+                Err(e) => {
+                    abort!("failed to convert proof json to string {:?}", e);
                 }
-                ProofSystem::KZG => String::new(),
             };
 
             let mut file = std::fs::File::create(output).expect("create failed");

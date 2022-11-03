@@ -27,7 +27,6 @@ use halo2curves::pasta::Fp;
 use halo2curves::pasta::{EqAffine, Fp as F};
 use log::{error, info, trace};
 use rand::rngs::OsRng;
-
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::time::Instant;

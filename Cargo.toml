@@ -8,10 +8,6 @@ edition = "2021"
 [dependencies]
 halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2", tag = "v2022_10_22"}
 halo2curves = { git = 'https://github.com/privacy-scaling-explorations/halo2curves', tag = "0.3.0" }
-ethereum_types = { package = "ethereum-types", version = "0.13.1", default-features = false, features = ["std"]}
-halo2_wrong_ecc = { git = "https://github.com/privacy-scaling-explorations/halo2wrong", tag = "v2022_10_22", package = "ecc"}
-plonk_verifier = {  git = "https://github.com/privacy-scaling-explorations/plonk-verifier.git", tag = "v2022_10_22" } 
-foundry_evm = { git = "https://github.com/foundry-rs/foundry", package = "foundry-evm", rev = "6b1ee60e" }
 # nalgebra = "0.31"
 rand = "0.8"
 mnist = "0.5"
@@ -27,6 +23,13 @@ serde_json = { version = "1.0.64", optional = true }
 log = { version = "0.4.17", optional = true }
 colog = { version = "1.1.0", optional = true }
 tabled = { version = "0.9.0", optional = true}
+# evm related deps
+ethereum_types = { package = "ethereum-types", version = "0.13.1", default-features = false, features = ["std"], optional=true}
+foundry_evm = { git = "https://github.com/foundry-rs/foundry", package = "foundry-evm", rev = "6b1ee60e", optional=true }
+halo2_wrong_ecc = { git = "https://github.com/privacy-scaling-explorations/halo2wrong", tag = "v2022_10_22", package = "ecc"}
+plonk_verifier = {  git = "https://github.com/privacy-scaling-explorations/plonk-verifier.git", tag = "v2022_10_22"}
+
+
 [dev-dependencies]
 criterion = {version = "0.3",  features = ["html_reports"]}
 
@@ -55,3 +58,4 @@ dev-graph = ["halo2_proofs/dev-graph", "plotters"]
 tensorflow = ["dep:tensorflow"]
 onnx = ["dep:tract-onnx"]
 ezkl = ["onnx", "serde", "serde_json", "log", "colog", "tabled"]
+evm = ["ethereum_types", "foundry_evm"]
