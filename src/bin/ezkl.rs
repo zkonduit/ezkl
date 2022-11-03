@@ -5,12 +5,14 @@ use ezkl::aggregation;
 use ezkl::commands::{Cli, Commands, ProofSystem};
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::onnx::OnnxModel;
-use ezkl::prove_verify::Proof;
-use ezkl::prove_verify::{create_ipa_proof, verify_ipa_proof};
-use ezkl::prove_verify::{
+
+//use ezkl::prove_verify::Proof;
+use ezkl::pfsys::ipa::{create_ipa_proof, verify_ipa_proof};
+use ezkl::pfsys::kzg::{
     evm_verify, gen_aggregation_evm_verifier, gen_application_snark, gen_kzg_proof, gen_pk, gen_srs,
 };
-use ezkl::prove_verify::{parse_prover_errors, prepare_circuit_and_public_input, prepare_data};
+use ezkl::pfsys::Proof;
+use ezkl::pfsys::{parse_prover_errors, prepare_circuit_and_public_input, prepare_data};
 use halo2_proofs::{
     dev::MockProver,
     plonk::verify_proof,
@@ -158,28 +160,34 @@ pub fn main() {
             let data = prepare_data(data);
             let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
             info!("proof with {}", pfsys);
-            let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
-            trace!("params computed");
 
-            let (_pk, proof, _input_dims) =
-                create_ipa_proof(circuit.clone(), public_inputs.clone(), &params);
+            let serialized = match pfsys {
+                ProofSystem::IPA => {
+                    let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
+                    trace!("params computed");
 
-            let pi: Vec<_> = public_inputs
-                .into_iter()
-                .map(|i| i.into_iter().collect())
-                .collect();
+                    let (_pk, proof, _input_dims) =
+                        create_ipa_proof(circuit.clone(), public_inputs.clone(), &params);
 
-            let checkable_pf = Proof {
-                input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
-                public_inputs: pi,
-                proof,
-            };
+                    let pi: Vec<_> = public_inputs
+                        .into_iter()
+                        .map(|i| i.into_iter().collect())
+                        .collect();
 
-            let serialized = match serde_json::to_string(&checkable_pf) {
-                Ok(s) => s,
-                Err(e) => {
-                    abort!("failed to convert proof json to string {:?}", e);
+                    let checkable_pf = Proof {
+                        input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
+                        public_inputs: pi,
+                        proof,
+                    };
+
+                    match serde_json::to_string(&checkable_pf) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            abort!("failed to convert proof json to string {:?}", e);
+                        }
+                    }
                 }
+                ProofSystem::KZG => String::new(),
             };
 
             let mut file = std::fs::File::create(output).expect("create failed");

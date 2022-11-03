@@ -13,7 +13,7 @@ pub mod fieldutils;
 #[cfg(feature = "onnx")]
 pub mod onnx;
 /// Tools for proofs and verification used by cli
-pub mod prove_verify;
+pub mod pfsys;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
 
