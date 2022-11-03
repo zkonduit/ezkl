@@ -195,6 +195,8 @@ fn test_kzg_fullprove(example_name: String) {
         .args([
             "run",
             "--release",
+            "--features",
+            "evm",
             "--bin",
             "ezkl",
             "--",
