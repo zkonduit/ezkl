@@ -4,7 +4,9 @@ pub mod aggregation;
 use super::prepare_circuit_and_public_input;
 use super::OnnxInput;
 use crate::fieldutils::i32_to_felt;
-
+#[cfg(feature = "evm")]
+use aggregation::Plonk;
+use aggregation::{PoseidonTranscript, Snark};
 #[cfg(feature = "evm")]
 use ethereum_types::Address;
 #[cfg(feature = "evm")]
@@ -32,7 +34,9 @@ use itertools::Itertools;
 use log::trace;
 #[cfg(feature = "evm")]
 use plonk_verifier::{
-    loader::evm::{EvmLoader, encode_calldata}, system::halo2::transcript::evm::EvmTranscript, verifier::PlonkVerifier,
+    loader::evm::{encode_calldata, EvmLoader},
+    system::halo2::transcript::evm::EvmTranscript,
+    verifier::PlonkVerifier,
 };
 use plonk_verifier::{
     loader::native::NativeLoader,
@@ -44,7 +48,7 @@ use std::io::Cursor;
 #[cfg(feature = "evm")]
 use std::rc::Rc;
 
-pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &OnnxInput) -> aggregation::Snark {
+pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &OnnxInput) -> Snark {
     let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(data);
 
     let pk = gen_pk(params, &circuit);
@@ -64,10 +68,10 @@ pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &OnnxInput) -> agg
     let proof = gen_kzg_proof::<
         _,
         _,
-        aggregation::PoseidonTranscript<NativeLoader, _>,
-        aggregation::PoseidonTranscript<NativeLoader, _>,
+        PoseidonTranscript<NativeLoader, _>,
+        PoseidonTranscript<NativeLoader, _>,
     >(params, &pk, circuit.clone(), pi_inner.clone());
-    aggregation::Snark::new(protocol, pi_inner, proof)
+    Snark::new(protocol, pi_inner, proof)
 }
 
 #[cfg(feature = "evm")]
@@ -91,9 +95,8 @@ pub fn gen_aggregation_evm_verifier(
     let mut transcript = EvmTranscript::<_, Rc<EvmLoader>, _, _>::new(loader.clone());
 
     let instances = transcript.load_instances(num_instance);
-    let proof =
-        aggregation::Plonk::read_proof(&svk, &protocol, &instances, &mut transcript).unwrap();
-    aggregation::Plonk::verify(&svk, &dk, &protocol, &instances, &proof).unwrap();
+    let proof = Plonk::read_proof(&svk, &protocol, &instances, &mut transcript).unwrap();
+    Plonk::verify(&svk, &dk, &protocol, &instances, &proof).unwrap();
 
     loader.deployment_code()
 }
