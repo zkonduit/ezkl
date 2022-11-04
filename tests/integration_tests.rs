@@ -187,3 +187,81 @@ fn test_relu_pav() {
 fn test_sig_pav() {
     test_onnx_prove_and_verify("sig".to_string());
 }
+
+// KZG / EVM tests
+// full prove (slower, covers more, but still reuses the pk)
+fn test_kzg_fullprove(example_name: String) {
+    let status = Command::new("cargo")
+        .args([
+            "run",
+            "--release",
+            "--features",
+            "evm",
+            "--bin",
+            "ezkl",
+            "--",
+            "--bits",
+            "16",
+            "-K",
+            "17",
+            "fullprove",
+            "-D",
+            format!("./examples/onnx_models/{}_input.json", example_name).as_str(),
+            "-M",
+            format!("./examples/onnx_models/{}.onnx", example_name).as_str(),
+            "--pfsys",
+            "kzg",
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+#[test]
+#[ignore]
+fn test_ff_fullprove_kzg() {
+    test_kzg_fullprove("ff".to_string());
+}
+
+#[test]
+#[ignore]
+fn test_relusig_fullprove_kzg() {
+    test_kzg_fullprove("relusig".to_string());
+}
+
+#[test]
+#[ignore]
+fn test_relurelu_fullprove_kzg() {
+    test_kzg_fullprove("relurelu_small".to_string());
+}
+
+#[test]
+#[ignore]
+fn test_relusig_small_fullprove_kzg() {
+    test_kzg_fullprove("relusig_small".to_string());
+}
+
+#[test]
+#[ignore]
+fn test_relu_fullprove_kzg() {
+    test_kzg_fullprove("relu".to_string());
+}
+
+#[test]
+#[ignore]
+fn test_sig_fullprove_kzg() {
+    test_kzg_fullprove("sig".to_string());
+}
+
+// These require too much memory for Github CI right now
+#[test]
+#[ignore]
+fn test_1lcnvrl_fullprove_kzg() {
+    test_kzg_fullprove("1lcnvrl".to_string());
+}
+
+#[test]
+#[ignore]
+fn test_2lcnvrl_fullprove_kzg() {
+    test_kzg_fullprove("2lcnvrl_relusig".to_string());
+}

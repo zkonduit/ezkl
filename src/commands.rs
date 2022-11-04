@@ -67,8 +67,6 @@ pub enum Commands {
         //todo: optional Params
         #[arg(
             long,
-	    short = 'B',
-            require_equals = true,
             num_args = 0..=1,
             default_value_t = ProofSystem::IPA,
 //            default_missing_value = "always",

@@ -149,6 +149,16 @@ impl TensorType for halo2curves::pasta::Fp {
     }
 }
 
+impl TensorType for halo2curves::bn256::Fr {
+    fn zero() -> Option<Self> {
+        Some(halo2curves::bn256::Fr::zero())
+    }
+
+    fn tmax(&self, other: &Self) -> Option<Self> {
+        Some((*self).max(*other))
+    }
+}
+
 #[derive(Debug)]
 pub struct TensorError(String);
 

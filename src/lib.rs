@@ -10,6 +10,8 @@ pub mod fieldutils;
 /// a Halo2 circuit.
 #[cfg(feature = "onnx")]
 pub mod onnx;
+/// Tools for proofs and verification used by cli
+pub mod pfsys;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
 
