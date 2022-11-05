@@ -16,15 +16,14 @@ use log::{info, trace};
 pub use model::*;
 pub use node::*;
 
-
 #[derive(Clone, Debug)]
-pub struct OnnxCircuit<F: FieldExt> {
+pub struct ModelCircuit<F: FieldExt> {
     pub inputs: Vec<Tensor<i32>>,
     pub _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
-    type Config = OnnxModelConfig<F>;
+impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
+    type Config = ModelConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -32,7 +31,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for OnnxCircuit<F> {
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        let onnx_model = OnnxModel::from_arg();
+        let onnx_model = Model::from_arg();
         let num_advices = max(
             onnx_model.max_node_advices(),
             onnx_model.max_advices_width().unwrap(),

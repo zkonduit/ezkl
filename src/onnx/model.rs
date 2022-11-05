@@ -19,70 +19,10 @@ use log::{debug, error, info, trace};
 use std::collections::{btree_map::Entry, BTreeMap, HashSet};
 
 use std::path::Path;
-use tabled::{Table};
+use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node, OutletId};
-use tract_onnx::tract_hir::{
-    internal::InferenceOp,
-};
-
-/// A circuit configuration for the entirety of a model loaded from an Onnx file.
-#[derive(Clone)]
-pub struct OnnxModelConfig<F: FieldExt + TensorType> {
-    configs: BTreeMap<usize, NodeConfig<F>>,
-    pub model: OnnxModel,
-    pub public_outputs: Vec<Column<Instance>>,
-}
-
-/// Representation of an execution graph divided into execution 'buckets'.
-#[derive(Clone, Default, Debug)]
-pub struct NodeGraph(BTreeMap<Option<usize>, BTreeMap<usize, OnnxNode>>);
-
-impl NodeGraph {
-    pub fn new() -> Self {
-        NodeGraph(BTreeMap::new())
-    }
-
-    fn insert(&mut self, idx: Option<usize>, node_idx: usize, config: OnnxNode) {
-        match self.0.entry(idx) {
-            Entry::Vacant(e) => {
-                e.insert(BTreeMap::from([(node_idx, config)]));
-            }
-            Entry::Occupied(mut e) => {
-                e.get_mut().insert(node_idx, config);
-            }
-        }
-    }
-
-    pub fn flatten(&self) -> Vec<OnnxNode> {
-        let a = self
-            .0
-            .clone()
-            .into_values()
-            .map(|d| d.into_values().collect())
-            .collect::<Vec<Vec<OnnxNode>>>();
-        let mut c: Vec<OnnxNode> = a
-            .iter()
-            .flatten()
-            .collect::<Vec<&OnnxNode>>()
-            .iter()
-            .map(|e| (*e).clone())
-            .collect();
-
-        c.sort_by_key(|v| v.idx);
-        c
-    }
-
-    pub fn filter(&self, idx: usize) -> OnnxNode {
-        let a = self.flatten();
-        let c = &a
-            .iter()
-            .filter(|i| i.idx == idx)
-            .cloned()
-            .collect::<Vec<OnnxNode>>()[0];
-        c.clone()
-    }
-}
+use tract_onnx::tract_hir::internal::InferenceOp;
 
 /// Mode we're using the model in.
 #[derive(Clone, Debug)]
@@ -94,9 +34,17 @@ pub enum Mode {
     Verify,
 }
 
+/// A circuit configuration for the entirety of a model loaded from an Onnx file.
+#[derive(Clone)]
+pub struct ModelConfig<F: FieldExt + TensorType> {
+    configs: BTreeMap<usize, NodeConfig<F>>,
+    pub model: Model,
+    pub public_outputs: Vec<Column<Instance>>,
+}
+
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
 #[derive(Clone, Debug)]
-pub struct OnnxModel {
+pub struct Model {
     pub model: Graph<InferenceFact, Box<dyn InferenceOp>>, // The raw Tract data structure
     pub onnx_nodes: NodeGraph, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
     pub bits: usize,
@@ -104,8 +52,8 @@ pub struct OnnxModel {
     pub mode: Mode,
 }
 
-impl OnnxModel {
-    /// Creates an `OnnxModel` from a specified path to an Onnx file.
+impl Model {
+    /// Creates an `Model` from a specified path to an Onnx file.
     /// # Arguments
     ///
     /// * `path` - A path to an Onnx file.
@@ -115,18 +63,17 @@ impl OnnxModel {
     pub fn new(path: impl AsRef<Path>, scale: i32, bits: usize, mode: Mode) -> Self {
         let model = tract_onnx::onnx().model_for_path(path).unwrap();
 
-        let mut onnx_nodes = BTreeMap::<usize, OnnxNode>::new();
+        let mut onnx_nodes = BTreeMap::<usize, ModelNode>::new();
         let _ = model
             .nodes()
             .iter()
             .enumerate()
             .map(|(i, n)| {
-                let n = OnnxNode::new(n.clone(), &mut onnx_nodes, scale, i);
+                let n = ModelNode::new(n.clone(), &mut onnx_nodes, scale, i);
                 onnx_nodes.insert(i, n);
             })
             .collect_vec();
-        debug!("{:?}", onnx_nodes);
-        let om = OnnxModel {
+        let om = Model {
             model: model.clone(),
             scale,
             onnx_nodes: Self::assign_execution_buckets(onnx_nodes)
@@ -139,37 +86,37 @@ impl OnnxModel {
 
         om
     }
-    /// Creates an `OnnxModel` based on CLI arguments
+    /// Creates an `Model` based on CLI arguments
     pub fn from_arg() -> Self {
         let args = Cli::parse();
 
         match args.command {
             Commands::Table { model } => {
-                OnnxModel::new(model_path(model), args.scale, args.bits, Mode::Table)
+                Model::new(model_path(model), args.scale, args.bits, Mode::Table)
             }
             Commands::Mock { data: _, model } => {
-                OnnxModel::new(model_path(model), args.scale, args.bits, Mode::Mock)
+                Model::new(model_path(model), args.scale, args.bits, Mode::Mock)
             }
             Commands::Fullprove {
                 data: _,
                 model,
                 pfsys: _,
-            } => OnnxModel::new(model_path(model), args.scale, args.bits, Mode::FullProve),
+            } => Model::new(model_path(model), args.scale, args.bits, Mode::FullProve),
             Commands::Prove {
                 data: _,
                 model,
                 output: _,
                 pfsys: _,
-            } => OnnxModel::new(model_path(model), args.scale, args.bits, Mode::Prove),
+            } => Model::new(model_path(model), args.scale, args.bits, Mode::Prove),
             Commands::Verify {
                 model,
                 proof: _,
                 pfsys: _,
-            } => OnnxModel::new(model_path(model), args.scale, args.bits, Mode::Verify),
+            } => Model::new(model_path(model), args.scale, args.bits, Mode::Verify),
         }
     }
 
-    /// Configures an `OnnxModel`. Does so one execution `bucket` at a time. Each bucket holds either:
+    /// Configures an `Model`. Does so one execution `bucket` at a time. Each bucket holds either:
     /// a) independent lookup operations (i.e operations that don't feed into one another so can be processed in parallel).
     /// b) operations that can be fused together, i.e the output of one op might feed into another.
     /// # Arguments
@@ -180,12 +127,12 @@ impl OnnxModel {
         &self,
         meta: &mut ConstraintSystem<F>,
         advices: VarTensor,
-    ) -> Result<OnnxModelConfig<F>> {
+    ) -> Result<ModelConfig<F>> {
         info!("configuring model");
         let mut results = BTreeMap::new();
 
         for (_, bucket_nodes) in self.onnx_nodes.0.iter() {
-            let non_fused_ops: BTreeMap<&usize, &OnnxNode> = bucket_nodes
+            let non_fused_ops: BTreeMap<&usize, &ModelNode> = bucket_nodes
                 .iter()
                 .filter(|(_, n)| !n.opkind.is_fused())
                 .collect();
@@ -203,7 +150,7 @@ impl OnnxModel {
             }
 
             // preserves ordering
-            let fused_ops: BTreeMap<&usize, &OnnxNode> = bucket_nodes
+            let fused_ops: BTreeMap<&usize, &ModelNode> = bucket_nodes
                 .iter()
                 .filter(|(_, n)| n.opkind.is_fused())
                 .collect();
@@ -230,7 +177,7 @@ impl OnnxModel {
             })
             .collect_vec();
 
-        Ok(OnnxModelConfig {
+        Ok(ModelConfig {
             configs: results,
             model: self.clone(),
             public_outputs,
@@ -242,16 +189,16 @@ impl OnnxModel {
     /// a single Halo2 gate.
     /// # Arguments
     ///
-    /// * `nodes` - A `BTreeMap` of (node index, [OnnxNode] pairs). The [OnnxNode] must represent a fuseable op.
+    /// * `nodes` - A `BTreeMap` of (node index, [ModelNode] pairs). The [ModelNode] must represent a fuseable op.
     /// * `meta` - Halo2 ConstraintSystem.
     /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure all the passed `nodes`.
     fn fuse_ops<F: FieldExt + TensorType>(
         &self,
-        nodes: &BTreeMap<&usize, &OnnxNode>,
+        nodes: &BTreeMap<&usize, &ModelNode>,
         meta: &mut ConstraintSystem<F>,
         advices: VarTensor,
     ) -> NodeConfigTypes<F> {
-        let input_nodes: BTreeMap<(&usize, &FusedOp), Vec<OnnxNode>> = nodes
+        let input_nodes: BTreeMap<(&usize, &FusedOp), Vec<ModelNode>> = nodes
             .iter()
             .map(|(i, e)| {
                 (
@@ -349,12 +296,12 @@ impl OnnxModel {
     /// the `circuit::eltwise` module.
     /// # Arguments
     ///
-    /// * `node` - The [OnnxNode] must represent a lookup based op.
+    /// * `node` - The [ModelNode] must represent a lookup based op.
     /// * `meta` - Halo2 ConstraintSystem.
     /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure the passed `node`.
     fn configure_table<F: FieldExt + TensorType>(
         &self,
-        node: &OnnxNode,
+        node: &ModelNode,
         meta: &mut ConstraintSystem<F>,
         advices: VarTensor,
     ) -> NodeConfigTypes<F> {
@@ -437,18 +384,19 @@ impl OnnxModel {
                 error!("{:?} not yet implemented", c);
                 unimplemented!()
             }
+            _ => panic!(),
         }
     }
 
     /// Assigns values to the regions created when calling `configure`.
     /// # Arguments
     ///
-    /// * `config` - [OnnxModelConfig] holding all node configs.
+    /// * `config` - [ModelConfig] holding all node configs.
     /// * `layouter` - Halo2 Layouter.
     /// * `inputs` - The values to feed into the circuit.
     pub fn layout<F: FieldExt + TensorType>(
         &self,
-        config: OnnxModelConfig<F>,
+        config: ModelConfig<F>,
         layouter: &mut impl Layouter<F>,
         inputs: &[ValTensor<F>],
     ) -> Result<Vec<ValTensor<F>>> {
@@ -464,14 +412,12 @@ impl OnnxModel {
                 if i > 0 {
                     display.push_str(&format!(
                         "| combined with node {} ({:?}) ",
-                        idx,
-                        node.node.op().name()
+                        idx, node.opkind
                     ));
                 } else {
                     display.push_str(&format!(
                         "------ laying out node {} ({:?}) ",
-                        idx,
-                        node.node.op().name()
+                        idx, node.opkind
                     ));
                 }
             }
@@ -557,7 +503,7 @@ impl OnnxModel {
         Ok(res)
     }
 
-    /// Iterates over OnnxNodes and assigns execution buckets to them.  Each bucket holds either:
+    /// Iterates over ModelNodes and assigns execution buckets to them.  Each bucket holds either:
     /// a) independent lookup operations (i.e operations that don't feed into one another so can be processed in parallel).
     /// b) operations that can be fused together, i.e the output of one op might feed into another.
     /// The logic for bucket assignment is thus: we assign all data intake nodes to the 0 bucket.
@@ -565,12 +511,12 @@ impl OnnxModel {
     /// If the node is a lookup table, assign to it the maximum bucket of it's inputs incremented by 1.
     /// # Arguments
     ///
-    /// * `nodes` - `BTreeMap` of (node index, [OnnxNode]) pairs.
-    pub fn assign_execution_buckets(mut nodes: BTreeMap<usize, OnnxNode>) -> Result<NodeGraph> {
+    /// * `nodes` - `BTreeMap` of (node index, [ModelNode]) pairs.
+    pub fn assign_execution_buckets(mut nodes: BTreeMap<usize, ModelNode>) -> Result<NodeGraph> {
         info!("assigning configuration buckets to operations");
 
         let mut bucketed_nodes =
-            NodeGraph(BTreeMap::<Option<usize>, BTreeMap<usize, OnnxNode>>::new());
+            NodeGraph(BTreeMap::<Option<usize>, BTreeMap<usize, ModelNode>>::new());
 
         for (_, node) in nodes.iter_mut() {
             let prev_bucket: Option<usize> = node
