@@ -73,14 +73,14 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let l0 = FusedConfig::<F>::configure(
             cs,
             &[input.clone(), kernel.clone(), bias.clone()],
-            &output.clone(),
+            &output,
             &[affine_node.clone()],
         );
 
         let l2 = FusedConfig::<F>::configure(
             cs,
-            &[input.clone(), kernel.clone(), bias.clone()],
-            &output.clone(),
+            &[input, kernel, bias],
+            &output,
             &[affine_node],
         );
 
@@ -179,10 +179,10 @@ pub fn runmlp() {
 
     let public_input: Vec<i32> = unsafe {
         vec![
-            (531f32 / 128f32).round().to_int_unchecked::<i32>().into(),
-            (103f32 / 128f32).round().to_int_unchecked::<i32>().into(),
-            (4469f32 / 128f32).round().to_int_unchecked::<i32>().into(),
-            (2849f32 / 128f32).to_int_unchecked::<i32>().into(),
+            (531f32 / 128f32).round().to_int_unchecked::<i32>(),
+            (103f32 / 128f32).round().to_int_unchecked::<i32>(),
+            (4469f32 / 128f32).round().to_int_unchecked::<i32>(),
+            (2849f32 / 128f32).to_int_unchecked::<i32>(),
         ]
     };
 
@@ -193,7 +193,7 @@ pub fn runmlp() {
         &circuit,
         vec![public_input
             .iter()
-            .map(|x| i32_to_felt::<F>(*x).into())
+            .map(|x| i32_to_felt::<F>(*x))
             .collect()],
     )
     .unwrap();

@@ -2,7 +2,7 @@ use super::Proof;
 use crate::abort;
 use crate::commands::Cli;
 use crate::fieldutils::i32_to_felt;
-use crate::onnx::OnnxCircuit;
+use crate::onnx::ModelCircuit;
 use crate::tensor::Tensor;
 use clap::Parser;
 use halo2_proofs::{
@@ -32,7 +32,7 @@ use std::ops::Deref;
 use std::time::Instant;
 
 pub fn create_ipa_proof(
-    circuit: OnnxCircuit<Fp>,
+    circuit: ModelCircuit<Fp>,
     public_inputs: Vec<Tensor<i32>>,
     params: &ParamsIPA<vesta::Affine>,
 ) -> (ProvingKey<EqAffine>, Vec<u8>, Vec<Vec<usize>>) {
@@ -92,7 +92,7 @@ pub fn verify_ipa_proof(proof: Proof) -> bool {
             },
         )
         .collect();
-    let circuit = OnnxCircuit::<F> {
+    let circuit = ModelCircuit::<F> {
         inputs,
         _marker: PhantomData,
     };

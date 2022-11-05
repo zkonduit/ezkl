@@ -2,7 +2,8 @@ use clap::Parser;
 use ezkl::abort;
 use ezkl::commands::{Cli, Commands, ProofSystem};
 use ezkl::fieldutils::i32_to_felt;
-use ezkl::onnx::OnnxModel;
+use ezkl::onnx::Model;
+use ezkl::pfsys::ipa::{create_ipa_proof, verify_ipa_proof};
 #[cfg(feature = "evm")]
 use ezkl::pfsys::kzg::{
     aggregation::AggregationCircuit, evm_verify, gen_aggregation_evm_verifier,
@@ -10,7 +11,6 @@ use ezkl::pfsys::kzg::{
 };
 use ezkl::pfsys::Proof;
 use ezkl::pfsys::{parse_prover_errors, prepare_circuit_and_public_input, prepare_data};
-use ezkl::pfsys::ipa::{create_ipa_proof, verify_ipa_proof};
 #[cfg(feature = "evm")]
 use halo2_proofs::poly::commitment::Params;
 use halo2_proofs::{
@@ -44,7 +44,7 @@ pub fn main() {
 
     match args.command {
         Commands::Table { model: _ } => {
-            let om = OnnxModel::from_arg();
+            let om = Model::from_arg();
             println!("{}", Table::new(om.onnx_nodes.flatten()));
         }
         Commands::Mock { data, model: _ } => {

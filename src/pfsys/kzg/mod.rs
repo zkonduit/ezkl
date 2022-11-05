@@ -2,7 +2,7 @@
 pub mod aggregation;
 
 use super::prepare_circuit_and_public_input;
-use super::OnnxInput;
+use super::ModelInput;
 use crate::fieldutils::i32_to_felt;
 #[cfg(feature = "evm")]
 use aggregation::Plonk;
@@ -48,7 +48,7 @@ use std::io::Cursor;
 #[cfg(feature = "evm")]
 use std::rc::Rc;
 
-pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &OnnxInput) -> Snark {
+pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &ModelInput) -> Snark {
     let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(data);
 
     let pk = gen_pk(params, &circuit);
@@ -70,7 +70,7 @@ pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &OnnxInput) -> Sna
         _,
         PoseidonTranscript<NativeLoader, _>,
         PoseidonTranscript<NativeLoader, _>,
-    >(params, &pk, circuit.clone(), pi_inner.clone());
+    >(params, &pk, circuit, pi_inner.clone());
     Snark::new(protocol, pi_inner, proof)
 }
 

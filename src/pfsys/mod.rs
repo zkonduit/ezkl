@@ -4,7 +4,7 @@ pub mod kzg;
 
 use crate::abort;
 use crate::commands::{data_path, Cli};
-use crate::onnx::{utilities::vector_to_quantized, OnnxCircuit, OnnxModel};
+use crate::onnx::{utilities::vector_to_quantized, Model, ModelCircuit};
 use crate::tensor::Tensor;
 use clap::Parser;
 use halo2_proofs::{arithmetic::FieldExt, dev::VerifyFailure};
@@ -15,7 +15,7 @@ use std::io::Read;
 use std::marker::PhantomData;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct OnnxInput {
+pub struct ModelInput {
     pub input_data: Vec<Vec<f32>>,
     pub input_shapes: Vec<Vec<usize>>,
     pub public_inputs: Vec<Vec<f32>>,
@@ -65,9 +65,9 @@ pub fn parse_prover_errors(f: &VerifyFailure) {
 }
 
 pub fn prepare_circuit_and_public_input<F: FieldExt>(
-    data: &OnnxInput,
-) -> (OnnxCircuit<F>, Vec<Tensor<i32>>) {
-    let onnx_model = OnnxModel::from_arg();
+    data: &ModelInput,
+) -> (ModelCircuit<F>, Vec<Tensor<i32>>) {
+    let onnx_model = Model::from_arg();
     let out_scales = onnx_model.get_output_scales();
     let circuit = prepare_circuit(data);
 
@@ -89,7 +89,7 @@ pub fn prepare_circuit_and_public_input<F: FieldExt>(
     (circuit, public_inputs)
 }
 
-pub fn prepare_circuit<F: FieldExt>(data: &OnnxInput) -> OnnxCircuit<F> {
+pub fn prepare_circuit<F: FieldExt>(data: &ModelInput) -> ModelCircuit<F> {
     let args = Cli::parse();
 
     // quantize the supplied data using the provided scale.
@@ -105,13 +105,13 @@ pub fn prepare_circuit<F: FieldExt>(data: &OnnxInput) -> OnnxCircuit<F> {
         })
         .collect();
 
-    OnnxCircuit::<F> {
+    ModelCircuit::<F> {
         inputs,
         _marker: PhantomData,
     }
 }
 
-pub fn prepare_data(datapath: String) -> OnnxInput {
+pub fn prepare_data(datapath: String) -> ModelInput {
     let mut file = match File::open(data_path(datapath)) {
         Ok(t) => t,
         Err(e) => {
@@ -125,7 +125,7 @@ pub fn prepare_data(datapath: String) -> OnnxInput {
             abort!("failed to read file {:?}", e);
         }
     };
-    let data: OnnxInput = serde_json::from_str(&data).expect("JSON was not well-formatted");
+    let data: ModelInput = serde_json::from_str(&data).expect("JSON was not well-formatted");
     info!(
         "public inputs (network outputs) lengths: {:?}",
         data.public_inputs

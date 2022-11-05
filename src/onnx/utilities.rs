@@ -18,6 +18,7 @@ pub fn vector_to_quantized(
     Tensor::new(Some(&scaled), dims)
 }
 
+
 pub fn scale_to_multiplier(scale: i32) -> f32 {
     i32::pow(2, scale as u32) as f32
 }
