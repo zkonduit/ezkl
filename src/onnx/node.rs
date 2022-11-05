@@ -11,12 +11,12 @@ use halo2_proofs::arithmetic::FieldExt;
 use itertools::Itertools;
 use log::{error, info, warn};
 use std::cmp::max;
-use std::collections::BTreeMap;
+use std::collections::{btree_map::Entry, BTreeMap, HashSet};
 use std::fmt;
 
 use tabled::Tabled;
 use tract_onnx;
-use tract_onnx::prelude::{InferenceFact, Node, OutletId};
+use tract_onnx::prelude::{InferenceFact, Node as OnnxNode, OutletId};
 use tract_onnx::tract_hir::{
     infer::Factoid,
     internal::InferenceOp,
@@ -108,17 +108,16 @@ pub enum NodeConfigTypes<F: FieldExt + TensorType> {
     NotConfigured,
 }
 
-
 /// Representation of an execution graph divided into execution 'buckets'.
 #[derive(Clone, Default, Debug)]
-pub struct NodeGraph(BTreeMap<Option<usize>, BTreeMap<usize, ModelNode>>);
+pub struct NodeGraph(pub BTreeMap<Option<usize>, BTreeMap<usize, Node>>);
 
 impl NodeGraph {
     pub fn new() -> Self {
         NodeGraph(BTreeMap::new())
     }
 
-    fn insert(&mut self, idx: Option<usize>, node_idx: usize, config: ModelNode) {
+    pub fn insert(&mut self, idx: Option<usize>, node_idx: usize, config: Node) {
         match self.0.entry(idx) {
             Entry::Vacant(e) => {
                 e.insert(BTreeMap::from([(node_idx, config)]));
@@ -129,17 +128,17 @@ impl NodeGraph {
         }
     }
 
-    pub fn flatten(&self) -> Vec<ModelNode> {
+    pub fn flatten(&self) -> Vec<Node> {
         let a = self
             .0
             .clone()
             .into_values()
             .map(|d| d.into_values().collect())
-            .collect::<Vec<Vec<ModelNode>>>();
-        let mut c: Vec<ModelNode> = a
+            .collect::<Vec<Vec<Node>>>();
+        let mut c: Vec<Node> = a
             .iter()
             .flatten()
-            .collect::<Vec<&ModelNode>>()
+            .collect::<Vec<&Node>>()
             .iter()
             .map(|e| (*e).clone())
             .collect();
@@ -148,13 +147,13 @@ impl NodeGraph {
         c
     }
 
-    pub fn filter(&self, idx: usize) -> ModelNode {
+    pub fn filter(&self, idx: usize) -> Node {
         let a = self.flatten();
         let c = &a
             .iter()
             .filter(|i| i.idx == idx)
             .cloned()
-            .collect::<Vec<ModelNode>>()[0];
+            .collect::<Vec<Node>>()[0];
         c.clone()
     }
 }
@@ -204,7 +203,7 @@ fn display_tensor(o: &Option<Tensor<i32>>) -> String {
 /// * `idx` - The node's unique identifier.
 /// * `bucket` - The execution bucket this node has been assigned to.
 #[derive(Clone, Debug, Default, Tabled)]
-pub struct ModelNode {
+pub struct Node {
     pub opkind: OpKind,
     pub output_max: f32,
     pub min_cols: usize,
@@ -225,10 +224,10 @@ pub struct ModelNode {
     pub bucket: Option<usize>,
 }
 
-impl ModelNode {
+impl Node {
     pub fn new(
-        mut node: Node<InferenceFact, Box<dyn InferenceOp>>,
-        other_nodes: &mut BTreeMap<usize, ModelNode>,
+        mut node: OnnxNode<InferenceFact, Box<dyn InferenceOp>>,
+        other_nodes: &mut BTreeMap<usize, Node>,
         scale: i32,
         idx: usize,
     ) -> Self {
@@ -237,14 +236,14 @@ impl ModelNode {
             _ => None,
         };
 
-        let inputs: Vec<ModelNode> = node
+        let inputs: Vec<Node> = node
             .inputs
             .iter_mut()
             // this shouldn't fail
             .map(|i| other_nodes.get(&i.node).unwrap().clone())
             .collect();
 
-        let mut mn = ModelNode::default();
+        let mut mn = Node::default();
 
         mn.opkind = OpKind::new(node.op().name().as_ref());
 
@@ -587,7 +586,7 @@ impl ModelNode {
     }
 
     /// Ensures all inputs to a node have the same floating point denominator.
-    pub fn homogenize_input_scales(opkind: OpKind, inputs: Vec<ModelNode>) -> OpKind {
+    pub fn homogenize_input_scales(opkind: OpKind, inputs: Vec<Node>) -> OpKind {
         let mut multipliers = vec![1; inputs.len()];
         let out_scales = inputs.windows(1).map(|w| w[0].out_scale).collect_vec();
         if !out_scales.windows(2).all(|w| w[0] == w[1]) {
@@ -622,7 +621,7 @@ impl ModelNode {
     }
 
     /// Re-quantizes a constant value node to a new scale.
-    pub fn scale_up_const_node(node: &mut ModelNode, scale_diff: i32) -> &mut ModelNode {
+    pub fn scale_up_const_node(node: &mut Node, scale_diff: i32) -> &mut Node {
         assert!(matches!(node.opkind, OpKind::Const));
         if scale_diff > 0 {
             if let Some(val) = &node.const_value {

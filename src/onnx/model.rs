@@ -21,7 +21,7 @@ use std::collections::{btree_map::Entry, BTreeMap, HashSet};
 use std::path::Path;
 use tabled::Table;
 use tract_onnx;
-use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node, OutletId};
+use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node as OnnxNode, OutletId};
 use tract_onnx::tract_hir::internal::InferenceOp;
 
 /// Mode we're using the model in.
@@ -63,13 +63,13 @@ impl Model {
     pub fn new(path: impl AsRef<Path>, scale: i32, bits: usize, mode: Mode) -> Self {
         let model = tract_onnx::onnx().model_for_path(path).unwrap();
 
-        let mut onnx_nodes = BTreeMap::<usize, ModelNode>::new();
+        let mut onnx_nodes = BTreeMap::<usize, Node>::new();
         let _ = model
             .nodes()
             .iter()
             .enumerate()
             .map(|(i, n)| {
-                let n = ModelNode::new(n.clone(), &mut onnx_nodes, scale, i);
+                let n = Node::new(n.clone(), &mut onnx_nodes, scale, i);
                 onnx_nodes.insert(i, n);
             })
             .collect_vec();
@@ -132,7 +132,7 @@ impl Model {
         let mut results = BTreeMap::new();
 
         for (_, bucket_nodes) in self.onnx_nodes.0.iter() {
-            let non_fused_ops: BTreeMap<&usize, &ModelNode> = bucket_nodes
+            let non_fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
                 .filter(|(_, n)| !n.opkind.is_fused())
                 .collect();
@@ -150,7 +150,7 @@ impl Model {
             }
 
             // preserves ordering
-            let fused_ops: BTreeMap<&usize, &ModelNode> = bucket_nodes
+            let fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
                 .filter(|(_, n)| n.opkind.is_fused())
                 .collect();
@@ -189,16 +189,16 @@ impl Model {
     /// a single Halo2 gate.
     /// # Arguments
     ///
-    /// * `nodes` - A `BTreeMap` of (node index, [ModelNode] pairs). The [ModelNode] must represent a fuseable op.
+    /// * `nodes` - A `BTreeMap` of (node index, [Node] pairs). The [Node] must represent a fuseable op.
     /// * `meta` - Halo2 ConstraintSystem.
     /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure all the passed `nodes`.
     fn fuse_ops<F: FieldExt + TensorType>(
         &self,
-        nodes: &BTreeMap<&usize, &ModelNode>,
+        nodes: &BTreeMap<&usize, &Node>,
         meta: &mut ConstraintSystem<F>,
         advices: VarTensor,
     ) -> NodeConfigTypes<F> {
-        let input_nodes: BTreeMap<(&usize, &FusedOp), Vec<ModelNode>> = nodes
+        let input_nodes: BTreeMap<(&usize, &FusedOp), Vec<Node>> = nodes
             .iter()
             .map(|(i, e)| {
                 (
@@ -296,12 +296,12 @@ impl Model {
     /// the `circuit::eltwise` module.
     /// # Arguments
     ///
-    /// * `node` - The [ModelNode] must represent a lookup based op.
+    /// * `node` - The [Node] must represent a lookup based op.
     /// * `meta` - Halo2 ConstraintSystem.
     /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure the passed `node`.
     fn configure_table<F: FieldExt + TensorType>(
         &self,
-        node: &ModelNode,
+        node: &Node,
         meta: &mut ConstraintSystem<F>,
         advices: VarTensor,
     ) -> NodeConfigTypes<F> {
@@ -503,7 +503,7 @@ impl Model {
         Ok(res)
     }
 
-    /// Iterates over ModelNodes and assigns execution buckets to them.  Each bucket holds either:
+    /// Iterates over Nodes and assigns execution buckets to them.  Each bucket holds either:
     /// a) independent lookup operations (i.e operations that don't feed into one another so can be processed in parallel).
     /// b) operations that can be fused together, i.e the output of one op might feed into another.
     /// The logic for bucket assignment is thus: we assign all data intake nodes to the 0 bucket.
@@ -511,12 +511,12 @@ impl Model {
     /// If the node is a lookup table, assign to it the maximum bucket of it's inputs incremented by 1.
     /// # Arguments
     ///
-    /// * `nodes` - `BTreeMap` of (node index, [ModelNode]) pairs.
-    pub fn assign_execution_buckets(mut nodes: BTreeMap<usize, ModelNode>) -> Result<NodeGraph> {
+    /// * `nodes` - `BTreeMap` of (node index, [Node]) pairs.
+    pub fn assign_execution_buckets(mut nodes: BTreeMap<usize, Node>) -> Result<NodeGraph> {
         info!("assigning configuration buckets to operations");
 
         let mut bucketed_nodes =
-            NodeGraph(BTreeMap::<Option<usize>, BTreeMap<usize, ModelNode>>::new());
+            NodeGraph(BTreeMap::<Option<usize>, BTreeMap<usize, Node>>::new());
 
         for (_, node) in nodes.iter_mut() {
             let prev_bucket: Option<usize> = node
@@ -550,7 +550,7 @@ impl Model {
     }
 
     /// Note that this order is not stable.
-    pub fn nodes(&self) -> Vec<Node<InferenceFact, Box<dyn InferenceOp>>> {
+    pub fn nodes(&self) -> Vec<OnnxNode<InferenceFact, Box<dyn InferenceOp>>> {
         self.model.nodes().to_vec()
     }
 
