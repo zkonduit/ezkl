@@ -493,6 +493,46 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     output
 }
 
+pub fn sumpool<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+    image: &Tensor<T>,
+    padding: (usize, usize),
+    stride: (usize, usize),
+    kernel_shape: (usize, usize),
+) -> Tensor<T> {
+    assert_eq!(image.dims().len(), 3);
+    let image_dims = image.dims();
+
+    let (image_channels, image_height, image_width) = (image_dims[0], image_dims[1], image_dims[2]);
+
+    let (output_channels, kernel_height, kernel_width) =
+        (image_channels, kernel_shape.0, kernel_shape.1);
+
+    let padded_image = pad::<T>(image.clone(), padding);
+
+    let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
+    let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
+
+    // calculate value of output
+    let mut output: Tensor<T> =
+        Tensor::new(None, &[output_channels, vert_slides, horz_slides]).unwrap();
+
+    for i in 0..output_channels {
+        for j in 0..vert_slides {
+            let rs = j * stride.0;
+            for k in 0..horz_slides {
+                let cs = k * stride.1;
+                let thesum = sum(&padded_image.get_slice(&[
+                    i..i + 1,
+                    rs..(rs + kernel_height),
+                    cs..(cs + kernel_width),
+                ]));
+                output.set(&[i, j, k], thesum[0].clone());
+            }
+        }
+    }
+    output
+}
+
 /// Applies 2D max pooling over a 3D tensor of shape C x H x W.
 /// # Arguments
 ///

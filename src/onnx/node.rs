@@ -21,7 +21,7 @@ use tract_onnx::prelude::{InferenceFact, Node as OnnxNode, OutletId};
 use tract_onnx::tract_hir::{
     infer::Factoid,
     internal::InferenceOp,
-    ops::cnn::Conv,
+    ops::cnn::{Conv, PoolSpec, SumPool}, //MaxPool,},
     ops::expandable::Expansion,
     ops::nn::DataFormat,
     tract_core::ops::{
@@ -66,6 +66,8 @@ impl OpKind {
             "Pow" => OpKind::Fused(FusedOp::Pow(1)),
             "Conv" => OpKind::Fused(FusedOp::Conv((1, 1), (1, 1))),
             "ConvHir" => OpKind::Fused(FusedOp::Conv((1, 1), (1, 1))),
+            "SumPool" => OpKind::Fused(FusedOp::SumPool((1, 1), (1, 1), (1, 1))),
+            "Pad" => OpKind::Fused(FusedOp::Identity),
             c => {
                 warn!("{:?} is not currently supported", c);
                 OpKind::Unknown(c.to_string())
@@ -412,6 +414,57 @@ impl Node {
                             (stride_h, stride_w),
                         ));
                     }
+
+                    FusedOp::SumPool(_, _, _) => {
+                        let input_node = &inputs[0];
+
+                        // Extract the padding and stride layer hyperparams
+                        let op = Box::new(node.op());
+                        let sumpool_node: &SumPool = match op.downcast_ref() {
+                            Some(b) => b,
+                            None => panic!("op isn't a SumPool!"),
+                        };
+
+                        let pool_spec: &PoolSpec = &sumpool_node.pool_spec;
+
+                        // only support pytorch type formatting for now
+                        assert_eq!(pool_spec.data_format, DataFormat::NCHW);
+
+                        let stride = pool_spec.strides.clone().unwrap();
+                        let padding = match &pool_spec.padding {
+                            PaddingSpec::Explicit(p, _, _) => p,
+                            _ => panic!("padding is not explicitly specified"),
+                        };
+                        let kernel_shape = &pool_spec.kernel_shape;
+
+                        let weight_scale = input_node.out_scale;
+                        mn.in_scale = input_node.out_scale;
+                        mn.out_scale = input_node.out_scale;
+
+                        let (padding_h, padding_w, stride_h, stride_w) =
+                            (padding[0], padding[1], stride[0], stride[1]);
+                        let (kernel_height, kernel_width) = (kernel_shape[0], kernel_shape[1]);
+
+                        mn.in_dims = input_node.out_dims.clone();
+
+                        let input_channels = mn.in_dims[0];
+                        let input_height = mn.in_dims[1];
+                        let input_width = mn.in_dims[2];
+
+                        let out_height =
+                            (input_height + 2 * padding_h - kernel_height) / stride_h + 1;
+                        let out_width = (input_width + 2 * padding_w - kernel_width) / stride_w + 1;
+
+                        mn.out_dims = vec![input_channels, out_height, out_width];
+                        mn.output_max = input_node.output_max * f32::powi(2.0, weight_scale);
+
+                        mn.opkind = OpKind::Fused(FusedOp::SumPool(
+                            (padding_h, padding_w),
+                            (stride_h, stride_w),
+                            (kernel_height, kernel_width),
+                        ));
+                    }
+
                     FusedOp::Matmul => {
                         let (a_node, b_node) = (&inputs[0], &inputs[1]);
                         let a_dims = a_node.out_dims.clone();
@@ -538,6 +591,11 @@ impl Node {
                     }
                     FusedOp::Rescaled(_, _) => {
                         error!("operations should not already be rescaled at this stage")
+                    }
+                    FusedOp::Identity => {
+                        mn.output_max = input_node.output_max;
+                        mn.in_scale = input_node.out_scale;
+                        mn.out_scale = input_node.out_scale;
                     }
                 }
                 // output size
