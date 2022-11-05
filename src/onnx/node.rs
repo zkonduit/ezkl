@@ -198,7 +198,6 @@ fn display_tensor(o: &Option<Tensor<i32>>) -> String {
 
 /// A single operation in an [OnnxModel].
 /// # Arguments:
-/// * `node` - The raw Tract Node data structure.
 /// * `opkind` - [OpKind] enum, i.e what operation this node represents.
 /// * `output_max` - The inferred maximum value that can appear in the output tensor given previous quantization choices.
 /// * `in_scale, out_scale` - The denominator in the fixed point representation. Tensors of differing scales should not be combined.
@@ -553,8 +552,7 @@ impl Node {
                 let const_node: &Const = match op.as_any().downcast_ref() {
                     Some(b) => b,
                     None => {
-                        error!("op is not a const!");
-                        panic!()
+                        abort!("op is not a const!");
                     }
                 };
                 let vec = const_node.0.as_slice::<f32>().unwrap().to_vec();
