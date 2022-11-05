@@ -6,7 +6,7 @@ use crate::commands::{model_path, Cli, Commands};
 
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use clap::Parser;
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -229,7 +229,7 @@ impl Model {
                 x.1.iter()
                     .filter(|i| !nodes.contains_key(&i.idx) && seen.insert(i.idx))
                     .map(|f| {
-                        let s = f.out_dims.clone().unwrap();
+                        let s = f.out_dims.clone();
                         let mut end = 1;
                         if s.len() > 1 {
                             end = s[0..s.len() - 1].iter().product();
@@ -246,8 +246,7 @@ impl Model {
         let output_shape = self
             .onnx_nodes
             .filter(**nodes.keys().max().unwrap())
-            .out_dims
-            .unwrap();
+            .out_dims;
 
         let mut end = 1;
         if output_shape.len() > 1 {
@@ -307,15 +306,9 @@ impl Model {
     ) -> NodeConfigTypes<F> {
         match &node.opkind {
             OpKind::Div(s) => {
-                let dims = match &node.in_dims {
-                    Some(v) => v,
-                    None => {
-                        error!("relu layer has no input shape");
-                        panic!()
-                    }
-                };
+                let dims = node.in_dims.clone();
 
-                let length = dims.clone().into_iter().product();
+                let length = dims.into_iter().product();
 
                 let conf: EltwiseConfig<F, DivideBy<F>> = EltwiseConfig::configure(
                     meta,
@@ -326,15 +319,9 @@ impl Model {
                 NodeConfigTypes::Divide(conf, inputs)
             }
             OpKind::ReLU(s) => {
-                let dims = match &node.in_dims {
-                    Some(v) => v,
-                    None => {
-                        error!("relu layer has no input shape");
-                        panic!()
-                    }
-                };
+                let dims = node.in_dims.clone();
 
-                let length = dims.clone().into_iter().product();
+                let length = dims.into_iter().product();
 
                 let conf: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
                     meta,
@@ -345,15 +332,9 @@ impl Model {
                 NodeConfigTypes::ReLU(conf, inputs)
             }
             OpKind::Sigmoid(denominator) => {
-                let dims = match &node.in_dims {
-                    Some(v) => v,
-                    None => {
-                        let _ = anyhow!("sigmoid layer has no input shape");
-                        panic!()
-                    }
-                };
+                let dims = node.in_dims.clone();
 
-                let length = dims.clone().into_iter().product();
+                let length = dims.into_iter().product();
                 let conf: EltwiseConfig<F, Sigmoid<F>> = EltwiseConfig::configure(
                     meta,
                     &[advices.get_slice(&[0..length], &[length])],

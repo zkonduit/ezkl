@@ -2,6 +2,7 @@ use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quanti
 use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
 use crate::circuit::fused::*;
 
+use crate::abort;
 use crate::tensor::ops::const_mult;
 use crate::tensor::Tensor;
 use crate::tensor::TensorType;
@@ -172,6 +173,10 @@ fn display_option<T: fmt::Debug>(o: &Option<T>) -> String {
     }
 }
 
+fn display_vector<T: fmt::Debug>(v: &Vec<T>) -> String {
+    format!("{:?}", v)
+}
+
 fn display_inputs(o: &Vec<OutletId>) -> String {
     if !o.is_empty() {
         let mut nodes = vec![];
@@ -215,10 +220,10 @@ pub struct Node {
     // but in_dim is [in], out_dim is [out]
     #[tabled(display_with = "display_inputs")]
     pub inputs: Vec<OutletId>,
-    #[tabled(display_with = "display_option")]
-    pub in_dims: Option<Vec<usize>>,
-    #[tabled(display_with = "display_option")]
-    pub out_dims: Option<Vec<usize>>,
+    #[tabled(display_with = "display_vector")]
+    pub in_dims: Vec<usize>,
+    #[tabled(display_with = "display_vector")]
+    pub out_dims: Vec<usize>,
     pub idx: usize,
     #[tabled(display_with = "display_option")]
     pub bucket: Option<usize>,
@@ -240,13 +245,21 @@ impl Node {
             .inputs
             .iter_mut()
             // this shouldn't fail
-            .map(|i| other_nodes.get(&i.node).unwrap().clone())
+            .map(|i| {
+                match other_nodes.get(&i.node) {
+                    Some(n) => n,
+                    None => {
+                        abort!("input {} has not been initialized", i.node);
+                    }
+                }
+                .clone()
+            })
             .collect();
 
         let mut mn = Node {
             opkind: OpKind::new(node.op().name().as_ref()),
             inputs: node.inputs.clone(),
-            in_scale: scale, 
+            in_scale: scale,
             idx,
             ..Default::default()
         };
@@ -266,7 +279,7 @@ impl Node {
 
                 mn.output_max = scale_to_multiplier(mn.out_scale);
 
-                mn.min_cols = max(1, mn.in_dims.as_ref().unwrap().iter().product());
+                mn.min_cols = max(1, mn.in_dims.iter().product());
             }
 
             OpKind::ReLU(_) => {
@@ -283,7 +296,7 @@ impl Node {
                     mn.opkind = OpKind::ReLU(mult as usize); // now the input will be scaled down to match
                     mn.output_max = input_node.output_max / mult;
                 }
-                mn.min_cols = max(1, mn.in_dims.as_ref().unwrap().iter().product());
+                mn.min_cols = max(1, mn.in_dims.iter().product());
             }
             OpKind::Div(_) => {
                 let input_node = &inputs[0];
@@ -293,9 +306,8 @@ impl Node {
                 // rescale the divider
                 let mult = scale_to_multiplier(scale);
                 node.inputs.pop();
-                if inputs[1].out_dims.clone().unwrap() != [1] {
-                    error!("ezkl currently only supports division by a constant");
-                    unimplemented!()
+                if inputs[1].out_dims.clone() != [1] {
+                    abort!("ezkl currently only supports division by a constant");
                 }
                 let div = inputs[1].output_max / mult;
 
@@ -311,7 +323,7 @@ impl Node {
                     mn.opkind = OpKind::Div(div as usize); // now the input will be scaled down to match
                     mn.output_max = input_node.output_max / (div);
                 }
-                mn.min_cols = max(1, mn.in_dims.as_ref().unwrap().iter().product());
+                mn.min_cols = max(1, mn.in_dims.iter().product());
             }
             OpKind::Fused(ref s) => {
                 let input_node = &inputs[0];
@@ -319,7 +331,7 @@ impl Node {
                 mn.out_dims = input_node.out_dims.clone();
                 mn.min_cols = inputs
                     .iter()
-                    .map(|input| input.out_dims.clone().unwrap().iter().product::<usize>() as f32)
+                    .map(|input| input.out_dims.clone().iter().product::<usize>() as f32)
                     .sum::<f32>() as usize;
 
                 inputs
@@ -353,7 +365,12 @@ impl Node {
                         assert_eq!(conv_node.data_format, DataFormat::NCHW);
                         assert_eq!(conv_node.kernel_fmt, KernelFormat::OIHW);
 
-                        let stride = conv_node.strides.clone().unwrap();
+                        let stride = match conv_node.strides.clone() {
+                            Some(s) => s,
+                            None => {
+                                abort!("strides for node {} has not been initialized", idx);
+                            }
+                        };
                         let padding = match &conv_node.padding {
                             PaddingSpec::Explicit(p, _, _) => p,
                             _ => panic!("padding is not explicitly specified"),
@@ -370,7 +387,7 @@ impl Node {
                             bias_node.out_scale
                         );
 
-                        let oihw = weight_node.out_dims.as_ref().unwrap();
+                        let oihw = weight_node.out_dims.clone();
                         let (out_channels, _, kernel_height, kernel_width) =
                             (oihw[0], oihw[1], oihw[2], oihw[3]);
 
@@ -378,15 +395,14 @@ impl Node {
                             (padding[0], padding[1], stride[0], stride[1]);
 
                         mn.in_dims = input_node.out_dims.clone();
-
-                        let input_height = mn.in_dims.as_ref().unwrap()[1];
-                        let input_width = mn.in_dims.as_ref().unwrap()[2];
+                        let input_height = mn.in_dims[1];
+                        let input_width = mn.in_dims[2];
 
                         let out_height =
                             (input_height + 2 * padding_h - kernel_height) / stride_h + 1;
                         let out_width = (input_width + 2 * padding_w - kernel_width) / stride_w + 1;
 
-                        mn.out_dims = Some(vec![out_channels, out_height, out_width]);
+                        mn.out_dims = vec![out_channels, out_height, out_width];
 
                         mn.output_max = input_node.output_max
                             * weight_node.output_max
@@ -399,17 +415,16 @@ impl Node {
                     }
                     FusedOp::Matmul => {
                         let (a_node, b_node) = (&inputs[0], &inputs[1]);
+                        let a_dims = a_node.out_dims.clone();
+                        let b_dims = b_node.out_dims.clone();
+                        let in_dim = a_dims[1];
+                        mn.in_dims = vec![in_dim];
 
-                        let in_dim = a_node.out_dims.as_ref().unwrap()[1];
-                        mn.in_dims = Some(vec![in_dim]);
-
-                        let a_dims = a_node.out_dims.as_ref().unwrap();
-                        let b_dims = b_node.out_dims.as_ref().unwrap();
                         let mut dims = Vec::from(&a_dims[0..a_dims.len() - 2]);
                         dims.push(a_dims[a_dims.len() - 2]);
                         dims.push(b_dims[a_dims.len() - 1]);
 
-                        mn.out_dims = Some(dims.clone());
+                        mn.out_dims = dims.clone();
 
                         mn.output_max = input_node.output_max * a_node.output_max * (in_dim as f32);
 
@@ -432,10 +447,10 @@ impl Node {
                             bias_node.out_scale
                         );
 
-                        let in_dim = weight_node.out_dims.as_ref().unwrap()[1];
-                        let out_dim = weight_node.out_dims.as_ref().unwrap()[0];
-                        mn.in_dims = Some(vec![in_dim]);
-                        mn.out_dims = Some(vec![out_dim]);
+                        let in_dim = weight_node.out_dims.clone()[1];
+                        let out_dim = weight_node.out_dims.clone()[0];
+                        mn.in_dims = vec![in_dim];
+                        mn.out_dims = vec![out_dim];
 
                         mn.output_max =
                             input_node.output_max * weight_node.output_max * (in_dim as f32);
@@ -463,10 +478,10 @@ impl Node {
                     FusedOp::Sum => {
                         assert!(inputs.len() == 1);
                         mn.output_max = inputs[0].output_max
-                            * inputs[0].in_dims.clone().unwrap().iter().product::<usize>() as f32;
+                            * inputs[0].in_dims.iter().product::<usize>() as f32;
                         mn.in_scale = inputs.iter().map(|input| input.out_scale).max().unwrap();
                         mn.out_scale = mn.in_scale;
-                        mn.out_dims = Some(vec![1]);
+                        mn.out_dims = vec![1];
                     }
                     FusedOp::Sub => {
                         mn.opkind = Self::homogenize_input_scales(mn.opkind, inputs.clone());
@@ -502,7 +517,7 @@ impl Node {
                     FusedOp::Pow(_) => {
                         let mult = scale_to_multiplier(scale);
                         node.inputs.pop();
-                        if inputs[1].out_dims.clone().unwrap() != [1] {
+                        if inputs[1].out_dims != [1] {
                             error!(
                                 "ezkl currently only supports raising to the power by a constant"
                             );
@@ -527,8 +542,7 @@ impl Node {
                     }
                 }
                 // output size
-                mn.min_cols += mn.out_dims.clone().unwrap()
-                    [0..mn.out_dims.clone().unwrap().len() - 1]
+                mn.min_cols += mn.out_dims[0..mn.out_dims.len() - 1]
                     .iter()
                     .product::<usize>()
                     + 1;
@@ -550,7 +564,8 @@ impl Node {
                 }
                 mn.out_scale = mn.in_scale;
                 let t = vector_to_quantized(&vec, &dims, 0f32, mn.out_scale).unwrap();
-                mn.out_dims = Some(t.dims().to_vec());
+                mn.out_dims = t.dims().to_vec();
+                mn.in_dims = mn.out_dims.clone();
                 mn.output_max = t.iter().map(|x| x.abs()).max().unwrap() as f32;
                 mn.const_value = Some(t);
             }
@@ -575,10 +590,11 @@ impl Node {
                 };
                 // remove batch dim for now
                 if dims[0] == 1 && dims.len() > 1 {
-                    mn.out_dims = Some(dims[1..].to_vec())
+                    mn.out_dims = dims[1..].to_vec();
                 } else {
-                    mn.out_dims = Some(dims)
+                    mn.out_dims = dims;
                 }
+                mn.in_dims = mn.out_dims.clone();
 
                 mn.output_max = 256.0;
                 mn.out_scale = mn.in_scale;
