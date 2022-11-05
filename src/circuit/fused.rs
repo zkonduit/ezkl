@@ -15,6 +15,7 @@ use std::marker::PhantomData;
 /// An enum representing the operations that can be merged into a single circuit gate.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum FusedOp {
+    Identity,
     Add,
     Sub,
     Sum,
@@ -22,7 +23,8 @@ pub enum FusedOp {
     Matmul,
     Dot,
     Affine,
-    Conv((usize, usize), (usize, usize)),
+    Conv((usize, usize), (usize, usize)), // padding, stride
+    SumPool((usize, usize), (usize, usize), (usize, usize)), // padding, stride, kernel_shape
     Pow(usize),
     Rescaled(Box<FusedOp>, Vec<(usize, usize)>),
 }
@@ -30,6 +32,7 @@ pub enum FusedOp {
 impl fmt::Display for FusedOp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            FusedOp::Identity => write!(f, "identity"),
             FusedOp::Add => write!(f, "add"),
             FusedOp::Sub => write!(f, "sub"),
             FusedOp::Sum => write!(f, "sum"),
@@ -39,6 +42,13 @@ impl fmt::Display for FusedOp {
             FusedOp::Affine => write!(f, "affine"),
             FusedOp::Conv(padding, stride) => {
                 write!(f, "conv w/ padding: {:?}, stride: {:?}", padding, stride)
+            }
+            FusedOp::SumPool(padding, stride, kernel_shape) => {
+                write!(
+                    f,
+                    "avg pl w/ padding: {:?}, stride: {:?}, kernel shape: {:?}",
+                    padding, stride, kernel_shape,
+                )
             }
             FusedOp::Pow(s) => write!(f, "pow {}", s),
             FusedOp::Rescaled(s, m) => {
@@ -228,6 +238,7 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
         mut inputs: Vec<Tensor<T>>,
     ) -> Tensor<T> {
         match op {
+            FusedOp::Identity => inputs[0].clone(),
             FusedOp::Add => add(&inputs),
             FusedOp::Sub => sub(&inputs),
             FusedOp::Mult => mult(&inputs),
@@ -237,6 +248,9 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
                 todo!();
             }
             FusedOp::Conv(padding, stride) => convolution(&inputs, padding, stride),
+            FusedOp::SumPool(padding, stride, kernel_shape) => {
+                sumpool(&inputs[0], padding, stride, kernel_shape)
+            }
             FusedOp::Pow(u) => {
                 assert_eq!(inputs.len(), 1);
                 pow(&inputs[0], u)

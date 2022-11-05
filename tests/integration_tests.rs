@@ -32,6 +32,11 @@ fn test_ff_mock() {
 }
 
 #[test]
+fn test_avg_mock() {
+    test_onnx_mock("avg".to_string());
+}
+
+#[test]
 fn test_relusig_mock() {
     test_onnx_mock("relusig".to_string());
 }
@@ -76,6 +81,11 @@ fn test_onnx_fullprove(example_name: String) {
 #[test]
 fn test_ff_fullprove() {
     test_onnx_fullprove("ff".to_string());
+}
+
+#[test]
+fn test_avg_fullprove() {
+    test_onnx_fullprove("avg".to_string());
 }
 
 #[test]
@@ -215,6 +225,12 @@ fn test_kzg_fullprove(example_name: String) {
         .status()
         .expect("failed to execute process");
     assert!(status.success());
+}
+
+#[test]
+#[ignore]
+fn test_avg_fullprove_kzg() {
+    test_kzg_fullprove("avg".to_string());
 }
 
 #[test]
