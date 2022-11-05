@@ -11,7 +11,7 @@ use halo2_proofs::arithmetic::FieldExt;
 use itertools::Itertools;
 use log::{error, info, warn};
 use std::cmp::max;
-use std::collections::{btree_map::Entry, BTreeMap, HashSet};
+use std::collections::{btree_map::Entry, BTreeMap};
 use std::fmt;
 
 use tabled::Tabled;

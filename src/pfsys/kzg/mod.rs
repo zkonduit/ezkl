@@ -70,7 +70,7 @@ pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &ModelInput) -> Sn
         _,
         PoseidonTranscript<NativeLoader, _>,
         PoseidonTranscript<NativeLoader, _>,
-    >(params, &pk, circuit.clone(), pi_inner.clone());
+    >(params, &pk, circuit, pi_inner.clone());
     Snark::new(protocol, pi_inner, proof)
 }
 

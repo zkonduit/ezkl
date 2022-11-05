@@ -16,7 +16,7 @@ use halo2_proofs::{
 use itertools::Itertools;
 use log::{debug, error, info, trace};
 
-use std::collections::{btree_map::Entry, BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 use std::path::Path;
 use tabled::Table;
