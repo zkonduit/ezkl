@@ -11,8 +11,11 @@ pub mod utilities;
 use std::cmp::max;
 pub use utilities::*;
 pub mod model;
+pub mod node;
 use log::{info, trace};
 pub use model::*;
+pub use node::*;
+
 
 #[derive(Clone, Debug)]
 pub struct OnnxCircuit<F: FieldExt> {

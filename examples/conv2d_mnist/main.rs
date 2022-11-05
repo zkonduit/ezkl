@@ -308,7 +308,7 @@ pub fn runconv() {
 
     let mut input: ValTensor<F> = train_data
         .get_slice(&[0..1, 0..28, 0..28])
-        .map(|d| Value::known(d))
+        .map(Value::known)
         .into();
 
     input.reshape(&[1, 28, 28]);
@@ -323,7 +323,7 @@ pub fn runconv() {
             .flatten()
             .flatten()
             .map(|fl| {
-                let dx = (fl as f32) * (32 as f32);
+                let dx = (fl as f32) * 32_f32;
                 let rounded = dx.round();
                 let integral: i32 = unsafe { rounded.to_int_unchecked() };
                 let felt = fieldutils::i32_to_felt(integral);
@@ -340,7 +340,7 @@ pub fn runconv() {
     .into();
 
     let l2_biases: ValTensor<F> = Tensor::<Value<F>>::from(myparams.biases.into_iter().map(|fl| {
-        let dx = fl * (32 as f32);
+        let dx = fl * 32_f32;
         let rounded = dx.round();
         let integral: i32 = unsafe { rounded.to_int_unchecked() };
         let felt = fieldutils::i32_to_felt(integral);
@@ -350,7 +350,7 @@ pub fn runconv() {
 
     let mut l2_weights: ValTensor<F> =
         Tensor::<Value<F>>::from(myparams.weights.into_iter().flatten().map(|fl| {
-            let dx = fl * (32 as f32);
+            let dx = fl * 32_f32;
             let rounded = dx.round();
             let integral: i32 = unsafe { rounded.to_int_unchecked() };
             let felt = fieldutils::i32_to_felt(integral);
@@ -402,7 +402,7 @@ pub fn runconv() {
     .into_iter()
     .into();
 
-    let pi_inner: Tensor<F> = public_input.map(|x| i32_to_felt::<F>(x).into());
+    let pi_inner: Tensor<F> = public_input.map(i32_to_felt::<F>);
     let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner]];
 
     //	Real proof
@@ -413,7 +413,7 @@ pub fn runconv() {
     let vk = keygen_vk(&params, &empty_circuit).expect("keygen_vk should not fail");
     println!("VK took {}", now.elapsed().as_secs());
     let now = Instant::now();
-    let pk = keygen_pk(&params, vk.clone(), &empty_circuit).expect("keygen_pk should not fail");
+    let pk = keygen_pk(&params, vk, &empty_circuit).expect("keygen_pk should not fail");
     println!("PK took {}", now.elapsed().as_secs());
     let now = Instant::now();
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);

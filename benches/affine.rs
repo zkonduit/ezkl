@@ -54,8 +54,8 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
 
         Self::Config::configure(
             cs,
-            &[input.clone(), kernel.clone(), bias.clone()],
-            &output.clone(),
+            &[input, kernel, bias],
+            &output,
             &[affine_node],
         )
     }
