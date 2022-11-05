@@ -243,9 +243,13 @@ impl Node {
             .map(|i| other_nodes.get(&i.node).unwrap().clone())
             .collect();
 
-        let mut mn = Node::default();
-
-        mn.opkind = OpKind::new(node.op().name().as_ref());
+        let mut mn = Node {
+            opkind: OpKind::new(node.op().name().as_ref()),
+            inputs: node.inputs.clone(),
+            in_scale: scale, 
+            idx,
+            ..Default::default()
+        };
 
         match mn.opkind {
             OpKind::Sigmoid(_) => {
@@ -581,7 +585,6 @@ impl Node {
             }
             _ => {}
         }
-
         mn
     }
 

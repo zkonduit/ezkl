@@ -515,8 +515,7 @@ impl Model {
     pub fn assign_execution_buckets(mut nodes: BTreeMap<usize, Node>) -> Result<NodeGraph> {
         info!("assigning configuration buckets to operations");
 
-        let mut bucketed_nodes =
-            NodeGraph(BTreeMap::<Option<usize>, BTreeMap<usize, Node>>::new());
+        let mut bucketed_nodes = NodeGraph(BTreeMap::<Option<usize>, BTreeMap<usize, Node>>::new());
 
         for (_, node) in nodes.iter_mut() {
             let prev_bucket: Option<usize> = node
