@@ -17,7 +17,7 @@ use std::fmt;
 
 use tabled::Tabled;
 use tract_onnx;
-use tract_onnx::prelude::{InferenceFact, Node as OnnxNode, OutletId};
+use tract_onnx::prelude::{DatumType, InferenceFact, Node as OnnxNode, OutletId};
 use tract_onnx::tract_hir::{
     infer::Factoid,
     internal::InferenceOp,
@@ -67,6 +67,7 @@ impl OpKind {
             "Conv" => OpKind::Fused(FusedOp::Conv((1, 1), (1, 1))),
             "ConvHir" => OpKind::Fused(FusedOp::Conv((1, 1), (1, 1))),
             "SumPool" => OpKind::Fused(FusedOp::SumPool((1, 1), (1, 1), (1, 1))),
+            "Reshape" => OpKind::Fused(FusedOp::Reshape(Vec::new())),
             "Pad" => OpKind::Fused(FusedOp::Identity),
             c => {
                 warn!("{:?} is not currently supported", c);
@@ -258,7 +259,7 @@ impl Node {
             .collect();
 
         let mut mn = Node {
-            opkind: OpKind::new(node.op().name().as_ref()),
+            opkind: OpKind::new(node.op().name().as_ref()), // parses the op name
             inputs: node.inputs.clone(),
             in_scale: scale,
             idx,
@@ -597,6 +598,27 @@ impl Node {
                         mn.in_scale = input_node.out_scale;
                         mn.out_scale = input_node.out_scale;
                     }
+                    FusedOp::Reshape(_) => {
+                        let shape_const_node = &inputs[1];
+                        let shape_const = match shape_const_node.const_value.as_ref() {
+                            Some(sc) => sc,
+                            None => {
+                                abort!("missing shape constant");
+                            }
+                        };
+                        let shapes = shape_const[0..].iter();
+                        let new_dims: Vec<usize> = shapes
+                            .map(|x| {
+                                assert!(x > &0);
+                                *x as usize
+                            })
+                            .collect();
+                        mn.opkind = OpKind::Fused(FusedOp::Reshape(new_dims.clone()));
+                        mn.output_max = input_node.output_max;
+                        mn.in_scale = input_node.out_scale;
+                        mn.out_scale = input_node.out_scale;
+                        mn.out_dims = new_dims;
+                    }
                 }
                 // output size
                 mn.min_cols += mn.out_dims[0..mn.out_dims.len() - 1]
@@ -605,7 +627,6 @@ impl Node {
                     + 1;
             }
             OpKind::Const => {
-                // Extract the padding and stride layer hyperparams
                 let op = Box::new(node.op());
                 let const_node: &Const = match op.as_any().downcast_ref() {
                     Some(b) => b,
@@ -613,17 +634,35 @@ impl Node {
                         abort!("op is not a const!");
                     }
                 };
-                let vec = const_node.0.as_slice::<f32>().unwrap().to_vec();
+                let dt = const_node.0.datum_type();
                 let mut dims = const_node.0.shape().to_vec();
                 if dims.is_empty() {
                     dims.push(1)
                 }
-                mn.out_scale = mn.in_scale;
-                let t = vector_to_quantized(&vec, &dims, 0f32, mn.out_scale).unwrap();
-                mn.out_dims = t.dims().to_vec();
-                mn.in_dims = mn.out_dims.clone();
-                mn.output_max = t.iter().map(|x| x.abs()).max().unwrap() as f32;
-                mn.const_value = Some(t);
+
+                match dt {
+                    DatumType::F32 => {
+                        mn.out_scale = mn.in_scale;
+                        let vec = const_node.0.as_slice::<f32>().unwrap().to_vec();
+                        let t = vector_to_quantized(&vec, &dims, 0f32, mn.out_scale).unwrap();
+                        mn.out_dims = t.dims().to_vec();
+                        mn.in_dims = mn.out_dims.clone();
+                        mn.output_max = t.iter().map(|x| x.abs()).max().unwrap() as f32;
+                        mn.const_value = Some(t);
+                    }
+
+                    DatumType::I64 => {
+                        mn.out_scale = 0;
+                        let vec = const_node.0.as_slice::<i64>().unwrap().to_vec();
+                        let cast: Vec<i32> = vec.iter().map(|x| *x as i32).collect();
+                        let t = Tensor::<i32>::new(Some(&cast), &dims).unwrap();
+                        mn.out_dims = t.dims().to_vec();
+                        mn.in_dims = mn.out_dims.clone();
+                        mn.output_max = cast.iter().map(|x| x.abs()).max().unwrap() as f32;
+                        mn.const_value = Some(t);
+                    }
+                    _ => todo!(),
+                }
             }
             OpKind::Input => {
                 let dims = if let Some([Some(v)]) = output_shapes.as_deref() {
@@ -654,6 +693,9 @@ impl Node {
 
                 mn.output_max = 256.0;
                 mn.out_scale = mn.in_scale;
+            }
+            OpKind::Unknown(_) => {
+                warn!("{:?}", mn);
             }
             _ => {}
         }
