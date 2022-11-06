@@ -96,12 +96,12 @@ pub struct FusedConfig<F: FieldExt + TensorType> {
     _marker: PhantomData<F>,
 }
 
-/// Configures the sequence of operations into a circuit gate, represented as an array of [FusedNode].
-/// # Arguments
-/// * `inputs` - The explicit inputs to the operations. [FusedNode]s index over these inputs using their `input_order` attribute. They can also index over the intermediate outputs of other [FusedNode]s.
-/// * `output` - The variable representing the (currently singular) output of the fused operations.
-/// * `nodes` - The sequence of operations (in order of execution) that constitute the fused operation.
 impl<F: FieldExt + TensorType> FusedConfig<F> {
+    /// Configures the sequence of operations into a circuit gate, represented as an array of [FusedNode].
+    /// # Arguments
+    /// * `inputs` - The explicit inputs to the operations. [FusedNode]s index over these inputs using their `input_order` attribute. They can also index over the intermediate outputs of other [FusedNode]s.
+    /// * `output` - The variable representing the (currently singular) output of the fused operations.
+    /// * `nodes` - The sequence of operations (in order of execution) that constitute the fused operation.
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         inputs: &[VarTensor],

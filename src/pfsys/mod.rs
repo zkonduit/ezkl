@@ -42,12 +42,9 @@ pub fn parse_prover_errors(f: &VerifyFailure) {
         VerifyFailure::ConstraintNotSatisfied {
             constraint,
             location,
-            cell_values,
+            cell_values: _,
         } => {
-            error!(
-                "constraint {:?} was not satisfied ({} with values {:?}).",
-                constraint, location, cell_values
-            );
+            error!("{} was not satisfied {}).", constraint, location);
         }
         VerifyFailure::ConstraintPoisoned { constraint } => {
             error!("constraint {:?} was poisoned", constraint);
@@ -58,8 +55,17 @@ pub fn parse_prover_errors(f: &VerifyFailure) {
                 column, location
             );
         }
-        e => {
-            error!("{:?}", e);
+        VerifyFailure::CellNotAssigned {
+            gate,
+            region,
+            gate_offset,
+            column,
+            offset,
+        } => {
+            error!(
+                "Unnassigned value in {} ({}) and {} ({:?}, {})",
+                gate, region, gate_offset, column, offset
+            );
         }
     }
 }

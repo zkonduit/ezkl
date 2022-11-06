@@ -45,7 +45,7 @@ pub fn main() {
     match args.command {
         Commands::Table { model: _ } => {
             let om = Model::from_arg();
-            println!("{}", Table::new(om.onnx_nodes.flatten()));
+            println!("{}", Table::new(om.nodes.flatten()));
         }
         Commands::Mock { data, model: _ } => {
             let args = Cli::parse();
@@ -71,6 +71,7 @@ pub fn main() {
                     for e in v.iter() {
                         parse_prover_errors(e)
                     }
+                    panic!()
                 }
             }
         }

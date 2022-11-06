@@ -1,31 +1,45 @@
 use crate::abort;
 use crate::fieldutils::i32_to_felt;
-use crate::tensor::{Tensor, TensorType, ValTensor, VarTensor};
+use crate::tensor::{TensorType, ValTensor, VarTensor};
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{Layouter},
-    plonk::{ConstraintSystem, Constraints, Expression, Selector},
+    circuit::Layouter,
+    plonk::{Column, ConstraintSystem, Constraints, Expression, Instance, Selector},
 };
 use log::error;
 use std::marker::PhantomData;
 
+/// Configuration for a range check on the difference between `input` and `expected`.
 #[derive(Debug, Clone)]
-pub struct RangeCheckConfig<F: FieldExt, const RANGE: usize> {
+pub struct RangeCheckConfig<F: FieldExt> {
     input: VarTensor,
-    pub output: VarTensor,
+    pub expected: VarTensor,
+    pub instance: Column<Instance>,
     selector: Selector,
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType, const RANGE: usize> RangeCheckConfig<F, RANGE> {
-    pub fn configure(meta: &mut ConstraintSystem<F>, input: &VarTensor,  output: &VarTensor) -> Self {
+impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
+    /// Configures a range check on the difference between `input` and `expected`.
+    /// # Arguments
+    /// * `input` - the input
+    /// * `expected` - the expected input we would have wanted to produce
+    /// * `instance` - the public input we'll be assigning to `expected`
+    /// * `tol` - the range (%2), effectively our tolerance for error between `input` and `expected`.
+    pub fn configure(
+        meta: &mut ConstraintSystem<F>,
+        input: &VarTensor,
+        expected: &VarTensor,
+        instance: &Column<Instance>,
+        tol: usize,
+    ) -> Self {
         let config = Self {
             selector: meta.selector(),
             input: input.clone(),
-            output: output.clone(),
+            expected: expected.clone(),
+            instance: *instance,
             _marker: PhantomData,
         };
-       
 
         meta.create_gate("range check", |meta| {
             //        value     |    q_range_check
@@ -41,50 +55,79 @@ impl<F: FieldExt + TensorType, const RANGE: usize> RangeCheckConfig<F, RANGE> {
             };
 
             // Get output expressions for each input channel
-            let expected: Tensor<Expression<F>> = match config.output.query(meta, 0) {
-                Ok(res) => res,
+            let expected = match expected.query(meta, 0) {
+                Ok(q) => q,
                 Err(e) => {
-                    abort!("failed to query output during fused layer layout {:?}", e);
+                    abort!("failed to query input {:?}", e);
                 }
             };
 
             // Given a range R and a value v, returns the expression
             // (v) * (1 - v) * (2 - v) * ... * (R - 1 - v)
-            let range_check = |range: i32, value: Expression<F>| {
-                assert!(range > 0);
-                (-range..range).fold(value.clone(), |expr, i| {
+            let range_check = |tol: i32, value: Expression<F>| {
+                (-tol..tol).fold(value.clone(), |expr, i| {
                     expr * (Expression::Constant(i32_to_felt(i)) - value.clone())
                 })
             };
 
-            let constraints = witnessed.enum_map(|i, o| range_check(RANGE as i32, o - expected[i].clone()));
+            let constraints =
+                witnessed.enum_map(|i, o| range_check(tol as i32, o - expected[i].clone()));
             Constraints::with_selector(q, constraints)
         });
 
-       config
+        config
     }
 
-    pub fn layout(&self, mut layouter: impl Layouter<F>, input: ValTensor<F>, output: ValTensor<F>) -> ValTensor<F> {
-        let t = match layouter.assign_region(
-            || "Assign value",
+    /// Assigns variables to the regions created when calling `configure`.
+    /// # Arguments
+    /// * `input` - The input values we want to express an error tolerance for
+    /// * `layouter` - A Halo2 Layouter.
+    pub fn layout(&self, mut layouter: impl Layouter<F>, input: ValTensor<F>) {
+        match layouter.assign_region(
+            || "range check layout",
             |mut region| {
                 let offset = 0;
 
                 // Enable q_range_check
                 self.selector.enable(&mut region, offset)?;
 
+                // assigns the instance to the advice.
                 match self.input.assign(&mut region, offset, &input) {
-                    Ok(res) => {res.map(|elem| elem.value_field().evaluate());},
+                    Ok(res) => {
+                        res.map(|elem| elem.value_field().evaluate());
+                    }
                     Err(e) => {
                         abort!("failed to assign inputs during range layer layout {:?}", e);
                     }
                 };
-                match self.output.assign(&mut region, offset, &output) {
-                    Ok(res) => Ok(res.map(|elem| elem.value_field().evaluate())),
-                    Err(e) => {
-                        abort!("failed to assign outputs during range layer layout {:?}", e);
+
+                // assigns the instance to the "expected" advice.
+                match self.expected.clone() {
+                    VarTensor::Advice { inner, dims: d } => {
+                        let mut outer_loop = 1;
+                        if d.len() > 1 {
+                            outer_loop = d[0..d.len() - 1].iter().product();
+                        }
+                        let inner_loop = d[d.len() - 1];
+                        for i in 0..outer_loop {
+                            for j in 0..inner_loop {
+                                region
+                                    .assign_advice_from_instance(
+                                        || "pub input anchor",
+                                        self.instance,
+                                        i * inner_loop + j,
+                                        inner[i],
+                                        j,
+                                    )
+                                    .unwrap();
+                            }
+                        }
+                    }
+                    _ => {
+                        abort!("should be an advice");
                     }
                 }
+                Ok(())
             },
         ) {
             Ok(a) => a,
@@ -92,31 +135,32 @@ impl<F: FieldExt + TensorType, const RANGE: usize> RangeCheckConfig<F, RANGE> {
                 abort!("failed to assign fused layer region {:?}", e);
             }
         };
-
-        ValTensor::from(t)
+        // ValTensor::from(t);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::tensor::Tensor;
     use halo2_proofs::{
-        arithmetic::{FieldExt},
+        arithmetic::FieldExt,
         circuit::{Layouter, SimpleFloorPlanner, Value},
-        dev::{MockProver},
+        dev::MockProver,
         plonk::{Circuit, ConstraintSystem, Error},
     };
     use halo2curves::pasta::Fp;
 
+    const RANGE: usize = 8; // 3-bit value
+
     use super::*;
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt + TensorType, const RANGE: usize> {
+    struct MyCircuit<F: FieldExt + TensorType> {
         input: ValTensor<F>,
-        output: ValTensor<F>,
     }
 
-    impl<F: FieldExt + TensorType, const RANGE: usize> Circuit<F> for MyCircuit<F, RANGE> {
-        type Config = RangeCheckConfig<F, RANGE>;
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = RangeCheckConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
         fn without_witnesses(&self) -> Self {
@@ -130,9 +174,14 @@ mod tests {
                 col
             })));
             let input = advices.get_slice(&[0..1], &[1]);
-            let output = advices.get_slice(&[1..2], &[1]);
+            let expected = advices.get_slice(&[1..2], &[1]);
+            let instance = {
+                let l = cs.instance_column();
+                cs.enable_equality(l);
+                l
+            };
 
-            RangeCheckConfig::configure(cs, &input, &output)
+            RangeCheckConfig::configure(cs, &input, &expected, &instance, RANGE)
         }
 
         fn synthesize(
@@ -140,7 +189,7 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            config.layout(layouter.namespace(|| "Assign value"), self.input.clone(), self.output.clone());
+            config.layout(layouter.namespace(|| "assign value"), self.input.clone());
 
             Ok(())
         }
@@ -149,29 +198,24 @@ mod tests {
     #[test]
     fn test_range_check() {
         let k = 4;
-        const RANGE: usize = 8; // 3-bit value
 
         // Successful cases
         for i in 0..RANGE {
             let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(i as u64))]), &[1]).unwrap();
-            let out = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(1 as u64))]), &[1]).unwrap();
-            let circuit = MyCircuit::<Fp, RANGE> {
+            let circuit = MyCircuit::<Fp> {
                 input: ValTensor::from(inp),
-                output: ValTensor::from(out),
             };
-
-            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            let instance = vec![vec![Fp::from(i as u64 + 1)]];
+            let prover = MockProver::run(k, &circuit, instance).unwrap();
             prover.assert_satisfied();
         }
         {
-            let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(22 as u64))]), &[1]).unwrap();
-            let out = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(1 as u64))]), &[1]).unwrap();
-            let circuit = MyCircuit::<Fp, RANGE> {
+            let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(22_u64))]), &[1]).unwrap();
+            let circuit = MyCircuit::<Fp> {
                 input: ValTensor::from(inp),
-                output: ValTensor::from(out),
             };
-
-            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            let instance = vec![vec![Fp::from(0_u64)]];
+            let prover = MockProver::run(k, &circuit, instance).unwrap();
             match prover.verify() {
                 Ok(_) => {
                     assert!(false)
@@ -180,8 +224,6 @@ mod tests {
                     assert!(true)
                 }
             }
-
         }
-
     }
 }

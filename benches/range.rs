@@ -3,24 +3,24 @@ use ezkl::circuit::range::*;
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
-    arithmetic::{Field, FieldExt},
+    arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error},
 };
 use halo2curves::pasta::pallas;
 use halo2curves::pasta::Fp as F;
-use rand::rngs::OsRng;
+use itertools::Itertools;
 
 static mut LEN: usize = 4;
+const RANGE: usize = 8; // 3-bit value
 
 #[derive(Clone)]
-struct MyCircuit<F: FieldExt + TensorType, const RANGE: usize> {
+struct MyCircuit<F: FieldExt + TensorType> {
     input: ValTensor<F>,
-    output: ValTensor<F>,
 }
 
-impl<F: FieldExt + TensorType, const RANGE: usize> Circuit<F> for MyCircuit<F, RANGE> {
-    type Config = RangeCheckConfig<F, RANGE>;
+impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+    type Config = RangeCheckConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -36,7 +36,13 @@ impl<F: FieldExt + TensorType, const RANGE: usize> Circuit<F> for MyCircuit<F, R
         })));
         let input = advices.get_slice(&[0..1], &[len]);
         let output = advices.get_slice(&[1..2], &[len]);
-        RangeCheckConfig::configure(cs, &input, &output)
+        let instance = {
+            let l = cs.instance_column();
+            cs.enable_equality(l);
+            l
+        };
+
+        RangeCheckConfig::configure(cs, &input, &output, &instance, RANGE)
     }
 
     fn synthesize(
@@ -44,7 +50,7 @@ impl<F: FieldExt + TensorType, const RANGE: usize> Circuit<F> for MyCircuit<F, R
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        config.layout(layouter.namespace(|| "Assign value"), self.input.clone(), self.output.clone());
+        config.layout(layouter.namespace(|| "Assign value"), self.input.clone());
 
         Ok(())
     }
@@ -58,19 +64,18 @@ fn runrange(c: &mut Criterion) {
         };
 
         let k = 15; //2^k rows
-        const RANGE: usize = 8; // 3-bit value
 
-        let input = Tensor::from((0..len).map(|_| Value::known(pallas::Base::random(OsRng))));
+        let input = Tensor::from((0..len).map(|_| Value::known(pallas::Base::from(1))));
 
-        let circuit = MyCircuit::<F, RANGE> {
+        let circuit = MyCircuit::<F> {
             input: ValTensor::from(input.clone()),
-            output: ValTensor::from(input),
         };
 
         group.throughput(Throughput::Elements(len as u64));
         group.bench_with_input(BenchmarkId::from_parameter(len), &len, |b, &_| {
             b.iter(|| {
-                let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+                let instances = vec![(0..len).map(|_| F::from(1)).collect_vec()];
+                let prover = MockProver::run(k, &circuit, instances).unwrap();
                 prover.assert_satisfied();
             });
         });
