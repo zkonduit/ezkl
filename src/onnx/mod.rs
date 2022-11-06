@@ -19,6 +19,7 @@ pub use node::*;
 #[derive(Clone, Debug)]
 pub struct ModelCircuit<F: FieldExt> {
     pub inputs: Vec<Tensor<i32>>,
+    pub tolerances: Vec<usize>,
     pub _marker: PhantomData<F>,
 }
 

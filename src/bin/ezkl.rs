@@ -179,6 +179,7 @@ pub fn main() {
             let checkable_pf = Proof {
                 input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
                 public_inputs: pi,
+                tolerances: data.tolerances,
                 proof,
             };
 

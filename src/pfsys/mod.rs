@@ -19,12 +19,14 @@ pub struct ModelInput {
     pub input_data: Vec<Vec<f32>>,
     pub input_shapes: Vec<Vec<usize>>,
     pub public_inputs: Vec<Vec<f32>>,
+    pub tolerances: Vec<usize>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Proof {
     pub input_shapes: Vec<Vec<usize>>,
     pub public_inputs: Vec<Vec<i32>>,
+    pub tolerances: Vec<usize>,
     pub proof: Vec<u8>,
 }
 
@@ -107,6 +109,7 @@ pub fn prepare_circuit<F: FieldExt>(data: &ModelInput) -> ModelCircuit<F> {
 
     ModelCircuit::<F> {
         inputs,
+        tolerances: data.tolerances.clone(),
         _marker: PhantomData,
     }
 }
@@ -127,11 +130,12 @@ pub fn prepare_data(datapath: String) -> ModelInput {
     };
     let data: ModelInput = serde_json::from_str(&data).expect("JSON was not well-formatted");
     info!(
-        "public inputs (network outputs) lengths: {:?}",
+        "public inputs (network outputs) of length {:?} and tolerances {:?}",
         data.public_inputs
             .iter()
             .map(|i| i.len())
-            .collect::<Vec<usize>>()
+            .collect::<Vec<usize>>(),
+        data.tolerances
     );
 
     data

@@ -92,8 +92,10 @@ pub fn verify_ipa_proof(proof: Proof) -> bool {
             },
         )
         .collect();
+
     let circuit = ModelCircuit::<F> {
         inputs,
+        tolerances: proof.tolerances,
         _marker: PhantomData,
     };
     let empty_circuit = circuit.without_witnesses();
