@@ -52,6 +52,11 @@ fn test_2lcnvrl_mock() {
     test_onnx_mock("2lcnvrl_relusig".to_string());
 }
 
+#[test]
+fn test_reshape_mock() {
+    test_onnx_mock("reshape".to_string());
+}
+
 // full prove (slower, covers more, but still reuses the pk)
 fn test_onnx_fullprove(example_name: String) {
     let status = Command::new("cargo")
@@ -112,6 +117,11 @@ fn test_relu_fullprove() {
 #[test]
 fn test_sig_fullprove() {
     test_onnx_fullprove("sig".to_string());
+}
+
+#[test]
+fn test_reshape_fullprove() {
+    test_onnx_fullprove("reshape".to_string());
 }
 
 // These require too much memory for Github CI right now

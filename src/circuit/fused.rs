@@ -16,6 +16,7 @@ use std::marker::PhantomData;
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum FusedOp {
     Identity,
+    Reshape(Vec<usize>),
     Add,
     Sub,
     Sum,
@@ -33,6 +34,7 @@ impl fmt::Display for FusedOp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             FusedOp::Identity => write!(f, "identity"),
+            FusedOp::Reshape(new_dims) => write!(f, "reshape to {:?}", new_dims),
             FusedOp::Add => write!(f, "add"),
             FusedOp::Sub => write!(f, "sub"),
             FusedOp::Sum => write!(f, "sum"),
@@ -239,6 +241,11 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
     ) -> Tensor<T> {
         match op {
             FusedOp::Identity => inputs[0].clone(),
+            FusedOp::Reshape(new_dims) => {
+                let mut t = inputs[0].clone();
+                t.reshape(&new_dims);
+                t
+            }
             FusedOp::Add => add(&inputs),
             FusedOp::Sub => sub(&inputs),
             FusedOp::Mult => mult(&inputs),
