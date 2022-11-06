@@ -560,8 +560,8 @@ impl Node {
                         // this node becomes a ScaleAndShift with former gamma and beta as params
                         mn.opkind = OpKind::Fused(FusedOp::ScaleAndShift);
 
-                        mn.in_dims = inputs[2].out_dims.clone();
-                        mn.out_dims = inputs[2].out_dims.clone();
+                        mn.in_dims = inputs[0].out_dims.clone();
+                        mn.out_dims = inputs[0].out_dims.clone();
 
                         mn.output_max = //is gamma output max still accurate?
                             inputs[0].output_max * inputs[1].output_max * (num_entries as f32);
