@@ -3,14 +3,14 @@ use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
 use crate::circuit::fused::*;
 
 use crate::abort;
-use crate::tensor::ops::const_mult;
+use crate::tensor::ops::{add, const_mult, div, mult};
 use crate::tensor::Tensor;
 use crate::tensor::TensorType;
 use anyhow::Result;
 
 use halo2_proofs::arithmetic::FieldExt;
 use itertools::Itertools;
-use log::{error, info, warn};
+use log::{error, info, trace, warn};
 use std::cmp::max;
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fmt;
@@ -68,6 +68,7 @@ impl OpKind {
             "ConvHir" => OpKind::Fused(FusedOp::Conv((1, 1), (1, 1))),
             "SumPool" => OpKind::Fused(FusedOp::SumPool((1, 1), (1, 1), (1, 1))),
             "Reshape" => OpKind::Fused(FusedOp::Reshape(Vec::new())),
+            "BatchNorm" => OpKind::Fused(FusedOp::BatchNorm),
             "Pad" => OpKind::Fused(FusedOp::Identity),
             c => {
                 warn!("{:?} is not currently supported", c);
@@ -199,6 +200,13 @@ fn display_tensor(o: &Option<Tensor<i32>>) -> String {
     }
 }
 
+fn display_tensorf32(o: &Option<Tensor<f32>>) -> String {
+    match o {
+        Some(s) => format!("[{:#?}...]", s[0]),
+        None => String::new(),
+    }
+}
+
 /// A single operation in an [OnnxModel].
 /// # Arguments:
 /// * `opkind` - [OpKind] enum, i.e what operation this node represents.
@@ -218,6 +226,8 @@ pub struct Node {
     pub out_scale: i32,
     #[tabled(display_with = "display_tensor")]
     pub const_value: Option<Tensor<i32>>, // float value * 2^qscale if applicable.
+    #[tabled(display_with = "display_tensorf32")]
+    pub raw_const_value: Option<Tensor<f32>>,
     // Usually there is a simple in and out shape of the node as an operator.  For example, an Affine node has three input_shapes (one for the input, weight, and bias),
     // but in_dim is [in], out_dim is [out]
     #[tabled(display_with = "display_inputs")]
@@ -238,12 +248,13 @@ impl Node {
         scale: i32,
         idx: usize,
     ) -> Self {
+        trace!("Create {:?}", node);
         let output_shapes = match node_output_shapes(&node) {
             Ok(s) => Some(s),
             _ => None,
         };
 
-        let inputs: Vec<Node> = node
+        let mut inputs: Vec<Node> = node
             .inputs
             .iter_mut()
             // this shouldn't fail
@@ -343,8 +354,7 @@ impl Node {
                 match s {
                     FusedOp::Dot => todo!(),
                     FusedOp::Conv(_, _) => {
-                        let (input_node, weight_node, bias_node) =
-                            (&inputs[0], &inputs[1], &inputs[2]);
+                        let (input_node, weight_node) = (&inputs[0], &inputs[1]);
 
                         // Extract the padding and stride layer hyperparams
                         let op = Box::new(node.op());
@@ -380,14 +390,17 @@ impl Node {
 
                         mn.in_scale = input_node.out_scale;
                         mn.out_scale = weight_node.out_scale + input_node.out_scale;
-                        let scale_diff = mn.out_scale - bias_node.out_scale;
-                        let mut bias_node = other_nodes.get_mut(&node.inputs[2].node).unwrap();
-                        bias_node = Self::scale_up_const_node(bias_node, scale_diff);
 
-                        assert_eq!(
-                            input_node.out_scale + weight_node.out_scale,
-                            bias_node.out_scale
-                        );
+                        if inputs.len() == 3 {
+                            let bias_node = &inputs[2];
+                            let scale_diff = mn.out_scale - bias_node.out_scale;
+                            let mut bias_node = other_nodes.get_mut(&node.inputs[2].node).unwrap();
+                            bias_node = Self::scale_up_const_node(bias_node, scale_diff);
+                            assert_eq!(
+                                input_node.out_scale + weight_node.out_scale,
+                                bias_node.out_scale
+                            );
+                        }
 
                         let oihw = weight_node.out_dims.clone();
                         let (out_channels, _, kernel_height, kernel_width) =
@@ -397,6 +410,7 @@ impl Node {
                             (padding[0], padding[1], stride[0], stride[1]);
 
                         mn.in_dims = input_node.out_dims.clone();
+                        trace!("{:?}", mn.in_dims);
                         let input_height = mn.in_dims[1];
                         let input_width = mn.in_dims[2];
 
@@ -485,7 +499,7 @@ impl Node {
 
                         mn.out_scale = a_node.out_scale + input_node.out_scale;
                     }
-                    FusedOp::Affine => {
+                    FusedOp::Affine | FusedOp::ScaleAndShift => {
                         let (input_node, weight_node, bias_node) =
                             (&inputs[0], &inputs[1], &inputs[2]);
 
@@ -508,6 +522,51 @@ impl Node {
                         mn.output_max =
                             input_node.output_max * weight_node.output_max * (in_dim as f32);
                     }
+                    // BatchNorm take four parameters, does some f32 arithmetic and then quantizes
+                    // while ScaleAndShift takes the final two parameters immediately.
+                    // We will also reach back and quantize
+                    FusedOp::BatchNorm => {
+                        //Compute scale and shift from the four inputs,
+                        // then replace the first two, and change this node to a ScaleAndShift
+
+                        // let (input_node, mut gamma_node, mut beta_node, mean_node, var_node) = (
+                        //     &mut inputs[0],
+                        //     &mut inputs[1],
+                        //     &mut inputs[2],
+                        //     &mut inputs[3],
+                        //     &mut inputs[4],
+                        // );
+                        let gamma = inputs[1].raw_const_value.as_ref().unwrap();
+                        let beta = inputs[2].raw_const_value.as_ref().unwrap();
+                        let mu = inputs[3].raw_const_value.as_ref().unwrap();
+                        let sigma = inputs[4].raw_const_value.as_ref().unwrap();
+                        let num_entries = gamma.len();
+
+                        let a = div(gamma.clone(), sigma.clone());
+                        let amu: Tensor<f32> = mult(&vec![a.clone(), mu.clone()]);
+                        let amupb: Tensor<f32> = add(&vec![amu, beta.clone()]);
+                        let b = const_mult(&amupb, -1f32);
+
+                        mn.in_scale = inputs[0].out_scale;
+                        mn.out_scale = 2 * inputs[0].out_scale;
+                        // gamma node becomes the scale (weigh) in scale and shift
+                        inputs[1].raw_const_value = Some(a);
+                        inputs[1].quantize_const_to_scale(mn.in_scale);
+
+                        // beta node becomes the shift (bias)
+                        inputs[2].raw_const_value = Some(b);
+                        inputs[2].quantize_const_to_scale(mn.out_scale);
+
+                        // this node becomes a ScaleAndShift with former gamma and beta as params
+                        mn.opkind = OpKind::Fused(FusedOp::ScaleAndShift);
+
+                        mn.in_dims = inputs[2].out_dims.clone();
+                        mn.out_dims = inputs[2].out_dims.clone();
+
+                        mn.output_max = //is gamma output max still accurate?
+                            inputs[0].output_max * inputs[1].output_max * (num_entries as f32);
+                    }
+
                     FusedOp::Add => {
                         mn.opkind = Self::homogenize_input_scales(mn.opkind, inputs.clone());
                         if let OpKind::Fused(FusedOp::Rescaled(_, mult)) = &mn.opkind {
@@ -644,14 +703,17 @@ impl Node {
                     DatumType::F32 => {
                         mn.out_scale = mn.in_scale;
                         let vec = const_node.0.as_slice::<f32>().unwrap().to_vec();
+                        let raw: Tensor<f32> = Tensor::new(Some(&vec), &dims).unwrap();
                         let t = vector_to_quantized(&vec, &dims, 0f32, mn.out_scale).unwrap();
                         mn.out_dims = t.dims().to_vec();
                         mn.in_dims = mn.out_dims.clone();
                         mn.output_max = t.iter().map(|x| x.abs()).max().unwrap() as f32;
                         mn.const_value = Some(t);
+                        mn.raw_const_value = Some(raw);
                     }
 
                     DatumType::I64 => {
+                        // Generally a shape or hyperparam
                         mn.out_scale = 0;
                         let vec = const_node.0.as_slice::<i64>().unwrap().to_vec();
                         let cast: Vec<i32> = vec.iter().map(|x| *x as i32).collect();
@@ -660,6 +722,7 @@ impl Node {
                         mn.in_dims = mn.out_dims.clone();
                         mn.output_max = cast.iter().map(|x| x.abs()).max().unwrap() as f32;
                         mn.const_value = Some(t);
+                        mn.raw_const_value = None;
                     }
                     _ => todo!(),
                 }
@@ -735,6 +798,15 @@ impl Node {
             error!("should not homegenize input scales for non fused ops.");
             panic!()
         }
+    }
+
+    pub fn quantize_const_to_scale(self: &mut Self, scale: i32) {
+        assert!(matches!(self.opkind, OpKind::Const));
+        let raw = self.raw_const_value.as_ref().unwrap();
+        self.out_scale = scale;
+        let t = vector_to_quantized(&*raw, &raw.dims(), 0f32, self.out_scale).unwrap();
+        self.output_max = t.iter().map(|x| x.abs()).max().unwrap() as f32;
+        self.const_value = Some(t);
     }
 
     /// Re-quantizes a constant value node to a new scale.

@@ -1,6 +1,6 @@
 use crate::tensor::{Tensor, TensorType};
 use itertools::Itertools;
-pub use std::ops::{Add, Mul, Sub};
+pub use std::ops::{Add, Div, Mul, Sub};
 
 /// Matrix multiplies two 2D tensors (and adds an offset).
 /// # Arguments
@@ -58,6 +58,22 @@ pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     // does matrix to vector multiplication
     if output.dims()[1] == 1 {
         output.flatten();
+    }
+    output
+}
+
+/// Scales and shifts a tensor.
+/// Given inputs (x,k,b) computes k*x + b elementwise
+pub fn scale_and_shift<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+    inputs: &Vec<Tensor<T>>,
+) -> Tensor<T> {
+    assert_eq!(inputs.len(), 3);
+    let (mut input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
+    assert_eq!(input.dims(), kernel.dims());
+    assert_eq!(bias.dims(), kernel.dims());
+    let mut output: Tensor<T> = input;
+    for (i, bias_i) in bias.iter().enumerate() {
+        output[i] = kernel[i].clone() * output[i].clone() + bias_i.clone()
     }
     output
 }
@@ -301,6 +317,17 @@ pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
     output
 }
 
+pub fn div<T: TensorType + Div<Output = T>>(t: Tensor<T>, d: Tensor<T>) -> Tensor<T> {
+    assert_eq!(t.dims(), d.dims());
+    // calculate value of output
+    let mut output: Tensor<T> = t.clone();
+
+    for (i, d_i) in d.iter().enumerate() {
+        output[i] = output[i].clone() / d_i.clone()
+    }
+    output
+}
+
 /// Elementwise multiplies a tensor with a const element.
 /// # Arguments
 ///
@@ -443,54 +470,102 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     padding: (usize, usize),
     stride: (usize, usize),
 ) -> Tensor<T> {
-    assert_eq!(inputs.len(), 3);
-    let (image, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
+    let has_bias = inputs.len() == 3;
+    if has_bias {
+        let (image, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
 
-    assert_eq!(image.dims().len(), 3);
-    assert_eq!(kernel.dims().len(), 4);
-    assert_eq!(bias.dims().len(), 1);
-    assert_eq!(image.dims()[0], kernel.dims()[1]);
-    assert_eq!(bias.dims()[0], kernel.dims()[0]);
+        assert_eq!(image.dims().len(), 3);
+        assert_eq!(kernel.dims().len(), 4);
+        assert_eq!(bias.dims().len(), 1);
+        assert_eq!(image.dims()[0], kernel.dims()[1]);
+        assert_eq!(bias.dims()[0], kernel.dims()[0]);
 
-    let image_dims = image.dims();
-    let kernel_dims = kernel.dims();
+        let image_dims = image.dims();
+        let kernel_dims = kernel.dims();
 
-    let (output_channels, input_channels, kernel_height, kernel_width) = (
-        kernel_dims[0],
-        kernel_dims[1],
-        kernel_dims[2],
-        kernel_dims[3],
-    );
+        let (output_channels, input_channels, kernel_height, kernel_width) = (
+            kernel_dims[0],
+            kernel_dims[1],
+            kernel_dims[2],
+            kernel_dims[3],
+        );
 
-    let (image_height, image_width) = (image_dims[1], image_dims[2]);
+        let (image_height, image_width) = (image_dims[1], image_dims[2]);
 
-    let padded_image = pad::<T>(image.clone(), padding);
+        let padded_image = pad::<T>(image.clone(), padding);
 
-    let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
-    let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
+        let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
+        let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
 
-    // calculate value of output
-    let mut output: Tensor<T> =
-        Tensor::new(None, &[output_channels, vert_slides, horz_slides]).unwrap();
+        // calculate value of output
+        let mut output: Tensor<T> =
+            Tensor::new(None, &[output_channels, vert_slides, horz_slides]).unwrap();
 
-    for i in 0..output_channels {
-        for j in 0..vert_slides {
-            let rs = j * stride.0;
-            for k in 0..horz_slides {
-                let cs = k * stride.1;
-                let prod = dot(&vec![
-                    &kernel.get_slice(&[i..i + 1]).clone(),
-                    &padded_image.get_slice(&[
-                        0..input_channels,
-                        rs..(rs + kernel_height),
-                        cs..(cs + kernel_width),
-                    ]),
-                ]);
-                output.set(&[i, j, k], prod[0].clone() + bias[i].clone());
+        for i in 0..output_channels {
+            for j in 0..vert_slides {
+                let rs = j * stride.0;
+                for k in 0..horz_slides {
+                    let cs = k * stride.1;
+                    let prod = dot(&vec![
+                        &kernel.get_slice(&[i..i + 1]).clone(),
+                        &padded_image.get_slice(&[
+                            0..input_channels,
+                            rs..(rs + kernel_height),
+                            cs..(cs + kernel_width),
+                        ]),
+                    ]);
+                    output.set(&[i, j, k], prod[0].clone() + bias[i].clone());
+                }
             }
         }
+        output
+    } else {
+        let (image, kernel) = (inputs[0].clone(), inputs[1].clone());
+
+        assert_eq!(image.dims().len(), 3);
+        assert_eq!(kernel.dims().len(), 4);
+        assert_eq!(image.dims()[0], kernel.dims()[1]);
+
+        let image_dims = image.dims();
+        let kernel_dims = kernel.dims();
+
+        let (output_channels, input_channels, kernel_height, kernel_width) = (
+            kernel_dims[0],
+            kernel_dims[1],
+            kernel_dims[2],
+            kernel_dims[3],
+        );
+
+        let (image_height, image_width) = (image_dims[1], image_dims[2]);
+
+        let padded_image = pad::<T>(image.clone(), padding);
+
+        let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
+        let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
+
+        // calculate value of output
+        let mut output: Tensor<T> =
+            Tensor::new(None, &[output_channels, vert_slides, horz_slides]).unwrap();
+
+        for i in 0..output_channels {
+            for j in 0..vert_slides {
+                let rs = j * stride.0;
+                for k in 0..horz_slides {
+                    let cs = k * stride.1;
+                    let prod = dot(&vec![
+                        &kernel.get_slice(&[i..i + 1]).clone(),
+                        &padded_image.get_slice(&[
+                            0..input_channels,
+                            rs..(rs + kernel_height),
+                            cs..(cs + kernel_width),
+                        ]),
+                    ]);
+                    output.set(&[i, j, k], prod[0].clone());
+                }
+            }
+        }
+        output
     }
-    output
 }
 
 pub fn sumpool<T: TensorType + Mul<Output = T> + Add<Output = T>>(

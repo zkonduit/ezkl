@@ -24,6 +24,8 @@ pub enum FusedOp {
     Matmul,
     Dot,
     Affine,
+    BatchNorm,
+    ScaleAndShift,
     Conv((usize, usize), (usize, usize)), // padding, stride
     SumPool((usize, usize), (usize, usize), (usize, usize)), // padding, stride, kernel_shape
     Pow(usize),
@@ -42,6 +44,8 @@ impl fmt::Display for FusedOp {
             FusedOp::Matmul => write!(f, "matmul"),
             FusedOp::Dot => write!(f, "dot"),
             FusedOp::Affine => write!(f, "affine"),
+            FusedOp::BatchNorm => write!(f, "batchnorm"),
+            FusedOp::ScaleAndShift => write!(f, "scale & shift"),
             FusedOp::Conv(padding, stride) => {
                 write!(f, "conv w/ padding: {:?}, stride: {:?}", padding, stride)
             }
@@ -250,6 +254,8 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
             FusedOp::Sub => sub(&inputs),
             FusedOp::Mult => mult(&inputs),
             FusedOp::Affine => affine(&inputs),
+            FusedOp::BatchNorm => scale_and_shift(&inputs),
+            FusedOp::ScaleAndShift => scale_and_shift(&inputs),
             FusedOp::Matmul => matmul(&inputs),
             FusedOp::Dot => {
                 todo!();

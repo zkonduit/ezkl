@@ -280,7 +280,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     }
 
     /// Returns the number of elements in the tensor.
-    pub fn len(&mut self) -> usize {
+    pub fn len(&self) -> usize {
         self.dims().iter().product::<usize>()
     }
     /// Checks if the number of elements in tensor is 0.
