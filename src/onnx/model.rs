@@ -2,8 +2,8 @@ use super::node::*;
 use super::utilities::{node_output_shapes, scale_to_multiplier};
 use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
 use crate::circuit::fused::*;
+use crate::circuit::range::*;
 use crate::commands::{model_path, Cli, Commands};
-
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
 use anyhow::{Context, Result};
@@ -11,7 +11,7 @@ use clap::Parser;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
-    plonk::{Column, ConstraintSystem, Instance},
+    plonk::ConstraintSystem,
 };
 use itertools::Itertools;
 use log::{debug, error, info, trace};
@@ -39,16 +39,17 @@ pub enum Mode {
 pub struct ModelConfig<F: FieldExt + TensorType> {
     configs: BTreeMap<usize, NodeConfig<F>>,
     pub model: Model,
-    pub public_outputs: Vec<Column<Instance>>,
+    pub public_outputs: Vec<RangeCheckConfig<F>>,
 }
 
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
 #[derive(Clone, Debug)]
 pub struct Model {
     pub model: Graph<InferenceFact, Box<dyn InferenceOp>>, // The raw Tract data structure
-    pub onnx_nodes: NodeGraph, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
+    pub nodes: NodeGraph, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
     pub bits: usize,
     pub scale: i32,
+    pub tolerance: usize,
     pub mode: Mode,
 }
 
@@ -60,29 +61,36 @@ impl Model {
     /// * `scale` - The denominator used for fixed point arithmetic (relevant for quantizing input data and model parameters).
     /// * `bits` - Number of bits to use.
     /// * `mode` -The [Mode] we're using the model in.
-    pub fn new(path: impl AsRef<Path>, scale: i32, bits: usize, mode: Mode) -> Self {
+    pub fn new(
+        path: impl AsRef<Path>,
+        scale: i32,
+        bits: usize,
+        tolerance: usize,
+        mode: Mode,
+    ) -> Self {
         let model = tract_onnx::onnx().model_for_path(path).unwrap();
 
-        let mut onnx_nodes = BTreeMap::<usize, Node>::new();
+        let mut nodes = BTreeMap::<usize, Node>::new();
         let _ = model
             .nodes()
             .iter()
             .enumerate()
             .map(|(i, n)| {
-                let n = Node::new(n.clone(), &mut onnx_nodes, scale, i);
-                onnx_nodes.insert(i, n);
+                let n = Node::new(n.clone(), &mut nodes, scale, i);
+                nodes.insert(i, n);
             })
             .collect_vec();
         let om = Model {
             model: model.clone(),
             scale,
-            onnx_nodes: Self::assign_execution_buckets(onnx_nodes)
+            tolerance,
+            nodes: Self::assign_execution_buckets(nodes)
                 .expect("failed to assign execution buckets"),
             bits,
             mode,
         };
 
-        debug!("{}", Table::new(om.onnx_nodes.flatten()).to_string());
+        debug!("{}", Table::new(om.nodes.flatten()).to_string());
 
         om
     }
@@ -91,28 +99,54 @@ impl Model {
         let args = Cli::parse();
 
         match args.command {
-            Commands::Table { model } => {
-                Model::new(model_path(model), args.scale, args.bits, Mode::Table)
-            }
-            Commands::Mock { data: _, model } => {
-                Model::new(model_path(model), args.scale, args.bits, Mode::Mock)
-            }
+            Commands::Table { model } => Model::new(
+                model_path(model),
+                args.scale,
+                args.bits,
+                args.tolerance,
+                Mode::Table,
+            ),
+            Commands::Mock { data: _, model } => Model::new(
+                model_path(model),
+                args.scale,
+                args.bits,
+                args.tolerance,
+                Mode::Mock,
+            ),
             Commands::Fullprove {
                 data: _,
                 model,
                 pfsys: _,
-            } => Model::new(model_path(model), args.scale, args.bits, Mode::FullProve),
+            } => Model::new(
+                model_path(model),
+                args.scale,
+                args.bits,
+                args.tolerance,
+                Mode::FullProve,
+            ),
             Commands::Prove {
                 data: _,
                 model,
                 output: _,
                 pfsys: _,
-            } => Model::new(model_path(model), args.scale, args.bits, Mode::Prove),
+            } => Model::new(
+                model_path(model),
+                args.scale,
+                args.bits,
+                args.tolerance,
+                Mode::Prove,
+            ),
             Commands::Verify {
                 model,
                 proof: _,
                 pfsys: _,
-            } => Model::new(model_path(model), args.scale, args.bits, Mode::Verify),
+            } => Model::new(
+                model_path(model),
+                args.scale,
+                args.bits,
+                args.tolerance,
+                Mode::Verify,
+            ),
         }
     }
 
@@ -122,7 +156,7 @@ impl Model {
     /// # Arguments
     ///
     /// * `meta` - Halo2 ConstraintSystem.
-    /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure all the nodes loaded in `self.onnx_nodes`.
+    /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure all the nodes loaded in `self.nodes`.
     pub fn configure<F: FieldExt + TensorType>(
         &self,
         meta: &mut ConstraintSystem<F>,
@@ -131,7 +165,7 @@ impl Model {
         info!("configuring model");
         let mut results = BTreeMap::new();
 
-        for (_, bucket_nodes) in self.onnx_nodes.0.iter() {
+        for (_, bucket_nodes) in self.nodes.0.iter() {
             let non_fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
                 .filter(|(_, n)| !n.opkind.is_fused())
@@ -166,6 +200,27 @@ impl Model {
             }
         }
 
+        Ok(ModelConfig {
+            configs: results,
+            model: self.clone(),
+            public_outputs: self.range_check_outputs(meta, advices),
+        })
+    }
+
+    fn range_check_outputs<F: FieldExt + TensorType>(
+        &self,
+        meta: &mut ConstraintSystem<F>,
+        advices: VarTensor,
+    ) -> Vec<RangeCheckConfig<F>> {
+        let mut configs = vec![];
+        let output_nodes = self.model.outputs.clone();
+        let output_shapes = output_nodes
+            .iter()
+            .map(|o| self.nodes.filter(o.node).clone().out_dims)
+            .collect_vec();
+
+        info!("output_shapes {:?}", output_shapes);
+
         let public_outputs = self
             .model
             .outputs
@@ -176,12 +231,23 @@ impl Model {
                 l
             })
             .collect_vec();
-
-        Ok(ModelConfig {
-            configs: results,
-            model: self.clone(),
-            public_outputs,
-        })
+        for (i, instance) in public_outputs.iter().enumerate() {
+            let s = output_shapes[i].clone();
+            let mut end = 1;
+            if s.len() > 1 {
+                end = s[0..s.len() - 1].iter().product();
+            }
+            let input = advices.get_slice(&[0..end], &s);
+            let output = advices.get_slice(&[end..2 * end], &s);
+            configs.push(RangeCheckConfig::configure(
+                meta,
+                &input,
+                &output,
+                &instance,
+                self.tolerance,
+            ));
+        }
+        configs
     }
 
     /// Configures a `BTreeMap` of 'fuseable' operations. These correspond to operations that are represented in
@@ -211,7 +277,7 @@ impl Model {
                     ),
                     e.inputs
                         .iter()
-                        .map(|i| self.onnx_nodes.filter(i.node))
+                        .map(|i| self.nodes.filter(i.node))
                         .collect_vec(),
                 )
             })
@@ -243,10 +309,7 @@ impl Model {
             .collect_vec();
 
         // output node
-        let output_shape = self
-            .onnx_nodes
-            .filter(**nodes.keys().max().unwrap())
-            .out_dims;
+        let output_shape = self.nodes.filter(**nodes.keys().max().unwrap()).out_dims;
 
         let mut end = 1;
         if output_shape.len() > 1 {
@@ -380,7 +443,7 @@ impl Model {
         config: ModelConfig<F>,
         layouter: &mut impl Layouter<F>,
         inputs: &[ValTensor<F>],
-    ) -> Result<Vec<ValTensor<F>>> {
+    ) -> Result<()> {
         info!("model layout");
         let mut results = BTreeMap::<usize, ValTensor<F>>::new();
         for i in inputs.iter().enumerate() {
@@ -389,7 +452,7 @@ impl Model {
         for (idx, c) in config.configs.iter() {
             let mut display: String = "".to_string();
             for (i, idx) in c.onnx_idx[0..].iter().enumerate() {
-                let node = &self.onnx_nodes.filter(*idx);
+                let node = &self.nodes.filter(*idx);
                 if i > 0 {
                     display.push_str(&format!(
                         "| combined with node {} ({:?}) ",
@@ -416,15 +479,23 @@ impl Model {
         }
 
         let output_nodes = self.model.outputs.iter();
-
         info!(
             "model outputs are nodes: {:?}",
             output_nodes.clone().map(|o| o.node).collect_vec()
         );
-
-        Ok(output_nodes
+        let outputs = output_nodes
             .map(|o| results.get(&o.node).unwrap().clone())
-            .collect_vec())
+            .collect_vec();
+        let _ = config
+            .public_outputs
+            .iter()
+            .zip(outputs)
+            .map(|(range_check, output)| {
+                range_check.layout(layouter.namespace(|| "range check outputs"), output)
+            })
+            .collect_vec();
+
+        Ok(())
     }
 
     /// Assigns values to a single region, represented as a [NodeConfig].
@@ -445,7 +516,7 @@ impl Model {
                 let values: Vec<ValTensor<F>> = idx
                     .iter()
                     .map(|i| {
-                        let node = &self.onnx_nodes.filter(*i);
+                        let node = &self.nodes.filter(*i);
                         match node.opkind {
                             OpKind::Const => {
                                 let val = node
@@ -549,12 +620,12 @@ impl Model {
     pub fn get_output_scales(&self) -> Vec<i32> {
         let output_nodes = self.model.outputs.iter();
         output_nodes
-            .map(|o| self.onnx_nodes.filter(o.node).out_scale)
+            .map(|o| self.nodes.filter(o.node).out_scale)
             .collect_vec()
     }
 
     pub fn max_node_advices(&self) -> usize {
-        self.onnx_nodes
+        self.nodes
             .flatten()
             .iter()
             .map(|e| e.min_cols)

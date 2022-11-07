@@ -9,6 +9,9 @@ use std::path::{Path, PathBuf};
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
+    /// The tolerance for error on model outputs
+    #[arg(short = 'T', long, default_value = "0")]
+    pub tolerance: usize,
     /// The denominator in the fixed point representation used when quantizing
     #[arg(short = 'S', long, default_value = "7")]
     pub scale: i32,

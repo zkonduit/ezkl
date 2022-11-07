@@ -32,6 +32,7 @@ Commands:
   help       Print this message or the help of the given subcommand(s)
 
 Options:
+  -T, --tolerance <TOLERANCE>  The tolerance for error on model outputs [default: 0]
   -S, --scale <SCALE>      The denominator in the fixed point representation used when quantizing [default: 7]
   -B, --bits <BITS>        The number of bits used in lookup tables [default: 14]
   -K, --logrows <LOGROWS>  The log_2 number of rows [default: 16]
@@ -39,7 +40,7 @@ Options:
   -V, --version            Print version information
 ```
 
-`bits`, `scale`, and `logrows` have default values. `prove`, `mock`, `fullprove` all require `-D` and `-M` parameters, which if not provided, the cli will query the user to manually enter the path(s).
+`bits`, `scale`, `tolerance`, and `logrows` have default values. You can use tolerance to express a tolerance to a certain amount of quantization error on the output eg. if set to 2 the circuit will verify even if the generated output deviates by an absolute value of 2 on any dimension from the expected output. `prove`, `mock`, `fullprove` all require `-D` and `-M` parameters, which if not provided, the cli will query the user to manually enter the path(s).
 
 ```bash
 
@@ -245,8 +246,8 @@ you should see the following table being displayed. This is a tabular representa
 | Div            | 85.333336  | 12       | 4        | 4         | true      |             | [15]       | [3, 2, 2] | [3, 2, 2]    | 17   | 2      |
 ```
 
-From there we can run proofs on the generated files, but note that because of quantization errors the public inputs may need to be tweaked to match the output of the circuit and generate a valid proof. The types of claims we can make with the setup of this tutorial are ones such as: "I ran my private model on data and produced the expected outputs (as dictated by the public inputs to the circuit)".
+From there we can run proofs on the generated files, but note that because of quantization errors the public inputs may need to be tweaked to match the output of the circuit and generate a valid proof. You can also express a tolerance to such errors using the `tolerance` flag (which we use below). The types of claims we can make with the setup of this tutorial are ones such as: "I ran my private model on data and produced the expected outputs (as dictated by the public inputs to the circuit)".
 
 ``` bash
- RUST_LOG=debug cargo run --bin ezkl -- --scale 4 --bits 16 -K 17 mock  -D ./input.json -M ./network.onnx
+ RUST_LOG=debug cargo run --bin ezkl -- --tolerance 2 --scale 4 --bits 16 -K 17 mock  -D ./input.json -M ./network.onnx
 ```
