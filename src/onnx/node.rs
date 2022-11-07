@@ -307,7 +307,7 @@ impl Node {
 
                 // rescale the divider
                 let mult = scale_to_multiplier(scale);
-                node.inputs.pop();
+                mn.inputs.pop();
                 if inputs[1].out_dims.clone() != [1] {
                     abort!("ezkl currently only supports division by a constant");
                 }
@@ -569,7 +569,7 @@ impl Node {
                     }
                     FusedOp::Pow(_) => {
                         let mult = scale_to_multiplier(scale);
-                        node.inputs.pop();
+                        mn.inputs.pop();
                         if inputs[1].out_dims != [1] {
                             error!(
                                 "ezkl currently only supports raising to the power by a constant"
