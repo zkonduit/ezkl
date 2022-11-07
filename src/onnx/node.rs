@@ -804,8 +804,9 @@ impl Node {
         assert!(matches!(self.opkind, OpKind::Const));
         let raw = self.raw_const_value.as_ref().unwrap();
         self.out_scale = scale;
+        println!("vtq {}", scale);
         let t = vector_to_quantized(&*raw, &raw.dims(), 0f32, self.out_scale).unwrap();
-        self.output_max = t.iter().map(|x| x.abs()).max().unwrap() as f32;
+        self.output_max = 0f32; //t.iter().map(|x| x.abs()).max().unwrap() as f32;
         self.const_value = Some(t);
     }
 
