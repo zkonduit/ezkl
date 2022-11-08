@@ -28,6 +28,7 @@ pub enum FusedOp {
     ScaleAndShift,
     Conv((usize, usize), (usize, usize)), // padding, stride
     SumPool((usize, usize), (usize, usize), (usize, usize)), // padding, stride, kernel_shape
+    GlobalSumPool,
     Pow(usize),
     Rescaled(Box<FusedOp>, Vec<(usize, usize)>),
 }
@@ -56,6 +57,7 @@ impl fmt::Display for FusedOp {
                     padding, stride, kernel_shape,
                 )
             }
+            FusedOp::GlobalSumPool => write!(f, "globalsumpool"),
             FusedOp::Pow(s) => write!(f, "pow {}", s),
             FusedOp::Rescaled(s, m) => {
                 write!(
@@ -264,6 +266,7 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
             FusedOp::SumPool(padding, stride, kernel_shape) => {
                 sumpool(&inputs[0], padding, stride, kernel_shape)
             }
+            FusedOp::GlobalSumPool => unreachable!(),
             FusedOp::Pow(u) => {
                 assert_eq!(inputs.len(), 1);
                 pow(&inputs[0], u)

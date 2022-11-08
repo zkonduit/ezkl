@@ -67,6 +67,7 @@ impl OpKind {
             "Conv" => OpKind::Fused(FusedOp::Conv((1, 1), (1, 1))),
             "ConvHir" => OpKind::Fused(FusedOp::Conv((1, 1), (1, 1))),
             "SumPool" => OpKind::Fused(FusedOp::SumPool((1, 1), (1, 1), (1, 1))),
+            "GlobalAvgPool" => OpKind::Fused(FusedOp::GlobalSumPool),
             "Reshape" => OpKind::Fused(FusedOp::Reshape(Vec::new())),
             "BatchNorm" => OpKind::Fused(FusedOp::BatchNorm),
             "Pad" => OpKind::Fused(FusedOp::Identity),
@@ -480,6 +481,34 @@ impl Node {
                         ));
                     }
 
+                    FusedOp::GlobalSumPool => {
+                        let input_node = &inputs[0];
+                        mn.in_scale = input_node.out_scale;
+                        mn.out_scale = input_node.out_scale;
+                        mn.in_dims = input_node.out_dims.clone();
+                        let input_channels = mn.in_dims[0];
+                        let input_height = mn.in_dims[1];
+                        let input_width = mn.in_dims[2];
+
+                        let (padding_h, padding_w, stride_h, stride_w) = (0, 0, 1, 1);
+                        let (kernel_height, kernel_width) = (input_height, input_width);
+
+                        // These are 1 if padding is 0,0 and stride is 1,1
+                        let out_height =
+                            (input_height + 2 * padding_h - kernel_height) / stride_h + 1;
+                        let out_width = (input_width + 2 * padding_w - kernel_width) / stride_w + 1;
+
+                        mn.out_dims = vec![input_channels, out_height, out_width];
+                        mn.output_max =
+                            input_node.output_max * (input_height as f32) * (input_width as f32);
+
+                        mn.opkind = OpKind::Fused(FusedOp::SumPool(
+                            (padding_h, padding_w),
+                            (stride_h, stride_w),
+                            (kernel_height, kernel_width),
+                        ));
+                    }
+
                     FusedOp::Matmul => {
                         let (a_node, b_node) = (&inputs[0], &inputs[1]);
                         let a_dims = a_node.out_dims.clone();
@@ -665,13 +694,32 @@ impl Node {
                                 abort!("missing shape constant");
                             }
                         };
-                        let shapes = shape_const[0..].iter();
-                        let new_dims: Vec<usize> = shapes
-                            .map(|x| {
-                                assert!(x > &0);
-                                *x as usize
-                            })
-                            .collect();
+                        let shapes = &shape_const[0..];
+                        let new_dims: Vec<usize> = if shapes.iter().all(|x| x > &0) {
+                            shapes
+                                .iter()
+                                .map(|x| {
+                                    assert!(x > &0);
+                                    *x as usize
+                                })
+                                .collect()
+                        } else {
+                            let num_entries: usize = input_node.out_dims.iter().product();
+                            let explicit_prod: i32 = shapes.iter().filter(|x| *x > &0).product();
+                            assert!(explicit_prod > 0);
+                            let inferred = num_entries / (explicit_prod as usize);
+                            let mut new_dims: Vec<usize> = Vec::new();
+                            for i in shapes {
+                                match i {
+                                    -1 => new_dims.push(inferred),
+                                    0 => continue,
+                                    x => new_dims.push(*x as usize),
+                                }
+                            }
+                            new_dims
+                            //                            vec![1000]
+                        };
+
                         mn.opkind = OpKind::Fused(FusedOp::Reshape(new_dims.clone()));
                         mn.output_max = input_node.output_max;
                         mn.in_scale = input_node.out_scale;
