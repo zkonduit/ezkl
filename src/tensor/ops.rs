@@ -5,7 +5,7 @@ pub use std::ops::{Add, Div, Mul, Sub};
 /// Matrix multiplies two 2D tensors (and adds an offset).
 /// # Arguments
 ///
-/// * `inputs` - A vector of tensors holding in order: input data, convolution kernel, convolution bias.
+/// * `inputs` - A vector of tensors holding in order: input data, affine kernel, convolution bias.
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
@@ -519,7 +519,7 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 
                 if has_bias {
                     // increment result by the bias
-                    res[0] = res[0] + inputs[2][i].clone();
+                    res[0] = res[0].clone() + inputs[2][i].clone();
                 }
 
                 output.set(&[i, j, k], res[0].clone());
