@@ -52,7 +52,7 @@ pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &ModelInput) -> Sn
     let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(data);
 
     let pk = gen_pk(params, &circuit);
-    let number_instance = public_inputs.clone()[0].len();
+    let number_instance = public_inputs[0].len();
     trace!("number_instance {:?}", number_instance);
     let protocol = compile(
         params,

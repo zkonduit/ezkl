@@ -68,7 +68,7 @@ pub fn scale_and_shift<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     inputs: &Vec<Tensor<T>>,
 ) -> Tensor<T> {
     assert_eq!(inputs.len(), 3);
-    let (mut input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
+    let (input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
     assert_eq!(input.dims(), kernel.dims());
     assert_eq!(bias.dims(), kernel.dims());
     let mut output: Tensor<T> = input;
@@ -320,7 +320,7 @@ pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
 pub fn div<T: TensorType + Div<Output = T>>(t: Tensor<T>, d: Tensor<T>) -> Tensor<T> {
     assert_eq!(t.dims(), d.dims());
     // calculate value of output
-    let mut output: Tensor<T> = t.clone();
+    let mut output: Tensor<T> = t;
 
     for (i, d_i) in d.iter().enumerate() {
         output[i] = output[i].clone() / d_i.clone()

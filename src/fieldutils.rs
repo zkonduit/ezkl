@@ -9,7 +9,7 @@ pub fn i32_to_felt<F: FieldExt>(x: i32) -> F {
 }
 
 fn felt_to_u32<F: FieldExt>(x: F) -> u32 {
-    x.get_lower_32() as u32
+    x.get_lower_32()
 }
 
 pub fn felt_to_i32<F: FieldExt>(x: F) -> i32 {

@@ -10,14 +10,13 @@ pub fn vector_to_quantized(
     shift: f32,
     scale: i32,
 ) -> Result<Tensor<i32>, TensorError> {
-    let mult = scale_to_multiplier(scale) as f32;
+    let mult = scale_to_multiplier(scale);
     let scaled: Vec<i32> = vec
         .iter()
         .map(|e| unsafe { (mult * e + shift).round().to_int_unchecked::<i32>() })
         .collect();
     Tensor::new(Some(&scaled), dims)
 }
-
 
 pub fn scale_to_multiplier(scale: i32) -> f32 {
     i32::pow(2, scale as u32) as f32

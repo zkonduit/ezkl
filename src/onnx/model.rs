@@ -216,7 +216,7 @@ impl Model {
         let output_nodes = self.model.outputs.clone();
         let output_shapes = output_nodes
             .iter()
-            .map(|o| self.nodes.filter(o.node).clone().out_dims)
+            .map(|o| self.nodes.filter(o.node).out_dims)
             .collect_vec();
 
         info!("output_shapes {:?}", output_shapes);
@@ -243,7 +243,7 @@ impl Model {
                 meta,
                 &input,
                 &output,
-                &instance,
+                instance,
                 self.tolerance,
             ));
         }

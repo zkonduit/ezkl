@@ -671,7 +671,7 @@ impl Node {
                                 .map(|input| input.output_max.ceil() as i32)
                                 .max()
                                 .unwrap() as f32,
-                            pow as f32,
+                            pow,
                         );
                         mn.in_scale = input_node.out_scale;
                         mn.out_scale = mn.in_scale * (pow as i32);
@@ -848,11 +848,11 @@ impl Node {
         }
     }
 
-    pub fn quantize_const_to_scale(self: &mut Self, scale: i32) {
+    pub fn quantize_const_to_scale(&mut self, scale: i32) {
         assert!(matches!(self.opkind, OpKind::Const));
         let raw = self.raw_const_value.as_ref().unwrap();
         self.out_scale = scale;
-        let t = vector_to_quantized(&*raw, &raw.dims(), 0f32, self.out_scale).unwrap();
+        let t = vector_to_quantized(raw, raw.dims(), 0f32, self.out_scale).unwrap();
         self.output_max = 0f32; //t.iter().map(|x| x.abs()).max().unwrap() as f32;
         self.const_value = Some(t);
     }
