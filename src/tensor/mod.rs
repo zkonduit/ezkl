@@ -209,7 +209,7 @@ where
 {
     fn from(value: I) -> Tensor<T> {
         let data: Vec<T> = value.collect::<Vec<T>>();
-        Tensor::new(Some(&data), &[data.len() as usize]).unwrap()
+        Tensor::new(Some(&data), &[data.len()]).unwrap()
     }
 }
 
@@ -240,7 +240,7 @@ impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>
 }
 
 impl<F: FieldExt + TensorType + Clone> From<Tensor<Value<F>>> for Tensor<Value<Assigned<F>>> {
-    fn from(mut t: Tensor<Value<F>>) -> Tensor<Value<Assigned<F>>> {
+    fn from(t: Tensor<Value<F>>) -> Tensor<Value<Assigned<F>>> {
         let mut ta: Tensor<Value<Assigned<F>>> = Tensor::from((0..t.len()).map(|i| t[i].into()));
         ta.reshape(t.dims());
         ta
@@ -248,7 +248,7 @@ impl<F: FieldExt + TensorType + Clone> From<Tensor<Value<F>>> for Tensor<Value<A
 }
 
 impl<F: FieldExt + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> {
-    fn from(mut t: Tensor<i32>) -> Tensor<Value<F>> {
+    fn from(t: Tensor<i32>) -> Tensor<Value<F>> {
         let mut ta: Tensor<Value<F>> =
             Tensor::from((0..t.len()).map(|i| Value::known(i32_to_felt::<F>(t[i]))));
         ta.reshape(t.dims());
@@ -273,18 +273,18 @@ impl<T: Clone + TensorType> Tensor<T> {
                 })
             }
             None => Ok(Tensor {
-                inner: vec![T::zero().unwrap(); total_dims as usize],
+                inner: vec![T::zero().unwrap(); total_dims],
                 dims: Vec::from(dims),
             }),
         }
     }
 
     /// Returns the number of elements in the tensor.
-    pub fn len(&mut self) -> usize {
+    pub fn len(&self) -> usize {
         self.dims().iter().product::<usize>()
     }
     /// Checks if the number of elements in tensor is 0.
-    pub fn is_empty(&mut self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.dims().iter().product::<usize>() == 0
     }
 
@@ -371,7 +371,7 @@ impl<T: Clone + TensorType> Tensor<T> {
             index += indices[i] * d;
             d *= self.dims[i];
         }
-        index as usize
+        index
     }
 
     /// Returns the tensor's dimensions.
@@ -465,7 +465,7 @@ impl<T: Clone + TensorType> Tensor<Tensor<T>> {
     pub fn combine(&self) -> Result<Tensor<T>, TensorError> {
         let mut dims = 0;
         let mut inner = Vec::new();
-        for mut t in self.inner.clone().into_iter() {
+        for t in self.inner.clone().into_iter() {
             dims += t.len();
             inner.extend(t.inner);
         }

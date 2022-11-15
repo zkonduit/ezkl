@@ -24,8 +24,11 @@ pub enum FusedOp {
     Matmul,
     Dot,
     Affine,
+    BatchNorm,
+    ScaleAndShift,
     Conv((usize, usize), (usize, usize)), // padding, stride
     SumPool((usize, usize), (usize, usize), (usize, usize)), // padding, stride, kernel_shape
+    GlobalSumPool,
     Pow(usize),
     Rescaled(Box<FusedOp>, Vec<(usize, usize)>),
 }
@@ -42,6 +45,8 @@ impl fmt::Display for FusedOp {
             FusedOp::Matmul => write!(f, "matmul"),
             FusedOp::Dot => write!(f, "dot"),
             FusedOp::Affine => write!(f, "affine"),
+            FusedOp::BatchNorm => write!(f, "batchnorm"),
+            FusedOp::ScaleAndShift => write!(f, "scale & shift"),
             FusedOp::Conv(padding, stride) => {
                 write!(f, "conv w/ padding: {:?}, stride: {:?}", padding, stride)
             }
@@ -52,6 +57,7 @@ impl fmt::Display for FusedOp {
                     padding, stride, kernel_shape,
                 )
             }
+            FusedOp::GlobalSumPool => write!(f, "globalsumpool"),
             FusedOp::Pow(s) => write!(f, "pow {}", s),
             FusedOp::Rescaled(s, m) => {
                 write!(
@@ -250,6 +256,8 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
             FusedOp::Sub => sub(&inputs),
             FusedOp::Mult => mult(&inputs),
             FusedOp::Affine => affine(&inputs),
+            FusedOp::BatchNorm => scale_and_shift(&inputs),
+            FusedOp::ScaleAndShift => scale_and_shift(&inputs),
             FusedOp::Matmul => matmul(&inputs),
             FusedOp::Dot => {
                 todo!();
@@ -258,6 +266,7 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
             FusedOp::SumPool(padding, stride, kernel_shape) => {
                 sumpool(&inputs[0], padding, stride, kernel_shape)
             }
+            FusedOp::GlobalSumPool => unreachable!(),
             FusedOp::Pow(u) => {
                 assert_eq!(inputs.len(), 1);
                 pow(&inputs[0], u)

@@ -1,11 +1,11 @@
 use crate::tensor::{Tensor, TensorType};
 use itertools::Itertools;
-pub use std::ops::{Add, Mul, Sub};
+pub use std::ops::{Add, Div, Mul, Sub};
 
 /// Matrix multiplies two 2D tensors (and adds an offset).
 /// # Arguments
 ///
-/// * `inputs` - A vector of tensors holding in order: input data, convolution kernel, convolution bias.
+/// * `inputs` - A vector of tensors holding in order: input data, affine kernel, convolution bias.
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
@@ -58,6 +58,22 @@ pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     // does matrix to vector multiplication
     if output.dims()[1] == 1 {
         output.flatten();
+    }
+    output
+}
+
+/// Scales and shifts a tensor.
+/// Given inputs (x,k,b) computes k*x + b elementwise
+pub fn scale_and_shift<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+    inputs: &Vec<Tensor<T>>,
+) -> Tensor<T> {
+    assert_eq!(inputs.len(), 3);
+    let (input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
+    assert_eq!(input.dims(), kernel.dims());
+    assert_eq!(bias.dims(), kernel.dims());
+    let mut output: Tensor<T> = input;
+    for (i, bias_i) in bias.iter().enumerate() {
+        output[i] = kernel[i].clone() * output[i].clone() + bias_i.clone()
     }
     output
 }
@@ -301,6 +317,17 @@ pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
     output
 }
 
+pub fn div<T: TensorType + Div<Output = T>>(t: Tensor<T>, d: Tensor<T>) -> Tensor<T> {
+    assert_eq!(t.dims(), d.dims());
+    // calculate value of output
+    let mut output: Tensor<T> = t;
+
+    for (i, d_i) in d.iter().enumerate() {
+        output[i] = output[i].clone() / d_i.clone()
+    }
+    output
+}
+
 /// Elementwise multiplies a tensor with a const element.
 /// # Arguments
 ///
@@ -443,14 +470,17 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     padding: (usize, usize),
     stride: (usize, usize),
 ) -> Tensor<T> {
-    assert_eq!(inputs.len(), 3);
-    let (image, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
+    let has_bias = inputs.len() == 3;
+    let (image, kernel) = (inputs[0].clone(), inputs[1].clone());
 
     assert_eq!(image.dims().len(), 3);
     assert_eq!(kernel.dims().len(), 4);
-    assert_eq!(bias.dims().len(), 1);
     assert_eq!(image.dims()[0], kernel.dims()[1]);
-    assert_eq!(bias.dims()[0], kernel.dims()[0]);
+    if has_bias {
+        let bias = inputs[2].clone();
+        assert_eq!(bias.dims().len(), 1);
+        assert_eq!(bias.dims()[0], kernel.dims()[0]);
+    }
 
     let image_dims = image.dims();
     let kernel_dims = kernel.dims();
@@ -478,7 +508,7 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
             let rs = j * stride.0;
             for k in 0..horz_slides {
                 let cs = k * stride.1;
-                let prod = dot(&vec![
+                let mut res = dot(&vec![
                     &kernel.get_slice(&[i..i + 1]).clone(),
                     &padded_image.get_slice(&[
                         0..input_channels,
@@ -486,7 +516,13 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
                         cs..(cs + kernel_width),
                     ]),
                 ]);
-                output.set(&[i, j, k], prod[0].clone() + bias[i].clone());
+
+                if has_bias {
+                    // increment result by the bias
+                    res[0] = res[0].clone() + inputs[2][i].clone();
+                }
+
+                output.set(&[i, j, k], res[0].clone());
             }
         }
     }
