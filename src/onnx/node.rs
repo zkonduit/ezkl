@@ -343,10 +343,7 @@ impl Node {
                 let input_node = &inputs[0];
                 mn.in_dims = input_node.out_dims.clone();
                 mn.out_dims = input_node.out_dims.clone();
-                mn.min_cols = inputs
-                    .iter()
-                    .map(|input| input.out_dims.clone().iter().product::<usize>() as f32)
-                    .sum::<f32>() as usize;
+                mn.min_cols = 1;
 
                 inputs
                     .iter()
