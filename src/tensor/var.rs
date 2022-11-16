@@ -1,6 +1,6 @@
 use super::*;
 use crate::abort;
-use log::error;
+use log::{error, info};
 /// A wrapper around a tensor where the inner type is one of Halo2's `Column<Fixed>` or `Column<Advice>`.
 /// The wrapper allows for `VarTensor`'s dimensions to differ from that of the inner (wrapped) tensor.
 /// The inner tensor might, for instance, contain 3 Advice Columns. Each of those columns in turn
@@ -44,10 +44,8 @@ impl VarTensor {
     pub fn get_slice(&self, indices: &[Range<usize>], new_dims: &[usize]) -> VarTensor {
         match self {
             VarTensor::Advice { inner: v, dims: _ } => {
-                let mut new_inner = v.get_slice(indices);
-                if new_dims.len() > 1 {
-                    new_inner.reshape(&new_dims[0..new_dims.len() - 1]);
-                }
+                let new_inner = v.get_slice(indices);
+                //  TODO: add shape assertion here
                 VarTensor::Advice {
                     inner: new_inner,
                     dims: new_dims.to_vec(),
@@ -120,9 +118,9 @@ impl VarTensor {
     ) -> Result<Tensor<Expression<F>>, TensorError> {
         match &self {
             // when fixed we have 1 col per param
-            VarTensor::Fixed { inner: f, dims: _ } => {
+            VarTensor::Fixed { inner: f, dims: d } => {
                 let mut t = f.map(|c| meta.query_fixed(c, Rotation(offset as i32)));
-                t.reshape(self.dims());
+                t.reshape(d);
                 Ok(t)
             }
             // when advice we have 1 col per row
@@ -130,19 +128,15 @@ impl VarTensor {
                 .map(|column| {
                     Tensor::from(
                         // this should fail if dims is empty, should be impossible
-                        (0..*match d.last() {
-                            Some(d) => d,
-                            None => {
-                                abort!("tensor dims should not be empty");
-                            }
-                        })
+                        (0.. d.iter().product::<usize>())
                             .map(|i| meta.query_advice(column, Rotation(offset as i32 + i as i32))),
                     )
                 })
                 .combine()
             {
                 Ok(mut c) => {
-                    c.reshape(self.dims());
+                    info!("{:?} {:?}", d, c.dims());
+                    c.reshape(d);
                     Ok(c)
                 }
                 Err(e) => {
@@ -177,9 +171,9 @@ impl VarTensor {
         values: &ValTensor<F>,
     ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, TensorError> {
         match values {
-            ValTensor::Value { inner: v, dims: _ } => v.mc_enum_map(|coord, k| match &self {
+            ValTensor::Value { inner: v, dims: _ } => v.enum_map(|coord, k| match &self {
                 VarTensor::Fixed { inner: f, dims: _ } => {
-                    match region.assign_fixed(|| "k", f.get(coord), offset, || k.into()) {
+                    match region.assign_fixed(|| "k", f[coord], offset, || k.into()) {
                         Ok(a) => a,
                         Err(e) => {
                             abort!("failed to assign ValTensor to VarTensor {:?}", e);
@@ -187,12 +181,10 @@ impl VarTensor {
                     }
                 }
                 VarTensor::Advice { inner: a, dims: _ } => {
-                    let coord = format_advice_coord(coord);
-                    let last = coord.len() - 1;
                     match region.assign_advice(
                         || "k",
-                        a.get(&coord[0..last]),
-                        offset + coord[last],
+                        a.get(&[0]),
+                        offset + coord,
                         || k.into(),
                     ) {
                         Ok(a) => a,
@@ -203,16 +195,14 @@ impl VarTensor {
                 }
             }),
             ValTensor::PrevAssigned { inner: v, dims: _ } => {
-                v.mc_enum_map(|coord, x| match &self {
+                v.enum_map(|coord, x| match &self {
                     VarTensor::Fixed { inner: _, dims: _ } => todo!(),
                     VarTensor::Advice { inner: a, dims: _ } => {
-                        let coord = format_advice_coord(coord);
-                        let last = coord.len() - 1;
                         match x.copy_advice(
                             || "k",
                             region,
-                            a.get(&coord[0..last]),
-                            offset + coord[last],
+                    a.get(&[0]),
+                    offset + coord,
                         ) {
                             Ok(a) => a,
                             Err(e) => {
@@ -223,9 +213,9 @@ impl VarTensor {
                 })
             }
             ValTensor::AssignedValue { inner: v, dims: _ } => {
-                v.mc_enum_map(|coord, k| match &self {
+                v.enum_map(|coord, k| match &self {
                     VarTensor::Fixed { inner: f, dims: _ } => {
-                        match region.assign_fixed(|| "k", f.get(coord), offset, || k) {
+                        match region.assign_fixed(|| "k", f[coord], offset, || k) {
                             Ok(a) => a,
                             Err(e) => {
                                 abort!("failed to assign ValTensor to VarTensor {:?}", e);
@@ -233,12 +223,10 @@ impl VarTensor {
                         }
                     }
                     VarTensor::Advice { inner: a, dims: _ } => {
-                        let coord = format_advice_coord(coord);
-                        let last = coord.len() - 1;
                         match region.assign_advice(
                             || "k",
-                            a.get(&coord[0..last]),
-                            offset + coord[last],
+                            a.get(&[0]),
+                    offset + coord,
                             || k,
                         ) {
                             Ok(a) => a,
@@ -253,11 +241,4 @@ impl VarTensor {
     }
 }
 
-fn format_advice_coord(coord: &[usize]) -> Vec<usize> {
-    let last = coord.len() - 1;
-    let mut v = coord.to_vec();
-    if last == 0 {
-        v.insert(0, 0);
-    }
-    v
-}
+

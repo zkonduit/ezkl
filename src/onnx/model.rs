@@ -233,10 +233,7 @@ impl Model {
             .collect_vec();
         for (i, instance) in public_outputs.iter().enumerate() {
             let s = output_shapes[i].clone();
-            let mut end = 1;
-            if s.len() > 1 {
-                end = s[0..s.len() - 1].iter().product();
-            }
+            let end = 1;
             let input = advices.get_slice(&[0..end], &s);
             let output = advices.get_slice(&[end..2 * end], &s);
             configs.push(RangeCheckConfig::configure(
@@ -296,10 +293,7 @@ impl Model {
                     .filter(|i| !nodes.contains_key(&i.idx) && seen.insert(i.idx))
                     .map(|f| {
                         let s = f.out_dims.clone();
-                        let mut end = 1;
-                        if s.len() > 1 {
-                            end = s[0..s.len() - 1].iter().product();
-                        }
+                        let end = 1;
                         let a = (f.idx, advices.get_slice(&[start..start + end], &s));
                         start += end;
                         a
@@ -311,10 +305,7 @@ impl Model {
         // output node
         let output_shape = self.nodes.filter(**nodes.keys().max().unwrap()).out_dims;
 
-        let mut end = 1;
-        if output_shape.len() > 1 {
-            end = output_shape[0..output_shape.len() - 1].iter().product();
-        }
+        let end = 1;
         let output = advices.get_slice(&[start..start + end], &output_shape);
 
         let mut inter_counter = 0;

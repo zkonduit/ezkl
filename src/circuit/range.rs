@@ -71,7 +71,7 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
             };
 
             let constraints =
-                witnessed.enum_map(|i, o| range_check(tol as i32, o - expected[i].clone()));
+                witnessed.enum_map(|i, o| range_check(tol as i32, o - expected[i].clone())).unwrap();
             Constraints::with_selector(q, constraints)
         });
 
@@ -104,11 +104,8 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
                 // assigns the instance to the "expected" advice.
                 match self.expected.clone() {
                     VarTensor::Advice { inner, dims: d } => {
-                        let mut outer_loop = 1;
-                        if d.len() > 1 {
-                            outer_loop = d[0..d.len() - 1].iter().product();
-                        }
-                        let inner_loop = d[d.len() - 1];
+                        let outer_loop = 1;
+                        let inner_loop =  d.iter().product();
                         for i in 0..outer_loop {
                             for j in 0..inner_loop {
                                 region

@@ -419,13 +419,13 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
-    /// let mut c = a.enum_map(|i, x| i32::pow(x + i as i32, 2));
+    /// let mut c = a.enum_map(|i, x| i32::pow(x + i as i32, 2)).unwrap();
     /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
     /// ```
-    pub fn enum_map<F: FnMut(usize, T) -> G, G: TensorType>(&self, mut f: F) -> Tensor<G> {
+    pub fn enum_map<F: FnMut(usize, T) -> G, G: TensorType>(&self, mut f: F) ->  Result<Tensor<G>, TensorError> {
         let mut t = Tensor::from(self.inner.iter().enumerate().map(|(i, e)| f(i, e.clone())));
         t.reshape(self.dims());
-        t
+        Ok(t)
     }
 
     /// Maps a function to tensors and enumerates using multi cartesian coordinates

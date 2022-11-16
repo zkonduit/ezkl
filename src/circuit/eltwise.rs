@@ -228,7 +228,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
                                         abort!("failed to assign input advice {:?}", e);
                                     }
                                 }
-                            }),
+                            }).unwrap(),
                             _ => todo!(),
                         },
                         ValTensor::PrevAssigned { inner: v, dims: _ } => match &self.input {
@@ -246,7 +246,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
                                             abort!("failed to copy input advice {:?}", e);
                                         }
                                     }
-                                })
+                                }).unwrap()
                             }
                             _ => todo!(),
                         },
@@ -267,7 +267,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
                                         abort!("failed to assign input advice {:?}", e);
                                     }
                                 }
-                            }),
+                            }).unwrap(),
                             _ => todo!(),
                         },
                     };
@@ -293,7 +293,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
                                     abort!("failed to assign non-linearity advice {:?}", e);
                                 }
                             }
-                        })),
+                        }).unwrap()),
 
                         _ => todo!(),
                     }
