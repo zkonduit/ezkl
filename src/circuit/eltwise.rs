@@ -113,15 +113,14 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
         cs: &mut ConstraintSystem<F>,
         input: &VarTensor,
         output: &VarTensor,
-        input_len: usize,
         eltwise_params: Option<&[usize]>,
     ) -> [Self; NUM] {
         let mut table: Option<Rc<RefCell<EltwiseTable<F, NL>>>> = None;
         let configs = (0..NUM)
             .map(|_| {
                 let l = match &table {
-                    None => Self::configure(cs, input, output, input_len, eltwise_params),
-                    Some(t) => Self::configure_with_table(cs, input, output, input_len, t.clone()),
+                    None => Self::configure(cs, input, output, eltwise_params),
+                    Some(t) => Self::configure_with_table(cs, input, output, t.clone()),
                 };
                 table = Some(l.table.clone());
                 l
@@ -140,7 +139,6 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
         cs: &mut ConstraintSystem<F>,
         input: &VarTensor,
         output: &VarTensor,
-        input_len: usize,
         table: Rc<RefCell<EltwiseTable<F, NL>>>,
     ) -> Self {
         let qlookup = cs.complex_selector();
@@ -153,7 +151,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
             _ => todo!(),
         };
 
-        let _ = (0..input_len)
+        let _ = (0..input.dims().iter().product::<usize>())
             .map(|i| {
                 let _ = cs.lookup("lk", |cs| {
                     let qlookup = cs.query_selector(qlookup);
@@ -194,7 +192,6 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
         cs: &mut ConstraintSystem<F>,
         input: &VarTensor,
         output: &VarTensor,
-        input_len: usize,
         eltwise_params: Option<&[usize]>,
     ) -> Self {
         // will fail if not supplied
@@ -210,7 +207,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
             bits,
             &params[1..],
         )));
-        Self::configure_with_table(cs, input, output, input_len, table)
+        Self::configure_with_table(cs, input, output, table)
     }
 
     /// Assigns values to the variables created when calling `configure`.

@@ -368,24 +368,14 @@ impl Model {
         let output = &advices[1].reshape(&[input_len]);
         match &node.opkind {
             OpKind::Div(s) => {
-                let conf: EltwiseConfig<F, DivideBy<F>> = EltwiseConfig::configure(
-                    meta,
-                    input,
-                    output,
-                    input_len,
-                    Some(&[self.bits, *s]),
-                );
+                let conf: EltwiseConfig<F, DivideBy<F>> =
+                    EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
                 let inputs = node.inputs.iter().map(|e| e.node).collect();
                 NodeConfigTypes::Divide(conf, inputs)
             }
             OpKind::ReLU(s) => {
-                let conf: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
-                    meta,
-                    input,
-                    output,
-                    input_len,
-                    Some(&[self.bits, *s]),
-                );
+                let conf: EltwiseConfig<F, ReLu<F>> =
+                    EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
                 let inputs = node.inputs.iter().map(|e| e.node).collect();
                 NodeConfigTypes::ReLU(conf, inputs)
             }
@@ -394,7 +384,6 @@ impl Model {
                     meta,
                     input,
                     output,
-                    input_len,
                     Some(&[
                         self.bits,
                         *denominator,

@@ -27,6 +27,7 @@ use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp as F;
 use mnist::*;
 use rand::rngs::OsRng;
+use std::cmp::max;
 use std::time::Instant;
 
 mod params;
@@ -145,23 +146,27 @@ where
         let input = VarTensor::new_advice(
             cs,
             K,
-            IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH,
+            max(IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH, LEN),
             vec![IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
             true,
         );
         let kernel = VarTensor::new_advice(
             cs,
             K,
-            OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH,
+            max(
+                OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH,
+                CLASSES * LEN,
+            ),
             vec![OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
             true,
         );
 
-        let bias = VarTensor::new_advice(cs, K, OUT_CHANNELS, vec![OUT_CHANNELS], true);
+        let bias =
+            VarTensor::new_advice(cs, K, max(OUT_CHANNELS, CLASSES), vec![OUT_CHANNELS], true);
         let output = VarTensor::new_advice(
             cs,
             K,
-            OUT_CHANNELS * output_height * output_width,
+            max(OUT_CHANNELS * output_height * output_width, LEN),
             vec![OUT_CHANNELS, output_height, output_width],
             true,
         );
@@ -187,7 +192,7 @@ where
         let output = output.reshape(&[LEN]);
 
         let l1: EltwiseConfig<F, ReLu<F>> =
-            EltwiseConfig::configure(cs, &input, &output, LEN, Some(&[BITS, 32]));
+            EltwiseConfig::configure(cs, &input, &output, Some(&[BITS, 32]));
 
         // tells the config layer to add an affine op to the circuit gate
         let affine_node = FusedNode {
