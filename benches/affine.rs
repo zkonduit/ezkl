@@ -91,7 +91,7 @@ fn runaffine(c: &mut Criterion) {
             LEN = len;
         };
 
-        let k = 15; //2^k rows
+        let k = 16; //2^k rows
                     // parameters
         let mut l0_kernel =
             Tensor::from((0..len * len).map(|_| Value::known(pallas::Base::random(OsRng))));
