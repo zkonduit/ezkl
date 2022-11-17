@@ -273,7 +273,7 @@ impl Node {
             opkind: OpKind::new(node.op().name().as_ref()), // parses the op name
             inputs: node.inputs.clone(),
             in_scale: scale,
-            min_cols: 1,
+            min_cols: 2,
             idx,
             ..Default::default()
         };
