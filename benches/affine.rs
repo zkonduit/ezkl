@@ -9,7 +9,6 @@ use halo2_proofs::{
 };
 use halo2curves::pasta::pallas;
 use halo2curves::pasta::Fp as F;
-use itertools::Itertools;
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
 

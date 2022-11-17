@@ -32,10 +32,9 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let onnx_model = Model::from_arg();
-        let num_advices = onnx_model.max_node_advices();
+        let num_variables = onnx_model.max_node_vars();
         let max_node_size = onnx_model.max_node_size();
-        info!("number of advices used: {:?}", num_advices);
-        let advices = (0..num_advices)
+        let advices = (0..num_variables)
             .map(|_| {
                 VarTensor::new_advice(
                     cs,
@@ -47,6 +46,10 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
             })
             .collect_vec();
 
+        info!(
+            "number of advices used: {:?}",
+            advices.iter().map(|a| a.num_cols()).sum::<usize>()
+        );
         onnx_model.configure(cs, advices).unwrap()
     }
 

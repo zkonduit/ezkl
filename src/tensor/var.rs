@@ -14,13 +14,13 @@ pub enum VarTensor {
     Advice {
         inner: Vec<Column<Advice>>,
         col_size: usize,
-        total_elems: usize,
+        capacity: usize,
         dims: Vec<usize>,
     },
     Fixed {
         inner: Vec<Column<Fixed>>,
         col_size: usize,
-        total_elems: usize,
+        capacity: usize,
     },
 }
 
@@ -28,14 +28,14 @@ impl VarTensor {
     pub fn new_advice<F: FieldExt>(
         cs: &mut ConstraintSystem<F>,
         k: usize,
-        total_elems: usize,
+        capacity: usize,
         dims: Vec<usize>,
         equality: bool,
     ) -> Self {
         let base: usize = 2;
         // TODO: figure out the actual number of rows T used for the ZK component of PLONK
         let max_rows = base.pow((k - 2) as u32);
-        let modulo = (total_elems / max_rows) + 1;
+        let modulo = (capacity / max_rows) + 1;
         let mut advices = vec![];
         for _ in 0..modulo {
             let col = cs.advice_column();
@@ -48,8 +48,16 @@ impl VarTensor {
         VarTensor::Advice {
             inner: advices,
             col_size: max_rows,
-            total_elems,
+            capacity,
             dims,
+        }
+    }
+
+    /// Gets the dims of the object the VarTensor represents
+    pub fn num_cols(&self) -> usize {
+        match self {
+            VarTensor::Advice { inner, .. } => inner.len(),
+            _ => todo!(),
         }
     }
 
@@ -67,12 +75,12 @@ impl VarTensor {
             VarTensor::Advice {
                 inner,
                 col_size,
-                total_elems,
+                capacity,
                 ..
             } => VarTensor::Advice {
                 inner: inner.clone(),
                 col_size: *col_size,
-                total_elems: *total_elems,
+                capacity: *capacity,
                 dims: new_dims.to_vec(),
             },
             _ => todo!(),
@@ -109,11 +117,11 @@ impl VarTensor {
         }
     }
 
-    /// Returns the `total_elems` attribute of the `VarTensor`.
-    pub fn total_elems(&self) -> usize {
+    /// Returns the `capacity` attribute of the `VarTensor`.
+    pub fn capacity(&self) -> usize {
         match self {
-            VarTensor::Advice { total_elems, .. } => *total_elems,
-            VarTensor::Fixed { total_elems, .. } => *total_elems,
+            VarTensor::Advice { capacity, .. } => *capacity,
+            VarTensor::Fixed { capacity, .. } => *capacity,
         }
     }
 }

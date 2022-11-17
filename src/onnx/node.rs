@@ -221,7 +221,7 @@ fn display_tensorf32(o: &Option<Tensor<f32>>) -> String {
 pub struct Node {
     pub opkind: OpKind,
     pub output_max: f32,
-    pub min_cols: usize,
+    pub num_var: usize,
     pub in_scale: i32,
     pub out_scale: i32,
     #[tabled(display_with = "display_tensor")]
@@ -273,7 +273,7 @@ impl Node {
             opkind: OpKind::new(node.op().name().as_ref()), // parses the op name
             inputs: node.inputs.clone(),
             in_scale: scale,
-            min_cols: 2,
+            num_var: 2,
             idx,
             ..Default::default()
         };
@@ -339,7 +339,7 @@ impl Node {
                 let input_node = &inputs[0];
                 mn.in_dims = input_node.out_dims.clone();
                 mn.out_dims = input_node.out_dims.clone();
-                mn.min_cols = 4;
+                mn.num_var = 4;
 
                 inputs
                     .iter()

@@ -631,11 +631,11 @@ impl Model {
         )
     }
 
-    pub fn max_node_advices(&self) -> usize {
+    pub fn max_node_vars(&self) -> usize {
         self.nodes
             .flatten()
             .iter()
-            .map(|e| e.min_cols)
+            .map(|e| e.num_var)
             .max()
             .unwrap()
     }
