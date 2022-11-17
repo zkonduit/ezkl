@@ -1,6 +1,6 @@
 use super::*;
 use crate::abort;
-use log::{error, info};
+use log::error;
 /// A wrapper around a tensor where the inner type is one of Halo2's `Column<Fixed>` or `Column<Advice>`.
 /// The wrapper allows for `VarTensor`'s dimensions to differ from that of the inner (wrapped) tensor.
 /// The inner tensor might, for instance, contain 3 Advice Columns. Each of those columns in turn
