@@ -1,5 +1,5 @@
 use super::node::*;
-use super::utilities::{node_output_shapes, scale_to_multiplier};
+use super::utilities::scale_to_multiplier;
 use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
 use crate::circuit::fused::*;
 use crate::circuit::range::*;
@@ -11,7 +11,7 @@ use clap::Parser;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
-    plonk::ConstraintSystem,
+    plonk::{Advice, Column, ConstraintSystem},
 };
 use itertools::Itertools;
 use log::{debug, error, info, trace};
@@ -160,7 +160,7 @@ impl Model {
     pub fn configure<F: FieldExt + TensorType>(
         &self,
         meta: &mut ConstraintSystem<F>,
-        advices: VarTensor,
+        advices: Tensor<Column<Advice>>,
     ) -> Result<ModelConfig<F>> {
         info!("configuring model");
         let mut results = BTreeMap::new();
@@ -210,7 +210,7 @@ impl Model {
     fn range_check_outputs<F: FieldExt + TensorType>(
         &self,
         meta: &mut ConstraintSystem<F>,
-        advices: VarTensor,
+        advices: Tensor<Column<Advice>>,
     ) -> Vec<RangeCheckConfig<F>> {
         let mut configs = vec![];
         let output_nodes = self.model.outputs.clone();
@@ -233,9 +233,14 @@ impl Model {
             .collect_vec();
         for (i, instance) in public_outputs.iter().enumerate() {
             let s = output_shapes[i].clone();
-            let end = 1;
-            let input = advices.get_slice(&[0..end], &s);
-            let output = advices.get_slice(&[end..2 * end], &s);
+            let input = VarTensor::Advice {
+                inner: advices[0],
+                dims: s.clone(),
+            };
+            let output = VarTensor::Advice {
+                inner: advices[1],
+                dims: s,
+            };
             configs.push(RangeCheckConfig::configure(
                 meta,
                 &input,
@@ -259,7 +264,7 @@ impl Model {
         &self,
         nodes: &BTreeMap<&usize, &Node>,
         meta: &mut ConstraintSystem<F>,
-        advices: VarTensor,
+        advices: Tensor<Column<Advice>>,
     ) -> NodeConfigTypes<F> {
         let input_nodes: BTreeMap<(&usize, &FusedOp), Vec<Node>> = nodes
             .iter()
@@ -293,9 +298,14 @@ impl Model {
                     .filter(|i| !nodes.contains_key(&i.idx) && seen.insert(i.idx))
                     .map(|f| {
                         let s = f.out_dims.clone();
-                        let end = 1;
-                        let a = (f.idx, advices.get_slice(&[start..start + end], &s));
-                        start += end;
+                        let a = (
+                            f.idx,
+                            VarTensor::Advice {
+                                inner: advices[start],
+                                dims: s,
+                            },
+                        );
+                        start += 1;
                         a
                     })
                     .collect_vec()
@@ -305,8 +315,10 @@ impl Model {
         // output node
         let output_shape = self.nodes.filter(**nodes.keys().max().unwrap()).out_dims;
 
-        let end = 1;
-        let output = advices.get_slice(&[start..start + end], &output_shape);
+        let output = VarTensor::Advice {
+            inner: advices[start],
+            dims: output_shape,
+        };
 
         let mut inter_counter = 0;
         let fused_nodes: Vec<FusedNode> = input_nodes
@@ -356,42 +368,43 @@ impl Model {
         &self,
         node: &Node,
         meta: &mut ConstraintSystem<F>,
-        advices: VarTensor,
+        advices: Tensor<Column<Advice>>,
     ) -> NodeConfigTypes<F> {
         match &node.opkind {
             OpKind::Div(s) => {
                 let dims = node.in_dims.clone();
-
                 let length = dims.into_iter().product();
-
-                let conf: EltwiseConfig<F, DivideBy<F>> = EltwiseConfig::configure(
-                    meta,
-                    &[advices.get_slice(&[0..length], &[length])],
-                    Some(&[self.bits, *s]),
-                );
+                let variables = VarTensor::Advice {
+                    inner: advices[0],
+                    dims: vec![length],
+                };
+                let conf: EltwiseConfig<F, DivideBy<F>> =
+                    EltwiseConfig::configure(meta, variables, Some(&[self.bits, *s]));
                 let inputs = node.inputs.iter().map(|e| e.node).collect();
                 NodeConfigTypes::Divide(conf, inputs)
             }
             OpKind::ReLU(s) => {
                 let dims = node.in_dims.clone();
-
                 let length = dims.into_iter().product();
-
-                let conf: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
-                    meta,
-                    &[advices.get_slice(&[0..length], &[length])],
-                    Some(&[self.bits, *s]),
-                );
+                let variables = VarTensor::Advice {
+                    inner: advices[0],
+                    dims: vec![length],
+                };
+                let conf: EltwiseConfig<F, ReLu<F>> =
+                    EltwiseConfig::configure(meta, variables, Some(&[self.bits, *s]));
                 let inputs = node.inputs.iter().map(|e| e.node).collect();
                 NodeConfigTypes::ReLU(conf, inputs)
             }
             OpKind::Sigmoid(denominator) => {
                 let dims = node.in_dims.clone();
-
                 let length = dims.into_iter().product();
+                let variables = VarTensor::Advice {
+                    inner: advices[0],
+                    dims: vec![length],
+                };
                 let conf: EltwiseConfig<F, Sigmoid<F>> = EltwiseConfig::configure(
                     meta,
-                    &[advices.get_slice(&[0..length], &[length])],
+                    variables,
                     Some(&[
                         self.bits,
                         *denominator,
@@ -527,15 +540,15 @@ impl Model {
             NodeConfigTypes::ReLU(rc, idx) => {
                 assert_eq!(idx.len(), 1);
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
-                Some(rc.layout(layouter, &[inputs.get(&idx[0]).unwrap().clone()]))
+                Some(rc.layout(layouter, inputs.get(&idx[0]).unwrap().clone()))
             }
             NodeConfigTypes::Sigmoid(sc, idx) => {
                 assert_eq!(idx.len(), 1);
-                Some(sc.layout(layouter, &[inputs.get(&idx[0]).unwrap().clone()]))
+                Some(sc.layout(layouter, inputs.get(&idx[0]).unwrap().clone()))
             }
             NodeConfigTypes::Divide(sc, idx) => {
                 assert_eq!(idx.len(), 1);
-                Some(sc.layout(layouter, &[inputs.get(&idx[0]).unwrap().clone()]))
+                Some(sc.layout(layouter, inputs.get(&idx[0]).unwrap().clone()))
             }
             NodeConfigTypes::Input => None,
             NodeConfigTypes::Const => None,
@@ -604,10 +617,6 @@ impl Model {
         Ok(self.model.output_outlets()?.to_vec())
     }
 
-    pub fn max_fixeds_width(&self) -> Result<usize> {
-        self.max_advices_width() //todo, improve this computation
-    }
-
     pub fn get_output_scales(&self) -> Vec<i32> {
         let output_nodes = self.model.outputs.iter();
         output_nodes
@@ -622,24 +631,5 @@ impl Model {
             .map(|e| e.min_cols)
             .max()
             .unwrap()
-    }
-
-    pub fn max_advices_width(&self) -> Result<usize> {
-        let mut max: usize = 1;
-        for node in &self.model.nodes {
-            for shape in node_output_shapes(node)? {
-                match shape {
-                    None => {}
-                    Some(vs) => {
-                        for v in vs {
-                            if v > max {
-                                max = v
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Ok(max + 5)
     }
 }

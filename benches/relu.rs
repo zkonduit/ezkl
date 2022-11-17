@@ -33,10 +33,10 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         unsafe {
             let advices = VarTensor::Advice {
-                inner: (0..LEN).map(|_| cs.advice_column()).into(),
+                inner: cs.advice_column(),
                 dims: [LEN].to_vec(),
             };
-            Self::Config::configure(cs, &[advices], Some(&[BITS, 128]))
+            Self::Config::configure(cs, advices, Some(&[BITS, 128]))
         }
     }
 
@@ -45,7 +45,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
         config: Self::Config,
         mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
     ) -> Result<(), Error> {
-        config.layout(&mut layouter, &[self.assigned.input.clone()]);
+        config.layout(&mut layouter, self.assigned.input.clone());
 
         Ok(())
     }

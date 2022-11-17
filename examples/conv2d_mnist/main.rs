@@ -1,5 +1,5 @@
-use ezkl::circuit::fused::*;
 use ezkl::circuit::eltwise::{EltwiseConfig, ReLu};
+use ezkl::circuit::fused::*;
 use ezkl::fieldutils;
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::tensor::*;
@@ -27,7 +27,6 @@ use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp as F;
 use mnist::*;
 use rand::rngs::OsRng;
-use std::cmp::max;
 use std::time::Instant;
 
 mod params;
@@ -141,43 +140,28 @@ where
         let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
-        let num_advices = max(LEN, CLASSES + 3);
-
-        let advices = VarTensor::from(Tensor::from((0..num_advices).map(|_| {
+        let advices = Tensor::from((0..4).map(|_| {
             let col = cs.advice_column();
             cs.enable_equality(col);
             col
-        })));
+        }));
 
-        let input = advices.get_slice(
-            &[0..IMAGE_HEIGHT * IN_CHANNELS],
-            &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
-        );
-
-        let kernel = advices.get_slice(
-            &[IMAGE_HEIGHT * IN_CHANNELS
-                ..IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT],
-            &[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
-        );
-
-        let bias = advices.get_slice(
-            &[
-                IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
-                    ..IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT + 1,
-            ],
-            &[OUT_CHANNELS],
-        );
-
-        let output = advices.get_slice(
-            &[
-                IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT + 1
-                    ..IMAGE_HEIGHT * IN_CHANNELS
-                        + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
-                        + 1
-                        + output_height * OUT_CHANNELS,
-            ],
-            &[OUT_CHANNELS, output_height, output_width],
-        );
+        let input = VarTensor::Advice {
+            inner: advices[0],
+            dims: vec![IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
+        };
+        let kernel = VarTensor::Advice {
+            inner: advices[1],
+            dims: vec![OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
+        };
+        let bias = VarTensor::Advice {
+            inner: advices[2],
+            dims: vec![OUT_CHANNELS],
+        };
+        let output = VarTensor::Advice {
+            inner: advices[3],
+            dims: vec![OUT_CHANNELS, output_height, output_width],
+        };
 
         // tells the config layer to add a conv op to a circuit gate
         let conv_node = FusedNode {
@@ -193,7 +177,10 @@ where
 
         let l1: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
             cs,
-            &[advices.get_slice(&[0..LEN], &[LEN])],
+            VarTensor::Advice {
+                inner: advices[0],
+                dims: vec![LEN],
+            },
             Some(&[BITS, 32]),
         );
 
@@ -207,18 +194,28 @@ where
             ],
         };
 
+        let input = VarTensor::Advice {
+            inner: advices[0],
+            dims: vec![LEN],
+        };
+        let kernel = VarTensor::Advice {
+            inner: advices[1],
+            dims: vec![CLASSES, LEN],
+        };
+        let bias = VarTensor::Advice {
+            inner: advices[2],
+            dims: vec![CLASSES],
+        };
+        let output = VarTensor::Advice {
+            inner: advices[3],
+            dims: vec![CLASSES],
+        };
+
         let l2 = FusedConfig::configure(
             cs,
-            &[
-                // input
-                advices.get_slice(&[0..1], &[LEN]),
-                // weights
-                advices.get_slice(&[1..CLASSES + 1], &[CLASSES, LEN]),
-                // bias
-                advices.get_slice(&[CLASSES + 1..CLASSES + 2], &[CLASSES]),
-            ],
+            &[input, kernel, bias],
             // output
-            &advices.get_slice(&[CLASSES + 2..CLASSES + 3], &[CLASSES]),
+            &output,
             &[affine_node],
         );
         let public_output: Column<Instance> = cs.instance_column();
@@ -245,7 +242,7 @@ where
                 self.l0_params[1].clone(),
             ],
         );
-        let mut x = config.l1.layout(&mut layouter, &[x]);
+        let mut x = config.l1.layout(&mut layouter, x);
         x.flatten();
         let l2out = config.l2.layout(
             &mut layouter,
@@ -253,11 +250,13 @@ where
         );
 
         match l2out {
-            ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|i, x| {
-                layouter
-                    .constrain_instance(x.cell(), config.public_output, i)
-                    .unwrap()
-            }),
+            ValTensor::PrevAssigned { inner: v, dims: _ } => v
+                .enum_map(|i, x| {
+                    layouter
+                        .constrain_instance(x.cell(), config.public_output, i)
+                        .unwrap()
+                })
+                .unwrap(),
             _ => panic!("Should be assigned"),
         };
 

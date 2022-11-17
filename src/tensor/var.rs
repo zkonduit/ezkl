@@ -1,6 +1,6 @@
 use super::*;
 use crate::abort;
-use log::{error, info};
+use log::{error};
 /// A wrapper around a tensor where the inner type is one of Halo2's `Column<Fixed>` or `Column<Advice>`.
 /// The wrapper allows for `VarTensor`'s dimensions to differ from that of the inner (wrapped) tensor.
 /// The inner tensor might, for instance, contain 3 Advice Columns. Each of those columns in turn
@@ -12,7 +12,7 @@ use log::{error, info};
 #[derive(Clone, Debug)]
 pub enum VarTensor {
     Advice {
-        inner: Tensor<Column<Advice>>,
+        inner: Column<Advice>,
         dims: Vec<usize>,
     },
     Fixed {
@@ -21,49 +21,8 @@ pub enum VarTensor {
     },
 }
 
-impl From<Tensor<Column<Advice>>> for VarTensor {
-    fn from(t: Tensor<Column<Advice>>) -> VarTensor {
-        VarTensor::Advice {
-            inner: t.clone(),
-            dims: t.dims().to_vec(),
-        }
-    }
-}
-
-impl From<Tensor<Column<Fixed>>> for VarTensor {
-    fn from(t: Tensor<Column<Fixed>>) -> VarTensor {
-        VarTensor::Fixed {
-            inner: t.clone(),
-            dims: t.dims().to_vec(),
-        }
-    }
-}
-
 impl VarTensor {
-    /// Calls `get_slice` on the inner tensor.
-    pub fn get_slice(&self, indices: &[Range<usize>], new_dims: &[usize]) -> VarTensor {
-        match self {
-            VarTensor::Advice { inner: v, dims: _ } => {
-                let new_inner = v.get_slice(indices);
-                //  TODO: add shape assertion here
-                VarTensor::Advice {
-                    inner: new_inner,
-                    dims: new_dims.to_vec(),
-                }
-            }
-            VarTensor::Fixed { inner: v, dims: _ } => {
-                let mut new_inner = v.get_slice(indices);
-                if new_dims.len() > 1 {
-                    new_inner.reshape(&new_dims[0..new_dims.len() - 1]);
-                }
-                VarTensor::Fixed {
-                    inner: new_inner,
-                    dims: new_dims.to_vec(),
-                }
-            }
-        }
-    }
-
+   
     /// Sets the `VarTensor`'s shape.
     pub fn reshape(&mut self, new_dims: &[usize]) {
         match self {
@@ -88,12 +47,10 @@ impl VarTensor {
     pub fn enable_equality<F: FieldExt>(&self, meta: &mut ConstraintSystem<F>) {
         match self {
             VarTensor::Advice {
-                inner: advices,
+                inner: advice,
                 dims: _,
             } => {
-                for advice in advices.iter() {
-                    meta.enable_equality(*advice);
-                }
+                meta.enable_equality(*advice);
             }
             VarTensor::Fixed { inner: _, dims: _ } => {}
         }
@@ -117,51 +74,23 @@ impl VarTensor {
         offset: usize,
     ) -> Result<Tensor<Expression<F>>, TensorError> {
         match &self {
-            // when fixed we have 1 col per param
-            VarTensor::Fixed { inner: f, dims: d } => {
-                let mut t = f.map(|c| meta.query_fixed(c, Rotation(offset as i32)));
-                t.reshape(d);
-                Ok(t)
+            VarTensor::Fixed { inner: _, dims: _ } => {
+                todo!()
             }
             // when advice we have 1 col per row
-            VarTensor::Advice { inner: a, dims: d } => match a
-                .map(|column| {
-                    Tensor::from(
+            VarTensor::Advice { inner: a, dims: d } => {
+                    let mut c = Tensor::from(
                         // this should fail if dims is empty, should be impossible
                         (0.. d.iter().product::<usize>())
-                            .map(|i| meta.query_advice(column, Rotation(offset as i32 + i as i32))),
-                    )
-                })
-                .combine()
-            {
-                Ok(mut c) => {
-                    info!("{:?} {:?}", d, c.dims());
-                    c.reshape(d);
-                    Ok(c)
-                }
-                Err(e) => {
-                    abort!("failed to combine tensors {:?}", e);
-                }
-            },
+                            .map(|i| meta.query_advice(*a, Rotation(offset as i32 + i as i32))),
+                    ); 
+                    c.reshape(d); 
+                    Ok(c)}
+        
         }
     }
 
-    /// Retrieve the value represented at a specific index within the columns of the inner tensor.
-    pub fn query_idx<F: FieldExt>(
-        &self,
-        meta: &mut VirtualCells<'_, F>,
-        idx: usize,
-        offset: usize,
-    ) -> Expression<F> {
-        match &self {
-            VarTensor::Fixed { inner: f, dims: _ } => {
-                meta.query_fixed(f[idx], Rotation(offset as i32))
-            }
-            VarTensor::Advice { inner: a, dims: _ } => {
-                meta.query_advice(a[idx], Rotation(offset as i32))
-            }
-        }
-    }
+    
 
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor.
     pub fn assign<F: FieldExt + TensorType>(
@@ -183,7 +112,7 @@ impl VarTensor {
                 VarTensor::Advice { inner: a, dims: _ } => {
                     match region.assign_advice(
                         || "k",
-                        a.get(&[0]),
+                        *a,
                         offset + coord,
                         || k.into(),
                     ) {
@@ -201,7 +130,7 @@ impl VarTensor {
                         match x.copy_advice(
                             || "k",
                             region,
-                    a.get(&[0]),
+                    *a,
                     offset + coord,
                         ) {
                             Ok(a) => a,
@@ -225,7 +154,7 @@ impl VarTensor {
                     VarTensor::Advice { inner: a, dims: _ } => {
                         match region.assign_advice(
                             || "k",
-                            a.get(&[0]),
+                            *a,
                     offset + coord,
                             || k,
                         ) {

@@ -40,50 +40,33 @@ where
         self.clone()
     }
 
-    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+    fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         unsafe {
             let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
             let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
-            let num_advices = output_height * OUT_CHANNELS
-                + IMAGE_HEIGHT * IN_CHANNELS
-                + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
-                + 1;
+            let advices = Tensor::from((0..4).map(|_| {
+                let col = cs.advice_column();
+                cs.enable_equality(col);
+                col
+            }));
 
-            let advices =
-                VarTensor::from(Tensor::from((0..num_advices).map(|_| meta.advice_column())));
-
-            let input = advices.get_slice(
-                &[0..IMAGE_HEIGHT * IN_CHANNELS],
-                &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
-            );
-
-            let kernel = advices.get_slice(
-                &[IMAGE_HEIGHT * IN_CHANNELS
-                    ..IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT],
-                &[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
-            );
-
-            let bias = advices.get_slice(
-                &[
-                    IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
-                        ..IMAGE_HEIGHT * IN_CHANNELS
-                            + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
-                            + 1,
-                ],
-                &[OUT_CHANNELS],
-            );
-
-            let output = advices.get_slice(
-                &[
-                    IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT + 1
-                        ..IMAGE_HEIGHT * IN_CHANNELS
-                            + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
-                            + 1
-                            + output_height * OUT_CHANNELS,
-                ],
-                &[OUT_CHANNELS, output_height, output_width],
-            );
+            let input = VarTensor::Advice {
+                inner: advices[0],
+                dims: vec![IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
+            };
+            let kernel = VarTensor::Advice {
+                inner: advices[1],
+                dims: vec![OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
+            };
+            let bias = VarTensor::Advice {
+                inner: advices[2],
+                dims: vec![OUT_CHANNELS],
+            };
+            let output = VarTensor::Advice {
+                inner: advices[3],
+                dims: vec![OUT_CHANNELS, output_height, output_width],
+            };
 
             // tells the config layer to add a conv op to a circuit gate
             let conv_node = FusedNode {
@@ -95,7 +78,7 @@ where
                 ],
             };
 
-            Self::Config::configure(meta, &[input, kernel, bias], &output, &[conv_node])
+            Self::Config::configure(cs, &[input, kernel, bias], &output, &[conv_node])
         }
     }
 

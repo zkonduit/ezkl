@@ -1,5 +1,5 @@
 use crate::tensor::TensorType;
-use crate::tensor::{Tensor, ValTensor, VarTensor};
+use crate::tensor::{Tensor, ValTensor};
 use anyhow::Result;
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -8,7 +8,6 @@ use halo2_proofs::{
 };
 use std::marker::PhantomData;
 pub mod utilities;
-use std::cmp::max;
 pub use utilities::*;
 pub mod model;
 pub mod node;
@@ -32,16 +31,13 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         let onnx_model = Model::from_arg();
-        let num_advices = max(
-            onnx_model.max_node_advices(),
-            onnx_model.max_advices_width().unwrap(),
-        );
+        let num_advices = onnx_model.max_node_advices();
         info!("number of advices used: {:?}", num_advices);
-        let advices = VarTensor::from(Tensor::from((0..num_advices + 3).map(|_| {
+        let advices = Tensor::from((0..num_advices).map(|_| {
             let col = meta.advice_column();
             meta.enable_equality(col);
             col
-        })));
+        }));
 
         onnx_model.configure(meta, advices).unwrap()
     }

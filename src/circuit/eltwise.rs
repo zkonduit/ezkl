@@ -110,15 +110,15 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
     /// Configures multiple element-wise non-linearities at once.
     pub fn configure_multiple<const NUM: usize>(
         cs: &mut ConstraintSystem<F>,
-        variables: &[VarTensor],
+        variables: VarTensor,
         eltwise_params: Option<&[usize]>,
     ) -> [Self; NUM] {
         let mut table: Option<Rc<RefCell<EltwiseTable<F, NL>>>> = None;
         let configs = (0..NUM)
             .map(|_| {
                 let l = match &table {
-                    None => Self::configure(cs, variables, eltwise_params),
-                    Some(t) => Self::configure_with_table(cs, variables, t.clone()),
+                    None => Self::configure(cs, variables.clone(), eltwise_params),
+                    Some(t) => Self::configure_with_table(cs, variables.clone(), t.clone()),
                 };
                 table = Some(l.table.clone());
                 l
@@ -135,36 +135,37 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
     /// Configures and creates an elementwise operation within a circuit using a supplied lookup table.
     fn configure_with_table(
         cs: &mut ConstraintSystem<F>,
-        variables: &[VarTensor],
+        variables: VarTensor,
         table: Rc<RefCell<EltwiseTable<F, NL>>>,
     ) -> Self {
         let qlookup = cs.complex_selector();
-        let input = variables[0].clone();
+        let input = variables.clone();
         match &input {
-            VarTensor::Advice {
-                inner: advice,
-                dims: _,
-            } => {
-                advice.map(|a| {
-                    let _ = cs.lookup("lk", |cs| {
-                        let qlookup = cs.query_selector(qlookup);
-                        let not_qlookup = Expression::Constant(F::one()) - qlookup.clone();
-                        let (default_x, default_y) =
-                            NL::default_pair(table.borrow().scaling_params.as_slice());
-                        vec![
-                            (
-                                qlookup.clone() * cs.query_advice(a, Rotation::cur())
-                                    + not_qlookup.clone() * default_x,
-                                table.borrow().table_input,
-                            ),
-                            (
-                                qlookup * cs.query_advice(a, Rotation::next())
-                                    + not_qlookup * default_y,
-                                table.borrow().table_output,
-                            ),
-                        ]
-                    });
-                });
+            VarTensor::Advice { inner: a, dims: d } => {
+                let offset = d.iter().product::<usize>() as i32;
+                let _ = (0..offset)
+                    .map(|i| {
+                        let _ = cs.lookup("lk", |cs| {
+                            let qlookup = cs.query_selector(qlookup);
+                            let not_qlookup = Expression::Constant(F::one()) - qlookup.clone();
+                            let (default_x, default_y) =
+                                NL::default_pair(table.borrow().scaling_params.as_slice());
+
+                            vec![
+                                (
+                                    qlookup.clone() * cs.query_advice(*a, Rotation(i as i32))
+                                        + not_qlookup.clone() * default_x,
+                                    table.borrow().table_input,
+                                ),
+                                (
+                                    qlookup * cs.query_advice(*a, Rotation(offset + i as i32))
+                                        + not_qlookup * default_y,
+                                    table.borrow().table_output,
+                                ),
+                            ]
+                        });
+                    })
+                    .collect::<Vec<_>>();
             }
             _ => todo!(),
         }
@@ -183,7 +184,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
     /// Variables are supplied as a 1-element array of `[input]` VarTensors.
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
-        variables: &[VarTensor],
+        variables: VarTensor,
         eltwise_params: Option<&[usize]>,
     ) -> Self {
         // will fail if not supplied
@@ -204,7 +205,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
 
     /// Assigns values to the variables created when calling `configure`.
     /// Values are supplied as a 1-element array of `[input]` VarTensors.
-    pub fn layout(&self, layouter: &mut impl Layouter<F>, values: &[ValTensor<F>]) -> ValTensor<F> {
+    pub fn layout(&self, layouter: &mut impl Layouter<F>, values: ValTensor<F>) -> ValTensor<F> {
         if !self.table.borrow().is_assigned {
             self.table.borrow_mut().layout(layouter)
         }
@@ -212,62 +213,51 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
             match layouter.assign_region(
                 || "Elementwise", // the name of the region
                 |mut region| {
-                    let offset = 0;
-                    self.qlookup.enable(&mut region, offset)?;
+                    self.qlookup.enable(&mut region, 0)?;
 
-                    let w = match &values[0] {
+                    let w = match &values {
                         ValTensor::AssignedValue { inner: v, dims: _ } => match &self.input {
-                            VarTensor::Advice {
-                                inner: advice,
-                                dims: _,
-                            } => v.enum_map(|i, x| {
-                                // assign the advice
-                                match region.assign_advice(|| "input", advice[i], offset, || x) {
-                                    Ok(a) => a,
-                                    Err(e) => {
-                                        abort!("failed to assign input advice {:?}", e);
+                            VarTensor::Advice { inner: a, dims: _ } => v
+                                .enum_map(|i, x| {
+                                    // assign the advice
+                                    match region.assign_advice(|| "input", *a, i, || x) {
+                                        Ok(a) => a,
+                                        Err(e) => {
+                                            abort!("failed to assign input advice {:?}", e);
+                                        }
                                     }
-                                }
-                            }).unwrap(),
+                                })
+                                .unwrap(),
                             _ => todo!(),
                         },
                         ValTensor::PrevAssigned { inner: v, dims: _ } => match &self.input {
-                            VarTensor::Advice {
-                                inner: advice,
-                                dims: _,
-                            } =>
+                            VarTensor::Advice { inner: a, dims: _ } =>
                             //copy the advice
                             {
                                 v.enum_map(|i, x| {
-                                    match x.copy_advice(|| "input", &mut region, advice[i], offset)
-                                    {
+                                    match x.copy_advice(|| "input", &mut region, *a, i) {
                                         Ok(a) => a,
                                         Err(e) => {
                                             abort!("failed to copy input advice {:?}", e);
                                         }
                                     }
-                                }).unwrap()
+                                })
+                                .unwrap()
                             }
                             _ => todo!(),
                         },
                         ValTensor::Value { inner: v, dims: _ } => match &self.input {
-                            VarTensor::Advice {
-                                inner: advice,
-                                dims: _,
-                            } => v.enum_map(|i, x| {
-                                // assign the advice
-                                match region.assign_advice(
-                                    || "input",
-                                    advice[i],
-                                    offset,
-                                    || x.into(),
-                                ) {
-                                    Ok(a) => a,
-                                    Err(e) => {
-                                        abort!("failed to assign input advice {:?}", e);
+                            VarTensor::Advice { inner: a, dims: _ } => v
+                                .enum_map(|i, x| {
+                                    // assign the advice
+                                    match region.assign_advice(|| "input", *a, i, || x.into()) {
+                                        Ok(a) => a,
+                                        Err(e) => {
+                                            abort!("failed to assign input advice {:?}", e);
+                                        }
                                     }
-                                }
-                            }).unwrap(),
+                                })
+                                .unwrap(),
                             _ => todo!(),
                         },
                     };
@@ -282,18 +272,24 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
                         })
                     }));
 
+                    let offset = values.dims().iter().product::<usize>();
+
                     match &self.input {
-                        VarTensor::Advice {
-                            inner: advice,
-                            dims: _,
-                        } => Ok(output.enum_map(|i, o| {
-                            match region.assign_advice(|| format!("nl_{i}"), advice[i], 1, || o) {
-                                Ok(a) => a,
-                                Err(e) => {
-                                    abort!("failed to assign non-linearity advice {:?}", e);
+                        VarTensor::Advice { inner: a, dims: _ } => Ok(output
+                            .enum_map(|i, o| {
+                                match region.assign_advice(
+                                    || format!("nl_{i}"),
+                                    *a,
+                                    offset + i,
+                                    || o,
+                                ) {
+                                    Ok(a) => a,
+                                    Err(e) => {
+                                        abort!("failed to assign non-linearity advice {:?}", e);
+                                    }
                                 }
-                            }
-                        }).unwrap()),
+                            })
+                            .unwrap()),
 
                         _ => todo!(),
                     }
@@ -305,7 +301,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
                 }
             },
         );
-        t.reshape(values[0].dims());
+        t.reshape(values.dims());
         t
     }
 }

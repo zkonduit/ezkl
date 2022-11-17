@@ -31,16 +31,28 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let len = unsafe { LEN };
-        let advices = VarTensor::from(Tensor::from((0..len + 3).map(|_| {
+        let advices = Tensor::from((0..4).map(|_| {
             let col = cs.advice_column();
             cs.enable_equality(col);
             col
-        })));
+        }));
 
-        let kernel = advices.get_slice(&[0..len], &[len, len]);
-        let bias = advices.get_slice(&[len + 2..len + 3], &[len]);
-        let input = advices.get_slice(&[len..len + 1], &[len]);
-        let output = advices.get_slice(&[len + 1..len + 2], &[len]);
+        let kernel = VarTensor::Advice {
+            inner: advices[0],
+            dims: vec![len, len],
+        };
+        let bias = VarTensor::Advice {
+            inner: advices[1],
+            dims: vec![len],
+        };
+        let input = VarTensor::Advice {
+            inner: advices[2],
+            dims: vec![len],
+        };
+        let output = VarTensor::Advice {
+            inner: advices[3],
+            dims: vec![len],
+        };
 
         // tells the config layer to add an affine op to a circuit gate
         let affine_node = FusedNode {
@@ -52,12 +64,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
             ],
         };
 
-        Self::Config::configure(
-            cs,
-            &[input, kernel, bias],
-            &output,
-            &[affine_node],
-        )
+        Self::Config::configure(cs, &[input, kernel, bias], &output, &[affine_node])
     }
 
     fn synthesize(
