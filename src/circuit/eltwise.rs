@@ -170,7 +170,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
         }
 
         Self {
-            input,
+            input: variables,
             table,
             qlookup,
             _marker: PhantomData,
