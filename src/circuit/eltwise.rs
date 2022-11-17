@@ -139,8 +139,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
         table: Rc<RefCell<EltwiseTable<F, NL>>>,
     ) -> Self {
         let qlookup = cs.complex_selector();
-        let input = variables.clone();
-        match &input {
+        match &variables {
             VarTensor::Advice { inner: a, dims: d } => {
                 let offset = d.iter().product::<usize>() as i32;
                 let _ = (0..offset)
