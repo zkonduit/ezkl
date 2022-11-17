@@ -104,16 +104,18 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
 
                 // assigns the instance to the "expected" advice.
                 match self.expected.clone() {
-                    VarTensor::Advice { inner, dims: d } => {
-                        let inner_loop = d.iter().product();
+                    VarTensor::Advice { inner, .. } => {
+                        let inner_loop = input.dims().iter().product();
+
                         for i in 0..inner_loop {
+                            let (x, y) = self.expected.cartesian_coord(i);
                             region
                                 .assign_advice_from_instance(
                                     || "pub input anchor",
                                     self.instance,
                                     i,
-                                    inner,
-                                    i,
+                                    inner[x],
+                                    y,
                                 )
                                 .unwrap();
                         }
@@ -144,6 +146,7 @@ mod tests {
         plonk::{Circuit, ConstraintSystem, Error},
     };
     use halo2curves::pasta::Fp;
+    use itertools::Itertools;
 
     const RANGE: usize = 8; // 3-bit value
 
@@ -163,19 +166,11 @@ mod tests {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let advices = Tensor::from((0..2).map(|_| {
-                let col = cs.advice_column();
-                cs.enable_equality(col);
-                col
-            }));
-            let input = VarTensor::Advice {
-                inner: advices[0],
-                dims: vec![1],
-            };
-            let expected = VarTensor::Advice {
-                inner: advices[1],
-                dims: vec![1],
-            };
+            let advices = (0..2)
+                .map(|_| VarTensor::new_advice(cs, 4, 1, vec![1], true))
+                .collect_vec();
+            let input = &advices[0];
+            let expected = &advices[1];
             let instance = {
                 let l = cs.instance_column();
                 cs.enable_equality(l);

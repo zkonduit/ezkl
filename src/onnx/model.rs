@@ -11,13 +11,12 @@ use clap::Parser;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
-    plonk::{Advice, Column, ConstraintSystem},
+    plonk::ConstraintSystem,
 };
 use itertools::Itertools;
 use log::{debug, error, info, trace};
-
+use std::cmp::max;
 use std::collections::{BTreeMap, HashSet};
-
 use std::path::Path;
 use tabled::Table;
 use tract_onnx;
@@ -48,6 +47,7 @@ pub struct Model {
     pub model: Graph<InferenceFact, Box<dyn InferenceOp>>, // The raw Tract data structure
     pub nodes: NodeGraph, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
     pub bits: usize,
+    pub logrows: u32,
     pub scale: i32,
     pub tolerance: usize,
     pub mode: Mode,
@@ -65,6 +65,7 @@ impl Model {
         path: impl AsRef<Path>,
         scale: i32,
         bits: usize,
+        logrows: u32,
         tolerance: usize,
         mode: Mode,
     ) -> Self {
@@ -87,6 +88,7 @@ impl Model {
             nodes: Self::assign_execution_buckets(nodes)
                 .expect("failed to assign execution buckets"),
             bits,
+            logrows,
             mode,
         };
 
@@ -103,6 +105,7 @@ impl Model {
                 model_path(model),
                 args.scale,
                 args.bits,
+                args.logrows,
                 args.tolerance,
                 Mode::Table,
             ),
@@ -110,6 +113,7 @@ impl Model {
                 model_path(model),
                 args.scale,
                 args.bits,
+                args.logrows,
                 args.tolerance,
                 Mode::Mock,
             ),
@@ -121,6 +125,7 @@ impl Model {
                 model_path(model),
                 args.scale,
                 args.bits,
+                args.logrows,
                 args.tolerance,
                 Mode::FullProve,
             ),
@@ -133,6 +138,7 @@ impl Model {
                 model_path(model),
                 args.scale,
                 args.bits,
+                args.logrows,
                 args.tolerance,
                 Mode::Prove,
             ),
@@ -144,6 +150,7 @@ impl Model {
                 model_path(model),
                 args.scale,
                 args.bits,
+                args.logrows,
                 args.tolerance,
                 Mode::Verify,
             ),
@@ -160,7 +167,7 @@ impl Model {
     pub fn configure<F: FieldExt + TensorType>(
         &self,
         meta: &mut ConstraintSystem<F>,
-        advices: Tensor<Column<Advice>>,
+        advices: Vec<VarTensor>,
     ) -> Result<ModelConfig<F>> {
         info!("configuring model");
         let mut results = BTreeMap::new();
@@ -210,7 +217,7 @@ impl Model {
     fn range_check_outputs<F: FieldExt + TensorType>(
         &self,
         meta: &mut ConstraintSystem<F>,
-        advices: Tensor<Column<Advice>>,
+        advices: Vec<VarTensor>,
     ) -> Vec<RangeCheckConfig<F>> {
         let mut configs = vec![];
         let output_nodes = self.model.outputs.clone();
@@ -233,14 +240,9 @@ impl Model {
             .collect_vec();
         for (i, instance) in public_outputs.iter().enumerate() {
             let s = output_shapes[i].clone();
-            let input = VarTensor::Advice {
-                inner: advices[0],
-                dims: s.clone(),
-            };
-            let output = VarTensor::Advice {
-                inner: advices[1],
-                dims: s,
-            };
+            let input = advices[0].reshape(&s);
+            let output = advices[1].reshape(&s);
+
             configs.push(RangeCheckConfig::configure(
                 meta,
                 &input,
@@ -264,7 +266,7 @@ impl Model {
         &self,
         nodes: &BTreeMap<&usize, &Node>,
         meta: &mut ConstraintSystem<F>,
-        advices: Tensor<Column<Advice>>,
+        advices: Vec<VarTensor>,
     ) -> NodeConfigTypes<F> {
         let input_nodes: BTreeMap<(&usize, &FusedOp), Vec<Node>> = nodes
             .iter()
@@ -298,13 +300,7 @@ impl Model {
                     .filter(|i| !nodes.contains_key(&i.idx) && seen.insert(i.idx))
                     .map(|f| {
                         let s = f.out_dims.clone();
-                        let a = (
-                            f.idx,
-                            VarTensor::Advice {
-                                inner: advices[start],
-                                dims: s,
-                            },
-                        );
+                        let a = (f.idx, advices[start].reshape(&s));
                         start += 1;
                         a
                     })
@@ -312,13 +308,10 @@ impl Model {
             })
             .collect_vec();
 
-        // output node
         let output_shape = self.nodes.filter(**nodes.keys().max().unwrap()).out_dims;
 
-        let output = VarTensor::Advice {
-            inner: advices[start],
-            dims: output_shape,
-        };
+        // output node
+        let output = &advices[start].reshape(&output_shape);
 
         let mut inter_counter = 0;
         let fused_nodes: Vec<FusedNode> = input_nodes
@@ -350,7 +343,7 @@ impl Model {
             FusedConfig::configure(
                 meta,
                 &inputs.clone().map(|x| x.1.clone()).collect_vec(),
-                &output,
+                output,
                 &fused_nodes,
             ),
             inputs.map(|x| x.0).collect_vec(),
@@ -368,43 +361,40 @@ impl Model {
         &self,
         node: &Node,
         meta: &mut ConstraintSystem<F>,
-        advices: Tensor<Column<Advice>>,
+        advices: Vec<VarTensor>,
     ) -> NodeConfigTypes<F> {
+        let input_len = node.in_dims.iter().product();
+        let input = &advices[0].reshape(&[input_len]);
+        let output = &advices[1].reshape(&[input_len]);
         match &node.opkind {
             OpKind::Div(s) => {
-                let dims = node.in_dims.clone();
-                let length = dims.into_iter().product();
-                let variables = VarTensor::Advice {
-                    inner: advices[0],
-                    dims: vec![length],
-                };
-                let conf: EltwiseConfig<F, DivideBy<F>> =
-                    EltwiseConfig::configure(meta, variables, Some(&[self.bits, *s]));
+                let conf: EltwiseConfig<F, DivideBy<F>> = EltwiseConfig::configure(
+                    meta,
+                    input,
+                    output,
+                    input_len,
+                    Some(&[self.bits, *s]),
+                );
                 let inputs = node.inputs.iter().map(|e| e.node).collect();
                 NodeConfigTypes::Divide(conf, inputs)
             }
             OpKind::ReLU(s) => {
-                let dims = node.in_dims.clone();
-                let length = dims.into_iter().product();
-                let variables = VarTensor::Advice {
-                    inner: advices[0],
-                    dims: vec![length],
-                };
-                let conf: EltwiseConfig<F, ReLu<F>> =
-                    EltwiseConfig::configure(meta, variables, Some(&[self.bits, *s]));
+                let conf: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
+                    meta,
+                    input,
+                    output,
+                    input_len,
+                    Some(&[self.bits, *s]),
+                );
                 let inputs = node.inputs.iter().map(|e| e.node).collect();
                 NodeConfigTypes::ReLU(conf, inputs)
             }
             OpKind::Sigmoid(denominator) => {
-                let dims = node.in_dims.clone();
-                let length = dims.into_iter().product();
-                let variables = VarTensor::Advice {
-                    inner: advices[0],
-                    dims: vec![length],
-                };
                 let conf: EltwiseConfig<F, Sigmoid<F>> = EltwiseConfig::configure(
                     meta,
-                    variables,
+                    input,
+                    output,
+                    input_len,
                     Some(&[
                         self.bits,
                         *denominator,
@@ -622,6 +612,23 @@ impl Model {
         output_nodes
             .map(|o| self.nodes.filter(o.node).out_scale)
             .collect_vec()
+    }
+
+    pub fn max_node_size(&self) -> usize {
+        max(
+            self.nodes
+                .flatten()
+                .iter()
+                .map(|e| e.in_dims.iter().product())
+                .max()
+                .unwrap(),
+            self.nodes
+                .flatten()
+                .iter()
+                .map(|e| e.out_dims.iter().product())
+                .max()
+                .unwrap(),
+        )
     }
 
     pub fn max_node_advices(&self) -> usize {

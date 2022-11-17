@@ -1,9 +1,9 @@
 use super::*;
 use crate::abort;
 use log::error;
-/// A wrapper around a tensor where the inner type is one of Halo2's `Column<Fixed>` or `Column<Advice>`.
-/// The wrapper allows for `VarTensor`'s dimensions to differ from that of the inner (wrapped) tensor.
-/// The inner tensor might, for instance, contain 3 Advice Columns. Each of those columns in turn
+/// A wrapper around Halo2's `Column<Fixed>` or `Column<Advice>`.
+/// The wrapper allows for `VarTensor`'s dimensions to differ from that of the inner (wrapped) columns.
+/// The inner vector might, for instance, contain 3 Advice Columns. Each of those columns in turn
 /// might be representing 3 elements laid out in the circuit. As such, though the inner tensor might
 /// only be of dimension `[3]` we can set the VarTensor's dimension to `[3,3]` to capture information
 /// about the column layout. This enum is generally used to configure and layout circuit variables / advices.
@@ -12,54 +12,108 @@ use log::error;
 #[derive(Clone, Debug)]
 pub enum VarTensor {
     Advice {
-        inner: Column<Advice>,
+        inner: Vec<Column<Advice>>,
+        col_size: usize,
+        total_elems: usize,
         dims: Vec<usize>,
     },
     Fixed {
-        inner: Tensor<Column<Fixed>>,
-        dims: Vec<usize>,
+        inner: Vec<Column<Fixed>>,
+        col_size: usize,
+        total_elems: usize,
     },
 }
 
 impl VarTensor {
-    /// Sets the `VarTensor`'s shape.
-    pub fn reshape(&mut self, new_dims: &[usize]) {
-        match self {
-            VarTensor::Advice { inner: _, dims: d } => {
-                assert_eq!(
-                    d.iter().product::<usize>(),
-                    new_dims.iter().product::<usize>()
-                );
-                *d = new_dims.to_vec();
+    pub fn new_advice<F: FieldExt>(
+        cs: &mut ConstraintSystem<F>,
+        k: usize,
+        total_elems: usize,
+        dims: Vec<usize>,
+        equality: bool,
+    ) -> Self {
+        let base: usize = 2;
+        // TODO: figure out the actual number of rows T used for the ZK component of PLONK
+        let max_rows = base.pow((k - 2) as u32);
+        let modulo = (total_elems / max_rows) + 1;
+        let mut advices = vec![];
+        for _ in 0..modulo {
+            let col = cs.advice_column();
+            if equality {
+                cs.enable_equality(col);
             }
-            VarTensor::Fixed { inner: _, dims: d } => {
-                assert_eq!(
-                    d.iter().product::<usize>(),
-                    new_dims.iter().product::<usize>()
-                );
-                *d = new_dims.to_vec();
+            advices.push(col);
+        }
+
+        VarTensor::Advice {
+            inner: advices,
+            col_size: max_rows,
+            total_elems,
+            dims,
+        }
+    }
+
+    /// Gets the dims of the object the VarTensor represents
+    pub fn dims(&self) -> Vec<usize> {
+        match self {
+            VarTensor::Advice { dims: d, .. } => d.to_vec(),
+            _ => todo!(),
+        }
+    }
+
+    /// Sets the dims of the object the VarTensor represents
+    pub fn reshape(&self, new_dims: &[usize]) -> Self {
+        match self {
+            VarTensor::Advice {
+                inner,
+                col_size,
+                total_elems,
+                ..
+            } => VarTensor::Advice {
+                inner: inner.clone(),
+                col_size: *col_size,
+                total_elems: *total_elems,
+                dims: new_dims.to_vec(),
+            },
+            _ => todo!(),
+        }
+    }
+
+    pub fn cartesian_coord(&self, linear_coord: usize) -> (usize, usize) {
+        match self {
+            VarTensor::Advice { col_size, .. } => {
+                let x = linear_coord / col_size;
+                let y = linear_coord % col_size;
+                (x, y)
+            }
+            VarTensor::Fixed { col_size, .. } => {
+                let x = linear_coord / col_size;
+                let y = linear_coord % col_size;
+                (x, y)
             }
         }
     }
 
     /// Enables equality on Advice type `VarTensor`.
-    pub fn enable_equality<F: FieldExt>(&self, meta: &mut ConstraintSystem<F>) {
+    pub fn enable_equality<F: FieldExt>(&self, cs: &mut ConstraintSystem<F>) {
         match self {
-            VarTensor::Advice {
-                inner: advice,
-                dims: _,
-            } => {
-                meta.enable_equality(*advice);
+            VarTensor::Advice { inner: advices, .. } => {
+                let _ = advices
+                    .iter()
+                    .map(|a| {
+                        cs.enable_equality(*a);
+                    })
+                    .collect_vec();
             }
-            VarTensor::Fixed { inner: _, dims: _ } => {}
+            VarTensor::Fixed { .. } => {}
         }
     }
 
-    /// Returns the `dims` attribute of the `VarTensor`.
-    pub fn dims(&self) -> &[usize] {
+    /// Returns the `total_elems` attribute of the `VarTensor`.
+    pub fn total_elems(&self) -> usize {
         match self {
-            VarTensor::Advice { inner: _, dims: d } => d,
-            VarTensor::Fixed { inner: _, dims: d } => d,
+            VarTensor::Advice { total_elems, .. } => *total_elems,
+            VarTensor::Fixed { total_elems, .. } => *total_elems,
         }
     }
 }
@@ -73,17 +127,23 @@ impl VarTensor {
         offset: usize,
     ) -> Result<Tensor<Expression<F>>, TensorError> {
         match &self {
-            VarTensor::Fixed { inner: _, dims: _ } => {
+            VarTensor::Fixed { .. } => {
                 todo!()
             }
             // when advice we have 1 col per row
-            VarTensor::Advice { inner: a, dims: d } => {
+            VarTensor::Advice {
+                inner: advices,
+                dims,
+                ..
+            } => {
                 let mut c = Tensor::from(
                     // this should fail if dims is empty, should be impossible
-                    (0..d.iter().product::<usize>())
-                        .map(|i| meta.query_advice(*a, Rotation(offset as i32 + i as i32))),
+                    (0..dims.iter().product::<usize>()).map(|i| {
+                        let (x, y) = self.cartesian_coord(i);
+                        meta.query_advice(advices[x], Rotation(offset as i32 + y as i32))
+                    }),
                 );
-                c.reshape(d);
+                c.reshape(dims);
                 Ok(c)
             }
         }
@@ -98,45 +158,40 @@ impl VarTensor {
     ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, TensorError> {
         match values {
             ValTensor::Value { inner: v, dims: _ } => v.enum_map(|coord, k| match &self {
-                VarTensor::Fixed { inner: f, dims: _ } => {
-                    match region.assign_fixed(|| "k", f[coord], offset, || k.into()) {
-                        Ok(a) => a,
-                        Err(e) => {
-                            abort!("failed to assign ValTensor to VarTensor {:?}", e);
-                        }
-                    }
+                VarTensor::Fixed { .. } => {
+                    todo!()
                 }
-                VarTensor::Advice { inner: a, dims: _ } => {
-                    match region.assign_advice(|| "k", *a, offset + coord, || k.into()) {
+                VarTensor::Advice { inner: advices, .. } => {
+                    let (x, y) = self.cartesian_coord(offset + coord);
+                    match region.assign_advice(|| "k", advices[x], y, || k.into()) {
                         Ok(a) => a,
                         Err(e) => {
-                            abort!("failed to assign ValTensor to VarTensor {:?}", e);
+                            panic!("failed to assign ValTensor to VarTensor {:?}", e);
                         }
                     }
                 }
             }),
-            ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|coord, x| match &self {
-                VarTensor::Fixed { inner: _, dims: _ } => todo!(),
-                VarTensor::Advice { inner: a, dims: _ } => {
-                    match x.copy_advice(|| "k", region, *a, offset + coord) {
-                        Ok(a) => a,
-                        Err(e) => {
-                            abort!("failed to copy ValTensor to VarTensor {:?}", e);
+            ValTensor::PrevAssigned { inner: v, dims: _ } => {
+                v.enum_map(|coord, xcell| match &self {
+                    VarTensor::Fixed { .. } => todo!(),
+                    VarTensor::Advice { inner: advices, .. } => {
+                        let (x, y) = self.cartesian_coord(offset + coord);
+                        match xcell.copy_advice(|| "k", region, advices[x], y) {
+                            Ok(a) => a,
+                            Err(e) => {
+                                abort!("failed to copy ValTensor to VarTensor {:?}", e);
+                            }
                         }
                     }
-                }
-            }),
+                })
+            }
             ValTensor::AssignedValue { inner: v, dims: _ } => v.enum_map(|coord, k| match &self {
-                VarTensor::Fixed { inner: f, dims: _ } => {
-                    match region.assign_fixed(|| "k", f[coord], offset, || k) {
-                        Ok(a) => a,
-                        Err(e) => {
-                            abort!("failed to assign ValTensor to VarTensor {:?}", e);
-                        }
-                    }
+                VarTensor::Fixed { .. } => {
+                    todo!()
                 }
-                VarTensor::Advice { inner: a, dims: _ } => {
-                    match region.assign_advice(|| "k", *a, offset + coord, || k) {
+                VarTensor::Advice { inner: advices, .. } => {
+                    let (x, y) = self.cartesian_coord(offset + coord);
+                    match region.assign_advice(|| "k", advices[x], y, || k) {
                         Ok(a) => a,
                         Err(e) => {
                             abort!("failed to assign ValTensor to VarTensor {:?}", e);

@@ -1,11 +1,12 @@
 use crate::tensor::TensorType;
-use crate::tensor::{Tensor, ValTensor};
+use crate::tensor::{Tensor, ValTensor, VarTensor};
 use anyhow::Result;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error},
 };
+use itertools::Itertools;
 use std::marker::PhantomData;
 pub mod utilities;
 pub use utilities::*;
@@ -29,17 +30,24 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
         self.clone()
     }
 
-    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+    fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let onnx_model = Model::from_arg();
         let num_advices = onnx_model.max_node_advices();
+        let max_node_size = onnx_model.max_node_size();
         info!("number of advices used: {:?}", num_advices);
-        let advices = Tensor::from((0..num_advices).map(|_| {
-            let col = meta.advice_column();
-            meta.enable_equality(col);
-            col
-        }));
+        let advices = (0..num_advices)
+            .map(|_| {
+                VarTensor::new_advice(
+                    cs,
+                    onnx_model.logrows as usize,
+                    max_node_size,
+                    vec![max_node_size],
+                    true,
+                )
+            })
+            .collect_vec();
 
-        onnx_model.configure(meta, advices).unwrap()
+        onnx_model.configure(cs, advices).unwrap()
     }
 
     fn synthesize(

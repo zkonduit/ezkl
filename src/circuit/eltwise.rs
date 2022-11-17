@@ -101,6 +101,7 @@ impl<F: FieldExt, NL: Nonlinearity<F>> EltwiseTable<F, NL> {
 #[derive(Clone, Debug)]
 pub struct EltwiseConfig<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
     pub input: VarTensor,
+    pub output: VarTensor,
     pub table: Rc<RefCell<EltwiseTable<F, NL>>>,
     qlookup: Selector,
     _marker: PhantomData<(NL, F)>,
@@ -110,15 +111,17 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
     /// Configures multiple element-wise non-linearities at once.
     pub fn configure_multiple<const NUM: usize>(
         cs: &mut ConstraintSystem<F>,
-        variables: VarTensor,
+        input: &VarTensor,
+        output: &VarTensor,
+        input_len: usize,
         eltwise_params: Option<&[usize]>,
     ) -> [Self; NUM] {
         let mut table: Option<Rc<RefCell<EltwiseTable<F, NL>>>> = None;
         let configs = (0..NUM)
             .map(|_| {
                 let l = match &table {
-                    None => Self::configure(cs, variables.clone(), eltwise_params),
-                    Some(t) => Self::configure_with_table(cs, variables.clone(), t.clone()),
+                    None => Self::configure(cs, input, output, input_len, eltwise_params),
+                    Some(t) => Self::configure_with_table(cs, input, output, input_len, t.clone()),
                 };
                 table = Some(l.table.clone());
                 l
@@ -135,42 +138,48 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
     /// Configures and creates an elementwise operation within a circuit using a supplied lookup table.
     fn configure_with_table(
         cs: &mut ConstraintSystem<F>,
-        variables: VarTensor,
+        input: &VarTensor,
+        output: &VarTensor,
+        input_len: usize,
         table: Rc<RefCell<EltwiseTable<F, NL>>>,
     ) -> Self {
         let qlookup = cs.complex_selector();
-        match &variables {
-            VarTensor::Advice { inner: a, dims: d } => {
-                let offset = d.iter().product::<usize>() as i32;
-                let _ = (0..offset)
-                    .map(|i| {
-                        let _ = cs.lookup("lk", |cs| {
-                            let qlookup = cs.query_selector(qlookup);
-                            let not_qlookup = Expression::Constant(F::one()) - qlookup.clone();
-                            let (default_x, default_y) =
-                                NL::default_pair(table.borrow().scaling_params.as_slice());
-
-                            vec![
-                                (
-                                    qlookup.clone() * cs.query_advice(*a, Rotation(i as i32))
-                                        + not_qlookup.clone() * default_x,
-                                    table.borrow().table_input,
-                                ),
-                                (
-                                    qlookup * cs.query_advice(*a, Rotation(offset + i as i32))
-                                        + not_qlookup * default_y,
-                                    table.borrow().table_output,
-                                ),
-                            ]
-                        });
-                    })
-                    .collect::<Vec<_>>();
-            }
+        let input_inner = match &input {
+            VarTensor::Advice { inner: advices, .. } => advices,
             _ => todo!(),
-        }
+        };
+        let output_inner = match &output {
+            VarTensor::Advice { inner: advices, .. } => advices,
+            _ => todo!(),
+        };
+
+        let _ = (0..input_len)
+            .map(|i| {
+                let _ = cs.lookup("lk", |cs| {
+                    let qlookup = cs.query_selector(qlookup);
+                    let not_qlookup = Expression::Constant(F::one()) - qlookup.clone();
+                    let (default_x, default_y) =
+                        NL::default_pair(table.borrow().scaling_params.as_slice());
+                    let (x, y) = input.cartesian_coord(i);
+                    vec![
+                        (
+                            qlookup.clone() * cs.query_advice(input_inner[x], Rotation(y as i32))
+                                + not_qlookup.clone() * default_x,
+                            table.borrow().table_input,
+                        ),
+                        (
+                            qlookup * cs.query_advice(output_inner[x], Rotation(y as i32))
+                                + not_qlookup * default_y,
+                            table.borrow().table_output,
+                        ),
+                    ]
+                });
+            })
+            .collect::<Vec<_>>();
 
         Self {
-            input: variables,
+            input: input.clone(),
+            output: output.clone(),
             table,
             qlookup,
             _marker: PhantomData,
@@ -180,10 +189,12 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
 
 impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, NL> {
     /// Configures and creates an elementwise operation within a circuit.
-    /// Variables are supplied as a 1-element array of `[input]` VarTensors.
+    /// Variables are supplied as a single VarTensors.
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
-        variables: VarTensor,
+        input: &VarTensor,
+        output: &VarTensor,
+        input_len: usize,
         eltwise_params: Option<&[usize]>,
     ) -> Self {
         // will fail if not supplied
@@ -199,7 +210,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
             bits,
             &params[1..],
         )));
-        Self::configure_with_table(cs, variables, table)
+        Self::configure_with_table(cs, input, output, input_len, table)
     }
 
     /// Assigns values to the variables created when calling `configure`.
@@ -214,84 +225,22 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
                 |mut region| {
                     self.qlookup.enable(&mut region, 0)?;
 
-                    let w = match &values {
-                        ValTensor::AssignedValue { inner: v, dims: _ } => match &self.input {
-                            VarTensor::Advice { inner: a, dims: _ } => v
-                                .enum_map(|i, x| {
-                                    // assign the advice
-                                    match region.assign_advice(|| "input", *a, i, || x) {
-                                        Ok(a) => a,
-                                        Err(e) => {
-                                            abort!("failed to assign input advice {:?}", e);
-                                        }
-                                    }
-                                })
-                                .unwrap(),
-                            _ => todo!(),
-                        },
-                        ValTensor::PrevAssigned { inner: v, dims: _ } => match &self.input {
-                            VarTensor::Advice { inner: a, dims: _ } =>
-                            //copy the advice
-                            {
-                                v.enum_map(|i, x| {
-                                    match x.copy_advice(|| "input", &mut region, *a, i) {
-                                        Ok(a) => a,
-                                        Err(e) => {
-                                            abort!("failed to copy input advice {:?}", e);
-                                        }
-                                    }
-                                })
-                                .unwrap()
-                            }
-                            _ => todo!(),
-                        },
-                        ValTensor::Value { inner: v, dims: _ } => match &self.input {
-                            VarTensor::Advice { inner: a, dims: _ } => v
-                                .enum_map(|i, x| {
-                                    // assign the advice
-                                    match region.assign_advice(|| "input", *a, i, || x.into()) {
-                                        Ok(a) => a,
-                                        Err(e) => {
-                                            abort!("failed to assign input advice {:?}", e);
-                                        }
-                                    }
-                                })
-                                .unwrap(),
-                            _ => todo!(),
-                        },
-                    };
+                    let w = self.input.assign(&mut region, 0, &values).unwrap();
 
-                    let output = Tensor::from(w.iter().map(|acaf| acaf.value_field()).map(|vaf| {
-                        vaf.map(|f| {
-                            <NL as Nonlinearity<F>>::nonlinearity(
-                                felt_to_i32(f.evaluate()),
-                                &self.table.borrow().scaling_params,
-                            )
-                            .into()
-                        })
-                    }));
-
-                    let offset = values.dims().iter().product::<usize>();
-
-                    match &self.input {
-                        VarTensor::Advice { inner: a, dims: _ } => Ok(output
-                            .enum_map(|i, o| {
-                                match region.assign_advice(
-                                    || format!("nl_{i}"),
-                                    *a,
-                                    offset + i,
-                                    || o,
-                                ) {
-                                    Ok(a) => a,
-                                    Err(e) => {
-                                        abort!("failed to assign non-linearity advice {:?}", e);
-                                    }
-                                }
+                    let output: Tensor<Value<F>> =
+                        Tensor::from(w.iter().map(|acaf| (*acaf).value_field()).map(|vaf| {
+                            vaf.map(|f| {
+                                <NL as Nonlinearity<F>>::nonlinearity(
+                                    felt_to_i32(f.evaluate()),
+                                    &self.table.borrow().scaling_params,
+                                )
                             })
-                            .unwrap()),
+                        }));
 
-                        _ => todo!(),
-                    }
+                    Ok(self
+                        .output
+                        .assign(&mut region, 0, &ValTensor::from(output))
+                        .unwrap())
                 },
             ) {
                 Ok(a) => a,

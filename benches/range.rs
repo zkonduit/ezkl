@@ -14,6 +14,8 @@ use itertools::Itertools;
 static mut LEN: usize = 4;
 const RANGE: usize = 8; // 3-bit value
 
+const K: usize = 15; //2^k rows
+
 #[derive(Clone)]
 struct MyCircuit<F: FieldExt + TensorType> {
     input: ValTensor<F>,
@@ -29,27 +31,17 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let len = unsafe { LEN };
-        let advices = Tensor::from((0..2).map(|_| {
-            let col = cs.advice_column();
-            cs.enable_equality(col);
-            col
-        }));
+        let advices = (0..2)
+            .map(|_| VarTensor::new_advice(cs, K, len, vec![len], true))
+            .collect_vec();
 
-        let input = VarTensor::Advice {
-            inner: advices[0],
-            dims: vec![len],
-        };
-        let output = VarTensor::Advice {
-            inner: advices[1],
-            dims: vec![len],
-        };
         let instance = {
             let l = cs.instance_column();
             cs.enable_equality(l);
             l
         };
 
-        RangeCheckConfig::configure(cs, &input, &output, &instance, RANGE)
+        RangeCheckConfig::configure(cs, &advices[0], &advices[1], &instance, RANGE)
     }
 
     fn synthesize(
@@ -70,8 +62,6 @@ fn runrange(c: &mut Criterion) {
             LEN = len;
         };
 
-        let k = 15; //2^k rows
-
         let input = Tensor::from((0..len).map(|_| Value::known(pallas::Base::from(1))));
 
         let circuit = MyCircuit::<F> {
@@ -82,7 +72,7 @@ fn runrange(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(len), &len, |b, &_| {
             b.iter(|| {
                 let instances = vec![(0..len).map(|_| F::from(1)).collect_vec()];
-                let prover = MockProver::run(k, &circuit, instances).unwrap();
+                let prover = MockProver::run(K as u32, &circuit, instances).unwrap();
                 prover.assert_satisfied();
             });
         });

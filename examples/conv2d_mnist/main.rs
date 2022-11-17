@@ -31,6 +31,8 @@ use std::time::Instant;
 
 mod params;
 
+const K: usize = 17;
+
 #[derive(Clone)]
 struct Config<
     F: FieldExt + TensorType,
@@ -140,28 +142,29 @@ where
         let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
-        let advices = Tensor::from((0..4).map(|_| {
-            let col = cs.advice_column();
-            cs.enable_equality(col);
-            col
-        }));
+        let input = VarTensor::new_advice(
+            cs,
+            K,
+            IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH,
+            vec![IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
+            true,
+        );
+        let kernel = VarTensor::new_advice(
+            cs,
+            K,
+            OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH,
+            vec![OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
+            true,
+        );
 
-        let input = VarTensor::Advice {
-            inner: advices[0],
-            dims: vec![IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
-        };
-        let kernel = VarTensor::Advice {
-            inner: advices[1],
-            dims: vec![OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
-        };
-        let bias = VarTensor::Advice {
-            inner: advices[2],
-            dims: vec![OUT_CHANNELS],
-        };
-        let output = VarTensor::Advice {
-            inner: advices[3],
-            dims: vec![OUT_CHANNELS, output_height, output_width],
-        };
+        let bias = VarTensor::new_advice(cs, K, OUT_CHANNELS, vec![OUT_CHANNELS], true);
+        let output = VarTensor::new_advice(
+            cs,
+            K,
+            OUT_CHANNELS * output_height * output_width,
+            vec![OUT_CHANNELS, output_height, output_width],
+            true,
+        );
 
         // tells the config layer to add a conv op to a circuit gate
         let conv_node = FusedNode {
@@ -173,16 +176,18 @@ where
             ],
         };
 
-        let l0 = FusedConfig::configure(cs, &[input, kernel, bias], &output, &[conv_node]);
-
-        let l1: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
+        let l0 = FusedConfig::configure(
             cs,
-            VarTensor::Advice {
-                inner: advices[0],
-                dims: vec![LEN],
-            },
-            Some(&[BITS, 32]),
+            &[input.clone(), kernel.clone(), bias.clone()],
+            &output,
+            &[conv_node],
         );
+
+        let input = input.reshape(&[LEN]);
+        let output = output.reshape(&[LEN]);
+
+        let l1: EltwiseConfig<F, ReLu<F>> =
+            EltwiseConfig::configure(cs, &input, &output, LEN, Some(&[BITS, 32]));
 
         // tells the config layer to add an affine op to the circuit gate
         let affine_node = FusedNode {
@@ -194,30 +199,11 @@ where
             ],
         };
 
-        let input = VarTensor::Advice {
-            inner: advices[0],
-            dims: vec![LEN],
-        };
-        let kernel = VarTensor::Advice {
-            inner: advices[1],
-            dims: vec![CLASSES, LEN],
-        };
-        let bias = VarTensor::Advice {
-            inner: advices[2],
-            dims: vec![CLASSES],
-        };
-        let output = VarTensor::Advice {
-            inner: advices[3],
-            dims: vec![CLASSES],
-        };
+        let kernel = kernel.reshape(&[CLASSES, LEN]);
+        let bias = bias.reshape(&[CLASSES]);
+        let output = output.reshape(&[CLASSES]);
 
-        let l2 = FusedConfig::configure(
-            cs,
-            &[input, kernel, bias],
-            // output
-            &output,
-            &[affine_node],
-        );
+        let l2 = FusedConfig::configure(cs, &[input, kernel, bias], &output, &[affine_node]);
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
 
@@ -265,8 +251,6 @@ where
 }
 
 pub fn runconv() {
-    const K: u32 = 17;
-
     const KERNEL_HEIGHT: usize = 5;
     const KERNEL_WIDTH: usize = 5;
     const OUT_CHANNELS: usize = 4;
@@ -405,7 +389,7 @@ pub fn runconv() {
     let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner]];
 
     //	Real proof
-    let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(K);
+    let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(K as u32);
     let empty_circuit = circuit.without_witnesses();
     // Initialize the proving key
     let now = Instant::now();

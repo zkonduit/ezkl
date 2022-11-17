@@ -11,6 +11,7 @@ use halo2_proofs::{
 use halo2curves::pasta::Fp as F;
 use std::marker::PhantomData;
 
+const K: usize = 15;
 // A columnar ReLu MLP
 #[derive(Clone)]
 struct MyConfig<F: FieldExt + TensorType> {
@@ -49,29 +50,10 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let advices = Tensor::from((0..4).map(|_| {
-            let col = cs.advice_column();
-            cs.enable_equality(col);
-            col
-        }));
-
-        let kernel = VarTensor::Advice {
-            inner: advices[0],
-            dims: vec![LEN, LEN],
-        };
-        let bias = VarTensor::Advice {
-            inner: advices[1],
-            dims: vec![LEN],
-        };
-        let input = VarTensor::Advice {
-            inner: advices[2],
-            dims: vec![LEN],
-        };
-        let output = VarTensor::Advice {
-            inner: advices[3],
-            dims: vec![LEN],
-        };
-
+        let input = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+        let kernel = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN * LEN], true);
+        let bias = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+        let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
         // tells the config layer to add an affine op to the circuit gate
         let affine_node = FusedNode {
             op: FusedOp::Affine,
@@ -89,27 +71,20 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
             &[affine_node.clone()],
         );
 
-        let l2 = FusedConfig::<F>::configure(cs, &[input, kernel, bias], &output, &[affine_node]);
+        let l2 = FusedConfig::<F>::configure(
+            cs,
+            &[input.clone(), kernel.clone(), bias.clone()],
+            &output,
+            &[affine_node],
+        );
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
-        let [l1, l3]: [EltwiseConfig<F, ReLu<F>>; 2] = EltwiseConfig::configure_multiple(
-            cs,
-            VarTensor::Advice {
-                inner: advices[0],
-                dims: vec![LEN],
-            },
-            Some(&[BITS, 1]),
-        );
+        let [l1, l3]: [EltwiseConfig<F, ReLu<F>>; 2] =
+            EltwiseConfig::configure_multiple(cs, &input, &output, LEN, Some(&[BITS, 1]));
 
         // sets up a new Divide by table
-        let l4: EltwiseConfig<F, DivideBy<F>> = EltwiseConfig::configure(
-            cs,
-            VarTensor::Advice {
-                inner: advices[0],
-                dims: vec![LEN],
-            },
-            Some(&[BITS, 128]),
-        );
+        let l4: EltwiseConfig<F, DivideBy<F>> =
+            EltwiseConfig::configure(cs, &input, &output, LEN, Some(&[BITS, 128]));
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -159,8 +134,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
 }
 
 pub fn runmlp() {
-    let k = 15; //2^k rows
-                // parameters
+    // parameters
     let l0_kernel: Tensor<Value<F>> = Tensor::<i32>::new(
         Some(&[10, 0, 0, -1, 0, 10, 1, 0, 0, 1, 10, 0, 1, 0, 0, 10]),
         &[4, 4],
@@ -204,7 +178,7 @@ pub fn runmlp() {
     println!("public input {:?}", public_input);
 
     let prover = MockProver::run(
-        k,
+        K as u32,
         &circuit,
         vec![public_input.iter().map(|x| i32_to_felt::<F>(*x)).collect()],
     )

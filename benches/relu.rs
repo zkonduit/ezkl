@@ -13,6 +13,7 @@ use std::marker::PhantomData;
 
 const BITS: usize = 8;
 static mut LEN: usize = 4;
+const K: usize = 15;
 
 #[derive(Clone)]
 struct NLCircuit<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
@@ -32,11 +33,11 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         unsafe {
-            let advices = VarTensor::Advice {
-                inner: cs.advice_column(),
-                dims: [LEN].to_vec(),
-            };
-            Self::Config::configure(cs, advices, Some(&[BITS, 128]))
+            let advices = (0..2)
+                .map(|_| VarTensor::new_advice(cs, K, LEN, vec![LEN], true))
+                .collect::<Vec<_>>();
+
+            Self::Config::configure(cs, &advices[0], &advices[1], LEN, Some(&[BITS, 128]))
         }
     }
 
@@ -53,7 +54,6 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
 
 fn runrelu(c: &mut Criterion) {
     let mut group = c.benchmark_group("relu");
-    let k = 16;
 
     let mut rng = rand::thread_rng();
 
@@ -79,7 +79,7 @@ fn runrelu(c: &mut Criterion) {
         group.throughput(Throughput::Elements(len as u64));
         group.bench_with_input(BenchmarkId::from_parameter(len), &len, |b, &_| {
             b.iter(|| {
-                let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+                let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
                 prover.assert_satisfied();
             });
         });

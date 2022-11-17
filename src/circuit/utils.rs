@@ -10,8 +10,8 @@ pub fn value_muxer<F: FieldExt + TensorType>(
     input: &ValTensor<F>,
 ) -> Tensor<Value<F>> {
     match variable {
-        VarTensor::Advice { inner: _, dims: _ } => assigned.clone(),
-        VarTensor::Fixed { inner: _, dims: _ } => match input {
+        VarTensor::Advice { .. } => assigned.clone(),
+        VarTensor::Fixed { .. } => match input {
             ValTensor::Value {
                 inner: val,
                 dims: _,
