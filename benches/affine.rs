@@ -13,7 +13,7 @@ use rand::rngs::OsRng;
 use std::marker::PhantomData;
 
 static mut LEN: usize = 4;
-const K: usize = 8;
+const K: usize = 16;
 
 #[derive(Clone)]
 struct MyCircuit<F: FieldExt + TensorType> {
@@ -69,7 +69,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
 
 fn runaffine(c: &mut Criterion) {
     let mut group = c.benchmark_group("affine");
-    for &len in [4, 8, 16, 32, 64, 128].iter() {
+    for &len in [4, 8, 16, 32, 64].iter() {
         unsafe {
             LEN = len;
         };

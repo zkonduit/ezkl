@@ -51,7 +51,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let input = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-        let kernel = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN * LEN], true);
+        let kernel = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true);
         let bias = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
         let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
         // tells the config layer to add an affine op to the circuit gate
@@ -80,11 +80,11 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
         let [l1, l3]: [EltwiseConfig<F, ReLu<F>>; 2] =
-            EltwiseConfig::configure_multiple(cs, &input, &output, LEN, Some(&[BITS, 1]));
+            EltwiseConfig::configure_multiple(cs, &input, &output, Some(&[BITS, 1]));
 
         // sets up a new Divide by table
         let l4: EltwiseConfig<F, DivideBy<F>> =
-            EltwiseConfig::configure(cs, &input, &output, LEN, Some(&[BITS, 128]));
+            EltwiseConfig::configure(cs, &input, &output, Some(&[BITS, 128]));
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);

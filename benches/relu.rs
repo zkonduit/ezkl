@@ -13,7 +13,7 @@ use std::marker::PhantomData;
 
 const BITS: usize = 8;
 static mut LEN: usize = 4;
-const K: usize = 15;
+const K: usize = 10;
 
 #[derive(Clone)]
 struct NLCircuit<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
@@ -37,7 +37,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
                 .map(|_| VarTensor::new_advice(cs, K, LEN, vec![LEN], true))
                 .collect::<Vec<_>>();
 
-            Self::Config::configure(cs, &advices[0], &advices[1], LEN, Some(&[BITS, 128]))
+            Self::Config::configure(cs, &advices[0], &advices[1], Some(&[BITS, 128]))
         }
     }
 
@@ -57,7 +57,7 @@ fn runrelu(c: &mut Criterion) {
 
     let mut rng = rand::thread_rng();
 
-    for &len in [4, 8, 16, 32, 64, 128].iter() {
+    for &len in [128].iter() {
         unsafe {
             LEN = len;
         };

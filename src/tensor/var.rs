@@ -32,9 +32,8 @@ impl VarTensor {
         dims: Vec<usize>,
         equality: bool,
     ) -> Self {
-        let base: usize = 2;
-        // TODO: figure out the actual number of rows T used for the ZK component of PLONK
-        let max_rows = base.pow((k - 2) as u32);
+        let base = 2u32;
+        let max_rows = base.pow(k as u32) as usize - cs.blinding_factors() - 1;
         let modulo = (capacity / max_rows) + 1;
         let mut advices = vec![];
         for _ in 0..modulo {
@@ -174,7 +173,7 @@ impl VarTensor {
                     match region.assign_advice(|| "k", advices[x], y, || k.into()) {
                         Ok(a) => a,
                         Err(e) => {
-                            panic!("failed to assign ValTensor to VarTensor {:?}", e);
+                            abort!("failed to assign ValTensor to VarTensor {:?}", e);
                         }
                     }
                 }
