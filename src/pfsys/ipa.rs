@@ -2,7 +2,7 @@ use super::Proof;
 use crate::abort;
 use crate::commands::Cli;
 use crate::fieldutils::i32_to_felt;
-use crate::onnx::ModelCircuit;
+use crate::graph::ModelCircuit;
 use crate::tensor::Tensor;
 use clap::Parser;
 use halo2_proofs::{

@@ -1,5 +1,6 @@
 use super::node::*;
 use super::utilities::scale_to_multiplier;
+use crate::circuit::chip::Chip;
 use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
 use crate::circuit::fused::*;
 use crate::circuit::range::*;
@@ -167,7 +168,7 @@ impl Model {
     pub fn configure<F: FieldExt + TensorType>(
         &self,
         meta: &mut ConstraintSystem<F>,
-        advices: Vec<VarTensor>,
+        chip: &mut Chip,
     ) -> Result<ModelConfig<F>> {
         info!("configuring model");
         let mut results = BTreeMap::new();
@@ -183,7 +184,7 @@ impl Model {
                     results.insert(
                         **i,
                         NodeConfig {
-                            config: self.configure_table(n, meta, advices.clone()),
+                            config: self.configure_table(n, meta, chip),
                             onnx_idx: vec![**i],
                         },
                     );
@@ -200,7 +201,7 @@ impl Model {
                 results.insert(
                     **fused_ops.keys().max().unwrap(),
                     NodeConfig {
-                        config: self.fuse_ops(&fused_ops, meta, advices.clone()),
+                        config: self.fuse_ops(&fused_ops, meta, chip),
                         onnx_idx: fused_ops.keys().map(|k| **k).sorted().collect_vec(),
                     },
                 );
@@ -210,14 +211,14 @@ impl Model {
         Ok(ModelConfig {
             configs: results,
             model: self.clone(),
-            public_outputs: self.range_check_outputs(meta, advices),
+            public_outputs: self.range_check_outputs(meta, chip),
         })
     }
 
     fn range_check_outputs<F: FieldExt + TensorType>(
         &self,
         meta: &mut ConstraintSystem<F>,
-        advices: Vec<VarTensor>,
+        chip: &mut Chip,
     ) -> Vec<RangeCheckConfig<F>> {
         let mut configs = vec![];
         let output_nodes = self.model.outputs.clone();
@@ -228,20 +229,10 @@ impl Model {
 
         info!("output_shapes {:?}", output_shapes);
 
-        let public_outputs = self
-            .model
-            .outputs
-            .iter()
-            .map(|_| {
-                let l = meta.instance_column();
-                meta.enable_equality(l);
-                l
-            })
-            .collect_vec();
-        for (i, instance) in public_outputs.iter().enumerate() {
+        for (i, instance) in chip.instances.iter().enumerate() {
             let s = output_shapes[i].clone();
-            let input = advices[0].reshape(&s);
-            let output = advices[1].reshape(&s);
+            let input = chip.advices[0].reshape(&s);
+            let output = chip.advices[1].reshape(&s);
 
             configs.push(RangeCheckConfig::configure(
                 meta,
@@ -266,7 +257,7 @@ impl Model {
         &self,
         nodes: &BTreeMap<&usize, &Node>,
         meta: &mut ConstraintSystem<F>,
-        advices: Vec<VarTensor>,
+        chip: &mut Chip,
     ) -> NodeConfigTypes<F> {
         let input_nodes: BTreeMap<(&usize, &FusedOp), Vec<Node>> = nodes
             .iter()
@@ -300,7 +291,7 @@ impl Model {
                     .filter(|i| !nodes.contains_key(&i.idx) && seen.insert(i.idx))
                     .map(|f| {
                         let s = f.out_dims.clone();
-                        let a = (f.idx, advices[start].reshape(&s));
+                        let a = (f.idx, chip.advices[start].reshape(&s));
                         start += 1;
                         a
                     })
@@ -311,7 +302,7 @@ impl Model {
         let output_shape = self.nodes.filter(**nodes.keys().max().unwrap()).out_dims;
 
         // output node
-        let output = &advices[start].reshape(&output_shape);
+        let output = &chip.advices[start].reshape(&output_shape);
 
         let mut inter_counter = 0;
         let fused_nodes: Vec<FusedNode> = input_nodes
@@ -361,11 +352,11 @@ impl Model {
         &self,
         node: &Node,
         meta: &mut ConstraintSystem<F>,
-        advices: Vec<VarTensor>,
+        chip: &mut Chip,
     ) -> NodeConfigTypes<F> {
         let input_len = node.in_dims.iter().product();
-        let input = &advices[0].reshape(&[input_len]);
-        let output = &advices[1].reshape(&[input_len]);
+        let input = &chip.advices[0].reshape(&[input_len]);
+        let output = &chip.advices[1].reshape(&[input_len]);
         match &node.opkind {
             OpKind::Div(s) => {
                 let conf: EltwiseConfig<F, DivideBy<F>> =
@@ -594,6 +585,11 @@ impl Model {
 
     pub fn output_outlets(&self) -> Result<Vec<OutletId>> {
         Ok(self.model.output_outlets()?.to_vec())
+    }
+
+    pub fn num_outputs(&self) -> usize {
+        let output_nodes = self.model.outputs.iter();
+        output_nodes.len()
     }
 
     pub fn get_output_scales(&self) -> Vec<i32> {
