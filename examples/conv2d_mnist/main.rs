@@ -1,5 +1,5 @@
-use ezkl::circuit::fused::*;
 use ezkl::circuit::eltwise::{EltwiseConfig, ReLu};
+use ezkl::circuit::fused::*;
 use ezkl::fieldutils;
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::tensor::*;
@@ -31,6 +31,8 @@ use std::cmp::max;
 use std::time::Instant;
 
 mod params;
+
+const K: usize = 17;
 
 #[derive(Clone)]
 struct Config<
@@ -141,42 +143,32 @@ where
         let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
         let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
-        let num_advices = max(LEN, CLASSES + 3);
-
-        let advices = VarTensor::from(Tensor::from((0..num_advices).map(|_| {
-            let col = cs.advice_column();
-            cs.enable_equality(col);
-            col
-        })));
-
-        let input = advices.get_slice(
-            &[0..IMAGE_HEIGHT * IN_CHANNELS],
-            &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
+        let input = VarTensor::new_advice(
+            cs,
+            K,
+            max(IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH, LEN),
+            vec![IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
+            true,
+        );
+        let kernel = VarTensor::new_advice(
+            cs,
+            K,
+            max(
+                OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH,
+                CLASSES * LEN,
+            ),
+            vec![OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
+            true,
         );
 
-        let kernel = advices.get_slice(
-            &[IMAGE_HEIGHT * IN_CHANNELS
-                ..IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT],
-            &[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
-        );
-
-        let bias = advices.get_slice(
-            &[
-                IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
-                    ..IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT + 1,
-            ],
-            &[OUT_CHANNELS],
-        );
-
-        let output = advices.get_slice(
-            &[
-                IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT + 1
-                    ..IMAGE_HEIGHT * IN_CHANNELS
-                        + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
-                        + 1
-                        + output_height * OUT_CHANNELS,
-            ],
-            &[OUT_CHANNELS, output_height, output_width],
+        let bias =
+            VarTensor::new_advice(cs, K, max(OUT_CHANNELS, CLASSES), vec![OUT_CHANNELS], true);
+        let output = VarTensor::new_advice(
+            cs,
+            K,
+            max(OUT_CHANNELS * output_height * output_width, LEN),
+            vec![OUT_CHANNELS, output_height, output_width],
+            true,
         );
 
         // tells the config layer to add a conv op to a circuit gate
@@ -189,13 +181,18 @@ where
             ],
         };
 
-        let l0 = FusedConfig::configure(cs, &[input, kernel, bias], &output, &[conv_node]);
-
-        let l1: EltwiseConfig<F, ReLu<F>> = EltwiseConfig::configure(
+        let l0 = FusedConfig::configure(
             cs,
-            &[advices.get_slice(&[0..LEN], &[LEN])],
-            Some(&[BITS, 32]),
+            &[input.clone(), kernel.clone(), bias.clone()],
+            &output,
+            &[conv_node],
         );
+
+        let input = input.reshape(&[LEN]);
+        let output = output.reshape(&[LEN]);
+
+        let l1: EltwiseConfig<F, ReLu<F>> =
+            EltwiseConfig::configure(cs, &input, &output, Some(&[BITS, 32]));
 
         // tells the config layer to add an affine op to the circuit gate
         let affine_node = FusedNode {
@@ -207,20 +204,11 @@ where
             ],
         };
 
-        let l2 = FusedConfig::configure(
-            cs,
-            &[
-                // input
-                advices.get_slice(&[0..1], &[LEN]),
-                // weights
-                advices.get_slice(&[1..CLASSES + 1], &[CLASSES, LEN]),
-                // bias
-                advices.get_slice(&[CLASSES + 1..CLASSES + 2], &[CLASSES]),
-            ],
-            // output
-            &advices.get_slice(&[CLASSES + 2..CLASSES + 3], &[CLASSES]),
-            &[affine_node],
-        );
+        let kernel = kernel.reshape(&[CLASSES, LEN]);
+        let bias = bias.reshape(&[CLASSES]);
+        let output = output.reshape(&[CLASSES]);
+
+        let l2 = FusedConfig::configure(cs, &[input, kernel, bias], &output, &[affine_node]);
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
 
@@ -245,7 +233,7 @@ where
                 self.l0_params[1].clone(),
             ],
         );
-        let mut x = config.l1.layout(&mut layouter, &[x]);
+        let mut x = config.l1.layout(&mut layouter, x);
         x.flatten();
         let l2out = config.l2.layout(
             &mut layouter,
@@ -253,11 +241,13 @@ where
         );
 
         match l2out {
-            ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|i, x| {
-                layouter
-                    .constrain_instance(x.cell(), config.public_output, i)
-                    .unwrap()
-            }),
+            ValTensor::PrevAssigned { inner: v, dims: _ } => v
+                .enum_map(|i, x| {
+                    layouter
+                        .constrain_instance(x.cell(), config.public_output, i)
+                        .unwrap()
+                })
+                .unwrap(),
             _ => panic!("Should be assigned"),
         };
 
@@ -266,8 +256,6 @@ where
 }
 
 pub fn runconv() {
-    const K: u32 = 17;
-
     const KERNEL_HEIGHT: usize = 5;
     const KERNEL_WIDTH: usize = 5;
     const OUT_CHANNELS: usize = 4;
@@ -406,7 +394,7 @@ pub fn runconv() {
     let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner]];
 
     //	Real proof
-    let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(K);
+    let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(K as u32);
     let empty_circuit = circuit.without_witnesses();
     // Initialize the proving key
     let now = Instant::now();

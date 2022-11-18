@@ -19,6 +19,8 @@ static mut IMAGE_WIDTH: usize = 2;
 static mut IN_CHANNELS: usize = 2;
 const PADDING: usize = 2;
 
+const K: usize = 8;
+
 #[derive(Clone, Debug)]
 struct MyCircuit<F: FieldExt + TensorType>
 where
@@ -40,49 +42,33 @@ where
         self.clone()
     }
 
-    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+    fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         unsafe {
             let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
             let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
 
-            let num_advices = output_height * OUT_CHANNELS
-                + IMAGE_HEIGHT * IN_CHANNELS
-                + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
-                + 1;
-
-            let advices =
-                VarTensor::from(Tensor::from((0..num_advices).map(|_| meta.advice_column())));
-
-            let input = advices.get_slice(
-                &[0..IMAGE_HEIGHT * IN_CHANNELS],
-                &[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
+            let input = VarTensor::new_advice(
+                cs,
+                K,
+                IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH,
+                vec![IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
+                true,
+            );
+            let kernel = VarTensor::new_advice(
+                cs,
+                K,
+                OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH,
+                vec![OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
+                true,
             );
 
-            let kernel = advices.get_slice(
-                &[IMAGE_HEIGHT * IN_CHANNELS
-                    ..IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT],
-                &[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
-            );
-
-            let bias = advices.get_slice(
-                &[
-                    IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
-                        ..IMAGE_HEIGHT * IN_CHANNELS
-                            + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
-                            + 1,
-                ],
-                &[OUT_CHANNELS],
-            );
-
-            let output = advices.get_slice(
-                &[
-                    IMAGE_HEIGHT * IN_CHANNELS + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT + 1
-                        ..IMAGE_HEIGHT * IN_CHANNELS
-                            + OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT
-                            + 1
-                            + output_height * OUT_CHANNELS,
-                ],
-                &[OUT_CHANNELS, output_height, output_width],
+            let bias = VarTensor::new_advice(cs, K, OUT_CHANNELS, vec![OUT_CHANNELS], true);
+            let output = VarTensor::new_advice(
+                cs,
+                K,
+                OUT_CHANNELS * output_height * output_width,
+                vec![OUT_CHANNELS, output_height, output_width],
+                true,
             );
 
             // tells the config layer to add a conv op to a circuit gate
@@ -95,7 +81,7 @@ where
                 ],
             };
 
-            Self::Config::configure(meta, &[input, kernel, bias], &output, &[conv_node])
+            Self::Config::configure(cs, &[input, kernel, bias], &output, &[conv_node])
         }
     }
 
@@ -114,8 +100,6 @@ where
 
 fn runcnvrl(c: &mut Criterion) {
     let mut group = c.benchmark_group("cnvrl");
-
-    let k = 8;
 
     for size in [1, 2, 4, 8, 16, 32].iter() {
         unsafe {
@@ -150,7 +134,7 @@ fn runcnvrl(c: &mut Criterion) {
             group.throughput(Throughput::Elements((IMAGE_HEIGHT * IMAGE_WIDTH) as u64));
             group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &_size| {
                 b.iter(|| {
-                    let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+                    let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
                     prover.assert_satisfied();
                 });
             });

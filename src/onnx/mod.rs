@@ -6,9 +6,9 @@ use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error},
 };
+use itertools::Itertools;
 use std::marker::PhantomData;
 pub mod utilities;
-use std::cmp::max;
 pub use utilities::*;
 pub mod model;
 pub mod node;
@@ -30,20 +30,27 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
         self.clone()
     }
 
-    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+    fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let onnx_model = Model::from_arg();
-        let num_advices = max(
-            onnx_model.max_node_advices(),
-            onnx_model.max_advices_width().unwrap(),
-        );
-        info!("number of advices used: {:?}", num_advices);
-        let advices = VarTensor::from(Tensor::from((0..num_advices + 3).map(|_| {
-            let col = meta.advice_column();
-            meta.enable_equality(col);
-            col
-        })));
+        let num_variables = onnx_model.max_node_vars();
+        let max_node_size = onnx_model.max_node_size();
+        let advices = (0..num_variables)
+            .map(|_| {
+                VarTensor::new_advice(
+                    cs,
+                    onnx_model.logrows as usize,
+                    max_node_size,
+                    vec![max_node_size],
+                    true,
+                )
+            })
+            .collect_vec();
 
-        onnx_model.configure(meta, advices).unwrap()
+        info!(
+            "number of advices used: {:?}",
+            advices.iter().map(|a| a.num_cols()).sum::<usize>()
+        );
+        onnx_model.configure(cs, advices).unwrap()
     }
 
     fn synthesize(

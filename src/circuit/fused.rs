@@ -149,7 +149,9 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
                 }
             };
 
-            let constraints = witnessed_output.enum_map(|i, o| o - expected_output[i].clone());
+            let constraints = witnessed_output
+                .enum_map(|i, o| o - expected_output[i].clone())
+                .unwrap();
 
             Constraints::with_selector(selector, constraints)
         });

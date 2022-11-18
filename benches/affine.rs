@@ -13,6 +13,7 @@ use rand::rngs::OsRng;
 use std::marker::PhantomData;
 
 static mut LEN: usize = 4;
+const K: usize = 16;
 
 #[derive(Clone)]
 struct MyCircuit<F: FieldExt + TensorType> {
@@ -31,17 +32,11 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let len = unsafe { LEN };
-        let advices = VarTensor::from(Tensor::from((0..len + 3).map(|_| {
-            let col = cs.advice_column();
-            cs.enable_equality(col);
-            col
-        })));
 
-        let kernel = advices.get_slice(&[0..len], &[len, len]);
-        let bias = advices.get_slice(&[len + 2..len + 3], &[len]);
-        let input = advices.get_slice(&[len..len + 1], &[len]);
-        let output = advices.get_slice(&[len + 1..len + 2], &[len]);
-
+        let input = VarTensor::new_advice(cs, K, len, vec![len], true);
+        let kernel = VarTensor::new_advice(cs, K, len * len, vec![len, len], true);
+        let bias = VarTensor::new_advice(cs, K, len, vec![len], true);
+        let output = VarTensor::new_advice(cs, K, len, vec![len], true);
         // tells the config layer to add an affine op to a circuit gate
         let affine_node = FusedNode {
             op: FusedOp::Affine,
@@ -52,12 +47,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
             ],
         };
 
-        Self::Config::configure(
-            cs,
-            &[input, kernel, bias],
-            &output,
-            &[affine_node],
-        )
+        Self::Config::configure(cs, &[input, kernel, bias], &output, &[affine_node])
     }
 
     fn synthesize(
@@ -79,13 +69,12 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
 
 fn runaffine(c: &mut Criterion) {
     let mut group = c.benchmark_group("affine");
-    for &len in [4, 8, 16, 32, 64, 128].iter() {
+    for &len in [4, 8, 16, 32, 64].iter() {
         unsafe {
             LEN = len;
         };
 
-        let k = 15; //2^k rows
-                    // parameters
+        // parameters
         let mut l0_kernel =
             Tensor::from((0..len * len).map(|_| Value::known(pallas::Base::random(OsRng))));
         l0_kernel.reshape(&[len, len]);
@@ -103,7 +92,7 @@ fn runaffine(c: &mut Criterion) {
         group.throughput(Throughput::Elements(len as u64));
         group.bench_with_input(BenchmarkId::from_parameter(len), &len, |b, &_| {
             b.iter(|| {
-                let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+                let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
                 prover.assert_satisfied();
             });
         });

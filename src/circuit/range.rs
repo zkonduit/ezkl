@@ -70,8 +70,9 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
                 })
             };
 
-            let constraints =
-                witnessed.enum_map(|i, o| range_check(tol as i32, o - expected[i].clone()));
+            let constraints = witnessed
+                .enum_map(|i, o| range_check(tol as i32, o - expected[i].clone()))
+                .unwrap();
             Constraints::with_selector(q, constraints)
         });
 
@@ -103,24 +104,20 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
 
                 // assigns the instance to the "expected" advice.
                 match self.expected.clone() {
-                    VarTensor::Advice { inner, dims: d } => {
-                        let mut outer_loop = 1;
-                        if d.len() > 1 {
-                            outer_loop = d[0..d.len() - 1].iter().product();
-                        }
-                        let inner_loop = d[d.len() - 1];
-                        for i in 0..outer_loop {
-                            for j in 0..inner_loop {
-                                region
-                                    .assign_advice_from_instance(
-                                        || "pub input anchor",
-                                        self.instance,
-                                        i * inner_loop + j,
-                                        inner[i],
-                                        j,
-                                    )
-                                    .unwrap();
-                            }
+                    VarTensor::Advice { inner, .. } => {
+                        let inner_loop = input.dims().iter().product();
+
+                        for i in 0..inner_loop {
+                            let (x, y) = self.expected.cartesian_coord(i);
+                            region
+                                .assign_advice_from_instance(
+                                    || "pub input anchor",
+                                    self.instance,
+                                    i,
+                                    inner[x],
+                                    y,
+                                )
+                                .unwrap();
                         }
                     }
                     _ => {
@@ -149,6 +146,7 @@ mod tests {
         plonk::{Circuit, ConstraintSystem, Error},
     };
     use halo2curves::pasta::Fp;
+    use itertools::Itertools;
 
     const RANGE: usize = 8; // 3-bit value
 
@@ -168,13 +166,11 @@ mod tests {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let advices = VarTensor::from(Tensor::from((0..2).map(|_| {
-                let col = cs.advice_column();
-                cs.enable_equality(col);
-                col
-            })));
-            let input = advices.get_slice(&[0..1], &[1]);
-            let expected = advices.get_slice(&[1..2], &[1]);
+            let advices = (0..2)
+                .map(|_| VarTensor::new_advice(cs, 4, 1, vec![1], true))
+                .collect_vec();
+            let input = &advices[0];
+            let expected = &advices[1];
             let instance = {
                 let l = cs.instance_column();
                 cs.enable_equality(l);

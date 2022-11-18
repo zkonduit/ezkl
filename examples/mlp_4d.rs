@@ -1,5 +1,5 @@
-use ezkl::circuit::fused::*;
 use ezkl::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu};
+use ezkl::circuit::fused::*;
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
@@ -11,6 +11,7 @@ use halo2_proofs::{
 use halo2curves::pasta::Fp as F;
 use std::marker::PhantomData;
 
+const K: usize = 15;
 // A columnar ReLu MLP
 #[derive(Clone)]
 struct MyConfig<F: FieldExt + TensorType> {
@@ -49,17 +50,10 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let advices = VarTensor::from(Tensor::from((0..LEN + 3).map(|_| {
-            let col = cs.advice_column();
-            cs.enable_equality(col);
-            col
-        })));
-
-        let kernel = advices.get_slice(&[0..LEN], &[LEN, LEN]);
-        let bias = advices.get_slice(&[LEN + 2..LEN + 3], &[LEN]);
-        let input = advices.get_slice(&[LEN..LEN + 1], &[LEN]);
-        let output = advices.get_slice(&[LEN + 1..LEN + 2], &[LEN]);
-
+        let input = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+        let kernel = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true);
+        let bias = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+        let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
         // tells the config layer to add an affine op to the circuit gate
         let affine_node = FusedNode {
             op: FusedOp::Affine,
@@ -79,24 +73,18 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
 
         let l2 = FusedConfig::<F>::configure(
             cs,
-            &[input, kernel, bias],
+            &[input.clone(), kernel.clone(), bias.clone()],
             &output,
             &[affine_node],
         );
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
-        let [l1, l3]: [EltwiseConfig<F, ReLu<F>>; 2] = EltwiseConfig::configure_multiple(
-            cs,
-            &[advices.get_slice(&[0..LEN], &[LEN])],
-            Some(&[BITS, 1]),
-        );
+        let [l1, l3]: [EltwiseConfig<F, ReLu<F>>; 2] =
+            EltwiseConfig::configure_multiple(cs, &input, &output, Some(&[BITS, 1]));
 
         // sets up a new Divide by table
-        let l4: EltwiseConfig<F, DivideBy<F>> = EltwiseConfig::configure(
-            cs,
-            &[advices.get_slice(&[0..LEN], &[LEN])],
-            Some(&[BITS, 128]),
-        );
+        let l4: EltwiseConfig<F, DivideBy<F>> =
+            EltwiseConfig::configure(cs, &input, &output, Some(&[BITS, 128]));
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -124,19 +112,21 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                 self.l0_params[1].clone(),
             ],
         );
-        let x = config.l1.layout(&mut layouter, &[x]);
+        let x = config.l1.layout(&mut layouter, x);
         let x = config.l2.layout(
             &mut layouter,
             &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
         );
-        let x = config.l3.layout(&mut layouter, &[x]);
-        let x = config.l4.layout(&mut layouter, &[x]);
+        let x = config.l3.layout(&mut layouter, x);
+        let x = config.l4.layout(&mut layouter, x);
         match x {
-            ValTensor::PrevAssigned { inner: v, dims: _ } => v.enum_map(|i, x| {
-                layouter
-                    .constrain_instance(x.cell(), config.public_output, i)
-                    .unwrap()
-            }),
+            ValTensor::PrevAssigned { inner: v, dims: _ } => v
+                .enum_map(|i, x| {
+                    layouter
+                        .constrain_instance(x.cell(), config.public_output, i)
+                        .unwrap()
+                })
+                .unwrap(),
             _ => panic!("Should be assigned"),
         };
         Ok(())
@@ -144,8 +134,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
 }
 
 pub fn runmlp() {
-    let k = 15; //2^k rows
-                // parameters
+    // parameters
     let l0_kernel: Tensor<Value<F>> = Tensor::<i32>::new(
         Some(&[10, 0, 0, -1, 0, 10, 1, 0, 0, 1, 10, 0, 1, 0, 0, 10]),
         &[4, 4],
@@ -189,12 +178,9 @@ pub fn runmlp() {
     println!("public input {:?}", public_input);
 
     let prover = MockProver::run(
-        k,
+        K as u32,
         &circuit,
-        vec![public_input
-            .iter()
-            .map(|x| i32_to_felt::<F>(*x))
-            .collect()],
+        vec![public_input.iter().map(|x| i32_to_felt::<F>(*x)).collect()],
     )
     .unwrap();
     prover.assert_satisfied();

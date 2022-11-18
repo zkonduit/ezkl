@@ -11,7 +11,6 @@ use anyhow::Result;
 use halo2_proofs::arithmetic::FieldExt;
 use itertools::Itertools;
 use log::{error, info, trace, warn};
-use std::cmp::max;
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fmt;
 
@@ -222,7 +221,7 @@ fn display_tensorf32(o: &Option<Tensor<f32>>) -> String {
 pub struct Node {
     pub opkind: OpKind,
     pub output_max: f32,
-    pub min_cols: usize,
+    pub num_var: usize,
     pub in_scale: i32,
     pub out_scale: i32,
     #[tabled(display_with = "display_tensor")]
@@ -274,6 +273,7 @@ impl Node {
             opkind: OpKind::new(node.op().name().as_ref()), // parses the op name
             inputs: node.inputs.clone(),
             in_scale: scale,
+            num_var: 2,
             idx,
             ..Default::default()
         };
@@ -292,8 +292,6 @@ impl Node {
                 }
 
                 mn.output_max = scale_to_multiplier(mn.out_scale);
-
-                mn.min_cols = max(1, mn.in_dims.iter().product());
             }
 
             OpKind::ReLU(_) => {
@@ -310,7 +308,6 @@ impl Node {
                     mn.opkind = OpKind::ReLU(mult as usize); // now the input will be scaled down to match
                     mn.output_max = input_node.output_max / mult;
                 }
-                mn.min_cols = max(1, mn.in_dims.iter().product());
             }
             OpKind::Div(_) => {
                 let input_node = &inputs[0];
@@ -337,16 +334,12 @@ impl Node {
                     mn.opkind = OpKind::Div(div as usize); // now the input will be scaled down to match
                     mn.output_max = input_node.output_max / (div);
                 }
-                mn.min_cols = max(1, mn.in_dims.iter().product());
             }
             OpKind::Fused(ref s) => {
                 let input_node = &inputs[0];
                 mn.in_dims = input_node.out_dims.clone();
                 mn.out_dims = input_node.out_dims.clone();
-                mn.min_cols = inputs
-                    .iter()
-                    .map(|input| input.out_dims.clone().iter().product::<usize>() as f32)
-                    .sum::<f32>() as usize;
+                mn.num_var = 4;
 
                 inputs
                     .iter()
@@ -727,11 +720,6 @@ impl Node {
                         mn.out_dims = new_dims;
                     }
                 }
-                // output size
-                mn.min_cols += mn.out_dims[0..mn.out_dims.len() - 1]
-                    .iter()
-                    .product::<usize>()
-                    + 1;
             }
             OpKind::Const => {
                 let op = Box::new(node.op());
