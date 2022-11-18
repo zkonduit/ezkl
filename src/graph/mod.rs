@@ -6,13 +6,11 @@ use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error},
 };
-use itertools::Itertools;
 use std::marker::PhantomData;
 pub mod utilities;
 pub use utilities::*;
 pub mod model;
 pub mod node;
-use crate::circuit::chip::Chip;
 use log::{info, trace};
 pub use model::*;
 pub use node::*;
@@ -37,7 +35,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
         let advice_cap = model.max_node_size();
         // for now the number of instances corresponds to the number of graph / model outputs
         let num_instances: usize = model.num_outputs();
-        let mut chip = Chip::new(
+        let mut vars = ModelVars::new(
             cs,
             model.logrows as usize,
             (num_advice, advice_cap),
@@ -46,9 +44,9 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
         );
         info!(
             "number of advices used: {:?}",
-            chip.advices.iter().map(|a| a.num_cols()).sum::<usize>()
+            vars.advices.iter().map(|a| a.num_cols()).sum::<usize>()
         );
-        model.configure(cs, &mut chip).unwrap()
+        model.configure(cs, &mut vars).unwrap()
     }
 
     fn synthesize(
