@@ -1,12 +1,11 @@
 use crate::tensor::TensorType;
-use crate::tensor::{Tensor, ValTensor, VarTensor};
+use crate::tensor::{Tensor, ValTensor};
 use anyhow::Result;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error},
 };
-use itertools::Itertools;
 use std::marker::PhantomData;
 pub mod utilities;
 pub use utilities::*;
@@ -31,26 +30,23 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
     }
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let onnx_model = Model::from_arg();
-        let num_variables = onnx_model.max_node_vars();
-        let max_node_size = onnx_model.max_node_size();
-        let advices = (0..num_variables)
-            .map(|_| {
-                VarTensor::new_advice(
-                    cs,
-                    onnx_model.logrows as usize,
-                    max_node_size,
-                    vec![max_node_size],
-                    true,
-                )
-            })
-            .collect_vec();
-
+        let model = Model::from_arg();
+        let num_advice = model.max_node_vars();
+        let advice_cap = model.max_node_size();
+        // for now the number of instances corresponds to the number of graph / model outputs
+        let num_instances: usize = model.num_outputs();
+        let mut vars = ModelVars::new(
+            cs,
+            model.logrows as usize,
+            (num_advice, advice_cap),
+            (0, 0),
+            num_instances,
+        );
         info!(
             "number of advices used: {:?}",
-            advices.iter().map(|a| a.num_cols()).sum::<usize>()
+            vars.advices.iter().map(|a| a.num_cols()).sum::<usize>()
         );
-        onnx_model.configure(cs, advices).unwrap()
+        model.configure(cs, &mut vars).unwrap()
     }
 
     fn synthesize(

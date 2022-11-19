@@ -2,7 +2,7 @@ use clap::Parser;
 use ezkl::abort;
 use ezkl::commands::{Cli, Commands, ProofSystem};
 use ezkl::fieldutils::i32_to_felt;
-use ezkl::onnx::Model;
+use ezkl::graph::Model;
 use ezkl::pfsys::ipa::{create_ipa_proof, verify_ipa_proof};
 #[cfg(feature = "evm")]
 use ezkl::pfsys::kzg::{

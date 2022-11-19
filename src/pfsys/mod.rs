@@ -4,7 +4,7 @@ pub mod kzg;
 
 use crate::abort;
 use crate::commands::{data_path, Cli};
-use crate::onnx::{utilities::vector_to_quantized, Model, ModelCircuit};
+use crate::graph::{utilities::vector_to_quantized, Model, ModelCircuit};
 use crate::tensor::Tensor;
 use clap::Parser;
 use halo2_proofs::{arithmetic::FieldExt, dev::VerifyFailure};

@@ -9,7 +9,7 @@ pub mod fieldutils;
 /// Methods for loading onnx format models and automatically laying them out in
 /// a Halo2 circuit.
 #[cfg(feature = "onnx")]
-pub mod onnx;
+pub mod graph;
 /// Tools for proofs and verification used by cli
 pub mod pfsys;
 /// An implementation of multi-dimensional tensors.

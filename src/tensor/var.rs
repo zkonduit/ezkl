@@ -21,6 +21,7 @@ pub enum VarTensor {
         inner: Vec<Column<Fixed>>,
         col_size: usize,
         capacity: usize,
+        dims: Vec<usize>,
     },
 }
 
@@ -46,6 +47,33 @@ impl VarTensor {
 
         VarTensor::Advice {
             inner: advices,
+            col_size: max_rows,
+            capacity,
+            dims,
+        }
+    }
+
+    pub fn new_fixed<F: FieldExt>(
+        cs: &mut ConstraintSystem<F>,
+        k: usize,
+        capacity: usize,
+        dims: Vec<usize>,
+        equality: bool,
+    ) -> Self {
+        let base = 2u32;
+        let max_rows = base.pow(k as u32) as usize - cs.blinding_factors() - 1;
+        let modulo = (capacity / max_rows) + 1;
+        let mut fixed = vec![];
+        for _ in 0..modulo {
+            let col = cs.fixed_column();
+            if equality {
+                cs.enable_equality(col);
+            }
+            fixed.push(col);
+        }
+
+        VarTensor::Fixed {
+            inner: fixed,
             col_size: max_rows,
             capacity,
             dims,
