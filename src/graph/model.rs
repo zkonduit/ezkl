@@ -18,6 +18,7 @@ use log::{debug, error, info, trace};
 use std::cmp::max;
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
+use std::rc::Rc;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node as OnnxNode, OutletId};
@@ -143,7 +144,7 @@ impl Model {
 
         om
     }
-    /// Creates an `Model` based on CLI arguments
+    /// Creates a `Model` based on CLI arguments
     pub fn from_arg() -> Self {
         let args = Cli::parse();
 
@@ -218,6 +219,7 @@ impl Model {
     ) -> Result<ModelConfig<F>> {
         info!("configuring model");
         let mut results = BTreeMap::new();
+        let mut tables = BTreeMap::new();
 
         for (_, bucket_nodes) in self.nodes.0.iter() {
             let non_fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
@@ -227,10 +229,11 @@ impl Model {
 
             if !non_fused_ops.is_empty() {
                 for (i, n) in non_fused_ops.iter() {
+                    let config = self.configure_table(n, meta, vars, &mut tables);
                     results.insert(
                         **i,
                         NodeConfig {
-                            config: self.configure_table(n, meta, vars),
+                            config,
                             onnx_idx: vec![**i],
                         },
                     );
@@ -244,10 +247,11 @@ impl Model {
                 .collect();
             // preserves ordering
             if !fused_ops.is_empty() {
+                let config = self.fuse_ops(&fused_ops, meta, vars);
                 results.insert(
                     **fused_ops.keys().max().unwrap(),
                     NodeConfig {
-                        config: self.fuse_ops(&fused_ops, meta, vars),
+                        config,
                         onnx_idx: fused_ops.keys().map(|k| **k).sorted().collect_vec(),
                     },
                 );
@@ -304,7 +308,7 @@ impl Model {
         nodes: &BTreeMap<&usize, &Node>,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars,
-    ) -> NodeConfigTypes<F> {
+    ) -> Rc<NodeConfigTypes<F>> {
         let input_nodes: BTreeMap<(&usize, &FusedOp), Vec<Node>> = nodes
             .iter()
             .map(|(i, e)| {
@@ -376,7 +380,7 @@ impl Model {
 
         let inputs = inputs_to_layer.iter();
 
-        NodeConfigTypes::Fused(
+        Rc::new(NodeConfigTypes::Fused(
             FusedConfig::configure(
                 meta,
                 &inputs.clone().map(|x| x.1.clone()).collect_vec(),
@@ -384,7 +388,7 @@ impl Model {
                 &fused_nodes,
             ),
             inputs.map(|x| x.0).collect_vec(),
-        )
+        ))
     }
 
     /// Configures a lookup table based operation. These correspond to operations that are represented in
@@ -399,56 +403,64 @@ impl Model {
         node: &Node,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars,
-    ) -> NodeConfigTypes<F> {
+        tables: &mut BTreeMap<OpKind, Rc<NodeConfigTypes<F>>>,
+    ) -> Rc<NodeConfigTypes<F>> {
         let input_len = node.in_dims.iter().product();
         let input = &vars.advices[0].reshape(&[input_len]);
         let output = &vars.advices[1].reshape(&[input_len]);
-        match &node.opkind {
-            OpKind::Div(s) => {
-                let conf: EltwiseConfig<F, DivideBy<F>> =
-                    EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
-                let inputs = node.inputs.iter().map(|e| e.node).collect();
-                NodeConfigTypes::Divide(conf, inputs)
+        if tables.contains_key(&node.opkind) {
+            info!("here");
+            tables.get(&node.opkind).unwrap().clone()
+        } else {
+            match &node.opkind {
+                OpKind::Div(s) => {
+                    let conf: EltwiseConfig<F, DivideBy<F>> =
+                        EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
+                    let inputs = node.inputs.iter().map(|e| e.node).collect();
+                    let config = Rc::new(NodeConfigTypes::Divide(conf, inputs));
+                    tables.insert(node.opkind.clone(), config.clone());
+                    config
+                }
+                OpKind::ReLU(s) => {
+                    let conf: EltwiseConfig<F, ReLu<F>> =
+                        EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
+                    let inputs = node.inputs.iter().map(|e| e.node).collect();
+                    let config = Rc::new(NodeConfigTypes::ReLU(conf, inputs));
+                    tables.insert(node.opkind.clone(), config.clone());
+                    config
+                }
+                OpKind::Sigmoid(s) => {
+                    let conf: EltwiseConfig<F, Sigmoid<F>> = EltwiseConfig::configure(
+                        meta,
+                        input,
+                        output,
+                        Some(&[self.bits, *s, scale_to_multiplier(self.scale) as usize]),
+                    );
+                    let inputs = node.inputs.iter().map(|e| e.node).collect();
+                    let config = Rc::new(NodeConfigTypes::Sigmoid(conf, inputs));
+                    tables.insert(node.opkind.clone(), config.clone());
+                    config
+                }
+                OpKind::Const => {
+                    // Typically parameters for one or more layers.
+                    // Currently this is handled in the consuming node(s), but will be moved here.
+                    Rc::new(NodeConfigTypes::Const)
+                }
+                OpKind::Input => {
+                    // This is the input to the model (e.g. the image).
+                    // Currently this is handled in the consuming node(s), but will be moved here.
+                    Rc::new(NodeConfigTypes::Input)
+                }
+                OpKind::Fused(s) => {
+                    error!("For {:?} call fuse_fused_ops instead", s);
+                    panic!();
+                }
+                OpKind::Unknown(c) => {
+                    error!("{:?} not yet implemented", c);
+                    unimplemented!()
+                }
+                _ => panic!(),
             }
-            OpKind::ReLU(s) => {
-                let conf: EltwiseConfig<F, ReLu<F>> =
-                    EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
-                let inputs = node.inputs.iter().map(|e| e.node).collect();
-                NodeConfigTypes::ReLU(conf, inputs)
-            }
-            OpKind::Sigmoid(denominator) => {
-                let conf: EltwiseConfig<F, Sigmoid<F>> = EltwiseConfig::configure(
-                    meta,
-                    input,
-                    output,
-                    Some(&[
-                        self.bits,
-                        *denominator,
-                        scale_to_multiplier(self.scale) as usize,
-                    ]),
-                );
-                let inputs = node.inputs.iter().map(|e| e.node).collect();
-                NodeConfigTypes::Sigmoid(conf, inputs)
-            }
-            OpKind::Const => {
-                // Typically parameters for one or more layers.
-                // Currently this is handled in the consuming node(s), but will be moved here.
-                NodeConfigTypes::Const
-            }
-            OpKind::Input => {
-                // This is the input to the model (e.g. the image).
-                // Currently this is handled in the consuming node(s), but will be moved here.
-                NodeConfigTypes::Input
-            }
-            OpKind::Fused(s) => {
-                error!("For {:?} call fuse_fused_ops instead", s);
-                panic!();
-            }
-            OpKind::Unknown(c) => {
-                error!("{:?} not yet implemented", c);
-                unimplemented!()
-            }
-            _ => panic!(),
         }
     }
 
@@ -521,7 +533,7 @@ impl Model {
     /// Assigns values to a single region, represented as a [NodeConfig].
     /// # Arguments
     ///
-    /// * `config` - [NodeConfig] the signle region we will layout.
+    /// * `config` - [NodeConfig] the single region we will layout.
     /// * `layouter` - Halo2 Layouter.
     /// * `inputs` - `BTreeMap` of values to feed into the NodeConfig, can also include previous intermediate results, i.e the output of other nodes.
     fn layout_config<F: FieldExt + TensorType>(
@@ -531,7 +543,7 @@ impl Model {
         config: &NodeConfig<F>,
     ) -> Result<Option<ValTensor<F>>> {
         // The node kind and the config should be the same.
-        let res = match config.config.clone() {
+        let res = match Rc::as_ref(&config.config).clone() {
             NodeConfigTypes::Fused(mut ac, idx) => {
                 let values: Vec<ValTensor<F>> = idx
                     .iter()
