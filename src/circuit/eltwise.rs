@@ -135,7 +135,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
     }
 
     /// Configures and creates an elementwise operation within a circuit using a supplied lookup table.
-    fn configure_with_table(
+    pub fn configure_with_table(
         cs: &mut ConstraintSystem<F>,
         input: &VarTensor,
         output: &VarTensor,

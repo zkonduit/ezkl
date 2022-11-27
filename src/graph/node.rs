@@ -13,7 +13,6 @@ use itertools::Itertools;
 use log::{error, info, trace, warn};
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fmt;
-
 use tabled::Tabled;
 use tract_onnx;
 use tract_onnx::prelude::{DatumType, InferenceFact, Node as OnnxNode, OutletId};
@@ -34,7 +33,7 @@ use tract_onnx::tract_hir::{
 // Eventually, though, we probably want to keep them and treat them directly (layouting and configuring
 // at each type of node)
 /// Enum of the different kinds of operations `ezkl` can support.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd)]
 pub enum OpKind {
     ReLU(usize),
     Sigmoid(usize),
