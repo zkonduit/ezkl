@@ -1,6 +1,7 @@
 use super::node::*;
 use super::utilities::scale_to_multiplier;
-use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
+use crate::abort;
+use crate::circuit::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu, Sigmoid};
 use crate::circuit::fused::*;
 use crate::circuit::range::*;
 use crate::commands::{model_path, Cli, Commands};
@@ -18,7 +19,7 @@ use log::{debug, error, info, trace};
 use std::cmp::max;
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node as OnnxNode, OutletId};
@@ -32,6 +33,38 @@ pub enum Mode {
     Prove,
     FullProve,
     Verify,
+}
+
+enum TableTypes<F: FieldExt + TensorType> {
+    ReLu(Rc<RefCell<EltwiseTable<F, ReLu<F>>>>),
+    DivideBy(Rc<RefCell<EltwiseTable<F, DivideBy<F>>>>),
+    Sigmoid(Rc<RefCell<EltwiseTable<F, Sigmoid<F>>>>),
+}
+impl<F: FieldExt + TensorType> TableTypes<F> {
+    fn get_relu(&self) -> Rc<RefCell<EltwiseTable<F, ReLu<F>>>> {
+        match self {
+            TableTypes::ReLu(inner) => inner.clone(),
+            _ => {
+                abort!("fetching wrong table type");
+            }
+        }
+    }
+    fn get_div(&self) -> Rc<RefCell<EltwiseTable<F, DivideBy<F>>>> {
+        match self {
+            TableTypes::DivideBy(inner) => inner.clone(),
+            _ => {
+                abort!("fetching wrong table type");
+            }
+        }
+    }
+    fn get_sig(&self) -> Rc<RefCell<EltwiseTable<F, Sigmoid<F>>>> {
+        match self {
+            TableTypes::Sigmoid(inner) => inner.clone(),
+            _ => {
+                abort!("fetching wrong table type");
+            }
+        }
+    }
 }
 
 pub struct ModelVars {
@@ -308,7 +341,7 @@ impl Model {
         nodes: &BTreeMap<&usize, &Node>,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars,
-    ) -> Rc<NodeConfigTypes<F>> {
+    ) -> NodeConfigTypes<F> {
         let input_nodes: BTreeMap<(&usize, &FusedOp), Vec<Node>> = nodes
             .iter()
             .map(|(i, e)| {
@@ -380,7 +413,7 @@ impl Model {
 
         let inputs = inputs_to_layer.iter();
 
-        Rc::new(NodeConfigTypes::Fused(
+        NodeConfigTypes::Fused(
             FusedConfig::configure(
                 meta,
                 &inputs.clone().map(|x| x.1.clone()).collect_vec(),
@@ -388,7 +421,7 @@ impl Model {
                 &fused_nodes,
             ),
             inputs.map(|x| x.0).collect_vec(),
-        ))
+        )
     }
 
     /// Configures a lookup table based operation. These correspond to operations that are represented in
@@ -403,64 +436,79 @@ impl Model {
         node: &Node,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars,
-        tables: &mut BTreeMap<OpKind, Rc<NodeConfigTypes<F>>>,
-    ) -> Rc<NodeConfigTypes<F>> {
+        tables: &mut BTreeMap<OpKind, TableTypes<F>>,
+    ) -> NodeConfigTypes<F> {
         let input_len = node.in_dims.iter().product();
         let input = &vars.advices[0].reshape(&[input_len]);
         let output = &vars.advices[1].reshape(&[input_len]);
-        if tables.contains_key(&node.opkind) {
-            info!("here");
-            tables.get(&node.opkind).unwrap().clone()
-        } else {
-            match &node.opkind {
-                OpKind::Div(s) => {
+        let node_inputs = node.inputs.iter().map(|e| e.node).collect();
+
+        match &node.opkind {
+            OpKind::Div(s) => {
+                if tables.contains_key(&node.opkind) {
+                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let conf: EltwiseConfig<F, DivideBy<F>> =
+                        EltwiseConfig::configure_with_table(meta, input, output, table.get_div());
+                    NodeConfigTypes::Divide(conf, node_inputs)
+                } else {
                     let conf: EltwiseConfig<F, DivideBy<F>> =
                         EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
-                    let inputs = node.inputs.iter().map(|e| e.node).collect();
-                    let config = Rc::new(NodeConfigTypes::Divide(conf, inputs));
-                    tables.insert(node.opkind.clone(), config.clone());
-                    config
+                    tables.insert(
+                        node.opkind.clone(),
+                        TableTypes::DivideBy(conf.table.clone()),
+                    );
+                    NodeConfigTypes::Divide(conf, node_inputs)
                 }
-                OpKind::ReLU(s) => {
+            }
+            OpKind::ReLU(s) => {
+                if tables.contains_key(&node.opkind) {
+                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let conf: EltwiseConfig<F, ReLu<F>> =
+                        EltwiseConfig::configure_with_table(meta, input, output, table.get_relu());
+                    NodeConfigTypes::ReLU(conf, node_inputs)
+                } else {
                     let conf: EltwiseConfig<F, ReLu<F>> =
                         EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
-                    let inputs = node.inputs.iter().map(|e| e.node).collect();
-                    let config = Rc::new(NodeConfigTypes::ReLU(conf, inputs));
-                    tables.insert(node.opkind.clone(), config.clone());
-                    config
+                    tables.insert(node.opkind.clone(), TableTypes::ReLu(conf.table.clone()));
+                    NodeConfigTypes::ReLU(conf, node_inputs)
                 }
-                OpKind::Sigmoid(s) => {
+            }
+            OpKind::Sigmoid(s) => {
+                if tables.contains_key(&node.opkind) {
+                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let conf: EltwiseConfig<F, Sigmoid<F>> =
+                        EltwiseConfig::configure_with_table(meta, input, output, table.get_sig());
+                    NodeConfigTypes::Sigmoid(conf, node_inputs)
+                } else {
                     let conf: EltwiseConfig<F, Sigmoid<F>> = EltwiseConfig::configure(
                         meta,
                         input,
                         output,
                         Some(&[self.bits, *s, scale_to_multiplier(self.scale) as usize]),
                     );
-                    let inputs = node.inputs.iter().map(|e| e.node).collect();
-                    let config = Rc::new(NodeConfigTypes::Sigmoid(conf, inputs));
-                    tables.insert(node.opkind.clone(), config.clone());
-                    config
+                    tables.insert(node.opkind.clone(), TableTypes::Sigmoid(conf.table.clone()));
+                    NodeConfigTypes::Sigmoid(conf, node_inputs)
                 }
-                OpKind::Const => {
-                    // Typically parameters for one or more layers.
-                    // Currently this is handled in the consuming node(s), but will be moved here.
-                    Rc::new(NodeConfigTypes::Const)
-                }
-                OpKind::Input => {
-                    // This is the input to the model (e.g. the image).
-                    // Currently this is handled in the consuming node(s), but will be moved here.
-                    Rc::new(NodeConfigTypes::Input)
-                }
-                OpKind::Fused(s) => {
-                    error!("For {:?} call fuse_fused_ops instead", s);
-                    panic!();
-                }
-                OpKind::Unknown(c) => {
-                    error!("{:?} not yet implemented", c);
-                    unimplemented!()
-                }
-                _ => panic!(),
             }
+            OpKind::Const => {
+                // Typically parameters for one or more layers.
+                // Currently this is handled in the consuming node(s), but will be moved here.
+                NodeConfigTypes::Const
+            }
+            OpKind::Input => {
+                // This is the input to the model (e.g. the image).
+                // Currently this is handled in the consuming node(s), but will be moved here.
+                NodeConfigTypes::Input
+            }
+            OpKind::Fused(s) => {
+                error!("For {:?} call fuse_fused_ops instead", s);
+                panic!();
+            }
+            OpKind::Unknown(c) => {
+                error!("{:?} not yet implemented", c);
+                unimplemented!()
+            }
+            _ => panic!(),
         }
     }
 
@@ -543,7 +591,7 @@ impl Model {
         config: &NodeConfig<F>,
     ) -> Result<Option<ValTensor<F>>> {
         // The node kind and the config should be the same.
-        let res = match Rc::as_ref(&config.config).clone() {
+        let res = match config.config.clone() {
             NodeConfigTypes::Fused(mut ac, idx) => {
                 let values: Vec<ValTensor<F>> = idx
                     .iter()
@@ -574,9 +622,9 @@ impl Model {
                 assert_eq!(idx.len(), 1);
                 Some(sc.layout(layouter, inputs.get(&idx[0]).unwrap().clone()))
             }
-            NodeConfigTypes::Divide(sc, idx) => {
+            NodeConfigTypes::Divide(dc, idx) => {
                 assert_eq!(idx.len(), 1);
-                Some(sc.layout(layouter, inputs.get(&idx[0]).unwrap().clone()))
+                Some(dc.layout(layouter, inputs.get(&idx[0]).unwrap().clone()))
             }
             NodeConfigTypes::Input => None,
             NodeConfigTypes::Const => None,

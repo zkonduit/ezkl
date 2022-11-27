@@ -7,12 +7,12 @@ use crate::tensor::ops::{add, const_mult, div, mult};
 use crate::tensor::Tensor;
 use crate::tensor::TensorType;
 use anyhow::Result;
+
 use halo2_proofs::arithmetic::FieldExt;
 use itertools::Itertools;
 use log::{error, info, trace, warn};
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fmt;
-use std::rc::Rc;
 use tabled::Tabled;
 use tract_onnx;
 use tract_onnx::prelude::{DatumType, InferenceFact, Node as OnnxNode, OutletId};
@@ -165,7 +165,7 @@ impl NodeGraph {
 /// A circuit configuration for a single self.
 #[derive(Clone, Default, Debug)]
 pub struct NodeConfig<F: FieldExt + TensorType> {
-    pub config: Rc<NodeConfigTypes<F>>,
+    pub config: NodeConfigTypes<F>,
     pub onnx_idx: Vec<usize>,
 }
 
