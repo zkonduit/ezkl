@@ -743,16 +743,23 @@ impl Model {
 
             maximum_number_inputs = max(maximum_number_inputs, non_fused_ops);
 
-            let fused_ops = bucket_nodes
+            let fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
                 .filter(|(_, n)| n.opkind.is_fused())
-                .map(|(_, n)| n.inputs.clone())
+                .collect();
+
+            let fused_inputs = fused_ops
+                .iter()
+                .map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
                 .flatten()
+                // here we remove intermediary calculation / nodes within the layer
+                .filter(|id| !fused_ops.contains_key(id))
                 .unique()
                 .collect_vec();
 
-            maximum_number_inputs = max(maximum_number_inputs, fused_ops.len());
+            maximum_number_inputs = max(maximum_number_inputs, fused_inputs.len());
         }
-        maximum_number_inputs
+        // add 1 for layer output
+        maximum_number_inputs + 1
     }
 }
