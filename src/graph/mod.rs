@@ -42,6 +42,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
             (0, 0),
             num_instances,
         );
+        info!("advice cap: {:?}", advice_cap);
         info!(
             "number of advices used: {:?}",
             vars.advices.iter().map(|a| a.num_cols()).sum::<usize>()

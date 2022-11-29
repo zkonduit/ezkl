@@ -254,7 +254,8 @@ impl Model {
         let mut results = BTreeMap::new();
         let mut tables = BTreeMap::new();
 
-        for (_, bucket_nodes) in self.nodes.0.iter() {
+        for (bucket, bucket_nodes) in self.nodes.0.iter() {
+            trace!("configuring bucket: {:?}", bucket);
             let non_fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
                 .filter(|(_, n)| !n.opkind.is_fused())
@@ -360,7 +361,6 @@ impl Model {
                 )
             })
             .collect();
-
         // This works because retain only keeps items for which the predicate returns true, and
         // insert only returns true if the item was not previously present in the set.
         // Since the vector is traversed in order, we end up keeping just the first occurrence of each item.
@@ -383,7 +383,6 @@ impl Model {
             .collect_vec();
 
         let output_shape = self.nodes.filter(**nodes.keys().max().unwrap()).out_dims;
-
         // output node
         let output = &vars.advices[start].reshape(&output_shape);
 
@@ -413,7 +412,7 @@ impl Model {
 
         let inputs = inputs_to_layer.iter();
 
-        NodeConfigTypes::Fused(
+        let config = NodeConfigTypes::Fused(
             FusedConfig::configure(
                 meta,
                 &inputs.clone().map(|x| x.1.clone()).collect_vec(),
@@ -421,7 +420,8 @@ impl Model {
                 &fused_nodes,
             ),
             inputs.map(|x| x.0).collect_vec(),
-        )
+        );
+        config
     }
 
     /// Configures a lookup table based operation. These correspond to operations that are represented in
@@ -438,7 +438,7 @@ impl Model {
         vars: &mut ModelVars,
         tables: &mut BTreeMap<OpKind, TableTypes<F>>,
     ) -> NodeConfigTypes<F> {
-        let input_len = node.in_dims.iter().product();
+        let input_len = node.in_dims[0].iter().product();
         let input = &vars.advices[0].reshape(&[input_len]);
         let output = &vars.advices[1].reshape(&[input_len]);
         let node_inputs = node.inputs.iter().map(|e| e.node).collect();
@@ -710,7 +710,13 @@ impl Model {
             self.nodes
                 .flatten()
                 .iter()
-                .map(|e| e.in_dims.iter().product())
+                .map(|e| {
+                    e.in_dims
+                        .iter()
+                        .map(|dims| dims.iter().product::<usize>())
+                        .max()
+                        .unwrap()
+                })
                 .max()
                 .unwrap(),
             self.nodes
@@ -723,11 +729,30 @@ impl Model {
     }
 
     pub fn max_node_vars(&self) -> usize {
-        self.nodes
-            .flatten()
-            .iter()
-            .map(|e| e.num_var)
-            .max()
-            .unwrap()
+        let mut maximum_number_inputs = 0;
+        for (_, bucket_nodes) in self.nodes.0.iter() {
+            let non_fused_ops = match bucket_nodes
+                .iter()
+                .filter(|(_, n)| !n.opkind.is_fused())
+                .map(|(_, n)| n.inputs.len())
+                .max()
+            {
+                Some(m) => m,
+                None => 0,
+            };
+
+            maximum_number_inputs = max(maximum_number_inputs, non_fused_ops);
+
+            let fused_ops = bucket_nodes
+                .iter()
+                .filter(|(_, n)| n.opkind.is_fused())
+                .map(|(_, n)| n.inputs.clone())
+                .flatten()
+                .unique()
+                .collect_vec();
+
+            maximum_number_inputs = max(maximum_number_inputs, fused_ops.len());
+        }
+        maximum_number_inputs
     }
 }
