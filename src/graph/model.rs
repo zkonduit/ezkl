@@ -574,7 +574,7 @@ impl Model {
                 range_check.layout(layouter.namespace(|| "range check outputs"), output)
             })
             .collect_vec();
-
+        info!("computing...");
         Ok(())
     }
 
