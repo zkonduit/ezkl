@@ -10,6 +10,8 @@ Note that the library requires a nightly version of the rust toolchain. You can 
 rustup override set nightly         
 ```
 
+This repository includes onnx example files as a submodule for testing out the cli. Either pass the `--recurse-submodules` flag to the `clone` command or after cloning run `git submodule update --init --recursive`. 
+
 ## docs
 
 Use `cargo doc --open` to compile and open the docs in your default browser.
@@ -125,4 +127,16 @@ cargo run --release --example mlp_4d
 
 ## python tutorial
 
-You can easily create an Onnx file using `pytorch`. For samples of Onnx files, and a tutorial on how to quickly generate Onnx files using python, check out [pyezkl](https://github.com/zkonduit/pyezkl). 
+You can easily create an Onnx file using `pytorch`. For samples of Onnx files see [here](https://github.com/zkonduit/onnx-examples). For a tutorial on how to quickly generate Onnx files using python, check out [pyezkl](https://github.com/zkonduit/pyezkl). 
+
+## Contributing
+
+If you're interested in contributing and unsure where to start feel free to reach out to one of the maintainers to be added to the repository discord:  
+
+* dante (alexander-camuto)
+* jason ( jasonmorton)
+
+Also feel free to open up a discussion topic to ask questions. 
+
+See currently open issues for ideas on how to contribute 🔧. 
+
