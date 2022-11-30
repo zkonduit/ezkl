@@ -140,3 +140,5 @@ Also feel free to open up a discussion topic to ask questions.
 
 See currently open issues for ideas on how to contribute 🔧. 
 
+For PRs we use the [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) naming convention. 
+
