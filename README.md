@@ -1,8 +1,29 @@
-# EZKL
+# EZKL 
 
 [![Test](https://github.com/zkonduit/ezkl/workflows/Rust/badge.svg)](https://github.com/zkonduit/ezkl/actions?query=workflow%3ARust)
 
 `ezkl` is a library and command-line tool for doing inference for deep learning models and other computational graphs in a zk-snark. The backend uses Halo2.  Typically the input image is private advice, the model parameters are public or private, and the last layer is the public input (instance column) which will be sent to the verifier along with the proof. Other configurations are also possible.
+
+----------------------
+
+## Contributing 🌎
+
+If you're interested in contributing and are unsure where to start, reach out to one of the maintainers:  
+
+* dante (alexander-camuto)
+* jason ( jasonmorton)
+
+More broadly: 
+
+- Feel free to open up a discussion topic to ask questions. 
+
+- See currently open issues for ideas on how to contribute. 
+
+- For PRs we use the [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) naming convention. 
+
+----------------------
+
+## Getting Started ⚙️
 
 Note that the library requires a nightly version of the rust toolchain. You can change the default toolchain by running:
 
@@ -12,15 +33,60 @@ rustup override set nightly
 
 This repository includes onnx example files as a submodule for testing out the cli. Either pass the `--recurse-submodules` flag to the `clone` command or after cloning run `git submodule update --init --recursive`. 
 
-## docs
+### docs 📖
 
 Use `cargo doc --open` to compile and open the docs in your default browser.
 
-## command line interface
+### benchmarks ⏳
+
+We include proof generation time benchmarks for some of the implemented layers including the affine, convolutional, and ReLu operations (more to come).
+
+To run these benchmarks:
+
+```bash
+cargo bench
+```
+
+To run a specific benchmark append one of `affine, cnvrl, relu` to the command. You can then find benchmarks results and plots in `target/criterion`. Note that depending on the capabilities of your machine you may need to increase the target time on the Criterion config. For instance:
+
+```rust
+criterion_group! {
+  name = benches;
+  config = Criterion::default().measurement_time(Duration::from_secs(10));
+  targets = runrelu
+}
+```
+
+### examples 🔍
+
+The MNIST inference example using ezkl as a library is contained in `examples/conv2d_mnist`. To run it:
+
+```bash
+# download MNIST data
+chmod +x data.sh
+./data.sh
+# test the model (takes 600-700 seconds)
+cargo run --release --example conv2d_mnist
+```
+
+We also provide an example which runs an MLP on input data with four dimensions. To run it:
+
+```bash
+cargo run --release --example mlp_4d
+```
+
+----------------------
+
+
+## Command line interface 👾
 
 The `ezkl` cli provides a simple interface to load Onnx files, which represent graphs of operations (such as neural networks), and convert them into a Halo2 circuit, then run a proof (given a public input).
 
-Usage:
+### python tutorial 🐍
+
+You can easily create an Onnx file using `pytorch`. For samples of Onnx files see [here](https://github.com/zkonduit/onnx-examples). For a tutorial on how to quickly generate Onnx files using python, check out [pyezkl](https://github.com/zkonduit/pyezkl). 
+
+### usage 🔧
 
 ```bash
 Usage: ezkl [OPTIONS] <COMMAND>
@@ -78,7 +144,7 @@ To display a table of loaded Onnx nodes, and their associated parameters, set `R
 cargo run --release --bin ezkl -- table -M ./examples/onnx_models/ff.onnx
 
 ```
-### verifying with the EVM
+### verifying with the EVM ◊
 
 Note that `fullprove` can also be run with an EVM verifier. In this case we use KZG commitments, rather than the default IPA commitments, and we need to pass the `evm` feature flag to conditionally compile the requisite [foundry_evm](https://github.com/foundry-rs/foundry) dependencies. Using `foundry_evm` we spin up a local EVM executor and verify the generated proof. In future releases we'll create a simple pipeline for deploying to EVM based networks.
 Example:
@@ -86,59 +152,8 @@ Example:
 ```bash
 cargo run  --release --features evm --bin ezkl fullprove  -D ./examples/onnx_models/ff_input.json -M ./examples/onnx_models/ff.onnx --pfsys kzg
 ```
+----------------------
 
-## benchmarks
 
-We include proof generation time benchmarks for some of the implemented layers including the affine, convolutional, and ReLu operations (more to come).
 
-To run these benchmarks:
-
-```bash
-cargo bench
-```
-
-To run a specific benchmark append one of `affine, cnvrl, relu` to the command. You can then find benchmarks results and plots in `target/criterion`. Note that depending on the capabilities of your machine you may need to increase the target time on the Criterion config. For instance:
-
-```rust
-criterion_group! {
-  name = benches;
-  config = Criterion::default().measurement_time(Duration::from_secs(10));
-  targets = runrelu
-}
-```
-
-## examples
-
-The MNIST inference example using ezkl as a library is contained in `examples/conv2d_mnist`. To run it:
-
-```bash
-# download MNIST data
-chmod +x data.sh
-./data.sh
-# test the model (takes 600-700 seconds)
-cargo run --release --example conv2d_mnist
-```
-
-We also provide an example which runs an MLP on input data with four dimensions. To run it:
-
-```bash
-cargo run --release --example mlp_4d
-```
-
-## python tutorial
-
-You can easily create an Onnx file using `pytorch`. For samples of Onnx files see [here](https://github.com/zkonduit/onnx-examples). For a tutorial on how to quickly generate Onnx files using python, check out [pyezkl](https://github.com/zkonduit/pyezkl). 
-
-## Contributing
-
-If you're interested in contributing and unsure where to start feel free to reach out to one of the maintainers to be added to the repository discord:  
-
-* dante (alexander-camuto)
-* jason ( jasonmorton)
-
-Also feel free to open up a discussion topic to ask questions. 
-
-See currently open issues for ideas on how to contribute 🔧. 
-
-For PRs we use the [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) naming convention. 
 
