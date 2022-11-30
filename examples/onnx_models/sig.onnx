@@ -1,13 +1,0 @@
-pytorch1.12.1:w
-#
-inputoutput	Sigmoid_0"Sigmoid	torch_jitZ!
-input
-
-
-batch_size
-b"
-output
-
-
-batch_size
-B
