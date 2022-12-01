@@ -15,9 +15,9 @@ fn test_onnx_mock(example_name: String) {
             "17",
             "mock",
             "-D",
-            format!("./examples/onnx_models/{}_input.json", example_name).as_str(),
+            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
             "-M",
-            format!("./examples/onnx_models/{}.onnx", example_name).as_str(),
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             // "-K",
             // "2",  //causes failure
         ])
@@ -28,33 +28,33 @@ fn test_onnx_mock(example_name: String) {
 
 #[test]
 fn test_ff_mock() {
-    test_onnx_mock("ff".to_string());
+    test_onnx_mock("1l_mlp".to_string());
 }
 
 #[test]
 fn test_avg_mock() {
-    test_onnx_mock("avg".to_string());
+    test_onnx_mock("1l_average".to_string());
 }
 
 #[test]
 fn test_relusig_mock() {
-    test_onnx_mock("relusig".to_string());
+    test_onnx_mock("2l_relu_sigmoid".to_string());
 }
 
 #[test]
 #[ignore]
 fn test_1lcnvrl_mock() {
-    test_onnx_mock("1lcnvrl".to_string());
+    test_onnx_mock("1l_conv".to_string());
 }
 
 #[test]
 fn test_2lcnvrl_mock() {
-    test_onnx_mock("2lcnvrl_relusig".to_string());
+    test_onnx_mock("2l_relu_sigmoid_conv".to_string());
 }
 
 #[test]
 fn test_reshape_mock() {
-    test_onnx_mock("reshape".to_string());
+    test_onnx_mock("1l_reshape".to_string());
 }
 
 // full prove (slower, covers more, but still reuses the pk)
@@ -72,9 +72,9 @@ fn test_onnx_fullprove(example_name: String) {
             "17",
             "fullprove",
             "-D",
-            format!("./examples/onnx_models/{}_input.json", example_name).as_str(),
+            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
             "-M",
-            format!("./examples/onnx_models/{}.onnx", example_name).as_str(),
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             // "-K",
             // "2",  //causes failure
         ])
@@ -85,56 +85,56 @@ fn test_onnx_fullprove(example_name: String) {
 
 #[test]
 fn test_ff_fullprove() {
-    test_onnx_fullprove("ff".to_string());
+    test_onnx_fullprove("1l_mlp".to_string());
 }
 
 #[test]
 fn test_avg_fullprove() {
-    test_onnx_fullprove("avg".to_string());
+    test_onnx_fullprove("1l_average".to_string());
 }
 
 #[test]
 #[ignore]
 fn test_relusig_fullprove() {
-    test_onnx_fullprove("relusig".to_string());
+    test_onnx_fullprove("2l_relu_sigmoid".to_string());
 }
 
 #[test]
 fn test_relurelu_fullprove() {
-    test_onnx_fullprove("relurelu_small".to_string());
+    test_onnx_fullprove("2l_relu_small".to_string());
 }
 
 #[test]
 fn test_relusig_small_fullprove() {
-    test_onnx_fullprove("relusig_small".to_string());
+    test_onnx_fullprove("2l_relu_sigmoid_small".to_string());
 }
 
 #[test]
 fn test_relu_fullprove() {
-    test_onnx_fullprove("relu".to_string());
+    test_onnx_fullprove("1l_relu".to_string());
 }
 
 #[test]
 fn test_sig_fullprove() {
-    test_onnx_fullprove("sig".to_string());
+    test_onnx_fullprove("1l_sigmoid".to_string());
 }
 
 #[test]
 fn test_reshape_fullprove() {
-    test_onnx_fullprove("reshape".to_string());
+    test_onnx_fullprove("1l_reshape".to_string());
 }
 
 // These require too much memory for Github CI right now
 #[test]
 #[ignore]
 fn test_1lcnvrl_fullprove() {
-    test_onnx_fullprove("1lcnvrl".to_string());
+    test_onnx_fullprove("1l_conv".to_string());
 }
 
 #[test]
 #[ignore]
 fn test_2lcnvrl_fullprove() {
-    test_onnx_fullprove("2lcnvrl_relusig".to_string());
+    test_onnx_fullprove("2l_relu_sigmoid_conv".to_string());
 }
 
 // prove-serialize-verify, the usual full path
@@ -152,9 +152,9 @@ fn test_onnx_prove_and_verify(example_name: String) {
             "17",
             "prove",
             "-D",
-            format!("./examples/onnx_models/{}_input.json", example_name).as_str(),
+            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
             "-M",
-            format!("./examples/onnx_models/{}.onnx", example_name).as_str(),
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             "-O",
             format!("pav_{}.pf", example_name).as_str(),
         ])
@@ -174,7 +174,7 @@ fn test_onnx_prove_and_verify(example_name: String) {
             "17",
             "verify",
             "-M",
-            format!("./examples/onnx_models/{}.onnx", example_name).as_str(),
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             "-P",
             format!("pav_{}.pf", example_name).as_str(),
         ])
@@ -185,27 +185,27 @@ fn test_onnx_prove_and_verify(example_name: String) {
 
 #[test]
 fn test_ff_pav() {
-    test_onnx_prove_and_verify("ff".to_string());
+    test_onnx_prove_and_verify("1l_mlp".to_string());
 }
 
 #[test]
 fn test_relusig_pav() {
-    test_onnx_prove_and_verify("relusig_small".to_string());
+    test_onnx_prove_and_verify("2l_relu_sigmoid_small".to_string());
 }
 
 #[test]
 fn test_relurelu_pav() {
-    test_onnx_prove_and_verify("relurelu_small".to_string());
+    test_onnx_prove_and_verify("2l_relu_small".to_string());
 }
 
 #[test]
 fn test_relu_pav() {
-    test_onnx_prove_and_verify("relu".to_string());
+    test_onnx_prove_and_verify("1l_relu".to_string());
 }
 
 #[test]
 fn test_sig_pav() {
-    test_onnx_prove_and_verify("sig".to_string());
+    test_onnx_prove_and_verify("1l_sigmoid".to_string());
 }
 
 // KZG / EVM tests
@@ -226,9 +226,9 @@ fn test_kzg_fullprove(example_name: String) {
             "17",
             "fullprove",
             "-D",
-            format!("./examples/onnx_models/{}_input.json", example_name).as_str(),
+            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
             "-M",
-            format!("./examples/onnx_models/{}.onnx", example_name).as_str(),
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             "--pfsys",
             "kzg",
         ])
@@ -240,54 +240,54 @@ fn test_kzg_fullprove(example_name: String) {
 #[test]
 #[ignore]
 fn test_avg_fullprove_kzg() {
-    test_kzg_fullprove("avg".to_string());
+    test_kzg_fullprove("1l_average".to_string());
 }
 
 #[test]
 #[ignore]
 fn test_ff_fullprove_kzg() {
-    test_kzg_fullprove("ff".to_string());
+    test_kzg_fullprove("1l_mlp".to_string());
 }
 
 #[test]
 #[ignore]
 fn test_relusig_fullprove_kzg() {
-    test_kzg_fullprove("relusig".to_string());
+    test_kzg_fullprove("2l_relu_sigmoid".to_string());
 }
 
 #[test]
 #[ignore]
 fn test_relurelu_fullprove_kzg() {
-    test_kzg_fullprove("relurelu_small".to_string());
+    test_kzg_fullprove("2l_relu_small".to_string());
 }
 
 #[test]
 #[ignore]
 fn test_relusig_small_fullprove_kzg() {
-    test_kzg_fullprove("relusig_small".to_string());
+    test_kzg_fullprove("2l_relu_sigmoid_small".to_string());
 }
 
 #[test]
 #[ignore]
 fn test_relu_fullprove_kzg() {
-    test_kzg_fullprove("relu".to_string());
+    test_kzg_fullprove("1l_relu".to_string());
 }
 
 #[test]
 #[ignore]
 fn test_sig_fullprove_kzg() {
-    test_kzg_fullprove("sig".to_string());
+    test_kzg_fullprove("1l_sigmoid".to_string());
 }
 
 // These require too much memory for Github CI right now
 #[test]
 #[ignore]
 fn test_1lcnvrl_fullprove_kzg() {
-    test_kzg_fullprove("1lcnvrl".to_string());
+    test_kzg_fullprove("1l_conv".to_string());
 }
 
 #[test]
 #[ignore]
 fn test_2lcnvrl_fullprove_kzg() {
-    test_kzg_fullprove("2lcnvrl_relusig".to_string());
+    test_kzg_fullprove("2l_relu_sigmoid_conv".to_string());
 }
