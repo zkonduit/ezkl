@@ -50,6 +50,7 @@ impl OpKind {
     pub fn new(name: &str) -> Self {
         match name {
             "Clip" => OpKind::ReLU(1),
+            "Prelu" => OpKind::ReLU(1),
             "Sigmoid" => OpKind::Sigmoid(1),
             "Div" => OpKind::Div(1),
             "Const" => OpKind::Const,
@@ -67,6 +68,7 @@ impl OpKind {
             "SumPool" => OpKind::Fused(FusedOp::SumPool((1, 1), (1, 1), (1, 1))),
             "GlobalAvgPool" => OpKind::Fused(FusedOp::GlobalSumPool),
             "Reshape" => OpKind::Fused(FusedOp::Reshape(Vec::new())),
+            "Flatten" => OpKind::Fused(FusedOp::Flatten(Vec::new())),
             "BatchNorm" => OpKind::Fused(FusedOp::BatchNorm),
             "Pad" => OpKind::Fused(FusedOp::Identity),
             c => {
@@ -674,6 +676,16 @@ impl Node {
                         mn.in_scale = input_node.out_scale;
                         mn.out_scale = input_node.out_scale;
                         mn.out_dims = input_node.out_dims.clone();
+                    }
+                    FusedOp::Flatten(_) => {
+                        let input_node = &inputs[0];
+                        let new_dims: Vec<usize> =
+                            vec![inputs[0].out_dims.iter().product::<usize>()];
+                        mn.opkind = OpKind::Fused(FusedOp::Flatten(new_dims.clone()));
+                        mn.output_max = input_node.output_max;
+                        mn.in_scale = input_node.out_scale;
+                        mn.out_scale = input_node.out_scale;
+                        mn.out_dims = new_dims;
                     }
                     FusedOp::Reshape(_) => {
                         let input_node = &inputs[0];
