@@ -32,6 +32,11 @@ fn test_ff_mock() {
 }
 
 #[test]
+fn test_flatten_mock() {
+    test_onnx_mock("1l_flatten".to_string());
+}
+
+#[test]
 fn test_avg_mock() {
     test_onnx_mock("1l_average".to_string());
 }

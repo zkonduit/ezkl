@@ -678,6 +678,7 @@ impl Node {
                         mn.out_dims = input_node.out_dims.clone();
                     }
                     FusedOp::Flatten(_) => {
+                        let input_node = &inputs[0];
                         let new_dims: Vec<usize> =
                             vec![inputs[0].out_dims.iter().product::<usize>()];
                         mn.opkind = OpKind::Fused(FusedOp::Flatten(new_dims.clone()));
