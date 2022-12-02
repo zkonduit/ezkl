@@ -142,14 +142,6 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
         table: Rc<RefCell<EltwiseTable<F, NL>>>,
     ) -> Self {
         let qlookup = cs.complex_selector();
-        let input_inner = match &input {
-            VarTensor::Advice { inner: advices, .. } => advices,
-            _ => todo!(),
-        };
-        let output_inner = match &output {
-            VarTensor::Advice { inner: advices, .. } => advices,
-            _ => todo!(),
-        };
 
         let _ = (0..input.dims().iter().product::<usize>())
             .map(|i| {
@@ -161,13 +153,30 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
                     let (x, y) = input.cartesian_coord(i);
                     vec![
                         (
-                            qlookup.clone() * cs.query_advice(input_inner[x], Rotation(y as i32))
-                                + not_qlookup.clone() * default_x,
+                            match &input {
+                                VarTensor::Advice { inner: advices, .. } => {
+                                    qlookup.clone()
+                                        * cs.query_advice(advices[x], Rotation(y as i32))
+                                        + not_qlookup.clone() * default_x
+                                }
+                                VarTensor::Fixed { inner: fixed, .. } => {
+                                    qlookup.clone() * cs.query_fixed(fixed[x], Rotation(y as i32))
+                                        + not_qlookup.clone() * default_x
+                                }
+                            },
                             table.borrow().table_input,
                         ),
                         (
-                            qlookup * cs.query_advice(output_inner[x], Rotation(y as i32))
-                                + not_qlookup * default_y,
+                            match &output {
+                                VarTensor::Advice { inner: advices, .. } => {
+                                    qlookup * cs.query_advice(advices[x], Rotation(y as i32))
+                                        + not_qlookup * default_y
+                                }
+                                VarTensor::Fixed { inner: fixed, .. } => {
+                                    qlookup * cs.query_fixed(fixed[x], Rotation(y as i32))
+                                        + not_qlookup * default_y
+                                }
+                            },
                             table.borrow().table_output,
                         ),
                     ]

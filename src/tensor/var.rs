@@ -84,7 +84,7 @@ impl VarTensor {
     pub fn num_cols(&self) -> usize {
         match self {
             VarTensor::Advice { inner, .. } => inner.len(),
-            _ => todo!(),
+            VarTensor::Fixed { inner, .. } => inner.len(),
         }
     }
 
@@ -92,7 +92,7 @@ impl VarTensor {
     pub fn dims(&self) -> Vec<usize> {
         match self {
             VarTensor::Advice { dims: d, .. } => d.to_vec(),
-            _ => todo!(),
+            VarTensor::Fixed { dims: d, .. } => d.to_vec(),
         }
     }
 
@@ -110,7 +110,17 @@ impl VarTensor {
                 capacity: *capacity,
                 dims: new_dims.to_vec(),
             },
-            _ => todo!(),
+            VarTensor::Fixed {
+                inner,
+                col_size,
+                capacity,
+                ..
+            } => VarTensor::Fixed {
+                inner: inner.clone(),
+                col_size: *col_size,
+                capacity: *capacity,
+                dims: new_dims.to_vec(),
+            },
         }
     }
 
@@ -162,8 +172,18 @@ impl VarTensor {
         offset: usize,
     ) -> Result<Tensor<Expression<F>>, TensorError> {
         match &self {
-            VarTensor::Fixed { .. } => {
-                todo!()
+            VarTensor::Fixed {
+                inner: fixed, dims, ..
+            } => {
+                let mut c = Tensor::from(
+                    // this should fail if dims is empty, should be impossible
+                    (0..dims.iter().product::<usize>()).map(|i| {
+                        let (x, y) = self.cartesian_coord(i);
+                        meta.query_fixed(fixed[x], Rotation(offset as i32 + y as i32))
+                    }),
+                );
+                c.reshape(dims);
+                Ok(c)
             }
             // when advice we have 1 col per row
             VarTensor::Advice {
@@ -193,8 +213,14 @@ impl VarTensor {
     ) -> Result<Tensor<AssignedCell<Assigned<F>, F>>, TensorError> {
         match values {
             ValTensor::Value { inner: v, dims: _ } => v.enum_map(|coord, k| match &self {
-                VarTensor::Fixed { .. } => {
-                    todo!()
+                VarTensor::Fixed { inner: fixed, .. } => {
+                    let (x, y) = self.cartesian_coord(offset + coord);
+                    match region.assign_fixed(|| "k", fixed[x], y, || k.into()) {
+                        Ok(a) => a,
+                        Err(e) => {
+                            abort!("failed to assign ValTensor to VarTensor {:?}", e);
+                        }
+                    }
                 }
                 VarTensor::Advice { inner: advices, .. } => {
                     let (x, y) = self.cartesian_coord(offset + coord);
@@ -208,7 +234,15 @@ impl VarTensor {
             }),
             ValTensor::PrevAssigned { inner: v, dims: _ } => {
                 v.enum_map(|coord, xcell| match &self {
-                    VarTensor::Fixed { .. } => todo!(),
+                    VarTensor::Fixed { inner: fixed, .. } => {
+                        let (x, y) = self.cartesian_coord(offset + coord);
+                        match region.assign_fixed(|| "k", fixed[x], y, || xcell.value_field()) {
+                            Ok(a) => a,
+                            Err(e) => {
+                                abort!("failed to assign ValTensor to VarTensor {:?}", e);
+                            }
+                        }
+                    }
                     VarTensor::Advice { inner: advices, .. } => {
                         let (x, y) = self.cartesian_coord(offset + coord);
                         match xcell.copy_advice(|| "k", region, advices[x], y) {
@@ -221,8 +255,14 @@ impl VarTensor {
                 })
             }
             ValTensor::AssignedValue { inner: v, dims: _ } => v.enum_map(|coord, k| match &self {
-                VarTensor::Fixed { .. } => {
-                    todo!()
+                VarTensor::Fixed { inner: fixed, .. } => {
+                    let (x, y) = self.cartesian_coord(offset + coord);
+                    match region.assign_fixed(|| "k", fixed[x], y, || k) {
+                        Ok(a) => a,
+                        Err(e) => {
+                            abort!("failed to assign ValTensor to VarTensor {:?}", e);
+                        }
+                    }
                 }
                 VarTensor::Advice { inner: advices, .. } => {
                     let (x, y) = self.cartesian_coord(offset + coord);
