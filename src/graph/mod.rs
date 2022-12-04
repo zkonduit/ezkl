@@ -32,17 +32,17 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let model = Model::from_arg();
         let num_advice = model.max_node_vars();
-        let advice_cap = model.max_node_size();
+        let row_cap = model.max_node_size();
         // for now the number of instances corresponds to the number of graph / model outputs
         let num_instances: usize = model.num_outputs();
         let mut vars = ModelVars::new(
             cs,
             model.logrows as usize,
-            (num_advice, advice_cap),
-            (0, 0),
+            (num_advice, row_cap),
+            (num_advice, row_cap),
             (num_instances, usize::MAX),
         );
-        info!("advice cap: {:?}", advice_cap);
+        info!("row cap: {:?}", row_cap);
         info!(
             "number of advices used: {:?}",
             vars.advices.iter().map(|a| a.num_cols()).sum::<usize>()

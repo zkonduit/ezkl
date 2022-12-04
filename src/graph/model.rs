@@ -16,6 +16,7 @@ use halo2_proofs::{
 };
 use itertools::Itertools;
 use log::{debug, error, info, trace};
+use serde::Deserialize;
 use std::cmp::max;
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
@@ -33,6 +34,50 @@ pub enum Mode {
     Prove,
     FullProve,
     Verify,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub enum Visibility {
+    Private,
+    Public,
+}
+impl Visibility {
+    pub fn is_public(&self) -> bool {
+        matches!(&self, Visibility::Public)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ModelVisibility {
+    pub input: Visibility,
+    pub params: Visibility,
+    pub output: Visibility,
+}
+impl ModelVisibility {
+    pub fn from_args() -> Self {
+        let args = Cli::parse();
+
+        let input_vis = if args.public_inputs {
+            Visibility::Public
+        } else {
+            Visibility::Private
+        };
+        let params_vis = if args.public_params {
+            Visibility::Public
+        } else {
+            Visibility::Private
+        };
+        let output_vis = if args.public_outputs {
+            Visibility::Public
+        } else {
+            Visibility::Private
+        };
+        Self {
+            input: input_vis,
+            params: params_vis,
+            output: output_vis,
+        }
+    }
 }
 
 enum TableTypes<F: FieldExt + TensorType> {
@@ -70,7 +115,6 @@ impl<F: FieldExt + TensorType> TableTypes<F> {
 pub struct ModelVars<F: FieldExt + TensorType> {
     pub advices: Vec<VarTensor>,
     pub fixed: Vec<VarTensor>,
-    // TODO: create a new VarTensor for Instance Columns
     pub instances: Vec<ValTensor<F>>,
 }
 /// A wrapper for holding all columns that will be assigned to by a model.
@@ -129,6 +173,7 @@ pub struct Model {
     pub scale: i32,
     pub tolerance: usize,
     pub mode: Mode,
+    pub visibility: ModelVisibility,
 }
 
 impl Model {
@@ -146,8 +191,10 @@ impl Model {
         logrows: u32,
         tolerance: usize,
         mode: Mode,
+        visibility: ModelVisibility,
     ) -> Self {
         let model = tract_onnx::onnx().model_for_path(path).unwrap();
+        info!("visibility: {:?}", visibility);
 
         let mut nodes = BTreeMap::<usize, Node>::new();
         let _ = model
@@ -168,6 +215,7 @@ impl Model {
             bits,
             logrows,
             mode,
+            visibility,
         };
 
         debug!("{}", Table::new(om.nodes.flatten()).to_string());
@@ -177,7 +225,7 @@ impl Model {
     /// Creates a `Model` based on CLI arguments
     pub fn from_arg() -> Self {
         let args = Cli::parse();
-
+        let visibility = ModelVisibility::from_args();
         match args.command {
             Commands::Table { model } => Model::new(
                 model_path(model),
@@ -186,6 +234,7 @@ impl Model {
                 args.logrows,
                 args.tolerance,
                 Mode::Table,
+                visibility,
             ),
             Commands::Mock { data: _, model } => Model::new(
                 model_path(model),
@@ -194,6 +243,7 @@ impl Model {
                 args.logrows,
                 args.tolerance,
                 Mode::Mock,
+                visibility,
             ),
             Commands::Fullprove {
                 data: _,
@@ -206,6 +256,7 @@ impl Model {
                 args.logrows,
                 args.tolerance,
                 Mode::FullProve,
+                visibility,
             ),
             Commands::Prove {
                 data: _,
@@ -219,6 +270,7 @@ impl Model {
                 args.logrows,
                 args.tolerance,
                 Mode::Prove,
+                visibility,
             ),
             Commands::Verify {
                 model,
@@ -231,6 +283,7 @@ impl Model {
                 args.logrows,
                 args.tolerance,
                 Mode::Verify,
+                visibility,
             ),
         }
     }
@@ -310,7 +363,7 @@ impl Model {
 
         info!("output_shapes {:?}", output_shapes);
 
-        for (i, instance) in vars.instances.iter().enumerate() {
+        for i in 0..output_shapes.len() {
             let s = output_shapes[i].clone();
             let input = vars.advices[0].reshape(&s);
             let output = vars.advices[1].reshape(&s);
@@ -319,7 +372,7 @@ impl Model {
                 meta,
                 &input,
                 &output,
-                instance,
+                &vars.instances[i],
                 self.tolerance,
             ));
         }
@@ -371,7 +424,11 @@ impl Model {
                     .filter(|i| !nodes.contains_key(&i.idx) && seen.insert(i.idx))
                     .map(|f| {
                         let s = f.out_dims.clone();
-                        let a = (f.idx, vars.advices[start].reshape(&s));
+                        let a = if f.opkind.is_const() && self.visibility.params.is_public() {
+                            (f.idx, vars.fixed[start].reshape(&s))
+                        } else {
+                            (f.idx, vars.advices[start].reshape(&s))
+                        };
                         start += 1;
                         a
                     })
@@ -688,6 +745,11 @@ impl Model {
 
     pub fn output_outlets(&self) -> Result<Vec<OutletId>> {
         Ok(self.model.output_outlets()?.to_vec())
+    }
+
+    pub fn num_inputs(&self) -> usize {
+        let input_nodes = self.model.inputs.iter();
+        input_nodes.len()
     }
 
     pub fn num_outputs(&self) -> usize {
