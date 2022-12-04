@@ -25,9 +25,7 @@ pub enum VarTensor {
         dims: Vec<usize>,
     },
     Instance {
-        inner: Vec<Column<Instance>>,
-        col_size: usize,
-        capacity: usize,
+        inner: Column<Instance>,
         dims: Vec<usize>,
     },
 }
@@ -62,29 +60,14 @@ impl VarTensor {
 
     pub fn new_instance<F: FieldExt>(
         cs: &mut ConstraintSystem<F>,
-        k: usize,
-        capacity: usize,
         dims: Vec<usize>,
         equality: bool,
     ) -> Self {
-        let base = 2u32;
-        let max_rows = base.pow(k as u32) as usize - cs.blinding_factors() - 1;
-        let modulo = (capacity / max_rows) + 1;
-        let mut instances = vec![];
-        for _ in 0..modulo {
-            let col = cs.instance_column();
-            if equality {
-                cs.enable_equality(col);
-            }
-            instances.push(col);
+        let col = cs.instance_column();
+        if equality {
+            cs.enable_equality(col);
         }
-
-        VarTensor::Instance {
-            inner: instances,
-            col_size: max_rows,
-            capacity,
-            dims,
-        }
+        VarTensor::Instance { inner: col, dims }
     }
 
     pub fn new_fixed<F: FieldExt>(
@@ -119,7 +102,7 @@ impl VarTensor {
         match self {
             VarTensor::Advice { inner, .. } => inner.len(),
             VarTensor::Fixed { inner, .. } => inner.len(),
-            VarTensor::Instance { inner, .. } => inner.len(),
+            VarTensor::Instance { .. } => 1,
         }
     }
 
@@ -157,15 +140,8 @@ impl VarTensor {
                 capacity: *capacity,
                 dims: new_dims.to_vec(),
             },
-            VarTensor::Instance {
-                inner,
-                col_size,
-                capacity,
-                ..
-            } => VarTensor::Instance {
+            VarTensor::Instance { inner, .. } => VarTensor::Instance {
                 inner: inner.clone(),
-                col_size: *col_size,
-                capacity: *capacity,
                 dims: new_dims.to_vec(),
             },
         }
@@ -173,22 +149,20 @@ impl VarTensor {
 
     pub fn cartesian_coord(&self, linear_coord: usize) -> (usize, usize) {
         match self {
-            VarTensor::Advice { col_size, .. }
-            | VarTensor::Fixed { col_size, .. }
-            | VarTensor::Instance { col_size, .. } => {
+            VarTensor::Advice { col_size, .. } | VarTensor::Fixed { col_size, .. } => {
                 let x = linear_coord / col_size;
                 let y = linear_coord % col_size;
                 (x, y)
             }
+            _ => unimplemented!(),
         }
     }
 
     /// Returns the `capacity` attribute of the `VarTensor`.
     pub fn capacity(&self) -> usize {
         match self {
-            VarTensor::Advice { capacity, .. }
-            | VarTensor::Fixed { capacity, .. }
-            | VarTensor::Instance { capacity, .. } => *capacity,
+            VarTensor::Advice { capacity, .. } | VarTensor::Fixed { capacity, .. } => *capacity,
+            _ => unimplemented!(),
         }
     }
 }
@@ -216,15 +190,14 @@ impl VarTensor {
                 Ok(c)
             }
             VarTensor::Instance {
-                inner: instances,
+                inner: instance,
                 dims,
                 ..
             } => {
                 let mut c = Tensor::from(
                     // this should fail if dims is empty, should be impossible
                     (0..dims.iter().product::<usize>()).map(|i| {
-                        let (x, y) = self.cartesian_coord(i);
-                        meta.query_instance(instances[x], Rotation(offset as i32 + y as i32))
+                        meta.query_instance(*instance, Rotation(offset as i32 + i as i32))
                     }),
                 );
                 c.reshape(dims);
@@ -247,6 +220,42 @@ impl VarTensor {
                 Ok(c)
             }
         }
+    }
+
+    /// Assigns specific values (`ValTensor`) to the columns of the inner tensor.
+    pub fn assign_from_var<F: FieldExt + TensorType>(
+        &self,
+        region: &mut Region<'_, F>,
+        offset: usize,
+        values: &VarTensor,
+    ) {
+        // assigns the instance to the "expected" advice.
+        match &self {
+            VarTensor::Advice { inner, .. } => {
+                for i in 0..self.dims().iter().product() {
+                    let (x, y) = self.cartesian_coord(offset + i);
+                    match values {
+                        VarTensor::Instance {
+                            inner: instance, ..
+                        } => {
+                            region
+                                .assign_advice_from_instance(
+                                    || "pub input anchor",
+                                    *instance,
+                                    i,
+                                    inner[x],
+                                    y,
+                                )
+                                .unwrap();
+                        }
+                        _ => unimplemented!(),
+                    }
+                }
+            }
+            _ => {
+                abort!("should be an advice");
+            }
+        };
     }
 
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor.

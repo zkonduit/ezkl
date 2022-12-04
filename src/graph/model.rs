@@ -12,7 +12,7 @@ use clap::Parser;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
-    plonk::{Column, ConstraintSystem, Instance},
+    plonk::ConstraintSystem,
 };
 use itertools::Itertools;
 use log::{debug, error, info, trace};
@@ -71,7 +71,7 @@ pub struct ModelVars {
     pub advices: Vec<VarTensor>,
     pub fixed: Vec<VarTensor>,
     // TODO: create a new VarTensor for Instance Columns
-    pub instances: Vec<Column<Instance>>,
+    pub instances: Vec<VarTensor>,
 }
 /// A wrapper for holding all columns that will be assigned to by a model.
 impl ModelVars {
@@ -80,7 +80,7 @@ impl ModelVars {
         logrows: usize,
         advice_dims: (usize, usize),
         fixed_dims: (usize, usize),
-        num_instances: usize,
+        instance_dims: (usize, usize),
     ) -> Self {
         let advices = (0..advice_dims.0)
             .map(|_| {
@@ -99,12 +99,9 @@ impl ModelVars {
                 VarTensor::new_fixed(cs, logrows as usize, fixed_dims.1, vec![fixed_dims.1], true)
             })
             .collect_vec();
-        let instances = (0..num_instances)
-            .map(|_| {
-                let l = cs.instance_column();
-                cs.enable_equality(l);
-                l
-            })
+        // todo init fixed
+        let instances = (0..instance_dims.0)
+            .map(|_| VarTensor::new_instance(cs, vec![instance_dims.1], true))
             .collect_vec();
         ModelVars {
             advices,

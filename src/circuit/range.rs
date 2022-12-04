@@ -4,7 +4,7 @@ use crate::tensor::{TensorType, ValTensor, VarTensor};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::Layouter,
-    plonk::{Column, ConstraintSystem, Constraints, Expression, Instance, Selector},
+    plonk::{ConstraintSystem, Constraints, Expression, Selector},
 };
 use log::error;
 use std::marker::PhantomData;
@@ -14,7 +14,7 @@ use std::marker::PhantomData;
 pub struct RangeCheckConfig<F: FieldExt> {
     input: VarTensor,
     pub expected: VarTensor,
-    pub instance: Column<Instance>,
+    pub output: VarTensor,
     selector: Selector,
     _marker: PhantomData<F>,
 }
@@ -30,14 +30,14 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
         meta: &mut ConstraintSystem<F>,
         input: &VarTensor,
         expected: &VarTensor,
-        instance: &Column<Instance>,
+        output: &VarTensor,
         tol: usize,
     ) -> Self {
         let config = Self {
             selector: meta.selector(),
             input: input.clone(),
             expected: expected.clone(),
-            instance: *instance,
+            output: output.clone(),
             _marker: PhantomData,
         };
 
@@ -102,28 +102,9 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
                     }
                 };
 
-                // assigns the instance to the "expected" advice.
-                match self.expected.clone() {
-                    VarTensor::Advice { inner, .. } => {
-                        let inner_loop = input.dims().iter().product();
+                self.expected
+                    .assign_from_var(&mut region, offset, &self.output);
 
-                        for i in 0..inner_loop {
-                            let (x, y) = self.expected.cartesian_coord(i);
-                            region
-                                .assign_advice_from_instance(
-                                    || "pub input anchor",
-                                    self.instance,
-                                    i,
-                                    inner[x],
-                                    y,
-                                )
-                                .unwrap();
-                        }
-                    }
-                    _ => {
-                        abort!("should be an advice");
-                    }
-                }
                 Ok(())
             },
         ) {
@@ -171,11 +152,7 @@ mod tests {
                 .collect_vec();
             let input = &advices[0];
             let expected = &advices[1];
-            let instance = {
-                let l = cs.instance_column();
-                cs.enable_equality(l);
-                l
-            };
+            let instance = VarTensor::new_instance(cs, vec![1], true);
 
             RangeCheckConfig::configure(cs, &input, &expected, &instance, RANGE)
         }

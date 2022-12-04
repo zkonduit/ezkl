@@ -40,7 +40,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
             model.logrows as usize,
             (num_advice, advice_cap),
             (0, 0),
-            num_instances,
+            (num_instances, usize::MAX),
         );
         info!("advice cap: {:?}", advice_cap);
         info!(

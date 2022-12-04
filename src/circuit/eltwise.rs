@@ -164,10 +164,10 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
                                         + not_qlookup.clone() * default_x
                                 }
                                 VarTensor::Instance {
-                                    inner: instances, ..
+                                    inner: instance, ..
                                 } => {
                                     qlookup.clone()
-                                        * cs.query_instance(instances[x], Rotation(y as i32))
+                                        * cs.query_instance(*instance, Rotation(i as i32))
                                         + not_qlookup.clone() * default_x
                                 }
                             },
@@ -184,9 +184,9 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
                                         + not_qlookup * default_y
                                 }
                                 VarTensor::Instance {
-                                    inner: instances, ..
+                                    inner: instance, ..
                                 } => {
-                                    qlookup * cs.query_instance(instances[x], Rotation(y as i32))
+                                    qlookup * cs.query_instance(*instance, Rotation(i as i32))
                                         + not_qlookup.clone() * default_y
                                 }
                             },
