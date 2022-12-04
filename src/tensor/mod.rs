@@ -138,6 +138,20 @@ impl<F: FieldExt> TensorType for AssignedCell<Assigned<F>, F> {
     }
 }
 
+impl<F: FieldExt> TensorType for AssignedCell<F, F> {
+    fn tmax(&self, other: &Self) -> Option<Self> {
+        let mut output: Option<Self> = None;
+        self.value().zip(other.value()).map(|(a, b)| {
+            if a >= b {
+                output = Some(self.clone());
+            } else {
+                output = Some(other.clone());
+            }
+        });
+        output
+    }
+}
+
 // specific types
 impl TensorType for halo2curves::pasta::Fp {
     fn zero() -> Option<Self> {
@@ -218,6 +232,20 @@ impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>
         let mut output = Vec::new();
         value.map(|x| {
             x.evaluate().value().map(|y| {
+                let e = felt_to_i32(*y);
+                output.push(e);
+                e
+            })
+        });
+        Tensor::new(Some(&output), value.dims()).unwrap()
+    }
+}
+
+impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<F, F>>> for Tensor<i32> {
+    fn from(value: Tensor<AssignedCell<F, F>>) -> Tensor<i32> {
+        let mut output = Vec::new();
+        value.map(|x| {
+            x.value().map(|y| {
                 let e = felt_to_i32(*y);
                 output.push(e);
                 e
@@ -422,7 +450,10 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// let mut c = a.enum_map(|i, x| i32::pow(x + i as i32, 2)).unwrap();
     /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
     /// ```
-    pub fn enum_map<F: FnMut(usize, T) -> G, G: TensorType>(&self, mut f: F) ->  Result<Tensor<G>, TensorError> {
+    pub fn enum_map<F: FnMut(usize, T) -> G, G: TensorType>(
+        &self,
+        mut f: F,
+    ) -> Result<Tensor<G>, TensorError> {
         let mut t = Tensor::from(self.inner.iter().enumerate().map(|(i, e)| f(i, e.clone())));
         t.reshape(self.dims());
         Ok(t)

@@ -11,10 +11,10 @@ use std::marker::PhantomData;
 
 /// Configuration for a range check on the difference between `input` and `expected`.
 #[derive(Debug, Clone)]
-pub struct RangeCheckConfig<F: FieldExt> {
+pub struct RangeCheckConfig<F: FieldExt + TensorType> {
     input: VarTensor,
     pub expected: VarTensor,
-    pub output: VarTensor,
+    pub output: ValTensor<F>,
     selector: Selector,
     _marker: PhantomData<F>,
 }
@@ -30,7 +30,7 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
         meta: &mut ConstraintSystem<F>,
         input: &VarTensor,
         expected: &VarTensor,
-        output: &VarTensor,
+        output: &ValTensor<F>,
         tol: usize,
     ) -> Self {
         let config = Self {
@@ -94,16 +94,21 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
 
                 // assigns the instance to the advice.
                 match self.input.assign(&mut region, offset, &input) {
-                    Ok(res) => {
-                        res.map(|elem| elem.value_field().evaluate());
-                    }
+                    Ok(_) => {}
                     Err(e) => {
                         abort!("failed to assign inputs during range layer layout {:?}", e);
                     }
                 };
 
-                self.expected
-                    .assign_from_var(&mut region, offset, &self.output);
+                match self.expected.assign(&mut region, offset, &self.output) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        abort!(
+                            "failed to assign expected output during range layer layout {:?}",
+                            e
+                        );
+                    }
+                };
 
                 Ok(())
             },
@@ -152,7 +157,7 @@ mod tests {
                 .collect_vec();
             let input = &advices[0];
             let expected = &advices[1];
-            let instance = VarTensor::new_instance(cs, vec![1], true);
+            let instance = ValTensor::new_instance(cs, vec![1], true);
 
             RangeCheckConfig::configure(cs, &input, &expected, &instance, RANGE)
         }

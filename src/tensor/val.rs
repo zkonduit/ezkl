@@ -1,5 +1,5 @@
 use super::*;
-
+use halo2_proofs::plonk::Instance;
 /// A wrapper around a tensor where the inner type is one of Halo2's `Value<F>`, `Value<Assigned<F>>`, `AssignedCell<Assigned<F>, F>`.
 /// This enum is generally used to assign values to variables / advices already configured in a Halo2 circuit (usually represented as a [VarTensor]).
 /// For instance can represent pre-trained neural network weights; or a known input to a network.
@@ -14,7 +14,11 @@ pub enum ValTensor<F: FieldExt + TensorType> {
         dims: Vec<usize>,
     },
     PrevAssigned {
-        inner: Tensor<AssignedCell<Assigned<F>, F>>,
+        inner: Tensor<AssignedCell<F, F>>,
+        dims: Vec<usize>,
+    },
+    Instance {
+        inner: Column<Instance>,
         dims: Vec<usize>,
     },
 }
@@ -37,8 +41,8 @@ impl<F: FieldExt + TensorType> From<Tensor<Value<Assigned<F>>>> for ValTensor<F>
     }
 }
 
-impl<F: FieldExt + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>> for ValTensor<F> {
-    fn from(t: Tensor<AssignedCell<Assigned<F>, F>>) -> ValTensor<F> {
+impl<F: FieldExt + TensorType> From<Tensor<AssignedCell<F, F>>> for ValTensor<F> {
+    fn from(t: Tensor<AssignedCell<F, F>>) -> ValTensor<F> {
         ValTensor::PrevAssigned {
             inner: t.clone(),
             dims: t.dims().to_vec(),
@@ -47,6 +51,14 @@ impl<F: FieldExt + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>> for Va
 }
 
 impl<F: FieldExt + TensorType> ValTensor<F> {
+    pub fn new_instance(cs: &mut ConstraintSystem<F>, dims: Vec<usize>, equality: bool) -> Self {
+        let col = cs.instance_column();
+        if equality {
+            cs.enable_equality(col);
+        }
+        ValTensor::Instance { inner: col, dims }
+    }
+
     /// Calls `get_slice` on the inner tensor.
     pub fn get_slice(&self, indices: &[Range<usize>]) -> ValTensor<F> {
         match self {
@@ -71,6 +83,7 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                     dims: slice.dims().to_vec(),
                 }
             }
+            _ => unimplemented!(),
         }
     }
 
@@ -101,6 +114,13 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                 v.reshape(new_dims);
                 *d = v.dims().to_vec();
             }
+            ValTensor::Instance { dims: d, .. } => {
+                assert_eq!(
+                    d.iter().product::<usize>(),
+                    new_dims.iter().product::<usize>()
+                );
+                *d = new_dims.to_vec();
+            }
         }
     }
 
@@ -119,15 +139,19 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                 v.flatten();
                 *d = v.dims().to_vec();
             }
+            ValTensor::Instance { dims: d, .. } => {
+                *d = vec![d.iter().product()];
+            }
         }
     }
 
     /// Returns the `dims` attribute of the `ValTensor`.
     pub fn dims(&self) -> &[usize] {
         match self {
-            ValTensor::Value { inner: _, dims: d } => d,
-            ValTensor::AssignedValue { inner: _, dims: d } => d,
-            ValTensor::PrevAssigned { inner: _, dims: d } => d,
+            ValTensor::Value { dims: d, .. }
+            | ValTensor::AssignedValue { dims: d, .. }
+            | ValTensor::PrevAssigned { dims: d, .. }
+            | ValTensor::Instance { dims: d, .. } => d,
         }
     }
     pub fn show(&self) -> String {

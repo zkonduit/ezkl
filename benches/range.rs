@@ -35,7 +35,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
             .map(|_| VarTensor::new_advice(cs, K, len, vec![len], true))
             .collect_vec();
 
-        let instance = VarTensor::new_instance(cs, vec![len], true);
+        let instance = ValTensor::new_instance(cs, vec![len], true);
 
         RangeCheckConfig::configure(cs, &advices[0], &advices[1], &instance, RANGE)
     }

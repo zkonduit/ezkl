@@ -67,15 +67,15 @@ impl<F: FieldExt + TensorType> TableTypes<F> {
     }
 }
 
-pub struct ModelVars {
+pub struct ModelVars<F: FieldExt + TensorType> {
     pub advices: Vec<VarTensor>,
     pub fixed: Vec<VarTensor>,
     // TODO: create a new VarTensor for Instance Columns
-    pub instances: Vec<VarTensor>,
+    pub instances: Vec<ValTensor<F>>,
 }
 /// A wrapper for holding all columns that will be assigned to by a model.
-impl ModelVars {
-    pub fn new<F: FieldExt>(
+impl<F: FieldExt + TensorType> ModelVars<F> {
+    pub fn new(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         advice_dims: (usize, usize),
@@ -101,7 +101,7 @@ impl ModelVars {
             .collect_vec();
         // todo init fixed
         let instances = (0..instance_dims.0)
-            .map(|_| VarTensor::new_instance(cs, vec![instance_dims.1], true))
+            .map(|_| ValTensor::new_instance(cs, vec![instance_dims.1], true))
             .collect_vec();
         ModelVars {
             advices,
@@ -245,7 +245,7 @@ impl Model {
     pub fn configure<F: FieldExt + TensorType>(
         &self,
         meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars,
+        vars: &mut ModelVars<F>,
     ) -> Result<ModelConfig<F>> {
         info!("configuring model");
         let mut results = BTreeMap::new();
@@ -299,7 +299,7 @@ impl Model {
     fn range_check_outputs<F: FieldExt + TensorType>(
         &self,
         meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars,
+        vars: &mut ModelVars<F>,
     ) -> Vec<RangeCheckConfig<F>> {
         let mut configs = vec![];
         let output_nodes = self.model.outputs.clone();
@@ -338,7 +338,7 @@ impl Model {
         &self,
         nodes: &BTreeMap<&usize, &Node>,
         meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars,
+        vars: &mut ModelVars<F>,
     ) -> NodeConfigTypes<F> {
         let input_nodes: BTreeMap<(&usize, &FusedOp), Vec<Node>> = nodes
             .iter()
@@ -432,7 +432,7 @@ impl Model {
         &self,
         node: &Node,
         meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars,
+        vars: &mut ModelVars<F>,
         tables: &mut BTreeMap<OpKind, TableTypes<F>>,
     ) -> NodeConfigTypes<F> {
         let input_len = node.in_dims[0].iter().product();
