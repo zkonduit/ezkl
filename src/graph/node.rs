@@ -1,5 +1,5 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
-use crate::circuit::eltwise::{DivideBy, EltwiseConfig, LeakyReLU, ReLU, Sigmoid};
+use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
 use crate::circuit::fused::*;
 
 use crate::abort;
@@ -119,8 +119,7 @@ impl fmt::Display for OpKind {
 #[allow(missing_docs)]
 #[derive(Clone, Default, Debug)]
 pub enum NodeConfigTypes<F: FieldExt + TensorType> {
-    ReLU(EltwiseConfig<F, ReLU<F>>, Vec<usize>),
-    LeakyReLU(EltwiseConfig<F, LeakyReLU<F>>, Vec<usize>),
+    ReLU(EltwiseConfig<F, ReLu<F>>, Vec<usize>),
     Sigmoid(EltwiseConfig<F, Sigmoid<F>>, Vec<usize>),
     Divide(EltwiseConfig<F, DivideBy<F>>, Vec<usize>),
     Fused(FusedConfig<F>, Vec<usize>),
@@ -346,6 +345,36 @@ impl Node {
                     out_scale: scale,
                     output_max,
                     ..Default::default()
+                }
+            }
+            OpKind::LeakyReLU(_) => {
+                let input_node = &inputs[0];
+                mn.in_dims = input_node.out_dims.clone();
+                mn.out_dims = input_node.out_dims.clone();
+                mn.output_max = input_node.output_max;
+                mn.in_scale = input_node.out_scale;
+                mn.out_scale = scale;
+                let scale_diff = mn.in_scale - mn.out_scale;
+                // We can also consider adjusting the scale of all inputs and the output in a more custom way.
+                if scale_diff > 0 {
+                    let mult = scale_to_multiplier(scale_diff);
+                    mn.opkind = OpKind::LeakyReLU(mult as usize); // now the input will be scaled down to match
+                    mn.output_max = input_node.output_max / mult;
+                }
+            }
+            OpKind::LeakyReLU(_) => {
+                let input_node = &inputs[0];
+                mn.in_dims = input_node.out_dims.clone();
+                mn.out_dims = input_node.out_dims.clone();
+                mn.output_max = input_node.output_max;
+                mn.in_scale = input_node.out_scale;
+                mn.out_scale = scale;
+                let scale_diff = mn.in_scale - mn.out_scale;
+                // We can also consider adjusting the scale of all inputs and the output in a more custom way.
+                if scale_diff > 0 {
+                    let mult = scale_to_multiplier(scale_diff);
+                    mn.opkind = OpKind::LeakyReLU(mult as usize); // now the input will be scaled down to match
+                    mn.output_max = input_node.output_max / mult;
                 }
             }
             OpKind::LeakyReLU(_) => {

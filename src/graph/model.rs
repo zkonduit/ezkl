@@ -1,7 +1,6 @@
 use super::node::*;
 use super::utilities::scale_to_multiplier;
-use crate::abort;
-use crate::circuit::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, LeakyRelU, ReLU, Sigmoid};
+use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
 use crate::circuit::fused::*;
 use crate::circuit::range::*;
 use crate::commands::{Cli, Commands};
