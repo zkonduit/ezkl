@@ -1,11 +1,7 @@
 use super::node::*;
 use super::utilities::scale_to_multiplier;
-<<<<<<< HEAD
-use crate::circuit::eltwise::{DivideBy, EltwiseConfig, LeakyReLu, ReLu, Sigmoid};
-=======
 use crate::abort;
-use crate::circuit::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu, Sigmoid};
->>>>>>> 7d863862630ca68c9fd7cef406c3f8892d106c2a
+use crate::circuit::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, LeakyReLU, ReLU, Sigmoid};
 use crate::circuit::fused::*;
 use crate::circuit::range::*;
 use crate::commands::{model_path, Cli, Commands};
@@ -40,14 +36,15 @@ pub enum Mode {
 }
 
 enum TableTypes<F: FieldExt + TensorType> {
-    ReLu(Rc<RefCell<EltwiseTable<F, ReLu<F>>>>),
+    ReLU(Rc<RefCell<EltwiseTable<F, ReLU<F>>>>),
+    LeakyReLU(Rc<RefCell<EltwiseTable<F, LeakyReLU<F>>>>),
     DivideBy(Rc<RefCell<EltwiseTable<F, DivideBy<F>>>>),
     Sigmoid(Rc<RefCell<EltwiseTable<F, Sigmoid<F>>>>),
 }
 impl<F: FieldExt + TensorType> TableTypes<F> {
-    fn get_relu(&self) -> Rc<RefCell<EltwiseTable<F, ReLu<F>>>> {
+    fn get_relu(&self) -> Rc<RefCell<EltwiseTable<F, ReLU<F>>>> {
         match self {
-            TableTypes::ReLu(inner) => inner.clone(),
+            TableTypes::ReLU(inner) => inner.clone(),
             _ => {
                 abort!("fetching wrong table type");
             }
@@ -467,37 +464,22 @@ impl Model {
             OpKind::ReLU(s) => {
                 if tables.contains_key(&node.opkind) {
                     let table = tables.get(&node.opkind).unwrap().clone();
-                    let conf: EltwiseConfig<F, ReLu<F>> =
+                    let conf: EltwiseConfig<F, ReLU<F>> =
                         EltwiseConfig::configure_with_table(meta, input, output, table.get_relu());
                     NodeConfigTypes::ReLU(conf, node_inputs)
                 } else {
-                    let conf: EltwiseConfig<F, ReLu<F>> =
+                    let conf: EltwiseConfig<F, ReLU<F>> =
                         EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
-                    tables.insert(node.opkind.clone(), TableTypes::ReLu(conf.table.clone()));
+                    tables.insert(node.opkind.clone(), TableTypes::ReLU(conf.table.clone()));
                     NodeConfigTypes::ReLU(conf, node_inputs)
                 }
             }
-<<<<<<< HEAD
             OpKind::LeakyReLU(s) => {
-                let conf: EltwiseConfig<F, LeakyReLu<F>> =
+                let conf: EltwiseConfig<F, LeakyReLU<F>> =
                     EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
                 let inputs = node.inputs.iter().map(|e| e.node).collect();
                 NodeConfigTypes::LeakyReLU(conf, inputs)
             }
-            OpKind::Sigmoid(denominator) => {
-                let conf: EltwiseConfig<F, Sigmoid<F>> = EltwiseConfig::configure(
-                    meta,
-                    input,
-                    output,
-                    Some(&[
-                        self.bits,
-                        *denominator,
-                        scale_to_multiplier(self.scale) as usize,
-                    ]),
-                );
-                let inputs = node.inputs.iter().map(|e| e.node).collect();
-                NodeConfigTypes::Sigmoid(conf, inputs)
-=======
             OpKind::Sigmoid(s) => {
                 if tables.contains_key(&node.opkind) {
                     let table = tables.get(&node.opkind).unwrap().clone();
@@ -514,7 +496,6 @@ impl Model {
                     tables.insert(node.opkind.clone(), TableTypes::Sigmoid(conf.table.clone()));
                     NodeConfigTypes::Sigmoid(conf, node_inputs)
                 }
->>>>>>> 7d863862630ca68c9fd7cef406c3f8892d106c2a
             }
             OpKind::Const => {
                 // Typically parameters for one or more layers.

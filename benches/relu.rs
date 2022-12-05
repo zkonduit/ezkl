@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::circuit::eltwise::{EltwiseConfig, Nonlin1d, Nonlinearity, ReLu};
+use ezkl::circuit::eltwise::{EltwiseConfig, Nonlin1d, Nonlinearity, ReLU};
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
@@ -65,13 +65,13 @@ fn runrelu(c: &mut Criterion) {
         let input: Tensor<Value<F>> =
             Tensor::<i32>::from((0..len).map(|_| rng.gen_range(0..10))).into();
 
-        let assigned: Nonlin1d<F, ReLu<F>> = Nonlin1d {
+        let assigned: Nonlin1d<F, ReLU<F>> = Nonlin1d {
             input: ValTensor::from(input.clone()),
             output: ValTensor::from(input),
             _marker: PhantomData,
         };
 
-        let circuit = NLCircuit::<F, ReLu<F>> {
+        let circuit = NLCircuit::<F, ReLU<F>> {
             assigned,
             _marker: PhantomData,
         };
