@@ -1,7 +1,7 @@
 use super::node::*;
 use super::utilities::scale_to_multiplier;
-use super::vars::*;
-use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
+use crate::abort;
+use crate::circuit::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, LeakyRelU, ReLU, Sigmoid};
 use crate::circuit::fused::*;
 use crate::circuit::range::*;
 use crate::commands::{Cli, Commands};
@@ -39,7 +39,86 @@ pub enum Mode {
     Verify,
 }
 
-/// A circuit configuration for  a model loaded from an Onnx file.
+enum TableTypes<F: FieldExt + TensorType> {
+    ReLu(Rc<RefCell<EltwiseTable<F, ReLu<F>>>>),
+    DivideBy(Rc<RefCell<EltwiseTable<F, DivideBy<F>>>>),
+    Sigmoid(Rc<RefCell<EltwiseTable<F, Sigmoid<F>>>>),
+}
+impl<F: FieldExt + TensorType> TableTypes<F> {
+    fn get_relu(&self) -> Rc<RefCell<EltwiseTable<F, ReLu<F>>>> {
+        match self {
+            TableTypes::ReLu(inner) => inner.clone(),
+            _ => {
+                abort!("fetching wrong table type");
+            }
+        }
+    }
+    fn get_div(&self) -> Rc<RefCell<EltwiseTable<F, DivideBy<F>>>> {
+        match self {
+            TableTypes::DivideBy(inner) => inner.clone(),
+            _ => {
+                abort!("fetching wrong table type");
+            }
+        }
+    }
+    fn get_sig(&self) -> Rc<RefCell<EltwiseTable<F, Sigmoid<F>>>> {
+        match self {
+            TableTypes::Sigmoid(inner) => inner.clone(),
+            _ => {
+                abort!("fetching wrong table type");
+            }
+        }
+    }
+}
+
+pub struct ModelVars {
+    pub advices: Vec<VarTensor>,
+    pub fixed: Vec<VarTensor>,
+    // TODO: create a new VarTensor for Instance Columns
+    pub instances: Vec<Column<Instance>>,
+}
+/// A wrapper for holding all columns that will be assigned to by a model.
+impl ModelVars {
+    pub fn new<F: FieldExt>(
+        cs: &mut ConstraintSystem<F>,
+        logrows: usize,
+        advice_dims: (usize, usize),
+        fixed_dims: (usize, usize),
+        num_instances: usize,
+    ) -> Self {
+        let advices = (0..advice_dims.0)
+            .map(|_| {
+                VarTensor::new_advice(
+                    cs,
+                    logrows as usize,
+                    advice_dims.1,
+                    vec![advice_dims.1],
+                    true,
+                )
+            })
+            .collect_vec();
+        // todo init fixed
+        let fixed = (0..fixed_dims.0)
+            .map(|_| {
+                VarTensor::new_fixed(cs, logrows as usize, fixed_dims.1, vec![fixed_dims.1], true)
+            })
+            .collect_vec();
+        let instances = (0..num_instances)
+            .map(|_| {
+                let l = cs.instance_column();
+                cs.enable_equality(l);
+                l
+            })
+            .collect_vec();
+        ModelVars {
+            advices,
+            fixed,
+            instances,
+        }
+    }
+}
+
+/// A circuit configuration for the entirety of a model loaded from an Onnx file.
 #[derive(Clone)]
 pub struct ModelConfig<F: FieldExt + TensorType> {
     configs: BTreeMap<usize, NodeConfig<F>>,
@@ -401,15 +480,31 @@ impl Model {
             }
             OpKind::ReLU(s) => {
                 if tables.contains_key(&node.opkind) {
-                    let table = tables.get(&node.opkind).unwrap();
+                    let table = tables.get(&node.opkind).unwrap().clone();
                     let conf: EltwiseConfig<F, ReLu<F>> =
                         EltwiseConfig::configure_with_table(meta, input, output, table.get_relu());
                     NodeConfig::ReLU(conf, node_inputs)
                 } else {
-                    let conf: EltwiseConfig<F, ReLu<F>> =
+                    let conf: EltwiseConfig<F, ReLU<F>> =
                         EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
                     tables.insert(node.opkind.clone(), TableTypes::ReLu(conf.table.clone()));
-                    NodeConfig::ReLU(conf, node_inputs)
+                    NodeConfigTypes::ReLU(conf, node_inputs)
+                }
+            }
+            OpKind::LeakyReLU(s) => {
+                if tables.contains_key(&node.opkind) {
+                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let conf: EltwiseConfig<F, LeakyReLU<F>> =
+                        EltwiseConfig::configure_with_table(meta, input, output, table.get_relu());
+                    NodeConfig::LeakyReLU(conf, node_inputs)
+                } else {
+                    let conf: EltwiseConfig<F, ReLU<F>> =
+                        EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
+                    tables.insert(
+                        node.opkind.clone(),
+                        TableTypes::LeakyReLU(conf.table.clone()),
+                    );
+                    NodeConfigTypes::LeakyReLU(conf, node_inputs)
                 }
             }
             OpKind::Sigmoid(s) => {

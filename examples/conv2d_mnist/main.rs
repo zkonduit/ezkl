@@ -1,4 +1,4 @@
-use ezkl::circuit::eltwise::{EltwiseConfig, ReLu};
+use ezkl::circuit::eltwise::{EltwiseConfig, ReLU};
 use ezkl::circuit::fused::*;
 use ezkl::fieldutils;
 use ezkl::fieldutils::i32_to_felt;
@@ -54,7 +54,7 @@ struct Config<
 {
     // this will be a conv layer
     l0: FusedConfig<F>,
-    l1: EltwiseConfig<F, ReLu<F>>,
+    l1: EltwiseConfig<F, ReLU<F>>,
     // this will be an affine layer
     l2: FusedConfig<F>,
     public_output: Column<Instance>,
@@ -200,7 +200,7 @@ where
         let input = input.reshape(&[LEN]);
         let output = output.reshape(&[LEN]);
 
-        let l1: EltwiseConfig<F, ReLu<F>> =
+        let l1: EltwiseConfig<F, ReLU<F>> =
             EltwiseConfig::configure(cs, &input, &output, Some(&[BITS, 32]));
 
         // tells the config layer to add an affine op to the circuit gate
@@ -384,7 +384,7 @@ pub fn runconv() {
         let root = BitMapBackend::new("conv2dmnist-layout.png", (2048, 7680)).into_drawing_area();
         root.fill(&WHITE).unwrap();
         let root = root
-            .titled("Conv -> ReLu -> Affine -> Relu", ("sans-serif", 60))
+            .titled("Conv -> ReLU -> Affine -> ReLU", ("sans-serif", 60))
             .unwrap();
 
         halo2_proofs::dev::CircuitLayout::default()

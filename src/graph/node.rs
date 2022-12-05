@@ -1,5 +1,5 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
-use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
+use crate::circuit::eltwise::{DivideBy, EltwiseConfig, LeakyReLU, ReLU, Sigmoid};
 use crate::circuit::fused::*;
 
 use crate::abort;
@@ -37,6 +37,8 @@ use tract_onnx::tract_hir::{
 pub enum OpKind {
     /// A ReLU nonlinearity
     ReLU(usize),
+    /// A Leaky ReLU nonlinearity
+    LeakyReLU(usize),
     /// A Sigmoid nonlinearity
     Sigmoid(usize),
     /// A DivideBy nonlinearity
@@ -59,7 +61,7 @@ impl OpKind {
     pub fn new(name: &str) -> Self {
         match name {
             "Clip" => OpKind::ReLU(1),
-            "Prelu" => OpKind::ReLU(1),
+            "Prelu" => OpKind::LeakyReLU(1),
             "Sigmoid" => OpKind::Sigmoid(1),
             "Div" => OpKind::Div(1),
             "Const" => OpKind::Const,
@@ -101,6 +103,7 @@ impl fmt::Display for OpKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             OpKind::ReLU(s) => write!(f, "relu w/ scaling: {}", s),
+            OpKind::LeakyReLU(s) => write!(f, "leaky relu w/ scaling: {}", s),
             OpKind::Div(s) => write!(f, "div  w/ scaling: {}", s),
             OpKind::Sigmoid(s) => write!(f, "sigmoid  w/ scaling: {}", s),
             OpKind::Const => write!(f, "const"),
@@ -115,8 +118,9 @@ impl fmt::Display for OpKind {
 /// Enum of the different kinds of node configurations `ezkl` can support.
 #[allow(missing_docs)]
 #[derive(Clone, Default, Debug)]
-pub enum NodeConfig<F: FieldExt + TensorType> {
-    ReLU(EltwiseConfig<F, ReLu<F>>, Vec<usize>),
+pub enum NodeConfigTypes<F: FieldExt + TensorType> {
+    ReLU(EltwiseConfig<F, ReLU<F>>, Vec<usize>),
+    LeakyReLU(EltwiseConfig<F, LeakyReLU<F>>, Vec<usize>),
     Sigmoid(EltwiseConfig<F, Sigmoid<F>>, Vec<usize>),
     Divide(EltwiseConfig<F, DivideBy<F>>, Vec<usize>),
     Fused(FusedConfig<F>, Vec<usize>),
@@ -342,6 +346,21 @@ impl Node {
                     out_scale: scale,
                     output_max,
                     ..Default::default()
+                }
+            }
+            OpKind::LeakyReLU(_) => {
+                let input_node = &inputs[0];
+                mn.in_dims = input_node.out_dims.clone();
+                mn.out_dims = input_node.out_dims.clone();
+                mn.output_max = input_node.output_max;
+                mn.in_scale = input_node.out_scale;
+                mn.out_scale = scale;
+                let scale_diff = mn.in_scale - mn.out_scale;
+                // We can also consider adjusting the scale of all inputs and the output in a more custom way.
+                if scale_diff > 0 {
+                    let mult = scale_to_multiplier(scale_diff);
+                    mn.opkind = OpKind::LeakyReLU(mult as usize); // now the input will be scaled down to match
+                    mn.output_max = input_node.output_max / mult;
                 }
             }
             OpKind::Div(_) => {
