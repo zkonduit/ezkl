@@ -337,11 +337,11 @@ impl<F: FieldExt> Nonlinearity<F> for LeakyReLU<F> {
 
 #[allow(missing_docs)]
 #[derive(Clone, Debug)]
-pub struct LeakyReLu<F> {
+pub struct LeakyReLU<F> {
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> Nonlinearity<F> for LeakyReLu<F> {
+impl<F: FieldExt> Nonlinearity<F> for LeakyReLU<F> {
     fn nonlinearity(x: i32, scale: &[usize]) -> F {
         if x < 0 {
             let d_inv_x = (0.05) * (x as f32) / (scale[0] as f32);
@@ -431,7 +431,7 @@ mod tests {
     #[test]
     fn test_eltrelunl() {
         for i in -127..127 {
-            let _r = <ReLu<F> as Nonlinearity<F>>::nonlinearity(i, &[1]);
+            let _r = <ReLU<F> as Nonlinearity<F>>::nonlinearity(i, &[1]);
         }
     }
 

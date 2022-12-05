@@ -1,5 +1,5 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
-use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
+use crate::circuit::eltwise::{DivideBy, EltwiseConfig, LeakyReLU, ReLU, Sigmoid};
 use crate::circuit::fused::*;
 
 use crate::abort;
@@ -119,7 +119,8 @@ impl fmt::Display for OpKind {
 #[allow(missing_docs)]
 #[derive(Clone, Default, Debug)]
 pub enum NodeConfigTypes<F: FieldExt + TensorType> {
-    ReLU(EltwiseConfig<F, ReLu<F>>, Vec<usize>),
+    ReLU(EltwiseConfig<F, ReLU<F>>, Vec<usize>),
+    LeakyReLU(EltwiseConfig<F, LeakyReLU<F>>, Vec<usize>),
     Sigmoid(EltwiseConfig<F, Sigmoid<F>>, Vec<usize>),
     Divide(EltwiseConfig<F, DivideBy<F>>, Vec<usize>),
     Fused(FusedConfig<F>, Vec<usize>),
@@ -379,7 +380,7 @@ impl Node {
             }
             OpKind::LeakyReLU(_) => {
                 let input_node = &inputs[0];
-                mn.in_dims = input_node.out_dims.clone();
+                mn.in_dims = input_node.in_dims.clone();
                 mn.out_dims = input_node.out_dims.clone();
                 mn.output_max = input_node.output_max;
                 mn.in_scale = input_node.out_scale;
