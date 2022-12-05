@@ -1,6 +1,11 @@
 use super::node::*;
 use super::utilities::scale_to_multiplier;
+<<<<<<< HEAD
 use crate::circuit::eltwise::{DivideBy, EltwiseConfig, LeakyReLu, ReLu, Sigmoid};
+=======
+use crate::abort;
+use crate::circuit::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu, Sigmoid};
+>>>>>>> 7d863862630ca68c9fd7cef406c3f8892d106c2a
 use crate::circuit::fused::*;
 use crate::circuit::range::*;
 use crate::commands::{model_path, Cli, Commands};
@@ -18,6 +23,7 @@ use log::{debug, error, info, trace};
 use std::cmp::max;
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
+use std::{cell::RefCell, rc::Rc};
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node as OnnxNode, OutletId};
@@ -31,6 +37,38 @@ pub enum Mode {
     Prove,
     FullProve,
     Verify,
+}
+
+enum TableTypes<F: FieldExt + TensorType> {
+    ReLu(Rc<RefCell<EltwiseTable<F, ReLu<F>>>>),
+    DivideBy(Rc<RefCell<EltwiseTable<F, DivideBy<F>>>>),
+    Sigmoid(Rc<RefCell<EltwiseTable<F, Sigmoid<F>>>>),
+}
+impl<F: FieldExt + TensorType> TableTypes<F> {
+    fn get_relu(&self) -> Rc<RefCell<EltwiseTable<F, ReLu<F>>>> {
+        match self {
+            TableTypes::ReLu(inner) => inner.clone(),
+            _ => {
+                abort!("fetching wrong table type");
+            }
+        }
+    }
+    fn get_div(&self) -> Rc<RefCell<EltwiseTable<F, DivideBy<F>>>> {
+        match self {
+            TableTypes::DivideBy(inner) => inner.clone(),
+            _ => {
+                abort!("fetching wrong table type");
+            }
+        }
+    }
+    fn get_sig(&self) -> Rc<RefCell<EltwiseTable<F, Sigmoid<F>>>> {
+        match self {
+            TableTypes::Sigmoid(inner) => inner.clone(),
+            _ => {
+                abort!("fetching wrong table type");
+            }
+        }
+    }
 }
 
 pub struct ModelVars {
@@ -143,7 +181,7 @@ impl Model {
 
         om
     }
-    /// Creates an `Model` based on CLI arguments
+    /// Creates a `Model` based on CLI arguments
     pub fn from_arg() -> Self {
         let args = Cli::parse();
 
@@ -218,8 +256,10 @@ impl Model {
     ) -> Result<ModelConfig<F>> {
         info!("configuring model");
         let mut results = BTreeMap::new();
+        let mut tables = BTreeMap::new();
 
-        for (_, bucket_nodes) in self.nodes.0.iter() {
+        for (bucket, bucket_nodes) in self.nodes.0.iter() {
+            trace!("configuring bucket: {:?}", bucket);
             let non_fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
                 .filter(|(_, n)| !n.opkind.is_fused())
@@ -227,10 +267,11 @@ impl Model {
 
             if !non_fused_ops.is_empty() {
                 for (i, n) in non_fused_ops.iter() {
+                    let config = self.configure_table(n, meta, vars, &mut tables);
                     results.insert(
                         **i,
                         NodeConfig {
-                            config: self.configure_table(n, meta, vars),
+                            config,
                             onnx_idx: vec![**i],
                         },
                     );
@@ -244,10 +285,11 @@ impl Model {
                 .collect();
             // preserves ordering
             if !fused_ops.is_empty() {
+                let config = self.fuse_ops(&fused_ops, meta, vars);
                 results.insert(
                     **fused_ops.keys().max().unwrap(),
                     NodeConfig {
-                        config: self.fuse_ops(&fused_ops, meta, vars),
+                        config,
                         onnx_idx: fused_ops.keys().map(|k| **k).sorted().collect_vec(),
                     },
                 );
@@ -323,7 +365,6 @@ impl Model {
                 )
             })
             .collect();
-
         // This works because retain only keeps items for which the predicate returns true, and
         // insert only returns true if the item was not previously present in the set.
         // Since the vector is traversed in order, we end up keeping just the first occurrence of each item.
@@ -346,7 +387,6 @@ impl Model {
             .collect_vec();
 
         let output_shape = self.nodes.filter(**nodes.keys().max().unwrap()).out_dims;
-
         // output node
         let output = &vars.advices[start].reshape(&output_shape);
 
@@ -376,7 +416,7 @@ impl Model {
 
         let inputs = inputs_to_layer.iter();
 
-        NodeConfigTypes::Fused(
+        let config = NodeConfigTypes::Fused(
             FusedConfig::configure(
                 meta,
                 &inputs.clone().map(|x| x.1.clone()).collect_vec(),
@@ -384,7 +424,8 @@ impl Model {
                 &fused_nodes,
             ),
             inputs.map(|x| x.0).collect_vec(),
-        )
+        );
+        config
     }
 
     /// Configures a lookup table based operation. These correspond to operations that are represented in
@@ -399,23 +440,44 @@ impl Model {
         node: &Node,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars,
+        tables: &mut BTreeMap<OpKind, TableTypes<F>>,
     ) -> NodeConfigTypes<F> {
-        let input_len = node.in_dims.iter().product();
+        let input_len = node.in_dims[0].iter().product();
         let input = &vars.advices[0].reshape(&[input_len]);
         let output = &vars.advices[1].reshape(&[input_len]);
+        let node_inputs = node.inputs.iter().map(|e| e.node).collect();
+
         match &node.opkind {
             OpKind::Div(s) => {
-                let conf: EltwiseConfig<F, DivideBy<F>> =
-                    EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
-                let inputs = node.inputs.iter().map(|e| e.node).collect();
-                NodeConfigTypes::Divide(conf, inputs)
+                if tables.contains_key(&node.opkind) {
+                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let conf: EltwiseConfig<F, DivideBy<F>> =
+                        EltwiseConfig::configure_with_table(meta, input, output, table.get_div());
+                    NodeConfigTypes::Divide(conf, node_inputs)
+                } else {
+                    let conf: EltwiseConfig<F, DivideBy<F>> =
+                        EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
+                    tables.insert(
+                        node.opkind.clone(),
+                        TableTypes::DivideBy(conf.table.clone()),
+                    );
+                    NodeConfigTypes::Divide(conf, node_inputs)
+                }
             }
             OpKind::ReLU(s) => {
-                let conf: EltwiseConfig<F, ReLu<F>> =
-                    EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
-                let inputs = node.inputs.iter().map(|e| e.node).collect();
-                NodeConfigTypes::ReLU(conf, inputs)
+                if tables.contains_key(&node.opkind) {
+                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let conf: EltwiseConfig<F, ReLu<F>> =
+                        EltwiseConfig::configure_with_table(meta, input, output, table.get_relu());
+                    NodeConfigTypes::ReLU(conf, node_inputs)
+                } else {
+                    let conf: EltwiseConfig<F, ReLu<F>> =
+                        EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
+                    tables.insert(node.opkind.clone(), TableTypes::ReLu(conf.table.clone()));
+                    NodeConfigTypes::ReLU(conf, node_inputs)
+                }
             }
+<<<<<<< HEAD
             OpKind::LeakyReLU(s) => {
                 let conf: EltwiseConfig<F, LeakyReLu<F>> =
                     EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
@@ -435,6 +497,24 @@ impl Model {
                 );
                 let inputs = node.inputs.iter().map(|e| e.node).collect();
                 NodeConfigTypes::Sigmoid(conf, inputs)
+=======
+            OpKind::Sigmoid(s) => {
+                if tables.contains_key(&node.opkind) {
+                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let conf: EltwiseConfig<F, Sigmoid<F>> =
+                        EltwiseConfig::configure_with_table(meta, input, output, table.get_sig());
+                    NodeConfigTypes::Sigmoid(conf, node_inputs)
+                } else {
+                    let conf: EltwiseConfig<F, Sigmoid<F>> = EltwiseConfig::configure(
+                        meta,
+                        input,
+                        output,
+                        Some(&[self.bits, *s, scale_to_multiplier(self.scale) as usize]),
+                    );
+                    tables.insert(node.opkind.clone(), TableTypes::Sigmoid(conf.table.clone()));
+                    NodeConfigTypes::Sigmoid(conf, node_inputs)
+                }
+>>>>>>> 7d863862630ca68c9fd7cef406c3f8892d106c2a
             }
             OpKind::Const => {
                 // Typically parameters for one or more layers.
@@ -520,14 +600,14 @@ impl Model {
                 range_check.layout(layouter.namespace(|| "range check outputs"), output)
             })
             .collect_vec();
-
+        info!("computing...");
         Ok(())
     }
 
     /// Assigns values to a single region, represented as a [NodeConfig].
     /// # Arguments
     ///
-    /// * `config` - [NodeConfig] the signle region we will layout.
+    /// * `config` - [NodeConfig] the single region we will layout.
     /// * `layouter` - Halo2 Layouter.
     /// * `inputs` - `BTreeMap` of values to feed into the NodeConfig, can also include previous intermediate results, i.e the output of other nodes.
     fn layout_config<F: FieldExt + TensorType>(
@@ -568,9 +648,9 @@ impl Model {
                 assert_eq!(idx.len(), 1);
                 Some(sc.layout(layouter, inputs.get(&idx[0]).unwrap().clone()))
             }
-            NodeConfigTypes::Divide(sc, idx) => {
+            NodeConfigTypes::Divide(dc, idx) => {
                 assert_eq!(idx.len(), 1);
-                Some(sc.layout(layouter, inputs.get(&idx[0]).unwrap().clone()))
+                Some(dc.layout(layouter, inputs.get(&idx[0]).unwrap().clone()))
             }
             NodeConfigTypes::Input => None,
             NodeConfigTypes::Const => None,
@@ -656,7 +736,13 @@ impl Model {
             self.nodes
                 .flatten()
                 .iter()
-                .map(|e| e.in_dims.iter().product())
+                .map(|e| {
+                    e.in_dims
+                        .iter()
+                        .map(|dims| dims.iter().product::<usize>())
+                        .max()
+                        .unwrap()
+                })
                 .max()
                 .unwrap(),
             self.nodes
@@ -669,11 +755,37 @@ impl Model {
     }
 
     pub fn max_node_vars(&self) -> usize {
-        self.nodes
-            .flatten()
-            .iter()
-            .map(|e| e.num_var)
-            .max()
-            .unwrap()
+        let mut maximum_number_inputs = 0;
+        for (_, bucket_nodes) in self.nodes.0.iter() {
+            let non_fused_ops = match bucket_nodes
+                .iter()
+                .filter(|(_, n)| !n.opkind.is_fused())
+                .map(|(_, n)| n.inputs.len())
+                .max()
+            {
+                Some(m) => m,
+                None => 0,
+            };
+
+            maximum_number_inputs = max(maximum_number_inputs, non_fused_ops);
+
+            let fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
+                .iter()
+                .filter(|(_, n)| n.opkind.is_fused())
+                .collect();
+
+            let fused_inputs = fused_ops
+                .iter()
+                .map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
+                .flatten()
+                // here we remove intermediary calculation / nodes within the layer
+                .filter(|id| !fused_ops.contains_key(id))
+                .unique()
+                .collect_vec();
+
+            maximum_number_inputs = max(maximum_number_inputs, fused_inputs.len());
+        }
+        // add 1 for layer output
+        maximum_number_inputs + 1
     }
 }

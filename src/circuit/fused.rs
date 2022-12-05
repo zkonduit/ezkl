@@ -17,6 +17,7 @@ use std::marker::PhantomData;
 pub enum FusedOp {
     Identity,
     Reshape(Vec<usize>),
+    Flatten(Vec<usize>),
     Add,
     Sub,
     Sum,
@@ -38,6 +39,7 @@ impl fmt::Display for FusedOp {
         match self {
             FusedOp::Identity => write!(f, "identity"),
             FusedOp::Reshape(new_dims) => write!(f, "reshape to {:?}", new_dims),
+            FusedOp::Flatten(new_dims) => write!(f, "flatten to {:?}", new_dims),
             FusedOp::Add => write!(f, "add"),
             FusedOp::Sub => write!(f, "sub"),
             FusedOp::Sum => write!(f, "sum"),
@@ -250,6 +252,11 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
         match op {
             FusedOp::Identity => inputs[0].clone(),
             FusedOp::Reshape(new_dims) => {
+                let mut t = inputs[0].clone();
+                t.reshape(&new_dims);
+                t
+            }
+            FusedOp::Flatten(new_dims) => {
                 let mut t = inputs[0].clone();
                 t.reshape(&new_dims);
                 t
