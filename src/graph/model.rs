@@ -342,10 +342,15 @@ impl Model {
             }
         }
 
+        let mut public_outputs = vec![];
+        if !self.visibility.output.is_public() {
+            public_outputs = self.range_check_outputs(meta, vars)
+        };
+
         Ok(ModelConfig {
             configs: results,
             model: self.clone(),
-            public_outputs: self.range_check_outputs(meta, vars),
+            public_outputs,
         })
     }
 
