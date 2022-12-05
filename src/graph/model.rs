@@ -1,6 +1,6 @@
 use super::node::*;
 use super::utilities::scale_to_multiplier;
-use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
+use crate::circuit::eltwise::{DivideBy, EltwiseConfig, LeakyReLu, ReLu, Sigmoid};
 use crate::circuit::fused::*;
 use crate::circuit::range::*;
 use crate::commands::{model_path, Cli, Commands};
@@ -415,6 +415,12 @@ impl Model {
                     EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
                 let inputs = node.inputs.iter().map(|e| e.node).collect();
                 NodeConfigTypes::ReLU(conf, inputs)
+            }
+            OpKind::LeakyReLU(s) => {
+                let conf: EltwiseConfig<F, LeakyReLu<F>> =
+                    EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
+                let inputs = node.inputs.iter().map(|e| e.node).collect();
+                NodeConfigTypes::LeakyReLU(conf, inputs)
             }
             OpKind::Sigmoid(denominator) => {
                 let conf: EltwiseConfig<F, Sigmoid<F>> = EltwiseConfig::configure(

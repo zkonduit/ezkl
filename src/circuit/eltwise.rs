@@ -270,6 +270,24 @@ impl<F: FieldExt> Nonlinearity<F> for ReLu<F> {
 }
 
 #[derive(Clone, Debug)]
+pub struct LeakyReLu<F> {
+    _marker: PhantomData<F>,
+}
+
+impl<F: FieldExt> Nonlinearity<F> for LeakyReLu<F> {
+    fn nonlinearity(x: i32, scale: &[usize]) -> F {
+        if x < 0 {
+            let d_inv_x = (0.05) * (x as f32) / (scale[0] as f32);
+            let rounded = d_inv_x.round();
+            let integral: i32 = unsafe { rounded.to_int_unchecked() };
+            i32_to_felt(integral)
+        } else {
+            i32_to_felt(x)
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Sigmoid<F> {
     _marker: PhantomData<F>,
 }
