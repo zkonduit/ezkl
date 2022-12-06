@@ -34,7 +34,13 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
         let num_advice = model.max_node_vars();
         let row_cap = model.max_node_size();
         // for now the number of instances corresponds to the number of graph / model outputs
-        let num_instances: usize = model.num_outputs();
+        let mut num_instances = 0;
+        if model.visibility.input.is_public() {
+            num_instances += model.num_inputs();
+        }
+        if model.visibility.output.is_public() {
+            num_instances += model.num_outputs();
+        }
         let mut vars = ModelVars::new(
             cs,
             model.logrows as usize,
@@ -47,6 +53,11 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
             "number of advices used: {:?}",
             vars.advices.iter().map(|a| a.num_cols()).sum::<usize>()
         );
+        info!(
+            "number of fixed used: {:?}",
+            vars.fixed.iter().map(|a| a.num_cols()).sum::<usize>()
+        );
+        info!("number of instances used: {:?}", num_instances);
         model.configure(cs, &mut vars).unwrap()
     }
 
@@ -64,7 +75,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
         trace!("Setting output in synthesize");
         config
             .model
-            .layout(config.clone(), &mut layouter, &inputs)
+            .layout(config.clone(), &mut layouter, &inputs, &config.vars)
             .unwrap();
 
         Ok(())

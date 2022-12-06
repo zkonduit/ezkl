@@ -46,6 +46,14 @@ impl Visibility {
         matches!(&self, Visibility::Public)
     }
 }
+impl std::fmt::Display for Visibility {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Visibility::Private => write!(f, "private"),
+            Visibility::Public => write!(f, "public"),
+        }
+    }
+}
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ModelVisibility {
@@ -53,6 +61,16 @@ pub struct ModelVisibility {
     pub params: Visibility,
     pub output: Visibility,
 }
+impl std::fmt::Display for ModelVisibility {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "(inputs: {}, params: {}, outputs: {})",
+            self.input, self.params, self.output
+        )
+    }
+}
+
 impl ModelVisibility {
     pub fn from_args() -> Self {
         let args = Cli::parse();
@@ -115,6 +133,7 @@ impl<F: FieldExt + TensorType> TableTypes<F> {
     }
 }
 
+#[derive(Clone)]
 pub struct ModelVars<F: FieldExt + TensorType> {
     pub advices: Vec<VarTensor>,
     pub fixed: Vec<VarTensor>,
@@ -164,6 +183,7 @@ pub struct ModelConfig<F: FieldExt + TensorType> {
     configs: BTreeMap<usize, NodeConfig<F>>,
     pub model: Model,
     pub public_outputs: Vec<RangeCheckConfig<F>>,
+    pub vars: ModelVars<F>,
 }
 
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
@@ -197,7 +217,7 @@ impl Model {
         visibility: ModelVisibility,
     ) -> Self {
         let model = tract_onnx::onnx().model_for_path(path).unwrap();
-        info!("visibility: {:?}", visibility);
+        info!("visibility: {}", visibility);
 
         let mut nodes = BTreeMap::<usize, Node>::new();
         let _ = model
@@ -354,6 +374,7 @@ impl Model {
             configs: results,
             model: self.clone(),
             public_outputs,
+            vars: vars.clone(),
         })
     }
 
@@ -380,7 +401,6 @@ impl Model {
                 meta,
                 &input,
                 &output,
-                &vars.instances[i],
                 self.tolerance,
             ));
         }
@@ -585,11 +605,16 @@ impl Model {
         config: ModelConfig<F>,
         layouter: &mut impl Layouter<F>,
         inputs: &[ValTensor<F>],
+        vars: &ModelVars<F>,
     ) -> Result<()> {
         info!("model layout");
         let mut results = BTreeMap::<usize, ValTensor<F>>::new();
         for i in inputs.iter().enumerate() {
-            results.insert(i.0, i.1.clone());
+            if self.visibility.input.is_public() {
+                results.insert(i.0, vars.instances[i.0].clone());
+            } else {
+                results.insert(i.0, i.1.clone());
+            }
         }
         for (idx, c) in config.configs.iter() {
             let mut display: String = "".to_string();
@@ -632,8 +657,17 @@ impl Model {
             .public_outputs
             .iter()
             .zip(outputs)
-            .map(|(range_check, output)| {
-                range_check.layout(layouter.namespace(|| "range check outputs"), output)
+            .enumerate()
+            .map(|(i, (range_check, output))| {
+                let mut offset = 0;
+                if self.visibility.input.is_public() {
+                    offset += inputs.len();
+                };
+                range_check.layout(
+                    layouter.namespace(|| "range check outputs"),
+                    output,
+                    vars.instances[offset + i].clone(),
+                )
             })
             .collect_vec();
         info!("computing...");
