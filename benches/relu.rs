@@ -57,7 +57,7 @@ fn runrelu(c: &mut Criterion) {
 
     let mut rng = rand::thread_rng();
 
-    for &len in [128].iter() {
+    for &len in [4, 8, 16, 32, 64].iter() {
         unsafe {
             LEN = len;
         };

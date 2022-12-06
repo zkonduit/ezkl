@@ -221,7 +221,7 @@ impl VarTensor {
             ValTensor::Value { inner: v, dims: _ } => v.enum_map(|coord, k| match &self {
                 VarTensor::Fixed { inner: fixed, .. } => {
                     let (x, y) = self.cartesian_coord(offset + coord);
-                    match region.assign_fixed(|| "k", fixed[x], y, || k.into()) {
+                    match region.assign_fixed(|| "k", fixed[x], y, || k) {
                         Ok(a) => a,
                         Err(e) => {
                             abort!("failed to assign ValTensor to VarTensor {:?}", e);
@@ -230,7 +230,7 @@ impl VarTensor {
                 }
                 VarTensor::Advice { inner: advices, .. } => {
                     let (x, y) = self.cartesian_coord(offset + coord);
-                    match region.assign_advice(|| "k", advices[x], y, || k.into()) {
+                    match region.assign_advice(|| "k", advices[x], y, || k) {
                         Ok(a) => a,
                         Err(e) => {
                             abort!("failed to assign ValTensor to VarTensor {:?}", e);

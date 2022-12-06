@@ -160,7 +160,7 @@ mod tests {
                 .collect_vec();
             let input = &advices[0];
             let expected = &advices[1];
-            RangeCheckConfig::configure(cs, &input, &expected, RANGE)
+            RangeCheckConfig::configure(cs, input, expected, RANGE)
         }
 
         fn synthesize(

@@ -392,10 +392,9 @@ impl Model {
 
         info!("output_shapes {:?}", output_shapes);
 
-        for i in 0..output_shapes.len() {
-            let s = output_shapes[i].clone();
-            let input = vars.advices[0].reshape(&s);
-            let output = vars.advices[1].reshape(&s);
+        for s in &output_shapes {
+            let input = vars.advices[0].reshape(s);
+            let output = vars.advices[1].reshape(s);
 
             configs.push(RangeCheckConfig::configure(
                 meta,
@@ -494,7 +493,7 @@ impl Model {
 
         let inputs = inputs_to_layer.iter();
 
-        let config = NodeConfigTypes::Fused(
+        NodeConfigTypes::Fused(
             FusedConfig::configure(
                 meta,
                 &inputs.clone().map(|x| x.1.clone()).collect_vec(),
@@ -502,8 +501,7 @@ impl Model {
                 &fused_nodes,
             ),
             inputs.map(|x| x.0).collect_vec(),
-        );
-        config
+        )
     }
 
     /// Configures a lookup table based operation. These correspond to operations that are represented in
@@ -528,7 +526,7 @@ impl Model {
         match &node.opkind {
             OpKind::Div(s) => {
                 if tables.contains_key(&node.opkind) {
-                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let table = tables.get(&node.opkind).unwrap();
                     let conf: EltwiseConfig<F, DivideBy<F>> =
                         EltwiseConfig::configure_with_table(meta, input, output, table.get_div());
                     NodeConfigTypes::Divide(conf, node_inputs)
@@ -544,7 +542,7 @@ impl Model {
             }
             OpKind::ReLU(s) => {
                 if tables.contains_key(&node.opkind) {
-                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let table = tables.get(&node.opkind).unwrap();
                     let conf: EltwiseConfig<F, ReLu<F>> =
                         EltwiseConfig::configure_with_table(meta, input, output, table.get_relu());
                     NodeConfigTypes::ReLU(conf, node_inputs)
@@ -557,7 +555,7 @@ impl Model {
             }
             OpKind::Sigmoid(s) => {
                 if tables.contains_key(&node.opkind) {
-                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let table = tables.get(&node.opkind).unwrap();
                     let conf: EltwiseConfig<F, Sigmoid<F>> =
                         EltwiseConfig::configure_with_table(meta, input, output, table.get_sig());
                     NodeConfigTypes::Sigmoid(conf, node_inputs)
@@ -832,15 +830,12 @@ impl Model {
     pub fn max_node_vars(&self) -> usize {
         let mut maximum_number_inputs = 0;
         for (_, bucket_nodes) in self.nodes.0.iter() {
-            let non_fused_ops = match bucket_nodes
+            let non_fused_ops = bucket_nodes
                 .iter()
                 .filter(|(_, n)| !n.opkind.is_fused())
                 .map(|(_, n)| n.inputs.len())
                 .max()
-            {
-                Some(m) => m,
-                None => 0,
-            };
+                .unwrap_or(0);
 
             maximum_number_inputs = max(maximum_number_inputs, non_fused_ops);
 
@@ -851,8 +846,7 @@ impl Model {
 
             let fused_inputs = fused_ops
                 .iter()
-                .map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
-                .flatten()
+                .flat_map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
                 // here we remove intermediary calculation / nodes within the layer
                 .filter(|id| !fused_ops.contains_key(id))
                 .unique()
