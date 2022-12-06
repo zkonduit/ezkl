@@ -72,6 +72,9 @@ impl ModelVisibility {
         } else {
             Visibility::Private
         };
+        if !output_vis.is_public() & !params_vis.is_public() & !input_vis.is_public() {
+            abort!("at least one set of variables should be public");
+        }
         Self {
             input: input_vis,
             params: params_vis,
