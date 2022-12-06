@@ -24,10 +24,10 @@ pub struct Cli {
     /// Flags whether inputs are public
     #[arg(long, default_value = "false")]
     pub public_inputs: bool,
-    /// Flags whether inputs are public
+    /// Flags whether outputs are public
     #[arg(long, default_value = "true")]
     pub public_outputs: bool,
-    /// Flags whether inputs are public
+    /// Flags whether params are public
     #[arg(long, default_value = "false")]
     pub public_params: bool,
 }

@@ -100,12 +100,16 @@ Commands:
   help       Print this message or the help of the given subcommand(s)
 
 Options:
+Options:
   -T, --tolerance <TOLERANCE>  The tolerance for error on model outputs [default: 0]
-  -S, --scale <SCALE>      The denominator in the fixed point representation used when quantizing [default: 7]
-  -B, --bits <BITS>        The number of bits used in lookup tables [default: 14]
-  -K, --logrows <LOGROWS>  The log_2 number of rows [default: 16]
-  -h, --help               Print help information
-  -V, --version            Print version information
+  -S, --scale <SCALE>          The denominator in the fixed point representation used when quantizing [default: 7]
+  -B, --bits <BITS>            The number of bits used in lookup tables [default: 16]
+  -K, --logrows <LOGROWS>      The log_2 number of rows [default: 17]
+      --public-inputs          Flags whether inputs are public
+      --public-outputs         Flags whether outputs are public
+      --public-params          Flags whether params are public
+  -h, --help                   Print help information
+  -V, --version                Print version information
 ```
 
 `bits`, `scale`, `tolerance`, and `logrows` have default values. You can use tolerance to express a tolerance to a certain amount of quantization error on the output eg. if set to 2 the circuit will verify even if the generated output deviates by an absolute value of 2 on any dimension from the expected output. `prove`, `mock`, `fullprove` all require `-D` and `-M` parameters, which if not provided, the cli will query the user to manually enter the path(s).
