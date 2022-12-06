@@ -33,6 +33,12 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
         let model = Model::from_arg();
         let num_advice = model.max_node_vars();
         let row_cap = model.max_node_size();
+        // TODO: extract max number of params in a given fused layer
+        let num_fixed = if model.visibility.params.is_public() {
+            num_advice
+        } else {
+            0
+        };
         // for now the number of instances corresponds to the number of graph / model outputs
         let mut num_instances = 0;
         if model.visibility.input.is_public() {
@@ -45,7 +51,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
             cs,
             model.logrows as usize,
             (num_advice, row_cap),
-            (num_advice, row_cap),
+            (num_fixed, row_cap),
             (num_instances, usize::MAX),
         );
         info!("row cap: {:?}", row_cap);
