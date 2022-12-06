@@ -1,7 +1,7 @@
 use super::node::*;
 use super::utilities::scale_to_multiplier;
-use crate::abort;
-use crate::circuit::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu, Sigmoid};
+use super::vars::*;
+use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
 use crate::circuit::fused::*;
 use crate::circuit::range::*;
 use crate::commands::{model_path, Cli, Commands};
@@ -12,14 +12,13 @@ use clap::Parser;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
-    plonk::{Column, ConstraintSystem, Instance},
+    plonk::ConstraintSystem,
 };
 use itertools::Itertools;
 use log::{debug, error, info, trace};
 use std::cmp::max;
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
-use std::{cell::RefCell, rc::Rc};
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node as OnnxNode, OutletId};
@@ -35,91 +34,13 @@ pub enum Mode {
     Verify,
 }
 
-enum TableTypes<F: FieldExt + TensorType> {
-    ReLu(Rc<RefCell<EltwiseTable<F, ReLu<F>>>>),
-    DivideBy(Rc<RefCell<EltwiseTable<F, DivideBy<F>>>>),
-    Sigmoid(Rc<RefCell<EltwiseTable<F, Sigmoid<F>>>>),
-}
-impl<F: FieldExt + TensorType> TableTypes<F> {
-    fn get_relu(&self) -> Rc<RefCell<EltwiseTable<F, ReLu<F>>>> {
-        match self {
-            TableTypes::ReLu(inner) => inner.clone(),
-            _ => {
-                abort!("fetching wrong table type");
-            }
-        }
-    }
-    fn get_div(&self) -> Rc<RefCell<EltwiseTable<F, DivideBy<F>>>> {
-        match self {
-            TableTypes::DivideBy(inner) => inner.clone(),
-            _ => {
-                abort!("fetching wrong table type");
-            }
-        }
-    }
-    fn get_sig(&self) -> Rc<RefCell<EltwiseTable<F, Sigmoid<F>>>> {
-        match self {
-            TableTypes::Sigmoid(inner) => inner.clone(),
-            _ => {
-                abort!("fetching wrong table type");
-            }
-        }
-    }
-}
-
-pub struct ModelVars {
-    pub advices: Vec<VarTensor>,
-    pub fixed: Vec<VarTensor>,
-    // TODO: create a new VarTensor for Instance Columns
-    pub instances: Vec<Column<Instance>>,
-}
-/// A wrapper for holding all columns that will be assigned to by a model.
-impl ModelVars {
-    pub fn new<F: FieldExt>(
-        cs: &mut ConstraintSystem<F>,
-        logrows: usize,
-        advice_dims: (usize, usize),
-        fixed_dims: (usize, usize),
-        num_instances: usize,
-    ) -> Self {
-        let advices = (0..advice_dims.0)
-            .map(|_| {
-                VarTensor::new_advice(
-                    cs,
-                    logrows as usize,
-                    advice_dims.1,
-                    vec![advice_dims.1],
-                    true,
-                )
-            })
-            .collect_vec();
-        // todo init fixed
-        let fixed = (0..fixed_dims.0)
-            .map(|_| {
-                VarTensor::new_fixed(cs, logrows as usize, fixed_dims.1, vec![fixed_dims.1], true)
-            })
-            .collect_vec();
-        let instances = (0..num_instances)
-            .map(|_| {
-                let l = cs.instance_column();
-                cs.enable_equality(l);
-                l
-            })
-            .collect_vec();
-        ModelVars {
-            advices,
-            fixed,
-            instances,
-        }
-    }
-}
-
 /// A circuit configuration for the entirety of a model loaded from an Onnx file.
 #[derive(Clone)]
 pub struct ModelConfig<F: FieldExt + TensorType> {
     configs: BTreeMap<usize, NodeConfig<F>>,
     pub model: Model,
     pub public_outputs: Vec<RangeCheckConfig<F>>,
+    pub vars: ModelVars<F>,
 }
 
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
@@ -132,6 +53,7 @@ pub struct Model {
     pub scale: i32,
     pub tolerance: usize,
     pub mode: Mode,
+    pub visibility: VarVisibility,
 }
 
 impl Model {
@@ -149,8 +71,10 @@ impl Model {
         logrows: u32,
         tolerance: usize,
         mode: Mode,
+        visibility: VarVisibility,
     ) -> Self {
         let model = tract_onnx::onnx().model_for_path(path).unwrap();
+        info!("visibility: {}", visibility);
 
         let mut nodes = BTreeMap::<usize, Node>::new();
         let _ = model
@@ -171,6 +95,7 @@ impl Model {
             bits,
             logrows,
             mode,
+            visibility,
         };
 
         debug!("{}", Table::new(om.nodes.flatten()).to_string());
@@ -180,7 +105,7 @@ impl Model {
     /// Creates a `Model` based on CLI arguments
     pub fn from_arg() -> Self {
         let args = Cli::parse();
-
+        let visibility = VarVisibility::from_args();
         match args.command {
             Commands::Table { model } => Model::new(
                 model_path(model),
@@ -189,6 +114,7 @@ impl Model {
                 args.logrows,
                 args.tolerance,
                 Mode::Table,
+                visibility,
             ),
             Commands::Mock { data: _, model } => Model::new(
                 model_path(model),
@@ -197,6 +123,7 @@ impl Model {
                 args.logrows,
                 args.tolerance,
                 Mode::Mock,
+                visibility,
             ),
             Commands::Fullprove {
                 data: _,
@@ -209,6 +136,7 @@ impl Model {
                 args.logrows,
                 args.tolerance,
                 Mode::FullProve,
+                visibility,
             ),
             Commands::Prove {
                 data: _,
@@ -222,6 +150,7 @@ impl Model {
                 args.logrows,
                 args.tolerance,
                 Mode::Prove,
+                visibility,
             ),
             Commands::Verify {
                 model,
@@ -234,6 +163,7 @@ impl Model {
                 args.logrows,
                 args.tolerance,
                 Mode::Verify,
+                visibility,
             ),
         }
     }
@@ -248,7 +178,7 @@ impl Model {
     pub fn configure<F: FieldExt + TensorType>(
         &self,
         meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars,
+        vars: &mut ModelVars<F>,
     ) -> Result<ModelConfig<F>> {
         info!("configuring model");
         let mut results = BTreeMap::new();
@@ -292,17 +222,23 @@ impl Model {
             }
         }
 
+        let mut public_outputs = vec![];
+        if !self.visibility.output.is_public() {
+            public_outputs = self.range_check_outputs(meta, vars)
+        };
+
         Ok(ModelConfig {
             configs: results,
             model: self.clone(),
-            public_outputs: self.range_check_outputs(meta, vars),
+            public_outputs,
+            vars: vars.clone(),
         })
     }
 
     fn range_check_outputs<F: FieldExt + TensorType>(
         &self,
         meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars,
+        vars: &mut ModelVars<F>,
     ) -> Vec<RangeCheckConfig<F>> {
         let mut configs = vec![];
         let output_nodes = self.model.outputs.clone();
@@ -313,16 +249,14 @@ impl Model {
 
         info!("output_shapes {:?}", output_shapes);
 
-        for (i, instance) in vars.instances.iter().enumerate() {
-            let s = output_shapes[i].clone();
-            let input = vars.advices[0].reshape(&s);
-            let output = vars.advices[1].reshape(&s);
+        for s in &output_shapes {
+            let input = vars.advices[0].reshape(s);
+            let output = vars.advices[1].reshape(s);
 
             configs.push(RangeCheckConfig::configure(
                 meta,
                 &input,
                 &output,
-                instance,
                 self.tolerance,
             ));
         }
@@ -341,7 +275,7 @@ impl Model {
         &self,
         nodes: &BTreeMap<&usize, &Node>,
         meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars,
+        vars: &mut ModelVars<F>,
     ) -> NodeConfigTypes<F> {
         let input_nodes: BTreeMap<(&usize, &FusedOp), Vec<Node>> = nodes
             .iter()
@@ -365,7 +299,8 @@ impl Model {
         // insert only returns true if the item was not previously present in the set.
         // Since the vector is traversed in order, we end up keeping just the first occurrence of each item.
         let mut seen = HashSet::new();
-        let mut start = 0;
+        let mut advice_idx = 0;
+        let mut fixed_idx = 0;
         // impose an execution order here
         let inputs_to_layer: Vec<(usize, VarTensor)> = input_nodes
             .iter()
@@ -374,8 +309,16 @@ impl Model {
                     .filter(|i| !nodes.contains_key(&i.idx) && seen.insert(i.idx))
                     .map(|f| {
                         let s = f.out_dims.clone();
-                        let a = (f.idx, vars.advices[start].reshape(&s));
-                        start += 1;
+                        let a = if f.opkind.is_const() && self.visibility.params.is_public() {
+                            let vars = (f.idx, vars.fixed[fixed_idx].reshape(&s));
+                            fixed_idx += 1;
+                            vars
+                        } else {
+                            let vars = (f.idx, vars.advices[advice_idx].reshape(&s));
+                            advice_idx += 1;
+                            vars
+                        };
+
                         a
                     })
                     .collect_vec()
@@ -384,7 +327,7 @@ impl Model {
 
         let output_shape = self.nodes.filter(**nodes.keys().max().unwrap()).out_dims;
         // output node
-        let output = &vars.advices[start].reshape(&output_shape);
+        let output = &vars.advices[advice_idx].reshape(&output_shape);
 
         let mut inter_counter = 0;
         let fused_nodes: Vec<FusedNode> = input_nodes
@@ -412,7 +355,7 @@ impl Model {
 
         let inputs = inputs_to_layer.iter();
 
-        let config = NodeConfigTypes::Fused(
+        NodeConfigTypes::Fused(
             FusedConfig::configure(
                 meta,
                 &inputs.clone().map(|x| x.1.clone()).collect_vec(),
@@ -420,8 +363,7 @@ impl Model {
                 &fused_nodes,
             ),
             inputs.map(|x| x.0).collect_vec(),
-        );
-        config
+        )
     }
 
     /// Configures a lookup table based operation. These correspond to operations that are represented in
@@ -435,7 +377,7 @@ impl Model {
         &self,
         node: &Node,
         meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars,
+        vars: &mut ModelVars<F>,
         tables: &mut BTreeMap<OpKind, TableTypes<F>>,
     ) -> NodeConfigTypes<F> {
         let input_len = node.in_dims[0].iter().product();
@@ -446,7 +388,7 @@ impl Model {
         match &node.opkind {
             OpKind::Div(s) => {
                 if tables.contains_key(&node.opkind) {
-                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let table = tables.get(&node.opkind).unwrap();
                     let conf: EltwiseConfig<F, DivideBy<F>> =
                         EltwiseConfig::configure_with_table(meta, input, output, table.get_div());
                     NodeConfigTypes::Divide(conf, node_inputs)
@@ -462,7 +404,7 @@ impl Model {
             }
             OpKind::ReLU(s) => {
                 if tables.contains_key(&node.opkind) {
-                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let table = tables.get(&node.opkind).unwrap();
                     let conf: EltwiseConfig<F, ReLu<F>> =
                         EltwiseConfig::configure_with_table(meta, input, output, table.get_relu());
                     NodeConfigTypes::ReLU(conf, node_inputs)
@@ -475,7 +417,7 @@ impl Model {
             }
             OpKind::Sigmoid(s) => {
                 if tables.contains_key(&node.opkind) {
-                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let table = tables.get(&node.opkind).unwrap();
                     let conf: EltwiseConfig<F, Sigmoid<F>> =
                         EltwiseConfig::configure_with_table(meta, input, output, table.get_sig());
                     NodeConfigTypes::Sigmoid(conf, node_inputs)
@@ -523,11 +465,16 @@ impl Model {
         config: ModelConfig<F>,
         layouter: &mut impl Layouter<F>,
         inputs: &[ValTensor<F>],
+        vars: &ModelVars<F>,
     ) -> Result<()> {
         info!("model layout");
         let mut results = BTreeMap::<usize, ValTensor<F>>::new();
         for i in inputs.iter().enumerate() {
-            results.insert(i.0, i.1.clone());
+            if self.visibility.input.is_public() {
+                results.insert(i.0, vars.instances[i.0].clone());
+            } else {
+                results.insert(i.0, i.1.clone());
+            }
         }
         for (idx, c) in config.configs.iter() {
             let mut display: String = "".to_string();
@@ -570,8 +517,17 @@ impl Model {
             .public_outputs
             .iter()
             .zip(outputs)
-            .map(|(range_check, output)| {
-                range_check.layout(layouter.namespace(|| "range check outputs"), output)
+            .enumerate()
+            .map(|(i, (range_check, output))| {
+                let mut offset = 0;
+                if self.visibility.input.is_public() {
+                    offset += inputs.len();
+                };
+                range_check.layout(
+                    layouter.namespace(|| "range check outputs"),
+                    output,
+                    vars.instances[offset + i].clone(),
+                )
             })
             .collect_vec();
         info!("computing...");
@@ -693,9 +649,30 @@ impl Model {
         Ok(self.model.output_outlets()?.to_vec())
     }
 
+    pub fn num_inputs(&self) -> usize {
+        let input_nodes = self.model.inputs.iter();
+        input_nodes.len()
+    }
+
+    pub fn input_shapes(&self) -> Vec<Vec<usize>> {
+        self.model
+            .inputs
+            .iter()
+            .map(|o| self.nodes.filter(o.node).out_dims)
+            .collect_vec()
+    }
+
     pub fn num_outputs(&self) -> usize {
         let output_nodes = self.model.outputs.iter();
         output_nodes.len()
+    }
+
+    pub fn output_shapes(&self) -> Vec<Vec<usize>> {
+        self.model
+            .outputs
+            .iter()
+            .map(|o| self.nodes.filter(o.node).out_dims)
+            .collect_vec()
     }
 
     pub fn get_output_scales(&self) -> Vec<i32> {
@@ -728,21 +705,32 @@ impl Model {
         )
     }
 
-    pub fn max_node_vars(&self) -> usize {
+    pub fn max_node_params(&self) -> usize {
         let mut maximum_number_inputs = 0;
         for (_, bucket_nodes) in self.nodes.0.iter() {
-            let non_fused_ops = match bucket_nodes
+            let fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
-                .filter(|(_, n)| !n.opkind.is_fused())
-                .map(|(_, n)| n.inputs.len())
-                .max()
-            {
-                Some(m) => m,
-                None => 0,
-            };
+                .filter(|(_, n)| n.opkind.is_fused())
+                .collect();
 
-            maximum_number_inputs = max(maximum_number_inputs, non_fused_ops);
+            let params = fused_ops
+                .iter()
+                .flat_map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
+                // here we remove intermediary calculation / nodes within the layer
+                .filter(|id| !fused_ops.contains_key(id))
+                .filter(|id| self.nodes.filter(*id).opkind.is_const())
+                .unique()
+                .collect_vec();
 
+            maximum_number_inputs = max(maximum_number_inputs, params.len());
+        }
+        // add 1 for layer output
+        maximum_number_inputs + 1
+    }
+
+    pub fn max_node_vars_fused(&self) -> usize {
+        let mut maximum_number_inputs = 0;
+        for (_, bucket_nodes) in self.nodes.0.iter() {
             let fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
                 .filter(|(_, n)| n.opkind.is_fused())
@@ -750,14 +738,30 @@ impl Model {
 
             let fused_inputs = fused_ops
                 .iter()
-                .map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
-                .flatten()
+                .flat_map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
                 // here we remove intermediary calculation / nodes within the layer
                 .filter(|id| !fused_ops.contains_key(id))
+                .filter(|id| !self.nodes.filter(*id).opkind.is_const())
                 .unique()
                 .collect_vec();
 
             maximum_number_inputs = max(maximum_number_inputs, fused_inputs.len());
+        }
+        // add 1 for layer output
+        maximum_number_inputs + 1
+    }
+
+    pub fn max_node_vars_non_fused(&self) -> usize {
+        let mut maximum_number_inputs = 0;
+        for (_, bucket_nodes) in self.nodes.0.iter() {
+            let non_fused_ops = bucket_nodes
+                .iter()
+                .filter(|(_, n)| !n.opkind.is_fused())
+                .map(|(_, n)| n.inputs.len())
+                .max()
+                .unwrap_or(0);
+
+            maximum_number_inputs = max(maximum_number_inputs, non_fused_ops);
         }
         // add 1 for layer output
         maximum_number_inputs + 1

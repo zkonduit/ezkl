@@ -62,6 +62,132 @@ fn test_reshape_mock() {
     test_onnx_mock("1l_reshape".to_string());
 }
 
+// Mock prove (fast, but does not cover some potential issues)
+fn test_onnx_mock_public_inputs(example_name: String) {
+    let status = Command::new("cargo")
+        .args([
+            "run",
+            "--release",
+            "--bin",
+            "ezkl",
+            "--",
+            "--public-inputs",
+            "--bits",
+            "16",
+            "-K",
+            "17",
+            "mock",
+            "-D",
+            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+            "-M",
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            // "-K",
+            // "2",  //causes failure
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+#[test]
+fn test_ff_mock_public_inputs() {
+    test_onnx_mock_public_inputs("1l_mlp".to_string());
+}
+
+#[test]
+fn test_flatten_mock_public_inputs() {
+    test_onnx_mock_public_inputs("1l_flatten".to_string());
+}
+
+#[test]
+fn test_avg_mock_public_inputs() {
+    test_onnx_mock_public_inputs("1l_average".to_string());
+}
+
+#[test]
+fn test_relusig_mock_public_inputs() {
+    test_onnx_mock_public_inputs("2l_relu_sigmoid".to_string());
+}
+
+#[test]
+#[ignore]
+fn test_1lcnvrl_mock_public_inputs() {
+    test_onnx_mock_public_inputs("1l_conv".to_string());
+}
+
+#[test]
+fn test_2lcnvrl_mock_public_inputs() {
+    test_onnx_mock_public_inputs("2l_relu_sigmoid_conv".to_string());
+}
+
+#[test]
+fn test_reshape_mock_public_inputs() {
+    test_onnx_mock_public_inputs("1l_reshape".to_string());
+}
+
+// Mock prove (fast, but does not cover some potential issues)
+fn test_onnx_mock_public_params(example_name: String) {
+    let status = Command::new("cargo")
+        .args([
+            "run",
+            "--release",
+            "--bin",
+            "ezkl",
+            "--",
+            "--public-params",
+            "--bits",
+            "16",
+            "-K",
+            "17",
+            "mock",
+            "-D",
+            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+            "-M",
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            // "-K",
+            // "2",  //causes failure
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+#[test]
+fn test_ff_mock_public_params() {
+    test_onnx_mock_public_params("1l_mlp".to_string());
+}
+
+#[test]
+fn test_flatten_mock_public_params() {
+    test_onnx_mock_public_params("1l_flatten".to_string());
+}
+
+#[test]
+fn test_avg_mock_public_params() {
+    test_onnx_mock_public_params("1l_average".to_string());
+}
+
+#[test]
+fn test_relusig_mock_public_params() {
+    test_onnx_mock_public_params("2l_relu_sigmoid".to_string());
+}
+
+#[test]
+#[ignore]
+fn test_1lcnvrl_mock_public_params() {
+    test_onnx_mock_public_params("1l_conv".to_string());
+}
+
+#[test]
+fn test_2lcnvrl_mock_public_params() {
+    test_onnx_mock_public_params("2l_relu_sigmoid_conv".to_string());
+}
+
+#[test]
+fn test_reshape_mock_public_params() {
+    test_onnx_mock_public_params("1l_reshape".to_string());
+}
+
 // full prove (slower, covers more, but still reuses the pk)
 fn test_onnx_fullprove(example_name: String) {
     let status = Command::new("cargo")

@@ -73,7 +73,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
 
         let l2 = FusedConfig::<F>::configure(
             cs,
-            &[input.clone(), kernel.clone(), bias.clone()],
+            &[input.clone(), kernel, bias],
             &output,
             &[affine_node],
         );

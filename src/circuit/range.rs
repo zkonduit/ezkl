@@ -4,17 +4,16 @@ use crate::tensor::{TensorType, ValTensor, VarTensor};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::Layouter,
-    plonk::{Column, ConstraintSystem, Constraints, Expression, Instance, Selector},
+    plonk::{ConstraintSystem, Constraints, Expression, Selector},
 };
 use log::error;
 use std::marker::PhantomData;
 
 /// Configuration for a range check on the difference between `input` and `expected`.
 #[derive(Debug, Clone)]
-pub struct RangeCheckConfig<F: FieldExt> {
+pub struct RangeCheckConfig<F: FieldExt + TensorType> {
     input: VarTensor,
     pub expected: VarTensor,
-    pub instance: Column<Instance>,
     selector: Selector,
     _marker: PhantomData<F>,
 }
@@ -27,27 +26,25 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
     /// * `instance` - the public input we'll be assigning to `expected`
     /// * `tol` - the range (%2), effectively our tolerance for error between `input` and `expected`.
     pub fn configure(
-        meta: &mut ConstraintSystem<F>,
+        cs: &mut ConstraintSystem<F>,
         input: &VarTensor,
         expected: &VarTensor,
-        instance: &Column<Instance>,
         tol: usize,
     ) -> Self {
         let config = Self {
-            selector: meta.selector(),
             input: input.clone(),
             expected: expected.clone(),
-            instance: *instance,
+            selector: cs.selector(),
             _marker: PhantomData,
         };
 
-        meta.create_gate("range check", |meta| {
+        cs.create_gate("range check", |cs| {
             //        value     |    q_range_check
             //       ------------------------------
             //          v       |         1
 
-            let q = meta.query_selector(config.selector);
-            let witnessed = match input.query(meta, 0) {
+            let q = cs.query_selector(config.selector);
+            let witnessed = match input.query(cs, 0) {
                 Ok(q) => q,
                 Err(e) => {
                     abort!("failed to query input {:?}", e);
@@ -55,7 +52,7 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
             };
 
             // Get output expressions for each input channel
-            let expected = match expected.query(meta, 0) {
+            let expected = match expected.query(cs, 0) {
                 Ok(q) => q,
                 Err(e) => {
                     abort!("failed to query input {:?}", e);
@@ -83,7 +80,12 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
     /// # Arguments
     /// * `input` - The input values we want to express an error tolerance for
     /// * `layouter` - A Halo2 Layouter.
-    pub fn layout(&self, mut layouter: impl Layouter<F>, input: ValTensor<F>) {
+    pub fn layout(
+        &self,
+        mut layouter: impl Layouter<F>,
+        input: ValTensor<F>,
+        output: ValTensor<F>,
+    ) {
         match layouter.assign_region(
             || "range check layout",
             |mut region| {
@@ -94,36 +96,22 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
 
                 // assigns the instance to the advice.
                 match self.input.assign(&mut region, offset, &input) {
-                    Ok(res) => {
-                        res.map(|elem| elem.value_field().evaluate());
-                    }
+                    Ok(_) => {}
                     Err(e) => {
                         abort!("failed to assign inputs during range layer layout {:?}", e);
                     }
                 };
 
-                // assigns the instance to the "expected" advice.
-                match self.expected.clone() {
-                    VarTensor::Advice { inner, .. } => {
-                        let inner_loop = input.dims().iter().product();
+                match self.expected.assign(&mut region, offset, &output) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        abort!(
+                            "failed to assign expected output during range layer layout {:?}",
+                            e
+                        );
+                    }
+                };
 
-                        for i in 0..inner_loop {
-                            let (x, y) = self.expected.cartesian_coord(i);
-                            region
-                                .assign_advice_from_instance(
-                                    || "pub input anchor",
-                                    self.instance,
-                                    i,
-                                    inner[x],
-                                    y,
-                                )
-                                .unwrap();
-                        }
-                    }
-                    _ => {
-                        abort!("should be an advice");
-                    }
-                }
                 Ok(())
             },
         ) {
@@ -155,6 +143,7 @@ mod tests {
     #[derive(Clone)]
     struct MyCircuit<F: FieldExt + TensorType> {
         input: ValTensor<F>,
+        output: ValTensor<F>,
     }
 
     impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
@@ -171,13 +160,7 @@ mod tests {
                 .collect_vec();
             let input = &advices[0];
             let expected = &advices[1];
-            let instance = {
-                let l = cs.instance_column();
-                cs.enable_equality(l);
-                l
-            };
-
-            RangeCheckConfig::configure(cs, &input, &expected, &instance, RANGE)
+            RangeCheckConfig::configure(cs, input, expected, RANGE)
         }
 
         fn synthesize(
@@ -185,7 +168,11 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            config.layout(layouter.namespace(|| "assign value"), self.input.clone());
+            config.layout(
+                layouter.namespace(|| "assign value"),
+                self.input.clone(),
+                self.output.clone(),
+            );
 
             Ok(())
         }
@@ -198,20 +185,23 @@ mod tests {
         // Successful cases
         for i in 0..RANGE {
             let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(i as u64))]), &[1]).unwrap();
+            let out =
+                Tensor::new(Some(&[Value::<Fp>::known(Fp::from(i as u64 + 1))]), &[1]).unwrap();
             let circuit = MyCircuit::<Fp> {
                 input: ValTensor::from(inp),
+                output: ValTensor::from(out),
             };
-            let instance = vec![vec![Fp::from(i as u64 + 1)]];
-            let prover = MockProver::run(k, &circuit, instance).unwrap();
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
             prover.assert_satisfied();
         }
         {
             let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(22_u64))]), &[1]).unwrap();
+            let out = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(0_u64))]), &[1]).unwrap();
             let circuit = MyCircuit::<Fp> {
                 input: ValTensor::from(inp),
+                output: ValTensor::from(out),
             };
-            let instance = vec![vec![Fp::from(0_u64)]];
-            let prover = MockProver::run(k, &circuit, instance).unwrap();
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
             match prover.verify() {
                 Ok(_) => {
                     assert!(false)

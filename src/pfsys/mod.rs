@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 pub struct ModelInput {
     pub input_data: Vec<Vec<f32>>,
     pub input_shapes: Vec<Vec<usize>>,
-    pub public_inputs: Vec<Vec<f32>>,
+    pub output_data: Vec<Vec<f32>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -73,24 +73,53 @@ pub fn parse_prover_errors(f: &VerifyFailure) {
 pub fn prepare_circuit_and_public_input<F: FieldExt>(
     data: &ModelInput,
 ) -> (ModelCircuit<F>, Vec<Tensor<i32>>) {
-    let onnx_model = Model::from_arg();
-    let out_scales = onnx_model.get_output_scales();
+    let model = Model::from_arg();
+    let out_scales = model.get_output_scales();
     let circuit = prepare_circuit(data);
 
     // quantize the supplied data using the provided scale.
-    let public_inputs = data
-        .public_inputs
-        .iter()
-        .enumerate()
-        .map(
-            |(idx, v)| match vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx]) {
-                Ok(q) => q,
-                Err(e) => {
-                    abort!("failed to quantize vector {:?}", e);
+    // the ordering here is important, we want the inputs to come before the outputs
+    // as they are configured in that order as Column<Instances>
+    let mut public_inputs = vec![];
+    if model.visibility.input.is_public() {
+        let mut res = data
+            .input_data
+            .iter()
+            .enumerate()
+            .map(|(idx, v)| {
+                match vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx]) {
+                    Ok(q) => q,
+                    Err(e) => {
+                        abort!("failed to quantize vector {:?}", e);
+                    }
                 }
-            },
-        )
-        .collect();
+            })
+            .collect();
+        public_inputs.append(&mut res);
+    }
+    if model.visibility.output.is_public() {
+        let mut res = data
+            .output_data
+            .iter()
+            .enumerate()
+            .map(|(idx, v)| {
+                match vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx]) {
+                    Ok(q) => q,
+                    Err(e) => {
+                        abort!("failed to quantize vector {:?}", e);
+                    }
+                }
+            })
+            .collect();
+        public_inputs.append(&mut res);
+    }
+    info!(
+        "public inputs  lengths: {:?}",
+        public_inputs
+            .iter()
+            .map(|i| i.len())
+            .collect::<Vec<usize>>()
+    );
     trace!("{:?}", public_inputs);
     (circuit, public_inputs)
 }
@@ -132,13 +161,6 @@ pub fn prepare_data(datapath: String) -> ModelInput {
         }
     };
     let data: ModelInput = serde_json::from_str(&data).expect("JSON was not well-formatted");
-    info!(
-        "public inputs (network outputs) lengths: {:?}",
-        data.public_inputs
-            .iter()
-            .map(|i| i.len())
-            .collect::<Vec<usize>>()
-    );
 
     data
 }

@@ -125,8 +125,8 @@ The `.onnx` file can be generated using pytorch or tensorflow. The data json fil
 ```javascript
 {
     "input_data": [[1.0, 22.2, 0.12 ...]], // 2D arrays of floats which represents the (private) inputs we run the proof on
-    "input_shape": [[3, 3, ...]], // 2D array of integers which represents the shapes of model inputs (excluding batch size)
-    "public_inputs": [[1.0, 5.0, 6.3 ...]], // 2D arrays of floats which represents the public inputs (model outputs for now)
+    "input_shapes": [[3, 3, ...]], // 2D array of integers which represents the shapes of model inputs (excluding batch size)
+    "output_data": [[1.0, 5.0, 6.3 ...]], // 2D arrays of floats which represents the model outputs we want to constrain against (if any)
 }
 ```
 

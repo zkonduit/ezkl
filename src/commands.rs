@@ -21,6 +21,15 @@ pub struct Cli {
     /// The log_2 number of rows
     #[arg(short = 'K', long, default_value = "17")]
     pub logrows: u32,
+    /// Flags whether inputs are public
+    #[arg(long, default_value = "false")]
+    pub public_inputs: bool,
+    /// Flags whether inputs are public
+    #[arg(long, default_value = "true")]
+    pub public_outputs: bool,
+    /// Flags whether inputs are public
+    #[arg(long, default_value = "false")]
+    pub public_params: bool,
 }
 
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]

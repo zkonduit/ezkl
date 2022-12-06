@@ -19,6 +19,7 @@ const K: usize = 15; //2^k rows
 #[derive(Clone)]
 struct MyCircuit<F: FieldExt + TensorType> {
     input: ValTensor<F>,
+    output: ValTensor<F>,
 }
 
 impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
@@ -35,13 +36,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
             .map(|_| VarTensor::new_advice(cs, K, len, vec![len], true))
             .collect_vec();
 
-        let instance = {
-            let l = cs.instance_column();
-            cs.enable_equality(l);
-            l
-        };
-
-        RangeCheckConfig::configure(cs, &advices[0], &advices[1], &instance, RANGE)
+        RangeCheckConfig::configure(cs, &advices[0], &advices[1], RANGE)
     }
 
     fn synthesize(
@@ -49,7 +44,11 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        config.layout(layouter.namespace(|| "Assign value"), self.input.clone());
+        config.layout(
+            layouter.namespace(|| "Assign value"),
+            self.input.clone(),
+            self.output.clone(),
+        );
 
         Ok(())
     }
@@ -66,13 +65,13 @@ fn runrange(c: &mut Criterion) {
 
         let circuit = MyCircuit::<F> {
             input: ValTensor::from(input.clone()),
+            output: ValTensor::from(input.clone()),
         };
 
         group.throughput(Throughput::Elements(len as u64));
         group.bench_with_input(BenchmarkId::from_parameter(len), &len, |b, &_| {
             b.iter(|| {
-                let instances = vec![(0..len).map(|_| F::from(1)).collect_vec()];
-                let prover = MockProver::run(K as u32, &circuit, instances).unwrap();
+                let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
                 prover.assert_satisfied();
             });
         });
