@@ -193,26 +193,24 @@ impl VarTensor {
             ValTensor::Instance {
                 inner: instance, ..
             } => match &self {
-                VarTensor::Advice { inner, .. } => {
-                    let mut vals = vec![];
-                    for i in 0..self.dims().iter().product() {
-                        let (x, y) = self.cartesian_coord(offset + i);
-                        vals.push(
-                            match region.assign_advice_from_instance(
-                                || "pub input anchor",
-                                *instance,
-                                i,
-                                inner[x],
-                                y,
-                            ) {
-                                Ok(v) => v,
-                                Err(e) => {
-                                    abort!("failed to assign advice from instance {:?}", e);
-                                }
-                            },
-                        );
-                    }
-                    Ok(Tensor::from(vals.into_iter()))
+                VarTensor::Advice { inner: v, dims, .. } => {
+                    let t = Tensor::new(None, dims).unwrap();
+                    t.enum_map(|coord, _: usize| {
+                        let (x, y) = self.cartesian_coord(offset + coord);
+                        
+                        match region.assign_advice_from_instance(
+                            || "pub input anchor",
+                            *instance,
+                            coord,
+                            v[x],
+                            y,
+                        ) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                abort!("failed to assign advice from instance {:?}", e);
+                            }
+                        }
+                    })
                 }
                 _ => {
                     abort!("should be an advice");

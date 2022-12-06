@@ -1,7 +1,7 @@
 use super::node::*;
 use super::utilities::scale_to_multiplier;
-use crate::abort;
-use crate::circuit::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, ReLu, Sigmoid};
+use super::vars::*;
+use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
 use crate::circuit::fused::*;
 use crate::circuit::range::*;
 use crate::commands::{model_path, Cli, Commands};
@@ -16,11 +16,9 @@ use halo2_proofs::{
 };
 use itertools::Itertools;
 use log::{debug, error, info, trace};
-use serde::Deserialize;
 use std::cmp::max;
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
-use std::{cell::RefCell, rc::Rc};
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node as OnnxNode, OutletId};
@@ -34,147 +32,6 @@ pub enum Mode {
     Prove,
     FullProve,
     Verify,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-pub enum Visibility {
-    Private,
-    Public,
-}
-impl Visibility {
-    pub fn is_public(&self) -> bool {
-        matches!(&self, Visibility::Public)
-    }
-}
-impl std::fmt::Display for Visibility {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Visibility::Private => write!(f, "private"),
-            Visibility::Public => write!(f, "public"),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct ModelVisibility {
-    pub input: Visibility,
-    pub params: Visibility,
-    pub output: Visibility,
-}
-impl std::fmt::Display for ModelVisibility {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "(inputs: {}, params: {}, outputs: {})",
-            self.input, self.params, self.output
-        )
-    }
-}
-
-impl ModelVisibility {
-    pub fn from_args() -> Self {
-        let args = Cli::parse();
-
-        let input_vis = if args.public_inputs {
-            Visibility::Public
-        } else {
-            Visibility::Private
-        };
-        let params_vis = if args.public_params {
-            Visibility::Public
-        } else {
-            Visibility::Private
-        };
-        let output_vis = if args.public_outputs {
-            Visibility::Public
-        } else {
-            Visibility::Private
-        };
-        if !output_vis.is_public() & !params_vis.is_public() & !input_vis.is_public() {
-            abort!("at least one set of variables should be public");
-        }
-        Self {
-            input: input_vis,
-            params: params_vis,
-            output: output_vis,
-        }
-    }
-}
-
-enum TableTypes<F: FieldExt + TensorType> {
-    ReLu(Rc<RefCell<EltwiseTable<F, ReLu<F>>>>),
-    DivideBy(Rc<RefCell<EltwiseTable<F, DivideBy<F>>>>),
-    Sigmoid(Rc<RefCell<EltwiseTable<F, Sigmoid<F>>>>),
-}
-impl<F: FieldExt + TensorType> TableTypes<F> {
-    fn get_relu(&self) -> Rc<RefCell<EltwiseTable<F, ReLu<F>>>> {
-        match self {
-            TableTypes::ReLu(inner) => inner.clone(),
-            _ => {
-                abort!("fetching wrong table type");
-            }
-        }
-    }
-    fn get_div(&self) -> Rc<RefCell<EltwiseTable<F, DivideBy<F>>>> {
-        match self {
-            TableTypes::DivideBy(inner) => inner.clone(),
-            _ => {
-                abort!("fetching wrong table type");
-            }
-        }
-    }
-    fn get_sig(&self) -> Rc<RefCell<EltwiseTable<F, Sigmoid<F>>>> {
-        match self {
-            TableTypes::Sigmoid(inner) => inner.clone(),
-            _ => {
-                abort!("fetching wrong table type");
-            }
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct ModelVars<F: FieldExt + TensorType> {
-    pub advices: Vec<VarTensor>,
-    pub fixed: Vec<VarTensor>,
-    pub instances: Vec<ValTensor<F>>,
-}
-/// A wrapper for holding all columns that will be assigned to by a model.
-impl<F: FieldExt + TensorType> ModelVars<F> {
-    pub fn new(
-        cs: &mut ConstraintSystem<F>,
-        logrows: usize,
-        advice_dims: (usize, usize),
-        fixed_dims: (usize, usize),
-        instance_dims: (usize, usize),
-    ) -> Self {
-        let advices = (0..advice_dims.0)
-            .map(|_| {
-                VarTensor::new_advice(
-                    cs,
-                    logrows as usize,
-                    advice_dims.1,
-                    vec![advice_dims.1],
-                    true,
-                )
-            })
-            .collect_vec();
-        // todo init fixed
-        let fixed = (0..fixed_dims.0)
-            .map(|_| {
-                VarTensor::new_fixed(cs, logrows as usize, fixed_dims.1, vec![fixed_dims.1], true)
-            })
-            .collect_vec();
-        // todo init fixed
-        let instances = (0..instance_dims.0)
-            .map(|_| ValTensor::new_instance(cs, vec![instance_dims.1], true))
-            .collect_vec();
-        ModelVars {
-            advices,
-            fixed,
-            instances,
-        }
-    }
 }
 
 /// A circuit configuration for the entirety of a model loaded from an Onnx file.
@@ -196,7 +53,7 @@ pub struct Model {
     pub scale: i32,
     pub tolerance: usize,
     pub mode: Mode,
-    pub visibility: ModelVisibility,
+    pub visibility: VarVisibility,
 }
 
 impl Model {
@@ -214,7 +71,7 @@ impl Model {
         logrows: u32,
         tolerance: usize,
         mode: Mode,
-        visibility: ModelVisibility,
+        visibility: VarVisibility,
     ) -> Self {
         let model = tract_onnx::onnx().model_for_path(path).unwrap();
         info!("visibility: {}", visibility);
@@ -248,7 +105,7 @@ impl Model {
     /// Creates a `Model` based on CLI arguments
     pub fn from_arg() -> Self {
         let args = Cli::parse();
-        let visibility = ModelVisibility::from_args();
+        let visibility = VarVisibility::from_args();
         match args.command {
             Commands::Table { model } => Model::new(
                 model_path(model),
@@ -442,7 +299,8 @@ impl Model {
         // insert only returns true if the item was not previously present in the set.
         // Since the vector is traversed in order, we end up keeping just the first occurrence of each item.
         let mut seen = HashSet::new();
-        let mut start = 0;
+        let mut advice_idx = 0;
+        let mut fixed_idx = 0;
         // impose an execution order here
         let inputs_to_layer: Vec<(usize, VarTensor)> = input_nodes
             .iter()
@@ -452,11 +310,15 @@ impl Model {
                     .map(|f| {
                         let s = f.out_dims.clone();
                         let a = if f.opkind.is_const() && self.visibility.params.is_public() {
-                            (f.idx, vars.fixed[start].reshape(&s))
+                            let vars = (f.idx, vars.fixed[fixed_idx].reshape(&s));
+                            fixed_idx += 1;
+                            vars
                         } else {
-                            (f.idx, vars.advices[start].reshape(&s))
+                            let vars = (f.idx, vars.advices[advice_idx].reshape(&s));
+                            advice_idx += 1;
+                            vars
                         };
-                        start += 1;
+
                         a
                     })
                     .collect_vec()
@@ -465,7 +327,7 @@ impl Model {
 
         let output_shape = self.nodes.filter(**nodes.keys().max().unwrap()).out_dims;
         // output node
-        let output = &vars.advices[start].reshape(&output_shape);
+        let output = &vars.advices[advice_idx].reshape(&output_shape);
 
         let mut inter_counter = 0;
         let fused_nodes: Vec<FusedNode> = input_nodes
@@ -792,9 +654,25 @@ impl Model {
         input_nodes.len()
     }
 
+    pub fn input_shapes(&self) -> Vec<Vec<usize>> {
+        self.model
+            .inputs
+            .iter()
+            .map(|o| self.nodes.filter(o.node).out_dims)
+            .collect_vec()
+    }
+
     pub fn num_outputs(&self) -> usize {
         let output_nodes = self.model.outputs.iter();
         output_nodes.len()
+    }
+
+    pub fn output_shapes(&self) -> Vec<Vec<usize>> {
+        self.model
+            .outputs
+            .iter()
+            .map(|o| self.nodes.filter(o.node).out_dims)
+            .collect_vec()
     }
 
     pub fn get_output_scales(&self) -> Vec<i32> {
@@ -827,18 +705,32 @@ impl Model {
         )
     }
 
-    pub fn max_node_vars(&self) -> usize {
+    pub fn max_node_params(&self) -> usize {
         let mut maximum_number_inputs = 0;
         for (_, bucket_nodes) in self.nodes.0.iter() {
-            let non_fused_ops = bucket_nodes
+            let fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
-                .filter(|(_, n)| !n.opkind.is_fused())
-                .map(|(_, n)| n.inputs.len())
-                .max()
-                .unwrap_or(0);
+                .filter(|(_, n)| n.opkind.is_fused())
+                .collect();
 
-            maximum_number_inputs = max(maximum_number_inputs, non_fused_ops);
+            let params = fused_ops
+                .iter()
+                .flat_map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
+                // here we remove intermediary calculation / nodes within the layer
+                .filter(|id| !fused_ops.contains_key(id))
+                .filter(|id| self.nodes.filter(*id).opkind.is_const())
+                .unique()
+                .collect_vec();
 
+            maximum_number_inputs = max(maximum_number_inputs, params.len());
+        }
+        // add 1 for layer output
+        maximum_number_inputs + 1
+    }
+
+    pub fn max_node_vars_fused(&self) -> usize {
+        let mut maximum_number_inputs = 0;
+        for (_, bucket_nodes) in self.nodes.0.iter() {
             let fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
                 .filter(|(_, n)| n.opkind.is_fused())
@@ -849,10 +741,27 @@ impl Model {
                 .flat_map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
                 // here we remove intermediary calculation / nodes within the layer
                 .filter(|id| !fused_ops.contains_key(id))
+                .filter(|id| !self.nodes.filter(*id).opkind.is_const())
                 .unique()
                 .collect_vec();
 
             maximum_number_inputs = max(maximum_number_inputs, fused_inputs.len());
+        }
+        // add 1 for layer output
+        maximum_number_inputs + 1
+    }
+
+    pub fn max_node_vars_non_fused(&self) -> usize {
+        let mut maximum_number_inputs = 0;
+        for (_, bucket_nodes) in self.nodes.0.iter() {
+            let non_fused_ops = bucket_nodes
+                .iter()
+                .filter(|(_, n)| !n.opkind.is_fused())
+                .map(|(_, n)| n.inputs.len())
+                .max()
+                .unwrap_or(0);
+
+            maximum_number_inputs = max(maximum_number_inputs, non_fused_ops);
         }
         // add 1 for layer output
         maximum_number_inputs + 1

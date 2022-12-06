@@ -91,26 +91,14 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     pub fn reshape(&mut self, new_dims: &[usize]) {
         match self {
             ValTensor::Value { inner: v, dims: d } => {
-                assert_eq!(
-                    d.iter().product::<usize>(),
-                    new_dims.iter().product::<usize>()
-                );
                 v.reshape(new_dims);
                 *d = v.dims().to_vec();
             }
             ValTensor::AssignedValue { inner: v, dims: d } => {
-                assert_eq!(
-                    d.iter().product::<usize>(),
-                    new_dims.iter().product::<usize>()
-                );
                 v.reshape(new_dims);
                 *d = v.dims().to_vec();
             }
             ValTensor::PrevAssigned { inner: v, dims: d } => {
-                assert_eq!(
-                    d.iter().product::<usize>(),
-                    new_dims.iter().product::<usize>()
-                );
                 v.reshape(new_dims);
                 *d = v.dims().to_vec();
             }
