@@ -22,13 +22,13 @@ pub struct Cli {
     #[arg(short = 'K', long, default_value = "17")]
     pub logrows: u32,
     /// Flags whether inputs are public
-    #[arg(short = 'I', long, default_value = "false")]
+    #[arg(long, default_value = "false")]
     pub public_inputs: bool,
     /// Flags whether inputs are public
-    #[arg(short = 'O', long, default_value = "true")]
+    #[arg(long, default_value = "true")]
     pub public_outputs: bool,
     /// Flags whether inputs are public
-    #[arg(short = 'P', long, default_value = "false")]
+    #[arg(long, default_value = "false")]
     pub public_params: bool,
 }
 
