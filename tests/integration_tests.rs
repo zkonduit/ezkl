@@ -5,68 +5,69 @@ const TESTS: [&str; 12] = [
     "1l_flatten",
     "1l_average",
     "2l_relu_sigmoid",
-    "1l_conv",
-    "2l_relu_sigmoid_conv",
     "1l_reshape",
     "1l_sigmoid",
     "1l_relu",
     "2l_relu_sigmoid_small",
     "2l_relu_small",
     "2l_relu_sigmoid",
+    "1l_conv",
+    "2l_relu_sigmoid_conv",
 ];
 
 macro_rules! test_func {
-    ($name:ident, $func:ident) => {
+    () => {
         #[cfg(test)]
         mod tests {
             use seq_macro::seq;
             use crate::TESTS;
             use test_case::test_case;
-            use crate::test_onnx_mock;
-            use crate::test_onnx_mock_public_inputs;
-            use crate::test_onnx_mock_public_params;
-            use crate::test_onnx_fullprove;
-            use crate::test_onnx_prove_and_verify;
-            use crate::test_kzg_fullprove;
+            use crate::mock;
+            use crate::mock_public_inputs;
+            use crate::mock_public_params;
+            use crate::fullprove;
+            use crate::prove_and_verify;
+            use crate::kzg_fullprove;
 
             seq!(N in 0..=11 {
             #(#[test_case(TESTS[N])])*
-            fn test_onnx_mock_(test: &str) {
-                test_onnx_mock(test.to_string());
+            fn mock_(test: &str) {
+                mock(test.to_string());
             }
             });
             seq!(N in 0..=11 {
                 #(#[test_case(TESTS[N])])*
-                fn test_onnx_mock_public_inputs_(test: &str) {
-                    test_onnx_mock_public_inputs(test.to_string());
+                fn mock_public_inputs_(test: &str) {
+                    mock_public_inputs(test.to_string());
                 }
             });
 
             seq!(N in 0..=11 {
                 #(#[test_case(TESTS[N])])*
-                fn test_onnx_mock_public_params_(test: &str) {
-                    test_onnx_mock_public_params(test.to_string());
+                fn mock_public_params_(test: &str) {
+                    mock_public_params(test.to_string());
                 }
             });
 
             seq!(N in 0..=11 {
                 #(#[test_case(TESTS[N])])*
-                fn test_onnx_fullprove_(test: &str) {
-                    test_onnx_fullprove(test.to_string());
+                fn fullprove_(test: &str) {
+                    fullprove(test.to_string());
                 }
             });
 
             seq!(N in 0..=11 {
                 #(#[test_case(TESTS[N])])*
-                fn test_onnx_prove_and_verify_(test: &str) {
-                    test_onnx_prove_and_verify(test.to_string());
+                fn prove_and_verify_(test: &str) {
+                    prove_and_verify(test.to_string());
                 }
             });
-
+            // these take a particularly long time to run
             seq!(N in 0..=11 {
                 #(#[test_case(TESTS[N])])*
-                fn test_kzg_fullprove_(test: &str) {
-                    test_kzg_fullprove(test.to_string());
+                #[ignore]
+                fn kzg_fullprove_(test: &str) {
+                    kzg_fullprove(test.to_string());
                 }
             });
 
@@ -74,10 +75,10 @@ macro_rules! test_func {
     };
 }
 
-test_func!(onnx_mock_tests, test_onnx_mock);
+test_func!();
 
 // Mock prove (fast, but does not cover some potential issues)
-fn test_onnx_mock(example_name: String) {
+fn mock(example_name: String) {
     let status = Command::new("cargo")
         .args([
             "run",
@@ -103,7 +104,7 @@ fn test_onnx_mock(example_name: String) {
 }
 
 // Mock prove (fast, but does not cover some potential issues)
-fn test_onnx_mock_public_inputs(example_name: String) {
+fn mock_public_inputs(example_name: String) {
     let status = Command::new("cargo")
         .args([
             "run",
@@ -130,7 +131,7 @@ fn test_onnx_mock_public_inputs(example_name: String) {
 }
 
 // Mock prove (fast, but does not cover some potential issues)
-fn test_onnx_mock_public_params(example_name: String) {
+fn mock_public_params(example_name: String) {
     let status = Command::new("cargo")
         .args([
             "run",
@@ -157,7 +158,7 @@ fn test_onnx_mock_public_params(example_name: String) {
 }
 
 // full prove (slower, covers more, but still reuses the pk)
-fn test_onnx_fullprove(example_name: String) {
+fn fullprove(example_name: String) {
     let status = Command::new("cargo")
         .args([
             "run",
@@ -183,7 +184,7 @@ fn test_onnx_fullprove(example_name: String) {
 }
 
 // prove-serialize-verify, the usual full path
-fn test_onnx_prove_and_verify(example_name: String) {
+fn prove_and_verify(example_name: String) {
     let status = Command::new("cargo")
         .args([
             "run",
@@ -230,7 +231,7 @@ fn test_onnx_prove_and_verify(example_name: String) {
 
 // KZG / EVM tests
 // full prove (slower, covers more, but still reuses the pk)
-fn test_kzg_fullprove(example_name: String) {
+fn kzg_fullprove(example_name: String) {
     let status = Command::new("cargo")
         .args([
             "run",
