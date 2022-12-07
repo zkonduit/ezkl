@@ -1,6 +1,7 @@
 use super::*;
 use crate::abort;
 use log::error;
+use std::cmp::min;
 /// A wrapper around Halo2's `Column<Fixed>` or `Column<Advice>`.
 /// The wrapper allows for `VarTensor`'s dimensions to differ from that of the inner (wrapped) columns.
 /// The inner vector might, for instance, contain 3 Advice Columns. Each of those columns in turn
@@ -34,7 +35,7 @@ impl VarTensor {
         equality: bool,
     ) -> Self {
         let base = 2u32;
-        let max_rows = base.pow(k as u32) as usize - cs.blinding_factors() - 1;
+        let max_rows = min(512, base.pow(k as u32) as usize - cs.blinding_factors() - 1);
         let modulo = (capacity / max_rows) + 1;
         let mut advices = vec![];
         for _ in 0..modulo {
@@ -61,7 +62,7 @@ impl VarTensor {
         equality: bool,
     ) -> Self {
         let base = 2u32;
-        let max_rows = base.pow(k as u32) as usize - cs.blinding_factors() - 1;
+        let max_rows = min(512, base.pow(k as u32) as usize - cs.blinding_factors() - 1);
         let modulo = (capacity / max_rows) + 1;
         let mut fixed = vec![];
         for _ in 0..modulo {
@@ -197,7 +198,7 @@ impl VarTensor {
                     let t = Tensor::new(None, dims).unwrap();
                     t.enum_map(|coord, _: usize| {
                         let (x, y) = self.cartesian_coord(offset + coord);
-                        
+
                         match region.assign_advice_from_instance(
                             || "pub input anchor",
                             *instance,
