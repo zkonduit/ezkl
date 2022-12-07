@@ -34,43 +34,34 @@ macro_rules! test_func {
             fn mock_(test: &str) {
                 mock(test.to_string());
             }
-            });
-            seq!(N in 0..=11 {
-                #(#[test_case(TESTS[N])])*
-                fn mock_public_inputs_(test: &str) {
-                    mock_public_inputs(test.to_string());
-                }
-            });
 
-            seq!(N in 0..=11 {
-                #(#[test_case(TESTS[N])])*
-                fn mock_public_params_(test: &str) {
-                    mock_public_params(test.to_string());
-                }
-            });
+            #(#[test_case(TESTS[N])])*
+            fn mock_public_inputs_(test: &str) {
+                mock_public_inputs(test.to_string());
+            }
 
-            seq!(N in 0..=11 {
-                #(#[test_case(TESTS[N])])*
-                fn fullprove_(test: &str) {
-                    fullprove(test.to_string());
-                }
-            });
+            #(#[test_case(TESTS[N])])*
+            fn mock_public_params_(test: &str) {
+                mock_public_params(test.to_string());
+            }
 
-            seq!(N in 0..=11 {
-                #(#[test_case(TESTS[N])])*
-                fn prove_and_verify_(test: &str) {
-                    prove_and_verify(test.to_string());
-                }
-            });
+            #(#[test_case(TESTS[N])])*
+            fn fullprove_(test: &str) {
+                fullprove(test.to_string());
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn prove_and_verify_(test: &str) {
+                prove_and_verify(test.to_string());
+            }
+
             // these take a particularly long time to run
-            seq!(N in 0..=11 {
-                #(#[test_case(TESTS[N])])*
-                #[ignore]
-                fn kzg_fullprove_(test: &str) {
-                    kzg_fullprove(test.to_string());
-                }
+            #(#[test_case(TESTS[N])])*
+            #[ignore]
+            fn kzg_fullprove_(test: &str) {
+                kzg_fullprove(test.to_string());
+            }
             });
-
     }
     };
 }
