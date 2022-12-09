@@ -302,3 +302,91 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use halo2_proofs::{
+        arithmetic::{Field, FieldExt},
+        circuit::{Layouter, SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::{Circuit, ConstraintSystem, Error},
+    };
+    use halo2curves::pasta::pallas;
+    use halo2curves::pasta::Fp as F;
+    use rand::rngs::OsRng;
+
+    const K: usize = 4;
+    const LEN: usize = 2;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        input: ValTensor<F>,
+        l0_params: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = FusedConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let input = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let kernel = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true);
+            let bias = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            // tells the config layer to add an affine op to a circuit gate
+            let affine_node = FusedNode {
+                op: FusedOp::Affine,
+                input_order: vec![
+                    FusedInputType::Input(0),
+                    FusedInputType::Input(1),
+                    FusedInputType::Input(2),
+                ],
+            };
+
+            Self::Config::configure(cs, &[input, kernel, bias], &output, &[affine_node])
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            config.layout(
+                &mut layouter,
+                &[
+                    self.input.clone(),
+                    self.l0_params[0].clone(),
+                    self.l0_params[1].clone(),
+                ],
+            );
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn affinecircuit() {
+        // parameters
+        let mut l0_kernel =
+            Tensor::from((0..LEN * LEN).map(|_| Value::known(pallas::Base::random(OsRng))));
+        l0_kernel.reshape(&[LEN, LEN]);
+
+        let l0_bias = Tensor::from((0..LEN).map(|_| Value::known(pallas::Base::random(OsRng))));
+
+        let input = Tensor::from((0..LEN).map(|_| Value::known(pallas::Base::random(OsRng))));
+
+        let circuit = MyCircuit::<F> {
+            input: ValTensor::from(input),
+            l0_params: [ValTensor::from(l0_kernel), ValTensor::from(l0_bias)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
