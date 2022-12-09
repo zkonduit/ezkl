@@ -352,10 +352,6 @@ impl Node {
                 }
             }
             OpKind::Fused(ref s) => {
-                inputs
-                    .iter()
-                    .tuple_windows()
-                    .all(|(a, b)| a.in_scale == b.in_scale);
                 match s {
                     FusedOp::Dot => todo!(),
                     FusedOp::Conv(_, _) => {
