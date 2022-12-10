@@ -310,26 +310,99 @@ impl<F: FieldExt> Nonlinearity<F> for DivideBy<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use halo2_proofs::{
+        arithmetic::FieldExt,
+        circuit::{Layouter, SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::{Circuit, ConstraintSystem, Error},
+    };
     use halo2curves::pasta::Fp as F;
+
+    #[derive(Clone)]
+    struct NLCircuit<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
+        assigned: Nonlin1d<F, NL>,
+        _marker: PhantomData<NL>,
+    }
+
+    impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
+        for NLCircuit<F, NL>
+    {
+        type Config = EltwiseConfig<F, NL>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let advices = (0..2)
+                .map(|_| VarTensor::new_advice(cs, 4, 1, vec![1], true))
+                .collect::<Vec<_>>();
+
+            Self::Config::configure(cs, &advices[0], &advices[1], Some(&[2, 1]))
+        }
+
+        fn synthesize(
+            &self,
+            config: Self::Config,
+            mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
+        ) -> Result<(), Error> {
+            config.layout(&mut layouter, self.assigned.input.clone());
+
+            Ok(())
+        }
+    }
 
     #[test]
     fn test_eltrelunl() {
         for i in -127..127 {
-            let _r = <ReLu<F> as Nonlinearity<F>>::nonlinearity(i, &[1]);
+            let r = <ReLu<F> as Nonlinearity<F>>::nonlinearity(i, &[1]);
+            if i <= 0 {
+                assert!(r == F::from(0 as u64))
+            } else {
+                assert!(r == F::from(i as u64))
+            }
         }
     }
 
     #[test]
     fn test_eltsigmoid() {
         for i in -127..127 {
-            let _r = <Sigmoid<F> as Nonlinearity<F>>::nonlinearity(i, &[1, 1]);
+            let r = <Sigmoid<F> as Nonlinearity<F>>::nonlinearity(i, &[1, 1]);
+            let exp_sig = (1.0 / (1.0 + (-i as f32).exp())).round();
+            assert!(r == F::from(exp_sig as u64))
         }
     }
 
     #[test]
     fn test_eltdivide() {
         for i in -127..127 {
-            let _r = <DivideBy<F> as Nonlinearity<F>>::nonlinearity(i, &[1]);
+            let r = <DivideBy<F> as Nonlinearity<F>>::nonlinearity(i, &[1]);
+            println!("{:?}, {:?}, {:?}", i, r, F::from(-i as u64));
+            if i <= 0 {
+                assert!(r == -F::from(-i as u64))
+            } else {
+                assert!(r == F::from(i as u64))
+            }
         }
+    }
+
+    #[test]
+    fn relucircuit() {
+        let input: Tensor<Value<F>> =
+            Tensor::new(Some(&[Value::<F>::known(F::from(1 as u64))]), &[1]).unwrap();
+        let assigned: Nonlin1d<F, ReLu<F>> = Nonlin1d {
+            input: ValTensor::from(input.clone()),
+            output: ValTensor::from(input),
+            _marker: PhantomData,
+        };
+
+        let circuit = NLCircuit::<F, ReLu<F>> {
+            assigned,
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(4 as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
     }
 }
