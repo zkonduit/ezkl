@@ -19,7 +19,7 @@ static mut IMAGE_WIDTH: usize = 2;
 static mut IN_CHANNELS: usize = 2;
 const PADDING: usize = 2;
 
-const K: usize = 8;
+const K: usize = 9;
 
 #[derive(Clone, Debug)]
 struct MyCircuit<F: FieldExt + TensorType>
