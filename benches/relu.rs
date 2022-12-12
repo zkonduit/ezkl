@@ -53,6 +53,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
 }
 
 fn runrelu(c: &mut Criterion) {
+    colog::init();
     let mut group = c.benchmark_group("relu");
 
     let mut rng = rand::thread_rng();
