@@ -19,7 +19,7 @@ static mut IMAGE_WIDTH: usize = 2;
 static mut IN_CHANNELS: usize = 2;
 const PADDING: usize = 2;
 
-const K: usize = 9;
+const K: usize = 11;
 
 #[derive(Clone, Debug)]
 struct MyCircuit<F: FieldExt + TensorType>
@@ -101,7 +101,7 @@ where
 fn runcnvrl(c: &mut Criterion) {
     let mut group = c.benchmark_group("cnvrl");
 
-    for size in [1, 2, 4, 8, 16, 32].iter() {
+    for size in [1, 2, 4, 8].iter() {
         unsafe {
             KERNEL_HEIGHT = size * 3;
             KERNEL_WIDTH = size * 3;
