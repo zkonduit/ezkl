@@ -55,6 +55,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
 }
 
 fn runrange(c: &mut Criterion) {
+    colog::init();
     let mut group = c.benchmark_group("range");
     for &len in [4, 8, 16, 32, 64, 128].iter() {
         unsafe {
