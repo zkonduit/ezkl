@@ -35,6 +35,7 @@ plonk_verifier = {  git = "https://github.com/privacy-scaling-explorations/plonk
 criterion = {version = "0.3",  features = ["html_reports"]}
 seq-macro = "0.3.1"
 test-case = "2.2.2"
+ctor = "0.1.26"
 
 [[bench]]
 name = "affine"

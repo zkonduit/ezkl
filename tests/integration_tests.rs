@@ -1,5 +1,11 @@
 use std::process::Command;
 
+#[cfg(test)]
+#[ctor::ctor]
+fn init() {
+    build_ezkl();
+}
+
 const TESTS: [&str; 12] = [
     "1l_mlp",
     "1l_flatten",
@@ -25,9 +31,11 @@ macro_rules! test_func {
             use crate::mock;
             use crate::mock_public_inputs;
             use crate::mock_public_params;
-            use crate::fullprove;
-            use crate::prove_and_verify;
+            use crate::ipa_fullprove;
+            use crate::ipa_prove_and_verify;
             use crate::kzg_fullprove;
+            use crate::kzg_prove_and_verify;
+            use crate::kzg_evm_fullprove;
 
             seq!(N in 0..=11 {
             #(#[test_case(TESTS[N])])*
@@ -46,20 +54,31 @@ macro_rules! test_func {
             }
 
             #(#[test_case(TESTS[N])])*
-            fn fullprove_(test: &str) {
-                fullprove(test.to_string());
+            fn ipa_fullprove_(test: &str) {
+                ipa_fullprove(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
-            fn prove_and_verify_(test: &str) {
-                prove_and_verify(test.to_string());
+            fn ipa_prove_and_verify_(test: &str) {
+                ipa_prove_and_verify(test.to_string());
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn kzg_fullprove_(test: &str) {
+                kzg_fullprove(test.to_string());
+            }
+
+            #(#[test_case(TESTS[N])])*
+            #[ignore]
+            fn kzg_prove_and_verify_(test: &str) {
+                kzg_prove_and_verify(test.to_string());
             }
 
             // these take a particularly long time to run
             #(#[test_case(TESTS[N])])*
             #[ignore]
-            fn kzg_fullprove_(test: &str) {
-                kzg_fullprove(test.to_string());
+            fn kzg_evm_fullprove_(test: &str) {
+                kzg_evm_fullprove(test.to_string());
             }
             });
     }
@@ -70,17 +89,10 @@ test_func!();
 
 // Mock prove (fast, but does not cover some potential issues)
 fn mock(example_name: String) {
-    let status = Command::new("cargo")
+    let status = Command::new("target/release/ezkl")
         .args([
-            "run",
-            "--release",
-            "--bin",
-            "ezkl",
-            "--",
-            "--bits",
-            "16",
-            "-K",
-            "17",
+            "--bits=16",
+            "-K=17",
             "mock",
             "-D",
             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
@@ -96,18 +108,11 @@ fn mock(example_name: String) {
 
 // Mock prove (fast, but does not cover some potential issues)
 fn mock_public_inputs(example_name: String) {
-    let status = Command::new("cargo")
+    let status = Command::new("target/release/ezkl")
         .args([
-            "run",
-            "--release",
-            "--bin",
-            "ezkl",
-            "--",
             "--public-inputs",
-            "--bits",
-            "16",
-            "-K",
-            "17",
+            "--bits=16",
+            "-K=17",
             "mock",
             "-D",
             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
@@ -123,18 +128,11 @@ fn mock_public_inputs(example_name: String) {
 
 // Mock prove (fast, but does not cover some potential issues)
 fn mock_public_params(example_name: String) {
-    let status = Command::new("cargo")
+    let status = Command::new("target/release/ezkl")
         .args([
-            "run",
-            "--release",
-            "--bin",
-            "ezkl",
-            "--",
             "--public-params",
-            "--bits",
-            "16",
-            "-K",
-            "17",
+            "--bits=16",
+            "-K=17",
             "mock",
             "-D",
             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
@@ -149,18 +147,11 @@ fn mock_public_params(example_name: String) {
 }
 
 // full prove (slower, covers more, but still reuses the pk)
-fn fullprove(example_name: String) {
-    let status = Command::new("cargo")
+fn ipa_fullprove(example_name: String) {
+    let status = Command::new("target/release/ezkl")
         .args([
-            "run",
-            "--release",
-            "--bin",
-            "ezkl",
-            "--",
-            "--bits",
-            "16",
-            "-K",
-            "17",
+            "--bits=16",
+            "-K=17",
             "fullprove",
             "-D",
             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
@@ -175,18 +166,11 @@ fn fullprove(example_name: String) {
 }
 
 // prove-serialize-verify, the usual full path
-fn prove_and_verify(example_name: String) {
-    let status = Command::new("cargo")
+fn ipa_prove_and_verify(example_name: String) {
+    let status = Command::new("target/release/ezkl")
         .args([
-            "run",
-            "--release",
-            "--bin",
-            "ezkl",
-            "--",
-            "--bits",
-            "16",
-            "-K",
-            "17",
+            "--bits=16",
+            "-K=17",
             "prove",
             "-D",
             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
@@ -198,17 +182,10 @@ fn prove_and_verify(example_name: String) {
         .status()
         .expect("failed to execute process");
     assert!(status.success());
-    let status = Command::new("cargo")
+    let status = Command::new("target/release/ezkl")
         .args([
-            "run",
-            "--release",
-            "--bin",
-            "ezkl",
-            "--",
-            "--bits",
-            "16",
-            "-K",
-            "17",
+            "--bits=16",
+            "-K=17",
             "verify",
             "-M",
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
@@ -220,9 +197,62 @@ fn prove_and_verify(example_name: String) {
     assert!(status.success());
 }
 
-// KZG / EVM tests
+// prove-serialize-verify, the usual full path
+fn kzg_prove_and_verify(example_name: String) {
+    let status = Command::new("target/release/ezkl")
+        .args([
+            "--bits=16",
+            "-K=17",
+            "prove",
+            "-D",
+            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+            "-M",
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            "-O",
+            format!("pav_{}.pf", example_name).as_str(),
+            "--pfsys=kzg",
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+    let status = Command::new("target/release/ezkl")
+        .args([
+            "--bits=16",
+            "-K=17",
+            "verify",
+            "--pfsys=kzg",
+            "-M",
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            "-P",
+            format!("pav_{}.pf", example_name).as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+// KZG  tests
 // full prove (slower, covers more, but still reuses the pk)
 fn kzg_fullprove(example_name: String) {
+    let status = Command::new("target/release/ezkl")
+        .args([
+            "--bits=16",
+            "-K=17",
+            "fullprove",
+            "--pfsys=kzg",
+            "-D",
+            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+            "-M",
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+// KZG / EVM tests
+// full prove (slower, covers more, but still reuses the pk)
+fn kzg_evm_fullprove(example_name: String) {
     let status = Command::new("cargo")
         .args([
             "run",
@@ -232,18 +262,23 @@ fn kzg_fullprove(example_name: String) {
             "--bin",
             "ezkl",
             "--",
-            "--bits",
-            "16",
-            "-K",
-            "17",
+            "--bits=16",
+            "-K=17",
             "fullprove",
+            "--pfsys=kzg",
             "-D",
             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
             "-M",
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
-            "--pfsys",
-            "kzg",
         ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+fn build_ezkl() {
+    let status = Command::new("cargo")
+        .args(["build", "--release", "--bin", "ezkl"])
         .status()
         .expect("failed to execute process");
     assert!(status.success());

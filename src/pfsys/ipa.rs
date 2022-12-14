@@ -98,7 +98,6 @@ pub fn verify_ipa_proof(proof: Proof) -> bool {
     };
     let empty_circuit = circuit.without_witnesses();
     let vk = keygen_vk(&params, &empty_circuit).expect("keygen_vk should not fail");
-    let pk = keygen_pk(&params, vk, &empty_circuit).expect("keygen_pk should not fail");
 
     let pi_inner: Vec<Vec<F>> = proof
         .public_inputs
@@ -115,14 +114,7 @@ pub fn verify_ipa_proof(proof: Proof) -> bool {
 
     trace!("params computed");
 
-    let result = verify_proof(
-        &params,
-        pk.get_vk(),
-        strategy,
-        pi_for_real_prover,
-        &mut transcript,
-    )
-    .is_ok();
+    let result = verify_proof(&params, &vk, strategy, pi_for_real_prover, &mut transcript).is_ok();
     info!("verify took {}", now.elapsed().as_secs());
     result
 }
