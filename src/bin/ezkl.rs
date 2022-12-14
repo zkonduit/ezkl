@@ -198,7 +198,7 @@ pub fn main() {
         } => {
             let args = Cli::parse();
             let data = prepare_data(data);
-            match pfsys {
+            let checkable_pf = match pfsys {
                 ProofSystem::IPA => {
                     let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
                     info!("proof with {}", pfsys);
@@ -213,21 +213,11 @@ pub fn main() {
                         .map(|i| i.into_iter().collect())
                         .collect();
 
-                    let checkable_pf = Proof {
+                    Proof {
                         input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
                         public_inputs: pi,
                         proof,
-                    };
-
-                    let serialized = match serde_json::to_string(&checkable_pf) {
-                        Ok(s) => s,
-                        Err(e) => {
-                            abort!("failed to convert proof json to string {:?}", e);
-                        }
-                    };
-
-                    let mut file = std::fs::File::create(output).expect("create failed");
-                    file.write_all(serialized.as_bytes()).expect("write failed");
+                    }
                 }
                 ProofSystem::KZG => {
                     let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
@@ -243,72 +233,55 @@ pub fn main() {
                         .map(|i| i.into_iter().collect())
                         .collect();
 
-                    let checkable_pf = Proof {
+                    Proof {
                         input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
                         public_inputs: pi,
                         proof,
-                    };
-
-                    let serialized = match serde_json::to_string(&checkable_pf) {
-                        Ok(s) => s,
-                        Err(e) => {
-                            abort!("failed to convert proof json to string {:?}", e);
-                        }
-                    };
-
-                    let mut file = std::fs::File::create(output).expect("create failed");
-                    file.write_all(serialized.as_bytes()).expect("write failed");
+                    }
                 }
-            }
+            };
+            let serialized = match serde_json::to_string(&checkable_pf) {
+                Ok(s) => s,
+                Err(e) => {
+                    abort!("failed to convert proof json to string {:?}", e);
+                }
+            };
+
+            let mut file = std::fs::File::create(output).expect("create failed");
+            file.write_all(serialized.as_bytes()).expect("write failed");
         }
         Commands::Verify {
             model: _,
             proof,
             pfsys,
-        } => match pfsys {
-            ProofSystem::IPA => {
-                let mut file = match File::open(proof) {
-                    Ok(f) => f,
-                    Err(e) => {
-                        abort!("failed to open proof file {:?}", e);
-                    }
-                };
-                let mut data = String::new();
-                match file.read_to_string(&mut data) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        abort!("failed to read file {:?}", e);
-                    }
-                };
-                let proof: Proof =
-                    serde_json::from_str(&data).expect("JSON was not well-formatted");
-
-                let result = verify_ipa_proof(proof);
-                info!("verified: {}", result);
-                assert!(result);
+        } => {
+            let mut file = match File::open(proof) {
+                Ok(f) => f,
+                Err(e) => {
+                    abort!("failed to open proof file {:?}", e);
+                }
+            };
+            let mut data = String::new();
+            match file.read_to_string(&mut data) {
+                Ok(_) => {}
+                Err(e) => {
+                    abort!("failed to read file {:?}", e);
+                }
+            };
+            let proof: Proof = serde_json::from_str(&data).expect("JSON was not well-formatted");
+            match pfsys {
+                ProofSystem::IPA => {
+                    let result = verify_ipa_proof(proof);
+                    info!("verified: {}", result);
+                    assert!(result);
+                }
+                ProofSystem::KZG => {
+                    let result = verify_kzg_proof(proof);
+                    info!("verified: {}", result);
+                    assert!(result);
+                }
             }
-            ProofSystem::KZG => {
-                let mut file = match File::open(proof) {
-                    Ok(f) => f,
-                    Err(e) => {
-                        abort!("failed to open proof file {:?}", e);
-                    }
-                };
-                let mut data = String::new();
-                match file.read_to_string(&mut data) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        abort!("failed to read file {:?}", e);
-                    }
-                };
-                let proof: Proof =
-                    serde_json::from_str(&data).expect("JSON was not well-formatted");
-
-                let result = verify_kzg_proof(proof);
-                info!("verified: {}", result);
-                assert!(result);
-            }
-        },
+        }
     }
 }
 
