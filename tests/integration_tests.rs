@@ -34,7 +34,6 @@ macro_rules! test_func {
             use crate::ipa_fullprove;
             use crate::ipa_prove_and_verify;
             use crate::kzg_fullprove;
-            use crate::kzg_prove_and_verify;
             use crate::kzg_evm_fullprove;
 
             seq!(N in 0..=11 {
@@ -66,12 +65,6 @@ macro_rules! test_func {
             #(#[test_case(TESTS[N])])*
             fn kzg_fullprove_(test: &str) {
                 kzg_fullprove(test.to_string());
-            }
-
-            #(#[test_case(TESTS[N])])*
-            #[ignore]
-            fn kzg_prove_and_verify_(test: &str) {
-                kzg_prove_and_verify(test.to_string());
             }
 
             // these take a particularly long time to run
@@ -187,40 +180,6 @@ fn ipa_prove_and_verify(example_name: String) {
             "--bits=16",
             "-K=17",
             "verify",
-            "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
-            "-P",
-            format!("pav_{}.pf", example_name).as_str(),
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
-}
-
-// prove-serialize-verify, the usual full path
-fn kzg_prove_and_verify(example_name: String) {
-    let status = Command::new("target/release/ezkl")
-        .args([
-            "--bits=16",
-            "-K=17",
-            "prove",
-            "-D",
-            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
-            "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
-            "-O",
-            format!("pav_{}.pf", example_name).as_str(),
-            "--pfsys=kzg",
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
-    let status = Command::new("target/release/ezkl")
-        .args([
-            "--bits=16",
-            "-K=17",
-            "verify",
-            "--pfsys=kzg",
             "-M",
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             "-P",
