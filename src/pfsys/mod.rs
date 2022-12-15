@@ -11,7 +11,7 @@ use clap::Parser;
 use halo2_proofs::plonk::{
     create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey,
 };
-use halo2_proofs::poly::commitment::{CommitmentScheme, Prover, Verifier};
+use halo2_proofs::poly::commitment::{CommitmentScheme, Params, Prover, Verifier};
 use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{
     Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
@@ -307,19 +307,39 @@ where
     VerifyingKey::<Scheme::Curve>::read::<_, ModelCircuit<F>>(&mut reader, params).unwrap()
 }
 
-pub fn save_proof<Scheme: CommitmentScheme, F: FieldExt>(
-    vk_path: Option<PathBuf>,
+pub fn load_params<'params, Scheme: CommitmentScheme, F: FieldExt + TensorType>(
+    path: PathBuf,
+) -> Scheme::ParamsVerifier {
+    info!("loading params from {:?}", path);
+    let f = match File::open(path) {
+        Ok(f) => f,
+        Err(e) => {
+            abort!("failed to load params {}", e);
+        }
+    };
+    let mut reader = BufReader::new(f);
+    Params::<'_, Scheme::Curve>::read(&mut reader).unwrap()
+}
+
+pub fn save_proof<'params, Scheme: CommitmentScheme, F: FieldExt>(
+    vk_path: PathBuf,
+    params_path: PathBuf,
     output: PathBuf,
     pk: ProvingKey<Scheme::Curve>,
     proof: Proof,
+    params: &'params Scheme::ParamsVerifier,
 ) {
-    if let Some(path) = &vk_path {
-        info!("saving verification key 💾");
-        let f = File::create(path).unwrap();
-        let mut writer = BufWriter::new(f);
-        pk.get_vk().write(&mut writer).unwrap();
-        writer.flush().unwrap();
-    }
+    info!("saving verification key 💾");
+    let f = File::create(vk_path).unwrap();
+    let mut writer = BufWriter::new(f);
+    pk.get_vk().write(&mut writer).unwrap();
+    writer.flush().unwrap();
+
+    info!("saving parameters 💾");
+    let f = File::create(params_path).unwrap();
+    let mut writer = BufWriter::new(f);
+    params.write(&mut writer).unwrap();
+    writer.flush().unwrap();
 
     let serialized = match serde_json::to_string(&proof) {
         Ok(s) => s,

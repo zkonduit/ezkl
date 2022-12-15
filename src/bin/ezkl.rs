@@ -13,7 +13,7 @@ use ezkl::pfsys::{
     create_proof_model, parse_prover_errors, prepare_circuit_and_public_input, prepare_data,
     save_proof, verify_proof_model,
 };
-use ezkl::pfsys::{load_vk, Proof};
+use ezkl::pfsys::{load_params, load_vk, Proof};
 #[cfg(feature = "evm")]
 use halo2_proofs::poly::commitment::Params;
 use halo2_proofs::poly::ipa::commitment::IPACommitmentScheme;
@@ -176,6 +176,7 @@ pub fn main() {
             model: _,
             output,
             vk_path,
+            params_path,
             pfsys,
         } => {
             let args = Cli::parse();
@@ -195,7 +196,14 @@ pub fn main() {
                             &params,
                         );
 
-                    save_proof::<IPACommitmentScheme<_>, Fp>(vk_path, output, pk, proof);
+                    save_proof::<IPACommitmentScheme<_>, Fp>(
+                        vk_path,
+                        params_path,
+                        output,
+                        pk,
+                        proof,
+                        &params,
+                    );
                 }
                 ProofSystem::KZG => {
                     info!("proof with {}", pfsys);
@@ -210,7 +218,14 @@ pub fn main() {
                             &params,
                         );
 
-                    save_proof::<KZGCommitmentScheme<Bn256>, Fr>(vk_path, output, pk, proof);
+                    save_proof::<KZGCommitmentScheme<Bn256>, Fr>(
+                        vk_path,
+                        params_path,
+                        output,
+                        pk,
+                        proof,
+                        &params,
+                    );
                 }
             };
         }
@@ -218,6 +233,7 @@ pub fn main() {
             model: _,
             proof,
             vk_path,
+            params_path,
             pfsys,
         } => {
             let mut file = match File::open(proof) {
@@ -236,7 +252,8 @@ pub fn main() {
             let proof: Proof = serde_json::from_str(&data).expect("JSON was not well-formatted");
             match pfsys {
                 ProofSystem::IPA => {
-                    let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
+                    let params: ParamsIPA<vesta::Affine> =
+                        load_params::<IPACommitmentScheme<_>, Fp>(params_path);
                     let strategy = IPASingleStrategy::new(&params);
                     let vk = load_vk::<IPACommitmentScheme<_>, Fp>(vk_path, &params);
                     let result = verify_proof_model(proof, &params, &vk, strategy);
@@ -244,7 +261,8 @@ pub fn main() {
                     assert!(result);
                 }
                 ProofSystem::KZG => {
-                    let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
+                    let params: ParamsKZG<Bn256> =
+                        load_params::<KZGCommitmentScheme<Bn256>, Fr>(params_path);
                     let strategy = KZGSingleStrategy::new(&params);
                     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr>(vk_path, &params);
                     let result = verify_proof_model::<_, VerifierGWC<'_, Bn256>, _, _>(

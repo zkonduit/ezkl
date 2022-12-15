@@ -180,6 +180,8 @@ fn ipa_prove_and_verify(example_name: String) {
             format!("ipa_{}.pf", example_name).as_str(),
             "--vk-path",
             format!("ipa_{}.vk", example_name).as_str(),
+            "--params-path",
+            format!("ipa_{}.params", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");
@@ -195,6 +197,8 @@ fn ipa_prove_and_verify(example_name: String) {
             format!("ipa_{}.pf", example_name).as_str(),
             "--vk-path",
             format!("ipa_{}.vk", example_name).as_str(),
+            "--params-path",
+            format!("ipa_{}.params", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");
@@ -217,6 +221,8 @@ fn kzg_prove_and_verify(example_name: String) {
             format!("kzg_{}.pf", example_name).as_str(),
             "--vk-path",
             format!("kzg_{}.vk", example_name).as_str(),
+            "--params-path",
+            format!("kzg_{}.params", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");
@@ -233,6 +239,8 @@ fn kzg_prove_and_verify(example_name: String) {
             format!("kzg_{}.pf", example_name).as_str(),
             "--vk-path",
             format!("kzg_{}.vk", example_name).as_str(),
+            "--params-path",
+            format!("kzg_{}.params", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");

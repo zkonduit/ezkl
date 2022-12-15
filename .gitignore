@@ -3,5 +3,6 @@ Cargo.lock
 data
 *.pf
 *.vk
+*.params
 *~
 \#*\#
