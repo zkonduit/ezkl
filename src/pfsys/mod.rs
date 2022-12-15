@@ -178,7 +178,7 @@ pub fn prepare_data(datapath: String) -> ModelInput {
     data
 }
 
-// a wrapper around halo2's create proof
+/// a wrapper around halo2's create_proof
 pub fn create_proof_model<
     'params,
     Scheme: CommitmentScheme,
@@ -248,6 +248,7 @@ where
     (pk, checkable_pf, dims)
 }
 
+/// a wrapper around halo2's verify_proof
 pub fn verify_proof_model<
     'params,
     F: FieldExt,
