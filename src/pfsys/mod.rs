@@ -41,6 +41,37 @@ pub struct Proof {
     pub proof: Vec<u8>,
 }
 
+impl Proof {
+    pub fn save(&self, proof_path: &PathBuf) {
+        let serialized = match serde_json::to_string(&self) {
+            Ok(s) => s,
+            Err(e) => {
+                abort!("failed to convert proof json to string {:?}", e);
+            }
+        };
+
+        let mut file = std::fs::File::create(proof_path).expect("create failed");
+        file.write_all(serialized.as_bytes()).expect("write failed");
+    }
+
+    pub fn load(proof_path: &PathBuf) -> Self {
+        let mut file = match File::open(proof_path) {
+            Ok(f) => f,
+            Err(e) => {
+                abort!("failed to open proof file {:?}", e);
+            }
+        };
+        let mut data = String::new();
+        match file.read_to_string(&mut data) {
+            Ok(_) => {}
+            Err(e) => {
+                abort!("failed to read file {:?}", e);
+            }
+        };
+        serde_json::from_str(&data).expect("JSON was not well-formatted")
+    }
+}
+
 /// Helper function to print helpful error messages after verification has failed.
 pub fn parse_prover_errors(f: &VerifyFailure) {
     match f {
@@ -178,17 +209,10 @@ pub fn prepare_data(datapath: String) -> ModelInput {
     data
 }
 
-/// a wrapper around halo2's create_proof
-pub fn create_proof_model<
-    'params,
-    Scheme: CommitmentScheme,
-    F: FieldExt + TensorType,
-    P: Prover<'params, Scheme>,
->(
-    circuit: ModelCircuit<F>,
-    public_inputs: Vec<Tensor<i32>>,
+pub fn create_keys<'params, Scheme: CommitmentScheme, F: FieldExt + TensorType>(
+    circuit: &ModelCircuit<F>,
     params: &'params Scheme::ParamsProver,
-) -> (ProvingKey<Scheme::Curve>, Proof, Vec<Vec<usize>>)
+) -> ProvingKey<Scheme::Curve>
 where
     ModelCircuit<F>: Circuit<Scheme::Scalar>,
 {
@@ -203,10 +227,27 @@ where
     let now = Instant::now();
     let pk = keygen_pk(params, vk, &empty_circuit).expect("keygen_pk should not fail");
     info!("PK took {}", now.elapsed().as_secs());
+    pk
+}
+
+/// a wrapper around halo2's create_proof
+pub fn create_proof_model<
+    'params,
+    Scheme: CommitmentScheme,
+    F: FieldExt + TensorType,
+    P: Prover<'params, Scheme>,
+>(
+    circuit: &ModelCircuit<F>,
+    public_inputs: &Vec<Tensor<i32>>,
+    params: &'params Scheme::ParamsProver,
+    pk: &ProvingKey<Scheme::Curve>,
+) -> (Proof, Vec<Vec<usize>>)
+where
+    ModelCircuit<F>: Circuit<Scheme::Scalar>,
+{
     let now = Instant::now();
     let mut transcript = Blake2bWrite::<_, Scheme::Curve, Challenge255<_>>::init(vec![]);
     let mut rng = OsRng;
-
     let pi_inner: Vec<Vec<Scheme::Scalar>> = public_inputs
         .iter()
         .map(|i| {
@@ -240,12 +281,12 @@ where
         input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
         public_inputs: public_inputs
             .into_iter()
-            .map(|i| i.into_iter().collect())
+            .map(|i| i.clone().into_iter().collect())
             .collect(),
         proof,
     };
 
-    (pk, checkable_pf, dims)
+    (checkable_pf, dims)
 }
 
 /// a wrapper around halo2's verify_proof
@@ -322,33 +363,24 @@ pub fn load_params<'params, Scheme: CommitmentScheme, F: FieldExt + TensorType>(
     Params::<'_, Scheme::Curve>::read(&mut reader).unwrap()
 }
 
-pub fn save_proof<'params, Scheme: CommitmentScheme, F: FieldExt>(
-    vk_path: PathBuf,
-    params_path: PathBuf,
-    output: PathBuf,
-    pk: ProvingKey<Scheme::Curve>,
-    proof: Proof,
-    params: &'params Scheme::ParamsVerifier,
+pub fn save_vk<'params, Scheme: CommitmentScheme, F: FieldExt>(
+    vk_path: &PathBuf,
+    vk: &VerifyingKey<Scheme::Curve>,
 ) {
     info!("saving verification key 💾");
     let f = File::create(vk_path).unwrap();
     let mut writer = BufWriter::new(f);
-    pk.get_vk().write(&mut writer).unwrap();
+    vk.write(&mut writer).unwrap();
     writer.flush().unwrap();
+}
 
+pub fn save_params<'params, Scheme: CommitmentScheme, F: FieldExt>(
+    params_path: &PathBuf,
+    params: &'params Scheme::ParamsVerifier,
+) {
     info!("saving parameters 💾");
     let f = File::create(params_path).unwrap();
     let mut writer = BufWriter::new(f);
     params.write(&mut writer).unwrap();
     writer.flush().unwrap();
-
-    let serialized = match serde_json::to_string(&proof) {
-        Ok(s) => s,
-        Err(e) => {
-            abort!("failed to convert proof json to string {:?}", e);
-        }
-    };
-
-    let mut file = std::fs::File::create(output).expect("create failed");
-    file.write_all(serialized.as_bytes()).expect("write failed");
 }

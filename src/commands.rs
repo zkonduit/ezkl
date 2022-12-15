@@ -98,7 +98,7 @@ pub enum Commands {
         model: PathBuf,
         /// The path to the desired output file
         #[arg(short = 'O', long, default_value = "")]
-        output: PathBuf,
+        proof_path: PathBuf,
         /// The path to output to the desired verfication key file (optional)
         #[arg(long, default_value = "")]
         vk_path: PathBuf,
@@ -129,7 +129,7 @@ pub enum Commands {
 
         /// The path to the proof file
         #[arg(short = 'P', long, default_value = "")]
-        proof: PathBuf,
+        proof_path: PathBuf,
         /// The path to output to the desired verfication key file (optional)
         #[arg(long, default_value = "")]
         vk_path: PathBuf,

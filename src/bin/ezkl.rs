@@ -8,12 +8,12 @@ use ezkl::pfsys::kzg::aggregation::{
     aggregation::AggregationCircuit, evm_verify, gen_aggregation_evm_verifier,
     gen_application_snark, gen_kzg_proof, gen_pk, gen_srs,
 };
+use ezkl::pfsys::{create_keys, load_params, load_vk, Proof};
 #[cfg(not(feature = "evm"))]
 use ezkl::pfsys::{
     create_proof_model, parse_prover_errors, prepare_circuit_and_public_input, prepare_data,
-    save_proof, verify_proof_model,
+    save_params, save_vk, verify_proof_model,
 };
-use ezkl::pfsys::{load_params, load_vk, Proof};
 #[cfg(feature = "evm")]
 use halo2_proofs::poly::commitment::Params;
 use halo2_proofs::poly::ipa::commitment::IPACommitmentScheme;
@@ -39,8 +39,6 @@ use log::{error, info, trace};
 #[cfg(feature = "evm")]
 use plonk_verifier::system::halo2::transcript::evm::EvmTranscript;
 use rand::seq::SliceRandom;
-use std::fs::File;
-use std::io::Read;
 use tabled::Table;
 
 pub fn main() {
@@ -97,15 +95,17 @@ pub fn main() {
                     info!("full proof with {}", pfsys);
 
                     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
+                    let pk = create_keys::<IPACommitmentScheme<_>, Fp>(&circuit, &params);
                     let strategy = IPASingleStrategy::new(&params);
                     trace!("params computed");
 
-                    let (pk, proof, _dims) =
-                        create_proof_model::<IPACommitmentScheme<_>, Fp, ProverIPA<_>>(
-                            circuit,
-                            public_inputs.clone(),
-                            &params,
-                        );
+                    let (proof, _dims) = create_proof_model::<
+                        IPACommitmentScheme<_>,
+                        Fp,
+                        ProverIPA<_>,
+                    >(
+                        &circuit, &public_inputs, &params, &pk
+                    );
 
                     assert!(verify_proof_model(proof, &params, pk.get_vk(), strategy));
                 }
@@ -114,15 +114,17 @@ pub fn main() {
                     // A direct proof
                     let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(&data);
                     let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
+                    let pk = create_keys::<KZGCommitmentScheme<_>, Fr>(&circuit, &params);
                     let strategy = KZGSingleStrategy::new(&params);
                     trace!("params computed");
 
-                    let (pk, proof, _dims) =
-                        create_proof_model::<KZGCommitmentScheme<_>, Fr, ProverGWC<_>>(
-                            circuit,
-                            public_inputs.clone(),
-                            &params,
-                        );
+                    let (proof, _dims) = create_proof_model::<
+                        KZGCommitmentScheme<_>,
+                        Fr,
+                        ProverGWC<_>,
+                    >(
+                        &circuit, &public_inputs, &params, &pk
+                    );
 
                     assert!(verify_proof_model::<_, VerifierGWC<'_, Bn256>, _, _>(
                         proof,
@@ -174,7 +176,7 @@ pub fn main() {
         Commands::Prove {
             data,
             model: _,
-            output,
+            proof_path,
             vk_path,
             params_path,
             pfsys,
@@ -187,69 +189,49 @@ pub fn main() {
                     info!("proof with {}", pfsys);
                     let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fp>(&data);
                     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
+                    let pk = create_keys::<IPACommitmentScheme<_>, Fp>(&circuit, &params);
                     trace!("params computed");
 
-                    let (pk, proof, _) =
-                        create_proof_model::<IPACommitmentScheme<_>, Fp, ProverIPA<_>>(
-                            circuit.clone(),
-                            public_inputs.clone(),
-                            &params,
-                        );
-
-                    save_proof::<IPACommitmentScheme<_>, Fp>(
-                        vk_path,
-                        params_path,
-                        output,
-                        pk,
-                        proof,
+                    let (proof, _) = create_proof_model::<IPACommitmentScheme<_>, Fp, ProverIPA<_>>(
+                        &circuit,
+                        &public_inputs,
                         &params,
+                        &pk,
                     );
+
+                    proof.save(&proof_path);
+                    save_params::<IPACommitmentScheme<_>, Fp>(&params_path, &params);
+                    save_vk::<IPACommitmentScheme<_>, Fp>(&vk_path, &pk.get_vk());
                 }
                 ProofSystem::KZG => {
                     info!("proof with {}", pfsys);
                     let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
                     let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
+                    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr>(&circuit, &params);
                     trace!("params computed");
 
-                    let (pk, proof, _input_dims) =
-                        create_proof_model::<KZGCommitmentScheme<Bn256>, Fr, ProverGWC<'_, Bn256>>(
-                            circuit.clone(),
-                            public_inputs.clone(),
-                            &params,
-                        );
-
-                    save_proof::<KZGCommitmentScheme<Bn256>, Fr>(
-                        vk_path,
-                        params_path,
-                        output,
-                        pk,
-                        proof,
-                        &params,
+                    let (proof, _input_dims) = create_proof_model::<
+                        KZGCommitmentScheme<Bn256>,
+                        Fr,
+                        ProverGWC<'_, Bn256>,
+                    >(
+                        &circuit, &public_inputs, &params, &pk
                     );
+
+                    proof.save(&proof_path);
+                    save_params::<KZGCommitmentScheme<Bn256>, Fr>(&params_path, &params);
+                    save_vk::<KZGCommitmentScheme<Bn256>, Fr>(&vk_path, &pk.get_vk());
                 }
             };
         }
         Commands::Verify {
             model: _,
-            proof,
+            proof_path,
             vk_path,
             params_path,
             pfsys,
         } => {
-            let mut file = match File::open(proof) {
-                Ok(f) => f,
-                Err(e) => {
-                    abort!("failed to open proof file {:?}", e);
-                }
-            };
-            let mut data = String::new();
-            match file.read_to_string(&mut data) {
-                Ok(_) => {}
-                Err(e) => {
-                    abort!("failed to read file {:?}", e);
-                }
-            };
-            let proof: Proof = serde_json::from_str(&data).expect("JSON was not well-formatted");
+            let proof = Proof::load(&proof_path);
             match pfsys {
                 ProofSystem::IPA => {
                     let params: ParamsIPA<vesta::Affine> =
