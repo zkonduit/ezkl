@@ -17,7 +17,6 @@ use halo2_proofs::transcript::{
     Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
 };
 use halo2_proofs::{arithmetic::FieldExt, dev::VerifyFailure};
-use halo2curves::CurveAffine;
 use log::{error, info, trace};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -308,10 +307,10 @@ where
     VerifyingKey::<Scheme::Curve>::read::<_, ModelCircuit<F>>(&mut reader, params).unwrap()
 }
 
-pub fn save_proof<C: CurveAffine, F: FieldExt>(
+pub fn save_proof<Scheme: CommitmentScheme, F: FieldExt>(
     vk_path: Option<PathBuf>,
     output: PathBuf,
-    pk: ProvingKey<C>,
+    pk: ProvingKey<Scheme::Curve>,
     proof: Proof,
 ) {
     if let Some(path) = &vk_path {

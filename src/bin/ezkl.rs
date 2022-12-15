@@ -195,7 +195,7 @@ pub fn main() {
                             &params,
                         );
 
-                    save_proof::<_, Fp>(vk_path, output, pk, proof);
+                    save_proof::<IPACommitmentScheme<_>, Fp>(vk_path, output, pk, proof);
                 }
                 ProofSystem::KZG => {
                     info!("proof with {}", pfsys);
@@ -204,13 +204,13 @@ pub fn main() {
                     trace!("params computed");
 
                     let (pk, proof, _input_dims) =
-                        create_proof_model::<KZGCommitmentScheme<_>, Fr, ProverGWC<_>>(
+                        create_proof_model::<KZGCommitmentScheme<Bn256>, Fr, ProverGWC<'_, Bn256>>(
                             circuit.clone(),
                             public_inputs.clone(),
                             &params,
                         );
 
-                    save_proof::<_, Fr>(vk_path, output, pk, proof);
+                    save_proof::<KZGCommitmentScheme<Bn256>, Fr>(vk_path, output, pk, proof);
                 }
             };
         }
@@ -246,7 +246,7 @@ pub fn main() {
                 ProofSystem::KZG => {
                     let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
                     let strategy = KZGSingleStrategy::new(&params);
-                    let vk = load_vk::<KZGCommitmentScheme<_>, Fr>(vk_path, &params);
+                    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr>(vk_path, &params);
                     let result = verify_proof_model::<_, VerifierGWC<'_, Bn256>, _, _>(
                         proof, &params, &vk, strategy,
                     );
