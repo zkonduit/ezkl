@@ -2,7 +2,7 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use log::info;
 use std::io::{stdin, stdout, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -95,10 +95,13 @@ pub enum Commands {
 
         /// The path to the .onnx model file
         #[arg(short = 'M', long, default_value = "")]
-        model: String,
+        model: PathBuf,
         /// The path to the desired output file
         #[arg(short = 'O', long, default_value = "")]
         output: PathBuf,
+        /// The path to output to the desired verfication key file (optional)
+        #[arg(long, default_value = "")]
+        vk_path: Option<PathBuf>,
 
         // /// The path to the Params for the proof system
         // #[arg(short = 'P', long, default_value = "")]
@@ -119,11 +122,14 @@ pub enum Commands {
     Verify {
         /// The path to the .onnx model file
         #[arg(short = 'M', long, default_value = "")]
-        model: String,
+        model: PathBuf,
 
         /// The path to the proof file
         #[arg(short = 'P', long, default_value = "")]
         proof: PathBuf,
+        /// The path to output to the desired verfication key file (optional)
+        #[arg(long, default_value = "")]
+        vk_path: Option<PathBuf>,
 
         // /// The path to the Params for the proof system
         // #[arg(short = 'P', long, default_value = "")]
@@ -138,80 +144,7 @@ pub enum Commands {
             value_enum
         )]
         pfsys: ProofSystem,
-        // todo, allow optional vkey and params when applicable
     },
-    // Awaiting PR to stabilize VK and PK formats
-    // /// Loads model and prepares verification key, saving in --output
-    // Vkey {
-    //     /// The path to the .onnx model file
-    //     #[arg(short = 'M', long, default_value = "")]
-    //     model: String,
-    //     /// The path to the desired output file
-    //     #[arg(short = 'O', long, default_value = "")]
-    //     output: PathBuf,
-
-    //     /// The path to the Params for the proof system
-    //     #[arg(short = 'P', long, default_value = "")]
-    //     params: PathBuf,
-
-    //     #[arg(
-    //         long,
-    // 	    short = 'B',
-    //         require_equals = true,
-    //         num_args = 0..=1,
-    //         default_value_t = ProofSystem::IPA,
-    //         default_missing_value = "always",
-    //         value_enum
-    //     )]
-    //     pfsys: ProofSystem,
-    // },
-
-    // /// Loads model and prepares verification and proving key, saving proving key in --output
-    // Pkey {
-    //     /// The path to the .onnx model file
-    //     #[arg(short = 'M', long, default_value = "")]
-    //     model: String,
-    //     /// The path to the desired output file
-    //     #[arg(short = 'O', long, default_value = "")]
-    //     output: PathBuf,
-
-    //     /// The path to the Params for the proof system
-    //     #[arg(short = 'P', long, default_value = "")]
-    //     params: PathBuf,
-
-    //     #[arg(
-    //         long,
-    // 	    short = 'B',
-    //         require_equals = true,
-    //         num_args = 0..=1,
-    //         default_value_t = ProofSystem::IPA,
-    //         default_missing_value = "always",
-    //         value_enum
-    //     )]
-    //     pfsys: ProofSystem,
-    //     // todo, optionally allow supplying verification key
-    // },
-}
-
-pub fn model_path(model: String) -> PathBuf {
-    let mut s = String::new();
-    let model_path = match model.is_empty() {
-        false => {
-            info!("loading model from {}", model.clone());
-            Path::new(&model)
-        }
-        true => {
-            info!("please enter a path to a .onnx file containing a model: ");
-            let _ = stdout().flush();
-            let _ = &stdin()
-                .read_line(&mut s)
-                .expect("did not enter a correct string");
-            s.truncate(s.len() - 1);
-            Path::new(&s)
-        }
-    };
-    assert!(model_path.exists());
-    model_path.into()
 }
 
 pub fn data_path(data: String) -> PathBuf {

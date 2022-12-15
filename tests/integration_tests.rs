@@ -178,6 +178,8 @@ fn ipa_prove_and_verify(example_name: String) {
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             "-O",
             format!("pav_{}.pf", example_name).as_str(),
+            "--vk-path",
+            format!("pav_{}.vk", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");
@@ -191,6 +193,8 @@ fn ipa_prove_and_verify(example_name: String) {
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             "-P",
             format!("pav_{}.pf", example_name).as_str(),
+            "--vk-path",
+            format!("pav_{}.vk", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");
@@ -204,13 +208,15 @@ fn kzg_prove_and_verify(example_name: String) {
             "--bits=16",
             "-K=17",
             "prove",
+            "--pfsys=kzg",
             "-D",
             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
             "-M",
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             "-O",
             format!("pav_{}.pf", example_name).as_str(),
-            "--pfsys=kzg",
+            "--vk-path",
+            format!("pav_{}.vk", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");
@@ -225,6 +231,8 @@ fn kzg_prove_and_verify(example_name: String) {
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             "-P",
             format!("pav_{}.pf", example_name).as_str(),
+            "--vk-path",
+            format!("pav_{}.vk", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");

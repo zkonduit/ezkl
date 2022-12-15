@@ -8,7 +8,7 @@ use clap::Parser;
 use halo2_proofs::{
     // arithmetic::FieldExt,
     // dev::{MockProver, VerifyFailure},
-    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey},
+    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey},
     poly::{
         commitment::ParamsProver,
         kzg::{
@@ -24,9 +24,9 @@ use halo2_proofs::{
 use halo2curves::bn256::{Bn256, Fr as F, G1Affine};
 use log::{error, info, trace};
 use rand::rngs::OsRng;
-use std::marker::PhantomData;
-use std::ops::Deref;
 use std::time::Instant;
+use std::{fs::File, path::PathBuf};
+use std::{io::BufReader, ops::Deref};
 
 pub fn create_kzg_proof(
     circuit: ModelCircuit<F>,
@@ -73,29 +73,20 @@ pub fn create_kzg_proof(
     (pk, proof, dims)
 }
 
-pub fn verify_kzg_proof(proof: Proof) -> bool {
+pub fn verify_kzg_proof(proof: Proof, vk_path: Option<PathBuf>) -> bool {
     let args = Cli::parse();
     let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
 
-    let inputs = proof
-        .input_shapes
-        .iter()
-        .map(
-            |s| match Tensor::new(Some(&vec![0; s.iter().product()]), s) {
-                Ok(t) => t,
-                Err(e) => {
-                    abort!("failed to initialize tensor {:?}", e);
-                }
-            },
-        )
-        .collect();
-    let circuit = ModelCircuit::<F> {
-        inputs,
-        _marker: PhantomData,
+    let vk = match vk_path {
+        None => {
+            abort!("kzg verify requires a path to a verification key");
+        }
+        Some(path) => {
+            let f = File::open(path).unwrap();
+            let mut reader = BufReader::new(f);
+            VerifyingKey::<G1Affine>::read::<_, ModelCircuit<F>>(&mut reader, &params).unwrap()
+        }
     };
-    let empty_circuit = circuit.without_witnesses();
-    let vk = keygen_vk(&params, &empty_circuit).expect("keygen_vk should not fail");
-    let pk = keygen_pk(&params, vk, &empty_circuit).expect("keygen_pk should not fail");
 
     let pi_inner: Vec<Vec<F>> = proof
         .public_inputs
@@ -114,7 +105,7 @@ pub fn verify_kzg_proof(proof: Proof) -> bool {
 
     let result = verify_proof::<_, VerifierGWC<_>, _, _, _>(
         &params,
-        pk.get_vk(),
+        &vk,
         strategy,
         pi_for_real_prover,
         &mut transcript,

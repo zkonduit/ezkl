@@ -8,7 +8,7 @@ use clap::Parser;
 use halo2_proofs::{
     // arithmetic::FieldExt,
     // dev::{MockProver, VerifyFailure},
-    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey},
+    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey},
     poly::{
         commitment::ParamsProver,
         ipa::{
@@ -28,8 +28,9 @@ use halo2curves::pasta::{EqAffine, Fp as F};
 use log::{error, info, trace};
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
-use std::ops::Deref;
 use std::time::Instant;
+use std::{fs::File, path::PathBuf};
+use std::{io::BufReader, ops::Deref};
 
 pub fn create_ipa_proof(
     circuit: ModelCircuit<Fp>,
@@ -76,28 +77,38 @@ pub fn create_ipa_proof(
     (pk, proof, dims)
 }
 
-pub fn verify_ipa_proof(proof: Proof) -> bool {
+pub fn verify_ipa_proof(proof: Proof, vk_path: Option<PathBuf>) -> bool {
     let args = Cli::parse();
     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
 
-    let inputs = proof
-        .input_shapes
-        .iter()
-        .map(
-            |s| match Tensor::new(Some(&vec![0; s.iter().product()]), s) {
-                Ok(t) => t,
-                Err(e) => {
-                    abort!("failed to initialize tensor {:?}", e);
-                }
-            },
-        )
-        .collect();
-    let circuit = ModelCircuit::<F> {
-        inputs,
-        _marker: PhantomData,
+    let vk = match vk_path {
+        None => {
+            let inputs = proof
+                .input_shapes
+                .iter()
+                .map(
+                    |s| match Tensor::new(Some(&vec![0; s.iter().product()]), s) {
+                        Ok(t) => t,
+                        Err(e) => {
+                            abort!("failed to initialize tensor {:?}", e);
+                        }
+                    },
+                )
+                .collect();
+            let circuit = ModelCircuit::<F> {
+                inputs,
+                _marker: PhantomData,
+            };
+            let empty_circuit = circuit.without_witnesses();
+            keygen_vk(&params, &empty_circuit).expect("keygen_vk should not fail")
+        }
+        Some(path) => {
+            info!("loading verification key from {:?}", path);
+            let f = File::open(path).unwrap();
+            let mut reader = BufReader::new(f);
+            VerifyingKey::<EqAffine>::read::<_, ModelCircuit<F>>(&mut reader, &params).unwrap()
+        }
     };
-    let empty_circuit = circuit.without_witnesses();
-    let vk = keygen_vk(&params, &empty_circuit).expect("keygen_vk should not fail");
 
     let pi_inner: Vec<Vec<F>> = proof
         .public_inputs

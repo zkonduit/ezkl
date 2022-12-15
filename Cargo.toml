@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2", tag = "v2022_10_22"}
+halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2", rev = "50ee8ad"}
 halo2curves = { git = 'https://github.com/privacy-scaling-explorations/halo2curves', tag = "0.3.0" }
 # nalgebra = "0.31"
 rand = "0.8"

@@ -4,7 +4,7 @@ use super::vars::*;
 use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
 use crate::circuit::fused::*;
 use crate::circuit::range::*;
-use crate::commands::{model_path, Cli, Commands};
+use crate::commands::{Cli, Commands};
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
 use anyhow::{Context, Result};
@@ -108,7 +108,7 @@ impl Model {
         let visibility = VarVisibility::from_args();
         match args.command {
             Commands::Table { model } => Model::new(
-                model_path(model),
+                model,
                 args.scale,
                 args.bits,
                 args.logrows,
@@ -116,8 +116,8 @@ impl Model {
                 Mode::Table,
                 visibility,
             ),
-            Commands::Mock { data: _, model } => Model::new(
-                model_path(model),
+            Commands::Mock { model, .. } => Model::new(
+                model,
                 args.scale,
                 args.bits,
                 args.logrows,
@@ -125,12 +125,8 @@ impl Model {
                 Mode::Mock,
                 visibility,
             ),
-            Commands::Fullprove {
-                data: _,
+            Commands::Fullprove { model, .. } => Model::new(
                 model,
-                pfsys: _,
-            } => Model::new(
-                model_path(model),
                 args.scale,
                 args.bits,
                 args.logrows,
@@ -138,13 +134,8 @@ impl Model {
                 Mode::FullProve,
                 visibility,
             ),
-            Commands::Prove {
-                data: _,
+            Commands::Prove { model, .. } => Model::new(
                 model,
-                output: _,
-                pfsys: _,
-            } => Model::new(
-                model_path(model),
                 args.scale,
                 args.bits,
                 args.logrows,
@@ -152,12 +143,8 @@ impl Model {
                 Mode::Prove,
                 visibility,
             ),
-            Commands::Verify {
+            Commands::Verify { model, .. } => Model::new(
                 model,
-                proof: _,
-                pfsys: _,
-            } => Model::new(
-                model_path(model),
                 args.scale,
                 args.bits,
                 args.logrows,
@@ -309,7 +296,7 @@ impl Model {
                     .filter(|i| !nodes.contains_key(&i.idx) && seen.insert(i.idx))
                     .map(|f| {
                         let s = f.out_dims.clone();
-                        let a = if f.opkind.is_const() && self.visibility.params.is_public() {
+                        if f.opkind.is_const() && self.visibility.params.is_public() {
                             let vars = (f.idx, vars.fixed[fixed_idx].reshape(&s));
                             fixed_idx += 1;
                             vars
@@ -317,9 +304,7 @@ impl Model {
                             let vars = (f.idx, vars.advices[advice_idx].reshape(&s));
                             advice_idx += 1;
                             vars
-                        };
-
-                        a
+                        }
                     })
                     .collect_vec()
             })

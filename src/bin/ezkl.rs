@@ -2,7 +2,7 @@ use clap::Parser;
 use ezkl::abort;
 use ezkl::commands::{Cli, Commands, ProofSystem};
 use ezkl::fieldutils::i32_to_felt;
-use ezkl::graph::Model;
+use ezkl::graph::{Model, ModelCircuit};
 use ezkl::pfsys::ipa::{create_ipa_proof, verify_ipa_proof};
 #[cfg(feature = "evm")]
 use ezkl::pfsys::kzg::aggregation::{
@@ -13,6 +13,8 @@ use ezkl::pfsys::kzg::aggregation::{
 use ezkl::pfsys::kzg::single::{create_kzg_proof, verify_kzg_proof};
 use ezkl::pfsys::Proof;
 use ezkl::pfsys::{parse_prover_errors, prepare_circuit_and_public_input, prepare_data};
+use ezkl::tensor::Tensor;
+use halo2_proofs::plonk::ProvingKey;
 #[cfg(feature = "evm")]
 use halo2_proofs::poly::commitment::Params;
 #[cfg(not(feature = "evm"))]
@@ -32,13 +34,15 @@ use halo2_proofs::{
 use halo2curves::bn256::{Bn256, Fr};
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp;
+use halo2curves::{CurveAffine, FieldExt};
 use log::{error, info, trace};
 #[cfg(feature = "evm")]
 use plonk_verifier::system::halo2::transcript::evm::EvmTranscript;
 use rand::seq::SliceRandom;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{BufWriter, Read, Write};
 use std::ops::Deref;
+use std::path::PathBuf;
 use std::time::Instant;
 use tabled::Table;
 
@@ -194,30 +198,22 @@ pub fn main() {
             data,
             model: _,
             output,
+            vk_path,
             pfsys,
         } => {
             let args = Cli::parse();
             let data = prepare_data(data);
-            let checkable_pf = match pfsys {
+            match pfsys {
                 ProofSystem::IPA => {
                     let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
                     info!("proof with {}", pfsys);
                     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
                     trace!("params computed");
 
-                    let (_pk, proof, _input_dims) =
+                    let (pk, proof, _) =
                         create_ipa_proof(circuit.clone(), public_inputs.clone(), &params);
 
-                    let pi: Vec<_> = public_inputs
-                        .into_iter()
-                        .map(|i| i.into_iter().collect())
-                        .collect();
-
-                    Proof {
-                        input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
-                        public_inputs: pi,
-                        proof,
-                    }
+                    save_proof(circuit, vk_path, output, pk, proof, public_inputs);
                 }
                 ProofSystem::KZG => {
                     let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
@@ -225,34 +221,17 @@ pub fn main() {
                     let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
                     trace!("params computed");
 
-                    let (_pk, proof, _input_dims) =
+                    let (pk, proof, _input_dims) =
                         create_kzg_proof(circuit.clone(), public_inputs.clone(), &params);
 
-                    let pi: Vec<_> = public_inputs
-                        .into_iter()
-                        .map(|i| i.into_iter().collect())
-                        .collect();
-
-                    Proof {
-                        input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
-                        public_inputs: pi,
-                        proof,
-                    }
+                    save_proof(circuit, vk_path, output, pk, proof, public_inputs);
                 }
             };
-            let serialized = match serde_json::to_string(&checkable_pf) {
-                Ok(s) => s,
-                Err(e) => {
-                    abort!("failed to convert proof json to string {:?}", e);
-                }
-            };
-
-            let mut file = std::fs::File::create(output).expect("create failed");
-            file.write_all(serialized.as_bytes()).expect("write failed");
         }
         Commands::Verify {
             model: _,
             proof,
+            vk_path,
             pfsys,
         } => {
             let mut file = match File::open(proof) {
@@ -271,18 +250,56 @@ pub fn main() {
             let proof: Proof = serde_json::from_str(&data).expect("JSON was not well-formatted");
             match pfsys {
                 ProofSystem::IPA => {
-                    let result = verify_ipa_proof(proof);
+                    let result = verify_ipa_proof(proof, vk_path);
                     info!("verified: {}", result);
                     assert!(result);
                 }
                 ProofSystem::KZG => {
-                    let result = verify_kzg_proof(proof);
+                    let result = verify_kzg_proof(proof, vk_path);
                     info!("verified: {}", result);
                     assert!(result);
                 }
             }
         }
     }
+}
+
+fn save_proof<C: CurveAffine, F: FieldExt>(
+    circuit: ModelCircuit<F>,
+    vk_path: Option<PathBuf>,
+    output: PathBuf,
+    pk: ProvingKey<C>,
+    proof: Vec<u8>,
+    public_inputs: Vec<Tensor<i32>>,
+) {
+    if let Some(path) = &vk_path {
+        info!("saving verification key 💾");
+        let f = File::create(path).unwrap();
+        let mut writer = BufWriter::new(f);
+        pk.get_vk().write(&mut writer).unwrap();
+        writer.flush().unwrap();
+    }
+
+    let pi: Vec<_> = public_inputs
+        .into_iter()
+        .map(|i| i.into_iter().collect())
+        .collect();
+
+    let checkable_pf = Proof {
+        input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
+        public_inputs: pi,
+        proof,
+    };
+
+    let serialized = match serde_json::to_string(&checkable_pf) {
+        Ok(s) => s,
+        Err(e) => {
+            abort!("failed to convert proof json to string {:?}", e);
+        }
+    };
+
+    let mut file = std::fs::File::create(output).expect("create failed");
+    file.write_all(serialized.as_bytes()).expect("write failed");
 }
 
 fn banner() {
