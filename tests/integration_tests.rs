@@ -69,7 +69,7 @@ macro_rules! test_func {
             }
 
             #(#[test_case(TESTS[N])])*
-            #[ignore]
+            // #[ignore]
             fn kzg_prove_and_verify_(test: &str) {
                 kzg_prove_and_verify(test.to_string());
             }
@@ -177,9 +177,9 @@ fn ipa_prove_and_verify(example_name: String) {
             "-M",
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             "-O",
-            format!("pav_{}.pf", example_name).as_str(),
+            format!("ipa_{}.pf", example_name).as_str(),
             "--vk-path",
-            format!("pav_{}.vk", example_name).as_str(),
+            format!("ipa_{}.vk", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");
@@ -192,9 +192,9 @@ fn ipa_prove_and_verify(example_name: String) {
             "-M",
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             "-P",
-            format!("pav_{}.pf", example_name).as_str(),
+            format!("ipa_{}.pf", example_name).as_str(),
             "--vk-path",
-            format!("pav_{}.vk", example_name).as_str(),
+            format!("ipa_{}.vk", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");
@@ -214,9 +214,9 @@ fn kzg_prove_and_verify(example_name: String) {
             "-M",
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             "-O",
-            format!("pav_{}.pf", example_name).as_str(),
+            format!("kzg_{}.pf", example_name).as_str(),
             "--vk-path",
-            format!("pav_{}.vk", example_name).as_str(),
+            format!("kzg_{}.vk", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");
@@ -230,9 +230,9 @@ fn kzg_prove_and_verify(example_name: String) {
             "-M",
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             "-P",
-            format!("pav_{}.pf", example_name).as_str(),
+            format!("kzg_{}.pf", example_name).as_str(),
             "--vk-path",
-            format!("pav_{}.vk", example_name).as_str(),
+            format!("kzg_{}.vk", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");

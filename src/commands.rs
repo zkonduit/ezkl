@@ -129,7 +129,7 @@ pub enum Commands {
         proof: PathBuf,
         /// The path to output to the desired verfication key file (optional)
         #[arg(long, default_value = "")]
-        vk_path: Option<PathBuf>,
+        vk_path: PathBuf,
 
         // /// The path to the Params for the proof system
         // #[arg(short = 'P', long, default_value = "")]

@@ -2,48 +2,45 @@ use clap::Parser;
 use ezkl::abort;
 use ezkl::commands::{Cli, Commands, ProofSystem};
 use ezkl::fieldutils::i32_to_felt;
-use ezkl::graph::{Model, ModelCircuit};
-use ezkl::pfsys::ipa::{create_ipa_proof, verify_ipa_proof};
+use ezkl::graph::Model;
 #[cfg(feature = "evm")]
 use ezkl::pfsys::kzg::aggregation::{
     aggregation::AggregationCircuit, evm_verify, gen_aggregation_evm_verifier,
     gen_application_snark, gen_kzg_proof, gen_pk, gen_srs,
 };
 #[cfg(not(feature = "evm"))]
-use ezkl::pfsys::kzg::single::{create_kzg_proof, verify_kzg_proof};
-use ezkl::pfsys::Proof;
-use ezkl::pfsys::{parse_prover_errors, prepare_circuit_and_public_input, prepare_data};
-use ezkl::tensor::Tensor;
-use halo2_proofs::plonk::ProvingKey;
+use ezkl::pfsys::{
+    create_proof_model, parse_prover_errors, prepare_circuit_and_public_input, prepare_data,
+    save_proof, verify_proof_model,
+};
+use ezkl::pfsys::{load_vk, Proof};
 #[cfg(feature = "evm")]
 use halo2_proofs::poly::commitment::Params;
+use halo2_proofs::poly::ipa::commitment::IPACommitmentScheme;
+use halo2_proofs::poly::ipa::multiopen::ProverIPA;
+use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+use halo2_proofs::poly::kzg::multiopen::ProverGWC;
 #[cfg(not(feature = "evm"))]
 use halo2_proofs::poly::kzg::{
     commitment::ParamsKZG, multiopen::VerifierGWC, strategy::SingleStrategy as KZGSingleStrategy,
 };
 use halo2_proofs::{
     dev::MockProver,
-    plonk::verify_proof,
     poly::{
         commitment::ParamsProver,
         ipa::{commitment::ParamsIPA, strategy::SingleStrategy as IPASingleStrategy},
         VerificationStrategy,
     },
-    transcript::{Blake2bRead, Challenge255, TranscriptReadBuffer},
 };
 use halo2curves::bn256::{Bn256, Fr};
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp;
-use halo2curves::{CurveAffine, FieldExt};
 use log::{error, info, trace};
 #[cfg(feature = "evm")]
 use plonk_verifier::system::halo2::transcript::evm::EvmTranscript;
 use rand::seq::SliceRandom;
 use std::fs::File;
-use std::io::{BufWriter, Read, Write};
-use std::ops::Deref;
-use std::path::PathBuf;
-use std::time::Instant;
+use std::io::Read;
 use tabled::Table;
 
 pub fn main() {
@@ -93,66 +90,46 @@ pub fn main() {
             // A direct proof
             let args = Cli::parse();
             let data = prepare_data(data);
+
             match pfsys {
                 ProofSystem::IPA => {
-                    let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
+                    let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fp>(&data);
                     info!("full proof with {}", pfsys);
 
                     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
+                    let strategy = IPASingleStrategy::new(&params);
                     trace!("params computed");
 
                     let (pk, proof, _dims) =
-                        create_ipa_proof(circuit, public_inputs.clone(), &params);
+                        create_proof_model::<IPACommitmentScheme<_>, Fp, ProverIPA<_>>(
+                            circuit,
+                            public_inputs.clone(),
+                            &params,
+                        );
 
-                    let pi_inner: Vec<Vec<Fp>> = public_inputs
-                        .iter()
-                        .map(|i| i.iter().map(|e| i32_to_felt::<Fp>(*e)).collect::<Vec<Fp>>())
-                        .collect::<Vec<Vec<Fp>>>();
-                    let pi_inner = pi_inner.iter().map(|e| e.deref()).collect::<Vec<&[Fp]>>();
-                    let pi_for_real_prover: &[&[&[Fp]]] = &[&pi_inner];
-
-                    let now = Instant::now();
-                    let strategy = IPASingleStrategy::new(&params);
-                    let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
-                    assert!(verify_proof(
-                        &params,
-                        pk.get_vk(),
-                        strategy,
-                        pi_for_real_prover,
-                        &mut transcript
-                    )
-                    .is_ok());
-                    info!("verify took {}", now.elapsed().as_secs());
+                    assert!(verify_proof_model(proof, &params, pk.get_vk(), strategy));
                 }
                 #[cfg(not(feature = "evm"))]
                 ProofSystem::KZG => {
                     // A direct proof
-                    let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
+                    let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(&data);
                     let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
+                    let strategy = KZGSingleStrategy::new(&params);
                     trace!("params computed");
 
                     let (pk, proof, _dims) =
-                        create_kzg_proof(circuit, public_inputs.clone(), &params);
+                        create_proof_model::<KZGCommitmentScheme<_>, Fr, ProverGWC<_>>(
+                            circuit,
+                            public_inputs.clone(),
+                            &params,
+                        );
 
-                    let pi_inner: Vec<Vec<Fr>> = public_inputs
-                        .iter()
-                        .map(|i| i.iter().map(|e| i32_to_felt::<Fr>(*e)).collect::<Vec<Fr>>())
-                        .collect::<Vec<Vec<Fr>>>();
-                    let pi_inner = pi_inner.iter().map(|e| e.deref()).collect::<Vec<&[Fr]>>();
-                    let pi_for_real_prover: &[&[&[Fr]]] = &[&pi_inner];
-
-                    let now = Instant::now();
-                    let strategy = KZGSingleStrategy::new(&params);
-                    let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
-                    assert!(verify_proof::<_, VerifierGWC<_>, _, _, _>(
+                    assert!(verify_proof_model::<_, VerifierGWC<'_, Bn256>, _, _>(
+                        proof,
                         &params,
                         pk.get_vk(),
-                        strategy,
-                        pi_for_real_prover,
-                        &mut transcript
-                    )
-                    .is_ok());
-                    info!("verify took {}", now.elapsed().as_secs());
+                        strategy
+                    ));
                 }
                 #[cfg(feature = "evm")]
                 ProofSystem::KZG => {
@@ -203,28 +180,37 @@ pub fn main() {
         } => {
             let args = Cli::parse();
             let data = prepare_data(data);
+
             match pfsys {
                 ProofSystem::IPA => {
-                    let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
                     info!("proof with {}", pfsys);
+                    let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fp>(&data);
                     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
                     trace!("params computed");
 
                     let (pk, proof, _) =
-                        create_ipa_proof(circuit.clone(), public_inputs.clone(), &params);
+                        create_proof_model::<IPACommitmentScheme<_>, Fp, ProverIPA<_>>(
+                            circuit.clone(),
+                            public_inputs.clone(),
+                            &params,
+                        );
 
-                    save_proof(circuit, vk_path, output, pk, proof, public_inputs);
+                    save_proof::<_, Fp>(vk_path, output, pk, proof);
                 }
                 ProofSystem::KZG => {
-                    let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
                     info!("proof with {}", pfsys);
+                    let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
                     let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
                     trace!("params computed");
 
                     let (pk, proof, _input_dims) =
-                        create_kzg_proof(circuit.clone(), public_inputs.clone(), &params);
+                        create_proof_model::<KZGCommitmentScheme<_>, Fr, ProverGWC<_>>(
+                            circuit.clone(),
+                            public_inputs.clone(),
+                            &params,
+                        );
 
-                    save_proof(circuit, vk_path, output, pk, proof, public_inputs);
+                    save_proof::<_, Fr>(vk_path, output, pk, proof);
                 }
             };
         }
@@ -250,56 +236,26 @@ pub fn main() {
             let proof: Proof = serde_json::from_str(&data).expect("JSON was not well-formatted");
             match pfsys {
                 ProofSystem::IPA => {
-                    let result = verify_ipa_proof(proof, vk_path);
+                    let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
+                    let strategy = IPASingleStrategy::new(&params);
+                    let vk = load_vk::<IPACommitmentScheme<_>, Fp>(vk_path, &params);
+                    let result = verify_proof_model(proof, &params, &vk, strategy);
                     info!("verified: {}", result);
                     assert!(result);
                 }
                 ProofSystem::KZG => {
-                    let result = verify_kzg_proof(proof, vk_path);
+                    let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
+                    let strategy = KZGSingleStrategy::new(&params);
+                    let vk = load_vk::<KZGCommitmentScheme<_>, Fr>(vk_path, &params);
+                    let result = verify_proof_model::<_, VerifierGWC<'_, Bn256>, _, _>(
+                        proof, &params, &vk, strategy,
+                    );
                     info!("verified: {}", result);
                     assert!(result);
                 }
             }
         }
     }
-}
-
-fn save_proof<C: CurveAffine, F: FieldExt>(
-    circuit: ModelCircuit<F>,
-    vk_path: Option<PathBuf>,
-    output: PathBuf,
-    pk: ProvingKey<C>,
-    proof: Vec<u8>,
-    public_inputs: Vec<Tensor<i32>>,
-) {
-    if let Some(path) = &vk_path {
-        info!("saving verification key 💾");
-        let f = File::create(path).unwrap();
-        let mut writer = BufWriter::new(f);
-        pk.get_vk().write(&mut writer).unwrap();
-        writer.flush().unwrap();
-    }
-
-    let pi: Vec<_> = public_inputs
-        .into_iter()
-        .map(|i| i.into_iter().collect())
-        .collect();
-
-    let checkable_pf = Proof {
-        input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
-        public_inputs: pi,
-        proof,
-    };
-
-    let serialized = match serde_json::to_string(&checkable_pf) {
-        Ok(s) => s,
-        Err(e) => {
-            abort!("failed to convert proof json to string {:?}", e);
-        }
-    };
-
-    let mut file = std::fs::File::create(output).expect("create failed");
-    file.write_all(serialized.as_bytes()).expect("write failed");
 }
 
 fn banner() {
