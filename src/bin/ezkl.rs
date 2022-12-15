@@ -10,7 +10,7 @@ use ezkl::pfsys::kzg::aggregation::{
     gen_application_snark, gen_kzg_proof, gen_pk, gen_srs,
 };
 #[cfg(not(feature = "evm"))]
-use ezkl::pfsys::kzg::single::create_kzg_proof;
+use ezkl::pfsys::kzg::single::{create_kzg_proof, verify_kzg_proof};
 use ezkl::pfsys::Proof;
 use ezkl::pfsys::{parse_prover_errors, prepare_circuit_and_public_input, prepare_data};
 #[cfg(feature = "evm")]
@@ -220,8 +220,24 @@ pub fn main() {
                     }
                 }
                 ProofSystem::KZG => {
-                    // https://github.com/zcash/halo2/pull/661
-                    todo!("we need verification key serialization to be implemented");
+                    let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
+                    info!("proof with {}", pfsys);
+                    let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
+                    trace!("params computed");
+
+                    let (_pk, proof, _input_dims) =
+                        create_kzg_proof(circuit.clone(), public_inputs.clone(), &params);
+
+                    let pi: Vec<_> = public_inputs
+                        .into_iter()
+                        .map(|i| i.into_iter().collect())
+                        .collect();
+
+                    Proof {
+                        input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
+                        public_inputs: pi,
+                        proof,
+                    }
                 }
             };
             let serialized = match serde_json::to_string(&checkable_pf) {
@@ -260,8 +276,9 @@ pub fn main() {
                     assert!(result);
                 }
                 ProofSystem::KZG => {
-                    // https://github.com/zcash/halo2/pull/661
-                    todo!("we need verification key serialization to be implemented");
+                    let result = verify_kzg_proof(proof);
+                    info!("verified: {}", result);
+                    assert!(result);
                 }
             }
         }
