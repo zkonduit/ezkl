@@ -349,9 +349,7 @@ where
     VerifyingKey::<Scheme::Curve>::read::<_, ModelCircuit<F>>(&mut reader, params).unwrap()
 }
 
-pub fn load_params<'params, Scheme: CommitmentScheme, F: FieldExt + TensorType>(
-    path: PathBuf,
-) -> Scheme::ParamsVerifier {
+pub fn load_params<'params, Scheme: CommitmentScheme>(path: PathBuf) -> Scheme::ParamsVerifier {
     info!("loading params from {:?}", path);
     let f = match File::open(path) {
         Ok(f) => f,
@@ -363,7 +361,7 @@ pub fn load_params<'params, Scheme: CommitmentScheme, F: FieldExt + TensorType>(
     Params::<'_, Scheme::Curve>::read(&mut reader).unwrap()
 }
 
-pub fn save_vk<'params, Scheme: CommitmentScheme, F: FieldExt>(
+pub fn save_vk<'params, Scheme: CommitmentScheme>(
     vk_path: &PathBuf,
     vk: &VerifyingKey<Scheme::Curve>,
 ) {
@@ -374,7 +372,7 @@ pub fn save_vk<'params, Scheme: CommitmentScheme, F: FieldExt>(
     writer.flush().unwrap();
 }
 
-pub fn save_params<'params, Scheme: CommitmentScheme, F: FieldExt>(
+pub fn save_params<'params, Scheme: CommitmentScheme>(
     params_path: &PathBuf,
     params: &'params Scheme::ParamsVerifier,
 ) {

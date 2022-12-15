@@ -200,8 +200,8 @@ pub fn main() {
                     );
 
                     proof.save(&proof_path);
-                    save_params::<IPACommitmentScheme<_>, Fp>(&params_path, &params);
-                    save_vk::<IPACommitmentScheme<_>, Fp>(&vk_path, &pk.get_vk());
+                    save_params::<IPACommitmentScheme<_>>(&params_path, &params);
+                    save_vk::<IPACommitmentScheme<_>>(&vk_path, &pk.get_vk());
                 }
                 ProofSystem::KZG => {
                     info!("proof with {}", pfsys);
@@ -219,8 +219,8 @@ pub fn main() {
                     );
 
                     proof.save(&proof_path);
-                    save_params::<KZGCommitmentScheme<Bn256>, Fr>(&params_path, &params);
-                    save_vk::<KZGCommitmentScheme<Bn256>, Fr>(&vk_path, &pk.get_vk());
+                    save_params::<KZGCommitmentScheme<Bn256>>(&params_path, &params);
+                    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, &pk.get_vk());
                 }
             };
         }
@@ -235,7 +235,7 @@ pub fn main() {
             match pfsys {
                 ProofSystem::IPA => {
                     let params: ParamsIPA<vesta::Affine> =
-                        load_params::<IPACommitmentScheme<_>, Fp>(params_path);
+                        load_params::<IPACommitmentScheme<_>>(params_path);
                     let strategy = IPASingleStrategy::new(&params);
                     let vk = load_vk::<IPACommitmentScheme<_>, Fp>(vk_path, &params);
                     let result = verify_proof_model(proof, &params, &vk, strategy);
@@ -244,7 +244,7 @@ pub fn main() {
                 }
                 ProofSystem::KZG => {
                     let params: ParamsKZG<Bn256> =
-                        load_params::<KZGCommitmentScheme<Bn256>, Fr>(params_path);
+                        load_params::<KZGCommitmentScheme<Bn256>>(params_path);
                     let strategy = KZGSingleStrategy::new(&params);
                     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr>(vk_path, &params);
                     let result = verify_proof_model::<_, VerifierGWC<'_, Bn256>, _, _>(
