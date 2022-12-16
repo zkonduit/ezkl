@@ -24,7 +24,7 @@ jobs:
     - name: Build
       run: cargo build --verbose
 
-  library_tests:
+  library tests:
 
     runs-on: self-hosted
 
@@ -40,7 +40,7 @@ jobs:
     - name: Library tests
       run: cargo test --lib --verbose
   
-  mock_proving_tests:
+  mock proving tests:
 
     runs-on: self-hosted
     steps:
@@ -60,7 +60,7 @@ jobs:
     - name: Mock proving tests (public params)
       run: cargo test --release --verbose tests::mock_public_params_ 
   
-  full_proving_tests:
+  full proving tests:
 
     runs-on: self-hosted
     steps:
@@ -78,7 +78,7 @@ jobs:
     - name: KZG full-prove tests
       run: cargo test --release --verbose tests::kzg_fullprove_ 
   
-  prove_and_verify_tests:
+  prove and verify tests:
 
     runs-on: self-hosted
     steps:

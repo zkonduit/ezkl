@@ -201,7 +201,7 @@ pub fn main() {
 
                     proof.save(&proof_path);
                     save_params::<IPACommitmentScheme<_>>(&params_path, &params);
-                    save_vk::<IPACommitmentScheme<_>>(&vk_path, &pk.get_vk());
+                    save_vk::<IPACommitmentScheme<_>>(&vk_path, pk.get_vk());
                 }
                 ProofSystem::KZG => {
                     info!("proof with {}", pfsys);
@@ -220,7 +220,7 @@ pub fn main() {
 
                     proof.save(&proof_path);
                     save_params::<KZGCommitmentScheme<Bn256>>(&params_path, &params);
-                    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, &pk.get_vk());
+                    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, pk.get_vk());
                 }
             };
         }

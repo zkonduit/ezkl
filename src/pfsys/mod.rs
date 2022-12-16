@@ -209,9 +209,9 @@ pub fn prepare_data(datapath: String) -> ModelInput {
     data
 }
 
-pub fn create_keys<'params, Scheme: CommitmentScheme, F: FieldExt + TensorType>(
+pub fn create_keys<Scheme: CommitmentScheme, F: FieldExt + TensorType>(
     circuit: &ModelCircuit<F>,
-    params: &'params Scheme::ParamsProver,
+    params: &'_ Scheme::ParamsProver,
 ) -> ProvingKey<Scheme::Curve>
 where
     ModelCircuit<F>: Circuit<Scheme::Scalar>,
@@ -238,7 +238,7 @@ pub fn create_proof_model<
     P: Prover<'params, Scheme>,
 >(
     circuit: &ModelCircuit<F>,
-    public_inputs: &Vec<Tensor<i32>>,
+    public_inputs: &[Tensor<i32>],
     params: &'params Scheme::ParamsProver,
     pk: &ProvingKey<Scheme::Curve>,
 ) -> (Proof, Vec<Vec<usize>>)
@@ -266,8 +266,8 @@ where
     let dims = circuit.inputs.iter().map(|i| i.dims().to_vec()).collect();
 
     create_proof::<Scheme, P, _, _, _, _>(
-        &params,
-        &pk,
+        params,
+        pk,
         &[circuit.clone()],
         instances,
         &mut rng,
@@ -280,7 +280,7 @@ where
     let checkable_pf = Proof {
         input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
         public_inputs: public_inputs
-            .into_iter()
+            .iter()
             .map(|i| i.clone().into_iter().collect())
             .collect(),
         proof,
@@ -325,15 +325,15 @@ where
     let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof.proof[..]);
 
     let result =
-        verify_proof::<Scheme, V, _, _, _>(&params, &vk, strategy, instances, &mut transcript)
+        verify_proof::<Scheme, V, _, _, _>(params, vk, strategy, instances, &mut transcript)
             .is_ok();
     info!("verify took {}", now.elapsed().as_secs());
     result
 }
 
-pub fn load_vk<'params, Scheme: CommitmentScheme, F: FieldExt + TensorType>(
+pub fn load_vk<Scheme: CommitmentScheme, F: FieldExt + TensorType>(
     path: PathBuf,
-    params: &'params Scheme::ParamsVerifier,
+    params: &'_ Scheme::ParamsVerifier,
 ) -> VerifyingKey<Scheme::Curve>
 where
     ModelCircuit<F>: Circuit<Scheme::Scalar>,
@@ -349,7 +349,7 @@ where
     VerifyingKey::<Scheme::Curve>::read::<_, ModelCircuit<F>>(&mut reader, params).unwrap()
 }
 
-pub fn load_params<'params, Scheme: CommitmentScheme>(path: PathBuf) -> Scheme::ParamsVerifier {
+pub fn load_params<Scheme: CommitmentScheme>(path: PathBuf) -> Scheme::ParamsVerifier {
     info!("loading params from {:?}", path);
     let f = match File::open(path) {
         Ok(f) => f,
@@ -361,10 +361,7 @@ pub fn load_params<'params, Scheme: CommitmentScheme>(path: PathBuf) -> Scheme::
     Params::<'_, Scheme::Curve>::read(&mut reader).unwrap()
 }
 
-pub fn save_vk<'params, Scheme: CommitmentScheme>(
-    vk_path: &PathBuf,
-    vk: &VerifyingKey<Scheme::Curve>,
-) {
+pub fn save_vk<Scheme: CommitmentScheme>(vk_path: &PathBuf, vk: &VerifyingKey<Scheme::Curve>) {
     info!("saving verification key 💾");
     let f = File::create(vk_path).unwrap();
     let mut writer = BufWriter::new(f);
@@ -372,9 +369,9 @@ pub fn save_vk<'params, Scheme: CommitmentScheme>(
     writer.flush().unwrap();
 }
 
-pub fn save_params<'params, Scheme: CommitmentScheme>(
+pub fn save_params<Scheme: CommitmentScheme>(
     params_path: &PathBuf,
-    params: &'params Scheme::ParamsVerifier,
+    params: &'_ Scheme::ParamsVerifier,
 ) {
     info!("saving parameters 💾");
     let f = File::create(params_path).unwrap();

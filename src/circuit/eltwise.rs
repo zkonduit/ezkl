@@ -358,7 +358,7 @@ mod tests {
         for i in -127..127 {
             let r = <ReLu<F> as Nonlinearity<F>>::nonlinearity(i, &[1]);
             if i <= 0 {
-                assert!(r == F::from(0 as u64))
+                assert!(r == F::from(0_u64))
             } else {
                 assert!(r == F::from(i as u64))
             }
@@ -390,7 +390,7 @@ mod tests {
     #[test]
     fn relucircuit() {
         let input: Tensor<Value<F>> =
-            Tensor::new(Some(&[Value::<F>::known(F::from(1 as u64))]), &[1]).unwrap();
+            Tensor::new(Some(&[Value::<F>::known(F::from(1_u64))]), &[1]).unwrap();
         let assigned: Nonlin1d<F, ReLu<F>> = Nonlin1d {
             input: ValTensor::from(input.clone()),
             output: ValTensor::from(input),
@@ -402,7 +402,7 @@ mod tests {
             _marker: PhantomData,
         };
 
-        let prover = MockProver::run(4 as u32, &circuit, vec![]).unwrap();
+        let prover = MockProver::run(4_u32, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
     }
 }
