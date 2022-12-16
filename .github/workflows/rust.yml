@@ -94,4 +94,4 @@ jobs:
     - name: IPA prove and verify tests
       run: cargo test --release --verbose tests::ipa_prove_and_verify_ 
     - name: KZG prove and verify tests
-      run: cargo test --release --verbose tests::kzg_prove_and_verify_ 
+      run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 1
