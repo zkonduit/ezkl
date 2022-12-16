@@ -13,6 +13,7 @@ jobs:
   build:
 
     runs-on: self-hosted
+    timeout-minutes: 720
 
     steps:
     - uses: actions/checkout@v3
@@ -27,12 +28,14 @@ jobs:
       run: cargo build --verbose
     - name: Doc tests
       run: cargo test --doc --verbose
-    - name: Doc tests
-      run: cargo test --doc --verbose
     - name: Library tests
       run: cargo test --lib --verbose
     - name: Mock proving tests
-      run: cargo test tests::mock_ --verbose
+      run: cargo test tests::mock_:: --verbose
+    - name: Mock proving tests (public inputs)
+      run: cargo test tests::mock_public_inputs_ --verbose
+    - name: Mock proving tests (public params)
+      run: cargo test tests::mock_public_params_ --verbose
     - name: IPA full-prove tests
       run: cargo test tests::ipa_fullprove_ --verbose
     - name: KZG full-prove tests
