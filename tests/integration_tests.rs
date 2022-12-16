@@ -39,7 +39,7 @@ macro_rules! test_func {
 
             seq!(N in 0..=11 {
             #(#[test_case(TESTS[N])])*
-            fn mock_(test: &str) {
+            fn mock_public_outputs_(test: &str) {
                 mock(test.to_string());
             }
 

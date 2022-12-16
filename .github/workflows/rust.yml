@@ -31,7 +31,7 @@ jobs:
     - name: Library tests
       run: cargo test --lib --verbose
     - name: Mock proving tests
-      run: cargo test tests::mock_:: --verbose
+      run: cargo test tests::mock_public_outputs_ --verbose
     - name: Mock proving tests (public inputs)
       run: cargo test tests::mock_public_inputs_ --verbose
     - name: Mock proving tests (public params)
