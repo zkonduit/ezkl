@@ -53,7 +53,7 @@ jobs:
           override: true
           components: rustfmt, clippy 
 
-    - name: Mock proving tests
+    - name: Mock proving tests (public outputs)
       run: cargo test --release --verbose tests::mock_public_outputs_ 
     - name: Mock proving tests (public inputs)
       run: cargo test --release --verbose tests::mock_public_inputs_ 
@@ -74,9 +74,9 @@ jobs:
           components: rustfmt, clippy
 
     - name: IPA full-prove tests
-      run: cargo test --release --verbose tests::ipa_fullprove_ 
+      run: cargo test --release --verbose tests::ipa_fullprove_ -- --test-threads 1
     - name: KZG full-prove tests
-      run: cargo test --release --verbose tests::kzg_fullprove_ 
+      run: cargo test --release --verbose tests::kzg_fullprove_ -- --test-threads 1
   
   prove-and-verify-tests:
 
@@ -92,6 +92,6 @@ jobs:
           components: rustfmt, clippy
 
     - name: IPA prove and verify tests
-      run: cargo test --release --verbose tests::ipa_prove_and_verify_ 
+      run: cargo test --release --verbose tests::ipa_prove_and_verify_ -- --test-threads 1
     - name: KZG prove and verify tests
       run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 1
