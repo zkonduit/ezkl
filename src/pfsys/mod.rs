@@ -1,18 +1,31 @@
-// Really these are halo2 plonkish IOP + commitment scheme, but we only support Plonkish IOP so far, so there is no ambiguity
-pub mod ipa;
-pub mod kzg;
+/// Aggregation circuit
+#[cfg(feature = "evm")]
+pub mod aggregation;
 
 use crate::abort;
 use crate::commands::{data_path, Cli};
+use crate::fieldutils::i32_to_felt;
 use crate::graph::{utilities::vector_to_quantized, Model, ModelCircuit};
-use crate::tensor::Tensor;
+use crate::tensor::{Tensor, TensorType};
 use clap::Parser;
+use halo2_proofs::plonk::{
+    create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey,
+};
+use halo2_proofs::poly::commitment::{CommitmentScheme, Params, Prover, Verifier};
+use halo2_proofs::poly::VerificationStrategy;
+use halo2_proofs::transcript::{
+    Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
+};
 use halo2_proofs::{arithmetic::FieldExt, dev::VerifyFailure};
 use log::{error, info, trace};
+use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::io::Read;
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::marker::PhantomData;
+use std::ops::Deref;
+use std::path::PathBuf;
+use std::time::Instant;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ModelInput {
@@ -26,6 +39,37 @@ pub struct Proof {
     pub input_shapes: Vec<Vec<usize>>,
     pub public_inputs: Vec<Vec<i32>>,
     pub proof: Vec<u8>,
+}
+
+impl Proof {
+    pub fn save(&self, proof_path: &PathBuf) {
+        let serialized = match serde_json::to_string(&self) {
+            Ok(s) => s,
+            Err(e) => {
+                abort!("failed to convert proof json to string {:?}", e);
+            }
+        };
+
+        let mut file = std::fs::File::create(proof_path).expect("create failed");
+        file.write_all(serialized.as_bytes()).expect("write failed");
+    }
+
+    pub fn load(proof_path: &PathBuf) -> Self {
+        let mut file = match File::open(proof_path) {
+            Ok(f) => f,
+            Err(e) => {
+                abort!("failed to open proof file {:?}", e);
+            }
+        };
+        let mut data = String::new();
+        match file.read_to_string(&mut data) {
+            Ok(_) => {}
+            Err(e) => {
+                abort!("failed to read file {:?}", e);
+            }
+        };
+        serde_json::from_str(&data).expect("JSON was not well-formatted")
+    }
 }
 
 /// Helper function to print helpful error messages after verification has failed.
@@ -163,4 +207,175 @@ pub fn prepare_data(datapath: String) -> ModelInput {
     let data: ModelInput = serde_json::from_str(&data).expect("JSON was not well-formatted");
 
     data
+}
+
+pub fn create_keys<Scheme: CommitmentScheme, F: FieldExt + TensorType>(
+    circuit: &ModelCircuit<F>,
+    params: &'_ Scheme::ParamsProver,
+) -> ProvingKey<Scheme::Curve>
+where
+    ModelCircuit<F>: Circuit<Scheme::Scalar>,
+{
+    //	Real proof
+    let empty_circuit = circuit.without_witnesses();
+
+    // Initialize the proving key
+    let now = Instant::now();
+    trace!("preparing VK");
+    let vk = keygen_vk(params, &empty_circuit).expect("keygen_vk should not fail");
+    info!("VK took {}", now.elapsed().as_secs());
+    let now = Instant::now();
+    let pk = keygen_pk(params, vk, &empty_circuit).expect("keygen_pk should not fail");
+    info!("PK took {}", now.elapsed().as_secs());
+    pk
+}
+
+/// a wrapper around halo2's create_proof
+pub fn create_proof_model<
+    'params,
+    Scheme: CommitmentScheme,
+    F: FieldExt + TensorType,
+    P: Prover<'params, Scheme>,
+>(
+    circuit: &ModelCircuit<F>,
+    public_inputs: &[Tensor<i32>],
+    params: &'params Scheme::ParamsProver,
+    pk: &ProvingKey<Scheme::Curve>,
+) -> (Proof, Vec<Vec<usize>>)
+where
+    ModelCircuit<F>: Circuit<Scheme::Scalar>,
+{
+    let now = Instant::now();
+    let mut transcript = Blake2bWrite::<_, Scheme::Curve, Challenge255<_>>::init(vec![]);
+    let mut rng = OsRng;
+    let pi_inner: Vec<Vec<Scheme::Scalar>> = public_inputs
+        .iter()
+        .map(|i| {
+            i.iter()
+                .map(|e| i32_to_felt::<Scheme::Scalar>(*e))
+                .collect::<Vec<Scheme::Scalar>>()
+        })
+        .collect::<Vec<Vec<Scheme::Scalar>>>();
+    let pi_inner = pi_inner
+        .iter()
+        .map(|e| e.deref())
+        .collect::<Vec<&[Scheme::Scalar]>>();
+    let instances: &[&[&[Scheme::Scalar]]] = &[&pi_inner];
+    trace!("instances {:?}", instances);
+
+    let dims = circuit.inputs.iter().map(|i| i.dims().to_vec()).collect();
+
+    create_proof::<Scheme, P, _, _, _, _>(
+        params,
+        pk,
+        &[circuit.clone()],
+        instances,
+        &mut rng,
+        &mut transcript,
+    )
+    .expect("proof generation should not fail");
+    let proof = transcript.finalize();
+    info!("Proof took {}", now.elapsed().as_secs());
+
+    let checkable_pf = Proof {
+        input_shapes: circuit.inputs.iter().map(|i| i.dims().to_vec()).collect(),
+        public_inputs: public_inputs
+            .iter()
+            .map(|i| i.clone().into_iter().collect())
+            .collect(),
+        proof,
+    };
+
+    (checkable_pf, dims)
+}
+
+/// a wrapper around halo2's verify_proof
+pub fn verify_proof_model<
+    'params,
+    F: FieldExt,
+    V: Verifier<'params, Scheme>,
+    Scheme: CommitmentScheme,
+    Strategy: VerificationStrategy<'params, Scheme, V>,
+>(
+    proof: Proof,
+    params: &'params Scheme::ParamsVerifier,
+    vk: &VerifyingKey<Scheme::Curve>,
+    strategy: Strategy,
+) -> bool
+where
+    ModelCircuit<F>: Circuit<Scheme::Scalar>,
+{
+    let pi_inner: Vec<Vec<Scheme::Scalar>> = proof
+        .public_inputs
+        .iter()
+        .map(|i| {
+            i.iter()
+                .map(|e| i32_to_felt::<Scheme::Scalar>(*e))
+                .collect::<Vec<Scheme::Scalar>>()
+        })
+        .collect::<Vec<Vec<Scheme::Scalar>>>();
+    let pi_inner = pi_inner
+        .iter()
+        .map(|e| e.deref())
+        .collect::<Vec<&[Scheme::Scalar]>>();
+    let instances: &[&[&[Scheme::Scalar]]] = &[&pi_inner];
+    trace!("instances {:?}", instances);
+
+    let now = Instant::now();
+    let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof.proof[..]);
+
+    let result =
+        verify_proof::<Scheme, V, _, _, _>(params, vk, strategy, instances, &mut transcript)
+            .is_ok();
+    info!("verify took {}", now.elapsed().as_secs());
+    result
+}
+
+pub fn load_vk<Scheme: CommitmentScheme, F: FieldExt + TensorType>(
+    path: PathBuf,
+    params: &'_ Scheme::ParamsVerifier,
+) -> VerifyingKey<Scheme::Curve>
+where
+    ModelCircuit<F>: Circuit<Scheme::Scalar>,
+{
+    info!("loading verification key from {:?}", path);
+    let f = match File::open(path) {
+        Ok(f) => f,
+        Err(e) => {
+            abort!("failed to load vk {}", e);
+        }
+    };
+    let mut reader = BufReader::new(f);
+    VerifyingKey::<Scheme::Curve>::read::<_, ModelCircuit<F>>(&mut reader, params).unwrap()
+}
+
+pub fn load_params<Scheme: CommitmentScheme>(path: PathBuf) -> Scheme::ParamsVerifier {
+    info!("loading params from {:?}", path);
+    let f = match File::open(path) {
+        Ok(f) => f,
+        Err(e) => {
+            abort!("failed to load params {}", e);
+        }
+    };
+    let mut reader = BufReader::new(f);
+    Params::<'_, Scheme::Curve>::read(&mut reader).unwrap()
+}
+
+pub fn save_vk<Scheme: CommitmentScheme>(vk_path: &PathBuf, vk: &VerifyingKey<Scheme::Curve>) {
+    info!("saving verification key 💾");
+    let f = File::create(vk_path).unwrap();
+    let mut writer = BufWriter::new(f);
+    vk.write(&mut writer).unwrap();
+    writer.flush().unwrap();
+}
+
+pub fn save_params<Scheme: CommitmentScheme>(
+    params_path: &PathBuf,
+    params: &'_ Scheme::ParamsVerifier,
+) {
+    info!("saving parameters 💾");
+    let f = File::create(params_path).unwrap();
+    let mut writer = BufWriter::new(f);
+    params.write(&mut writer).unwrap();
+    writer.flush().unwrap();
 }

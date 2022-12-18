@@ -16,8 +16,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-      with:
-          submodules: recursive
     - uses: actions-rs/toolchain@v1
       with:
           toolchain: nightly
@@ -25,5 +23,75 @@ jobs:
           components: rustfmt, clippy    
     - name: Build
       run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+
+  library-tests:
+
+    runs-on: self-hosted
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy 
+    - name: Doc tests
+      run: cargo test --doc --verbose
+    - name: Library tests
+      run: cargo test --lib --verbose
+  
+  mock-proving-tests:
+
+    runs-on: self-hosted
+    steps:
+    - uses: actions/checkout@v3
+      with:
+          submodules: recursive
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy 
+
+    - name: Mock proving tests (public outputs)
+      run: cargo test --release --verbose tests::mock_public_outputs_ 
+    - name: Mock proving tests (public inputs)
+      run: cargo test --release --verbose tests::mock_public_inputs_ 
+    - name: Mock proving tests (public params)
+      run: cargo test --release --verbose tests::mock_public_params_ 
+  
+  full-proving-tests:
+
+    runs-on: self-hosted
+    steps:
+    - uses: actions/checkout@v3
+      with:
+          submodules: recursive
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+
+    - name: IPA full-prove tests
+      run: cargo test --release --verbose tests::ipa_fullprove_ -- --test-threads 1
+    - name: KZG full-prove tests
+      run: cargo test --release --verbose tests::kzg_fullprove_ -- --test-threads 1
+  
+  prove-and-verify-tests:
+
+    runs-on: self-hosted
+    steps:
+    - uses: actions/checkout@v3
+      with:
+          submodules: recursive
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+
+    - name: IPA prove and verify tests
+      run: cargo test --release --verbose tests::ipa_prove_and_verify_ -- --test-threads 1
+    - name: KZG prove and verify tests
+      run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 1
