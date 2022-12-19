@@ -33,10 +33,10 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let input = VarTensor::new_advice(cs, K, len, vec![len], true);
-        let kernel = VarTensor::new_advice(cs, K, len * len, vec![len, len], true);
-        let bias = VarTensor::new_advice(cs, K, len, vec![len], true);
-        let output = VarTensor::new_advice(cs, K, len, vec![len], true);
+        let input = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
+        let kernel = VarTensor::new_advice(cs, K, len * len, vec![len, len], true, 512);
+        let bias = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
+        let output = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
         // tells the config layer to add an affine op to a circuit gate
         let affine_node = FusedNode {
             op: FusedOp::Affine,

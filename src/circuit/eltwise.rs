@@ -336,7 +336,7 @@ mod tests {
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
             let advices = (0..2)
-                .map(|_| VarTensor::new_advice(cs, 4, 1, vec![1], true))
+                .map(|_| VarTensor::new_advice(cs, 4, 1, vec![1], true, 512))
                 .collect::<Vec<_>>();
 
             Self::Config::configure(cs, &advices[0], &advices[1], Some(&[2, 1]))
