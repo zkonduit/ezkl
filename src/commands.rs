@@ -30,6 +30,9 @@ pub struct Cli {
     /// Flags whether params are public
     #[arg(long, default_value = "false")]
     pub public_params: bool,
+    /// Flags whether params are public
+    #[arg(short = 'V', long, default_value = "512")]
+    pub tensor_max_value: usize,
 }
 
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]

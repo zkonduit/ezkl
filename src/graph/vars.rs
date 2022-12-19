@@ -122,6 +122,8 @@ impl<F: FieldExt + TensorType> ModelVars<F> {
         fixed_dims: (usize, usize),
         instance_dims: (usize, Vec<Vec<usize>>),
     ) -> Self {
+        let tensor_max = Cli::parse().tensor_max_value;
+
         let advices = (0..advice_dims.0)
             .map(|_| {
                 VarTensor::new_advice(
@@ -130,12 +132,20 @@ impl<F: FieldExt + TensorType> ModelVars<F> {
                     advice_dims.1,
                     vec![advice_dims.1],
                     true,
+                    tensor_max,
                 )
             })
             .collect_vec();
         let fixed = (0..fixed_dims.0)
             .map(|_| {
-                VarTensor::new_fixed(cs, logrows as usize, fixed_dims.1, vec![fixed_dims.1], true)
+                VarTensor::new_fixed(
+                    cs,
+                    logrows as usize,
+                    fixed_dims.1,
+                    vec![fixed_dims.1],
+                    true,
+                    tensor_max,
+                )
             })
             .collect_vec();
         let instances = (0..instance_dims.0)
