@@ -122,7 +122,7 @@ impl<F: FieldExt + TensorType> ModelVars<F> {
         fixed_dims: (usize, usize),
         instance_dims: (usize, Vec<Vec<usize>>),
     ) -> Self {
-        let tensor_max = Cli::parse().tensor_max_value;
+        let tensor_max = Cli::parse().max_rotations;
 
         let advices = (0..advice_dims.0)
             .map(|_| {
