@@ -33,7 +33,6 @@ use halo2_wrong_ecc::{
 use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine};
 use itertools::Itertools;
 use log::trace;
-// use plonk_verifier::loader::halo2::ecc::BaseFieldEccChip;
 use plonk_verifier::{
     loader::evm::{self, encode_calldata, EvmLoader},
     system::halo2::transcript::evm::EvmTranscript,
