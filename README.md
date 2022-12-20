@@ -150,7 +150,9 @@ cargo run --release --bin ezkl -- table -M ./examples/onnx_models/ff.onnx
 ```
 ### verifying with the EVM ◊
 
-Note that `fullprove` can also be run with an EVM verifier. In this case we use KZG commitments, rather than the default IPA commitments, and we need to pass the `evm` feature flag to conditionally compile the requisite [foundry_evm](https://github.com/foundry-rs/foundry) dependencies. Using `foundry_evm` we spin up a local EVM executor and verify the generated proof. In future releases we'll create a simple pipeline for deploying to EVM based networks.
+Note that `fullprove` can also be run with an EVM verifier. In this case we use KZG commitments, rather than the default IPA commitments, and we need to pass the `evm` feature flag to conditionally compile the requisite [foundry_evm](https://github.com/foundry-rs/foundry) dependencies. Using `foundry_evm` we spin up a local EVM executor and verify the generated proof. In future releases we'll create a simple pipeline for deploying to EVM based networks. Also note that this requires a local [solc](https://docs.soliditylang.org/en/v0.8.17/installing-solidity.html) installation. 
+
+
 Example:
 
 ```bash

@@ -76,7 +76,7 @@ macro_rules! test_func {
 
             // these take a particularly long time to run
             #(#[test_case(TESTS[N])])*
-            #[ignore]
+            // #[ignore]
             fn kzg_evm_fullprove_(test: &str) {
                 kzg_evm_fullprove(test.to_string());
             }
