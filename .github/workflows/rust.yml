@@ -93,8 +93,7 @@ jobs:
           components: rustfmt, clippy
 
     - name: Install solc
-        run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
-
+      run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
     - name: KZG full-prove tests (EVM)
       run: cargo test --release --verbose tests::kzg_evm_fullprove_ -- --test-threads 1
 
