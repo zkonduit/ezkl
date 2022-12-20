@@ -77,7 +77,23 @@ jobs:
       run: cargo test --release --verbose tests::ipa_fullprove_ -- --test-threads 1
     - name: KZG full-prove tests
       run: cargo test --release --verbose tests::kzg_fullprove_ -- --test-threads 1
-  
+
+  full-proving-evm-tests:
+
+    runs-on: self-hosted
+    steps:
+    - uses: actions/checkout@v3
+      with:
+          submodules: recursive
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+
+    - name: KZG full-prove tests (EVM)
+      run: cargo test --release --verbose tests::kzg_evm_fullprove_ -- --test-threads 1
+
   prove-and-verify-tests:
 
     runs-on: self-hosted
