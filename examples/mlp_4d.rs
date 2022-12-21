@@ -50,10 +50,10 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let input = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-        let kernel = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true);
-        let bias = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-        let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+        let input = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+        let kernel = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true, 512);
+        let bias = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+        let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
         // tells the config layer to add an affine op to the circuit gate
         let affine_node = FusedNode {
             op: FusedOp::Affine,

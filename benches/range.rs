@@ -33,7 +33,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let len = unsafe { LEN };
         let advices = (0..2)
-            .map(|_| VarTensor::new_advice(cs, K, len, vec![len], true))
+            .map(|_| VarTensor::new_advice(cs, K, len, vec![len], true, 512))
             .collect_vec();
 
         RangeCheckConfig::configure(cs, &advices[0], &advices[1], RANGE)

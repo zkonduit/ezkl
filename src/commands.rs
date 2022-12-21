@@ -30,6 +30,9 @@ pub struct Cli {
     /// Flags whether params are public
     #[arg(long, default_value = "false")]
     pub public_params: bool,
+    /// Flags to set maximum rotations
+    #[arg(short = 'M', long, default_value = "512")]
+    pub max_rotations: usize,
 }
 
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]

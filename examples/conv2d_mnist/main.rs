@@ -149,6 +149,7 @@ where
             max(IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH, LEN),
             vec![IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
             true,
+            512,
         );
         let kernel = VarTensor::new_advice(
             cs,
@@ -159,16 +160,18 @@ where
             ),
             vec![OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
             true,
+            512,
         );
 
         let bias =
-            VarTensor::new_advice(cs, K, max(OUT_CHANNELS, CLASSES), vec![OUT_CHANNELS], true);
+            VarTensor::new_advice(cs, K, max(OUT_CHANNELS, CLASSES), vec![OUT_CHANNELS], true, 512);
         let output = VarTensor::new_advice(
             cs,
             K,
             max(OUT_CHANNELS * output_height * output_width, LEN),
             vec![OUT_CHANNELS, output_height, output_width],
             true,
+            512,
         );
 
         // tells the config layer to add a conv op to a circuit gate
