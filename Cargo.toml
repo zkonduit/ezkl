@@ -25,8 +25,8 @@ colog = { version = "1.1.0", optional = true }
 tabled = { version = "0.9.0", optional = true}
 # evm related deps
 hashbrown = "0.13"
-ethereum_types = { package = "ethereum-types", version = "0.14", default-features = false, features = ["std"], optional=true}
-foundry_evm = { git = "https://github.com/foundry-rs/foundry", package = "foundry-evm", rev = "b28119b56d7dd18c268a471167a0c547c301c13e", optional=true }
+ethereum_types = { package = "ethereum-types", version = "0.14.1", default-features = false, features = ["std"], optional=true}
+foundry_evm = { git = "https://github.com/foundry-rs/foundry", package = "foundry-evm", rev = "4f21719", optional=true }
 halo2_wrong_ecc = { git = "https://github.com/zkonduit/halo2wrong", package = "ecc", branch = "master"}
 plonk_verifier = { git = "https://github.com/zkonduit/plonk-verifier", branch = "main"}
 
