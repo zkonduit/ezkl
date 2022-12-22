@@ -1,5 +1,4 @@
 use lazy_static::lazy_static;
-use log::info;
 use std::env::var;
 use std::process::Command;
 
