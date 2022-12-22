@@ -77,7 +77,6 @@ macro_rules! test_func {
             }
 
             #(#[test_case(TESTS[N])])*
-            // #[ignore]
             fn kzg_prove_and_verify_(test: &str) {
                 kzg_prove_and_verify(test.to_string());
             }
@@ -97,7 +96,6 @@ macro_rules! test_func_evm {
             seq!(N in 0..=7 {
             // these take a particularly long time to run
             #(#[test_case(TESTS_EVM[N])])*
-            // #[ignore]
             fn kzg_evm_fullprove_(test: &str) {
                 kzg_evm_fullprove(test.to_string());
             }
