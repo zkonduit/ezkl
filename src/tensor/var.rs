@@ -33,9 +33,10 @@ impl VarTensor {
         capacity: usize,
         dims: Vec<usize>,
         equality: bool,
+        v1: usize,
     ) -> Self {
         let base = 2u32;
-        let max_rows = min(512, base.pow(k as u32) as usize - cs.blinding_factors() - 1);
+        let max_rows = min(v1, base.pow(k as u32) as usize - cs.blinding_factors() - 1);
         let modulo = (capacity / max_rows) + 1;
         let mut advices = vec![];
         for _ in 0..modulo {
@@ -60,9 +61,10 @@ impl VarTensor {
         capacity: usize,
         dims: Vec<usize>,
         equality: bool,
+        v1: usize,
     ) -> Self {
         let base = 2u32;
-        let max_rows = min(512, base.pow(k as u32) as usize - cs.blinding_factors() - 1);
+        let max_rows = min(v1, base.pow(k as u32) as usize - cs.blinding_factors() - 1);
         let modulo = (capacity / max_rows) + 1;
         let mut fixed = vec![];
         for _ in 0..modulo {

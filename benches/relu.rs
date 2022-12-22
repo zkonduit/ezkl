@@ -34,7 +34,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         unsafe {
             let advices = (0..2)
-                .map(|_| VarTensor::new_advice(cs, K, LEN, vec![LEN], true))
+                .map(|_| VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512))
                 .collect::<Vec<_>>();
 
             Self::Config::configure(cs, &advices[0], &advices[1], Some(&[BITS, 128]))
