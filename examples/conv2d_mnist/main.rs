@@ -163,8 +163,14 @@ where
             512,
         );
 
-        let bias =
-            VarTensor::new_advice(cs, K, max(OUT_CHANNELS, CLASSES), vec![OUT_CHANNELS], true, 512);
+        let bias = VarTensor::new_advice(
+            cs,
+            K,
+            max(OUT_CHANNELS, CLASSES),
+            vec![OUT_CHANNELS],
+            true,
+            512,
+        );
         let output = VarTensor::new_advice(
             cs,
             K,

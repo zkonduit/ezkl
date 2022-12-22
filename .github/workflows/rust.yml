@@ -54,11 +54,11 @@ jobs:
           components: rustfmt, clippy 
 
     - name: Mock proving tests (public outputs)
-      run: cargo test --release --verbose tests::mock_public_outputs_ 
+      run: cargo test --release --verbose tests::mock_public_outputs_ -- --test-threads 16
     - name: Mock proving tests (public inputs)
-      run: cargo test --release --verbose tests::mock_public_inputs_ 
+      run: cargo test --release --verbose tests::mock_public_inputs_ -- --test-threads 16
     - name: Mock proving tests (public params)
-      run: cargo test --release --verbose tests::mock_public_params_ 
+      run: cargo test --release --verbose tests::mock_public_params_ -- --test-threads 16
   
   full-proving-tests:
 

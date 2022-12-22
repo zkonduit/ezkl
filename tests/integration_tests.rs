@@ -1,8 +1,16 @@
+use lazy_static::lazy_static;
+use log::info;
+use std::env::var;
 use std::process::Command;
+
+lazy_static! {
+    static ref CARGO_TARGET_DIR: String = var("CARGO_TARGET_DIR").unwrap_or("./target".to_string());
+}
 
 #[cfg(test)]
 #[ctor::ctor]
 fn init() {
+    println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
     build_ezkl();
 }
 
@@ -109,7 +117,7 @@ test_func_evm!();
 
 // Mock prove (fast, but does not cover some potential issues)
 fn mock(example_name: String) {
-    let status = Command::new("target/release/ezkl")
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
             "-K=17",
@@ -128,7 +136,7 @@ fn mock(example_name: String) {
 
 // Mock prove (fast, but does not cover some potential issues)
 fn mock_public_inputs(example_name: String) {
-    let status = Command::new("target/release/ezkl")
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--public-inputs",
             "--bits=16",
@@ -148,7 +156,7 @@ fn mock_public_inputs(example_name: String) {
 
 // Mock prove (fast, but does not cover some potential issues)
 fn mock_public_params(example_name: String) {
-    let status = Command::new("target/release/ezkl")
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--public-params",
             "--bits=16",
@@ -168,7 +176,7 @@ fn mock_public_params(example_name: String) {
 
 // full prove (slower, covers more, but still reuses the pk)
 fn ipa_fullprove(example_name: String) {
-    let status = Command::new("target/release/ezkl")
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
             "-K=17",
@@ -187,7 +195,7 @@ fn ipa_fullprove(example_name: String) {
 
 // prove-serialize-verify, the usual full path
 fn ipa_prove_and_verify(example_name: String) {
-    let status = Command::new("target/release/ezkl")
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
             "-K=17",
@@ -206,7 +214,7 @@ fn ipa_prove_and_verify(example_name: String) {
         .status()
         .expect("failed to execute process");
     assert!(status.success());
-    let status = Command::new("target/release/ezkl")
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
             "-K=17",
@@ -227,7 +235,7 @@ fn ipa_prove_and_verify(example_name: String) {
 
 // prove-serialize-verify, the usual full path
 fn kzg_prove_and_verify(example_name: String) {
-    let status = Command::new("target/release/ezkl")
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
             "-K=17",
@@ -247,7 +255,7 @@ fn kzg_prove_and_verify(example_name: String) {
         .status()
         .expect("failed to execute process");
     assert!(status.success());
-    let status = Command::new("target/release/ezkl")
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
             "-K=17",
@@ -270,7 +278,7 @@ fn kzg_prove_and_verify(example_name: String) {
 // KZG  tests
 // full prove (slower, covers more, but still reuses the pk)
 fn kzg_fullprove(example_name: String) {
-    let status = Command::new("target/release/ezkl")
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
             "-K=17",
