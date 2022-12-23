@@ -1,4 +1,4 @@
-#![deny(warnings, unsafe_code)]
+#![deny(missing_docs, warnings, unsafe_code)]
 #![feature(slice_flatten)]
 
 /// Methods for configuring tensor operations and assigning values to them in a Halo2 circuit.
