@@ -12,31 +12,51 @@ use std::cmp::min;
 /// using the `assign` method called on a [ValTensor].
 #[derive(Clone, Debug)]
 pub enum VarTensor {
+    /// A VarTensor for holding Advice values, which are assigned at proving time.
     Advice {
+        /// Vec of Advice columns
         inner: Vec<Column<Advice>>,
+        /// Number of rows available to be used in each column of the storage
         col_size: usize,
+        /// Total capacity (number of advice cells), usually inner.len()*col_size
         capacity: usize,
+        /// Vector of dimensions of the tensor we are representing using this storage. Note that the shape of the storage and this shape can differ.
         dims: Vec<usize>,
     },
+    /// A VarTensor for holding Fixed values, which are assigned at circuit definition time.
     Fixed {
+        /// Vec of Fixed columns
         inner: Vec<Column<Fixed>>,
+        /// Number of rows available to be used in each column of the storage
         col_size: usize,
+        /// Total capacity (number of advice cells), usually inner.len()*col_size
         capacity: usize,
+        /// Vector of dimensions of the tensor we are representing using this storage. Note that the shape of the storage and this shape can differ.
         dims: Vec<usize>,
     },
 }
 
 impl VarTensor {
+    /// Create a new VarTensor::Advice
+    /// `cs` is the `ConstraintSystem` from which the columns will be allocated.
+    /// `k` is the log2 number of rows in the matrix, including any system and blinding rows.
+    /// `capacity` is the number of advice cells for this tensor
+    /// `dims` is the `Vec` of dimensions of the tensor we are representing. Note that the shape of the storage and this shape can differ.
+    /// `equality` should be true if we want to enable equality constraints for the columns involved.
+    /// `max_rot` is the maximum number of rotations that we allow for this VarTensor. Rotations affect performance.
     pub fn new_advice<F: FieldExt>(
         cs: &mut ConstraintSystem<F>,
         k: usize,
         capacity: usize,
         dims: Vec<usize>,
         equality: bool,
-        v1: usize,
+        max_rot: usize,
     ) -> Self {
         let base = 2u32;
-        let max_rows = min(v1, base.pow(k as u32) as usize - cs.blinding_factors() - 1);
+        let max_rows = min(
+            max_rot,
+            base.pow(k as u32) as usize - cs.blinding_factors() - 1,
+        );
         let modulo = (capacity / max_rows) + 1;
         let mut advices = vec![];
         for _ in 0..modulo {
@@ -55,16 +75,26 @@ impl VarTensor {
         }
     }
 
+    /// Create a new VarTensor::Fixed
+    /// `cs` is the `ConstraintSystem` from which the columns will be allocated.
+    /// `k` is the log2 number of rows in the matrix, including any system and blinding rows.
+    /// `capacity` is the number of fixed cells for this tensor
+    /// `dims` is the `Vec` of dimensions of the tensor we are representing. Note that the shape of the storage and this shape can differ.
+    /// `equality` should be true if we want to enable equality constraints for the columns involved.
+    /// `max_rot` is the maximum number of rotations that we allow for this VarTensor. Rotations affect performance.
     pub fn new_fixed<F: FieldExt>(
         cs: &mut ConstraintSystem<F>,
         k: usize,
         capacity: usize,
         dims: Vec<usize>,
         equality: bool,
-        v1: usize,
+        max_rot: usize,
     ) -> Self {
         let base = 2u32;
-        let max_rows = min(v1, base.pow(k as u32) as usize - cs.blinding_factors() - 1);
+        let max_rows = min(
+            max_rot,
+            base.pow(k as u32) as usize - cs.blinding_factors() - 1,
+        );
         let modulo = (capacity / max_rows) + 1;
         let mut fixed = vec![];
         for _ in 0..modulo {
@@ -126,6 +156,7 @@ impl VarTensor {
         }
     }
 
+    /// Take a linear coordinate and output the (column, row) position in the storage block.
     pub fn cartesian_coord(&self, linear_coord: usize) -> (usize, usize) {
         match self {
             VarTensor::Advice { col_size, .. } | VarTensor::Fixed { col_size, .. } => {
