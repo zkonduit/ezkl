@@ -30,7 +30,7 @@ pub trait TensorType: Clone + Debug + 'static {
     fn zero() -> Option<Self> {
         None
     }
-
+    /// Max operator for ordering values.
     fn tmax(&self, _: &Self) -> Option<Self> {
         None
     }
@@ -173,6 +173,7 @@ impl TensorType for halo2curves::bn256::Fr {
     }
 }
 
+/// A wrapper for tensor related errors.
 #[derive(Debug)]
 pub struct TensorError(String);
 

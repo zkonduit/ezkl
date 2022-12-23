@@ -12,6 +12,7 @@ use log::error;
 use std::fmt;
 use std::marker::PhantomData;
 
+#[allow(missing_docs)]
 /// An enum representing the operations that can be merged into a single circuit gate.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum FusedOp {
@@ -100,6 +101,7 @@ pub struct FusedConfig<F: FieldExt + TensorType> {
     nodes: Vec<FusedNode>,
     /// the (currently singular) output of the fused operations.
     pub output: VarTensor,
+    /// [Selector] generated when configuring the layer.
     pub selector: Selector,
     _marker: PhantomData<F>,
 }

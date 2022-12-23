@@ -317,6 +317,26 @@ pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
     output
 }
 
+/// Elementwise divide a tensor with another tensor.
+/// # Arguments
+///
+/// * `t` - Tensor
+/// * `d` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::div;
+/// let x = Tensor::<i32>::new(
+///     Some(&[4, 1, 4, 1, 1, 4]),
+///     &[2, 3],
+/// ).unwrap();
+/// let y = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// let result = div(&x, y);
+/// let expected = Tensor::<i32>::new(Some(&[2, 1, 2, 1, 1, 4]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
 pub fn div<T: TensorType + Div<Output = T>>(t: Tensor<T>, d: Tensor<T>) -> Tensor<T> {
     assert_eq!(t.dims(), d.dims());
     // calculate value of output

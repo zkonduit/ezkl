@@ -1,34 +1,34 @@
 use super::*;
 use halo2_proofs::plonk::Instance;
-/// A wrapper around a tensor where the inner type is one of Halo2's `Value<F>`, `Value<Assigned<F>>`, `AssignedCell<Assigned<F>, F>`.
+/// A wrapper around a [Tensor] where the inner type is one of Halo2's [Value<F>], [Value<Assigned<F>>], [AssignedCell<Assigned<F>, F>].
 /// This enum is generally used to assign values to variables / advices already configured in a Halo2 circuit (usually represented as a [VarTensor]).
 /// For instance can represent pre-trained neural network weights; or a known input to a network.
 #[derive(Debug, Clone)]
 pub enum ValTensor<F: FieldExt + TensorType> {
-    /// A tensor of Values, each containing a field element
+    /// A tensor of [Value], each containing a field element
     Value {
-        /// Underlying Tensor.
+        /// Underlying [Tensor].
         inner: Tensor<Value<F>>,
         /// Vector of dimensions of the tensor.
         dims: Vec<usize>,
     },
-    /// A tensor of Values, each containing a ratio of field elements, which may be evaluated to produce plain field elements.
+    /// A tensor of [Value], each containing a ratio of field elements, which may be evaluated to produce plain field elements.
     AssignedValue {
-        /// Underlying Tensor.
+        /// Underlying [Tensor].
         inner: Tensor<Value<Assigned<F>>>,
-        /// Vector of dimensions of the tensor.
+        /// Vector of dimensions of the [Tensor].
         dims: Vec<usize>,
     },
     /// A tensor of AssignedCells, with data both a value and the matrix cell to which it is assigned.
     PrevAssigned {
-        /// Underlying Tensor.
+        /// Underlying [Tensor].
         inner: Tensor<AssignedCell<F, F>>,
-        /// Vector of dimensions of the tensor.
+        /// Vector of dimensions of the [Tensor].
         dims: Vec<usize>,
     },
-    /// A tensor backed by an Instance column
+    /// A tensor backed by an [Instance] column
     Instance {
-        /// Underlying Tensor.
+        /// [Instance]
         inner: Column<Instance>,
         /// Vector of dimensions of the tensor.
         dims: Vec<usize>,
@@ -63,7 +63,7 @@ impl<F: FieldExt + TensorType> From<Tensor<AssignedCell<F, F>>> for ValTensor<F>
 }
 
 impl<F: FieldExt + TensorType> ValTensor<F> {
-    /// Allocate a new ValTensor::Instance from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
+    /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
     pub fn new_instance(cs: &mut ConstraintSystem<F>, dims: Vec<usize>, equality: bool) -> Self {
         let col = cs.instance_column();
         if equality {
@@ -100,7 +100,7 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         }
     }
 
-    /// Sets the `ValTensor`'s shape.
+    /// Sets the [ValTensor]'s shape.
     pub fn reshape(&mut self, new_dims: &[usize]) {
         match self {
             ValTensor::Value { inner: v, dims: d } => {
@@ -125,7 +125,7 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         }
     }
 
-    /// Calls `flatten` on the inner tensor.
+    /// Calls `flatten` on the inner [Tensor].
     pub fn flatten(&mut self) {
         match self {
             ValTensor::Value { inner: v, dims: d } => {
@@ -146,7 +146,7 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         }
     }
 
-    /// Returns the `dims` attribute of the `ValTensor`.
+    /// Returns the `dims` attribute of the [ValTensor].
     pub fn dims(&self) -> &[usize] {
         match self {
             ValTensor::Value { dims: d, .. }
@@ -155,7 +155,7 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
             | ValTensor::Instance { dims: d, .. } => d,
         }
     }
-    /// A `String` representation of the `ValTensor` for display, for example in showing intermediate values in a computational graph.
+    /// A [String] representation of the [ValTensor] for display, for example in showing intermediate values in a computational graph.
     pub fn show(&self) -> String {
         match self.clone() {
             ValTensor::PrevAssigned { inner: v, dims: _ } => {

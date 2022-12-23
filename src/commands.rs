@@ -4,10 +4,12 @@ use log::info;
 use std::io::{stdin, stdout, Write};
 use std::path::PathBuf;
 
+#[allow(missing_docs)]
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
+    #[allow(missing_docs)]
     pub command: Commands,
     /// The tolerance for error on model outputs
     #[arg(short = 'T', long, default_value = "0")]
@@ -35,6 +37,7 @@ pub struct Cli {
     pub max_rotations: usize,
 }
 
+#[allow(missing_docs)]
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ProofSystem {
     IPA,
@@ -49,6 +52,7 @@ impl std::fmt::Display for ProofSystem {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Debug, Subcommand)]
 pub enum Commands {
     /// Loads model and prints model table
@@ -121,6 +125,7 @@ pub enum Commands {
             default_missing_value = "always",
             value_enum
         )]
+        /// The [ProofSystem] we'll be using.
         pfsys: ProofSystem,
         // todo, optionally allow supplying proving key
     },
@@ -156,6 +161,7 @@ pub enum Commands {
     },
 }
 
+/// Loads the path to a path `data` represented as a [String]. If empty queries the user for an input.
 pub fn data_path(data: String) -> PathBuf {
     let mut s = String::new();
     match data.is_empty() {

@@ -4,6 +4,13 @@ use tract_onnx::prelude::{InferenceFact, Node};
 use tract_onnx::tract_hir::internal::InferenceOp;
 
 // Warning: currently ignores stride information
+/// Quantizes an iterable of f32s to a [Tensor] of i32s using a fixed point representation.
+/// Arguments
+///
+/// * `vec` - the vector to quantize.
+/// * `dims` - the dimensionality of the resulting [Tensor].
+/// * `shift` - offset used in the fixed point representation.
+/// * `scale` - `2^scale` used in the fixed point representation.
 pub fn vector_to_quantized(
     vec: &[f32],
     dims: &[usize],
@@ -18,10 +25,12 @@ pub fn vector_to_quantized(
     Tensor::new(Some(&scaled), dims)
 }
 
+/// Converts a scale (log base 2) to a fixed point multiplier.
 pub fn scale_to_multiplier(scale: i32) -> f32 {
     i32::pow(2, scale as u32) as f32
 }
 
+/// Gets the shape of a onnx node's outlets.
 pub fn node_output_shapes(
     node: &Node<InferenceFact, Box<dyn InferenceOp>>,
 ) -> Result<Vec<Option<Vec<usize>>>> {

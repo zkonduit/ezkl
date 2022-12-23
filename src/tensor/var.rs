@@ -38,12 +38,14 @@ pub enum VarTensor {
 
 impl VarTensor {
     /// Create a new VarTensor::Advice
-    /// `cs` is the `ConstraintSystem` from which the columns will be allocated.
-    /// `k` is the log2 number of rows in the matrix, including any system and blinding rows.
-    /// `capacity` is the number of advice cells for this tensor
-    /// `dims` is the `Vec` of dimensions of the tensor we are representing. Note that the shape of the storage and this shape can differ.
-    /// `equality` should be true if we want to enable equality constraints for the columns involved.
-    /// `max_rot` is the maximum number of rotations that we allow for this VarTensor. Rotations affect performance.
+    /// Arguments
+    ///
+    /// * `cs` - `ConstraintSystem` from which the columns will be allocated.
+    /// * `k` - log2 number of rows in the matrix, including any system and blinding rows.
+    /// * `capacity` - number of advice cells for this tensor
+    /// * `dims` - `Vec` of dimensions of the tensor we are representing. Note that the shape of the storage and this shape can differ.
+    /// * `equality` - true if we want to enable equality constraints for the columns involved.
+    /// * `max_rot` - maximum number of rotations that we allow for this VarTensor. Rotations affect performance.
     pub fn new_advice<F: FieldExt>(
         cs: &mut ConstraintSystem<F>,
         k: usize,

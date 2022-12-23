@@ -18,9 +18,12 @@ pub use node::*;
 use std::cmp::max;
 pub use vars::*;
 
+/// Defines the circuit for a computational graph / model loaded from a `.onnx` file.
 #[derive(Clone, Debug)]
 pub struct ModelCircuit<F: FieldExt> {
+    /// Vector of input tensors to the model / graph of computations.
     pub inputs: Vec<Tensor<i32>>,
+    /// Represents the Field we are using.
     pub _marker: PhantomData<F>,
 }
 

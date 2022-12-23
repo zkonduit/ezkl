@@ -46,13 +46,22 @@ pub struct ModelConfig<F: FieldExt + TensorType> {
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
 #[derive(Clone, Debug)]
 pub struct Model {
-    pub model: Graph<InferenceFact, Box<dyn InferenceOp>>, // The raw Tract data structure
+    /// The raw tract [Graph] data structure.
+    pub model: Graph<InferenceFact, Box<dyn InferenceOp>>,
+    /// Graph of nodes we are loading from Onnx.
     pub nodes: NodeGraph, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
+    /// bits used in lookup tables
     pub bits: usize,
+    /// Log rows available in circuit.
     pub logrows: u32,
+    /// Exponent used in the fixed point representation.
     pub scale: i32,
+    /// The divergence from the expected output (if using public outputs) we can tolerate. This is in absolute value across each dimension.
+    /// eg. for a tolerance of 1 and for a 2D output we could tolerate at most off by 1 errors for each of the 2 outputs.
     pub tolerance: usize,
+    /// The [Mode] we're using the model in.
     pub mode: Mode,
+    /// Defines which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
     pub visibility: VarVisibility,
 }
 
