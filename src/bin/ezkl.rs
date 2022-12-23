@@ -4,12 +4,11 @@ use ezkl::commands::{Cli, Commands, ProofSystem};
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::graph::Model;
 #[cfg(feature = "evm")]
-use ezkl::pfsys::kzg::aggregation::{
-    aggregation::AggregationCircuit, evm_verify, gen_aggregation_evm_verifier,
-    gen_application_snark, gen_kzg_proof, gen_pk, gen_srs,
+use ezkl::pfsys::aggregation::{
+    evm_verify, gen_aggregation_evm_verifier, gen_application_snark, gen_kzg_proof, gen_pk,
+    gen_srs, AggregationCircuit,
 };
 use ezkl::pfsys::{create_keys, load_params, load_vk, Proof};
-#[cfg(not(feature = "evm"))]
 use ezkl::pfsys::{
     create_proof_model, parse_prover_errors, prepare_circuit_and_public_input, prepare_data,
     save_params, save_vk, verify_proof_model,
@@ -20,7 +19,6 @@ use halo2_proofs::poly::ipa::commitment::IPACommitmentScheme;
 use halo2_proofs::poly::ipa::multiopen::ProverIPA;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2_proofs::poly::kzg::multiopen::ProverGWC;
-#[cfg(not(feature = "evm"))]
 use halo2_proofs::poly::kzg::{
     commitment::ParamsKZG, multiopen::VerifierGWC, strategy::SingleStrategy as KZGSingleStrategy,
 };
@@ -32,6 +30,8 @@ use halo2_proofs::{
         VerificationStrategy,
     },
 };
+#[cfg(feature = "evm")]
+use halo2curves::bn256::G1Affine;
 use halo2curves::bn256::{Bn256, Fr};
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp;
@@ -39,6 +39,8 @@ use log::{error, info, trace};
 #[cfg(feature = "evm")]
 use plonk_verifier::system::halo2::transcript::evm::EvmTranscript;
 use rand::seq::SliceRandom;
+#[cfg(feature = "evm")]
+use std::time::Instant;
 use tabled::Table;
 
 pub fn main() {
@@ -137,7 +139,6 @@ pub fn main() {
                 ProofSystem::KZG => {
                     // We will need aggregator k > application k > bits
                     //		    let application_logrows = args.logrows; //bits + 1;
-                    let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
                     let aggregation_logrows = args.logrows + 6;
 
                     let params = gen_srs(aggregation_logrows);

@@ -13,7 +13,7 @@ pub fn vector_to_quantized(
     let mult = scale_to_multiplier(scale);
     let scaled: Vec<i32> = vec
         .iter()
-        .map(|e| unsafe { (mult * e + shift).round().to_int_unchecked::<i32>() })
+        .map(|e| (mult * e + shift).round() as i32)
         .collect();
     Tensor::new(Some(&scaled), dims)
 }

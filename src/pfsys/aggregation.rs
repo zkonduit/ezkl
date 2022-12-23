@@ -1,11 +1,8 @@
-use super::super::prepare_circuit_and_public_input;
-use super::super::ModelInput;
+use super::prepare_circuit_and_public_input;
+use super::ModelInput;
 use crate::fieldutils::i32_to_felt;
-#[cfg(feature = "evm")]
 use ethereum_types::Address;
-#[cfg(feature = "evm")]
 use foundry_evm::executor::{fork::MultiFork, Backend, ExecutorBuilder};
-#[cfg(feature = "evm")]
 use halo2_proofs::plonk::VerifyingKey;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -33,16 +30,12 @@ use halo2_wrong_ecc::{
     },
     EccConfig,
 };
-#[cfg(feature = "evm")]
-use halo2curves::bn256::Fq;
 use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine};
 use itertools::Itertools;
 use log::trace;
-#[cfg(feature = "evm")]
 use plonk_verifier::{
-    loader::evm::{encode_calldata, EvmLoader},
+    loader::evm::{self, encode_calldata, EvmLoader},
     system::halo2::transcript::evm::EvmTranscript,
-    verifier::PlonkVerifier,
 };
 use plonk_verifier::{
     loader::native::NativeLoader,
@@ -61,8 +54,6 @@ use plonk_verifier::{
 };
 use rand::rngs::OsRng;
 use std::io::Cursor;
-#[cfg(feature = "evm")]
-use std::rc::Rc;
 use std::{iter, rc::Rc};
 
 const LIMBS: usize = 4;
@@ -159,22 +150,22 @@ pub fn aggregate<'a>(
     let accumulators = snarks
         .iter()
         .flat_map(|snark| {
+            let protocol = snark.protocol.loaded(loader);
             let instances = assign_instances(&snark.instances);
             let mut transcript =
                 PoseidonTranscript::<Rc<Halo2Loader>, _>::new(loader, snark.proof());
-            let proof =
-                Plonk::read_proof(svk, &snark.protocol, &instances, &mut transcript).unwrap();
-            Plonk::succinct_verify(svk, &snark.protocol, &instances, &proof).unwrap()
+            let proof = Plonk::read_proof(svk, &protocol, &instances, &mut transcript).unwrap();
+            Plonk::succinct_verify(svk, &protocol, &instances, &proof).unwrap()
         })
         .collect_vec();
 
-    let acccumulator = {
+    let accumulator = {
         let mut transcript = PoseidonTranscript::<Rc<Halo2Loader>, _>::new(loader, as_proof);
         let proof = As::read_proof(&Default::default(), &accumulators, &mut transcript).unwrap();
         As::verify(&Default::default(), &accumulators, &proof).unwrap()
     };
 
-    acccumulator
+    accumulator
 }
 
 #[derive(Clone)]
@@ -324,7 +315,10 @@ impl Circuit<Fr> for AggregationCircuit {
                 let KzgAccumulator { lhs, rhs } =
                     aggregate(&self.svk, &loader, &self.snarks, self.as_proof());
 
-                Ok((lhs.assigned(), rhs.assigned()))
+                let lhs = lhs.assigned().clone();
+                let rhs = rhs.assigned().clone();
+
+                Ok((lhs, rhs))
             },
         )?;
 
@@ -368,7 +362,6 @@ pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &ModelInput) -> Sn
     Snark::new(protocol, pi_inner, proof)
 }
 
-#[cfg(feature = "evm")]
 pub fn gen_aggregation_evm_verifier(
     params: &ParamsKZG<Bn256>,
     vk: &VerifyingKey<G1Affine>,
@@ -382,20 +375,20 @@ pub fn gen_aggregation_evm_verifier(
         vk,
         Config::kzg()
             .with_num_instance(num_instance.clone())
-            .with_accumulator_indices(accumulator_indices),
+            .with_accumulator_indices(Some(accumulator_indices)),
     );
 
     let loader = EvmLoader::new::<Fq, Fr>();
-    let mut transcript = EvmTranscript::<_, Rc<EvmLoader>, _, _>::new(loader.clone());
+    let protocol = protocol.loaded(&loader);
+    let mut transcript = EvmTranscript::<_, Rc<EvmLoader>, _, _>::new(&loader.clone());
 
     let instances = transcript.load_instances(num_instance);
     let proof = Plonk::read_proof(&svk, &protocol, &instances, &mut transcript).unwrap();
     Plonk::verify(&svk, &dk, &protocol, &instances, &proof).unwrap();
 
-    loader.deployment_code()
+    evm::compile_yul(&loader.yul_code())
 }
 
-#[cfg(feature = "evm")]
 pub fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<u8>) {
     let calldata = encode_calldata(&instances, &proof);
     let success = {

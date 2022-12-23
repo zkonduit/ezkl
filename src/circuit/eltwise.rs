@@ -272,8 +272,7 @@ impl<F: FieldExt> Nonlinearity<F> for ReLu<F> {
         } else {
             let d_inv_x = (x as f32) / (scale[0] as f32);
             let rounded = d_inv_x.round();
-            let integral: i32 = unsafe { rounded.to_int_unchecked() };
-            i32_to_felt(integral)
+            i32_to_felt(rounded as i32)
         }
     }
 }
@@ -289,8 +288,7 @@ impl<F: FieldExt> Nonlinearity<F> for Sigmoid<F> {
         let kix = (x as f32) / (scale[0] as f32);
         let fout = (scale[1] as f32) / (1.0 + (-kix).exp());
         let rounded = fout.round();
-        let xi: i32 = unsafe { rounded.to_int_unchecked() };
-        fieldutils::i32_to_felt(xi)
+        fieldutils::i32_to_felt(rounded as i32)
     }
 }
 
@@ -302,8 +300,7 @@ impl<F: FieldExt> Nonlinearity<F> for DivideBy<F> {
     fn nonlinearity(x: i32, scale: &[usize]) -> F {
         let d_inv_x = (x as f32) / (scale[0] as f32);
         let rounded = d_inv_x.round();
-        let integral: i32 = unsafe { rounded.to_int_unchecked() };
-        fieldutils::i32_to_felt(integral)
+        fieldutils::i32_to_felt(rounded as i32)
     }
 }
 
