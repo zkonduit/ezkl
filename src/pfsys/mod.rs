@@ -197,6 +197,7 @@ pub fn prepare_circuit<F: FieldExt>(data: &ModelInput) -> ModelCircuit<F> {
     }
 }
 
+/// Deserializes the required inputs to a model at path `datapath` to a [ModelInput] struct.
 pub fn prepare_data(datapath: String) -> ModelInput {
     let mut file = match File::open(data_path(datapath)) {
         Ok(t) => t,
@@ -216,6 +217,7 @@ pub fn prepare_data(datapath: String) -> ModelInput {
     data
 }
 
+/// Creates a [VerifyingKey] and [ProvingKey] for a [ModelCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`).
 pub fn create_keys<Scheme: CommitmentScheme, F: FieldExt + TensorType>(
     circuit: &ModelCircuit<F>,
     params: &'_ Scheme::ParamsProver,
@@ -337,6 +339,7 @@ where
     result
 }
 
+/// Loads a [VerifyingKey] at `path`.
 pub fn load_vk<Scheme: CommitmentScheme, F: FieldExt + TensorType>(
     path: PathBuf,
     params: &'_ Scheme::ParamsVerifier,
@@ -355,6 +358,7 @@ where
     VerifyingKey::<Scheme::Curve>::read::<_, ModelCircuit<F>>(&mut reader, params).unwrap()
 }
 
+/// Loads the [CommitmentScheme::ParamsVerifier] at `path`.
 pub fn load_params<Scheme: CommitmentScheme>(path: PathBuf) -> Scheme::ParamsVerifier {
     info!("loading params from {:?}", path);
     let f = match File::open(path) {
@@ -367,20 +371,19 @@ pub fn load_params<Scheme: CommitmentScheme>(path: PathBuf) -> Scheme::ParamsVer
     Params::<'_, Scheme::Curve>::read(&mut reader).unwrap()
 }
 
-pub fn save_vk<Scheme: CommitmentScheme>(vk_path: &PathBuf, vk: &VerifyingKey<Scheme::Curve>) {
+/// Saves a [VerifyingKey] to `path`.
+pub fn save_vk<Scheme: CommitmentScheme>(path: &PathBuf, vk: &VerifyingKey<Scheme::Curve>) {
     info!("saving verification key 💾");
-    let f = File::create(vk_path).unwrap();
+    let f = File::create(path).unwrap();
     let mut writer = BufWriter::new(f);
     vk.write(&mut writer).unwrap();
     writer.flush().unwrap();
 }
 
-pub fn save_params<Scheme: CommitmentScheme>(
-    params_path: &PathBuf,
-    params: &'_ Scheme::ParamsVerifier,
-) {
+/// Saves [CommitmentScheme] parameters to `path`.
+pub fn save_params<Scheme: CommitmentScheme>(path: &PathBuf, params: &'_ Scheme::ParamsVerifier) {
     info!("saving parameters 💾");
-    let f = File::create(params_path).unwrap();
+    let f = File::create(path).unwrap();
     let mut writer = BufWriter::new(f);
     params.write(&mut writer).unwrap();
     writer.flush().unwrap();
