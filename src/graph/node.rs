@@ -35,18 +35,27 @@ use tract_onnx::tract_hir::{
 /// Enum of the different kinds of operations `ezkl` can support.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd)]
 pub enum OpKind {
+    /// A ReLU nonlinearity
     ReLU(usize),
+    /// A Sigmoid nonlinearity
     Sigmoid(usize),
+    /// A DivideBy nonlinearity
     Div(usize),
+    /// A Constant tensor, such as a parameter or hyperparameter
     Const,
+    /// An input to the model
     Input,
+    /// A fused op, combining affine layers or other arithmetic
     Fused(FusedOp),
+    /// Unable to parse the node type
     Unknown(String),
+    #[allow(missing_docs)]
     #[default]
     None,
 }
 
 impl OpKind {
+    /// Produce an OpKind from a `&str` onnx name  
     pub fn new(name: &str) -> Self {
         match name {
             "Clip" => OpKind::ReLU(1),
@@ -77,10 +86,12 @@ impl OpKind {
             }
         }
     }
+    /// Identify fused OpKind
     pub fn is_fused(&self) -> bool {
         matches!(self, OpKind::Fused(_))
     }
 
+    /// Identify constant OpKind
     pub fn is_const(&self) -> bool {
         matches!(self, OpKind::Const)
     }
@@ -102,6 +113,7 @@ impl fmt::Display for OpKind {
 }
 
 /// Enum of the different kinds of node configurations `ezkl` can support.
+#[allow(missing_docs)]
 #[derive(Clone, Default, Debug)]
 pub enum NodeConfigTypes<F: FieldExt + TensorType> {
     ReLU(EltwiseConfig<F, ReLu<F>>, Vec<usize>),
@@ -119,10 +131,12 @@ pub enum NodeConfigTypes<F: FieldExt + TensorType> {
 pub struct NodeGraph(pub BTreeMap<Option<usize>, BTreeMap<usize, Node>>);
 
 impl NodeGraph {
+    /// Create an empty NodeGraph
     pub fn new() -> Self {
         NodeGraph(BTreeMap::new())
     }
 
+    /// Insert the node with given tract `node_idx` and config at `idx`  
     pub fn insert(&mut self, idx: Option<usize>, node_idx: usize, config: Node) {
         match self.0.entry(idx) {
             Entry::Vacant(e) => {
