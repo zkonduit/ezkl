@@ -10,12 +10,16 @@ use log::error;
 use serde::Deserialize;
 use std::{cell::RefCell, rc::Rc};
 
+/// Label Enum to track whether model input, model parameters, and model output are public or private
 #[derive(Clone, Debug, Deserialize)]
 pub enum Visibility {
+    /// Mark an item as private to the prover (not in the proof submitted for verification)
     Private,
+    /// Mark an item as public (sent in the proof submitted for verification)
     Public,
 }
 impl Visibility {
+    #[allow(missing_docs)]
     pub fn is_public(&self) -> bool {
         matches!(&self, Visibility::Public)
     }
@@ -29,10 +33,14 @@ impl std::fmt::Display for Visibility {
     }
 }
 
+/// Whether the model input, model parameters, and model output are Public or Private to the prover.
 #[derive(Clone, Debug, Deserialize)]
 pub struct VarVisibility {
+    /// Input to the model or computational graph
     pub input: Visibility,
+    /// Parameters, such as weights and biases, in the model
     pub params: Visibility,
+    /// Output of the model or computational graph
     pub output: Visibility,
 }
 impl std::fmt::Display for VarVisibility {
@@ -46,6 +54,8 @@ impl std::fmt::Display for VarVisibility {
 }
 
 impl VarVisibility {
+    /// Read from cli args whether the model input, model parameters, and model output are Public or Private to the prover.
+    /// Place in [VarVIsibility] struct.
     pub fn from_args() -> Self {
         let args = Cli::parse();
 
@@ -75,12 +85,17 @@ impl VarVisibility {
     }
 }
 
+/// Lookup tables that will be available for reuse.
 pub enum TableTypes<F: FieldExt + TensorType> {
+    /// Reference to a ReLU table
     ReLu(Rc<RefCell<EltwiseTable<F, ReLu<F>>>>),
+    /// Reference to a DivideBy table
     DivideBy(Rc<RefCell<EltwiseTable<F, DivideBy<F>>>>),
+    /// Reference to a Sigmoid table
     Sigmoid(Rc<RefCell<EltwiseTable<F, Sigmoid<F>>>>),
 }
 impl<F: FieldExt + TensorType> TableTypes<F> {
+    /// Get a reference to a reused ReLU lookup table
     pub fn get_relu(&self) -> Rc<RefCell<EltwiseTable<F, ReLu<F>>>> {
         match self {
             TableTypes::ReLu(inner) => inner.clone(),
@@ -89,6 +104,7 @@ impl<F: FieldExt + TensorType> TableTypes<F> {
             }
         }
     }
+    /// Get a reference to a reused DivideBy lookup table
     pub fn get_div(&self) -> Rc<RefCell<EltwiseTable<F, DivideBy<F>>>> {
         match self {
             TableTypes::DivideBy(inner) => inner.clone(),
@@ -97,6 +113,7 @@ impl<F: FieldExt + TensorType> TableTypes<F> {
             }
         }
     }
+    /// Get a reference to a reused Sigmoid lookup table
     pub fn get_sig(&self) -> Rc<RefCell<EltwiseTable<F, Sigmoid<F>>>> {
         match self {
             TableTypes::Sigmoid(inner) => inner.clone(),
@@ -107,14 +124,19 @@ impl<F: FieldExt + TensorType> TableTypes<F> {
     }
 }
 
+/// A wrapper for holding all columns that will be assigned to by a model.
 #[derive(Clone)]
 pub struct ModelVars<F: FieldExt + TensorType> {
+    #[allow(missing_docs)]
     pub advices: Vec<VarTensor>,
+    #[allow(missing_docs)]
     pub fixed: Vec<VarTensor>,
+    #[allow(missing_docs)]
     pub instances: Vec<ValTensor<F>>,
 }
-/// A wrapper for holding all columns that will be assigned to by a model.
+
 impl<F: FieldExt + TensorType> ModelVars<F> {
+    /// Allocate all columns that will be assigned to by a model.
     pub fn new(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
