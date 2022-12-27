@@ -42,7 +42,7 @@ pub enum Mode {
 /// A circuit configuration for  a model loaded from an Onnx file.
 #[derive(Clone)]
 pub struct ModelConfig<F: FieldExt + TensorType> {
-    configs: BTreeMap<usize, (NodeConfig<F>, Vec<usize>)>,
+    configs: BTreeMap<usize, NodeConfig<F>>,
     /// The model struct
     pub model: Model,
     /// (optional) range checked outputs of the model graph
@@ -198,7 +198,7 @@ impl Model {
             if !non_fused_ops.is_empty() {
                 for (i, n) in non_fused_ops.iter() {
                     let config = self.configure_table(n, meta, vars, &mut tables);
-                    results.insert(**i, (config, vec![**i]));
+                    results.insert(**i, config);
                 }
             }
 
@@ -210,10 +210,14 @@ impl Model {
             // preserves ordering
             if !fused_ops.is_empty() {
                 let config = self.fuse_ops(&fused_ops, meta, vars);
-                results.insert(
-                    **fused_ops.keys().max().unwrap(),
-                    (config, fused_ops.keys().map(|k| **k).sorted().collect_vec()),
-                );
+                results.insert(**fused_ops.keys().max().unwrap(), config);
+
+                let mut display: String = "Fused nodes: ".to_string();
+                for idx in fused_ops.keys().map(|k| **k).sorted() {
+                    let node = &self.nodes.filter(idx);
+                    display.push_str(&format!("| {} ({:?}) | ", idx, node.opkind));
+                }
+                info!("{}", display);
             }
         }
 
@@ -469,25 +473,7 @@ impl Model {
                 results.insert(i.0, i.1.clone());
             }
         }
-        for (idx, (config, node_idx)) in config.configs.iter() {
-            let mut display: String = "".to_string();
-            for (i, idx) in node_idx.iter().enumerate() {
-                let node = &self.nodes.filter(*idx);
-                if i > 0 {
-                    display.push_str(&format!(
-                        "| combined with node {} ({:?}) ",
-                        idx, node.opkind
-                    ));
-                } else {
-                    display.push_str(&format!(
-                        "------ laying out node {} ({:?}) ",
-                        idx, node.opkind
-                    ));
-                }
-            }
-
-            info!("{}", display);
-
+        for (idx, config) in config.configs.iter() {
             if let Some(vt) = self.layout_config(layouter, &mut results, config)? {
                 // we get the max as for fused nodes this corresponds to the node output
                 results.insert(*idx, vt);
