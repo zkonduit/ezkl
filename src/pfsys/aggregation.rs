@@ -60,6 +60,7 @@ const LIMBS: usize = 4;
 const BITS: usize = 68;
 type Pcs = Kzg<Bn256, Gwc19>;
 type As = KzgAs<Pcs>;
+/// Type for aggregator verification
 pub type Plonk = verifier::Plonk<Pcs, LimbsEncoding<LIMBS, BITS>>;
 
 const T: usize = 5;
@@ -69,10 +70,13 @@ const R_P: usize = 60;
 
 type Svk = KzgSuccinctVerifyingKey<G1Affine>;
 type BaseFieldEccChip = halo2_wrong_ecc::BaseFieldEccChip<G1Affine, LIMBS, BITS>;
+/// The loader type used in the transcript definition
 type Halo2Loader<'a> = loader::halo2::Halo2Loader<'a, G1Affine, BaseFieldEccChip>;
+/// Application snark transcript
 pub type PoseidonTranscript<L, S> =
     system::halo2::transcript::halo2::PoseidonTranscript<G1Affine, L, S, T, RATE, R_F, R_P>;
 
+/// An application snark with proof and instance variables ready for aggregation (raw field element)
 #[derive(Debug)]
 pub struct Snark {
     protocol: Protocol<G1Affine>,
@@ -81,6 +85,7 @@ pub struct Snark {
 }
 
 impl Snark {
+    /// Create a new application snark from proof and instance variables ready for aggregation
     pub fn new(protocol: Protocol<G1Affine>, instances: Vec<Vec<Fr>>, proof: Vec<u8>) -> Self {
         Self {
             protocol,
@@ -104,6 +109,7 @@ impl From<Snark> for SnarkWitness {
     }
 }
 
+/// An application snark with proof and instance variables ready for aggregation (wrapped field element)
 #[derive(Clone)]
 pub struct SnarkWitness {
     protocol: Protocol<G1Affine>,
@@ -129,6 +135,7 @@ impl SnarkWitness {
     }
 }
 
+/// Aggregate one or more application snarks of the same shape into a KzgAccumulator
 pub fn aggregate<'a>(
     svk: &Svk,
     loader: &Rc<Halo2Loader<'a>>,
@@ -168,6 +175,7 @@ pub fn aggregate<'a>(
     accumulator
 }
 
+/// The Halo2 Config for the aggregation circuit
 #[derive(Clone)]
 pub struct AggregationConfig {
     main_gate_config: MainGateConfig,
@@ -175,6 +183,7 @@ pub struct AggregationConfig {
 }
 
 impl AggregationConfig {
+    /// Configure the aggregation circuit
     pub fn configure<F: FieldExt>(
         meta: &mut ConstraintSystem<F>,
         composition_bits: Vec<usize>,
@@ -189,14 +198,17 @@ impl AggregationConfig {
         }
     }
 
+    /// Create a MainGate from the aggregation approach
     pub fn main_gate(&self) -> MainGate<Fr> {
         MainGate::new(self.main_gate_config.clone())
     }
 
+    /// Create a range chip to decompose and range check inputs
     pub fn range_chip(&self) -> RangeChip<Fr> {
         RangeChip::new(self.range_config.clone())
     }
 
+    /// Create an ecc chip for ec ops
     pub fn ecc_chip(&self) -> BaseFieldEccChip {
         BaseFieldEccChip::new(EccConfig::new(
             self.range_config.clone(),
@@ -205,6 +217,7 @@ impl AggregationConfig {
     }
 }
 
+/// Aggregation Circuit with a SuccinctVerifyingKey, application snark witnesses (each with a proof and instance variables), and the instance variables and the resulting aggregation circuit proof.
 #[derive(Clone)]
 pub struct AggregationCircuit {
     svk: Svk,
@@ -214,6 +227,7 @@ pub struct AggregationCircuit {
 }
 
 impl AggregationCircuit {
+    /// Create a new Aggregation Circuit with a SuccinctVerifyingKey, application snark witnesses (each with a proof and instance variables), and the instance variables and the resulting aggregation circuit proof.
     pub fn new(params: &ParamsKZG<Bn256>, snarks: impl IntoIterator<Item = Snark>) -> Self {
         let svk = params.get_g()[0].into();
         let snarks = snarks.into_iter().collect_vec();
@@ -253,19 +267,22 @@ impl AggregationCircuit {
         }
     }
 
+    /// Accumulator indices used in generating verifier.
     pub fn accumulator_indices() -> Vec<(usize, usize)> {
         (0..4 * LIMBS).map(|idx| (0, idx)).collect()
     }
 
+    /// Number of instance variables for the aggregation circuit, used in generating verifier.
     pub fn num_instance() -> Vec<usize> {
         vec![4 * LIMBS]
     }
 
+    /// Instance variables for the aggregation circuit, fed to verifier.
     pub fn instances(&self) -> Vec<Vec<Fr>> {
         vec![self.instances.clone()]
     }
 
-    pub fn as_proof(&self) -> Value<&[u8]> {
+    fn as_proof(&self) -> Value<&[u8]> {
         self.as_proof.as_ref().map(Vec::as_slice)
     }
 }
@@ -336,6 +353,7 @@ impl Circuit<Fr> for AggregationCircuit {
     }
 }
 
+/// Create proof and instance variables for the application snark
 pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &ModelInput) -> Snark {
     let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(data);
 
@@ -362,6 +380,7 @@ pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &ModelInput) -> Sn
     Snark::new(protocol, pi_inner, proof)
 }
 
+/// Create aggregation EVM verifier bytecode
 pub fn gen_aggregation_evm_verifier(
     params: &ParamsKZG<Bn256>,
     vk: &VerifyingKey<G1Affine>,
@@ -389,6 +408,7 @@ pub fn gen_aggregation_evm_verifier(
     evm::compile_yul(&loader.yul_code())
 }
 
+/// Verify by executing bytecode with instance variables and proof as input
 pub fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<u8>) {
     let calldata = encode_calldata(&instances, &proof);
     let success = {
@@ -412,10 +432,12 @@ pub fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<
     assert!(success);
 }
 
+/// Generate a structured reference string for testing. Not secure, do not use in production.
 pub fn gen_srs(k: u32) -> ParamsKZG<Bn256> {
     ParamsKZG::<Bn256>::setup(k, OsRng)
 }
 
+/// Generate the proving key
 pub fn gen_pk<C: Circuit<Fr>>(params: &ParamsKZG<Bn256>, circuit: &C) -> ProvingKey<G1Affine> {
     let vk = keygen_vk(params, circuit).unwrap();
     keygen_pk(params, vk, circuit).unwrap()
