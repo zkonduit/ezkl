@@ -31,7 +31,8 @@ pub struct Nonlin1d<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
     pub input: ValTensor<F>,
     /// Input to the layer as a [ValTensor].
     pub output: ValTensor<F>,
-    _marker: PhantomData<(F, NL)>,
+    #[allow(missing_docs)]
+    pub _marker: PhantomData<(F, NL)>,
 }
 
 /// Halo2 lookup table for element wise non-linearities.

@@ -1,3 +1,13 @@
+/// Helper functions
+pub mod utilities;
+pub use utilities::*;
+/// Crate for defining a computational graph and building a ZK-circuit from it.
+pub mod model;
+/// Inner elements of a computational graph that represent a single operation / constraints.
+pub mod node;
+/// Representations of a computational graph's variables.
+pub mod vars;
+
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor};
 use anyhow::Result;
@@ -6,16 +16,11 @@ use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error},
 };
-use std::marker::PhantomData;
-pub mod utilities;
-pub use utilities::*;
-pub mod model;
-pub mod node;
-pub mod vars;
 use log::{info, trace};
 pub use model::*;
 pub use node::*;
 use std::cmp::max;
+use std::marker::PhantomData;
 pub use vars::*;
 
 /// Defines the circuit for a computational graph / model loaded from a `.onnx` file.

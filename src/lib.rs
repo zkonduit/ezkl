@@ -1,9 +1,11 @@
 #![deny(missing_docs, warnings, unsafe_code)]
 #![feature(slice_flatten)]
+//! A library for turning computational graphs, such as neural networks, into ZK-circuits.
+//!
 
 /// Methods for configuring tensor operations and assigning values to them in a Halo2 circuit.
 pub mod circuit;
-/// Commands
+/// CLI commands.
 pub mod commands;
 /// Utilities for converting from Halo2 Field types to integers (and vice-versa).
 pub mod fieldutils;
