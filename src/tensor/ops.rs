@@ -333,7 +333,8 @@ pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
 /// let y = Tensor::<i32>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
-/// let result = div(&x, y);
+/// ).unwrap();
+/// let result = div(x, y);
 /// let expected = Tensor::<i32>::new(Some(&[2, 1, 2, 1, 1, 4]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
