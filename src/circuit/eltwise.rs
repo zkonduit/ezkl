@@ -17,10 +17,10 @@ pub trait Nonlinearity<F: FieldExt> {
     ///
     /// * `x` - input to function
     /// * `scales` - additional parameters that may parametrize the function
-    fn nonlinearity(x: i32, scales: &[usize]) -> F;
+    fn nonlinearity(x: i32, scales: &[usize], param: Option<f32>) -> F;
     /// a value which is always in the table
-    fn default_pair(scales: &[usize]) -> (F, F) {
-        (F::zero(), Self::nonlinearity(0, scales))
+    fn default_pair(scales: &[usize], param: Option<f32>) -> (F, F) {
+        (F::zero(), Self::nonlinearity(0, scales, param))
     }
 }
 
@@ -45,8 +45,10 @@ pub struct EltwiseTable<F: FieldExt, NL: Nonlinearity<F>> {
     pub table_output: TableColumn,
     /// Flags if table has been previously assigned to.
     pub is_assigned: bool,
-    /// Number of bits used in lookup table.
+    /// Scaling of the table's inputs.
     pub scaling_params: Vec<usize>,
+    /// Parameters related to the eltwise function being represented
+    pub eltwise_params: Option<f32>,
     /// Number of bits used in lookup table.
     pub bits: usize,
     _marker: PhantomData<(F, NL)>,
@@ -58,12 +60,14 @@ impl<F: FieldExt, NL: Nonlinearity<F>> EltwiseTable<F, NL> {
         cs: &mut ConstraintSystem<F>,
         bits: usize,
         scaling_params: &[usize],
+        eltwise_params: Option<f32>,
     ) -> EltwiseTable<F, NL> {
         EltwiseTable {
             table_input: cs.lookup_table_column(),
             table_output: cs.lookup_table_column(),
             is_assigned: false,
             scaling_params: scaling_params.to_vec(),
+            eltwise_params,
             bits,
             _marker: PhantomData,
         }
@@ -94,7 +98,13 @@ impl<F: FieldExt, NL: Nonlinearity<F>> EltwiseTable<F, NL> {
                         || format!("nl_o_col row {}", row_offset),
                         self.table_output,
                         row_offset,
-                        || Value::known(NL::nonlinearity(int_input, &self.scaling_params)),
+                        || {
+                            Value::known(NL::nonlinearity(
+                                int_input,
+                                &self.scaling_params,
+                                self.eltwise_params,
+                            ))
+                        },
                     ) {
                         Ok(a) => a,
                         Err(e) => {
@@ -133,13 +143,17 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
         cs: &mut ConstraintSystem<F>,
         input: &VarTensor,
         output: &VarTensor,
-        eltwise_params: Option<&[usize]>,
+        bits: usize,
+        scaling_params: &[usize],
+        eltwise_params: Option<f32>,
     ) -> [Self; NUM] {
         let mut table: Option<Rc<RefCell<EltwiseTable<F, NL>>>> = None;
         let configs = (0..NUM)
             .map(|_| {
                 let l = match &table {
-                    None => Self::configure(cs, input, output, eltwise_params),
+                    None => {
+                        Self::configure(cs, input, output, bits, scaling_params, eltwise_params)
+                    }
                     Some(t) => Self::configure_with_table(cs, input, output, t.clone()),
                 };
                 table = Some(l.table.clone());
@@ -168,8 +182,10 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
                 let _ = cs.lookup("lk", |cs| {
                     let qlookup = cs.query_selector(qlookup);
                     let not_qlookup = Expression::Constant(F::one()) - qlookup.clone();
-                    let (default_x, default_y) =
-                        NL::default_pair(table.borrow().scaling_params.as_slice());
+                    let (default_x, default_y) = NL::default_pair(
+                        table.borrow().scaling_params.as_slice(),
+                        table.borrow().eltwise_params,
+                    );
                     let (x, y) = input.cartesian_coord(i);
                     vec![
                         (
@@ -221,20 +237,15 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
         cs: &mut ConstraintSystem<F>,
         input: &VarTensor,
         output: &VarTensor,
-        eltwise_params: Option<&[usize]>,
+        bits: usize,
+        scaling_params: &[usize],
+        eltwise_params: Option<f32>,
     ) -> Self {
-        // will fail if not supplied
-        let params = match eltwise_params {
-            Some(p) => p,
-            None => {
-                panic!("failed to supply eltwise parameters")
-            }
-        };
-        let bits = params[0];
         let table = Rc::new(RefCell::new(EltwiseTable::<F, NL>::configure(
             cs,
             bits,
-            &params[1..],
+            scaling_params,
+            eltwise_params,
         )));
         Self::configure_with_table(cs, input, output, table)
     }
@@ -259,6 +270,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
                                 <NL as Nonlinearity<F>>::nonlinearity(
                                     felt_to_i32(f.evaluate()),
                                     &self.table.borrow().scaling_params,
+                                    self.table.borrow().eltwise_params,
                                 )
                             })
                         }));
@@ -287,7 +299,7 @@ pub struct ReLU<F> {
     _marker: PhantomData<F>,
 }
 impl<F: FieldExt> Nonlinearity<F> for ReLU<F> {
-    fn nonlinearity(x: i32, scale: &[usize]) -> F {
+    fn nonlinearity(x: i32, scale: &[usize], _: Option<f32>) -> F {
         if x < 0 {
             F::zero()
         } else {
@@ -305,9 +317,9 @@ pub struct LeakyReLU<F> {
 }
 
 impl<F: FieldExt> Nonlinearity<F> for LeakyReLU<F> {
-    fn nonlinearity(x: i32, scale: &[usize]) -> F {
+    fn nonlinearity(x: i32, scale: &[usize], slope: Option<f32>) -> F {
         if x < 0 {
-            let d_inv_x = (0.05) * (x as f32) / (scale[0] as f32);
+            let d_inv_x = slope.unwrap() * (x as f32) / (scale[0] as f32);
             let rounded = d_inv_x.round();
             fieldutils::i32_to_felt(rounded as i32)
         } else {
@@ -324,7 +336,7 @@ pub struct Sigmoid<F> {
 // L is our implicit or explicit denominator (fixed point d)
 // Usually want K=L
 impl<F: FieldExt> Nonlinearity<F> for Sigmoid<F> {
-    fn nonlinearity(x: i32, scale: &[usize]) -> F {
+    fn nonlinearity(x: i32, scale: &[usize], _: Option<f32>) -> F {
         let kix = (x as f32) / (scale[0] as f32);
         let fout = (scale[1] as f32) / (1.0 + (-kix).exp());
         let rounded = fout.round();
@@ -338,7 +350,7 @@ pub struct DivideBy<F> {
     _marker: PhantomData<F>,
 }
 impl<F: FieldExt> Nonlinearity<F> for DivideBy<F> {
-    fn nonlinearity(x: i32, scale: &[usize]) -> F {
+    fn nonlinearity(x: i32, scale: &[usize], _: Option<f32>) -> F {
         let d_inv_x = (x as f32) / (scale[0] as f32);
         let rounded = d_inv_x.round();
         fieldutils::i32_to_felt(rounded as i32)
@@ -377,7 +389,7 @@ mod tests {
                 .map(|_| VarTensor::new_advice(cs, 4, 1, vec![1], true, 512))
                 .collect::<Vec<_>>();
 
-            Self::Config::configure(cs, &advices[0], &advices[1], Some(&[2, 1]))
+            Self::Config::configure(cs, &advices[0], &advices[1], 2, &[1], None)
         }
 
         fn synthesize(
@@ -394,14 +406,31 @@ mod tests {
     #[test]
     fn test_eltrelunl() {
         for i in -127..127 {
-            let _r = <ReLU<F> as Nonlinearity<F>>::nonlinearity(i, &[1]);
+            let r = <ReLU<F> as Nonlinearity<F>>::nonlinearity(i, &[1], None);
+            if i <= 0 {
+                assert!(r == F::from(0_u64))
+            } else {
+                assert!(r == F::from(i as u64))
+            }
+        }
+    }
+
+    #[test]
+    fn test_eltleakyrelunl() {
+        for i in -127..127 {
+            let r = <LeakyReLU<F> as Nonlinearity<F>>::nonlinearity(i, &[1], Some(0.05));
+            if i <= 0 {
+                assert!(r == F::from(0_u64))
+            } else {
+                assert!(r == F::from(i as u64))
+            }
         }
     }
 
     #[test]
     fn test_eltsigmoid() {
         for i in -127..127 {
-            let r = <Sigmoid<F> as Nonlinearity<F>>::nonlinearity(i, &[1, 1]);
+            let r = <Sigmoid<F> as Nonlinearity<F>>::nonlinearity(i, &[1, 1], None);
             let exp_sig = (1.0 / (1.0 + (-i as f32).exp())).round();
             assert!(r == F::from(exp_sig as u64))
         }
@@ -410,7 +439,7 @@ mod tests {
     #[test]
     fn test_eltdivide() {
         for i in -127..127 {
-            let r = <DivideBy<F> as Nonlinearity<F>>::nonlinearity(i, &[1]);
+            let r = <DivideBy<F> as Nonlinearity<F>>::nonlinearity(i, &[1], None);
             println!("{:?}, {:?}, {:?}", i, r, F::from(-i as u64));
             if i <= 0 {
                 assert!(r == -F::from(-i as u64))

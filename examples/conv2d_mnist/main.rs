@@ -201,7 +201,7 @@ where
         let output = output.reshape(&[LEN]);
 
         let l1: EltwiseConfig<F, ReLU<F>> =
-            EltwiseConfig::configure(cs, &input, &output, Some(&[BITS, 32]));
+            EltwiseConfig::configure(cs, &input, &output, BITS, &[32], None);
 
         // tells the config layer to add an affine op to the circuit gate
         let affine_node = FusedNode {

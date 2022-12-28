@@ -80,11 +80,11 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
         let [l1, l3]: [EltwiseConfig<F, ReLU<F>>; 2] =
-            EltwiseConfig::configure_multiple(cs, &input, &output, Some(&[BITS, 1]));
+            EltwiseConfig::configure_multiple(cs, &input, &output, BITS, &[1], None);
 
         // sets up a new Divide by table
         let l4: EltwiseConfig<F, DivideBy<F>> =
-            EltwiseConfig::configure(cs, &input, &output, Some(&[BITS, 128]));
+            EltwiseConfig::configure(cs, &input, &output, BITS, &[128], None);
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);

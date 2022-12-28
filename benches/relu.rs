@@ -37,7 +37,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
                 .map(|_| VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512))
                 .collect::<Vec<_>>();
 
-            Self::Config::configure(cs, &advices[0], &advices[1], Some(&[BITS, 128]))
+            Self::Config::configure(cs, &advices[0], &advices[1], BITS, &[128], None)
         }
     }
 

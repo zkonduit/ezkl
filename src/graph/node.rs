@@ -1,13 +1,11 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
+use crate::abort;
 use crate::circuit::eltwise::{DivideBy, EltwiseConfig, LeakyReLU, ReLU, Sigmoid};
 use crate::circuit::fused::*;
-
-use crate::abort;
 use crate::tensor::ops::{add, const_mult, div, mult};
 use crate::tensor::Tensor;
 use crate::tensor::TensorType;
 use anyhow::Result;
-
 use halo2_proofs::arithmetic::FieldExt;
 use itertools::Itertools;
 use log::{error, info, trace, warn};
@@ -19,6 +17,7 @@ use tract_onnx::prelude::{DatumType, InferenceFact, Node as OnnxNode, OutletId};
 use tract_onnx::tract_hir::{
     infer::Factoid,
     internal::InferenceOp,
+    ops::activations::LeakyRelu,
     ops::cnn::{Conv, PoolSpec, SumPool}, //MaxPool,},
     ops::expandable::Expansion,
     ops::nn::DataFormat,
@@ -37,8 +36,8 @@ use tract_onnx::tract_hir::{
 pub enum OpKind {
     /// A ReLU nonlinearity
     ReLU(usize),
-    /// A Leaky ReLU nonlinearity
-    LeakyReLU(usize),
+    /// A Leaky ReLU nonlinearity with slope parameter
+    LeakyReLU((usize, eq_float::F32)),
     /// A Sigmoid nonlinearity
     Sigmoid(usize),
     /// A DivideBy nonlinearity
@@ -61,8 +60,8 @@ impl OpKind {
     pub fn new(name: &str) -> Self {
         match name {
             "Clip" => OpKind::ReLU(1),
-            "Prelu" => OpKind::LeakyReLU(1),
-            "LeakyRelu" => OpKind::LeakyReLU(1),
+            "Prelu" => OpKind::LeakyReLU((1, eq_float::F32(0.0))),
+            "LeakyRelu" => OpKind::LeakyReLU((1, eq_float::F32(0.0))),
             "Sigmoid" => OpKind::Sigmoid(1),
             "Div" => OpKind::Div(1),
             "Const" => OpKind::Const,
@@ -104,7 +103,7 @@ impl fmt::Display for OpKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             OpKind::ReLU(s) => write!(f, "relu w/ scaling: {}", s),
-            OpKind::LeakyReLU(s) => write!(f, "leaky relu w/ scaling: {}", s),
+            OpKind::LeakyReLU(s) => write!(f, "leaky relu w/ scaling: {} and slope {}", s.0, s.1),
             OpKind::Div(s) => write!(f, "div  w/ scaling: {}", s),
             OpKind::Sigmoid(s) => write!(f, "sigmoid  w/ scaling: {}", s),
             OpKind::Const => write!(f, "const"),
@@ -280,6 +279,7 @@ impl Node {
         idx: usize,
     ) -> Self {
         trace!("Create {:?}", node);
+        trace!("Create op {:?}", node.op);
         let output_shapes = match node_output_shapes(&node) {
             Ok(s) => Some(s),
             _ => None,
@@ -345,16 +345,33 @@ impl Node {
                     ..Default::default()
                 }
             }
-            OpKind::LeakyReLU(_) => {
+            OpKind::LeakyReLU((mut layer_scale, _)) => {
                 let input_node = &inputs[0];
+
+                // Extract the slope layer hyperparams
+                let op = Box::new(node.op());
+
+                let leaky_op: &LeakyRelu = match op.downcast_ref::<Box<dyn Expansion>>() {
+                    Some(b) => match (*b).as_any().downcast_ref() {
+                        Some(b) => b,
+                        None => {
+                            panic!("not a leaky relu!");
+                        }
+                    },
+                    None => {
+                        panic!("op is not a Tract Expansion!");
+                    }
+                };
+
                 let scale_diff = input_node.out_scale - scale;
                 // We can also consider adjusting the scale of all inputs and the output in a more custom way.
                 let mut output_max = input_node.output_max;
                 if scale_diff > 0 {
-                    let mult = scale_to_multiplier(scale_diff);
-                    opkind = OpKind::LeakyReLU(mult as usize); // now the input will be scaled down to match
-                    output_max = input_node.output_max / mult;
+                    layer_scale = scale_to_multiplier(scale_diff) as usize;
+                    output_max = input_node.output_max / (layer_scale as f32);
                 }
+
+                opkind = OpKind::LeakyReLU((layer_scale as usize, eq_float::F32(leaky_op.0))); // now the input will be scaled down to match
 
                 Node {
                     idx,
@@ -418,13 +435,11 @@ impl Node {
                             Some(b) => match (*b).as_any().downcast_ref() {
                                 Some(b) => b,
                                 None => {
-                                    error!("not a conv!");
-                                    panic!()
+                                    panic!("not a conv!");
                                 }
                             },
                             None => {
-                                error!("op is not a Tract Expansion!");
-                                panic!()
+                                panic!("op is not a Tract Expansion!");
                             }
                         };
 
