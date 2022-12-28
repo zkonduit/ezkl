@@ -568,6 +568,11 @@ impl Model {
 
                 Some(ac.layout(layouter, &values))
             }
+            NodeConfig::LeakyReLU(rc, idx) => {
+                assert_eq!(idx.len(), 1);
+                // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
+                Some(rc.layout(layouter, inputs.get(&idx[0]).unwrap().clone()))
+            }
             NodeConfig::ReLU(rc, idx) => {
                 assert_eq!(idx.len(), 1);
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.

@@ -62,6 +62,7 @@ impl OpKind {
         match name {
             "Clip" => OpKind::ReLU(1),
             "Prelu" => OpKind::LeakyReLU(1),
+            "LeakyRelu" => OpKind::LeakyReLU(1),
             "Sigmoid" => OpKind::Sigmoid(1),
             "Div" => OpKind::Div(1),
             "Const" => OpKind::Const,
