@@ -221,7 +221,7 @@ fn display_tensorf32(o: &Option<Tensor<f32>>) -> String {
     }
 }
 
-/// A single operation in an [OnnxModel].
+/// A single operation in a Model.
 /// # Arguments:
 /// * `opkind` - [OpKind] enum, i.e what operation this node represents.
 /// * `output_max` - The inferred maximum value that can appear in the output tensor given previous quantization choices.
