@@ -317,6 +317,27 @@ pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
     output
 }
 
+/// Elementwise divide a tensor with another tensor.
+/// # Arguments
+///
+/// * `t` - Tensor
+/// * `d` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::div;
+/// let x = Tensor::<i32>::new(
+///     Some(&[4, 1, 4, 1, 1, 4]),
+///     &[2, 3],
+/// ).unwrap();
+/// let y = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = div(x, y);
+/// let expected = Tensor::<i32>::new(Some(&[2, 1, 2, 1, 1, 4]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
 pub fn div<T: TensorType + Div<Output = T>>(t: Tensor<T>, d: Tensor<T>) -> Tensor<T> {
     assert_eq!(t.dims(), d.dims());
     // calculate value of output
@@ -529,6 +550,29 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     output
 }
 
+/// Applies 2D sum pooling over a 3D tensor of shape C x H x W.
+/// # Arguments
+///
+/// * `image` - Tensor.
+/// * `padding` - Tuple of padding values in x and y directions.
+/// * `stride` - Tuple of stride values in x and y directions.
+/// * `pool_dims` - Tuple of pooling window size in x and y directions.
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::sumpool;
+/// use halo2_proofs::circuit::Value;
+/// use halo2_proofs::plonk::Assigned;
+/// use halo2curves::pasta::Fp as F;
+///
+/// let x = Tensor::<i32>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[1, 3, 3],
+/// ).unwrap();
+/// let pooled = sumpool::<i32>(&x, (0, 0), (1, 1), (2, 2));
+/// let expected: Tensor<i32> = Tensor::<i32>::new(Some(&[11, 8, 8, 10]), &[1, 2, 2]).unwrap();
+/// assert_eq!(pooled, expected);
+/// ```
 pub fn sumpool<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     image: &Tensor<T>,
     padding: (usize, usize),

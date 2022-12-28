@@ -13,6 +13,7 @@ use std::marker::PhantomData;
 #[derive(Debug, Clone)]
 pub struct RangeCheckConfig<F: FieldExt + TensorType> {
     input: VarTensor,
+    /// The value we are expecting the output of the circuit to match (within a range)
     pub expected: VarTensor,
     selector: Selector,
     _marker: PhantomData<F>,

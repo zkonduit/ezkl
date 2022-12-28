@@ -10,7 +10,13 @@ use halo2_proofs::{
 use log::error;
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
+/// Defines a non-linear layer.  
 pub trait Nonlinearity<F: FieldExt> {
+    /// Function that defines the non-linearity.
+    /// Arguments
+    ///
+    /// * `x` - input to function
+    /// * `scales` - additional parameters that may parametrize the function
     fn nonlinearity(x: i32, scales: &[usize]) -> F;
     /// a value which is always in the table
     fn default_pair(scales: &[usize]) -> (F, F) {
@@ -18,10 +24,14 @@ pub trait Nonlinearity<F: FieldExt> {
     }
 }
 
+/// A 1D non-linearity.  
 #[derive(Clone, Debug)]
 pub struct Nonlin1d<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
+    /// Input to the layer as a [ValTensor].
     pub input: ValTensor<F>,
+    /// Input to the layer as a [ValTensor].
     pub output: ValTensor<F>,
+    #[allow(missing_docs)]
     pub _marker: PhantomData<(F, NL)>,
 }
 
@@ -29,15 +39,21 @@ pub struct Nonlin1d<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
 // Table that should be reused across all lookups (so no Clone)
 #[derive(Clone, Debug)]
 pub struct EltwiseTable<F: FieldExt, NL: Nonlinearity<F>> {
+    /// Input to table.
     pub table_input: TableColumn,
+    /// Output of table
     pub table_output: TableColumn,
+    /// Flags if table has been previously assigned to.
     pub is_assigned: bool,
+    /// Number of bits used in lookup table.
     pub scaling_params: Vec<usize>,
+    /// Number of bits used in lookup table.
     pub bits: usize,
     _marker: PhantomData<(F, NL)>,
 }
 
 impl<F: FieldExt, NL: Nonlinearity<F>> EltwiseTable<F, NL> {
+    /// Configures the table.
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
         bits: usize,
@@ -52,6 +68,7 @@ impl<F: FieldExt, NL: Nonlinearity<F>> EltwiseTable<F, NL> {
             _marker: PhantomData,
         }
     }
+    /// Assigns values to the constraints generated when calling `configure`.
     pub fn layout(&mut self, layouter: &mut impl Layouter<F>) {
         assert!(!self.is_assigned);
         let base = 2i32;
@@ -100,8 +117,11 @@ impl<F: FieldExt, NL: Nonlinearity<F>> EltwiseTable<F, NL> {
 /// Configuration for element-wise non-linearities.
 #[derive(Clone, Debug)]
 pub struct EltwiseConfig<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
+    /// [VarTensor] input to non-linearity.
     pub input: VarTensor,
+    /// [VarTensor] input to non-linearity.
     pub output: VarTensor,
+    /// Lookup table used to represent the non-linearity
     pub table: Rc<RefCell<EltwiseTable<F, NL>>>,
     qlookup: Selector,
     _marker: PhantomData<(NL, F)>,
@@ -260,6 +280,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
     }
 }
 
+#[allow(missing_docs)]
 // Now implement nonlinearity functions like this
 #[derive(Clone, Debug)]
 pub struct ReLu<F> {
@@ -277,6 +298,7 @@ impl<F: FieldExt> Nonlinearity<F> for ReLu<F> {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug)]
 pub struct Sigmoid<F> {
     _marker: PhantomData<F>,
@@ -292,6 +314,7 @@ impl<F: FieldExt> Nonlinearity<F> for Sigmoid<F> {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Debug)]
 pub struct DivideBy<F> {
     _marker: PhantomData<F>,

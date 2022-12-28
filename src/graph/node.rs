@@ -35,18 +35,27 @@ use tract_onnx::tract_hir::{
 /// Enum of the different kinds of operations `ezkl` can support.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd)]
 pub enum OpKind {
+    /// A ReLU nonlinearity
     ReLU(usize),
+    /// A Sigmoid nonlinearity
     Sigmoid(usize),
+    /// A DivideBy nonlinearity
     Div(usize),
+    /// A Constant tensor, such as a parameter or hyperparameter
     Const,
+    /// An input to the model
     Input,
+    /// A fused op, combining affine layers or other arithmetic
     Fused(FusedOp),
+    /// Unable to parse the node type
     Unknown(String),
+    #[allow(missing_docs)]
     #[default]
     None,
 }
 
 impl OpKind {
+    /// Produce an OpKind from a `&str` onnx name  
     pub fn new(name: &str) -> Self {
         match name {
             "Clip" => OpKind::ReLU(1),
@@ -77,10 +86,12 @@ impl OpKind {
             }
         }
     }
+    /// Identify fused OpKind
     pub fn is_fused(&self) -> bool {
         matches!(self, OpKind::Fused(_))
     }
 
+    /// Identify constant OpKind
     pub fn is_const(&self) -> bool {
         matches!(self, OpKind::Const)
     }
@@ -102,8 +113,9 @@ impl fmt::Display for OpKind {
 }
 
 /// Enum of the different kinds of node configurations `ezkl` can support.
+#[allow(missing_docs)]
 #[derive(Clone, Default, Debug)]
-pub enum NodeConfigTypes<F: FieldExt + TensorType> {
+pub enum NodeConfig<F: FieldExt + TensorType> {
     ReLU(EltwiseConfig<F, ReLu<F>>, Vec<usize>),
     Sigmoid(EltwiseConfig<F, Sigmoid<F>>, Vec<usize>),
     Divide(EltwiseConfig<F, DivideBy<F>>, Vec<usize>),
@@ -119,10 +131,12 @@ pub enum NodeConfigTypes<F: FieldExt + TensorType> {
 pub struct NodeGraph(pub BTreeMap<Option<usize>, BTreeMap<usize, Node>>);
 
 impl NodeGraph {
+    /// Create an empty NodeGraph
     pub fn new() -> Self {
         NodeGraph(BTreeMap::new())
     }
 
+    /// Insert the node with given tract `node_idx` and config at `idx`  
     pub fn insert(&mut self, idx: Option<usize>, node_idx: usize, config: Node) {
         match self.0.entry(idx) {
             Entry::Vacant(e) => {
@@ -134,6 +148,7 @@ impl NodeGraph {
         }
     }
 
+    /// Flattens the inner [BTreeMap] into a [Vec] of [Node]s.
     pub fn flatten(&self) -> Vec<Node> {
         let a = self
             .0
@@ -153,6 +168,7 @@ impl NodeGraph {
         c
     }
 
+    /// Retrieves a node, as specified by idx, from the Graph of bucketed nodes.
     pub fn filter(&self, idx: usize) -> Node {
         let a = self.flatten();
         let c = &a
@@ -164,12 +180,9 @@ impl NodeGraph {
     }
 }
 
-/// A circuit configuration for a single self.
-#[derive(Clone, Default, Debug)]
-pub struct NodeConfig<F: FieldExt + TensorType> {
-    pub config: NodeConfigTypes<F>,
-    pub onnx_idx: Vec<usize>,
-}
+// /// A circuit configuration for a single self.
+// #[derive(Clone, Default, Debug)]
+// pub struct NodeConfig<F: FieldExt + TensorType>(pub NodeConfigTypes<F>);
 
 fn display_option<T: fmt::Debug>(o: &Option<T>) -> String {
     match o {
@@ -220,28 +233,45 @@ fn display_tensorf32(o: &Option<Tensor<f32>>) -> String {
 /// * `bucket` - The execution bucket this node has been assigned to.
 #[derive(Clone, Debug, Default, Tabled)]
 pub struct Node {
+    /// [OpKind] enum, i.e what operation this node represents.
     pub opkind: OpKind,
+    /// The inferred maximum value that can appear in the output tensor given previous quantization choices.
     pub output_max: f32,
+    /// The denominator in the fixed point representation for the node's input. Tensors of differing scales should not be combined.
     pub in_scale: i32,
+    /// The denominator in the fixed point representation for the node's output. Tensors of differing scales should not be combined.
     pub out_scale: i32,
     #[tabled(display_with = "display_tensor")]
-    pub const_value: Option<Tensor<i32>>, // float value * 2^qscale if applicable.
+    /// The quantized constants potentially associated with this self.
+    pub const_value: Option<Tensor<i32>>,
     #[tabled(display_with = "display_tensorf32")]
+    /// The un-quantized constants potentially associated with this self.
     pub raw_const_value: Option<Tensor<f32>>,
     // Usually there is a simple in and out shape of the node as an operator.  For example, an Affine node has three input_shapes (one for the input, weight, and bias),
     // but in_dim is [in], out_dim is [out]
     #[tabled(display_with = "display_inputs")]
+    /// The indices of the node's inputs.
     pub inputs: Vec<OutletId>,
     #[tabled(display_with = "display_vector")]
+    /// Dimensions of input.
     pub in_dims: Vec<Vec<usize>>,
     #[tabled(display_with = "display_vector")]
+    /// Dimensions of output.
     pub out_dims: Vec<usize>,
+    /// The node's unique identifier.
     pub idx: usize,
     #[tabled(display_with = "display_option")]
+    /// The execution bucket this node has been assigned to.
     pub bucket: Option<usize>,
 }
 
 impl Node {
+    /// Converts a tract [OnnxNode] into an ezkl [Node].
+    /// # Arguments:
+    /// * `node` - [OnnxNode]
+    /// * `other_nodes` - [BTreeMap] of other previously initialized [Node]s in the computational graph.
+    /// * `scale` - The denominator in the fixed point representation. Tensors of differing scales should not be combined.
+    /// * `idx` - The node's unique identifier.
     pub fn new(
         mut node: OnnxNode<InferenceFact, Box<dyn InferenceOp>>,
         other_nodes: &mut BTreeMap<usize, Node>,
@@ -941,8 +971,8 @@ impl Node {
         mn
     }
 
-    /// Ensures all inputs to a node have the same floating point denominator.
-    pub fn homogenize_input_scales(opkind: OpKind, inputs: Vec<Node>) -> OpKind {
+    /// Ensures all inputs to a node have the same fixed point denominator.
+    fn homogenize_input_scales(opkind: OpKind, inputs: Vec<Node>) -> OpKind {
         let mut multipliers = vec![1; inputs.len()];
         let out_scales = inputs.windows(1).map(|w| w[0].out_scale).collect_vec();
         if !out_scales.windows(2).all(|w| w[0] == w[1]) {
@@ -976,7 +1006,7 @@ impl Node {
         }
     }
 
-    pub fn quantize_const_to_scale(&mut self, scale: i32) {
+    fn quantize_const_to_scale(&mut self, scale: i32) {
         assert!(matches!(self.opkind, OpKind::Const));
         let raw = self.raw_const_value.as_ref().unwrap();
         self.out_scale = scale;
@@ -986,7 +1016,7 @@ impl Node {
     }
 
     /// Re-quantizes a constant value node to a new scale.
-    pub fn scale_up_const_node(node: &mut Node, scale_diff: i32) -> &mut Node {
+    fn scale_up_const_node(node: &mut Node, scale_diff: i32) -> &mut Node {
         assert!(matches!(node.opkind, OpKind::Const));
         if scale_diff > 0 {
             if let Some(val) = &node.const_value {
