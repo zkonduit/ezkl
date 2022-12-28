@@ -309,25 +309,6 @@ impl<F: FieldExt> Nonlinearity<F> for LeakyReLU<F> {
         if x < 0 {
             let d_inv_x = (0.05) * (x as f32) / (scale[0] as f32);
             let rounded = d_inv_x.round();
-            let integral: i32 = unsafe { rounded.to_int_unchecked() };
-            i32_to_felt(integral)
-        } else {
-            i32_to_felt(x)
-        }
-    }
-}
-
-#[allow(missing_docs)]
-#[derive(Clone, Debug)]
-pub struct LeakyReLU<F> {
-    _marker: PhantomData<F>,
-}
-
-impl<F: FieldExt> Nonlinearity<F> for LeakyReLU<F> {
-    fn nonlinearity(x: i32, scale: &[usize]) -> F {
-        if x < 0 {
-            let d_inv_x = (0.05) * (x as f32) / (scale[0] as f32);
-            let rounded = d_inv_x.round();
             fieldutils::i32_to_felt(rounded as i32)
         } else {
             fieldutils::i32_to_felt(x)
@@ -336,24 +317,6 @@ impl<F: FieldExt> Nonlinearity<F> for LeakyReLU<F> {
 }
 
 #[allow(missing_docs)]
-#[derive(Clone, Debug)]
-pub struct LeakyReLU<F> {
-    _marker: PhantomData<F>,
-}
-
-impl<F: FieldExt> Nonlinearity<F> for LeakyReLU<F> {
-    fn nonlinearity(x: i32, scale: &[usize]) -> F {
-        if x < 0 {
-            let d_inv_x = (0.05) * (x as f32) / (scale[0] as f32);
-            let rounded = d_inv_x.round();
-            let integral: i32 = unsafe { rounded.to_int_unchecked() };
-            i32_to_felt(integral)
-        } else {
-            i32_to_felt(x)
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct Sigmoid<F> {
     _marker: PhantomData<F>,
@@ -461,13 +424,13 @@ mod tests {
     fn relucircuit() {
         let input: Tensor<Value<F>> =
             Tensor::new(Some(&[Value::<F>::known(F::from(1_u64))]), &[1]).unwrap();
-        let assigned: Nonlin1d<F, ReLu<F>> = Nonlin1d {
+        let assigned: Nonlin1d<F, ReLU<F>> = Nonlin1d {
             input: ValTensor::from(input.clone()),
             output: ValTensor::from(input),
             _marker: PhantomData,
         };
 
-        let circuit = NLCircuit::<F, ReLu<F>> {
+        let circuit = NLCircuit::<F, ReLU<F>> {
             assigned,
             _marker: PhantomData,
         };

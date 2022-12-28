@@ -1,7 +1,7 @@
 use super::node::*;
 use super::utilities::scale_to_multiplier;
-use crate::abort;
-use crate::circuit::eltwise::{DivideBy, EltwiseConfig, EltwiseTable, LeakyReLU, ReLU, Sigmoid};
+use super::vars::*;
+use crate::circuit::eltwise::{DivideBy, EltwiseConfig, LeakyReLU, ReLU, Sigmoid};
 use crate::circuit::fused::*;
 use crate::circuit::range::*;
 use crate::commands::{Cli, Commands};
@@ -409,23 +409,27 @@ impl Model {
                     let conf: EltwiseConfig<F, ReLU<F>> =
                         EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
                     tables.insert(node.opkind.clone(), TableTypes::ReLU(conf.table.clone()));
-                    NodeConfigTypes::ReLU(conf, node_inputs)
+                    NodeConfig::ReLU(conf, node_inputs)
                 }
             }
             OpKind::LeakyReLU(s) => {
                 if tables.contains_key(&node.opkind) {
                     let table = tables.get(&node.opkind).unwrap().clone();
-                    let conf: EltwiseConfig<F, LeakyReLU<F>> =
-                        EltwiseConfig::configure_with_table(meta, input, output, table.get_relu());
+                    let conf: EltwiseConfig<F, LeakyReLU<F>> = EltwiseConfig::configure_with_table(
+                        meta,
+                        input,
+                        output,
+                        table.get_leakyrelu(),
+                    );
                     NodeConfig::LeakyReLU(conf, node_inputs)
                 } else {
-                    let conf: EltwiseConfig<F, ReLU<F>> =
+                    let conf: EltwiseConfig<F, LeakyReLU<F>> =
                         EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
                     tables.insert(
                         node.opkind.clone(),
                         TableTypes::LeakyReLU(conf.table.clone()),
                     );
-                    NodeConfigTypes::LeakyReLU(conf, node_inputs)
+                    NodeConfig::LeakyReLU(conf, node_inputs)
                 }
             }
             OpKind::Sigmoid(s) => {
