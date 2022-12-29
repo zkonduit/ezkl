@@ -5,3 +5,4 @@ data
 *.params
 *~
 \#*\#
+.DS_Store

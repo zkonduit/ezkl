@@ -1,7 +1,7 @@
 use super::node::*;
 use super::utilities::scale_to_multiplier;
 use super::vars::*;
-use crate::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu, Sigmoid};
+use crate::circuit::eltwise::{DivideBy, EltwiseConfig, LeakyReLU, ReLU, Sigmoid};
 use crate::circuit::fused::*;
 use crate::circuit::range::*;
 use crate::commands::{Cli, Commands};
@@ -39,7 +39,7 @@ pub enum Mode {
     Verify,
 }
 
-/// A circuit configuration for  a model loaded from an Onnx file.
+/// A circuit configuration for the entirety of a model loaded from an Onnx file.
 #[derive(Clone)]
 pub struct ModelConfig<F: FieldExt + TensorType> {
     configs: BTreeMap<usize, NodeConfig<F>>,
@@ -391,7 +391,7 @@ impl Model {
                     NodeConfig::Divide(conf, node_inputs)
                 } else {
                     let conf: EltwiseConfig<F, DivideBy<F>> =
-                        EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
+                        EltwiseConfig::configure(meta, input, output, self.bits, &[*s], None);
                     tables.insert(
                         node.opkind.clone(),
                         TableTypes::DivideBy(conf.table.clone()),
@@ -401,15 +401,41 @@ impl Model {
             }
             OpKind::ReLU(s) => {
                 if tables.contains_key(&node.opkind) {
-                    let table = tables.get(&node.opkind).unwrap();
-                    let conf: EltwiseConfig<F, ReLu<F>> =
+                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let conf: EltwiseConfig<F, ReLU<F>> =
                         EltwiseConfig::configure_with_table(meta, input, output, table.get_relu());
                     NodeConfig::ReLU(conf, node_inputs)
                 } else {
-                    let conf: EltwiseConfig<F, ReLu<F>> =
-                        EltwiseConfig::configure(meta, input, output, Some(&[self.bits, *s]));
-                    tables.insert(node.opkind.clone(), TableTypes::ReLu(conf.table.clone()));
+                    let conf: EltwiseConfig<F, ReLU<F>> =
+                        EltwiseConfig::configure(meta, input, output, self.bits, &[*s], None);
+                    tables.insert(node.opkind.clone(), TableTypes::ReLU(conf.table.clone()));
                     NodeConfig::ReLU(conf, node_inputs)
+                }
+            }
+            OpKind::LeakyReLU((scale, slope)) => {
+                if tables.contains_key(&node.opkind) {
+                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let conf: EltwiseConfig<F, LeakyReLU<F>> = EltwiseConfig::configure_with_table(
+                        meta,
+                        input,
+                        output,
+                        table.get_leakyrelu(),
+                    );
+                    NodeConfig::LeakyReLU(conf, node_inputs)
+                } else {
+                    let conf: EltwiseConfig<F, LeakyReLU<F>> = EltwiseConfig::configure(
+                        meta,
+                        input,
+                        output,
+                        self.bits,
+                        &[*scale],
+                        Some(slope.0),
+                    );
+                    tables.insert(
+                        node.opkind.clone(),
+                        TableTypes::LeakyReLU(conf.table.clone()),
+                    );
+                    NodeConfig::LeakyReLU(conf, node_inputs)
                 }
             }
             OpKind::Sigmoid(s) => {
@@ -423,7 +449,9 @@ impl Model {
                         meta,
                         input,
                         output,
-                        Some(&[self.bits, *s, scale_to_multiplier(self.scale) as usize]),
+                        self.bits,
+                        &[self.bits, *s, scale_to_multiplier(self.scale) as usize],
+                        None,
                     );
                     tables.insert(node.opkind.clone(), TableTypes::Sigmoid(conf.table.clone()));
                     NodeConfig::Sigmoid(conf, node_inputs)
@@ -547,6 +575,11 @@ impl Model {
                     .collect_vec();
 
                 Some(ac.layout(layouter, &values))
+            }
+            NodeConfig::LeakyReLU(rc, idx) => {
+                assert_eq!(idx.len(), 1);
+                // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
+                Some(rc.layout(layouter, inputs.get(&idx[0]).unwrap().clone()))
             }
             NodeConfig::ReLU(rc, idx) => {
                 assert_eq!(idx.len(), 1);

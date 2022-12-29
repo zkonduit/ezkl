@@ -1,4 +1,4 @@
-use ezkl::circuit::eltwise::{DivideBy, EltwiseConfig, ReLu};
+use ezkl::circuit::eltwise::{DivideBy, EltwiseConfig, ReLU};
 use ezkl::circuit::fused::*;
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::tensor::*;
@@ -16,9 +16,9 @@ const K: usize = 15;
 #[derive(Clone)]
 struct MyConfig<F: FieldExt + TensorType> {
     l0: FusedConfig<F>,
-    l1: EltwiseConfig<F, ReLu<F>>,
+    l1: EltwiseConfig<F, ReLU<F>>,
     l2: FusedConfig<F>,
-    l3: EltwiseConfig<F, ReLu<F>>,
+    l3: EltwiseConfig<F, ReLU<F>>,
     l4: EltwiseConfig<F, DivideBy<F>>,
     public_output: Column<Instance>,
 }
@@ -79,12 +79,12 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         );
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
-        let [l1, l3]: [EltwiseConfig<F, ReLu<F>>; 2] =
-            EltwiseConfig::configure_multiple(cs, &input, &output, Some(&[BITS, 1]));
+        let [l1, l3]: [EltwiseConfig<F, ReLU<F>>; 2] =
+            EltwiseConfig::configure_multiple(cs, &input, &output, BITS, &[1], None);
 
         // sets up a new Divide by table
         let l4: EltwiseConfig<F, DivideBy<F>> =
-            EltwiseConfig::configure(cs, &input, &output, Some(&[BITS, 128]));
+            EltwiseConfig::configure(cs, &input, &output, BITS, &[128], None);
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
