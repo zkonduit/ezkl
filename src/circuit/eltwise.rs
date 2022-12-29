@@ -1,6 +1,6 @@
 use super::*;
 use crate::abort;
-use crate::fieldutils::{self, felt_to_i32, i32_to_felt};
+use crate::fieldutils::{felt_to_i32, i32_to_felt};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
@@ -321,9 +321,9 @@ impl<F: FieldExt> Nonlinearity<F> for LeakyReLU<F> {
         if x < 0 {
             let d_inv_x = slope.unwrap() * (x as f32) / (scale[0] as f32);
             let rounded = d_inv_x.round();
-            fieldutils::i32_to_felt(rounded as i32)
+            i32_to_felt(rounded as i32)
         } else {
-            fieldutils::i32_to_felt(x)
+            i32_to_felt(x)
         }
     }
 }
@@ -340,7 +340,7 @@ impl<F: FieldExt> Nonlinearity<F> for Sigmoid<F> {
         let kix = (x as f32) / (scale[0] as f32);
         let fout = (scale[1] as f32) / (1.0 + (-kix).exp());
         let rounded = fout.round();
-        fieldutils::i32_to_felt(rounded as i32)
+        i32_to_felt(rounded as i32)
     }
 }
 
@@ -353,7 +353,7 @@ impl<F: FieldExt> Nonlinearity<F> for DivideBy<F> {
     fn nonlinearity(x: i32, scale: &[usize], _: Option<f32>) -> F {
         let d_inv_x = (x as f32) / (scale[0] as f32);
         let rounded = d_inv_x.round();
-        fieldutils::i32_to_felt(rounded as i32)
+        i32_to_felt(rounded as i32)
     }
 }
 
@@ -397,7 +397,7 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
         ) -> Result<(), Error> {
-            config.layout(&mut layouter, self.assigned.input.clone());
+            let _ = config.layout(&mut layouter, self.assigned.input.clone());
 
             Ok(())
         }

@@ -371,7 +371,7 @@ impl Node {
                     output_max = input_node.output_max / (layer_scale as f32);
                 }
 
-                opkind = OpKind::LeakyReLU((layer_scale as usize, eq_float::F32(leaky_op.0))); // now the input will be scaled down to match
+                opkind = OpKind::LeakyReLU((layer_scale, eq_float::F32(leaky_op.0))); // now the input will be scaled down to match
 
                 Node {
                     idx,
