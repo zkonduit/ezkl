@@ -408,9 +408,9 @@ mod tests {
         for i in -127..127 {
             let r = <ReLU<F> as Nonlinearity<F>>::nonlinearity(i, &[1], None);
             if i <= 0 {
-                assert!(r == F::from(0_u64))
+                assert_eq!(r, F::from(0_u64))
             } else {
-                assert!(r == F::from(i as u64))
+                assert_eq!(r, F::from(i as u64))
             }
         }
     }
@@ -420,9 +420,10 @@ mod tests {
         for i in -127..127 {
             let r = <LeakyReLU<F> as Nonlinearity<F>>::nonlinearity(i, &[1], Some(0.05));
             if i <= 0 {
-                assert!(r == F::from(0_u64))
+                println!("{:?}", (0.05 * i as f32));
+                assert_eq!(r, -F::from(-(0.05 * i as f32).round() as u64))
             } else {
-                assert!(r == F::from(i as u64))
+                assert_eq!(r, F::from(i as u64))
             }
         }
     }
@@ -432,7 +433,7 @@ mod tests {
         for i in -127..127 {
             let r = <Sigmoid<F> as Nonlinearity<F>>::nonlinearity(i, &[1, 1], None);
             let exp_sig = (1.0 / (1.0 + (-i as f32).exp())).round();
-            assert!(r == F::from(exp_sig as u64))
+            assert_eq!(r, F::from(exp_sig as u64))
         }
     }
 
@@ -442,9 +443,9 @@ mod tests {
             let r = <DivideBy<F> as Nonlinearity<F>>::nonlinearity(i, &[1], None);
             println!("{:?}, {:?}, {:?}", i, r, F::from(-i as u64));
             if i <= 0 {
-                assert!(r == -F::from(-i as u64))
+                assert_eq!(r, -F::from(-i as u64))
             } else {
-                assert!(r == F::from(i as u64))
+                assert_eq!(r, F::from(i as u64))
             }
         }
     }
