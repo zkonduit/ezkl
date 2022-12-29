@@ -110,7 +110,7 @@ impl From<Snark> for SnarkWitness {
 }
 
 /// An application snark with proof and instance variables ready for aggregation (wrapped field element)
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SnarkWitness {
     protocol: Protocol<G1Affine>,
     instances: Vec<Vec<Value<Fr>>>,
@@ -176,7 +176,7 @@ pub fn aggregate<'a>(
 }
 
 /// The Halo2 Config for the aggregation circuit
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AggregationConfig {
     main_gate_config: MainGateConfig,
     range_config: RangeConfig,
@@ -218,7 +218,7 @@ impl AggregationConfig {
 }
 
 /// Aggregation Circuit with a SuccinctVerifyingKey, application snark witnesses (each with a proof and instance variables), and the instance variables and the resulting aggregation circuit proof.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AggregationCircuit {
     svk: Svk,
     snarks: Vec<SnarkWitness>,
@@ -304,7 +304,7 @@ impl Circuit<Fr> for AggregationCircuit {
         }
     }
 
-    fn configure(meta: &mut plonk::ConstraintSystem<Fr>) -> Self::Config {
+    fn configure(meta: &mut ConstraintSystem<Fr>) -> Self::Config {
         AggregationConfig::configure(
             meta,
             vec![BITS / LIMBS],
