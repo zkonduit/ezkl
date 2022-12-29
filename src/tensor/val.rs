@@ -1,6 +1,6 @@
 use super::*;
 use halo2_proofs::plonk::Instance;
-/// A wrapper around a [Tensor] where the inner type is one of Halo2's [Value<F>], [Value<Assigned<F>>], [AssignedCell<Assigned<F>, F>].
+/// A wrapper around a [Tensor] where the inner type is one of Halo2's [`Value<F>`], [`Value<Assigned<F>>`], [`AssignedCell<Assigned<F>, F>`].
 /// This enum is generally used to assign values to variables / advices already configured in a Halo2 circuit (usually represented as a [VarTensor]).
 /// For instance can represent pre-trained neural network weights; or a known input to a network.
 #[derive(Debug, Clone)]
