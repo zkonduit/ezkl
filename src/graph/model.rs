@@ -40,7 +40,7 @@ pub enum Mode {
 }
 
 /// A circuit configuration for the entirety of a model loaded from an Onnx file.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ModelConfig<F: FieldExt + TensorType> {
     configs: BTreeMap<usize, NodeConfig<F>>,
     /// The model struct
@@ -401,7 +401,7 @@ impl Model {
             }
             OpKind::ReLU(s) => {
                 if tables.contains_key(&node.opkind) {
-                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let table = tables.get(&node.opkind).unwrap();
                     let conf: EltwiseConfig<F, ReLU<F>> =
                         EltwiseConfig::configure_with_table(meta, input, output, table.get_relu());
                     NodeConfig::ReLU(conf, node_inputs)
@@ -414,7 +414,7 @@ impl Model {
             }
             OpKind::LeakyReLU((scale, slope)) => {
                 if tables.contains_key(&node.opkind) {
-                    let table = tables.get(&node.opkind).unwrap().clone();
+                    let table = tables.get(&node.opkind).unwrap();
                     let conf: EltwiseConfig<F, LeakyReLU<F>> = EltwiseConfig::configure_with_table(
                         meta,
                         input,

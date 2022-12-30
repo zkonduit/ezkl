@@ -359,7 +359,7 @@ mod tests {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            config.layout(
+            let _ = config.layout(
                 &mut layouter,
                 &[
                     self.input.clone(),

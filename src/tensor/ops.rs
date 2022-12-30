@@ -455,7 +455,7 @@ pub fn pow<T: TensorType + Mul<Output = T>>(a: &Tensor<T>, pow: usize) -> Tensor
 pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Tensor<T> {
     // calculate value of output
     let mut res = T::zero().unwrap();
-    a.map(|a_i| res = res.clone() + a_i);
+    let _ = a.map(|a_i| res = res.clone() + a_i);
     Tensor::new(Some(&[res]), &[1]).unwrap()
 }
 

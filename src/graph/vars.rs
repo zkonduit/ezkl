@@ -85,6 +85,7 @@ impl VarVisibility {
     }
 }
 
+#[derive(Debug)]
 /// Lookup tables that will be available for reuse.
 pub enum TableTypes<F: FieldExt + TensorType> {
     /// Reference to a ReLU table
@@ -137,7 +138,7 @@ impl<F: FieldExt + TensorType> TableTypes<F> {
 }
 
 /// A wrapper for holding all columns that will be assigned to by a model.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ModelVars<F: FieldExt + TensorType> {
     #[allow(missing_docs)]
     pub advices: Vec<VarTensor>,
@@ -162,7 +163,7 @@ impl<F: FieldExt + TensorType> ModelVars<F> {
             .map(|_| {
                 VarTensor::new_advice(
                     cs,
-                    logrows as usize,
+                    logrows,
                     advice_dims.1,
                     vec![advice_dims.1],
                     true,
@@ -174,7 +175,7 @@ impl<F: FieldExt + TensorType> ModelVars<F> {
             .map(|_| {
                 VarTensor::new_fixed(
                     cs,
-                    logrows as usize,
+                    logrows,
                     fixed_dims.1,
                     vec![fixed_dims.1],
                     true,

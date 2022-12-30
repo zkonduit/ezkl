@@ -8,7 +8,6 @@ edition = "2021"
 [dependencies]
 halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2", rev = "50ee8ad"}
 halo2curves = { git = 'https://github.com/privacy-scaling-explorations/halo2curves', tag = "0.3.0" }
-# nalgebra = "0.31"
 rand = "0.8"
 itertools = "0.10.3"
 tensorflow = {version = "0.18.0", features = ["eager"], optional = true }
