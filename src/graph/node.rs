@@ -1,6 +1,6 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
 use crate::abort;
-use crate::circuit::eltwise::{DivideBy, EltwiseConfig, LeakyReLU, ReLU, Sigmoid};
+use crate::circuit::eltwise::{EltwiseConfig, EltwiseOp};
 use crate::circuit::fused::*;
 use crate::tensor::ops::{add, const_mult, div, mult};
 use crate::tensor::Tensor;
@@ -34,20 +34,14 @@ use tract_onnx::tract_hir::{
 /// Enum of the different kinds of operations `ezkl` can support.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd)]
 pub enum OpKind {
-    /// A ReLU nonlinearity
-    ReLU(usize),
-    /// A Leaky ReLU nonlinearity with slope parameter
-    LeakyReLU((usize, eq_float::F32)),
-    /// A Sigmoid nonlinearity
-    Sigmoid(usize),
-    /// A DivideBy nonlinearity
-    Div(usize),
-    /// A Constant tensor, such as a parameter or hyperparameter
-    Const,
-    /// An input to the model
-    Input,
+    /// A nonlinearity
+    Eltwise(EltwiseOp),
     /// A fused op, combining affine layers or other arithmetic
     Fused(FusedOp),
+    /// Constant
+    Const,
+    /// Input node
+    Input,
     /// Unable to parse the node type
     Unknown(String),
     #[allow(missing_docs)]
@@ -59,11 +53,17 @@ impl OpKind {
     /// Produce an OpKind from a `&str` onnx name  
     pub fn new(name: &str) -> Self {
         match name {
-            "Clip" => OpKind::ReLU(1),
-            "Prelu" => OpKind::LeakyReLU((1, eq_float::F32(0.0))),
-            "LeakyRelu" => OpKind::LeakyReLU((1, eq_float::F32(0.0))),
-            "Sigmoid" => OpKind::Sigmoid(1),
-            "Div" => OpKind::Div(1),
+            "Clip" => OpKind::Eltwise(EltwiseOp::ReLU { scale: 1 }),
+            "Prelu" => OpKind::Eltwise(EltwiseOp::LeakyReLU {
+                scale: 1,
+                slope: eq_float::F32(0.0),
+            }),
+            "LeakyRelu" => OpKind::Eltwise(EltwiseOp::LeakyReLU {
+                scale: 1,
+                slope: eq_float::F32(0.0),
+            }),
+            "Sigmoid" => OpKind::Eltwise(EltwiseOp::Sigmoid { scales: (1, 1) }),
+            "Div" => OpKind::Eltwise(EltwiseOp::Div { scale: 1 }),
             "Const" => OpKind::Const,
             "Source" => OpKind::Input,
             "Add" => OpKind::Fused(FusedOp::Add),
@@ -74,9 +74,19 @@ impl OpKind {
             "Dot" => OpKind::Fused(FusedOp::Dot),
             "Reduce<Sum>" => OpKind::Fused(FusedOp::Sum),
             "Pow" => OpKind::Fused(FusedOp::Pow(1)),
-            "Conv" => OpKind::Fused(FusedOp::Conv((1, 1), (1, 1))),
-            "ConvHir" => OpKind::Fused(FusedOp::Conv((1, 1), (1, 1))),
-            "SumPool" => OpKind::Fused(FusedOp::SumPool((1, 1), (1, 1), (1, 1))),
+            "Conv" => OpKind::Fused(FusedOp::Conv {
+                padding: (1, 1),
+                stride: (1, 1),
+            }),
+            "ConvHir" => OpKind::Fused(FusedOp::Conv {
+                padding: (1, 1),
+                stride: (1, 1),
+            }),
+            "SumPool" => OpKind::Fused(FusedOp::SumPool {
+                padding: (1, 1),
+                stride: (1, 1),
+                kernel_shape: (1, 1),
+            }),
             "GlobalAvgPool" => OpKind::Fused(FusedOp::GlobalSumPool),
             "Reshape" => OpKind::Fused(FusedOp::Reshape(Vec::new())),
             "Flatten" => OpKind::Fused(FusedOp::Flatten(Vec::new())),
@@ -102,12 +112,9 @@ impl OpKind {
 impl fmt::Display for OpKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            OpKind::ReLU(s) => write!(f, "relu w/ scaling: {}", s),
-            OpKind::LeakyReLU(s) => write!(f, "leaky relu w/ scaling: {} and slope {}", s.0, s.1),
-            OpKind::Div(s) => write!(f, "div  w/ scaling: {}", s),
-            OpKind::Sigmoid(s) => write!(f, "sigmoid  w/ scaling: {}", s),
             OpKind::Const => write!(f, "const"),
             OpKind::Input => write!(f, "input"),
+            OpKind::Eltwise(s) => write!(f, "{}", s),
             OpKind::Fused(s) => write!(f, "{}", s),
             OpKind::Unknown(c) => write!(f, "? {}", c),
             OpKind::None => write!(f, "n/a",),
@@ -119,10 +126,7 @@ impl fmt::Display for OpKind {
 #[allow(missing_docs)]
 #[derive(Clone, Default, Debug)]
 pub enum NodeConfig<F: FieldExt + TensorType> {
-    ReLU(EltwiseConfig<F, ReLU<F>>, Vec<usize>),
-    LeakyReLU(EltwiseConfig<F, LeakyReLU<F>>, Vec<usize>),
-    Sigmoid(EltwiseConfig<F, Sigmoid<F>>, Vec<usize>),
-    Divide(EltwiseConfig<F, DivideBy<F>>, Vec<usize>),
+    Eltwise(EltwiseConfig<F>, Vec<usize>),
     Fused(FusedConfig<F>, Vec<usize>),
     Const,
     Input,
@@ -303,129 +307,152 @@ impl Node {
         let mut opkind = OpKind::new(node.op().name().as_ref()); // parses the op name
 
         let mn = match opkind {
-            OpKind::Sigmoid(_) => {
-                let input_node = &inputs[0];
-                let scale_diff = input_node.out_scale;
-                if scale_diff > 0 {
-                    let mult = scale_to_multiplier(scale_diff);
-                    opkind = OpKind::Sigmoid(mult as usize);
-                }
-                Node {
-                    idx,
-                    opkind,
-                    inputs: node.inputs.clone(),
-                    in_dims: vec![input_node.out_dims.clone()],
-                    out_dims: input_node.out_dims.clone(),
-                    in_scale: input_node.out_scale,
-                    out_scale: scale,
-                    output_max: scale_to_multiplier(scale),
-                    ..Default::default()
-                }
-            }
-
-            OpKind::ReLU(_) => {
-                let input_node = &inputs[0];
-                let scale_diff = input_node.out_scale - scale;
-                // We can also consider adjusting the scale of all inputs and the output in a more custom way.
-                let mut output_max = input_node.output_max;
-                if scale_diff > 0 {
-                    let mult = scale_to_multiplier(scale_diff);
-                    opkind = OpKind::ReLU(mult as usize); // now the input will be scaled down to match
-                    output_max = input_node.output_max / mult;
-                }
-                Node {
-                    idx,
-                    opkind,
-                    inputs: node.inputs.clone(),
-                    in_dims: vec![input_node.out_dims.clone()],
-                    out_dims: input_node.out_dims.clone(),
-                    in_scale: input_node.out_scale,
-                    out_scale: scale,
-                    output_max,
-                    ..Default::default()
-                }
-            }
-            OpKind::LeakyReLU((mut layer_scale, _)) => {
-                let input_node = &inputs[0];
-
-                // Extract the slope layer hyperparams
-                let op = Box::new(node.op());
-
-                let leaky_op: &LeakyRelu = match op.downcast_ref::<Box<dyn Expansion>>() {
-                    Some(b) => match (*b).as_any().downcast_ref() {
-                        Some(b) => b,
-                        None => {
-                            panic!("not a leaky relu!");
+            OpKind::Eltwise(ref s) => {
+                match s {
+                    EltwiseOp::Sigmoid { .. } => {
+                        let input_node = &inputs[0];
+                        let scale_diff = input_node.out_scale;
+                        if scale_diff > 0 {
+                            let mult = scale_to_multiplier(scale_diff);
+                            opkind = OpKind::Eltwise(EltwiseOp::Sigmoid {
+                                scales: (mult as usize, scale as usize),
+                            });
+                        } else {
+                            opkind = OpKind::Eltwise(EltwiseOp::Sigmoid {
+                                scales: (1, scale as usize),
+                            });
                         }
-                    },
-                    None => {
-                        panic!("op is not a Tract Expansion!");
+
+                        Node {
+                            idx,
+                            opkind,
+                            inputs: node.inputs.clone(),
+                            in_dims: vec![input_node.out_dims.clone()],
+                            out_dims: input_node.out_dims.clone(),
+                            in_scale: input_node.out_scale,
+                            out_scale: scale,
+                            output_max: scale_to_multiplier(scale),
+                            ..Default::default()
+                        }
                     }
-                };
 
-                let scale_diff = input_node.out_scale - scale;
-                // We can also consider adjusting the scale of all inputs and the output in a more custom way.
-                let mut output_max = input_node.output_max;
-                if scale_diff > 0 {
-                    layer_scale = scale_to_multiplier(scale_diff) as usize;
-                    output_max = input_node.output_max / (layer_scale as f32);
-                }
+                    EltwiseOp::ReLU { .. } => {
+                        let input_node = &inputs[0];
+                        let scale_diff = input_node.out_scale - scale;
+                        // We can also consider adjusting the scale of all inputs and the output in a more custom way.
+                        let mut output_max = input_node.output_max;
+                        if scale_diff > 0 {
+                            let mult = scale_to_multiplier(scale_diff);
+                            opkind = OpKind::Eltwise(EltwiseOp::ReLU {
+                                scale: mult as usize,
+                            }); // now the input will be scaled down to match
+                            output_max = input_node.output_max / mult;
+                        }
+                        Node {
+                            idx,
+                            opkind,
+                            inputs: node.inputs.clone(),
+                            in_dims: vec![input_node.out_dims.clone()],
+                            out_dims: input_node.out_dims.clone(),
+                            in_scale: input_node.out_scale,
+                            out_scale: scale,
+                            output_max,
+                            ..Default::default()
+                        }
+                    }
+                    EltwiseOp::LeakyReLU {
+                        scale: mut layer_scale,
+                        ..
+                    } => {
+                        let input_node = &inputs[0];
 
-                opkind = OpKind::LeakyReLU((layer_scale, eq_float::F32(leaky_op.0))); // now the input will be scaled down to match
+                        // Extract the slope layer hyperparams
+                        let op = Box::new(node.op());
 
-                Node {
-                    idx,
-                    opkind,
-                    inputs: node.inputs.clone(),
-                    in_dims: vec![input_node.out_dims.clone()],
-                    out_dims: input_node.out_dims.clone(),
-                    in_scale: input_node.out_scale,
-                    out_scale: scale,
-                    output_max,
-                    ..Default::default()
-                }
-            }
-            OpKind::Div(_) => {
-                if inputs[1].out_dims.clone() != [1] {
-                    abort!("ezkl currently only supports division by a constant");
-                }
-                let mult = scale_to_multiplier(scale);
-                let div = inputs[1].output_max / mult;
-                let input_node = &inputs[0];
+                        let leaky_op: &LeakyRelu = match op.downcast_ref::<Box<dyn Expansion>>() {
+                            Some(b) => match (*b).as_any().downcast_ref() {
+                                Some(b) => b,
+                                None => {
+                                    panic!("not a leaky relu!");
+                                }
+                            },
+                            None => {
+                                panic!("op is not a Tract Expansion!");
+                            }
+                        };
 
-                let mut input_outlets = node.inputs.clone();
-                input_outlets.pop();
+                        let scale_diff = input_node.out_scale - scale;
+                        // We can also consider adjusting the scale of all inputs and the output in a more custom way.
+                        let mut output_max = input_node.output_max;
+                        if scale_diff > 0 {
+                            layer_scale = scale_to_multiplier(scale_diff) as usize;
+                            output_max = input_node.output_max / (layer_scale as f32);
+                        }
 
-                let scale_diff = input_node.out_scale - scale;
-                // We can also consider adjusting the scale of all inputs and the output in a more custom way.
-                let output_max: f32;
-                if scale_diff > 0 {
-                    let mult = scale_to_multiplier(scale_diff);
-                    opkind = OpKind::Div((div * mult) as usize); // now the input will be scaled down to match
-                    output_max = input_node.output_max / (div * mult);
-                } else {
-                    opkind = OpKind::Div(div as usize); // now the input will be scaled down to match
-                    output_max = input_node.output_max / (div);
-                }
+                        opkind = OpKind::Eltwise(EltwiseOp::LeakyReLU {
+                            scale: layer_scale,
+                            slope: eq_float::F32(leaky_op.0),
+                        }); // now the input will be scaled down to match
 
-                Node {
-                    idx,
-                    opkind,
-                    inputs: input_outlets,
-                    in_dims: vec![input_node.out_dims.clone()],
-                    out_dims: input_node.out_dims.clone(),
-                    // in scale is the same as the input
-                    in_scale: input_node.out_scale,
-                    // same for the output scale
-                    out_scale: scale,
-                    output_max,
-                    ..Default::default()
+                        Node {
+                            idx,
+                            opkind,
+                            inputs: node.inputs.clone(),
+                            in_dims: vec![input_node.out_dims.clone()],
+                            out_dims: input_node.out_dims.clone(),
+                            in_scale: input_node.out_scale,
+                            out_scale: scale,
+                            output_max,
+                            ..Default::default()
+                        }
+                    }
+                    EltwiseOp::Div { .. } => {
+                        if inputs[1].out_dims.clone() != [1] {
+                            abort!("ezkl currently only supports division by a constant");
+                        }
+                        let mult = scale_to_multiplier(scale);
+                        let div = inputs[1].output_max / mult;
+                        let input_node = &inputs[0];
+
+                        let mut input_outlets = node.inputs.clone();
+                        input_outlets.pop();
+
+                        let scale_diff = input_node.out_scale - scale;
+                        // We can also consider adjusting the scale of all inputs and the output in a more custom way.
+                        let output_max: f32;
+                        if scale_diff > 0 {
+                            let mult = scale_to_multiplier(scale_diff);
+                            opkind = OpKind::Eltwise(EltwiseOp::Div {
+                                scale: (div * mult) as usize,
+                            }); // now the input will be scaled down to match
+                            output_max = input_node.output_max / (div * mult);
+                        } else {
+                            opkind = OpKind::Eltwise(EltwiseOp::Div {
+                                scale: div as usize,
+                            }); // now the input will be scaled down to match
+                            output_max = input_node.output_max / (div);
+                        }
+
+                        Node {
+                            idx,
+                            opkind,
+                            inputs: input_outlets,
+                            in_dims: vec![input_node.out_dims.clone()],
+                            out_dims: input_node.out_dims.clone(),
+                            // in scale is the same as the input
+                            in_scale: input_node.out_scale,
+                            // same for the output scale
+                            out_scale: scale,
+                            output_max,
+                            ..Default::default()
+                        }
+                    }
                 }
             }
             OpKind::Fused(ref s) => {
                 match s {
                     FusedOp::Dot => todo!(),
-                    FusedOp::Conv(_, _) => {
+                    FusedOp::Conv { .. } => {
                         let (input_node, weight_node) = (&inputs[0], &inputs[1]);
 
                         // Extract the padding and stride layer hyperparams
@@ -486,10 +513,10 @@ impl Node {
 
                         Node {
                             idx,
-                            opkind: OpKind::Fused(FusedOp::Conv(
-                                (padding_h, padding_w),
-                                (stride_h, stride_w),
-                            )),
+                            opkind: OpKind::Fused(FusedOp::Conv {
+                                padding: (padding_h, padding_w),
+                                stride: (stride_h, stride_w),
+                            }),
                             inputs: node.inputs.clone(),
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: vec![out_channels, out_height, out_width],
@@ -502,7 +529,7 @@ impl Node {
                         }
                     }
 
-                    FusedOp::SumPool(_, _, _) => {
+                    FusedOp::SumPool { .. } => {
                         let input_node = &inputs[0];
 
                         // Extract the padding and stride layer hyperparams
@@ -538,11 +565,11 @@ impl Node {
 
                         Node {
                             idx,
-                            opkind: OpKind::Fused(FusedOp::SumPool(
-                                (padding_h, padding_w),
-                                (stride_h, stride_w),
-                                (kernel_height, kernel_width),
-                            )),
+                            opkind: OpKind::Fused(FusedOp::SumPool {
+                                padding: (padding_h, padding_w),
+                                stride: (stride_h, stride_w),
+                                kernel_shape: (kernel_height, kernel_width),
+                            }),
                             inputs: node.inputs.clone(),
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: vec![input_channels, out_height, out_width],
@@ -570,11 +597,11 @@ impl Node {
 
                         Node {
                             idx,
-                            opkind: OpKind::Fused(FusedOp::SumPool(
-                                (padding_h, padding_w),
-                                (stride_h, stride_w),
-                                (kernel_height, kernel_width),
-                            )),
+                            opkind: OpKind::Fused(FusedOp::SumPool {
+                                padding: (padding_h, padding_w),
+                                stride: (stride_h, stride_w),
+                                kernel_shape: (kernel_height, kernel_width),
+                            }),
                             inputs: node.inputs.clone(),
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: vec![input_channels, out_height, out_width],
@@ -692,21 +719,21 @@ impl Node {
 
                     FusedOp::Add => {
                         opkind = Self::homogenize_input_scales(opkind, inputs.clone());
-                        let output_max = if let OpKind::Fused(FusedOp::Rescaled(_, mult)) = &opkind
-                        {
-                            (inputs
-                                .iter()
-                                .enumerate()
-                                .map(|(idx, n)| {
-                                    ((mult[idx].1 as f32) * (n.output_max.ceil())) as i32
-                                })
-                                .max()
-                                .unwrap() as f32)
-                                * (inputs.len() as f32)
-                        } else {
-                            error!("failed to homogenize input scalings for node {}", idx);
-                            panic!()
-                        };
+                        let output_max =
+                            if let OpKind::Fused(FusedOp::Rescaled { scale, .. }) = &opkind {
+                                (inputs
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(idx, n)| {
+                                        ((scale[idx].1 as f32) * (n.output_max.ceil())) as i32
+                                    })
+                                    .max()
+                                    .unwrap() as f32)
+                                    * (inputs.len() as f32)
+                            } else {
+                                error!("failed to homogenize input scalings for node {}", idx);
+                                panic!()
+                            };
 
                         Node {
                             idx,
@@ -738,21 +765,21 @@ impl Node {
                     }
                     FusedOp::Sub => {
                         opkind = Self::homogenize_input_scales(opkind, inputs.clone());
-                        let output_max = if let OpKind::Fused(FusedOp::Rescaled(_, mult)) = &opkind
-                        {
-                            (inputs
-                                .iter()
-                                .enumerate()
-                                .map(|(idx, n)| {
-                                    ((mult[idx].1 as f32) * (n.output_max.ceil())) as i32
-                                })
-                                .max()
-                                .unwrap() as f32)
-                                * (inputs.len() as f32)
-                        } else {
-                            error!("failed to homogenize input scalings for node {}", idx);
-                            panic!()
-                        };
+                        let output_max =
+                            if let OpKind::Fused(FusedOp::Rescaled { inner: _, scale }) = &opkind {
+                                (inputs
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(idx, n)| {
+                                        ((scale[idx].1 as f32) * (n.output_max.ceil())) as i32
+                                    })
+                                    .max()
+                                    .unwrap() as f32)
+                                    * (inputs.len() as f32)
+                            } else {
+                                error!("failed to homogenize input scalings for node {}", idx);
+                                panic!()
+                            };
 
                         Node {
                             idx,
@@ -820,7 +847,7 @@ impl Node {
                             ..Default::default()
                         }
                     }
-                    FusedOp::Rescaled(_, _) => {
+                    FusedOp::Rescaled { .. } => {
                         error!("operations should not already be rescaled at this stage");
                         panic!()
                     }
@@ -1035,10 +1062,10 @@ impl Node {
                 .collect_vec();
         }
         if let OpKind::Fused(c) = &opkind {
-            OpKind::Fused(FusedOp::Rescaled(
-                Box::new(c.clone()),
-                (0..inputs.len()).zip(multipliers).collect_vec(),
-            ))
+            OpKind::Fused(FusedOp::Rescaled {
+                inner: Box::new(c.clone()),
+                scale: (0..inputs.len()).zip(multipliers).collect_vec(),
+            })
         } else {
             error!("should not homegenize input scales for non fused ops.");
             panic!()

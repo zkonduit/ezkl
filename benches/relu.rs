@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::circuit::eltwise::{EltwiseConfig, Nonlin1d, Nonlinearity, ReLU};
+use ezkl::circuit::eltwise::{EltwiseConfig, EltwiseOp, Nonlin1d};
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
@@ -16,15 +16,12 @@ static mut LEN: usize = 4;
 const K: usize = 10;
 
 #[derive(Clone)]
-struct NLCircuit<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
-    assigned: Nonlin1d<F, NL>,
-    _marker: PhantomData<NL>,
+struct NLCircuit<F: FieldExt + TensorType> {
+    assigned: Nonlin1d<F>,
 }
 
-impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
-    for NLCircuit<F, NL>
-{
-    type Config = EltwiseConfig<F, NL>;
+impl<F: FieldExt + TensorType> Circuit<F> for NLCircuit<F> {
+    type Config = EltwiseConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -37,7 +34,9 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
                 .map(|_| VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512))
                 .collect::<Vec<_>>();
 
-            Self::Config::configure(cs, &advices[0], &advices[1], BITS, &[128], &[])
+            let nl = EltwiseOp::ReLU { scale: 128 };
+
+            Self::Config::configure(cs, &advices[0], &advices[1], BITS, nl)
         }
     }
 
@@ -66,16 +65,13 @@ fn runrelu(c: &mut Criterion) {
         let input: Tensor<Value<F>> =
             Tensor::<i32>::from((0..len).map(|_| rng.gen_range(0..10))).into();
 
-        let assigned: Nonlin1d<F, ReLU<F>> = Nonlin1d {
+        let assigned: Nonlin1d<F> = Nonlin1d {
             input: ValTensor::from(input.clone()),
             output: ValTensor::from(input),
             _marker: PhantomData,
         };
 
-        let circuit = NLCircuit::<F, ReLU<F>> {
-            assigned,
-            _marker: PhantomData,
-        };
+        let circuit = NLCircuit::<F> { assigned };
 
         group.throughput(Throughput::Elements(len as u64));
         group.bench_with_input(BenchmarkId::from_parameter(len), &len, |b, &_| {

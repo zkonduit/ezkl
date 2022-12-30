@@ -1,7 +1,7 @@
 use super::node::*;
-use super::utilities::scale_to_multiplier;
 use super::vars::*;
-use crate::circuit::eltwise::{DivideBy, EltwiseConfig, LeakyReLU, ReLU, Sigmoid};
+use crate::circuit::eltwise::EltwiseConfig;
+use crate::circuit::eltwise::EltwiseTable;
 use crate::circuit::fused::*;
 use crate::circuit::range::*;
 use crate::commands::{Cli, Commands};
@@ -16,9 +16,11 @@ use halo2_proofs::{
 };
 use itertools::Itertools;
 use log::{debug, error, info, trace};
+use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
+use std::rc::Rc;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node as OnnxNode, OutletId};
@@ -394,7 +396,7 @@ impl Model {
         node: &Node,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-        tables: &mut BTreeMap<OpKind, TableTypes<F>>,
+        tables: &mut BTreeMap<OpKind, Rc<RefCell<EltwiseTable<F>>>>,
     ) -> NodeConfig<F> {
         let input_len = node.in_dims[0].iter().product();
         let input = &vars.advices[0].reshape(&[input_len]);
@@ -402,78 +404,17 @@ impl Model {
         let node_inputs = node.inputs.iter().map(|e| e.node).collect();
 
         match &node.opkind {
-            OpKind::Div(s) => {
+            OpKind::Eltwise(s) => {
                 if tables.contains_key(&node.opkind) {
                     let table = tables.get(&node.opkind).unwrap();
-                    let conf: EltwiseConfig<F, DivideBy<F>> =
-                        EltwiseConfig::configure_with_table(meta, input, output, table.get_div());
-                    NodeConfig::Divide(conf, node_inputs)
+                    let conf: EltwiseConfig<F> =
+                        EltwiseConfig::configure_with_table(meta, input, output, table.clone());
+                    NodeConfig::Eltwise(conf, node_inputs)
                 } else {
-                    let conf: EltwiseConfig<F, DivideBy<F>> =
-                        EltwiseConfig::configure(meta, input, output, self.bits, &[*s], &[]);
-                    tables.insert(
-                        node.opkind.clone(),
-                        TableTypes::DivideBy(conf.table.clone()),
-                    );
-                    NodeConfig::Divide(conf, node_inputs)
-                }
-            }
-            OpKind::ReLU(s) => {
-                if tables.contains_key(&node.opkind) {
-                    let table = tables.get(&node.opkind).unwrap();
-                    let conf: EltwiseConfig<F, ReLU<F>> =
-                        EltwiseConfig::configure_with_table(meta, input, output, table.get_relu());
-                    NodeConfig::ReLU(conf, node_inputs)
-                } else {
-                    let conf: EltwiseConfig<F, ReLU<F>> =
-                        EltwiseConfig::configure(meta, input, output, self.bits, &[*s], &[]);
-                    tables.insert(node.opkind.clone(), TableTypes::ReLU(conf.table.clone()));
-                    NodeConfig::ReLU(conf, node_inputs)
-                }
-            }
-            OpKind::LeakyReLU((scale, slope)) => {
-                if tables.contains_key(&node.opkind) {
-                    let table = tables.get(&node.opkind).unwrap();
-                    let conf: EltwiseConfig<F, LeakyReLU<F>> = EltwiseConfig::configure_with_table(
-                        meta,
-                        input,
-                        output,
-                        table.get_leakyrelu(),
-                    );
-                    NodeConfig::LeakyReLU(conf, node_inputs)
-                } else {
-                    let conf: EltwiseConfig<F, LeakyReLU<F>> = EltwiseConfig::configure(
-                        meta,
-                        input,
-                        output,
-                        self.bits,
-                        &[*scale],
-                        &[slope.0],
-                    );
-                    tables.insert(
-                        node.opkind.clone(),
-                        TableTypes::LeakyReLU(conf.table.clone()),
-                    );
-                    NodeConfig::LeakyReLU(conf, node_inputs)
-                }
-            }
-            OpKind::Sigmoid(s) => {
-                if tables.contains_key(&node.opkind) {
-                    let table = tables.get(&node.opkind).unwrap();
-                    let conf: EltwiseConfig<F, Sigmoid<F>> =
-                        EltwiseConfig::configure_with_table(meta, input, output, table.get_sig());
-                    NodeConfig::Sigmoid(conf, node_inputs)
-                } else {
-                    let conf: EltwiseConfig<F, Sigmoid<F>> = EltwiseConfig::configure(
-                        meta,
-                        input,
-                        output,
-                        self.bits,
-                        &[self.bits, *s, scale_to_multiplier(self.scale) as usize],
-                        &[],
-                    );
-                    tables.insert(node.opkind.clone(), TableTypes::Sigmoid(conf.table.clone()));
-                    NodeConfig::Sigmoid(conf, node_inputs)
+                    let conf: EltwiseConfig<F> =
+                        EltwiseConfig::configure(meta, input, output, self.bits, *s);
+                    tables.insert(node.opkind.clone(), conf.table.clone());
+                    NodeConfig::Eltwise(conf, node_inputs)
                 }
             }
             OpKind::Const => {
@@ -595,23 +536,10 @@ impl Model {
 
                 Some(ac.layout(layouter, &values))
             }
-            NodeConfig::LeakyReLU(rc, idx) => {
+            NodeConfig::Eltwise(rc, idx) => {
                 assert_eq!(idx.len(), 1);
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
                 Some(rc.layout(layouter, inputs.get(&idx[0]).unwrap().clone()))
-            }
-            NodeConfig::ReLU(rc, idx) => {
-                assert_eq!(idx.len(), 1);
-                // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
-                Some(rc.layout(layouter, inputs.get(&idx[0]).unwrap().clone()))
-            }
-            NodeConfig::Sigmoid(sc, idx) => {
-                assert_eq!(idx.len(), 1);
-                Some(sc.layout(layouter, inputs.get(&idx[0]).unwrap().clone()))
-            }
-            NodeConfig::Divide(dc, idx) => {
-                assert_eq!(idx.len(), 1);
-                Some(dc.layout(layouter, inputs.get(&idx[0]).unwrap().clone()))
             }
             NodeConfig::Input => None,
             NodeConfig::Const => None,

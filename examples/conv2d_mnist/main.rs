@@ -1,4 +1,4 @@
-use ezkl::circuit::eltwise::{EltwiseConfig, ReLU};
+use ezkl::circuit::eltwise::{EltwiseConfig, EltwiseOp};
 use ezkl::circuit::fused::*;
 use ezkl::fieldutils;
 use ezkl::fieldutils::i32_to_felt;
@@ -54,7 +54,7 @@ struct Config<
 {
     // this will be a conv layer
     l0: FusedConfig<F>,
-    l1: EltwiseConfig<F, ReLU<F>>,
+    l1: EltwiseConfig<F>,
     // this will be an affine layer
     l2: FusedConfig<F>,
     public_output: Column<Instance>,
@@ -182,7 +182,10 @@ where
 
         // tells the config layer to add a conv op to a circuit gate
         let conv_node = FusedNode {
-            op: FusedOp::Conv((PADDING, PADDING), (STRIDE, STRIDE)),
+            op: FusedOp::Conv {
+                padding: (PADDING, PADDING),
+                stride: (STRIDE, STRIDE),
+            },
             input_order: vec![
                 FusedInputType::Input(0),
                 FusedInputType::Input(1),
@@ -200,8 +203,7 @@ where
         let input = input.reshape(&[LEN]);
         let output = output.reshape(&[LEN]);
 
-        let l1: EltwiseConfig<F, ReLU<F>> =
-            EltwiseConfig::configure(cs, &input, &output, BITS, &[32], &[]);
+        let l1 = EltwiseConfig::configure(cs, &input, &output, BITS, EltwiseOp::ReLU { scale: 32 });
 
         // tells the config layer to add an affine op to the circuit gate
         let affine_node = FusedNode {

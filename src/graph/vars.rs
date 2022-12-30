@@ -1,5 +1,5 @@
 use crate::abort;
-use crate::circuit::eltwise::{DivideBy, EltwiseTable, LeakyReLU, ReLU, Sigmoid};
+use crate::circuit::eltwise::EltwiseTable;
 use crate::commands::Cli;
 use crate::tensor::TensorType;
 use crate::tensor::{ValTensor, VarTensor};
@@ -86,52 +86,13 @@ impl VarVisibility {
 /// Lookup tables that will be available for reuse.
 pub enum TableTypes<F: FieldExt + TensorType> {
     /// Reference to a ReLU table
-    ReLU(Rc<RefCell<EltwiseTable<F, ReLU<F>>>>),
+    ReLU(Rc<RefCell<EltwiseTable<F>>>),
     /// Reference to a leaky ReLU table
-    LeakyReLU(Rc<RefCell<EltwiseTable<F, LeakyReLU<F>>>>),
+    LeakyReLU(Rc<RefCell<EltwiseTable<F>>>),
     /// Reference to a DivideBy table
-    DivideBy(Rc<RefCell<EltwiseTable<F, DivideBy<F>>>>),
+    DivideBy(Rc<RefCell<EltwiseTable<F>>>),
     /// Reference to a Sigmoid table
-    Sigmoid(Rc<RefCell<EltwiseTable<F, Sigmoid<F>>>>),
-}
-impl<F: FieldExt + TensorType> TableTypes<F> {
-    /// Get a reference to a reused ReLU lookup table
-    pub fn get_relu(&self) -> Rc<RefCell<EltwiseTable<F, ReLU<F>>>> {
-        match self {
-            TableTypes::ReLU(inner) => inner.clone(),
-            _ => {
-                abort!("fetching wrong table type");
-            }
-        }
-    }
-    /// Get a reference to a reused DivideBy lookup table
-    pub fn get_div(&self) -> Rc<RefCell<EltwiseTable<F, DivideBy<F>>>> {
-        match self {
-            TableTypes::DivideBy(inner) => inner.clone(),
-            _ => {
-                abort!("fetching wrong table type");
-            }
-        }
-    }
-    /// Get a reference to a reused Sigmoid lookup table
-    pub fn get_sig(&self) -> Rc<RefCell<EltwiseTable<F, Sigmoid<F>>>> {
-        match self {
-            TableTypes::Sigmoid(inner) => inner.clone(),
-            _ => {
-                abort!("fetching wrong table type");
-            }
-        }
-    }
-
-    /// Get a reference to a reused Sigmoid lookup table
-    pub fn get_leakyrelu(&self) -> Rc<RefCell<EltwiseTable<F, LeakyReLU<F>>>> {
-        match self {
-            TableTypes::LeakyReLU(inner) => inner.clone(),
-            _ => {
-                abort!("fetching wrong table type");
-            }
-        }
-    }
+    Sigmoid(Rc<RefCell<EltwiseTable<F>>>),
 }
 
 /// A wrapper for holding all columns that will be assigned to by a model.
