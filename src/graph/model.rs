@@ -62,6 +62,8 @@ pub struct Model {
     pub bits: usize,
     /// Log rows available in circuit.
     pub logrows: u32,
+    /// Maximum number of permitted rotations.
+    pub max_rotations: usize,
     /// Exponent used in the fixed point representation.
     pub scale: i32,
     /// The divergence from the expected output (if using public outputs) we can tolerate. This is in absolute value across each dimension.
@@ -80,12 +82,17 @@ impl Model {
     /// * `path` - A path to an Onnx file.
     /// * `scale` - The denominator used for fixed point arithmetic (relevant for quantizing input data and model parameters).
     /// * `bits` - Number of bits to use.
-    /// * `mode` -The [Mode] we're using the model in.
+    /// * `logrows` -  Log rows available in circuit.
+    /// * `max_rotations` - Maximum number of permitted rotations.
+    /// * `tolerance` - How much each quantized output is allowed to be off by
+    /// * `mode` - The [Mode] we're using the model in.
+    /// * `visibility` - Which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
     pub fn new(
         path: impl AsRef<Path>,
         scale: i32,
         bits: usize,
         logrows: u32,
+        max_rotations: usize,
         tolerance: usize,
         mode: Mode,
         visibility: VarVisibility,
@@ -111,6 +118,7 @@ impl Model {
                 .expect("failed to assign execution buckets"),
             bits,
             logrows,
+            max_rotations,
             mode,
             visibility,
         };
@@ -119,16 +127,17 @@ impl Model {
 
         om
     }
-    /// Creates a `Model` based on CLI arguments
-    pub fn from_arg() -> Self {
-        let args = Cli::parse();
-        let visibility = VarVisibility::from_args();
+
+    /// Creates a `Model` from parsed CLI arguments
+    pub fn from_ezkl_conf(args: Cli) -> Self {
+        let visibility = VarVisibility::from_args(args.clone());
         match args.command {
             Commands::Table { model } => Model::new(
                 model,
                 args.scale,
                 args.bits,
                 args.logrows,
+                args.max_rotations,
                 args.tolerance,
                 Mode::Table,
                 visibility,
@@ -138,6 +147,7 @@ impl Model {
                 args.scale,
                 args.bits,
                 args.logrows,
+                args.max_rotations,
                 args.tolerance,
                 Mode::Mock,
                 visibility,
@@ -147,6 +157,7 @@ impl Model {
                 args.scale,
                 args.bits,
                 args.logrows,
+                args.max_rotations,
                 args.tolerance,
                 Mode::FullProve,
                 visibility,
@@ -156,6 +167,7 @@ impl Model {
                 args.scale,
                 args.bits,
                 args.logrows,
+                args.max_rotations,
                 args.tolerance,
                 Mode::Prove,
                 visibility,
@@ -165,11 +177,18 @@ impl Model {
                 args.scale,
                 args.bits,
                 args.logrows,
+                args.max_rotations,
                 args.tolerance,
                 Mode::Verify,
                 visibility,
             ),
         }
+    }
+
+    /// Creates a `Model` based on CLI arguments
+    pub fn from_arg() -> Self {
+        let args = Cli::parse();
+        Self::from_ezkl_conf(args)
     }
 
     /// Configures an `Model`. Does so one execution `bucket` at a time. Each bucket holds either:

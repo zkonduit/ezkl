@@ -5,7 +5,7 @@ use std::io::{stdin, stdout, Write};
 use std::path::PathBuf;
 
 #[allow(missing_docs)]
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
@@ -53,7 +53,7 @@ impl std::fmt::Display for ProofSystem {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, Subcommand)]
+#[derive(Debug, Subcommand, Clone)]
 pub enum Commands {
     /// Loads model and prints model table
     #[command(arg_required_else_help = true)]
