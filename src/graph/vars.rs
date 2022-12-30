@@ -3,7 +3,6 @@ use crate::circuit::eltwise::{DivideBy, EltwiseTable, LeakyReLU, ReLU, Sigmoid};
 use crate::commands::Cli;
 use crate::tensor::TensorType;
 use crate::tensor::{ValTensor, VarTensor};
-use clap::Parser;
 use halo2_proofs::{arithmetic::FieldExt, plonk::ConstraintSystem};
 use itertools::Itertools;
 use log::error;
@@ -56,9 +55,7 @@ impl std::fmt::Display for VarVisibility {
 impl VarVisibility {
     /// Read from cli args whether the model input, model parameters, and model output are Public or Private to the prover.
     /// Place in [VarVisibility] struct.
-    pub fn from_args() -> Self {
-        let args = Cli::parse();
-
+    pub fn from_args(args: Cli) -> Self {
         let input_vis = if args.public_inputs {
             Visibility::Public
         } else {
@@ -153,12 +150,11 @@ impl<F: FieldExt + TensorType> ModelVars<F> {
     pub fn new(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
+        max_rotations: usize,
         advice_dims: (usize, usize),
         fixed_dims: (usize, usize),
         instance_dims: (usize, Vec<Vec<usize>>),
     ) -> Self {
-        let tensor_max = Cli::parse().max_rotations;
-
         let advices = (0..advice_dims.0)
             .map(|_| {
                 VarTensor::new_advice(
@@ -167,7 +163,7 @@ impl<F: FieldExt + TensorType> ModelVars<F> {
                     advice_dims.1,
                     vec![advice_dims.1],
                     true,
-                    tensor_max,
+                    max_rotations,
                 )
             })
             .collect_vec();
@@ -179,7 +175,7 @@ impl<F: FieldExt + TensorType> ModelVars<F> {
                     fixed_dims.1,
                     vec![fixed_dims.1],
                     true,
-                    tensor_max,
+                    max_rotations,
                 )
             })
             .collect_vec();
