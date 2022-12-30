@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::circuit::eltwise::{EltwiseConfig, EltwiseOp, Nonlin1d};
+use ezkl::circuit::eltwise::{EltwiseConfig, EltwiseOp};
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
@@ -9,7 +9,6 @@ use halo2_proofs::{
 };
 use halo2curves::pasta::Fp as F;
 use rand::Rng;
-use std::marker::PhantomData;
 
 const BITS: usize = 8;
 static mut LEN: usize = 4;
@@ -17,7 +16,7 @@ const K: usize = 10;
 
 #[derive(Clone)]
 struct NLCircuit<F: FieldExt + TensorType> {
-    assigned: Nonlin1d<F>,
+    pub input: ValTensor<F>,
 }
 
 impl<F: FieldExt + TensorType> Circuit<F> for NLCircuit<F> {
@@ -45,7 +44,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for NLCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
     ) -> Result<(), Error> {
-        config.layout(&mut layouter, self.assigned.input.clone());
+        config.layout(&mut layouter, self.input.clone());
 
         Ok(())
     }
@@ -65,13 +64,9 @@ fn runrelu(c: &mut Criterion) {
         let input: Tensor<Value<F>> =
             Tensor::<i32>::from((0..len).map(|_| rng.gen_range(0..10))).into();
 
-        let assigned: Nonlin1d<F> = Nonlin1d {
+        let circuit = NLCircuit::<F> {
             input: ValTensor::from(input.clone()),
-            output: ValTensor::from(input),
-            _marker: PhantomData,
         };
-
-        let circuit = NLCircuit::<F> { assigned };
 
         group.throughput(Throughput::Elements(len as u64));
         group.bench_with_input(BenchmarkId::from_parameter(len), &len, |b, &_| {

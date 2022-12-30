@@ -75,17 +75,6 @@ impl fmt::Display for EltwiseOp {
     }
 }
 
-/// A 1D non-linearity.  
-#[derive(Clone, Debug)]
-pub struct Nonlin1d<F: FieldExt + TensorType> {
-    /// Input to the layer as a [ValTensor].
-    pub input: ValTensor<F>,
-    /// Input to the layer as a [ValTensor].
-    pub output: ValTensor<F>,
-    #[allow(missing_docs)]
-    pub _marker: PhantomData<F>,
-}
-
 /// Halo2 lookup table for element wise non-linearities.
 // Table that should be reused across all lookups (so no Clone)
 #[derive(Clone, Debug)]
@@ -337,7 +326,7 @@ mod tests {
 
     #[derive(Clone)]
     struct ReLUCircuit<F: FieldExt + TensorType> {
-        assigned: Nonlin1d<F>,
+        pub input: ValTensor<F>,
     }
 
     impl<F: FieldExt + TensorType> Circuit<F> for ReLUCircuit<F> {
@@ -363,7 +352,7 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
         ) -> Result<(), Error> {
-            let _ = config.layout(&mut layouter, self.assigned.input.clone());
+            let _ = config.layout(&mut layouter, self.input.clone());
 
             Ok(())
         }
@@ -427,13 +416,10 @@ mod tests {
     fn relucircuit() {
         let input: Tensor<Value<F>> =
             Tensor::new(Some(&[Value::<F>::known(F::from(1_u64))]), &[1]).unwrap();
-        let assigned: Nonlin1d<F> = Nonlin1d {
-            input: ValTensor::from(input.clone()),
-            output: ValTensor::from(input),
-            _marker: PhantomData,
-        };
 
-        let circuit = ReLUCircuit::<F> { assigned };
+        let circuit = ReLUCircuit::<F> {
+            input: ValTensor::from(input.clone()),
+        };
 
         let prover = MockProver::run(4_u32, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
