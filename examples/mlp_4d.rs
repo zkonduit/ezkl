@@ -1,4 +1,4 @@
-use ezkl::circuit::eltwise::{DivideBy, EltwiseConfig, ReLU};
+use ezkl::circuit::eltwise::{EltwiseConfig, EltwiseOp};
 use ezkl::circuit::fused::*;
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::tensor::*;
@@ -16,10 +16,10 @@ const K: usize = 15;
 #[derive(Clone)]
 struct MyConfig<F: FieldExt + TensorType> {
     l0: FusedConfig<F>,
-    l1: EltwiseConfig<F, ReLU<F>>,
+    l1: EltwiseConfig<F>,
     l2: FusedConfig<F>,
-    l3: EltwiseConfig<F, ReLU<F>>,
-    l4: EltwiseConfig<F, DivideBy<F>>,
+    l3: EltwiseConfig<F>,
+    l4: EltwiseConfig<F>,
     public_output: Column<Instance>,
 }
 
@@ -79,12 +79,16 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         );
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
-        let [l1, l3]: [EltwiseConfig<F, ReLU<F>>; 2] =
-            EltwiseConfig::configure_multiple(cs, &input, &output, BITS, &[1], None);
+        let [l1, l3]: [EltwiseConfig<F>; 2] = EltwiseConfig::configure_multiple(
+            cs,
+            &input,
+            &output,
+            BITS,
+            EltwiseOp::ReLU { scale: 1 },
+        );
 
         // sets up a new Divide by table
-        let l4: EltwiseConfig<F, DivideBy<F>> =
-            EltwiseConfig::configure(cs, &input, &output, BITS, &[128], None);
+        let l4 = EltwiseConfig::configure(cs, &input, &output, BITS, EltwiseOp::Div { scale: 128 });
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
@@ -112,13 +116,13 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                 self.l0_params[1].clone(),
             ],
         );
-        let x = config.l1.layout(&mut layouter, x);
+        let x = config.l1.layout(&mut layouter, &x);
         let x = config.l2.layout(
             &mut layouter,
             &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
         );
-        let x = config.l3.layout(&mut layouter, x);
-        let x = config.l4.layout(&mut layouter, x);
+        let x = config.l3.layout(&mut layouter, &x);
+        let x = config.l4.layout(&mut layouter, &x);
         match x {
             ValTensor::PrevAssigned { inner: v, dims: _ } => v
                 .enum_map(|i, x| {

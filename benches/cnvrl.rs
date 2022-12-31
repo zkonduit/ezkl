@@ -61,7 +61,7 @@ where
                 OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH,
                 vec![OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
                 true,
-                512
+                512,
             );
 
             let bias = VarTensor::new_advice(cs, K, OUT_CHANNELS, vec![OUT_CHANNELS], true, 512);
@@ -76,7 +76,10 @@ where
 
             // tells the config layer to add a conv op to a circuit gate
             let conv_node = FusedNode {
-                op: FusedOp::Conv((PADDING, PADDING), (STRIDE, STRIDE)),
+                op: FusedOp::Conv {
+                    padding: (PADDING, PADDING),
+                    stride: (STRIDE, STRIDE),
+                },
                 input_order: vec![
                     FusedInputType::Input(0),
                     FusedInputType::Input(1),
@@ -105,7 +108,7 @@ fn runcnvrl(c: &mut Criterion) {
     colog::init();
     let mut group = c.benchmark_group("cnvrl");
 
-    for size in [1, 2, 4, 8].iter() {
+    for size in [1, 2, 4].iter() {
         unsafe {
             KERNEL_HEIGHT = size * 3;
             KERNEL_WIDTH = size * 3;

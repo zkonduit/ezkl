@@ -757,3 +757,108 @@ pub fn pad<T: TensorType>(image: Tensor<T>, padding: (usize, usize)) -> Tensor<T
     output.reshape(&[channels, padded_height, padded_width]);
     output
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// -- Activation Functions ---------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------
+
+/// Activation functions
+pub mod activations {
+    use super::*;
+    /// Elementwise applies sigmoid to a tensor of integers.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::activations::sigmoid;
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[2, 15, 2, 1, 1, 0]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = sigmoid(&x, 1, 1);
+    /// let expected = Tensor::<i32>::new(Some(&[1, 1, 1, 1, 1, 1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn sigmoid(a: &Tensor<i32>, scale_input: usize, scale_output: usize) -> Tensor<i32> {
+        // calculate value of output
+        let mut output: Tensor<i32> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            let kix = (*a_i as f32) / (scale_input as f32);
+            let fout = (scale_output as f32) / (1.0 + (-kix).exp());
+            let rounded = fout.round();
+            output[i] = rounded as i32;
+        }
+        output
+    }
+
+    /// Elementwise applies leaky relu to a tensor of integers.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `scale` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::activations::leakyrelu;
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[2, 15, 2, 1, 1, -5]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = leakyrelu(&x, 1, 0.1);
+    /// let expected = Tensor::<i32>::new(Some(&[2, 15, 2, 1, 1, -1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn leakyrelu(a: &Tensor<i32>, scale: usize, slope: f32) -> Tensor<i32> {
+        // calculate value of output
+        let mut output: Tensor<i32> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            output[i] = if a_i < &0 {
+                let d_inv_x = (slope) * (*a_i as f32) / (scale as f32);
+                d_inv_x.round() as i32
+            } else {
+                let d_inv_x = (*a_i as f32) / (scale as f32);
+                d_inv_x.round() as i32
+            };
+        }
+        output
+    }
+
+    /// Elementwise divides a tensor with a const integer element.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `b` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::activations::const_div;
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[2, 1, 2, 7, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let k = 2;
+    /// let result = const_div(&x, k);
+    /// let expected = Tensor::<i32>::new(Some(&[1, 1, 1, 4, 1, 1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn const_div(a: &Tensor<i32>, scale: i32) -> Tensor<i32> {
+        // calculate value of output
+        // calculate value of output
+        let mut output: Tensor<i32> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            let d_inv_x = (*a_i as f32) / (scale as f32);
+            output[i] = d_inv_x.round() as i32;
+        }
+        output
+    }
+}

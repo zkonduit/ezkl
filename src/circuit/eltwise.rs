@@ -1,6 +1,6 @@
 use super::*;
-use crate::abort;
-use crate::fieldutils::{felt_to_i32, i32_to_felt};
+use crate::tensor::ops::activations::*;
+use crate::{abort, fieldutils::felt_to_i32, fieldutils::i32_to_felt};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
@@ -8,66 +8,80 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use log::error;
+use std::fmt;
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
-/// Defines a non-linear layer.  
-pub trait Nonlinearity<F: FieldExt> {
-    /// Function that defines the non-linearity.
-    /// Arguments
-    ///
-    /// * `x` - input to function
-    /// * `scales` - additional parameters that may parametrize the function
-    fn nonlinearity(x: i32, scales: &[usize], param: Option<f32>) -> F;
-    /// a value which is always in the table
-    fn default_pair(scales: &[usize], param: Option<f32>) -> (F, F) {
-        (F::zero(), Self::nonlinearity(0, scales, param))
+#[allow(missing_docs)]
+/// An enum representing the operations that can be merged into a single circuit gate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum EltwiseOp {
+    Sigmoid { scales: (usize, usize) },
+    LeakyReLU { scale: usize, slope: eq_float::F32 },
+    ReLU { scale: usize },
+    Div { scale: usize },
+}
+
+impl fmt::Display for EltwiseOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            EltwiseOp::Div { scale } => write!(f, "div  w/ scale: {}", scale),
+            EltwiseOp::ReLU { scale } => write!(f, "relu w/ scale: {}", scale),
+            EltwiseOp::LeakyReLU { scale, slope } => {
+                write!(f, "leaky-relu w/ scale: {}, slope: {}", scale, slope)
+            }
+            EltwiseOp::Sigmoid { scales } => write!(f, "sigmoid  w/ scale: {}", scales.0),
+        }
     }
 }
 
-/// A 1D non-linearity.  
-#[derive(Clone, Debug)]
-pub struct Nonlin1d<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
-    /// Input to the layer as a [ValTensor].
-    pub input: ValTensor<F>,
-    /// Input to the layer as a [ValTensor].
-    pub output: ValTensor<F>,
-    #[allow(missing_docs)]
-    pub _marker: PhantomData<(F, NL)>,
+impl EltwiseOp {
+    fn f(&self, x: Tensor<i32>) -> Tensor<i32> {
+        match &self {
+            EltwiseOp::Div { scale } => const_div(&x, *scale as i32),
+            EltwiseOp::ReLU { scale } => leakyrelu(&x, *scale, 0_f32),
+            EltwiseOp::LeakyReLU { scale, slope } => leakyrelu(&x, *scale, slope.0),
+            EltwiseOp::Sigmoid { scales } => sigmoid(&x, scales.0, scales.1),
+        }
+    }
+
+    /// a value which is always in the table
+    fn default_pair<F: FieldExt>(&self) -> (F, F) {
+        (
+            F::zero(),
+            i32_to_felt(self.f(vec![0_i32].into_iter().into())[0]),
+        )
+    }
 }
 
 /// Halo2 lookup table for element wise non-linearities.
 // Table that should be reused across all lookups (so no Clone)
 #[derive(Clone, Debug)]
-pub struct EltwiseTable<F: FieldExt, NL: Nonlinearity<F>> {
+pub struct EltwiseTable<F: FieldExt> {
+    /// nonlinearity represented by the table
+    pub nonlinearity: EltwiseOp,
     /// Input to table.
     pub table_input: TableColumn,
     /// Output of table
     pub table_output: TableColumn,
     /// Flags if table has been previously assigned to.
     pub is_assigned: bool,
-    /// Scaling of the table's inputs.
-    pub scaling_params: Vec<usize>,
-    /// Parameters related to the eltwise function being represented
-    pub eltwise_params: Option<f32>,
     /// Number of bits used in lookup table.
     pub bits: usize,
-    _marker: PhantomData<(F, NL)>,
+    _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt, NL: Nonlinearity<F>> EltwiseTable<F, NL> {
+impl<F: FieldExt> EltwiseTable<F> {
     /// Configures the table.
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
         bits: usize,
-        scaling_params: &[usize],
-        eltwise_params: Option<f32>,
-    ) -> EltwiseTable<F, NL> {
+        nonlinearity: EltwiseOp,
+    ) -> EltwiseTable<F> {
         EltwiseTable {
+            nonlinearity,
             table_input: cs.lookup_table_column(),
             table_output: cs.lookup_table_column(),
             is_assigned: false,
-            scaling_params: scaling_params.to_vec(),
-            eltwise_params,
             bits,
             _marker: PhantomData,
         }
@@ -78,88 +92,74 @@ impl<F: FieldExt, NL: Nonlinearity<F>> EltwiseTable<F, NL> {
         let base = 2i32;
         let smallest = -base.pow(self.bits as u32 - 1);
         let largest = base.pow(self.bits as u32 - 1);
-        match layouter.assign_table(
-            || "nl table",
-            |mut table| {
-                for (row_offset, int_input) in (smallest..largest).enumerate() {
-                    let input: F = i32_to_felt(int_input);
-                    match table.assign_cell(
-                        || format!("nl_i_col row {}", row_offset),
-                        self.table_input,
-                        row_offset,
-                        || Value::known(input),
-                    ) {
-                        Ok(a) => a,
-                        Err(e) => {
-                            abort!("failed to assign table cell {:?}", e);
-                        }
-                    }
-                    match table.assign_cell(
-                        || format!("nl_o_col row {}", row_offset),
-                        self.table_output,
-                        row_offset,
-                        || {
-                            Value::known(NL::nonlinearity(
-                                int_input,
-                                &self.scaling_params,
-                                self.eltwise_params,
-                            ))
-                        },
-                    ) {
-                        Ok(a) => a,
-                        Err(e) => {
-                            abort!("failed to assign table cell {:?}", e);
-                        }
-                    }
-                }
-                Ok(())
-            },
-        ) {
-            Ok(a) => a,
-            Err(e) => {
-                abort!("failed to assign elt-wise table {:?}", e);
-            }
-        };
+        let inputs = Tensor::from(smallest..largest);
+        let evals = self.nonlinearity.f(inputs.clone());
+        layouter
+            .assign_table(
+                || "nl table",
+                |mut table| {
+                    inputs
+                        .enum_map(|row_offset, input| {
+                            table
+                                .assign_cell(
+                                    || format!("nl_i_col row {}", row_offset),
+                                    self.table_input,
+                                    row_offset,
+                                    || Value::known(i32_to_felt::<F>(input)),
+                                )
+                                .expect("failed to assign table input cell");
+
+                            table
+                                .assign_cell(
+                                    || format!("nl_o_col row {}", row_offset),
+                                    self.table_output,
+                                    row_offset,
+                                    || Value::known(i32_to_felt::<F>(evals[row_offset])),
+                                )
+                                .expect("failed to assign table output cell");
+                        })
+                        .expect("failed to assign table");
+                    Ok(())
+                },
+            )
+            .expect("failed to layout table");
         self.is_assigned = true;
     }
 }
 
 /// Configuration for element-wise non-linearities.
 #[derive(Clone, Debug)]
-pub struct EltwiseConfig<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
+pub struct EltwiseConfig<F: FieldExt + TensorType> {
     /// [VarTensor] input to non-linearity.
     pub input: VarTensor,
     /// [VarTensor] input to non-linearity.
     pub output: VarTensor,
     /// Lookup table used to represent the non-linearity
-    pub table: Rc<RefCell<EltwiseTable<F, NL>>>,
+    pub table: Rc<RefCell<EltwiseTable<F>>>,
     qlookup: Selector,
-    _marker: PhantomData<(NL, F)>,
+    _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, NL> {
+impl<F: FieldExt + TensorType> EltwiseConfig<F> {
     /// Configures multiple element-wise non-linearities at once.
     pub fn configure_multiple<const NUM: usize>(
         cs: &mut ConstraintSystem<F>,
         input: &VarTensor,
         output: &VarTensor,
         bits: usize,
-        scaling_params: &[usize],
-        eltwise_params: Option<f32>,
+        nonlinearity: EltwiseOp,
     ) -> [Self; NUM] {
-        let mut table: Option<Rc<RefCell<EltwiseTable<F, NL>>>> = None;
+        let mut table: Option<Rc<RefCell<EltwiseTable<F>>>> = None;
         let configs = (0..NUM)
             .map(|_| {
                 let l = match &table {
-                    None => {
-                        Self::configure(cs, input, output, bits, scaling_params, eltwise_params)
-                    }
+                    None => Self::configure(cs, input, output, bits, nonlinearity),
                     Some(t) => Self::configure_with_table(cs, input, output, t.clone()),
                 };
                 table = Some(l.table.clone());
                 l
             })
-            .collect::<Vec<EltwiseConfig<F, NL>>>()
+            .collect::<Vec<EltwiseConfig<F>>>()
             .try_into();
 
         match configs {
@@ -173,7 +173,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
         cs: &mut ConstraintSystem<F>,
         input: &VarTensor,
         output: &VarTensor,
-        table: Rc<RefCell<EltwiseTable<F, NL>>>,
+        table: Rc<RefCell<EltwiseTable<F>>>,
     ) -> Self {
         let qlookup = cs.complex_selector();
 
@@ -182,10 +182,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
                 let _ = cs.lookup("lk", |cs| {
                     let qlookup = cs.query_selector(qlookup);
                     let not_qlookup = Expression::Constant(F::one()) - qlookup.clone();
-                    let (default_x, default_y) = NL::default_pair(
-                        table.borrow().scaling_params.as_slice(),
-                        table.borrow().eltwise_params,
-                    );
+                    let (default_x, default_y) = table.borrow().nonlinearity.default_pair::<F>();
                     let (x, y) = input.cartesian_coord(i);
                     vec![
                         (
@@ -230,7 +227,7 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
     }
 }
 
-impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, NL> {
+impl<F: FieldExt + TensorType> EltwiseConfig<F> {
     /// Configures and creates an elementwise operation within a circuit.
     /// Variables are supplied as a single VarTensors.
     pub fn configure(
@@ -238,21 +235,19 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
         input: &VarTensor,
         output: &VarTensor,
         bits: usize,
-        scaling_params: &[usize],
-        eltwise_params: Option<f32>,
+        nonlinearity: EltwiseOp,
     ) -> Self {
-        let table = Rc::new(RefCell::new(EltwiseTable::<F, NL>::configure(
+        let table = Rc::new(RefCell::new(EltwiseTable::<F>::configure(
             cs,
             bits,
-            scaling_params,
-            eltwise_params,
+            nonlinearity,
         )));
         Self::configure_with_table(cs, input, output, table)
     }
 
     /// Assigns values to the variables created when calling `configure`.
     /// Values are supplied as a 1-element array of `[input]` VarTensors.
-    pub fn layout(&self, layouter: &mut impl Layouter<F>, values: ValTensor<F>) -> ValTensor<F> {
+    pub fn layout(&self, layouter: &mut impl Layouter<F>, values: &ValTensor<F>) -> ValTensor<F> {
         if !self.table.borrow().is_assigned {
             self.table.borrow_mut().layout(layouter)
         }
@@ -264,16 +259,23 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
 
                     let w = self.input.assign(&mut region, 0, &values).unwrap();
 
-                    let output: Tensor<Value<F>> =
-                        Tensor::from(w.iter().map(|acaf| (*acaf).value_field()).map(|vaf| {
-                            vaf.map(|f| {
-                                <NL as Nonlinearity<F>>::nonlinearity(
-                                    felt_to_i32(f.evaluate()),
-                                    &self.table.borrow().scaling_params,
-                                    self.table.borrow().eltwise_params,
-                                )
-                            })
-                        }));
+                    let mut res: Vec<i32> = vec![];
+                    let _ = Tensor::from(w.iter().map(|acaf| (*acaf).value_field()).map(|vaf| {
+                        vaf.map(|f| {
+                            res.push(felt_to_i32(f.evaluate()));
+                        })
+                    }));
+
+                    // for key generation res will be empty and we need to return a set of unassigned values
+                    let output: Tensor<Value<F>> = match res.len() {
+                        0 => w.map(|_| Value::unknown()),
+                        _ => self
+                            .table
+                            .borrow()
+                            .nonlinearity
+                            .f(res.into_iter().into())
+                            .map(|elem| Value::known(i32_to_felt(elem))),
+                    };
 
                     Ok(self
                         .output
@@ -292,71 +294,6 @@ impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F>> EltwiseConfig<F, N
     }
 }
 
-#[allow(missing_docs)]
-// Now implement nonlinearity functions like this
-#[derive(Clone, Debug)]
-pub struct ReLU<F> {
-    _marker: PhantomData<F>,
-}
-impl<F: FieldExt> Nonlinearity<F> for ReLU<F> {
-    fn nonlinearity(x: i32, scale: &[usize], _: Option<f32>) -> F {
-        if x < 0 {
-            F::zero()
-        } else {
-            let d_inv_x = (x as f32) / (scale[0] as f32);
-            let rounded = d_inv_x.round();
-            i32_to_felt(rounded as i32)
-        }
-    }
-}
-
-#[allow(missing_docs)]
-#[derive(Clone, Debug)]
-pub struct LeakyReLU<F> {
-    _marker: PhantomData<F>,
-}
-
-impl<F: FieldExt> Nonlinearity<F> for LeakyReLU<F> {
-    fn nonlinearity(x: i32, scale: &[usize], slope: Option<f32>) -> F {
-        if x < 0 {
-            let d_inv_x = slope.unwrap() * (x as f32) / (scale[0] as f32);
-            let rounded = d_inv_x.round();
-            i32_to_felt(rounded as i32)
-        } else {
-            i32_to_felt(x)
-        }
-    }
-}
-
-#[allow(missing_docs)]
-#[derive(Clone, Debug)]
-pub struct Sigmoid<F> {
-    _marker: PhantomData<F>,
-}
-// L is our implicit or explicit denominator (fixed point d)
-// Usually want K=L
-impl<F: FieldExt> Nonlinearity<F> for Sigmoid<F> {
-    fn nonlinearity(x: i32, scale: &[usize], _: Option<f32>) -> F {
-        let kix = (x as f32) / (scale[0] as f32);
-        let fout = (scale[1] as f32) / (1.0 + (-kix).exp());
-        let rounded = fout.round();
-        i32_to_felt(rounded as i32)
-    }
-}
-
-#[allow(missing_docs)]
-#[derive(Clone, Debug)]
-pub struct DivideBy<F> {
-    _marker: PhantomData<F>,
-}
-impl<F: FieldExt> Nonlinearity<F> for DivideBy<F> {
-    fn nonlinearity(x: i32, scale: &[usize], _: Option<f32>) -> F {
-        let d_inv_x = (x as f32) / (scale[0] as f32);
-        let rounded = d_inv_x.round();
-        i32_to_felt(rounded as i32)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -369,15 +306,12 @@ mod tests {
     use halo2curves::pasta::Fp as F;
 
     #[derive(Clone)]
-    struct NLCircuit<F: FieldExt + TensorType, NL: Nonlinearity<F>> {
-        assigned: Nonlin1d<F, NL>,
-        _marker: PhantomData<NL>,
+    struct ReLUCircuit<F: FieldExt + TensorType> {
+        pub input: ValTensor<F>,
     }
 
-    impl<F: FieldExt + TensorType, NL: 'static + Nonlinearity<F> + Clone> Circuit<F>
-        for NLCircuit<F, NL>
-    {
-        type Config = EltwiseConfig<F, NL>;
+    impl<F: FieldExt + TensorType> Circuit<F> for ReLUCircuit<F> {
+        type Config = EltwiseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
         fn without_witnesses(&self) -> Self {
@@ -389,7 +323,9 @@ mod tests {
                 .map(|_| VarTensor::new_advice(cs, 4, 1, vec![1], true, 512))
                 .collect::<Vec<_>>();
 
-            Self::Config::configure(cs, &advices[0], &advices[1], 2, &[1], None)
+            let nl = EltwiseOp::ReLU { scale: 1 };
+
+            Self::Config::configure(cs, &advices[0], &advices[1], 2, nl)
         }
 
         fn synthesize(
@@ -397,56 +333,9 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
         ) -> Result<(), Error> {
-            let _ = config.layout(&mut layouter, self.assigned.input.clone());
+            let _ = config.layout(&mut layouter, &self.input);
 
             Ok(())
-        }
-    }
-
-    #[test]
-    fn test_eltrelunl() {
-        for i in -127..127 {
-            let r = <ReLU<F> as Nonlinearity<F>>::nonlinearity(i, &[1], None);
-            if i <= 0 {
-                assert_eq!(r, F::from(0_u64))
-            } else {
-                assert_eq!(r, F::from(i as u64))
-            }
-        }
-    }
-
-    #[test]
-    fn test_eltleakyrelunl() {
-        for i in -127..127 {
-            let r = <LeakyReLU<F> as Nonlinearity<F>>::nonlinearity(i, &[1], Some(0.05));
-            if i <= 0 {
-                println!("{:?}", (0.05 * i as f32));
-                assert_eq!(r, -F::from(-(0.05 * i as f32).round() as u64))
-            } else {
-                assert_eq!(r, F::from(i as u64))
-            }
-        }
-    }
-
-    #[test]
-    fn test_eltsigmoid() {
-        for i in -127..127 {
-            let r = <Sigmoid<F> as Nonlinearity<F>>::nonlinearity(i, &[1, 1], None);
-            let exp_sig = (1.0 / (1.0 + (-i as f32).exp())).round();
-            assert_eq!(r, F::from(exp_sig as u64))
-        }
-    }
-
-    #[test]
-    fn test_eltdivide() {
-        for i in -127..127 {
-            let r = <DivideBy<F> as Nonlinearity<F>>::nonlinearity(i, &[1], None);
-            println!("{:?}, {:?}, {:?}", i, r, F::from(-i as u64));
-            if i <= 0 {
-                assert_eq!(r, -F::from(-i as u64))
-            } else {
-                assert_eq!(r, F::from(i as u64))
-            }
         }
     }
 
@@ -454,15 +343,9 @@ mod tests {
     fn relucircuit() {
         let input: Tensor<Value<F>> =
             Tensor::new(Some(&[Value::<F>::known(F::from(1_u64))]), &[1]).unwrap();
-        let assigned: Nonlin1d<F, ReLU<F>> = Nonlin1d {
-            input: ValTensor::from(input.clone()),
-            output: ValTensor::from(input),
-            _marker: PhantomData,
-        };
 
-        let circuit = NLCircuit::<F, ReLU<F>> {
-            assigned,
-            _marker: PhantomData,
+        let circuit = ReLUCircuit::<F> {
+            input: ValTensor::from(input),
         };
 
         let prover = MockProver::run(4_u32, &circuit, vec![]).unwrap();
