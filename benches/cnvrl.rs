@@ -108,7 +108,7 @@ fn runcnvrl(c: &mut Criterion) {
     colog::init();
     let mut group = c.benchmark_group("cnvrl");
 
-    for size in [1, 2, 4, 8].iter() {
+    for size in [1, 2, 4].iter() {
         unsafe {
             KERNEL_HEIGHT = size * 3;
             KERNEL_WIDTH = size * 3;
