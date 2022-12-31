@@ -1,6 +1,7 @@
 use super::*;
 use crate::abort;
 use crate::fieldutils::{felt_to_i32, i32_to_felt};
+use crate::tensor::ops::*;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
@@ -35,43 +36,21 @@ impl fmt::Display for EltwiseOp {
 }
 
 impl EltwiseOp {
-    fn f<F: FieldExt>(&self, x: i32) -> F {
+    fn f(&self, x: Tensor<i32>) -> Tensor<i32> {
         match &self {
-            EltwiseOp::Sigmoid { scales } => {
-                let kix = (x as f32) / (scales.0 as f32);
-                let fout = (scales.1 as f32) / (1.0 + (-kix).exp());
-                let rounded = fout.round();
-                i32_to_felt(rounded as i32)
-            }
-            EltwiseOp::LeakyReLU { scale, slope } => {
-                if x < 0 {
-                    let d_inv_x = slope.0 * (x as f32) / (*scale as f32);
-                    let rounded = d_inv_x.round();
-                    i32_to_felt(rounded as i32)
-                } else {
-                    i32_to_felt(x)
-                }
-            }
-            EltwiseOp::ReLU { scale } => {
-                if x < 0 {
-                    F::zero()
-                } else {
-                    let d_inv_x = (x as f32) / (*scale as f32);
-                    let rounded = d_inv_x.round();
-                    i32_to_felt(rounded as i32)
-                }
-            }
-            EltwiseOp::Div { scale } => {
-                let d_inv_x = (x as f32) / (*scale as f32);
-                let rounded = d_inv_x.round();
-                i32_to_felt(rounded as i32)
-            }
+            EltwiseOp::Sigmoid { scales } => sigmoid(&x, scales.0, scales.1),
+            EltwiseOp::LeakyReLU { scale, slope } => leakyrelu(&x, *scale, slope.0),
+            EltwiseOp::ReLU { scale } => leakyrelu(&x, *scale, 0_f32),
+            EltwiseOp::Div { scale } => const_div(&x, *scale as i32),
         }
     }
 
     /// a value which is always in the table
     fn default_pair<F: FieldExt>(&self) -> (F, F) {
-        (F::zero(), self.f(0))
+        (
+            F::zero(),
+            i32_to_felt(self.f(vec![0_i32].into_iter().into())[0]),
+        )
     }
 }
 
@@ -117,13 +96,14 @@ impl<F: FieldExt> EltwiseTable<F> {
         match layouter.assign_table(
             || "nl table",
             |mut table| {
-                for (row_offset, int_input) in (smallest..largest).enumerate() {
-                    let input: F = i32_to_felt(int_input);
+                let inputs = Tensor::from(smallest..largest);
+                let evals = self.nonlinearity.f(inputs.clone());
+                match inputs.enum_map(|row_offset, input| {
                     match table.assign_cell(
                         || format!("nl_i_col row {}", row_offset),
                         self.table_input,
                         row_offset,
-                        || Value::known(input),
+                        || Value::known(i32_to_felt::<F>(input)),
                     ) {
                         Ok(a) => a,
                         Err(e) => {
@@ -134,14 +114,20 @@ impl<F: FieldExt> EltwiseTable<F> {
                         || format!("nl_o_col row {}", row_offset),
                         self.table_output,
                         row_offset,
-                        || Value::known(self.nonlinearity.f::<F>(int_input)),
+                        || Value::known(i32_to_felt::<F>(evals[row_offset])),
                     ) {
                         Ok(a) => a,
                         Err(e) => {
                             abort!("failed to assign table cell {:?}", e);
                         }
                     }
-                }
+                }) {
+                    Ok(a) => a,
+                    Err(e) => {
+                        abort!("failed to assign table {:?}", e);
+                    }
+                };
+
                 Ok(())
             },
         ) {
@@ -285,16 +271,20 @@ impl<F: FieldExt + TensorType> EltwiseConfig<F> {
                     self.qlookup.enable(&mut region, 0)?;
 
                     let w = self.input.assign(&mut region, 0, &values).unwrap();
+                    let mut res: Vec<i32> = vec![];
 
-                    let output: Tensor<Value<F>> =
-                        Tensor::from(w.iter().map(|acaf| (*acaf).value_field()).map(|vaf| {
-                            vaf.map(|f| {
-                                self.table
-                                    .borrow()
-                                    .nonlinearity
-                                    .f(felt_to_i32(f.evaluate()))
-                            })
-                        }));
+                    let _ = Tensor::from(w.iter().map(|acaf| (*acaf).value_field()).map(|vaf| {
+                        vaf.map(|f| {
+                            res.push(felt_to_i32(f.evaluate()));
+                        })
+                    }));
+
+                    let output: Tensor<Value<F>> = self
+                        .table
+                        .borrow()
+                        .nonlinearity
+                        .f(res.into_iter().into())
+                        .map(|elem| Value::known(i32_to_felt(elem)));
 
                     Ok(self
                         .output
@@ -355,60 +345,6 @@ mod tests {
             let _ = config.layout(&mut layouter, self.input.clone());
 
             Ok(())
-        }
-    }
-
-    #[test]
-    fn test_eltrelunl() {
-        let nl = EltwiseOp::ReLU { scale: 1 };
-        for i in -127..127 {
-            let r: F = nl.f(i);
-            if i <= 0 {
-                assert_eq!(r, F::from(0_u64))
-            } else {
-                assert_eq!(r, F::from(i as u64))
-            }
-        }
-    }
-
-    #[test]
-    fn test_eltleakyrelunl() {
-        let nl = EltwiseOp::LeakyReLU {
-            scale: 1,
-            slope: eq_float::F32(0.05),
-        };
-        for i in -127..127 {
-            let r: F = nl.f(i);
-            if i <= 0 {
-                println!("{:?}", (0.05 * i as f32));
-                assert_eq!(r, -F::from(-(0.05 * i as f32).round() as u64))
-            } else {
-                assert_eq!(r, F::from(i as u64))
-            }
-        }
-    }
-
-    #[test]
-    fn test_eltsigmoid() {
-        let nl = EltwiseOp::Sigmoid { scales: (1, 1) };
-        for i in -127..127 {
-            let r: F = nl.f(i);
-            let exp_sig = (1.0 / (1.0 + (-i as f32).exp())).round();
-            assert_eq!(r, F::from(exp_sig as u64))
-        }
-    }
-
-    #[test]
-    fn test_eltdivide() {
-        let nl = EltwiseOp::Div { scale: 1 };
-        for i in -127..127 {
-            let r: F = nl.f(i);
-            println!("{:?}, {:?}, {:?}", i, r, F::from(-i as u64));
-            if i <= 0 {
-                assert_eq!(r, -F::from(-i as u64))
-            } else {
-                assert_eq!(r, F::from(i as u64))
-            }
         }
     }
 
