@@ -88,6 +88,65 @@ impl fmt::Display for FusedOp {
     }
 }
 
+impl FusedOp {
+    /// Matches a [FusedOp] to an operation in the `tensor::ops` module.
+    fn f<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
+        &self,
+        mut inputs: Vec<Tensor<T>>,
+    ) -> Tensor<T> {
+        match &self {
+            FusedOp::Identity => inputs[0].clone(),
+            FusedOp::Reshape(new_dims) => {
+                let mut t = inputs[0].clone();
+                t.reshape(&new_dims);
+                t
+            }
+            FusedOp::Flatten(new_dims) => {
+                let mut t = inputs[0].clone();
+                t.reshape(&new_dims);
+                t
+            }
+            FusedOp::Add => add(&inputs),
+            FusedOp::Sub => sub(&inputs),
+            FusedOp::Mult => mult(&inputs),
+            FusedOp::Affine => affine(&inputs),
+            FusedOp::BatchNorm => scale_and_shift(&inputs),
+            FusedOp::ScaleAndShift => scale_and_shift(&inputs),
+            FusedOp::Matmul => matmul(&inputs),
+            FusedOp::Dot => {
+                todo!();
+            }
+            FusedOp::Conv { padding, stride } => convolution(&inputs, *padding, *stride),
+            FusedOp::SumPool {
+                padding,
+                stride,
+                kernel_shape,
+            } => sumpool(&inputs[0], *padding, *stride, *kernel_shape),
+            FusedOp::GlobalSumPool => unreachable!(),
+            FusedOp::Pow(u) => {
+                assert_eq!(inputs.len(), 1);
+                pow(&inputs[0], *u)
+            }
+            FusedOp::Sum => {
+                assert_eq!(inputs.len(), 1);
+                sum(&inputs[0])
+            }
+            FusedOp::Rescaled { inner, scale } => {
+                assert_eq!(scale.len(), inputs.len());
+
+                inner.f(inputs
+                    .iter_mut()
+                    .enumerate()
+                    .map(|(i, ri)| {
+                        assert_eq!(scale[i].0, i);
+                        rescale(ri, scale[i].1)
+                    })
+                    .collect_vec())
+            }
+        }
+    }
+}
+
 /// Representation of a the inputs a [FusedNode] can ingest. The inner type indexes over each of the types.
 #[derive(Clone, Debug)]
 pub enum FusedInputType {
@@ -257,67 +316,7 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
                 FusedInputType::Inter(u) => outputs[*u].clone(),
             })
             .collect_vec();
-        outputs.push(Self::match_op(node.op.clone(), op_inputs));
-    }
-
-    /// Matches a [FusedOp] to an operation in the `tensor::ops` module.
-    fn match_op<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
-        op: FusedOp,
-        mut inputs: Vec<Tensor<T>>,
-    ) -> Tensor<T> {
-        match op {
-            FusedOp::Identity => inputs[0].clone(),
-            FusedOp::Reshape(new_dims) => {
-                let mut t = inputs[0].clone();
-                t.reshape(&new_dims);
-                t
-            }
-            FusedOp::Flatten(new_dims) => {
-                let mut t = inputs[0].clone();
-                t.reshape(&new_dims);
-                t
-            }
-            FusedOp::Add => add(&inputs),
-            FusedOp::Sub => sub(&inputs),
-            FusedOp::Mult => mult(&inputs),
-            FusedOp::Affine => affine(&inputs),
-            FusedOp::BatchNorm => scale_and_shift(&inputs),
-            FusedOp::ScaleAndShift => scale_and_shift(&inputs),
-            FusedOp::Matmul => matmul(&inputs),
-            FusedOp::Dot => {
-                todo!();
-            }
-            FusedOp::Conv { padding, stride } => convolution(&inputs, padding, stride),
-            FusedOp::SumPool {
-                padding,
-                stride,
-                kernel_shape,
-            } => sumpool(&inputs[0], padding, stride, kernel_shape),
-            FusedOp::GlobalSumPool => unreachable!(),
-            FusedOp::Pow(u) => {
-                assert_eq!(inputs.len(), 1);
-                pow(&inputs[0], u)
-            }
-            FusedOp::Sum => {
-                assert_eq!(inputs.len(), 1);
-                sum(&inputs[0])
-            }
-            FusedOp::Rescaled { inner, scale } => {
-                assert_eq!(scale.len(), inputs.len());
-
-                Self::match_op(
-                    *inner,
-                    inputs
-                        .iter_mut()
-                        .enumerate()
-                        .map(|(i, ri)| {
-                            assert_eq!(scale[i].0, i);
-                            rescale(ri, scale[i].1)
-                        })
-                        .collect_vec(),
-                )
-            }
-        }
+        outputs.push(node.op.f(op_inputs));
     }
 }
 
