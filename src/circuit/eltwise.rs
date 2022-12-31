@@ -21,6 +21,19 @@ pub enum EltwiseOp {
     Div { scale: usize },
 }
 
+impl fmt::Display for EltwiseOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            EltwiseOp::ReLU { scale } => write!(f, "relu w/ scaling: {}", scale),
+            EltwiseOp::LeakyReLU { scale, slope } => {
+                write!(f, "leaky relu w/ scaling: {} and slope {}", scale, slope)
+            }
+            EltwiseOp::Div { scale } => write!(f, "div  w/ scaling: {}", scale),
+            EltwiseOp::Sigmoid { scales } => write!(f, "sigmoid  w/ scaling: {}", scales.0),
+        }
+    }
+}
+
 impl EltwiseOp {
     fn f<F: FieldExt>(&self, x: i32) -> F {
         match &self {
@@ -59,19 +72,6 @@ impl EltwiseOp {
     /// a value which is always in the table
     fn default_pair<F: FieldExt>(&self) -> (F, F) {
         (F::zero(), self.f(0))
-    }
-}
-
-impl fmt::Display for EltwiseOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            EltwiseOp::ReLU { scale } => write!(f, "relu w/ scaling: {}", scale),
-            EltwiseOp::LeakyReLU { scale, slope } => {
-                write!(f, "leaky relu w/ scaling: {} and slope {}", scale, slope)
-            }
-            EltwiseOp::Div { scale } => write!(f, "div  w/ scaling: {}", scale),
-            EltwiseOp::Sigmoid { scales } => write!(f, "sigmoid  w/ scaling: {}", scales.0),
-        }
     }
 }
 
