@@ -244,7 +244,7 @@ where
                 self.l0_params[1].clone(),
             ],
         );
-        let mut x = config.l1.layout(&mut layouter, x);
+        let mut x = config.l1.layout(&mut layouter, &x);
         x.flatten();
         let l2out = config.l2.layout(
             &mut layouter,

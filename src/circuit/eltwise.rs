@@ -1,7 +1,6 @@
 use super::*;
-use crate::abort;
-use crate::fieldutils::{felt_to_i32, i32_to_felt};
-use crate::tensor::ops::*;
+use crate::tensor::ops::activations::*;
+use crate::{abort, fieldutils::felt_to_i32, fieldutils::i32_to_felt};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
@@ -25,12 +24,12 @@ pub enum EltwiseOp {
 impl fmt::Display for EltwiseOp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            EltwiseOp::ReLU { scale } => write!(f, "relu w/ scaling: {}", scale),
+            EltwiseOp::Div { scale } => write!(f, "div  w/ scale: {}", scale),
+            EltwiseOp::ReLU { scale } => write!(f, "relu w/ scale: {}", scale),
             EltwiseOp::LeakyReLU { scale, slope } => {
-                write!(f, "leaky relu w/ scaling: {} and slope {}", scale, slope)
+                write!(f, "leaky-relu w/ scale: {}, slope: {}", scale, slope)
             }
-            EltwiseOp::Div { scale } => write!(f, "div  w/ scaling: {}", scale),
-            EltwiseOp::Sigmoid { scales } => write!(f, "sigmoid  w/ scaling: {}", scales.0),
+            EltwiseOp::Sigmoid { scales } => write!(f, "sigmoid  w/ scale: {}", scales.0),
         }
     }
 }
@@ -38,10 +37,10 @@ impl fmt::Display for EltwiseOp {
 impl EltwiseOp {
     fn f(&self, x: Tensor<i32>) -> Tensor<i32> {
         match &self {
-            EltwiseOp::Sigmoid { scales } => sigmoid(&x, scales.0, scales.1),
-            EltwiseOp::LeakyReLU { scale, slope } => leakyrelu(&x, *scale, slope.0),
-            EltwiseOp::ReLU { scale } => leakyrelu(&x, *scale, 0_f32),
             EltwiseOp::Div { scale } => const_div(&x, *scale as i32),
+            EltwiseOp::ReLU { scale } => leakyrelu(&x, *scale, 0_f32),
+            EltwiseOp::LeakyReLU { scale, slope } => leakyrelu(&x, *scale, slope.0),
+            EltwiseOp::Sigmoid { scales } => sigmoid(&x, scales.0, scales.1),
         }
     }
 
@@ -93,49 +92,37 @@ impl<F: FieldExt> EltwiseTable<F> {
         let base = 2i32;
         let smallest = -base.pow(self.bits as u32 - 1);
         let largest = base.pow(self.bits as u32 - 1);
-        match layouter.assign_table(
-            || "nl table",
-            |mut table| {
-                let inputs = Tensor::from(smallest..largest);
-                let evals = self.nonlinearity.f(inputs.clone());
-                match inputs.enum_map(|row_offset, input| {
-                    match table.assign_cell(
-                        || format!("nl_i_col row {}", row_offset),
-                        self.table_input,
-                        row_offset,
-                        || Value::known(i32_to_felt::<F>(input)),
-                    ) {
-                        Ok(a) => a,
-                        Err(e) => {
-                            abort!("failed to assign table cell {:?}", e);
-                        }
-                    }
-                    match table.assign_cell(
-                        || format!("nl_o_col row {}", row_offset),
-                        self.table_output,
-                        row_offset,
-                        || Value::known(i32_to_felt::<F>(evals[row_offset])),
-                    ) {
-                        Ok(a) => a,
-                        Err(e) => {
-                            abort!("failed to assign table cell {:?}", e);
-                        }
-                    }
-                }) {
-                    Ok(a) => a,
-                    Err(e) => {
-                        abort!("failed to assign table {:?}", e);
-                    }
-                };
+        let inputs = Tensor::from(smallest..largest);
+        let evals = self.nonlinearity.f(inputs.clone());
+        layouter
+            .assign_table(
+                || "nl table",
+                |mut table| {
+                    inputs
+                        .enum_map(|row_offset, input| {
+                            table
+                                .assign_cell(
+                                    || format!("nl_i_col row {}", row_offset),
+                                    self.table_input,
+                                    row_offset,
+                                    || Value::known(i32_to_felt::<F>(input)),
+                                )
+                                .expect("failed to assign table input cell");
 
-                Ok(())
-            },
-        ) {
-            Ok(a) => a,
-            Err(e) => {
-                abort!("failed to assign elt-wise table {:?}", e);
-            }
-        };
+                            table
+                                .assign_cell(
+                                    || format!("nl_o_col row {}", row_offset),
+                                    self.table_output,
+                                    row_offset,
+                                    || Value::known(i32_to_felt::<F>(evals[row_offset])),
+                                )
+                                .expect("failed to assign table output cell");
+                        })
+                        .expect("failed to assign table");
+                    Ok(())
+                },
+            )
+            .expect("failed to layout table");
         self.is_assigned = true;
     }
 }
@@ -260,7 +247,7 @@ impl<F: FieldExt + TensorType> EltwiseConfig<F> {
 
     /// Assigns values to the variables created when calling `configure`.
     /// Values are supplied as a 1-element array of `[input]` VarTensors.
-    pub fn layout(&self, layouter: &mut impl Layouter<F>, values: ValTensor<F>) -> ValTensor<F> {
+    pub fn layout(&self, layouter: &mut impl Layouter<F>, values: &ValTensor<F>) -> ValTensor<F> {
         if !self.table.borrow().is_assigned {
             self.table.borrow_mut().layout(layouter)
         }
@@ -271,20 +258,24 @@ impl<F: FieldExt + TensorType> EltwiseConfig<F> {
                     self.qlookup.enable(&mut region, 0)?;
 
                     let w = self.input.assign(&mut region, 0, &values).unwrap();
-                    let mut res: Vec<i32> = vec![];
 
+                    let mut res: Vec<i32> = vec![];
                     let _ = Tensor::from(w.iter().map(|acaf| (*acaf).value_field()).map(|vaf| {
                         vaf.map(|f| {
                             res.push(felt_to_i32(f.evaluate()));
                         })
                     }));
 
-                    let output: Tensor<Value<F>> = self
-                        .table
-                        .borrow()
-                        .nonlinearity
-                        .f(res.into_iter().into())
-                        .map(|elem| Value::known(i32_to_felt(elem)));
+                    // for key generation res will be empty and we need to return a set of unassigned values
+                    let output: Tensor<Value<F>> = match res.len() {
+                        0 => w.map(|_| Value::unknown()),
+                        _ => self
+                            .table
+                            .borrow()
+                            .nonlinearity
+                            .f(res.into_iter().into())
+                            .map(|elem| Value::known(i32_to_felt(elem))),
+                    };
 
                     Ok(self
                         .output
@@ -342,7 +333,7 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
         ) -> Result<(), Error> {
-            let _ = config.layout(&mut layouter, self.input.clone());
+            let _ = config.layout(&mut layouter, &self.input);
 
             Ok(())
         }

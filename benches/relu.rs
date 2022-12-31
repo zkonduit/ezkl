@@ -44,7 +44,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for NLCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
     ) -> Result<(), Error> {
-        config.layout(&mut layouter, self.input.clone());
+        config.layout(&mut layouter, &self.input);
 
         Ok(())
     }

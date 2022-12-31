@@ -539,7 +539,7 @@ impl Model {
             NodeConfig::Eltwise(rc, idx) => {
                 assert_eq!(idx.len(), 1);
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
-                Some(rc.layout(layouter, inputs.get(&idx[0]).unwrap().clone()))
+                Some(rc.layout(layouter, inputs.get(&idx[0]).unwrap()))
             }
             NodeConfig::Input => None,
             NodeConfig::Const => None,
