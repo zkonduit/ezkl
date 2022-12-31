@@ -1,5 +1,4 @@
 use crate::abort;
-use crate::circuit::eltwise::EltwiseTable;
 use crate::commands::Cli;
 use crate::tensor::TensorType;
 use crate::tensor::{ValTensor, VarTensor};
@@ -7,7 +6,6 @@ use halo2_proofs::{arithmetic::FieldExt, plonk::ConstraintSystem};
 use itertools::Itertools;
 use log::error;
 use serde::Deserialize;
-use std::{cell::RefCell, rc::Rc};
 
 /// Label Enum to track whether model input, model parameters, and model output are public or private
 #[derive(Clone, Debug, Deserialize)]
@@ -80,19 +78,6 @@ impl VarVisibility {
             output: output_vis,
         }
     }
-}
-
-#[derive(Debug)]
-/// Lookup tables that will be available for reuse.
-pub enum TableTypes<F: FieldExt + TensorType> {
-    /// Reference to a ReLU table
-    ReLU(Rc<RefCell<EltwiseTable<F>>>),
-    /// Reference to a leaky ReLU table
-    LeakyReLU(Rc<RefCell<EltwiseTable<F>>>),
-    /// Reference to a DivideBy table
-    DivideBy(Rc<RefCell<EltwiseTable<F>>>),
-    /// Reference to a Sigmoid table
-    Sigmoid(Rc<RefCell<EltwiseTable<F>>>),
 }
 
 /// A wrapper for holding all columns that will be assigned to by a model.
