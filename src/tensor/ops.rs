@@ -777,7 +777,7 @@ pub mod activations {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::sigmoid;
+    /// use ezkl::tensor::ops::activations::sigmoid;
     /// let x = Tensor::<i32>::new(
     ///     Some(&[2, 15, 2, 1, 1, 0]),
     ///     &[2, 3],
@@ -807,7 +807,7 @@ pub mod activations {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::leakyrelu;
+    /// use ezkl::tensor::ops::activations::leakyrelu;
     /// let x = Tensor::<i32>::new(
     ///     Some(&[2, 15, 2, 1, 1, -5]),
     ///     &[2, 3],
@@ -840,14 +840,14 @@ pub mod activations {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::const_div;
+    /// use ezkl::tensor::ops::activations::const_div;
     /// let x = Tensor::<i32>::new(
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let k = 2;
     /// let result = const_div(&x, k);
-    /// let expected = Tensor::<i32>::new(Some(&[1, 0, 1, 4, 0, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[1, 1, 1, 4, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn const_div(a: &Tensor<i32>, scale: i32) -> Tensor<i32> {
