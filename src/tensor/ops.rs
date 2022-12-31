@@ -349,35 +349,6 @@ pub fn div<T: TensorType + Div<Output = T>>(t: Tensor<T>, d: Tensor<T>) -> Tenso
     output
 }
 
-/// Elementwise divides a tensor with a const element.
-/// # Arguments
-///
-/// * `a` - Tensor
-/// * `b` - Single value
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::const_div;
-/// let x = Tensor::<i32>::new(
-///     Some(&[2, 1, 2, 7, 1, 1]),
-///     &[2, 3],
-/// ).unwrap();
-/// let k = 2;
-/// let result = const_div(&x, k);
-/// let expected = Tensor::<i32>::new(Some(&[1, 0, 1, 3, 0, 0]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn const_div<T: TensorType + Div<Output = T>>(a: &Tensor<T>, b: T) -> Tensor<T> {
-    // calculate value of output
-    let mut output: Tensor<T> = a.clone();
-
-    for (i, a_i) in a.iter().enumerate() {
-        output[i] = a_i.clone() / b.clone()
-    }
-
-    output
-}
-
 /// Elementwise multiplies a tensor with a const element.
 /// # Arguments
 ///
@@ -847,6 +818,36 @@ pub fn leakyrelu(a: &Tensor<i32>, scale: usize, slope: f32) -> Tensor<i32> {
             let d_inv_x = (*a_i as f32) / (scale as f32);
             d_inv_x.round() as i32
         };
+    }
+    output
+}
+
+/// Elementwise divides a tensor with a const integer element.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::const_div;
+/// let x = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 7, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let k = 2;
+/// let result = const_div(&x, k);
+/// let expected = Tensor::<i32>::new(Some(&[1, 0, 1, 3, 0, 0]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn const_div(a: &Tensor<i32>, scale: i32) -> Tensor<i32> {
+    // calculate value of output
+    // calculate value of output
+    let mut output: Tensor<i32> = a.clone();
+
+    for (i, a_i) in a.iter().enumerate() {
+        let d_inv_x = (*a_i as f32) / (scale as f32);
+        output[i] = d_inv_x.round() as i32;
     }
     output
 }

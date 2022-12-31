@@ -354,7 +354,7 @@ mod tests {
             Tensor::new(Some(&[Value::<F>::known(F::from(1_u64))]), &[1]).unwrap();
 
         let circuit = ReLUCircuit::<F> {
-            input: ValTensor::from(input.clone()),
+            input: ValTensor::from(input),
         };
 
         let prover = MockProver::run(4_u32, &circuit, vec![]).unwrap();

@@ -98,12 +98,12 @@ impl FusedOp {
             FusedOp::Identity => inputs[0].clone(),
             FusedOp::Reshape(new_dims) => {
                 let mut t = inputs[0].clone();
-                t.reshape(&new_dims);
+                t.reshape(new_dims);
                 t
             }
             FusedOp::Flatten(new_dims) => {
                 let mut t = inputs[0].clone();
-                t.reshape(&new_dims);
+                t.reshape(new_dims);
                 t
             }
             FusedOp::Add => add(&inputs),
