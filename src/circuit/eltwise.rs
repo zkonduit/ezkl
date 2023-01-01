@@ -7,18 +7,32 @@ use halo2_proofs::{
     plonk::{ConstraintSystem, Expression, Selector, TableColumn},
     poly::Rotation,
 };
+use itertools::Itertools;
 use log::error;
 use std::fmt;
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be merged into a single circuit gate.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum EltwiseOp {
-    Sigmoid { scales: (usize, usize) },
-    LeakyReLU { scale: usize, slope: eq_float::F32 },
-    ReLU { scale: usize },
-    Div { scale: usize },
+    Div {
+        scale: usize,
+    },
+    ReLU {
+        scale: usize,
+    },
+    LeakyReLU {
+        scale: usize,
+        slope: eq_float::F32,
+    },
+    PReLU {
+        scale: usize,
+        slopes: Vec<eq_float::F32>,
+    },
+    Sigmoid {
+        scales: (usize, usize),
+    },
 }
 
 impl fmt::Display for EltwiseOp {
@@ -28,6 +42,9 @@ impl fmt::Display for EltwiseOp {
             EltwiseOp::ReLU { scale } => write!(f, "relu w/ scale: {}", scale),
             EltwiseOp::LeakyReLU { scale, slope } => {
                 write!(f, "leaky-relu w/ scale: {}, slope: {}", scale, slope)
+            }
+            EltwiseOp::PReLU { scale, slopes } => {
+                write!(f, "leaky-relu w/ scale: {}, slopes: {:#?}", scale, slopes)
             }
             EltwiseOp::Sigmoid { scales } => write!(f, "sigmoid  w/ scale: {}", scales.0),
         }
@@ -40,6 +57,9 @@ impl EltwiseOp {
             EltwiseOp::Div { scale } => const_div(&x, *scale as i32),
             EltwiseOp::ReLU { scale } => leakyrelu(&x, *scale, 0_f32),
             EltwiseOp::LeakyReLU { scale, slope } => leakyrelu(&x, *scale, slope.0),
+            EltwiseOp::PReLU { scale, slopes } => {
+                prelu(&x, *scale, &slopes.iter().map(|f| f.0).collect_vec())
+            }
             EltwiseOp::Sigmoid { scales } => sigmoid(&x, scales.0, scales.1),
         }
     }
@@ -153,7 +173,7 @@ impl<F: FieldExt + TensorType> EltwiseConfig<F> {
         let configs = (0..NUM)
             .map(|_| {
                 let l = match &table {
-                    None => Self::configure(cs, input, output, bits, nonlinearity),
+                    None => Self::configure(cs, input, output, bits, nonlinearity.clone()),
                     Some(t) => Self::configure_with_table(cs, input, output, t.clone()),
                 };
                 table = Some(l.table.clone());

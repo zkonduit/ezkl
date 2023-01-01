@@ -11,6 +11,7 @@ use itertools::Itertools;
 use log::{error, info, trace, warn};
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fmt;
+use std::ops::Deref;
 use tabled::Tabled;
 use tract_onnx;
 use tract_onnx::prelude::{DatumType, InferenceFact, Node as OnnxNode, OutletId};
@@ -54,9 +55,9 @@ impl OpKind {
     pub fn new(name: &str) -> Self {
         match name {
             "Clip" => OpKind::Eltwise(EltwiseOp::ReLU { scale: 1 }),
-            "Prelu" => OpKind::Eltwise(EltwiseOp::LeakyReLU {
+            "Prelu" => OpKind::Eltwise(EltwiseOp::PReLU {
                 scale: 1,
-                slope: eq_float::F32(0.0),
+                slopes: vec![],
             }),
             "LeakyRelu" => OpKind::Eltwise(EltwiseOp::LeakyReLU {
                 scale: 1,
@@ -398,6 +399,47 @@ impl Node {
                             idx,
                             opkind,
                             inputs: node.inputs.clone(),
+                            in_dims: vec![input_node.out_dims.clone()],
+                            out_dims: input_node.out_dims.clone(),
+                            in_scale: input_node.out_scale,
+                            out_scale: scale,
+                            output_max,
+                            ..Default::default()
+                        }
+                    }
+                    EltwiseOp::PReLU {
+                        scale: mut layer_scale,
+                        ..
+                    } => {
+                        let input_node = &inputs[0];
+                        // Extract the slope layer hyperparams
+                        let slopes = inputs[1]
+                            .clone()
+                            .raw_const_value
+                            .unwrap()
+                            .deref()
+                            .iter()
+                            .map(|value| eq_float::F32(*value))
+                            .collect_vec();
+                        node.inputs.pop();
+
+                        let scale_diff = input_node.out_scale - scale;
+                        // We can also consider adjusting the scale of all inputs and the output in a more custom way.
+                        let mut output_max = input_node.output_max;
+                        if scale_diff > 0 {
+                            layer_scale = scale_to_multiplier(scale_diff) as usize;
+                            output_max = input_node.output_max / (layer_scale as f32);
+                        }
+
+                        opkind = OpKind::Eltwise(EltwiseOp::PReLU {
+                            scale: layer_scale,
+                            slopes: slopes.clone(),
+                        }); // now the input will be scaled down to match
+
+                        Node {
+                            idx,
+                            opkind,
+                            inputs: node.inputs,
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
@@ -817,21 +859,19 @@ impl Node {
                     }
                     FusedOp::Pow(_) => {
                         let input_node = &inputs[0];
-                        let mult = scale_to_multiplier(scale);
-                        let mut input_outlets = node.inputs.clone();
-                        input_outlets.pop();
+                        let pow = inputs[1].clone().raw_const_value.unwrap()[0];
+                        node.inputs.pop();
                         if inputs[1].out_dims != [1] {
                             error!(
                                 "ezkl currently only supports raising to the power by a constant"
                             );
                             unimplemented!()
                         }
-                        let pow = inputs[1].output_max / mult;
 
                         Node {
                             idx,
                             opkind: OpKind::Fused(FusedOp::Pow(pow as usize)),
-                            inputs: input_outlets,
+                            inputs: node.inputs,
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,

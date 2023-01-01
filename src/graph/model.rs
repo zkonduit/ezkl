@@ -412,7 +412,7 @@ impl Model {
                     NodeConfig::Eltwise(conf, node_inputs)
                 } else {
                     let conf: EltwiseConfig<F> =
-                        EltwiseConfig::configure(meta, input, output, self.bits, *s);
+                        EltwiseConfig::configure(meta, input, output, self.bits, s.clone());
                     tables.insert(node.opkind.clone(), conf.table.clone());
                     NodeConfig::Eltwise(conf, node_inputs)
                 }
