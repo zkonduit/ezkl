@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::circuit::fused::*;
+use ezkl::circuit::polynomial::*;
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
@@ -23,7 +23,7 @@ struct MyCircuit<F: FieldExt + TensorType> {
 }
 
 impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
-    type Config = FusedConfig<F>;
+    type Config = Config<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -38,12 +38,12 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
         let bias = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
         let output = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
         // tells the config layer to add an affine op to a circuit gate
-        let affine_node = FusedNode {
-            op: FusedOp::Affine,
+        let affine_node = Node {
+            op: Op::Affine,
             input_order: vec![
-                FusedInputType::Input(0),
-                FusedInputType::Input(1),
-                FusedInputType::Input(2),
+                InputType::Input(0),
+                InputType::Input(1),
+                InputType::Input(2),
             ],
         };
 

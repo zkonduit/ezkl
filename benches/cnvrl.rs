@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::circuit::fused::*;
+use ezkl::circuit::polynomial::*;
 use ezkl::tensor::*;
 use halo2_proofs::{
     arithmetic::{Field, FieldExt},
@@ -35,7 +35,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F>
 where
     Value<F>: TensorType,
 {
-    type Config = FusedConfig<F>;
+    type Config = Config<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -75,15 +75,15 @@ where
             );
 
             // tells the config layer to add a conv op to a circuit gate
-            let conv_node = FusedNode {
-                op: FusedOp::Conv {
+            let conv_node = Node {
+                op: Op::Conv {
                     padding: (PADDING, PADDING),
                     stride: (STRIDE, STRIDE),
                 },
                 input_order: vec![
-                    FusedInputType::Input(0),
-                    FusedInputType::Input(1),
-                    FusedInputType::Input(2),
+                    InputType::Input(0),
+                    InputType::Input(1),
+                    InputType::Input(2),
                 ],
             };
 

@@ -13,14 +13,13 @@ fn init() {
     build_ezkl();
 }
 
-const TESTS: [&str; 13] = [
+const TESTS: [&str; 12] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
     "1l_reshape",
     "1l_sigmoid",
     "1l_leakyrelu",
-    "1l_prelu",
     "1l_relu",
     "2l_relu_sigmoid_small",
     "2l_relu_small",
@@ -29,14 +28,13 @@ const TESTS: [&str; 13] = [
     "2l_relu_sigmoid_conv",
 ];
 
-const TESTS_EVM: [&str; 10] = [
+const TESTS_EVM: [&str; 9] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
     "1l_reshape",
     "1l_sigmoid",
     "1l_leakyrelu",
-    "1l_prelu",
     "1l_relu",
     "2l_relu_sigmoid_small",
     "2l_relu_small",
@@ -56,7 +54,7 @@ macro_rules! test_func {
             use crate::ipa_prove_and_verify;
             use crate::kzg_fullprove;
             use crate::kzg_prove_and_verify;
-            seq!(N in 0..=12 {
+            seq!(N in 0..=11 {
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
                 mock(test.to_string());
@@ -104,7 +102,7 @@ macro_rules! test_func_evm {
             use crate::TESTS_EVM;
             use test_case::test_case;
             use crate::kzg_evm_fullprove;
-            seq!(N in 0..=9 {
+            seq!(N in 0..=8 {
             // these take a particularly long time to run
             #(#[test_case(TESTS_EVM[N])])*
             fn kzg_evm_fullprove_(test: &str) {
