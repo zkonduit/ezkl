@@ -235,8 +235,10 @@ impl Model {
                 .collect();
 
             if !lookup_ops.is_empty() {
-                let config = self.conf_table(&lookup_ops, meta, vars, &mut tables);
-                results.insert(**lookup_ops.keys().max().unwrap(), config);
+                for (i, node) in lookup_ops {
+                    let config = self.conf_table(node, meta, vars, &mut tables);
+                    results.insert(*i, config);
+                }
             }
 
             // preserves ordering
@@ -249,12 +251,12 @@ impl Model {
                 let config = self.conf_poly_ops(&poly_ops, meta, vars);
                 results.insert(**poly_ops.keys().max().unwrap(), config);
 
-                let mut display: String = "Fused nodes: ".to_string();
+                let mut display: String = "Poly nodes: ".to_string();
                 for idx in poly_ops.keys().map(|k| **k).sorted() {
                     let node = &self.nodes.filter(idx);
                     display.push_str(&format!("| {} ({:?}) | ", idx, node.opkind));
                 }
-                info!("{}", display);
+                trace!("{}", display);
             }
         }
 
@@ -430,43 +432,30 @@ impl Model {
     /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure the passed `node`.
     fn conf_table<F: FieldExt + TensorType>(
         &self,
-        nodes: &BTreeMap<&usize, &Node>,
+        node: &Node,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
         tables: &mut BTreeMap<Vec<LookupOp>, Rc<RefCell<LookupTable<F>>>>,
     ) -> NodeConfig<F> {
-        let input_len = nodes.values().collect_vec()[0].in_dims[0].iter().product();
+        let input_len = node.in_dims[0].iter().product();
         let input = &vars.advices[0].reshape(&[input_len]);
         let output = &vars.advices[1].reshape(&[input_len]);
-        let node_inputs = nodes.values().collect_vec()[0]
-            .inputs
-            .iter()
-            .map(|e| e.node)
-            .collect();
+        let node_inputs = node.inputs.iter().map(|e| e.node).collect();
 
-        let mut ops = vec![];
-        for node in nodes {
-            match node.1.opkind.clone() {
-                OpKind::Lookup(op) => {
-                    // asserts the composed operations all have the same input len
-                    assert_eq!(node.1.in_dims[0].iter().product::<usize>(), input_len);
-                    ops.push(op);
-                }
-                _ => {
-                    panic!("wrong method called for a non lookup op");
-                }
-            }
-        }
+        let op = match &node.opkind {
+            OpKind::Lookup(l) => l,
+            c => panic!("wrong method called for {}", c),
+        };
 
-        if tables.contains_key(&ops) {
-            let table = tables.get(&ops).unwrap();
+        if tables.contains_key(&vec![op.clone()]) {
+            let table = tables.get(&vec![op.clone()]).unwrap();
             let conf: LookupConfig<F> =
                 LookupConfig::configure_with_table(meta, input, output, table.clone());
             NodeConfig::Lookup(conf, node_inputs)
         } else {
             let conf: LookupConfig<F> =
-                LookupConfig::configure(meta, input, output, self.bits, &ops);
-            tables.insert(ops, conf.table.clone());
+                LookupConfig::configure(meta, input, output, self.bits, &[op.clone()]);
+            tables.insert(vec![op.clone()], conf.table.clone());
             NodeConfig::Lookup(conf, node_inputs)
         }
     }
