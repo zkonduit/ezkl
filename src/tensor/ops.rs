@@ -804,6 +804,7 @@ pub mod activations {
     ///
     /// * `a` - Tensor
     /// * `scale` - Single value
+    /// * `slope` - Single value
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
@@ -837,6 +838,7 @@ pub mod activations {
     ///
     /// * `a` - Tensor
     /// * `scale` - Single value
+    /// * `slopes` - Array of values
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
