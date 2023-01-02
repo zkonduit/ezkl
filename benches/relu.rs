@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::circuit::eltwise::{EltwiseConfig, EltwiseOp};
+use ezkl::circuit::lookup::{Config, Op};
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
@@ -20,7 +20,7 @@ struct NLCircuit<F: FieldExt + TensorType> {
 }
 
 impl<F: FieldExt + TensorType> Circuit<F> for NLCircuit<F> {
-    type Config = EltwiseConfig<F>;
+    type Config = Config<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -33,9 +33,9 @@ impl<F: FieldExt + TensorType> Circuit<F> for NLCircuit<F> {
                 .map(|_| VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512))
                 .collect::<Vec<_>>();
 
-            let nl = EltwiseOp::ReLU { scale: 128 };
+            let nl = Op::ReLU { scale: 128 };
 
-            Self::Config::configure(cs, &advices[0], &advices[1], BITS, nl)
+            Self::Config::configure(cs, &advices[0], &advices[1], BITS, &[nl])
         }
     }
 

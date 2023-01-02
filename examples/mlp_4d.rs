@@ -1,5 +1,7 @@
-use ezkl::circuit::eltwise::{EltwiseConfig, EltwiseOp};
-use ezkl::circuit::fused::*;
+use ezkl::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
+use ezkl::circuit::polynomial::{
+    Config as PolyConfig, InputType as PolyInputType, Node as PolyNode, Op as PolyOp,
+};
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
@@ -15,11 +17,11 @@ const K: usize = 15;
 // A columnar ReLu MLP
 #[derive(Clone)]
 struct MyConfig<F: FieldExt + TensorType> {
-    l0: FusedConfig<F>,
-    l1: EltwiseConfig<F>,
-    l2: FusedConfig<F>,
-    l3: EltwiseConfig<F>,
-    l4: EltwiseConfig<F>,
+    l0: PolyConfig<F>,
+    l1: LookupConfig<F>,
+    l2: PolyConfig<F>,
+    l3: LookupConfig<F>,
+    l4: LookupConfig<F>,
     public_output: Column<Instance>,
 }
 
@@ -55,40 +57,37 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let bias = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
         let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
         // tells the config layer to add an affine op to the circuit gate
-        let affine_node = FusedNode {
-            op: FusedOp::Affine,
+        let affine_node = PolyNode {
+            op: PolyOp::Affine,
             input_order: vec![
-                FusedInputType::Input(0),
-                FusedInputType::Input(1),
-                FusedInputType::Input(2),
+                PolyInputType::Input(0),
+                PolyInputType::Input(1),
+                PolyInputType::Input(2),
             ],
         };
 
-        let l0 = FusedConfig::<F>::configure(
+        let l0 = PolyConfig::<F>::configure(
             cs,
             &[input.clone(), kernel.clone(), bias.clone()],
             &output,
             &[affine_node.clone()],
         );
 
-        let l2 = FusedConfig::<F>::configure(
-            cs,
-            &[input.clone(), kernel, bias],
-            &output,
-            &[affine_node],
-        );
+        let l2 =
+            PolyConfig::<F>::configure(cs, &[input.clone(), kernel, bias], &output, &[affine_node]);
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
-        let [l1, l3]: [EltwiseConfig<F>; 2] = EltwiseConfig::configure_multiple(
+        let [l1, l3]: [LookupConfig<F>; 2] = LookupConfig::configure_multiple(
             cs,
             &input,
             &output,
             BITS,
-            EltwiseOp::ReLU { scale: 1 },
+            &[LookupOp::ReLU { scale: 1 }],
         );
 
         // sets up a new Divide by table
-        let l4 = EltwiseConfig::configure(cs, &input, &output, BITS, EltwiseOp::Div { scale: 128 });
+        let l4 =
+            LookupConfig::configure(cs, &input, &output, BITS, &[LookupOp::Div { scale: 128 }]);
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);

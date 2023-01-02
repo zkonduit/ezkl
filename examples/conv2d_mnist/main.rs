@@ -1,5 +1,7 @@
-use ezkl::circuit::eltwise::{EltwiseConfig, EltwiseOp};
-use ezkl::circuit::fused::*;
+use ezkl::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
+use ezkl::circuit::polynomial::{
+    Config as PolyConfig, InputType as PolyInputType, Node as PolyNode, Op as PolyOp,
+};
 use ezkl::fieldutils;
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::tensor::*;
@@ -53,10 +55,10 @@ struct Config<
     Value<F>: TensorType,
 {
     // this will be a conv layer
-    l0: FusedConfig<F>,
-    l1: EltwiseConfig<F>,
+    l0: PolyConfig<F>,
+    l1: LookupConfig<F>,
     // this will be an affine layer
-    l2: FusedConfig<F>,
+    l2: PolyConfig<F>,
     public_output: Column<Instance>,
 }
 
@@ -181,19 +183,19 @@ where
         );
 
         // tells the config layer to add a conv op to a circuit gate
-        let conv_node = FusedNode {
-            op: FusedOp::Conv {
+        let conv_node = PolyNode {
+            op: PolyOp::Conv {
                 padding: (PADDING, PADDING),
                 stride: (STRIDE, STRIDE),
             },
             input_order: vec![
-                FusedInputType::Input(0),
-                FusedInputType::Input(1),
-                FusedInputType::Input(2),
+                PolyInputType::Input(0),
+                PolyInputType::Input(1),
+                PolyInputType::Input(2),
             ],
         };
 
-        let l0 = FusedConfig::configure(
+        let l0 = PolyConfig::configure(
             cs,
             &[input.clone(), kernel.clone(), bias.clone()],
             &output,
@@ -203,15 +205,16 @@ where
         let input = input.reshape(&[LEN]);
         let output = output.reshape(&[LEN]);
 
-        let l1 = EltwiseConfig::configure(cs, &input, &output, BITS, EltwiseOp::ReLU { scale: 32 });
+        let l1 =
+            LookupConfig::configure(cs, &input, &output, BITS, &[LookupOp::ReLU { scale: 32 }]);
 
         // tells the config layer to add an affine op to the circuit gate
-        let affine_node = FusedNode {
-            op: FusedOp::Affine,
+        let affine_node = PolyNode {
+            op: PolyOp::Affine,
             input_order: vec![
-                FusedInputType::Input(0),
-                FusedInputType::Input(1),
-                FusedInputType::Input(2),
+                PolyInputType::Input(0),
+                PolyInputType::Input(1),
+                PolyInputType::Input(2),
             ],
         };
 
@@ -219,7 +222,7 @@ where
         let bias = bias.reshape(&[CLASSES]);
         let output = output.reshape(&[CLASSES]);
 
-        let l2 = FusedConfig::configure(cs, &[input, kernel, bias], &output, &[affine_node]);
+        let l2 = PolyConfig::configure(cs, &[input, kernel, bias], &output, &[affine_node]);
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
 
