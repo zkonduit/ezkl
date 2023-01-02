@@ -144,7 +144,7 @@ pub fn run(args: Cli) {
                         params
                     };
                     let now = Instant::now();
-                    let snarks = [(); 1].map(|_| gen_application_snark(&params_app, &data));
+                    let snarks = [(); 1].map(|_| gen_application_snark(&params_app, &data, &args));
                     info!("Application proof took {}", now.elapsed().as_secs());
                     let agg_circuit = AggregationCircuit::new(&params, snarks);
                     let pk = gen_pk(&params, &agg_circuit);
