@@ -7,6 +7,8 @@ use std::env;
 use std::io::{stdin, stdout, Write};
 use std::path::PathBuf;
 
+const EZKLCONF: &str = "EZKLCONF";
+
 #[allow(missing_docs)]
 #[derive(Parser, Debug, Clone, Deserialize, Serialize)]
 #[command(author, version, about, long_about = None)]
@@ -57,8 +59,7 @@ impl Cli {
     }
     /// Create an ezkl configuration: if there is an EZKLCONF env variable, parse its value, else read it from the command line.
     pub fn create() -> Self {
-        let key = "EZKLCONF";
-        match env::var(key) {
+        match env::var(EZKLCONF) {
             Ok(val) => Self::from_json(&val).unwrap(),
             Err(_e) => Cli::parse(),
         }
