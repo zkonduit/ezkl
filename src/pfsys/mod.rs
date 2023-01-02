@@ -7,7 +7,6 @@ use crate::commands::{data_path, Cli};
 use crate::fieldutils::i32_to_felt;
 use crate::graph::{utilities::vector_to_quantized, Model, ModelCircuit};
 use crate::tensor::{Tensor, TensorType};
-use clap::Parser;
 use halo2_proofs::plonk::{
     create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey,
 };
@@ -126,10 +125,11 @@ pub fn parse_prover_errors(f: &VerifyFailure) {
 /// Initialize the model circuit and quantize the provided float inputs from the provided `ModelInput`.
 pub fn prepare_circuit_and_public_input<F: FieldExt>(
     data: &ModelInput,
+    args: &Cli,
 ) -> (ModelCircuit<F>, Vec<Tensor<i32>>) {
-    let model = Model::from_arg();
+    let model = Model::from_ezkl_conf(args.clone());
     let out_scales = model.get_output_scales();
-    let circuit = prepare_circuit(data);
+    let circuit = prepare_circuit(data, args);
 
     // quantize the supplied data using the provided scale.
     // the ordering here is important, we want the inputs to come before the outputs
@@ -179,9 +179,7 @@ pub fn prepare_circuit_and_public_input<F: FieldExt>(
 }
 
 /// Initialize the model circuit
-pub fn prepare_circuit<F: FieldExt>(data: &ModelInput) -> ModelCircuit<F> {
-    let args = Cli::parse();
-
+pub fn prepare_circuit<F: FieldExt>(data: &ModelInput, args: &Cli) -> ModelCircuit<F> {
     // quantize the supplied data using the provided scale.
     let inputs = data
         .input_data

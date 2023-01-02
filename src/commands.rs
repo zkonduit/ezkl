@@ -1,11 +1,16 @@
 //use crate::onnx::OnnxModel;
+use crate::abort;
 use clap::{Parser, Subcommand, ValueEnum};
-use log::info;
+use log::{error, info};
+use serde::{Deserialize, Serialize};
+use std::env;
 use std::io::{stdin, stdout, Write};
 use std::path::PathBuf;
 
+const EZKLCONF: &str = "EZKLCONF";
+
 #[allow(missing_docs)]
-#[derive(Parser, Debug, Clone)]
+#[derive(Parser, Debug, Clone, Deserialize, Serialize)]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
@@ -37,8 +42,32 @@ pub struct Cli {
     pub max_rotations: usize,
 }
 
+impl Cli {
+    /// Export the ezkl configuration as json
+    pub fn as_json(&self) -> String {
+        let serialized = match serde_json::to_string(&self) {
+            Ok(s) => s,
+            Err(e) => {
+                abort!("failed to convert Cli to string {:?}", e);
+            }
+        };
+        serialized
+    }
+    /// Parse an ezkl configuration from a json
+    pub fn from_json(arg_json: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(arg_json)
+    }
+    /// Create an ezkl configuration: if there is an EZKLCONF env variable, parse its value, else read it from the command line.
+    pub fn create() -> Self {
+        match env::var(EZKLCONF) {
+            Ok(val) => Self::from_json(&val).unwrap(),
+            Err(_e) => Cli::parse(),
+        }
+    }
+}
+
 #[allow(missing_docs)]
-#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub enum ProofSystem {
     IPA,
     KZG,
@@ -53,7 +82,7 @@ impl std::fmt::Display for ProofSystem {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, Subcommand, Clone)]
+#[derive(Debug, Subcommand, Clone, Deserialize, Serialize)]
 pub enum Commands {
     /// Loads model and prints model table
     #[command(arg_required_else_help = true)]

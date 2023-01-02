@@ -15,7 +15,7 @@ use crate::commands::{Cli, Commands};
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
 use anyhow::{Context, Result};
-use clap::Parser;
+//use clap::Parser;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
@@ -196,7 +196,7 @@ impl Model {
 
     /// Creates a `Model` based on CLI arguments
     pub fn from_arg() -> Self {
-        let args = Cli::parse();
+        let args = Cli::create();
         Self::from_ezkl_conf(args)
     }
 
