@@ -1,4 +1,4 @@
-use clap::Parser;
+//use clap::Parser;
 use ezkl::abort;
 use ezkl::commands::{Cli, Commands, ProofSystem};
 use ezkl::fieldutils::i32_to_felt;
@@ -44,19 +44,22 @@ use std::time::Instant;
 use tabled::Table;
 
 pub fn main() {
-    let args = Cli::parse();
+    let args = Cli::create();
     colog::init();
     banner();
+    info!("{}", &args.as_json());
+    run(args)
+}
 
+pub fn run(args: Cli) {
     match args.command {
         Commands::Table { model: _ } => {
-            let om = Model::from_arg();
+            let om = Model::from_ezkl_conf(args);
             println!("{}", Table::new(om.nodes.flatten()));
         }
-        Commands::Mock { data, model: _ } => {
-            let args = Cli::parse();
-            let data = prepare_data(data);
-            let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
+        Commands::Mock { ref data, model: _ } => {
+            let data = prepare_data(data.to_string());
+            let (circuit, public_inputs) = prepare_circuit_and_public_input(&data, &args);
             info!("Mock proof");
             let pi: Vec<Vec<Fp>> = public_inputs
                 .into_iter()
@@ -83,17 +86,18 @@ pub fn main() {
         }
 
         Commands::Fullprove {
-            data,
+            ref data,
             model: _,
             pfsys,
         } => {
             // A direct proof
-            let args = Cli::parse();
-            let data = prepare_data(data);
+
+            let data = prepare_data(data.to_string());
 
             match pfsys {
                 ProofSystem::IPA => {
-                    let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fp>(&data);
+                    let (circuit, public_inputs) =
+                        prepare_circuit_and_public_input::<Fp>(&data, &args);
                     info!("full proof with {}", pfsys);
 
                     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
@@ -114,7 +118,8 @@ pub fn main() {
                 #[cfg(not(feature = "evm"))]
                 ProofSystem::KZG => {
                     // A direct proof
-                    let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(&data);
+                    let (circuit, public_inputs) =
+                        prepare_circuit_and_public_input::<Fr>(&data, &args);
                     let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
                     let pk = create_keys::<KZGCommitmentScheme<_>, Fr>(&circuit, &params);
                     let strategy = KZGSingleStrategy::new(&params);
@@ -175,20 +180,20 @@ pub fn main() {
             }
         }
         Commands::Prove {
-            data,
+            ref data,
             model: _,
-            proof_path,
-            vk_path,
-            params_path,
+            ref proof_path,
+            ref vk_path,
+            ref params_path,
             pfsys,
         } => {
-            let args = Cli::parse();
-            let data = prepare_data(data);
+            let data = prepare_data(data.to_string());
 
             match pfsys {
                 ProofSystem::IPA => {
                     info!("proof with {}", pfsys);
-                    let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fp>(&data);
+                    let (circuit, public_inputs) =
+                        prepare_circuit_and_public_input::<Fp>(&data, &args);
                     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
                     let pk = create_keys::<IPACommitmentScheme<_>, Fp>(&circuit, &params);
                     trace!("params computed");
@@ -200,13 +205,13 @@ pub fn main() {
                         &pk,
                     );
 
-                    proof.save(&proof_path);
-                    save_params::<IPACommitmentScheme<_>>(&params_path, &params);
-                    save_vk::<IPACommitmentScheme<_>>(&vk_path, pk.get_vk());
+                    proof.save(proof_path);
+                    save_params::<IPACommitmentScheme<_>>(params_path, &params);
+                    save_vk::<IPACommitmentScheme<_>>(vk_path, pk.get_vk());
                 }
                 ProofSystem::KZG => {
                     info!("proof with {}", pfsys);
-                    let (circuit, public_inputs) = prepare_circuit_and_public_input(&data);
+                    let (circuit, public_inputs) = prepare_circuit_and_public_input(&data, &args);
                     let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
                     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr>(&circuit, &params);
                     trace!("params computed");
@@ -219,9 +224,9 @@ pub fn main() {
                         &circuit, &public_inputs, &params, &pk
                     );
 
-                    proof.save(&proof_path);
-                    save_params::<KZGCommitmentScheme<Bn256>>(&params_path, &params);
-                    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, pk.get_vk());
+                    proof.save(proof_path);
+                    save_params::<KZGCommitmentScheme<Bn256>>(params_path, &params);
+                    save_vk::<KZGCommitmentScheme<Bn256>>(vk_path, pk.get_vk());
                 }
             };
         }
