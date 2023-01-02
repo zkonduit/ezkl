@@ -1,5 +1,6 @@
 use super::prepare_circuit_and_public_input;
 use super::ModelInput;
+use crate::commands::Cli;
 use crate::fieldutils::i32_to_felt;
 use ethereum_types::Address;
 use foundry_evm::executor::{fork::MultiFork, Backend, ExecutorBuilder};
@@ -354,8 +355,8 @@ impl Circuit<Fr> for AggregationCircuit {
 }
 
 /// Create proof and instance variables for the application snark
-pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &ModelInput) -> Snark {
-    let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(data);
+pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &ModelInput, args: &Cli) -> Snark {
+    let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(data, &args);
 
     let pk = gen_pk(params, &circuit);
     let number_instance = public_inputs[0].len();
