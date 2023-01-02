@@ -15,7 +15,7 @@ use std::marker::PhantomData;
 #[allow(missing_docs)]
 /// An enum representing the operations that can be merged into a single circuit gate.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum FusedOp {
+pub enum Op {
     Identity,
     Reshape(Vec<usize>),
     Flatten(Vec<usize>),
@@ -40,30 +40,30 @@ pub enum FusedOp {
     GlobalSumPool,
     Pow(usize),
     Rescaled {
-        inner: Box<FusedOp>,
+        inner: Box<Op>,
         scale: Vec<(usize, usize)>,
     },
 }
 
-impl fmt::Display for FusedOp {
+impl fmt::Display for Op {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            FusedOp::Identity => write!(f, "identity"),
-            FusedOp::Reshape(new_dims) => write!(f, "reshape to {:?}", new_dims),
-            FusedOp::Flatten(new_dims) => write!(f, "flatten to {:?}", new_dims),
-            FusedOp::Add => write!(f, "add"),
-            FusedOp::Sub => write!(f, "sub"),
-            FusedOp::Sum => write!(f, "sum"),
-            FusedOp::Mult => write!(f, "mult"),
-            FusedOp::Matmul => write!(f, "matmul"),
-            FusedOp::Dot => write!(f, "dot"),
-            FusedOp::Affine => write!(f, "affine"),
-            FusedOp::BatchNorm => write!(f, "batchnorm"),
-            FusedOp::ScaleAndShift => write!(f, "scale & shift"),
-            FusedOp::Conv { padding, stride } => {
+            Op::Identity => write!(f, "identity"),
+            Op::Reshape(new_dims) => write!(f, "reshape to {:?}", new_dims),
+            Op::Flatten(new_dims) => write!(f, "flatten to {:?}", new_dims),
+            Op::Add => write!(f, "add"),
+            Op::Sub => write!(f, "sub"),
+            Op::Sum => write!(f, "sum"),
+            Op::Mult => write!(f, "mult"),
+            Op::Matmul => write!(f, "matmul"),
+            Op::Dot => write!(f, "dot"),
+            Op::Affine => write!(f, "affine"),
+            Op::BatchNorm => write!(f, "batchnorm"),
+            Op::ScaleAndShift => write!(f, "scale & shift"),
+            Op::Conv { padding, stride } => {
                 write!(f, "conv w/ padding: {:?}, stride: {:?}", padding, stride)
             }
-            FusedOp::SumPool {
+            Op::SumPool {
                 padding,
                 stride,
                 kernel_shape,
@@ -74,9 +74,9 @@ impl fmt::Display for FusedOp {
                     padding, stride, kernel_shape,
                 )
             }
-            FusedOp::GlobalSumPool => write!(f, "globalsumpool"),
-            FusedOp::Pow(s) => write!(f, "pow {}", s),
-            FusedOp::Rescaled { inner, scale } => {
+            Op::GlobalSumPool => write!(f, "globalsumpool"),
+            Op::Pow(s) => write!(f, "pow {}", s),
+            Op::Rescaled { inner, scale } => {
                 write!(
                     f,
                     "{} w/ scalings: {:?}",
@@ -88,50 +88,50 @@ impl fmt::Display for FusedOp {
     }
 }
 
-impl FusedOp {
-    /// Matches a [FusedOp] to an operation in the `tensor::ops` module.
-    fn f<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
+impl Op {
+    /// Matches a [Op] to an operation in the `tensor::ops` module.
+    pub fn f<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
         &self,
         mut inputs: Vec<Tensor<T>>,
     ) -> Tensor<T> {
         match &self {
-            FusedOp::Identity => inputs[0].clone(),
-            FusedOp::Reshape(new_dims) => {
+            Op::Identity => inputs[0].clone(),
+            Op::Reshape(new_dims) => {
                 let mut t = inputs[0].clone();
                 t.reshape(new_dims);
                 t
             }
-            FusedOp::Flatten(new_dims) => {
+            Op::Flatten(new_dims) => {
                 let mut t = inputs[0].clone();
                 t.reshape(new_dims);
                 t
             }
-            FusedOp::Add => add(&inputs),
-            FusedOp::Sub => sub(&inputs),
-            FusedOp::Mult => mult(&inputs),
-            FusedOp::Affine => affine(&inputs),
-            FusedOp::BatchNorm => scale_and_shift(&inputs),
-            FusedOp::ScaleAndShift => scale_and_shift(&inputs),
-            FusedOp::Matmul => matmul(&inputs),
-            FusedOp::Dot => {
+            Op::Add => add(&inputs),
+            Op::Sub => sub(&inputs),
+            Op::Mult => mult(&inputs),
+            Op::Affine => affine(&inputs),
+            Op::BatchNorm => scale_and_shift(&inputs),
+            Op::ScaleAndShift => scale_and_shift(&inputs),
+            Op::Matmul => matmul(&inputs),
+            Op::Dot => {
                 todo!();
             }
-            FusedOp::Conv { padding, stride } => convolution(&inputs, *padding, *stride),
-            FusedOp::SumPool {
+            Op::Conv { padding, stride } => convolution(&inputs, *padding, *stride),
+            Op::SumPool {
                 padding,
                 stride,
                 kernel_shape,
             } => sumpool(&inputs[0], *padding, *stride, *kernel_shape),
-            FusedOp::GlobalSumPool => unreachable!(),
-            FusedOp::Pow(u) => {
+            Op::GlobalSumPool => unreachable!(),
+            Op::Pow(u) => {
                 assert_eq!(inputs.len(), 1);
                 pow(&inputs[0], *u)
             }
-            FusedOp::Sum => {
+            Op::Sum => {
                 assert_eq!(inputs.len(), 1);
                 sum(&inputs[0])
             }
-            FusedOp::Rescaled { inner, scale } => {
+            Op::Rescaled { inner, scale } => {
                 assert_eq!(scale.len(), inputs.len());
 
                 inner.f(inputs
@@ -147,31 +147,31 @@ impl FusedOp {
     }
 }
 
-/// Representation of a the inputs a [FusedNode] can ingest. The inner type indexes over each of the types.
+/// Representation of a the inputs a [Node] can ingest. The inner type indexes over each of the types.
 #[derive(Clone, Debug)]
-pub enum FusedInputType {
+pub enum InputType {
     /// an explicit input to the operations
     Input(usize),
-    /// the intermediate output of a [FusedNode]
+    /// the intermediate output of a [Node]
     Inter(usize),
 }
 
 /// Representation of a single fuseable operation.
 #[derive(Clone, Debug)]
-pub struct FusedNode {
+pub struct Node {
     /// the type of operation
-    pub op: FusedOp,
+    pub op: Op,
     /// execution order over explicit inputs and intermediate outputs.
-    pub input_order: Vec<FusedInputType>,
+    pub input_order: Vec<InputType>,
 }
 
 /// Configuration for a basic sequence of operations all fused together in a single gate.
 #[derive(Clone, Debug)]
-pub struct FusedConfig<F: FieldExt + TensorType> {
+pub struct Config<F: FieldExt + TensorType> {
     /// the inputs to the fused operations.
     pub inputs: Vec<VarTensor>,
-    /// the set of [FusedNode] represented in the operation.
-    nodes: Vec<FusedNode>,
+    /// the set of [Node] represented in the operation.
+    nodes: Vec<Node>,
     /// the (currently singular) output of the fused operations.
     pub output: VarTensor,
     /// [Selector] generated when configuring the layer.
@@ -179,17 +179,17 @@ pub struct FusedConfig<F: FieldExt + TensorType> {
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType> FusedConfig<F> {
-    /// Configures the sequence of operations into a circuit gate, represented as an array of [FusedNode].
+impl<F: FieldExt + TensorType> Config<F> {
+    /// Configures the sequence of operations into a circuit gate, represented as an array of [Node].
     /// # Arguments
-    /// * `inputs` - The explicit inputs to the operations. [FusedNode]s index over these inputs using their `input_order` attribute. They can also index over the intermediate outputs of other [FusedNode]s.
+    /// * `inputs` - The explicit inputs to the operations. [Node]s index over these inputs using their `input_order` attribute. They can also index over the intermediate outputs of other [Node]s.
     /// * `output` - The variable representing the (currently singular) output of the fused operations.
     /// * `nodes` - The sequence of operations (in order of execution) that constitute the fused operation.
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         inputs: &[VarTensor],
         output: &VarTensor,
-        nodes: &[FusedNode],
+        nodes: &[Node],
     ) -> Self {
         let mut config = Self {
             selector: meta.selector(),
@@ -238,7 +238,7 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
 
     /// Assigns variables to the regions created when calling `configure`.
     /// # Arguments
-    /// * `values` - The explicit values to the operations. [FusedNode]s index over these inputs using their `input_order` attribute. They can also index over the intermediate outputs of other [FusedNode]s.
+    /// * `values` - The explicit values to the operations. [Node]s index over these inputs using their `input_order` attribute. They can also index over the intermediate outputs of other [Node]s.
     /// * `layouter` - A Halo2 Layouter.
     pub fn layout(
         &mut self,
@@ -302,9 +302,9 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
         ValTensor::from(t)
     }
 
-    /// Applies an operation represented by a [FusedOp] to the set of inputs (both explicit and intermediate results) it indexes over.
+    /// Applies an operation represented by a [Op] to the set of inputs (both explicit and intermediate results) it indexes over.
     pub fn apply_op<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
-        node: &mut FusedNode,
+        node: &mut Node,
         inputs: &[Tensor<T>],
         outputs: &mut Vec<Tensor<T>>,
     ) {
@@ -312,8 +312,8 @@ impl<F: FieldExt + TensorType> FusedConfig<F> {
             .input_order
             .iter()
             .map(|input| match input {
-                FusedInputType::Input(u) => inputs[*u].clone(),
-                FusedInputType::Inter(u) => outputs[*u].clone(),
+                InputType::Input(u) => inputs[*u].clone(),
+                InputType::Inter(u) => outputs[*u].clone(),
             })
             .collect_vec();
         outputs.push(node.op.f(op_inputs));
@@ -344,7 +344,7 @@ mod tests {
     }
 
     impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
-        type Config = FusedConfig<F>;
+        type Config = Config<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
         fn without_witnesses(&self) -> Self {
@@ -357,12 +357,12 @@ mod tests {
             let bias = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
             // tells the config layer to add an affine op to a circuit gate
-            let affine_node = FusedNode {
-                op: FusedOp::Affine,
+            let affine_node = Node {
+                op: Op::Affine,
                 input_order: vec![
-                    FusedInputType::Input(0),
-                    FusedInputType::Input(1),
-                    FusedInputType::Input(2),
+                    InputType::Input(0),
+                    InputType::Input(1),
+                    InputType::Input(2),
                 ],
             };
 

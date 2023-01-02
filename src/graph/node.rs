@@ -1,7 +1,9 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
 use crate::abort;
-use crate::circuit::eltwise::{EltwiseConfig, EltwiseOp};
-use crate::circuit::fused::*;
+use crate::circuit::lookup::Config as LookupConfig;
+use crate::circuit::lookup::Op as LookupOp;
+use crate::circuit::polynomial::Config as PolyConfig;
+use crate::circuit::polynomial::Op as PolyOp;
 use crate::tensor::ops::{add, const_mult, div, mult};
 use crate::tensor::Tensor;
 use crate::tensor::TensorType;
@@ -11,6 +13,7 @@ use itertools::Itertools;
 use log::{error, info, trace, warn};
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fmt;
+use std::ops::Deref;
 use tabled::Tabled;
 use tract_onnx;
 use tract_onnx::prelude::{DatumType, InferenceFact, Node as OnnxNode, OutletId};
@@ -35,9 +38,9 @@ use tract_onnx::tract_hir::{
 #[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd)]
 pub enum OpKind {
     /// A nonlinearity
-    Eltwise(EltwiseOp),
+    Lookup(LookupOp),
     /// A fused op, combining affine layers or other arithmetic
-    Fused(FusedOp),
+    Poly(PolyOp),
     /// Constant
     Const,
     /// Input node
@@ -53,45 +56,45 @@ impl OpKind {
     /// Produce an OpKind from a `&str` onnx name  
     pub fn new(name: &str) -> Self {
         match name {
-            "Clip" => OpKind::Eltwise(EltwiseOp::ReLU { scale: 1 }),
-            "Prelu" => OpKind::Eltwise(EltwiseOp::LeakyReLU {
+            "Clip" => OpKind::Lookup(LookupOp::ReLU { scale: 1 }),
+            "Prelu" => OpKind::Lookup(LookupOp::PReLU {
+                scale: 1,
+                slopes: vec![],
+            }),
+            "LeakyRelu" => OpKind::Lookup(LookupOp::LeakyReLU {
                 scale: 1,
                 slope: eq_float::F32(0.0),
             }),
-            "LeakyRelu" => OpKind::Eltwise(EltwiseOp::LeakyReLU {
-                scale: 1,
-                slope: eq_float::F32(0.0),
-            }),
-            "Sigmoid" => OpKind::Eltwise(EltwiseOp::Sigmoid { scales: (1, 1) }),
-            "Div" => OpKind::Eltwise(EltwiseOp::Div { scale: 1 }),
+            "Sigmoid" => OpKind::Lookup(LookupOp::Sigmoid { scales: (1, 1) }),
+            "Div" => OpKind::Lookup(LookupOp::Div { scale: 1 }),
             "Const" => OpKind::Const,
             "Source" => OpKind::Input,
-            "Add" => OpKind::Fused(FusedOp::Add),
-            "Sub" => OpKind::Fused(FusedOp::Sub),
-            "Mul" => OpKind::Fused(FusedOp::Mult),
-            "Gemm" => OpKind::Fused(FusedOp::Affine),
-            "MatMulInference" => OpKind::Fused(FusedOp::Matmul),
-            "Dot" => OpKind::Fused(FusedOp::Dot),
-            "Reduce<Sum>" => OpKind::Fused(FusedOp::Sum),
-            "Pow" => OpKind::Fused(FusedOp::Pow(1)),
-            "Conv" => OpKind::Fused(FusedOp::Conv {
+            "Add" => OpKind::Poly(PolyOp::Add),
+            "Sub" => OpKind::Poly(PolyOp::Sub),
+            "Mul" => OpKind::Poly(PolyOp::Mult),
+            "Gemm" => OpKind::Poly(PolyOp::Affine),
+            "MatMulInference" => OpKind::Poly(PolyOp::Matmul),
+            "Dot" => OpKind::Poly(PolyOp::Dot),
+            "Reduce<Sum>" => OpKind::Poly(PolyOp::Sum),
+            "Pow" => OpKind::Poly(PolyOp::Pow(1)),
+            "Conv" => OpKind::Poly(PolyOp::Conv {
                 padding: (1, 1),
                 stride: (1, 1),
             }),
-            "ConvHir" => OpKind::Fused(FusedOp::Conv {
+            "ConvHir" => OpKind::Poly(PolyOp::Conv {
                 padding: (1, 1),
                 stride: (1, 1),
             }),
-            "SumPool" => OpKind::Fused(FusedOp::SumPool {
+            "SumPool" => OpKind::Poly(PolyOp::SumPool {
                 padding: (1, 1),
                 stride: (1, 1),
                 kernel_shape: (1, 1),
             }),
-            "GlobalAvgPool" => OpKind::Fused(FusedOp::GlobalSumPool),
-            "Reshape" => OpKind::Fused(FusedOp::Reshape(Vec::new())),
-            "Flatten" => OpKind::Fused(FusedOp::Flatten(Vec::new())),
-            "BatchNorm" => OpKind::Fused(FusedOp::BatchNorm),
-            "Pad" => OpKind::Fused(FusedOp::Identity),
+            "GlobalAvgPool" => OpKind::Poly(PolyOp::GlobalSumPool),
+            "Reshape" => OpKind::Poly(PolyOp::Reshape(Vec::new())),
+            "Flatten" => OpKind::Poly(PolyOp::Flatten(Vec::new())),
+            "BatchNorm" => OpKind::Poly(PolyOp::BatchNorm),
+            "Pad" => OpKind::Poly(PolyOp::Identity),
             c => {
                 warn!("{:?} is not currently supported", c);
                 OpKind::Unknown(c.to_string())
@@ -99,8 +102,18 @@ impl OpKind {
         }
     }
     /// Identify fused OpKind
-    pub fn is_fused(&self) -> bool {
-        matches!(self, OpKind::Fused(_))
+    pub fn is_poly(&self) -> bool {
+        matches!(self, OpKind::Poly(_))
+    }
+
+    /// Identify fused OpKind
+    pub fn is_lookup(&self) -> bool {
+        matches!(self, OpKind::Lookup(_))
+    }
+
+    /// Identify fused OpKind
+    pub fn is_input(&self) -> bool {
+        matches!(self, OpKind::Input)
     }
 
     /// Identify constant OpKind
@@ -114,8 +127,8 @@ impl fmt::Display for OpKind {
         match self {
             OpKind::Const => write!(f, "const"),
             OpKind::Input => write!(f, "input"),
-            OpKind::Eltwise(s) => write!(f, "{}", s),
-            OpKind::Fused(s) => write!(f, "{}", s),
+            OpKind::Lookup(s) => write!(f, "{}", s),
+            OpKind::Poly(s) => write!(f, "{}", s),
             OpKind::Unknown(c) => write!(f, "? {}", c),
             OpKind::None => write!(f, "n/a",),
         }
@@ -126,8 +139,8 @@ impl fmt::Display for OpKind {
 #[allow(missing_docs)]
 #[derive(Clone, Default, Debug)]
 pub enum NodeConfig<F: FieldExt + TensorType> {
-    Eltwise(EltwiseConfig<F>, Vec<usize>),
-    Fused(FusedConfig<F>, Vec<usize>),
+    Lookup(LookupConfig<F>, Vec<usize>),
+    Poly(PolyConfig<F>, Vec<usize>),
     Const,
     Input,
     #[default]
@@ -307,18 +320,18 @@ impl Node {
         let mut opkind = OpKind::new(node.op().name().as_ref()); // parses the op name
 
         let mn = match opkind {
-            OpKind::Eltwise(ref s) => {
+            OpKind::Lookup(ref s) => {
                 match s {
-                    EltwiseOp::Sigmoid { .. } => {
+                    LookupOp::Sigmoid { .. } => {
                         let input_node = &inputs[0];
                         let scale_diff = input_node.out_scale;
                         if scale_diff > 0 {
                             let mult = scale_to_multiplier(scale_diff);
-                            opkind = OpKind::Eltwise(EltwiseOp::Sigmoid {
+                            opkind = OpKind::Lookup(LookupOp::Sigmoid {
                                 scales: (mult as usize, scale as usize),
                             });
                         } else {
-                            opkind = OpKind::Eltwise(EltwiseOp::Sigmoid {
+                            opkind = OpKind::Lookup(LookupOp::Sigmoid {
                                 scales: (1, scale as usize),
                             });
                         }
@@ -336,14 +349,14 @@ impl Node {
                         }
                     }
 
-                    EltwiseOp::ReLU { .. } => {
+                    LookupOp::ReLU { .. } => {
                         let input_node = &inputs[0];
                         let scale_diff = input_node.out_scale - scale;
                         // We can also consider adjusting the scale of all inputs and the output in a more custom way.
                         let mut output_max = input_node.output_max;
                         if scale_diff > 0 {
                             let mult = scale_to_multiplier(scale_diff);
-                            opkind = OpKind::Eltwise(EltwiseOp::ReLU {
+                            opkind = OpKind::Lookup(LookupOp::ReLU {
                                 scale: mult as usize,
                             }); // now the input will be scaled down to match
                             output_max = input_node.output_max / mult;
@@ -360,7 +373,7 @@ impl Node {
                             ..Default::default()
                         }
                     }
-                    EltwiseOp::LeakyReLU {
+                    LookupOp::LeakyReLU {
                         scale: mut layer_scale,
                         ..
                     } => {
@@ -389,7 +402,7 @@ impl Node {
                             output_max = input_node.output_max / (layer_scale as f32);
                         }
 
-                        opkind = OpKind::Eltwise(EltwiseOp::LeakyReLU {
+                        opkind = OpKind::Lookup(LookupOp::LeakyReLU {
                             scale: layer_scale,
                             slope: eq_float::F32(leaky_op.0),
                         }); // now the input will be scaled down to match
@@ -406,7 +419,48 @@ impl Node {
                             ..Default::default()
                         }
                     }
-                    EltwiseOp::Div { .. } => {
+                    LookupOp::PReLU {
+                        scale: mut layer_scale,
+                        ..
+                    } => {
+                        let input_node = &inputs[0];
+                        // Extract the slope layer hyperparams
+                        let slopes = inputs[1]
+                            .clone()
+                            .raw_const_value
+                            .unwrap()
+                            .deref()
+                            .iter()
+                            .map(|value| eq_float::F32(*value))
+                            .collect_vec();
+                        node.inputs.pop();
+
+                        let scale_diff = input_node.out_scale - scale;
+                        // We can also consider adjusting the scale of all inputs and the output in a more custom way.
+                        let mut output_max = input_node.output_max;
+                        if scale_diff > 0 {
+                            layer_scale = scale_to_multiplier(scale_diff) as usize;
+                            output_max = input_node.output_max / (layer_scale as f32);
+                        }
+
+                        opkind = OpKind::Lookup(LookupOp::PReLU {
+                            scale: layer_scale,
+                            slopes: slopes.clone(),
+                        }); // now the input will be scaled down to match
+
+                        Node {
+                            idx,
+                            opkind,
+                            inputs: node.inputs,
+                            in_dims: vec![input_node.out_dims.clone()],
+                            out_dims: input_node.out_dims.clone(),
+                            in_scale: input_node.out_scale,
+                            out_scale: scale,
+                            output_max,
+                            ..Default::default()
+                        }
+                    }
+                    LookupOp::Div { .. } => {
                         if inputs[1].out_dims.clone() != [1] {
                             abort!("ezkl currently only supports division by a constant");
                         }
@@ -422,12 +476,12 @@ impl Node {
                         let output_max: f32;
                         if scale_diff > 0 {
                             let mult = scale_to_multiplier(scale_diff);
-                            opkind = OpKind::Eltwise(EltwiseOp::Div {
+                            opkind = OpKind::Lookup(LookupOp::Div {
                                 scale: (div * mult) as usize,
                             }); // now the input will be scaled down to match
                             output_max = input_node.output_max / (div * mult);
                         } else {
-                            opkind = OpKind::Eltwise(EltwiseOp::Div {
+                            opkind = OpKind::Lookup(LookupOp::Div {
                                 scale: div as usize,
                             }); // now the input will be scaled down to match
                             output_max = input_node.output_max / (div);
@@ -449,10 +503,10 @@ impl Node {
                     }
                 }
             }
-            OpKind::Fused(ref s) => {
+            OpKind::Poly(ref s) => {
                 match s {
-                    FusedOp::Dot => todo!(),
-                    FusedOp::Conv { .. } => {
+                    PolyOp::Dot => todo!(),
+                    PolyOp::Conv { .. } => {
                         let (input_node, weight_node) = (&inputs[0], &inputs[1]);
 
                         // Extract the padding and stride layer hyperparams
@@ -513,7 +567,7 @@ impl Node {
 
                         Node {
                             idx,
-                            opkind: OpKind::Fused(FusedOp::Conv {
+                            opkind: OpKind::Poly(PolyOp::Conv {
                                 padding: (padding_h, padding_w),
                                 stride: (stride_h, stride_w),
                             }),
@@ -529,7 +583,7 @@ impl Node {
                         }
                     }
 
-                    FusedOp::SumPool { .. } => {
+                    PolyOp::SumPool { .. } => {
                         let input_node = &inputs[0];
 
                         // Extract the padding and stride layer hyperparams
@@ -565,7 +619,7 @@ impl Node {
 
                         Node {
                             idx,
-                            opkind: OpKind::Fused(FusedOp::SumPool {
+                            opkind: OpKind::Poly(PolyOp::SumPool {
                                 padding: (padding_h, padding_w),
                                 stride: (stride_h, stride_w),
                                 kernel_shape: (kernel_height, kernel_width),
@@ -581,7 +635,7 @@ impl Node {
                         }
                     }
 
-                    FusedOp::GlobalSumPool => {
+                    PolyOp::GlobalSumPool => {
                         let input_node = &inputs[0];
                         let input_channels = input_node.out_dims[0];
                         let input_height = input_node.out_dims[1];
@@ -597,7 +651,7 @@ impl Node {
 
                         Node {
                             idx,
-                            opkind: OpKind::Fused(FusedOp::SumPool {
+                            opkind: OpKind::Poly(PolyOp::SumPool {
                                 padding: (padding_h, padding_w),
                                 stride: (stride_h, stride_w),
                                 kernel_shape: (kernel_height, kernel_width),
@@ -614,7 +668,7 @@ impl Node {
                         }
                     }
 
-                    FusedOp::Matmul => {
+                    PolyOp::Matmul => {
                         let (a_node, b_node) = (&inputs[0], &inputs[1]);
                         let a_dims = a_node.out_dims.clone();
                         let b_dims = b_node.out_dims.clone();
@@ -636,7 +690,7 @@ impl Node {
                             ..Default::default()
                         }
                     }
-                    FusedOp::Affine | FusedOp::ScaleAndShift => {
+                    PolyOp::Affine | PolyOp::ScaleAndShift => {
                         let (input_node, weight_node, bias_node) =
                             (&inputs[0], &inputs[1], &inputs[2]);
 
@@ -670,7 +724,7 @@ impl Node {
                     // BatchNorm take four parameters, does some f32 arithmetic and then quantizes
                     // while ScaleAndShift takes the final two parameters immediately.
                     // We will also reach back and quantize
-                    FusedOp::BatchNorm => {
+                    PolyOp::BatchNorm => {
                         //Compute scale and shift from the four inputs,
                         // then replace the first two, and change this node to a ScaleAndShift
 
@@ -704,7 +758,7 @@ impl Node {
 
                         Node {
                             idx,
-                            opkind: OpKind::Fused(FusedOp::ScaleAndShift),
+                            opkind: OpKind::Poly(PolyOp::ScaleAndShift),
                             inputs: node.inputs.clone(),
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: inputs[0].out_dims.clone(),
@@ -717,10 +771,10 @@ impl Node {
                         }
                     }
 
-                    FusedOp::Add => {
+                    PolyOp::Add => {
                         opkind = Self::homogenize_input_scales(opkind, inputs.clone());
                         let output_max =
-                            if let OpKind::Fused(FusedOp::Rescaled { scale, .. }) = &opkind {
+                            if let OpKind::Poly(PolyOp::Rescaled { scale, .. }) = &opkind {
                                 (inputs
                                     .iter()
                                     .enumerate()
@@ -747,7 +801,7 @@ impl Node {
                             ..Default::default()
                         }
                     }
-                    FusedOp::Sum => {
+                    PolyOp::Sum => {
                         assert!(inputs.len() == 1);
 
                         Node {
@@ -763,10 +817,10 @@ impl Node {
                             ..Default::default()
                         }
                     }
-                    FusedOp::Sub => {
+                    PolyOp::Sub => {
                         opkind = Self::homogenize_input_scales(opkind, inputs.clone());
                         let output_max =
-                            if let OpKind::Fused(FusedOp::Rescaled { inner: _, scale }) = &opkind {
+                            if let OpKind::Poly(PolyOp::Rescaled { inner: _, scale }) = &opkind {
                                 (inputs
                                     .iter()
                                     .enumerate()
@@ -793,7 +847,7 @@ impl Node {
                             ..Default::default()
                         }
                     }
-                    FusedOp::Mult => {
+                    PolyOp::Mult => {
                         let input_node = &inputs[0];
 
                         Node {
@@ -815,23 +869,21 @@ impl Node {
                             ..Default::default()
                         }
                     }
-                    FusedOp::Pow(_) => {
+                    PolyOp::Pow(_) => {
                         let input_node = &inputs[0];
-                        let mult = scale_to_multiplier(scale);
-                        let mut input_outlets = node.inputs.clone();
-                        input_outlets.pop();
+                        let pow = inputs[1].clone().raw_const_value.unwrap()[0];
+                        node.inputs.pop();
                         if inputs[1].out_dims != [1] {
                             error!(
                                 "ezkl currently only supports raising to the power by a constant"
                             );
                             unimplemented!()
                         }
-                        let pow = inputs[1].output_max / mult;
 
                         Node {
                             idx,
-                            opkind: OpKind::Fused(FusedOp::Pow(pow as usize)),
-                            inputs: input_outlets,
+                            opkind: OpKind::Poly(PolyOp::Pow(pow as usize)),
+                            inputs: node.inputs,
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
@@ -847,11 +899,11 @@ impl Node {
                             ..Default::default()
                         }
                     }
-                    FusedOp::Rescaled { .. } => {
+                    PolyOp::Rescaled { .. } => {
                         error!("operations should not already be rescaled at this stage");
                         panic!()
                     }
-                    FusedOp::Identity => {
+                    PolyOp::Identity => {
                         let input_node = &inputs[0];
                         Node {
                             idx,
@@ -865,13 +917,13 @@ impl Node {
                             ..Default::default()
                         }
                     }
-                    FusedOp::Flatten(_) => {
+                    PolyOp::Flatten(_) => {
                         let input_node = &inputs[0];
                         let new_dims: Vec<usize> =
                             vec![inputs[0].out_dims.iter().product::<usize>()];
                         Node {
                             idx,
-                            opkind: OpKind::Fused(FusedOp::Flatten(new_dims.clone())),
+                            opkind: OpKind::Poly(PolyOp::Flatten(new_dims.clone())),
                             inputs: node.inputs.clone(),
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: new_dims,
@@ -881,7 +933,7 @@ impl Node {
                             ..Default::default()
                         }
                     }
-                    FusedOp::Reshape(_) => {
+                    PolyOp::Reshape(_) => {
                         let input_node = &inputs[0];
                         let shape_const_node = &inputs[1];
                         let shape_const = match shape_const_node.const_value.as_ref() {
@@ -917,7 +969,7 @@ impl Node {
 
                         Node {
                             idx,
-                            opkind: OpKind::Fused(FusedOp::Reshape(new_dims.clone())),
+                            opkind: OpKind::Poly(PolyOp::Reshape(new_dims.clone())),
                             inputs: node.inputs.clone(),
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: new_dims,
@@ -1061,8 +1113,8 @@ impl Node {
                 })
                 .collect_vec();
         }
-        if let OpKind::Fused(c) = &opkind {
-            OpKind::Fused(FusedOp::Rescaled {
+        if let OpKind::Poly(c) = &opkind {
+            OpKind::Poly(PolyOp::Rescaled {
                 inner: Box::new(c.clone()),
                 scale: (0..inputs.len()).zip(multipliers).collect_vec(),
             })

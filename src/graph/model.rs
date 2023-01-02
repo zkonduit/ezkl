@@ -1,8 +1,15 @@
 use super::node::*;
 use super::vars::*;
-use crate::circuit::eltwise::EltwiseConfig;
-use crate::circuit::eltwise::EltwiseTable;
-use crate::circuit::fused::*;
+use crate::circuit::lookup::Config as LookupConfig;
+use crate::circuit::lookup::Op as LookupOp;
+use crate::circuit::lookup::Table as LookupTable;
+use crate::circuit::polynomial::Config as PolyConfig;
+use crate::circuit::polynomial::InputType as PolyInputType;
+use crate::circuit::polynomial::Node as PolyNode;
+use crate::circuit::polynomial::Op as PolyOp;
+
+// use crate::circuit::polynomial::InputType as PolyInputType;
+
 use crate::circuit::range::*;
 use crate::commands::{Cli, Commands};
 use crate::tensor::TensorType;
@@ -15,7 +22,7 @@ use halo2_proofs::{
     plonk::ConstraintSystem,
 };
 use itertools::Itertools;
-use log::{debug, error, info, trace};
+use log::{debug, info, trace};
 use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::{BTreeMap, HashSet};
@@ -211,34 +218,45 @@ impl Model {
 
         for (bucket, bucket_nodes) in self.nodes.0.iter() {
             trace!("configuring bucket: {:?}", bucket);
-            let non_fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
+            let non_op_nodes: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
-                .filter(|(_, n)| !n.opkind.is_fused())
+                .filter(|(_, n)| n.opkind.is_const() || n.opkind.is_input())
+                .collect();
+            if !non_op_nodes.is_empty() {
+                for (i, node) in non_op_nodes {
+                    let config = self.conf_non_op_node(&node);
+                    results.insert(*i, config);
+                }
+            }
+
+            let lookup_ops: BTreeMap<&usize, &Node> = bucket_nodes
+                .iter()
+                .filter(|(_, n)| n.opkind.is_lookup())
                 .collect();
 
-            if !non_fused_ops.is_empty() {
-                for (i, n) in non_fused_ops.iter() {
-                    let config = self.configure_table(n, meta, vars, &mut tables);
-                    results.insert(**i, config);
+            if !lookup_ops.is_empty() {
+                for (i, node) in lookup_ops {
+                    let config = self.conf_table(node, meta, vars, &mut tables);
+                    results.insert(*i, config);
                 }
             }
 
             // preserves ordering
-            let fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
+            let poly_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
-                .filter(|(_, n)| n.opkind.is_fused())
+                .filter(|(_, n)| n.opkind.is_poly())
                 .collect();
             // preserves ordering
-            if !fused_ops.is_empty() {
-                let config = self.fuse_ops(&fused_ops, meta, vars);
-                results.insert(**fused_ops.keys().max().unwrap(), config);
+            if !poly_ops.is_empty() {
+                let config = self.conf_poly_ops(&poly_ops, meta, vars);
+                results.insert(**poly_ops.keys().max().unwrap(), config);
 
-                let mut display: String = "Fused nodes: ".to_string();
-                for idx in fused_ops.keys().map(|k| **k).sorted() {
+                let mut display: String = "Poly nodes: ".to_string();
+                for idx in poly_ops.keys().map(|k| **k).sorted() {
                     let node = &self.nodes.filter(idx);
                     display.push_str(&format!("| {} ({:?}) | ", idx, node.opkind));
                 }
-                info!("{}", display);
+                trace!("{}", display);
             }
         }
 
@@ -282,6 +300,27 @@ impl Model {
         }
         configs
     }
+    /// Configures non op related nodes (eg. representing an input or const value)
+    pub fn conf_non_op_node<F: FieldExt + TensorType>(&self, node: &Node) -> NodeConfig<F> {
+        match &node.opkind {
+            OpKind::Const => {
+                // Typically parameters for one or more layers.
+                // Currently this is handled in the consuming node(s), but will be moved here.
+                NodeConfig::Const
+            }
+            OpKind::Input => {
+                // This is the input to the model (e.g. the image).
+                // Currently this is handled in the consuming node(s), but will be moved here.
+                NodeConfig::Input
+            }
+            OpKind::Unknown(_c) => {
+                unimplemented!()
+            }
+            c => {
+                panic!("wrong method called for {}", c)
+            }
+        }
+    }
 
     /// Configures a `BTreeMap` of 'fuseable' operations. These correspond to operations that are represented in
     /// the `circuit::fused` module. A single configuration is output, representing the amalgamation of these operations into
@@ -291,20 +330,20 @@ impl Model {
     /// * `nodes` - A `BTreeMap` of (node index, [Node] pairs). The [Node] must represent a fuseable op.
     /// * `meta` - Halo2 ConstraintSystem.
     /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure all the passed `nodes`.
-    fn fuse_ops<F: FieldExt + TensorType>(
+    fn conf_poly_ops<F: FieldExt + TensorType>(
         &self,
         nodes: &BTreeMap<&usize, &Node>,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
     ) -> NodeConfig<F> {
-        let input_nodes: BTreeMap<(&usize, &FusedOp), Vec<Node>> = nodes
+        let input_nodes: BTreeMap<(&usize, &PolyOp), Vec<Node>> = nodes
             .iter()
             .map(|(i, e)| {
                 (
                     (
                         *i,
                         match &e.opkind {
-                            OpKind::Fused(f) => f,
+                            OpKind::Poly(f) => f,
                             _ => panic!(),
                         },
                     ),
@@ -348,23 +387,23 @@ impl Model {
         let output = &vars.advices[advice_idx].reshape(&output_shape);
 
         let mut inter_counter = 0;
-        let fused_nodes: Vec<FusedNode> = input_nodes
+        let fused_nodes: Vec<PolyNode> = input_nodes
             .iter()
             .map(|(op, e)| {
                 let order = e
                     .iter()
                     .map(|n| {
                         if !nodes.contains_key(&n.idx) {
-                            FusedInputType::Input(
+                            PolyInputType::Input(
                                 inputs_to_layer.iter().position(|r| r.0 == n.idx).unwrap(),
                             )
                         } else {
                             inter_counter += 1;
-                            FusedInputType::Inter(inter_counter - 1)
+                            PolyInputType::Inter(inter_counter - 1)
                         }
                     })
                     .collect_vec();
-                FusedNode {
+                PolyNode {
                     op: op.1.clone(),
                     input_order: order,
                 }
@@ -373,8 +412,8 @@ impl Model {
 
         let inputs = inputs_to_layer.iter();
 
-        NodeConfig::Fused(
-            FusedConfig::configure(
+        NodeConfig::Poly(
+            PolyConfig::configure(
                 meta,
                 &inputs.clone().map(|x| x.1.clone()).collect_vec(),
                 output,
@@ -391,51 +430,33 @@ impl Model {
     /// * `node` - The [Node] must represent a lookup based op.
     /// * `meta` - Halo2 ConstraintSystem.
     /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure the passed `node`.
-    fn configure_table<F: FieldExt + TensorType>(
+    fn conf_table<F: FieldExt + TensorType>(
         &self,
         node: &Node,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-        tables: &mut BTreeMap<OpKind, Rc<RefCell<EltwiseTable<F>>>>,
+        tables: &mut BTreeMap<Vec<LookupOp>, Rc<RefCell<LookupTable<F>>>>,
     ) -> NodeConfig<F> {
         let input_len = node.in_dims[0].iter().product();
         let input = &vars.advices[0].reshape(&[input_len]);
         let output = &vars.advices[1].reshape(&[input_len]);
         let node_inputs = node.inputs.iter().map(|e| e.node).collect();
 
-        match &node.opkind {
-            OpKind::Eltwise(s) => {
-                if tables.contains_key(&node.opkind) {
-                    let table = tables.get(&node.opkind).unwrap();
-                    let conf: EltwiseConfig<F> =
-                        EltwiseConfig::configure_with_table(meta, input, output, table.clone());
-                    NodeConfig::Eltwise(conf, node_inputs)
-                } else {
-                    let conf: EltwiseConfig<F> =
-                        EltwiseConfig::configure(meta, input, output, self.bits, *s);
-                    tables.insert(node.opkind.clone(), conf.table.clone());
-                    NodeConfig::Eltwise(conf, node_inputs)
-                }
-            }
-            OpKind::Const => {
-                // Typically parameters for one or more layers.
-                // Currently this is handled in the consuming node(s), but will be moved here.
-                NodeConfig::Const
-            }
-            OpKind::Input => {
-                // This is the input to the model (e.g. the image).
-                // Currently this is handled in the consuming node(s), but will be moved here.
-                NodeConfig::Input
-            }
-            OpKind::Fused(s) => {
-                error!("For {:?} call fuse_fused_ops instead", s);
-                panic!();
-            }
-            OpKind::Unknown(c) => {
-                error!("{:?} not yet implemented", c);
-                unimplemented!()
-            }
-            _ => panic!(),
+        let op = match &node.opkind {
+            OpKind::Lookup(l) => l,
+            c => panic!("wrong method called for {}", c),
+        };
+
+        if tables.contains_key(&vec![op.clone()]) {
+            let table = tables.get(&vec![op.clone()]).unwrap();
+            let conf: LookupConfig<F> =
+                LookupConfig::configure_with_table(meta, input, output, table.clone());
+            NodeConfig::Lookup(conf, node_inputs)
+        } else {
+            let conf: LookupConfig<F> =
+                LookupConfig::configure(meta, input, output, self.bits, &[op.clone()]);
+            tables.insert(vec![op.clone()], conf.table.clone());
+            NodeConfig::Lookup(conf, node_inputs)
         }
     }
 
@@ -515,7 +536,7 @@ impl Model {
     ) -> Result<Option<ValTensor<F>>> {
         // The node kind and the config should be the same.
         let res = match config.clone() {
-            NodeConfig::Fused(mut ac, idx) => {
+            NodeConfig::Poly(mut ac, idx) => {
                 let values: Vec<ValTensor<F>> = idx
                     .iter()
                     .map(|i| {
@@ -536,7 +557,7 @@ impl Model {
 
                 Some(ac.layout(layouter, &values))
             }
-            NodeConfig::Eltwise(rc, idx) => {
+            NodeConfig::Lookup(rc, idx) => {
                 assert_eq!(idx.len(), 1);
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
                 Some(rc.layout(layouter, inputs.get(&idx[0]).unwrap()))
@@ -578,8 +599,9 @@ impl Model {
             match &node.opkind {
                 OpKind::Input => node.bucket = Some(0),
                 OpKind::Const => node.bucket = None,
-                OpKind::Fused(_) => node.bucket = Some(prev_bucket.unwrap()),
-                _ => node.bucket = Some(prev_bucket.unwrap() + 1),
+                OpKind::Poly(_) => node.bucket = Some(prev_bucket.unwrap()),
+                OpKind::Lookup(_) => node.bucket = Some(prev_bucket.unwrap() + 1),
+                _ => unimplemented!(),
             }
             bucketed_nodes.insert(node.bucket, node.idx, node.clone());
         }
@@ -678,7 +700,7 @@ impl Model {
         for (_, bucket_nodes) in self.nodes.0.iter() {
             let fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
-                .filter(|(_, n)| n.opkind.is_fused())
+                .filter(|(_, n)| n.opkind.is_poly())
                 .collect();
 
             let params = fused_ops
@@ -702,7 +724,7 @@ impl Model {
         for (_, bucket_nodes) in self.nodes.0.iter() {
             let fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
-                .filter(|(_, n)| n.opkind.is_fused())
+                .filter(|(_, n)| n.opkind.is_poly())
                 .collect();
 
             let fused_inputs = fused_ops
@@ -726,7 +748,7 @@ impl Model {
         for (_, bucket_nodes) in self.nodes.0.iter() {
             let non_fused_ops = bucket_nodes
                 .iter()
-                .filter(|(_, n)| !n.opkind.is_fused())
+                .filter(|(_, n)| !n.opkind.is_poly())
                 .map(|(_, n)| n.inputs.len())
                 .max()
                 .unwrap_or(0);

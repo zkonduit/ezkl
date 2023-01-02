@@ -804,6 +804,7 @@ pub mod activations {
     ///
     /// * `a` - Tensor
     /// * `scale` - Single value
+    /// * `slope` - Single value
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
@@ -823,6 +824,47 @@ pub mod activations {
         for (i, a_i) in a.iter().enumerate() {
             output[i] = if a_i < &0 {
                 let d_inv_x = (slope) * (*a_i as f32) / (scale as f32);
+                d_inv_x.round() as i32
+            } else {
+                let d_inv_x = (*a_i as f32) / (scale as f32);
+                d_inv_x.round() as i32
+            };
+        }
+        output
+    }
+
+    /// Elementwise applies prelu to a tensor of integers.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `scale` - Single value
+    /// * `slopes` - Array of values
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::activations::prelu;
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[-10, 15, 2, 1, 1, -5]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = prelu(&x, 1, &[0.1, 25.0]);
+    /// let expected = Tensor::<i32>::new(Some(&[-1, 15, 2, 1, 1, -125]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn prelu(a: &Tensor<i32>, scale: usize, slopes: &[f32]) -> Tensor<i32> {
+        if slopes.len() == 1 {
+            return leakyrelu(a, scale, slopes[0]);
+        } else {
+            // assert number of slopes is equal to number of channels
+            assert_eq!(slopes.len(), a.dims()[0])
+        }
+        // calculate value of output
+        let mut output: Tensor<i32> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            output[i] = if a_i < &0 {
+                let slope_i: f32 = slopes[i / (a.dims()[1..].iter().product::<usize>())];
+                let d_inv_x = (slope_i) * (*a_i as f32) / (scale as f32);
                 d_inv_x.round() as i32
             } else {
                 let d_inv_x = (*a_i as f32) / (scale as f32);
