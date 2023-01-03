@@ -82,12 +82,21 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
             &input,
             &output,
             BITS,
-            &[LookupOp::ReLU { scale: 1 }],
+            &[LookupOp::ReLU {
+                scale: eq_float::F32(1.0),
+            }],
         );
 
         // sets up a new Divide by table
-        let l4 =
-            LookupConfig::configure(cs, &input, &output, BITS, &[LookupOp::Div { scale: 128 }]);
+        let l4 = LookupConfig::configure(
+            cs,
+            &input,
+            &output,
+            BITS,
+            &[LookupOp::Div {
+                scale: eq_float::F32(128.0),
+            }],
+        );
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);

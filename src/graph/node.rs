@@ -1,5 +1,7 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
 use crate::abort;
+use crate::circuit::composite::Config as CompositeConfig;
+use crate::circuit::composite::Op as CompositeOp;
 use crate::circuit::lookup::Config as LookupConfig;
 use crate::circuit::lookup::Op as LookupOp;
 use crate::circuit::polynomial::Config as PolyConfig;
@@ -13,7 +15,6 @@ use itertools::Itertools;
 use log::{error, info, trace, warn};
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fmt;
-use std::ops::Deref;
 use tabled::Tabled;
 use tract_onnx;
 use tract_onnx::prelude::{DatumType, InferenceFact, Node as OnnxNode, OutletId};
@@ -37,6 +38,8 @@ use tract_onnx::tract_hir::{
 /// Enum of the different kinds of operations `ezkl` can support.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd)]
 pub enum OpKind {
+    /// A complex op
+    Composite(CompositeOp),
     /// A nonlinearity
     Lookup(LookupOp),
     /// A fused op, combining affine layers or other arithmetic
@@ -56,17 +59,22 @@ impl OpKind {
     /// Produce an OpKind from a `&str` onnx name  
     pub fn new(name: &str) -> Self {
         match name {
-            "Clip" => OpKind::Lookup(LookupOp::ReLU { scale: 1 }),
-            "Prelu" => OpKind::Lookup(LookupOp::PReLU {
-                scale: 1,
-                slopes: vec![],
+            "Clip" => OpKind::Lookup(LookupOp::ReLU {
+                scale: eq_float::F32(1.0),
+            }),
+            "Prelu" => OpKind::Composite(CompositeOp::PReLU {
+                scale: eq_float::F32(1.0),
             }),
             "LeakyRelu" => OpKind::Lookup(LookupOp::LeakyReLU {
-                scale: 1,
+                scale: eq_float::F32(1.0),
                 slope: eq_float::F32(0.0),
             }),
-            "Sigmoid" => OpKind::Lookup(LookupOp::Sigmoid { scales: (1, 1) }),
-            "Div" => OpKind::Lookup(LookupOp::Div { scale: 1 }),
+            "Sigmoid" => OpKind::Lookup(LookupOp::Sigmoid {
+                scales: (eq_float::F32(1.0), eq_float::F32(1.0)),
+            }),
+            "Div" => OpKind::Lookup(LookupOp::Div {
+                scale: eq_float::F32(1.0),
+            }),
             "Const" => OpKind::Const,
             "Source" => OpKind::Input,
             "Add" => OpKind::Poly(PolyOp::Add),
@@ -101,22 +109,27 @@ impl OpKind {
             }
         }
     }
-    /// Identify fused OpKind
+    /// Polynomial
     pub fn is_poly(&self) -> bool {
         matches!(self, OpKind::Poly(_))
     }
 
-    /// Identify fused OpKind
+    /// Lookup
     pub fn is_lookup(&self) -> bool {
         matches!(self, OpKind::Lookup(_))
     }
 
-    /// Identify fused OpKind
+    /// Composite
+    pub fn is_composite(&self) -> bool {
+        matches!(self, OpKind::Composite(_))
+    }
+
+    /// Input
     pub fn is_input(&self) -> bool {
         matches!(self, OpKind::Input)
     }
 
-    /// Identify constant OpKind
+    /// Constant
     pub fn is_const(&self) -> bool {
         matches!(self, OpKind::Const)
     }
@@ -129,6 +142,7 @@ impl fmt::Display for OpKind {
             OpKind::Input => write!(f, "input"),
             OpKind::Lookup(s) => write!(f, "{}", s),
             OpKind::Poly(s) => write!(f, "{}", s),
+            OpKind::Composite(s) => write!(f, "{}", s),
             OpKind::Unknown(c) => write!(f, "? {}", c),
             OpKind::None => write!(f, "n/a",),
         }
@@ -139,6 +153,7 @@ impl fmt::Display for OpKind {
 #[allow(missing_docs)]
 #[derive(Clone, Default, Debug)]
 pub enum NodeConfig<F: FieldExt + TensorType> {
+    Composite(CompositeConfig<F>, Vec<usize>),
     Lookup(LookupConfig<F>, Vec<usize>),
     Poly(PolyConfig<F>, Vec<usize>),
     Const,
@@ -320,6 +335,38 @@ impl Node {
         let mut opkind = OpKind::new(node.op().name().as_ref()); // parses the op name
 
         let mn = match opkind {
+            OpKind::Composite(ref s) => {
+                match s {
+                    CompositeOp::PReLU {
+                        scale: mut layer_scale,
+                        ..
+                    } => {
+                        let input_node = &inputs[0];
+
+                        let scale_diff = input_node.out_scale - scale;
+                        // We can also consider adjusting the scale of all inputs and the output in a more custom way.
+                        let mut output_max = input_node.output_max;
+                        if scale_diff > 0 {
+                            layer_scale = eq_float::F32(scale_to_multiplier(scale_diff));
+                            output_max = input_node.output_max / (layer_scale.0);
+                        }
+
+                        opkind = OpKind::Composite(CompositeOp::PReLU { scale: layer_scale }); // now the input will be scaled down to match
+
+                        Node {
+                            idx,
+                            opkind,
+                            inputs: node.inputs,
+                            in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
+                            out_dims: input_node.out_dims.clone(),
+                            in_scale: input_node.out_scale,
+                            out_scale: 2 * scale,
+                            output_max,
+                            ..Default::default()
+                        }
+                    }
+                }
+            }
             OpKind::Lookup(ref s) => {
                 match s {
                     LookupOp::Sigmoid { .. } => {
@@ -328,11 +375,11 @@ impl Node {
                         if scale_diff > 0 {
                             let mult = scale_to_multiplier(scale_diff);
                             opkind = OpKind::Lookup(LookupOp::Sigmoid {
-                                scales: (mult as usize, scale as usize),
+                                scales: (eq_float::F32(mult), eq_float::F32(scale as f32)),
                             });
                         } else {
                             opkind = OpKind::Lookup(LookupOp::Sigmoid {
-                                scales: (1, scale as usize),
+                                scales: (eq_float::F32(1.0), eq_float::F32(scale as f32)),
                             });
                         }
 
@@ -357,7 +404,7 @@ impl Node {
                         if scale_diff > 0 {
                             let mult = scale_to_multiplier(scale_diff);
                             opkind = OpKind::Lookup(LookupOp::ReLU {
-                                scale: mult as usize,
+                                scale: eq_float::F32(mult),
                             }); // now the input will be scaled down to match
                             output_max = input_node.output_max / mult;
                         }
@@ -398,8 +445,8 @@ impl Node {
                         // We can also consider adjusting the scale of all inputs and the output in a more custom way.
                         let mut output_max = input_node.output_max;
                         if scale_diff > 0 {
-                            layer_scale = scale_to_multiplier(scale_diff) as usize;
-                            output_max = input_node.output_max / (layer_scale as f32);
+                            layer_scale = eq_float::F32(scale_to_multiplier(scale_diff));
+                            output_max = input_node.output_max / (layer_scale.0);
                         }
 
                         opkind = OpKind::Lookup(LookupOp::LeakyReLU {
@@ -411,47 +458,6 @@ impl Node {
                             idx,
                             opkind,
                             inputs: node.inputs.clone(),
-                            in_dims: vec![input_node.out_dims.clone()],
-                            out_dims: input_node.out_dims.clone(),
-                            in_scale: input_node.out_scale,
-                            out_scale: scale,
-                            output_max,
-                            ..Default::default()
-                        }
-                    }
-                    LookupOp::PReLU {
-                        scale: mut layer_scale,
-                        ..
-                    } => {
-                        let input_node = &inputs[0];
-                        // Extract the slope layer hyperparams
-                        let slopes = inputs[1]
-                            .clone()
-                            .raw_const_value
-                            .unwrap()
-                            .deref()
-                            .iter()
-                            .map(|value| eq_float::F32(*value))
-                            .collect_vec();
-                        node.inputs.pop();
-
-                        let scale_diff = input_node.out_scale - scale;
-                        // We can also consider adjusting the scale of all inputs and the output in a more custom way.
-                        let mut output_max = input_node.output_max;
-                        if scale_diff > 0 {
-                            layer_scale = scale_to_multiplier(scale_diff) as usize;
-                            output_max = input_node.output_max / (layer_scale as f32);
-                        }
-
-                        opkind = OpKind::Lookup(LookupOp::PReLU {
-                            scale: layer_scale,
-                            slopes: slopes.clone(),
-                        }); // now the input will be scaled down to match
-
-                        Node {
-                            idx,
-                            opkind,
-                            inputs: node.inputs,
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
@@ -477,12 +483,12 @@ impl Node {
                         if scale_diff > 0 {
                             let mult = scale_to_multiplier(scale_diff);
                             opkind = OpKind::Lookup(LookupOp::Div {
-                                scale: (div * mult) as usize,
+                                scale: eq_float::F32(div * mult),
                             }); // now the input will be scaled down to match
                             output_max = input_node.output_max / (div * mult);
                         } else {
                             opkind = OpKind::Lookup(LookupOp::Div {
-                                scale: div as usize,
+                                scale: eq_float::F32(div),
                             }); // now the input will be scaled down to match
                             output_max = input_node.output_max / (div);
                         }
@@ -804,6 +810,21 @@ impl Node {
                     PolyOp::Sum => {
                         assert!(inputs.len() == 1);
 
+                        Node {
+                            idx,
+                            opkind,
+                            inputs: node.inputs.clone(),
+                            in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
+                            out_dims: vec![1],
+                            in_scale: inputs.iter().map(|input| input.out_scale).max().unwrap(),
+                            out_scale: inputs.iter().map(|input| input.out_scale).max().unwrap(),
+                            output_max: inputs[0].output_max
+                                * inputs[0].out_dims.iter().product::<usize>() as f32,
+                            ..Default::default()
+                        }
+                    }
+                    PolyOp::Neg => {
+                        assert!(inputs.len() == 1);
                         Node {
                             idx,
                             opkind,

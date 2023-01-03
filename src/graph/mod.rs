@@ -49,15 +49,16 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
         let num_advice: usize = if model.visibility.params.is_public() {
             num_fixed += model.max_node_params();
             // this is the maximum of variables in non-fused layer, and the maximum of variables (non-params) in fused layers
-            max(model.max_node_vars_non_fused(), model.max_node_vars_fused())
+            max(model.max_node_vars_non_fused(), model.max_node_vars_fused()) + 4
         } else {
             // this is the maximum of variables in non-fused layer, and the maximum of variables (non-params) in fused layers
             //  + the max number of params in a fused layer
             max(
                 model.max_node_vars_non_fused(),
                 model.max_node_params() + model.max_node_vars_fused(),
-            )
+            ) + 4
         };
+
         // for now the number of instances corresponds to the number of graph / model outputs
         let mut num_instances = 0;
         let mut instance_shapes = vec![];

@@ -1,5 +1,7 @@
 use super::node::*;
 use super::vars::*;
+use crate::circuit::composite::Config as CompositeConfig;
+// use crate::circuit::composite::Op as CompositeOp;
 use crate::circuit::lookup::Config as LookupConfig;
 use crate::circuit::lookup::Op as LookupOp;
 use crate::circuit::lookup::Table as LookupTable;
@@ -241,6 +243,18 @@ impl Model {
                 }
             }
 
+            let composite_ops: BTreeMap<&usize, &Node> = bucket_nodes
+                .iter()
+                .filter(|(_, n)| n.opkind.is_composite())
+                .collect();
+
+            if !composite_ops.is_empty() {
+                for (i, node) in composite_ops {
+                    let config = self.conf_composite(node, meta, vars);
+                    results.insert(*i, config);
+                }
+            }
+
             // preserves ordering
             let poly_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
@@ -323,7 +337,7 @@ impl Model {
     }
 
     /// Configures a `BTreeMap` of 'fuseable' operations. These correspond to operations that are represented in
-    /// the `circuit::fused` module. A single configuration is output, representing the amalgamation of these operations into
+    /// the [crate::circuit::polynomial] module. A single configuration is output, representing the amalgamation of these operations into
     /// a single Halo2 gate.
     /// # Arguments
     ///
@@ -424,12 +438,12 @@ impl Model {
     }
 
     /// Configures a lookup table based operation. These correspond to operations that are represented in
-    /// the `circuit::eltwise` module.
+    /// the [crate::circuit::lookup] module.
     /// # Arguments
     ///
     /// * `node` - The [Node] must represent a lookup based op.
     /// * `meta` - Halo2 ConstraintSystem.
-    /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure the passed `node`.
+    /// * `vars` - A [ModelVars]. Must be sufficiently large to configure the passed `node`.
     fn conf_table<F: FieldExt + TensorType>(
         &self,
         node: &Node,
@@ -458,6 +472,39 @@ impl Model {
             tables.insert(vec![op.clone()], conf.table.clone());
             NodeConfig::Lookup(conf, node_inputs)
         }
+    }
+
+    /// Configures a mixed lookup table + polynomial based operation. These correspond to operations that are represented in
+    /// the `circuit::eltwise` module.
+    /// # Arguments
+    ///
+    /// * `node` - The [Node] must represent a lookup based op.
+    /// * `meta` - Halo2 ConstraintSystem.
+    /// * `vars` - A [ModelVars]. Must be sufficiently large to configure the passed `node`.
+    fn conf_composite<F: FieldExt + TensorType>(
+        &self,
+        node: &Node,
+        meta: &mut ConstraintSystem<F>,
+        vars: &mut ModelVars<F>,
+    ) -> NodeConfig<F> {
+        // let input_len: usize = node.in_dims[0].iter().product();
+        println!("{:?}", node);
+        let mut inputs = vec![];
+        for (i, in_dim) in node.in_dims.iter().enumerate() {
+            inputs.push(vars.advices[i].reshape(&in_dim))
+        }
+        inputs.push(vars.advices[2].reshape(&node.in_dims[0]));
+        let output = &vars.advices[0..1];
+        let node_inputs = node.inputs.iter().map(|e| e.node).collect();
+
+        let op = match &node.opkind {
+            OpKind::Composite(l) => l,
+            c => panic!("wrong method called for {}", c),
+        };
+
+        let conf: CompositeConfig<F> =
+            CompositeConfig::configure(meta, &inputs, &output, self.scale, self.bits, &op);
+        NodeConfig::Composite(conf, node_inputs)
     }
 
     /// Assigns values to the regions created when calling `configure`.
@@ -557,11 +604,33 @@ impl Model {
 
                 Some(ac.layout(layouter, &values))
             }
+            NodeConfig::Composite(mut cc, idx) => {
+                let values: Vec<ValTensor<F>> = idx
+                    .iter()
+                    .map(|i| {
+                        let node = &self.nodes.filter(*i);
+                        match node.opkind {
+                            OpKind::Const => {
+                                let val = node
+                                    .const_value
+                                    .clone()
+                                    .context("Tensor<i32> should already be loaded")
+                                    .unwrap();
+                                <Tensor<i32> as Into<Tensor<Value<F>>>>::into(val).into()
+                            }
+                            _ => inputs.get(i).unwrap().clone(),
+                        }
+                    })
+                    .collect_vec();
+
+                Some(cc.layout(layouter, &values))
+            }
             NodeConfig::Lookup(rc, idx) => {
                 assert_eq!(idx.len(), 1);
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
                 Some(rc.layout(layouter, inputs.get(&idx[0]).unwrap()))
             }
+
             NodeConfig::Input => None,
             NodeConfig::Const => None,
             c => {
@@ -601,6 +670,7 @@ impl Model {
                 OpKind::Const => node.bucket = None,
                 OpKind::Poly(_) => node.bucket = Some(prev_bucket.unwrap()),
                 OpKind::Lookup(_) => node.bucket = Some(prev_bucket.unwrap() + 1),
+                OpKind::Composite(_) => node.bucket = Some(prev_bucket.unwrap() + 1),
                 _ => unimplemented!(),
             }
             bucketed_nodes.insert(node.bucket, node.idx, node.clone());

@@ -1,5 +1,6 @@
 use crate::tensor::{Tensor, TensorType};
 use itertools::Itertools;
+use std::ops::Neg;
 pub use std::ops::{Add, Div, Mul, Sub};
 
 /// Matrix multiplies two 2D tensors (and adds an offset).
@@ -246,6 +247,34 @@ pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
     output
 }
 
+/// Negates a tensor.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::sub;
+/// let x = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// ).unwrap();
+/// let result = nega(&vec![x, k]);
+/// let expected = Tensor::<i32>::new(Some(&[-2, -1, -2, -1, -1, -1]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn neg<T: TensorType + Neg<Output = T>>(t: &Tensor<T>) -> Tensor<T> {
+    // calculate value of output
+    let mut output: Tensor<T> = t.clone();
+
+    for (i, e) in t.iter().enumerate() {
+        output[i] = -e.clone()
+    }
+
+    output
+}
+
 /// Elementwise subtracts a tensor with a const element.
 /// # Arguments
 ///
@@ -300,11 +329,13 @@ pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
     // determines if we're multiplying by a 1D const
     if t.len() == 2 && t[1].dims().len() == 1 && t[1].dims()[0] == 1 {
         return const_mult(&t[0], t[1][0].clone());
+    } else if t.len() == 2
+        && t[0].dims()[0] == t[1].dims()[0]
+        && t[1].dims()[1..].iter().product::<usize>() == 1
+    {
+        return shape_casted_mult(&t[0], &t[1]);
     }
 
-    for e in t.iter() {
-        assert_eq!(t[0].dims(), e.dims());
-    }
     // calculate value of output
     let mut output: Tensor<T> = t[0].clone();
 
@@ -314,6 +345,39 @@ pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<Tensor<T>>) -> Tensor<T> {
         }
     }
 
+    output
+}
+
+/// Elementwise applies prelu to a tensor of integers.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `scale` - Single value
+/// * `slopes` - Array of values
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::shape_casted_mult;
+/// let x = Tensor::<i32>::new(
+///     Some(&[-10, 15, 2, 1, 1, -5]),
+///     &[2, 3],
+/// ).unwrap();
+/// let y = Tensor::<i32>::new(
+///     Some(&[2, 2]),
+///     &[2, 1],
+/// ).unwrap();
+/// let result = shape_casted_mult(&x, &y]);
+/// let expected = Tensor::<i32>::new(Some(&[-1, 15, 2, 1, 1, -125]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+fn shape_casted_mult<T: TensorType + Mul<Output = T>>(a: &Tensor<T>, b: &Tensor<T>) -> Tensor<T> {
+    // calculate value of output
+    let mut output: Tensor<T> = a.clone();
+
+    for (i, a_i) in a.iter().enumerate() {
+        let b_i = &b[i / (a.dims()[1..].iter().product::<usize>())];
+        output[i] = (b_i.clone()) * (a_i.clone());
+    }
     output
 }
 
@@ -786,13 +850,13 @@ pub mod activations {
     /// let expected = Tensor::<i32>::new(Some(&[1, 1, 1, 1, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn sigmoid(a: &Tensor<i32>, scale_input: usize, scale_output: usize) -> Tensor<i32> {
+    pub fn sigmoid(a: &Tensor<i32>, scale_input: f32, scale_output: f32) -> Tensor<i32> {
         // calculate value of output
         let mut output: Tensor<i32> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
-            let kix = (*a_i as f32) / (scale_input as f32);
-            let fout = (scale_output as f32) / (1.0 + (-kix).exp());
+            let kix = (*a_i as f32) / (scale_input);
+            let fout = (scale_output) / (1.0 + (-kix).exp());
             let rounded = fout.round();
             output[i] = rounded as i32;
         }
@@ -817,57 +881,16 @@ pub mod activations {
     /// let expected = Tensor::<i32>::new(Some(&[2, 15, 2, 1, 1, -1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn leakyrelu(a: &Tensor<i32>, scale: usize, slope: f32) -> Tensor<i32> {
+    pub fn leakyrelu(a: &Tensor<i32>, scale: f32, slope: f32) -> Tensor<i32> {
         // calculate value of output
         let mut output: Tensor<i32> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
             output[i] = if a_i < &0 {
-                let d_inv_x = (slope) * (*a_i as f32) / (scale as f32);
+                let d_inv_x = (slope) * (*a_i as f32) / (scale);
                 d_inv_x.round() as i32
             } else {
-                let d_inv_x = (*a_i as f32) / (scale as f32);
-                d_inv_x.round() as i32
-            };
-        }
-        output
-    }
-
-    /// Elementwise applies prelu to a tensor of integers.
-    /// # Arguments
-    ///
-    /// * `a` - Tensor
-    /// * `scale` - Single value
-    /// * `slopes` - Array of values
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::activations::prelu;
-    /// let x = Tensor::<i32>::new(
-    ///     Some(&[-10, 15, 2, 1, 1, -5]),
-    ///     &[2, 3],
-    /// ).unwrap();
-    /// let result = prelu(&x, 1, &[0.1, 25.0]);
-    /// let expected = Tensor::<i32>::new(Some(&[-1, 15, 2, 1, 1, -125]), &[2, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn prelu(a: &Tensor<i32>, scale: usize, slopes: &[f32]) -> Tensor<i32> {
-        if slopes.len() == 1 {
-            return leakyrelu(a, scale, slopes[0]);
-        } else {
-            // assert number of slopes is equal to number of channels
-            assert_eq!(slopes.len(), a.dims()[0])
-        }
-        // calculate value of output
-        let mut output: Tensor<i32> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            output[i] = if a_i < &0 {
-                let slope_i: f32 = slopes[i / (a.dims()[1..].iter().product::<usize>())];
-                let d_inv_x = (slope_i) * (*a_i as f32) / (scale as f32);
-                d_inv_x.round() as i32
-            } else {
-                let d_inv_x = (*a_i as f32) / (scale as f32);
+                let d_inv_x = (*a_i as f32) / (scale);
                 d_inv_x.round() as i32
             };
         }
@@ -892,13 +915,13 @@ pub mod activations {
     /// let expected = Tensor::<i32>::new(Some(&[1, 1, 1, 4, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn const_div(a: &Tensor<i32>, scale: i32) -> Tensor<i32> {
+    pub fn const_div(a: &Tensor<i32>, scale: f32) -> Tensor<i32> {
         // calculate value of output
         // calculate value of output
         let mut output: Tensor<i32> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
-            let d_inv_x = (*a_i as f32) / (scale as f32);
+            let d_inv_x = (*a_i as f32) / (scale);
             output[i] = d_inv_x.round() as i32;
         }
         output

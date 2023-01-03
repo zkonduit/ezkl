@@ -33,7 +33,9 @@ impl<F: FieldExt + TensorType> Circuit<F> for NLCircuit<F> {
                 .map(|_| VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512))
                 .collect::<Vec<_>>();
 
-            let nl = Op::ReLU { scale: 128 };
+            let nl = Op::ReLU {
+                scale: eq_float::F32(128.0),
+            };
 
             Self::Config::configure(cs, &advices[0], &advices[1], BITS, &[nl])
         }

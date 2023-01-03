@@ -11,6 +11,7 @@ use itertools::Itertools;
 use log::error;
 use std::fmt;
 use std::marker::PhantomData;
+use std::ops::Neg;
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be merged into a single circuit gate.
@@ -20,6 +21,7 @@ pub enum Op {
     Reshape(Vec<usize>),
     Flatten(Vec<usize>),
     Add,
+    Neg,
     Sub,
     Sum,
     Mult,
@@ -53,6 +55,7 @@ impl fmt::Display for Op {
             Op::Flatten(new_dims) => write!(f, "flatten to {:?}", new_dims),
             Op::Add => write!(f, "add"),
             Op::Sub => write!(f, "sub"),
+            Op::Neg => write!(f, "neg"),
             Op::Sum => write!(f, "sum"),
             Op::Mult => write!(f, "mult"),
             Op::Matmul => write!(f, "matmul"),
@@ -90,7 +93,9 @@ impl fmt::Display for Op {
 
 impl Op {
     /// Matches a [Op] to an operation in the `tensor::ops` module.
-    pub fn f<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
+    pub fn f<
+        T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Neg<Output = T>,
+    >(
         &self,
         mut inputs: Vec<Tensor<T>>,
     ) -> Tensor<T> {
@@ -126,6 +131,10 @@ impl Op {
             Op::Pow(u) => {
                 assert_eq!(inputs.len(), 1);
                 pow(&inputs[0], *u)
+            }
+            Op::Neg => {
+                assert_eq!(inputs.len(), 1);
+                neg(&inputs[0])
             }
             Op::Sum => {
                 assert_eq!(inputs.len(), 1);
@@ -303,7 +312,9 @@ impl<F: FieldExt + TensorType> Config<F> {
     }
 
     /// Applies an operation represented by a [Op] to the set of inputs (both explicit and intermediate results) it indexes over.
-    pub fn apply_op<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
+    pub fn apply_op<
+        T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Neg<Output = T>,
+    >(
         node: &mut Node,
         inputs: &[Tensor<T>],
         outputs: &mut Vec<Tensor<T>>,

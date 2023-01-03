@@ -15,21 +15,17 @@ use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Op {
     Div {
-        scale: usize,
+        scale: eq_float::F32,
     },
     ReLU {
-        scale: usize,
+        scale: eq_float::F32,
     },
     LeakyReLU {
-        scale: usize,
+        scale: eq_float::F32,
         slope: eq_float::F32,
     },
-    PReLU {
-        scale: usize,
-        slopes: Vec<eq_float::F32>,
-    },
     Sigmoid {
-        scales: (usize, usize),
+        scales: (eq_float::F32, eq_float::F32),
     },
 }
 
@@ -41,9 +37,6 @@ impl fmt::Display for Op {
             Op::LeakyReLU { scale, slope } => {
                 write!(f, "leaky-relu w/ scale: {}, slope: {}", scale, slope)
             }
-            Op::PReLU { scale, slopes } => {
-                write!(f, "leaky-relu w/ scale: {}, slopes: {:#?}", scale, slopes)
-            }
             Op::Sigmoid { scales } => write!(f, "sigmoid  w/ scale: {}", scales.0),
         }
     }
@@ -53,11 +46,10 @@ impl Op {
     /// forward function
     pub fn f(&self, x: Tensor<i32>) -> Tensor<i32> {
         match &self {
-            Op::Div { scale } => const_div(&x, *scale as i32),
-            Op::ReLU { scale } => leakyrelu(&x, *scale, 0_f32),
-            Op::LeakyReLU { scale, slope } => leakyrelu(&x, *scale, slope.0),
-            Op::PReLU { scale, slopes } => leakyrelu(&x, *scale, slopes[0].0),
-            Op::Sigmoid { scales } => sigmoid(&x, scales.0, scales.1),
+            Op::Div { scale } => const_div(&x, scale.0),
+            Op::ReLU { scale } => leakyrelu(&x, scale.0, 0_f32),
+            Op::LeakyReLU { scale, slope } => leakyrelu(&x, scale.0, slope.0),
+            Op::Sigmoid { scales } => sigmoid(&x, scales.0 .0, scales.1 .0),
         }
     }
 
@@ -255,12 +247,12 @@ impl<F: FieldExt + TensorType> Config<F> {
         input: &VarTensor,
         output: &VarTensor,
         bits: usize,
-        nonlinearitities: &[Op],
+        nonlinearities: &[Op],
     ) -> Self {
         let table = Rc::new(RefCell::new(Table::<F>::configure(
             cs,
             bits,
-            &nonlinearitities,
+            &nonlinearities,
         )));
         Self::configure_with_table(cs, input, output, table)
     }
@@ -344,7 +336,9 @@ mod tests {
                 .map(|_| VarTensor::new_advice(cs, 4, 1, vec![1], true, 512))
                 .collect::<Vec<_>>();
 
-            let nl = Op::ReLU { scale: 1 };
+            let nl = Op::ReLU {
+                scale: eq_float::F32(1.0),
+            };
 
             Self::Config::configure(cs, &advices[0], &advices[1], 2, &[nl])
         }

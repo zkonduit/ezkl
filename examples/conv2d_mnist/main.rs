@@ -205,8 +205,15 @@ where
         let input = input.reshape(&[LEN]);
         let output = output.reshape(&[LEN]);
 
-        let l1 =
-            LookupConfig::configure(cs, &input, &output, BITS, &[LookupOp::ReLU { scale: 32 }]);
+        let l1 = LookupConfig::configure(
+            cs,
+            &input,
+            &output,
+            BITS,
+            &[LookupOp::ReLU {
+                scale: eq_float::F32(32.0),
+            }],
+        );
 
         // tells the config layer to add an affine op to the circuit gate
         let affine_node = PolyNode {
