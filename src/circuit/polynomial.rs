@@ -9,6 +9,7 @@ use halo2_proofs::{
 };
 use itertools::Itertools;
 use log::error;
+use std::error::Error;
 use std::fmt;
 use std::marker::PhantomData;
 
@@ -93,18 +94,18 @@ impl Op {
     pub fn f<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
         &self,
         mut inputs: Vec<Tensor<T>>,
-    ) -> Tensor<T> {
+    ) -> Result<Tensor<T>, Box<dyn Error>> {
         match &self {
-            Op::Identity => inputs[0].clone(),
+            Op::Identity => Ok(inputs[0].clone()),
             Op::Reshape(new_dims) => {
                 let mut t = inputs[0].clone();
                 t.reshape(new_dims);
-                t
+                Ok(t)
             }
             Op::Flatten(new_dims) => {
                 let mut t = inputs[0].clone();
                 t.reshape(new_dims);
-                t
+                Ok(t)
             }
             Op::Add => add(&inputs),
             Op::Sub => sub(&inputs),
@@ -134,14 +135,11 @@ impl Op {
             Op::Rescaled { inner, scale } => {
                 assert_eq!(scale.len(), inputs.len());
 
-                inner.f(inputs
-                    .iter_mut()
-                    .enumerate()
-                    .map(|(i, ri)| {
-                        assert_eq!(scale[i].0, i);
-                        rescale(ri, scale[i].1)
-                    })
-                    .collect_vec())
+                let mut rescaled_inputs = vec![];
+                for (i, ri) in inputs.iter_mut().enumerate() {
+                    rescaled_inputs.push(rescale(ri, scale[i].1)?);
+                }
+                Ok(inner.f(rescaled_inputs)?)
             }
         }
     }
@@ -214,7 +212,12 @@ impl<F: FieldExt + TensorType> Config<F> {
 
             let mut config_outputs = vec![];
             for node in config.nodes.iter_mut() {
-                Self::apply_op(node, &qis, &mut config_outputs);
+                match Self::apply_op(node, &qis, &mut config_outputs) {
+                    Ok(res) => res,
+                    e => {
+                        abort!("apply op failed {:?}", e);
+                    }
+                };
             }
             let witnessed_output = &config_outputs[config.nodes.len() - 1];
 
@@ -244,7 +247,7 @@ impl<F: FieldExt + TensorType> Config<F> {
         &mut self,
         layouter: &mut impl Layouter<F>,
         values: &[ValTensor<F>],
-    ) -> ValTensor<F> {
+    ) -> Result<ValTensor<F>, Box<dyn Error>> {
         assert_eq!(values.len(), self.inputs.len());
 
         let t = match layouter.assign_region(
@@ -276,7 +279,12 @@ impl<F: FieldExt + TensorType> Config<F> {
                 let mut layout_outputs = vec![];
 
                 for node in self.nodes.iter_mut() {
-                    Self::apply_op(node, &inputs, &mut layout_outputs);
+                    match Self::apply_op(node, &inputs, &mut layout_outputs) {
+                        Ok(res) => res,
+                        e => {
+                            abort!("apply op failed {:?}", e);
+                        }
+                    };
                 }
                 let output: ValTensor<F> = match layout_outputs.last() {
                     Some(a) => a.clone().into(),
@@ -299,7 +307,7 @@ impl<F: FieldExt + TensorType> Config<F> {
             }
         };
 
-        ValTensor::from(t)
+        Ok(ValTensor::from(t))
     }
 
     /// Applies an operation represented by a [Op] to the set of inputs (both explicit and intermediate results) it indexes over.
@@ -307,7 +315,7 @@ impl<F: FieldExt + TensorType> Config<F> {
         node: &mut Node,
         inputs: &[Tensor<T>],
         outputs: &mut Vec<Tensor<T>>,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         let op_inputs = node
             .input_order
             .iter()
@@ -316,7 +324,8 @@ impl<F: FieldExt + TensorType> Config<F> {
                 InputType::Inter(u) => outputs[*u].clone(),
             })
             .collect_vec();
-        outputs.push(node.op.f(op_inputs));
+        outputs.push(node.op.f(op_inputs)?);
+        Ok(())
     }
 }
 

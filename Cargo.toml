@@ -26,6 +26,7 @@ halo2_wrong_ecc = { git = "https://github.com/zkonduit/halo2wrong", package = "e
 plonk_verifier = { git = "https://github.com/zkonduit/plonk-verifier", branch = "main"}
 colog = { version = "1.1.0", optional = true }
 eq-float = "0.1.0"
+thiserror = "1.0.38"
 
 [dev-dependencies]
 criterion = {version = "0.3",  features = ["html_reports"]}

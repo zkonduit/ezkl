@@ -12,6 +12,7 @@ use halo2_proofs::arithmetic::FieldExt;
 use itertools::Itertools;
 use log::{error, info, trace, warn};
 use std::collections::{btree_map::Entry, BTreeMap};
+use std::error::Error;
 use std::fmt;
 use std::ops::Deref;
 use tabled::Tabled;
@@ -294,7 +295,7 @@ impl Node {
         other_nodes: &mut BTreeMap<usize, Node>,
         scale: i32,
         idx: usize,
-    ) -> Self {
+    ) -> Result<Self, Box<dyn Error>> {
         trace!("Create {:?}", node);
         trace!("Create op {:?}", node.op);
         let output_shapes = match node_output_shapes(&node) {
@@ -544,7 +545,7 @@ impl Node {
                             let scale_diff =
                                 weight_node.out_scale + input_node.out_scale - bias_node.out_scale;
                             let mut bias_node = other_nodes.get_mut(&node.inputs[2].node).unwrap();
-                            bias_node = Self::scale_up_const_node(bias_node, scale_diff);
+                            bias_node = Self::scale_up_const_node(bias_node, scale_diff)?;
                             assert_eq!(
                                 input_node.out_scale + weight_node.out_scale,
                                 bias_node.out_scale
@@ -697,7 +698,7 @@ impl Node {
                         let scale_diff =
                             weight_node.out_scale + input_node.out_scale - bias_node.out_scale;
                         let mut bias_node = other_nodes.get_mut(&node.inputs[2].node).unwrap();
-                        bias_node = Self::scale_up_const_node(bias_node, scale_diff);
+                        bias_node = Self::scale_up_const_node(bias_node, scale_diff)?;
 
                         assert_eq!(
                             input_node.out_scale + weight_node.out_scale,
@@ -741,10 +742,10 @@ impl Node {
                         let sigma = inputs[4].raw_const_value.as_ref().unwrap();
                         let num_entries = gamma.len();
 
-                        let a = div(gamma.clone(), sigma.clone());
-                        let amu: Tensor<f32> = mult(&vec![a.clone(), mu.clone()]);
-                        let amupb: Tensor<f32> = add(&vec![amu, beta.clone()]);
-                        let b = const_mult(&amupb, -1f32);
+                        let a = div(gamma.clone(), sigma.clone())?;
+                        let amu: Tensor<f32> = mult(&vec![a.clone(), mu.clone()])?;
+                        let amupb: Tensor<f32> = add(&vec![amu, beta.clone()])?;
+                        let b = const_mult(&amupb, -1f32)?;
 
                         let in_scale = inputs[0].out_scale;
                         let out_scale = 2 * inputs[0].out_scale;
@@ -1086,7 +1087,7 @@ impl Node {
                 panic!()
             }
         };
-        mn
+        Ok(mn)
     }
 
     /// Ensures all inputs to a node have the same fixed point denominator.
@@ -1134,12 +1135,12 @@ impl Node {
     }
 
     /// Re-quantizes a constant value node to a new scale.
-    fn scale_up_const_node(node: &mut Node, scale_diff: i32) -> &mut Node {
+    fn scale_up_const_node(node: &mut Node, scale_diff: i32) -> Result<&mut Node, Box<dyn Error>> {
         assert!(matches!(node.opkind, OpKind::Const));
         if scale_diff > 0 {
             if let Some(val) = &node.const_value {
                 let mult = scale_to_multiplier(scale_diff);
-                node.const_value = Some(const_mult(val, mult as i32));
+                node.const_value = Some(const_mult(val, mult as i32)?);
                 info!(
                     "------ scaled const node {:?}: {:?} -> {:?}",
                     node.idx,
@@ -1150,6 +1151,6 @@ impl Node {
                 node.out_scale += scale_diff;
             }
         }
-        node
+        Ok(node)
     }
 }

@@ -18,11 +18,31 @@ use halo2_proofs::{
 };
 use itertools::Itertools;
 use std::cmp::max;
+use std::error::Error;
+use std::fmt;
 use std::fmt::Debug;
 use std::iter::Iterator;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
+use thiserror::Error;
+/// A wrapper for tensor related errors.
+#[derive(Debug, Error)]
+pub enum TensorError {
+    /// Shape mismatch in a operation
+    DimMismatch(String),
+    /// Shape when instantiating
+    DimError,
+}
+
+impl fmt::Display for TensorError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TensorError::DimMismatch(op) => write!(f, "dimension mismatch in tensor op: {}", op),
+            TensorError::DimError => write!(f, "dimensionality error when manipulating a tensor"),
+        }
+    }
+}
 
 /// The (inner) type of tensor elements.
 pub trait TensorType: Clone + Debug + 'static {
@@ -173,10 +193,6 @@ impl TensorType for halo2curves::bn256::Fr {
     }
 }
 
-/// A wrapper for tensor related errors.
-#[derive(Debug)]
-pub struct TensorError(String);
-
 /// A generic multi-dimensional array representation of a Tensor.
 /// The `inner` attribute contains a vector of values whereas `dims` corresponds to the dimensionality of the array
 /// and as such determines how we index, query for values, or slice a Tensor.
@@ -287,14 +303,12 @@ impl<F: FieldExt + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> {
 
 impl<T: Clone + TensorType> Tensor<T> {
     /// Sets (copies) the tensor values to the provided ones.
-    pub fn new(values: Option<&[T]>, dims: &[usize]) -> Result<Self, TensorError> {
+    pub fn new(values: Option<&[T]>, dims: &[usize]) -> Result<Self, Box<dyn Error>> {
         let total_dims: usize = dims.iter().product();
         match values {
             Some(v) => {
                 if total_dims != v.len() {
-                    return Err(TensorError(
-                        "length of values array is not equal to tensor total elements".to_string(),
-                    ));
+                    return Err(Box::new(TensorError::DimError));
                 }
                 Ok(Tensor {
                     inner: Vec::from(v),
@@ -357,8 +371,10 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///
     /// assert_eq!(a.get_slice(&[0..2]), b);
     /// ```
-    pub fn get_slice(&self, indices: &[Range<usize>]) -> Tensor<T> {
-        assert!(self.dims.len() >= indices.len());
+    pub fn get_slice(&self, indices: &[Range<usize>]) -> Result<Tensor<T>, Box<dyn Error>> {
+        if self.dims.len() < indices.len() {
+            return Err(Box::new(TensorError::DimError));
+        }
         let mut res = Vec::new();
         // if indices weren't specified we fill them in as required
         let mut full_indices = indices.to_vec();
@@ -377,7 +393,7 @@ impl<T: Clone + TensorType> Tensor<T> {
             }
         }
 
-        Tensor::new(Some(&res), &dims).unwrap()
+        Tensor::new(Some(&res), &dims)
     }
 
     /// Get the array index from rows / columns indices.
@@ -454,7 +470,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     pub fn enum_map<F: FnMut(usize, T) -> G, G: TensorType>(
         &self,
         mut f: F,
-    ) -> Result<Tensor<G>, TensorError> {
+    ) -> Result<Tensor<G>, Box<dyn Error>> {
         let mut t = Tensor::from(self.inner.iter().enumerate().map(|(i, e)| f(i, e.clone())));
         t.reshape(self.dims());
         Ok(t)
@@ -470,7 +486,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     pub fn mc_enum_map<F: FnMut(&[usize], T) -> G, G: TensorType>(
         &self,
         mut f: F,
-    ) -> Result<Tensor<G>, TensorError> {
+    ) -> Result<Tensor<G>, Box<dyn Error>> {
         let mut indices = Vec::new();
         for i in self.dims.clone() {
             indices.push(0..i);
@@ -494,7 +510,7 @@ impl<T: Clone + TensorType> Tensor<Tensor<T>> {
     /// let mut d = c.combine().unwrap();
     /// assert_eq!(d.dims(), &[8]);
     /// ```
-    pub fn combine(&self) -> Result<Tensor<T>, TensorError> {
+    pub fn combine(&self) -> Result<Tensor<T>, Box<dyn Error>> {
         let mut dims = 0;
         let mut inner = Vec::new();
         for t in self.inner.clone().into_iter() {
@@ -540,6 +556,6 @@ mod tests {
     fn tensor_slice() {
         let a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
         let b = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
-        assert_eq!(a.get_slice(&[0..2, 0..1]), b);
+        assert_eq!(a.get_slice(&[0..2, 0..1]).unwrap(), b);
     }
 }

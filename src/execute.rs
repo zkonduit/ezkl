@@ -37,20 +37,21 @@ use halo2curves::pasta::Fp;
 use log::{error, info, trace};
 #[cfg(feature = "evm")]
 use plonk_verifier::system::halo2::transcript::evm::EvmTranscript;
+use std::error::Error;
 #[cfg(feature = "evm")]
 use std::time::Instant;
 use tabled::Table;
 
 /// Run an ezkl command with given args
-pub fn run(args: Cli) {
+pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
     match args.command {
         Commands::Table { model: _ } => {
-            let om = Model::from_ezkl_conf(args);
+            let om = Model::from_ezkl_conf(args)?;
             println!("{}", Table::new(om.nodes.flatten()));
         }
         Commands::Mock { ref data, model: _ } => {
             let data = prepare_data(data.to_string());
-            let (circuit, public_inputs) = prepare_circuit_and_public_input(&data, &args);
+            let (circuit, public_inputs) = prepare_circuit_and_public_input(&data, &args)?;
             info!("Mock proof");
             let pi: Vec<Vec<Fp>> = public_inputs
                 .into_iter()
@@ -88,7 +89,7 @@ pub fn run(args: Cli) {
             match pfsys {
                 ProofSystem::IPA => {
                     let (circuit, public_inputs) =
-                        prepare_circuit_and_public_input::<Fp>(&data, &args);
+                        prepare_circuit_and_public_input::<Fp>(&data, &args)?;
                     info!("full proof with {}", pfsys);
 
                     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
@@ -110,7 +111,7 @@ pub fn run(args: Cli) {
                 ProofSystem::KZG => {
                     // A direct proof
                     let (circuit, public_inputs) =
-                        prepare_circuit_and_public_input::<Fr>(&data, &args);
+                        prepare_circuit_and_public_input::<Fr>(&data, &args)?;
                     let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
                     let pk = create_keys::<KZGCommitmentScheme<_>, Fr>(&circuit, &params);
                     let strategy = KZGSingleStrategy::new(&params);
@@ -144,7 +145,7 @@ pub fn run(args: Cli) {
                         params
                     };
                     let now = Instant::now();
-                    let snarks = [(); 1].map(|_| gen_application_snark(&params_app, &data, &args));
+                    let snarks = [gen_application_snark(&params_app, &data, &args)?];
                     info!("Application proof took {}", now.elapsed().as_secs());
                     let agg_circuit = AggregationCircuit::new(&params, snarks);
                     let pk = gen_pk(&params, &agg_circuit);
@@ -184,7 +185,7 @@ pub fn run(args: Cli) {
                 ProofSystem::IPA => {
                     info!("proof with {}", pfsys);
                     let (circuit, public_inputs) =
-                        prepare_circuit_and_public_input::<Fp>(&data, &args);
+                        prepare_circuit_and_public_input::<Fp>(&data, &args)?;
                     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
                     let pk = create_keys::<IPACommitmentScheme<_>, Fp>(&circuit, &params);
                     trace!("params computed");
@@ -202,7 +203,7 @@ pub fn run(args: Cli) {
                 }
                 ProofSystem::KZG => {
                     info!("proof with {}", pfsys);
-                    let (circuit, public_inputs) = prepare_circuit_and_public_input(&data, &args);
+                    let (circuit, public_inputs) = prepare_circuit_and_public_input(&data, &args)?;
                     let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
                     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr>(&circuit, &params);
                     trace!("params computed");
@@ -253,4 +254,5 @@ pub fn run(args: Cli) {
             }
         }
     }
+    Ok(())
 }

@@ -8,6 +8,7 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use log::error;
+use std::error::Error;
 use std::fmt;
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
@@ -267,7 +268,11 @@ impl<F: FieldExt + TensorType> Config<F> {
 
     /// Assigns values to the variables created when calling `configure`.
     /// Values are supplied as a 1-element array of `[input]` VarTensors.
-    pub fn layout(&self, layouter: &mut impl Layouter<F>, values: &ValTensor<F>) -> ValTensor<F> {
+    pub fn layout(
+        &self,
+        layouter: &mut impl Layouter<F>,
+        values: &ValTensor<F>,
+    ) -> Result<ValTensor<F>, Box<dyn Error>> {
         if !self.table.borrow().is_assigned {
             self.table.borrow_mut().layout(layouter)
         }
@@ -310,8 +315,8 @@ impl<F: FieldExt + TensorType> Config<F> {
                 }
             },
         );
-        t.reshape(values.dims());
-        t
+        t.reshape(values.dims())?;
+        Ok(t)
     }
 }
 

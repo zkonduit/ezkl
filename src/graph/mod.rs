@@ -14,7 +14,7 @@ use anyhow::Result;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
-    plonk::{Circuit, ConstraintSystem, Error},
+    plonk::{Circuit, ConstraintSystem, Error as PlonkError},
 };
 use log::{info, trace};
 pub use model::*;
@@ -41,7 +41,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
     }
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let model = Model::from_arg();
+        let model = Model::from_arg().expect("model should load from args");
         let mut num_fixed = 0;
         let row_cap = model.max_node_size();
 
@@ -94,7 +94,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
         &self,
         config: Self::Config,
         mut layouter: impl Layouter<F>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), PlonkError> {
         trace!("Setting input in synthesize");
         let inputs = self
             .inputs

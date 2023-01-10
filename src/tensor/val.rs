@@ -73,35 +73,36 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     }
 
     /// Calls `get_slice` on the inner tensor.
-    pub fn get_slice(&self, indices: &[Range<usize>]) -> ValTensor<F> {
-        match self {
+    pub fn get_slice(&self, indices: &[Range<usize>]) -> Result<ValTensor<F>, Box<dyn Error>> {
+        let slice = match self {
             ValTensor::Value { inner: v, dims: _ } => {
-                let slice = v.get_slice(indices);
+                let slice = v.get_slice(indices)?;
                 ValTensor::Value {
                     inner: slice.clone(),
                     dims: slice.dims().to_vec(),
                 }
             }
             ValTensor::AssignedValue { inner: v, dims: _ } => {
-                let slice = v.get_slice(indices);
+                let slice = v.get_slice(indices)?;
                 ValTensor::AssignedValue {
                     inner: slice.clone(),
                     dims: slice.dims().to_vec(),
                 }
             }
             ValTensor::PrevAssigned { inner: v, dims: _ } => {
-                let slice = v.get_slice(indices);
+                let slice = v.get_slice(indices)?;
                 ValTensor::PrevAssigned {
                     inner: slice.clone(),
                     dims: slice.dims().to_vec(),
                 }
             }
             _ => unimplemented!(),
-        }
+        };
+        Ok(slice)
     }
 
     /// Sets the [ValTensor]'s shape.
-    pub fn reshape(&mut self, new_dims: &[usize]) {
+    pub fn reshape(&mut self, new_dims: &[usize]) -> Result<(), Box<dyn Error>> {
         match self {
             ValTensor::Value { inner: v, dims: d } => {
                 v.reshape(new_dims);
@@ -116,13 +117,13 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { dims: d, .. } => {
-                assert_eq!(
-                    d.iter().product::<usize>(),
-                    new_dims.iter().product::<usize>()
-                );
+                if d.iter().product::<usize>() != new_dims.iter().product::<usize>() {
+                    return Err(Box::new(TensorError::DimError));
+                }
                 *d = new_dims.to_vec();
             }
-        }
+        };
+        Ok(())
     }
 
     /// Calls `flatten` on the inner [Tensor].

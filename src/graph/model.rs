@@ -14,8 +14,8 @@ use crate::circuit::range::*;
 use crate::commands::{Cli, Commands};
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
-use anyhow::{Context, Result};
 //use clap::Parser;
+use anyhow::{Context, Error as AnyError};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
@@ -26,13 +26,13 @@ use log::{debug, info, trace};
 use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::{BTreeMap, HashSet};
+use std::error::Error;
 use std::path::Path;
 use std::rc::Rc;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node as OnnxNode, OutletId};
 use tract_onnx::tract_hir::internal::InferenceOp;
-
 /// Mode we're using the model in.
 #[derive(Clone, Debug)]
 pub enum Mode {
@@ -105,20 +105,15 @@ impl Model {
         tolerance: usize,
         mode: Mode,
         visibility: VarVisibility,
-    ) -> Self {
+    ) -> Result<Self, Box<dyn Error>> {
         let model = tract_onnx::onnx().model_for_path(path).unwrap();
         info!("visibility: {}", visibility);
 
         let mut nodes = BTreeMap::<usize, Node>::new();
-        let _ = model
-            .nodes()
-            .iter()
-            .enumerate()
-            .map(|(i, n)| {
-                let n = Node::new(n.clone(), &mut nodes, scale, i);
-                nodes.insert(i, n);
-            })
-            .collect_vec();
+        for (i, n) in model.nodes.iter().enumerate() {
+            let n = Node::new(n.clone(), &mut nodes, scale, i)?;
+            nodes.insert(i, n);
+        }
         let om = Model {
             model: model.clone(),
             scale,
@@ -134,11 +129,11 @@ impl Model {
 
         debug!("{}", Table::new(om.nodes.flatten()).to_string());
 
-        om
+        Ok(om)
     }
 
     /// Creates a `Model` from parsed CLI arguments
-    pub fn from_ezkl_conf(args: Cli) -> Self {
+    pub fn from_ezkl_conf(args: Cli) -> Result<Self, Box<dyn Error>> {
         let visibility = VarVisibility::from_args(args.clone());
         match args.command {
             Commands::Table { model } => Model::new(
@@ -195,7 +190,7 @@ impl Model {
     }
 
     /// Creates a `Model` based on CLI arguments
-    pub fn from_arg() -> Self {
+    pub fn from_arg() -> Result<Self, Box<dyn Error>> {
         let args = Cli::create();
         Self::from_ezkl_conf(args)
     }
@@ -211,7 +206,7 @@ impl Model {
         &self,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-    ) -> Result<ModelConfig<F>> {
+    ) -> Result<ModelConfig<F>, Box<dyn Error>> {
         info!("configuring model");
         let mut results = BTreeMap::new();
         let mut tables = BTreeMap::new();
@@ -472,7 +467,7 @@ impl Model {
         layouter: &mut impl Layouter<F>,
         inputs: &[ValTensor<F>],
         vars: &ModelVars<F>,
-    ) -> Result<()> {
+    ) -> Result<(), Box<dyn Error>> {
         info!("model layout");
         let mut results = BTreeMap::<usize, ValTensor<F>>::new();
         for i in inputs.iter().enumerate() {
@@ -533,7 +528,7 @@ impl Model {
         layouter: &mut impl Layouter<F>,
         inputs: &mut BTreeMap<usize, ValTensor<F>>,
         config: &NodeConfig<F>,
-    ) -> Result<Option<ValTensor<F>>> {
+    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         // The node kind and the config should be the same.
         let res = match config.clone() {
             NodeConfig::Poly(mut ac, idx) => {
@@ -555,12 +550,12 @@ impl Model {
                     })
                     .collect_vec();
 
-                Some(ac.layout(layouter, &values))
+                Some(ac.layout(layouter, &values)?)
             }
             NodeConfig::Lookup(rc, idx) => {
                 assert_eq!(idx.len(), 1);
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
-                Some(rc.layout(layouter, inputs.get(&idx[0]).unwrap()))
+                Some(rc.layout(layouter, inputs.get(&idx[0]).unwrap())?)
             }
             NodeConfig::Input => None,
             NodeConfig::Const => None,
@@ -580,7 +575,9 @@ impl Model {
     /// # Arguments
     ///
     /// * `nodes` - `BTreeMap` of (node index, [Node]) pairs.
-    pub fn assign_execution_buckets(mut nodes: BTreeMap<usize, Node>) -> Result<NodeGraph> {
+    pub fn assign_execution_buckets(
+        mut nodes: BTreeMap<usize, Node>,
+    ) -> Result<NodeGraph, Box<dyn Error>> {
         info!("assigning configuration buckets to operations");
 
         let mut bucketed_nodes = NodeGraph(BTreeMap::<Option<usize>, BTreeMap<usize, Node>>::new());
@@ -613,7 +610,7 @@ impl Model {
     /// Note that this order is not stable over multiple reloads of the model.  For example, it will freely
     /// interchange the order of evaluation of fixed parameters.   For example weight could have id 1 on one load,
     /// and bias id 2, and vice versa on the next load of the same file. The ids are also not stable.
-    pub fn eval_order(&self) -> Result<Vec<usize>> {
+    pub fn eval_order(&self) -> Result<Vec<usize>, AnyError> {
         self.model.eval_order()
     }
 
@@ -623,12 +620,12 @@ impl Model {
     }
 
     /// Returns the ID of the computational graph's inputs
-    pub fn input_outlets(&self) -> Result<Vec<OutletId>> {
+    pub fn input_outlets(&self) -> Result<Vec<OutletId>, Box<dyn Error>> {
         Ok(self.model.input_outlets()?.to_vec())
     }
 
     /// Returns the ID of the computational graph's outputs
-    pub fn output_outlets(&self) -> Result<Vec<OutletId>> {
+    pub fn output_outlets(&self) -> Result<Vec<OutletId>, Box<dyn Error>> {
         Ok(self.model.output_outlets()?.to_vec())
     }
 

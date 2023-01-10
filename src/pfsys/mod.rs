@@ -19,6 +19,7 @@ use halo2_proofs::{arithmetic::FieldExt, dev::VerifyFailure};
 use log::{error, info, trace};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
+use std::error::Error;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::marker::PhantomData;
@@ -126,8 +127,8 @@ pub fn parse_prover_errors(f: &VerifyFailure) {
 pub fn prepare_circuit_and_public_input<F: FieldExt>(
     data: &ModelInput,
     args: &Cli,
-) -> (ModelCircuit<F>, Vec<Tensor<i32>>) {
-    let model = Model::from_ezkl_conf(args.clone());
+) -> Result<(ModelCircuit<F>, Vec<Tensor<i32>>), Box<dyn Error>> {
+    let model = Model::from_ezkl_conf(args.clone())?;
     let out_scales = model.get_output_scales();
     let circuit = prepare_circuit(data, args);
 
@@ -175,7 +176,7 @@ pub fn prepare_circuit_and_public_input<F: FieldExt>(
             .collect::<Vec<usize>>()
     );
     trace!("{:?}", public_inputs);
-    (circuit, public_inputs)
+    Ok((circuit, public_inputs))
 }
 
 /// Initialize the model circuit

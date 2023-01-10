@@ -184,7 +184,7 @@ impl VarTensor {
         &self,
         meta: &mut VirtualCells<'_, F>,
         offset: usize,
-    ) -> Result<Tensor<Expression<F>>, TensorError> {
+    ) -> Result<Tensor<Expression<F>>, Box<dyn Error>> {
         match &self {
             VarTensor::Fixed {
                 inner: fixed, dims, ..
@@ -224,7 +224,7 @@ impl VarTensor {
         region: &mut Region<'_, F>,
         offset: usize,
         values: &ValTensor<F>,
-    ) -> Result<Tensor<AssignedCell<F, F>>, TensorError> {
+    ) -> Result<Tensor<AssignedCell<F, F>>, Box<dyn Error>> {
         match values {
             ValTensor::Instance {
                 inner: instance, ..

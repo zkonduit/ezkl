@@ -2,8 +2,9 @@ use ezkl::commands::Cli;
 use ezkl::execute::run;
 use log::info;
 use rand::seq::SliceRandom;
+use std::error::Error;
 
-pub fn main() {
+pub fn main() -> Result<(), Box<dyn Error>> {
     let args = Cli::create();
     colog::init();
     banner();

@@ -54,6 +54,7 @@ use plonk_verifier::{
     Protocol,
 };
 use rand::rngs::OsRng;
+use std::error::Error;
 use std::io::Cursor;
 use std::{iter, rc::Rc};
 
@@ -355,8 +356,12 @@ impl Circuit<Fr> for AggregationCircuit {
 }
 
 /// Create proof and instance variables for the application snark
-pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &ModelInput, args: &Cli) -> Snark {
-    let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(data, &args);
+pub fn gen_application_snark(
+    params: &ParamsKZG<Bn256>,
+    data: &ModelInput,
+    args: &Cli,
+) -> Result<Snark, Box<dyn Error>> {
+    let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(data, &args)?;
 
     let pk = gen_pk(params, &circuit);
     let number_instance = public_inputs[0].len();
@@ -378,7 +383,7 @@ pub fn gen_application_snark(params: &ParamsKZG<Bn256>, data: &ModelInput, args:
         PoseidonTranscript<NativeLoader, _>,
         PoseidonTranscript<NativeLoader, _>,
     >(params, &pk, circuit, pi_inner.clone());
-    Snark::new(protocol, pi_inner, proof)
+    Ok(Snark::new(protocol, pi_inner, proof))
 }
 
 /// Create aggregation EVM verifier bytecode

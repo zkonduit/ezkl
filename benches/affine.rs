@@ -55,14 +55,16 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
         mut config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        config.layout(
-            &mut layouter,
-            &[
-                self.input.clone(),
-                self.l0_params[0].clone(),
-                self.l0_params[1].clone(),
-            ],
-        );
+        config
+            .layout(
+                &mut layouter,
+                &[
+                    self.input.clone(),
+                    self.l0_params[0].clone(),
+                    self.l0_params[1].clone(),
+                ],
+            )
+            .unwrap();
         Ok(())
     }
 }
