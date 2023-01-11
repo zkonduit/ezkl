@@ -369,7 +369,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
     /// let mut b = Tensor::<i32>::new(Some(&[1, 2]), &[2]).unwrap();
     ///
-    /// assert_eq!(a.get_slice(&[0..2]), b);
+    /// assert_eq!(a.get_slice(&[0..2]).unwrap(), b);
     /// ```
     pub fn get_slice(&self, indices: &[Range<usize>]) -> Result<Tensor<T>, Box<dyn Error>> {
         if self.dims.len() < indices.len() {

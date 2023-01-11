@@ -25,7 +25,7 @@ pub use std::ops::{Add, Div, Mul, Sub};
 ///     Some(&[0, 0]),
 ///     &[2],
 /// ).unwrap();
-/// let result = affine(&vec![x, k, b]);
+/// let result = affine(&vec![x, k, b]).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[26, 7, 11, 3, 15, 3, 7, 2]), &[2, 4]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -69,15 +69,42 @@ pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 
 /// Scales and shifts a tensor.
 /// Given inputs (x,k,b) computes k*x + b elementwise
+/// # Arguments
+///
+/// * `inputs` - Vector of tensors of length 2
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::scale_and_shift;
+///
+/// let x = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let k = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let b = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = scale_and_shift(&vec![x, k, b]).unwrap();
+/// let expected = Tensor::<i32>::new(Some(&[6, 2, 6, 2, 2, 2]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
 pub fn scale_and_shift<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     inputs: &Vec<Tensor<T>>,
 ) -> Result<Tensor<T>, Box<dyn Error>> {
-    let (input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
-    if (inputs.len() != 3) || (bias.dims() != kernel.dims()) || (input.dims() != kernel.dims()) {
+    if (inputs.len() != 3)
+        || (inputs[1].dims() != inputs[2].dims())
+        || (inputs[0].dims() != inputs[1].dims())
+    {
         return Err(Box::new(TensorError::DimMismatch(
             "scale and shift".to_string(),
         )));
     }
+    let (input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
     let mut output: Tensor<T> = input;
     for (i, bias_i) in bias.iter().enumerate() {
         output[i] = kernel[i].clone() * output[i].clone() + bias_i.clone()
@@ -102,7 +129,7 @@ pub fn scale_and_shift<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = matmul(&vec![k, x]);
+/// let result = matmul(&vec![k, x]).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[26, 7, 11, 3, 15, 3, 7, 2]), &[2, 4]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -158,7 +185,7 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = add(&vec![x, k]);
+/// let result = add(&vec![x, k]).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[4, 4, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -200,7 +227,7 @@ pub fn add<T: TensorType + Add<Output = T>>(
 ///     &[2, 3],
 /// ).unwrap();
 /// let k = 2;
-/// let result = const_add(&x, k);
+/// let result = const_add(&x, k).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 3, 3, 3]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -235,7 +262,7 @@ pub fn const_add<T: TensorType + Add<Output = T>>(
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = sub(&vec![x, k]);
+/// let result = sub(&vec![x, k]).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[0, -2, 0, 0, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -278,7 +305,7 @@ pub fn sub<T: TensorType + Sub<Output = T>>(
 ///     &[2, 3],
 /// ).unwrap();
 /// let k = 2;
-/// let result = const_sub(&x, k);
+/// let result = const_sub(&x, k).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[0, -1, 0, -1, -1, -1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -313,7 +340,7 @@ pub fn const_sub<T: TensorType + Sub<Output = T>>(
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = mult(&vec![x, k]);
+/// let result = mult(&vec![x, k]).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 1, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -359,7 +386,7 @@ pub fn mult<T: TensorType + Mul<Output = T>>(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = div(x, y);
+/// let result = div(x, y).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[2, 1, 2, 1, 1, 4]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -393,7 +420,7 @@ pub fn div<T: TensorType + Div<Output = T>>(
 ///     &[2, 3],
 /// ).unwrap();
 /// let k = 2;
-/// let result = const_mult(&x, k);
+/// let result = const_mult(&x, k).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -425,7 +452,7 @@ pub fn const_mult<T: TensorType + Mul<Output = T>>(
 ///     &[2, 3],
 /// ).unwrap();
 /// let k = 2;
-/// let result = rescale(&x, k);
+/// let result = rescale(&x, k).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -456,7 +483,7 @@ pub fn rescale<T: TensorType + Add<Output = T>>(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = pow(&x, 3);
+/// let result = pow(&x, 3).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[8, 3375, 8, 1, 1, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -487,7 +514,7 @@ pub fn pow<T: TensorType + Mul<Output = T>>(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = sum(&x);
+/// let result = sum(&x).unwrap();
 /// let expected = 21;
 /// assert_eq!(result[0], expected);
 /// ```
@@ -521,7 +548,7 @@ pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, 
 ///     Some(&[0]),
 ///     &[1],
 /// ).unwrap();
-/// let result = convolution::<i32>(&vec![x, k, b], (0, 0), (1, 1));
+/// let result = convolution::<i32>(&vec![x, k, b], (0, 0), (1, 1)).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[31, 16, 8, 26]), &[1, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -613,7 +640,7 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 3, 3],
 /// ).unwrap();
-/// let pooled = sumpool::<i32>(&x, (0, 0), (1, 1), (2, 2));
+/// let pooled = sumpool::<i32>(&x, (0, 0), (1, 1), (2, 2)).unwrap();
 /// let expected: Tensor<i32> = Tensor::<i32>::new(Some(&[11, 8, 8, 10]), &[1, 2, 2]).unwrap();
 /// assert_eq!(pooled, expected);
 /// ```
@@ -678,7 +705,7 @@ pub fn sumpool<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 3, 3],
 /// ).unwrap();
-/// let pooled = max_pool2d::<i32>(&x, (0, 0), (1, 1), (2, 2));
+/// let pooled = max_pool2d::<i32>(&x, (0, 0), (1, 1), (2, 2)).unwrap();
 /// let expected: Tensor<i32> = Tensor::<i32>::new(Some(&[5, 4, 4, 6]), &[1, 2, 2]).unwrap();
 /// assert_eq!(pooled, expected);
 /// ```
@@ -747,7 +774,7 @@ pub fn max_pool2d<T: TensorType>(
 ///     Some(&[5, 5, 10, -4, 2, -1, 2, 0, 1]),
 ///     &[1, 3, 3],
 /// ).unwrap();
-/// assert_eq!(dot(&vec![&x, &y])[0], 86);
+/// assert_eq!(dot(&vec![&x, &y]).unwrap()[0], 86);
 /// ```
 pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     inputs: &Vec<&Tensor<T>>,
@@ -777,7 +804,7 @@ pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 3, 3],
 /// ).unwrap();
-/// let result = pad::<i32>(x, (1, 1));
+/// let result = pad::<i32>(x, (1, 1)).unwrap();
 /// let expected = Tensor::<i32>::new(
 ///     Some(&[0, 0, 0, 0, 0, 0, 5, 2, 3, 0, 0, 0, 4, -1, 0, 0, 3, 1, 6, 0, 0, 0, 0, 0, 0]),
 ///     &[1, 5, 5],
