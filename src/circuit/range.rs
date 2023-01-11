@@ -7,6 +7,7 @@ use halo2_proofs::{
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
 };
 use log::error;
+use std::error::Error;
 use std::marker::PhantomData;
 
 /// Configuration for a range check on the difference between `input` and `expected`.
@@ -86,7 +87,7 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
         mut layouter: impl Layouter<F>,
         input: ValTensor<F>,
         output: ValTensor<F>,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         match layouter.assign_region(
             || "range check layout",
             |mut region| {
@@ -118,10 +119,10 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
         ) {
             Ok(a) => a,
             Err(e) => {
-                abort!("failed to assign fused layer region {:?}", e);
+                return Err(Box::new(e));
             }
         };
-        // ValTensor::from(t);
+        Ok(())
     }
 }
 
@@ -169,11 +170,13 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            config.layout(
-                layouter.namespace(|| "assign value"),
-                self.input.clone(),
-                self.output.clone(),
-            );
+            config
+                .layout(
+                    layouter.namespace(|| "assign value"),
+                    self.input.clone(),
+                    self.output.clone(),
+                )
+                .unwrap();
 
             Ok(())
         }

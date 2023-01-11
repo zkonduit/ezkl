@@ -125,15 +125,27 @@ impl Op {
             } => sumpool(&inputs[0], *padding, *stride, *kernel_shape),
             Op::GlobalSumPool => unreachable!(),
             Op::Pow(u) => {
-                assert_eq!(inputs.len(), 1);
+                if 1 != inputs.len() {
+                    return Err(Box::new(CircuitError::DimMismatch(
+                        "pow constraint".to_string(),
+                    )));
+                }
                 pow(&inputs[0], *u)
             }
             Op::Sum => {
-                assert_eq!(inputs.len(), 1);
+                if 1 != inputs.len() {
+                    return Err(Box::new(CircuitError::DimMismatch(
+                        "sum constraint".to_string(),
+                    )));
+                }
                 sum(&inputs[0])
             }
             Op::Rescaled { inner, scale } => {
-                assert_eq!(scale.len(), inputs.len());
+                if scale.len() != inputs.len() {
+                    return Err(Box::new(CircuitError::DimMismatch(
+                        "rescaled constraint".to_string(),
+                    )));
+                }
 
                 let mut rescaled_inputs = vec![];
                 for (i, ri) in inputs.iter_mut().enumerate() {
@@ -249,6 +261,11 @@ impl<F: FieldExt + TensorType> Config<F> {
         values: &[ValTensor<F>],
     ) -> Result<ValTensor<F>, Box<dyn Error>> {
         assert_eq!(values.len(), self.inputs.len());
+        if values.len() != self.inputs.len() {
+            return Err(Box::new(CircuitError::DimMismatch(
+                "polynomial layout".to_string(),
+            )));
+        }
 
         let t = match layouter.assign_region(
             || "assign inputs",
@@ -281,7 +298,7 @@ impl<F: FieldExt + TensorType> Config<F> {
                 for node in self.nodes.iter_mut() {
                     match Self::apply_op(node, &inputs, &mut layout_outputs) {
                         Ok(res) => res,
-                        e => {
+                        Err(e) => {
                             abort!("apply op failed {:?}", e);
                         }
                     };
@@ -303,7 +320,7 @@ impl<F: FieldExt + TensorType> Config<F> {
         ) {
             Ok(a) => a,
             Err(e) => {
-                abort!("failed to assign fused layer region {:?}", e);
+                return Err(Box::new(e));
             }
         };
 

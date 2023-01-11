@@ -83,7 +83,8 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
             &output,
             BITS,
             &[LookupOp::ReLU { scale: 1 }],
-        );
+        )
+        .unwrap();
 
         // sets up a new Divide by table
         let l4 =
