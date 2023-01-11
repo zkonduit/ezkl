@@ -21,7 +21,70 @@ pub use model::*;
 pub use node::*;
 use std::cmp::max;
 use std::marker::PhantomData;
+use thiserror::Error;
 pub use vars::*;
+
+/// circuit related errors.
+#[derive(Debug, Error)]
+pub enum GraphError {
+    /// Shape mismatch in circuit construction
+    DimMismatch(String),
+    /// Wrong method was called to configure an op
+    WrongMethod(OpKind),
+    /// A requested node is missing in the graph
+    MissingNode(usize),
+    /// A requested node is missing in the graph
+    OpMismatch(OpKind),
+    /// A requested node is missing in the graph
+    UnsupportedOp,
+    /// A requested node is missing in the graph
+    MissingParams(String),
+    /// Error in the configuration of the visibility of variables
+    Visibility,
+    ///
+    NonConstantDiv,
+    ///
+    NonConstantPower,
+    ///
+    RescalingError(OpKind),
+}
+
+impl std::fmt::Display for GraphError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            GraphError::DimMismatch(op) => {
+                write!(f, "dimension mismatch in circuit construction: {}", op)
+            }
+            GraphError::WrongMethod(op) => {
+                write!(f, "wrong method was called to configure: {}", op)
+            }
+            GraphError::MissingNode(id) => {
+                write!(f, "a requested node is missing in the graph: {}", id)
+            }
+            GraphError::OpMismatch(id) => {
+                write!(f, "a requested node is missing in the graph: {}", id)
+            }
+            GraphError::UnsupportedOp => {
+                write!(f, "unsupported operation in graph")
+            }
+            GraphError::MissingParams(id) => {
+                write!(f, "a requested node is missing in the graph: {}", id)
+            }
+            GraphError::Visibility => {
+                write!(f, "there should be at least 1 set of public variables")
+            }
+            GraphError::NonConstantDiv => {
+                write!(f, "ezkl currently only supports division by a constant")
+            }
+            GraphError::NonConstantPower => {
+                write!(f, "ezkl currently only supports constant exponents")
+            }
+            GraphError::RescalingError(op) => {
+                write!(f, "failed to rescale inputs to {}", op)
+            }
+        }
+    }
+}
 
 /// Defines the circuit for a computational graph / model loaded from a `.onnx` file.
 #[derive(Clone, Debug)]

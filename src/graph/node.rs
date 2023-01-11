@@ -1,16 +1,16 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
-use crate::abort;
 use crate::circuit::lookup::Config as LookupConfig;
 use crate::circuit::lookup::Op as LookupOp;
 use crate::circuit::polynomial::Config as PolyConfig;
 use crate::circuit::polynomial::Op as PolyOp;
+use crate::graph::GraphError;
 use crate::tensor::ops::{add, const_mult, div, mult};
 use crate::tensor::Tensor;
 use crate::tensor::TensorType;
 use anyhow::Result;
 use halo2_proofs::arithmetic::FieldExt;
 use itertools::Itertools;
-use log::{error, info, trace, warn};
+use log::{info, trace, warn};
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::error::Error;
 use std::fmt;
@@ -303,20 +303,13 @@ impl Node {
             _ => None,
         };
 
-        let mut inputs: Vec<Node> = node
-            .inputs
-            .iter_mut()
-            // this shouldn't fail
-            .map(|i| {
-                match other_nodes.get(&i.node) {
-                    Some(n) => n,
-                    None => {
-                        abort!("input {} has not been initialized", i.node);
-                    }
-                }
-                .clone()
-            })
-            .collect();
+        let mut inputs = vec![];
+        for i in node.inputs.iter_mut() {
+            match other_nodes.get(&i.node) {
+                Some(n) => inputs.push(n.clone()),
+                None => return Err(Box::new(GraphError::MissingNode(i.node))),
+            }
+        }
 
         let mut opkind = OpKind::new(node.op().name().as_ref()); // parses the op name
 
@@ -387,11 +380,11 @@ impl Node {
                             Some(b) => match (*b).as_any().downcast_ref() {
                                 Some(b) => b,
                                 None => {
-                                    panic!("not a leaky relu!");
+                                    return Err(Box::new(GraphError::OpMismatch(opkind)));
                                 }
                             },
                             None => {
-                                panic!("op is not a Tract Expansion!");
+                                return Err(Box::new(GraphError::OpMismatch(opkind)));
                             }
                         };
 
@@ -463,7 +456,7 @@ impl Node {
                     }
                     LookupOp::Div { .. } => {
                         if inputs[1].out_dims.clone() != [1] {
-                            abort!("ezkl currently only supports division by a constant");
+                            return Err(Box::new(GraphError::NonConstantDiv));
                         }
                         let mult = scale_to_multiplier(scale);
                         let div = inputs[1].output_max / mult;
@@ -517,11 +510,11 @@ impl Node {
                             Some(b) => match (*b).as_any().downcast_ref() {
                                 Some(b) => b,
                                 None => {
-                                    panic!("not a conv!");
+                                    return Err(Box::new(GraphError::OpMismatch(opkind)));
                                 }
                             },
                             None => {
-                                panic!("op is not a Tract Expansion!");
+                                return Err(Box::new(GraphError::OpMismatch(opkind)));
                             }
                         };
 
@@ -532,12 +525,18 @@ impl Node {
                         let stride = match conv_node.strides.clone() {
                             Some(s) => s,
                             None => {
-                                abort!("strides for node {} has not been initialized", idx);
+                                return Err(Box::new(GraphError::MissingParams(
+                                    "strides".to_string(),
+                                )));
                             }
                         };
                         let padding = match &conv_node.padding {
                             PaddingSpec::Explicit(p, _, _) => p,
-                            _ => panic!("padding is not explicitly specified"),
+                            _ => {
+                                return Err(Box::new(GraphError::MissingParams(
+                                    "padding".to_string(),
+                                )));
+                            }
                         };
 
                         if inputs.len() == 3 {
@@ -591,7 +590,9 @@ impl Node {
                         let op = Box::new(node.op());
                         let sumpool_node: &SumPool = match op.downcast_ref() {
                             Some(b) => b,
-                            None => panic!("op isn't a SumPool!"),
+                            None => {
+                                return Err(Box::new(GraphError::OpMismatch(opkind)));
+                            }
                         };
 
                         let pool_spec: &PoolSpec = &sumpool_node.pool_spec;
@@ -602,7 +603,11 @@ impl Node {
                         let stride = pool_spec.strides.clone().unwrap();
                         let padding = match &pool_spec.padding {
                             PaddingSpec::Explicit(p, _, _) => p,
-                            _ => panic!("padding is not explicitly specified"),
+                            _ => {
+                                return Err(Box::new(GraphError::MissingParams(
+                                    "padding".to_string(),
+                                )));
+                            }
                         };
                         let kernel_shape = &pool_spec.kernel_shape;
 
@@ -773,7 +778,7 @@ impl Node {
                     }
 
                     PolyOp::Add => {
-                        opkind = Self::homogenize_input_scales(opkind, inputs.clone());
+                        opkind = Self::homogenize_input_scales(opkind, inputs.clone())?;
                         let output_max =
                             if let OpKind::Poly(PolyOp::Rescaled { scale, .. }) = &opkind {
                                 (inputs
@@ -786,8 +791,7 @@ impl Node {
                                     .unwrap() as f32)
                                     * (inputs.len() as f32)
                             } else {
-                                error!("failed to homogenize input scalings for node {}", idx);
-                                panic!()
+                                return Err(Box::new(GraphError::RescalingError(opkind)));
                             };
 
                         Node {
@@ -819,7 +823,7 @@ impl Node {
                         }
                     }
                     PolyOp::Sub => {
-                        opkind = Self::homogenize_input_scales(opkind, inputs.clone());
+                        opkind = Self::homogenize_input_scales(opkind, inputs.clone())?;
                         let output_max =
                             if let OpKind::Poly(PolyOp::Rescaled { inner: _, scale }) = &opkind {
                                 (inputs
@@ -832,8 +836,7 @@ impl Node {
                                     .unwrap() as f32)
                                     * (inputs.len() as f32)
                             } else {
-                                error!("failed to homogenize input scalings for node {}", idx);
-                                panic!()
+                                return Err(Box::new(GraphError::RescalingError(opkind)));
                             };
 
                         Node {
@@ -875,10 +878,9 @@ impl Node {
                         let pow = inputs[1].clone().raw_const_value.unwrap()[0];
                         node.inputs.pop();
                         if inputs[1].out_dims != [1] {
-                            error!(
-                                "ezkl currently only supports raising to the power by a constant"
-                            );
-                            unimplemented!()
+                            {
+                                return Err(Box::new(GraphError::NonConstantPower));
+                            }
                         }
 
                         Node {
@@ -901,8 +903,7 @@ impl Node {
                         }
                     }
                     PolyOp::Rescaled { .. } => {
-                        error!("operations should not already be rescaled at this stage");
-                        panic!()
+                        return Err(Box::new(GraphError::RescalingError(opkind)));
                     }
                     PolyOp::Identity => {
                         let input_node = &inputs[0];
@@ -940,7 +941,9 @@ impl Node {
                         let shape_const = match shape_const_node.const_value.as_ref() {
                             Some(sc) => sc,
                             None => {
-                                abort!("missing shape constant");
+                                return Err(Box::new(GraphError::MissingParams(
+                                    "shape constant".to_string(),
+                                )));
                             }
                         };
                         let shapes = &shape_const[0..];
@@ -987,7 +990,7 @@ impl Node {
                 let const_node: &Const = match op.as_any().downcast_ref() {
                     Some(b) => b,
                     None => {
-                        abort!("op is not a const!");
+                        return Err(Box::new(GraphError::OpMismatch(opkind)));
                     }
                 };
                 let dt = const_node.0.datum_type();
@@ -1082,16 +1085,18 @@ impl Node {
                 warn!("{:?} is unknown", opkind);
                 Node::default()
             }
-            o => {
-                error!("unsupported op {:?}", o);
-                panic!()
+            _ => {
+                return Err(Box::new(GraphError::UnsupportedOp));
             }
         };
         Ok(mn)
     }
 
     /// Ensures all inputs to a node have the same fixed point denominator.
-    fn homogenize_input_scales(opkind: OpKind, inputs: Vec<Node>) -> OpKind {
+    fn homogenize_input_scales(
+        opkind: OpKind,
+        inputs: Vec<Node>,
+    ) -> Result<OpKind, Box<dyn Error>> {
         let mut multipliers = vec![1; inputs.len()];
         let out_scales = inputs.windows(1).map(|w| w[0].out_scale).collect_vec();
         if !out_scales.windows(2).all(|w| w[0] == w[1]) {
@@ -1115,13 +1120,12 @@ impl Node {
                 .collect_vec();
         }
         if let OpKind::Poly(c) = &opkind {
-            OpKind::Poly(PolyOp::Rescaled {
+            Ok(OpKind::Poly(PolyOp::Rescaled {
                 inner: Box::new(c.clone()),
                 scale: (0..inputs.len()).zip(multipliers).collect_vec(),
-            })
+            }))
         } else {
-            error!("should not homegenize input scales for non fused ops.");
-            panic!()
+            Err(Box::new(GraphError::RescalingError(opkind)))
         }
     }
 
