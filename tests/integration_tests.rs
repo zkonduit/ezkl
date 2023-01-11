@@ -40,6 +40,8 @@ const TESTS_EVM: [&str; 9] = [
     "2l_relu_small",
 ];
 
+const EXAMPLES: [&str; 2] = ["mlp_4d", "conv2d_mnist"];
+
 macro_rules! test_func {
     () => {
         #[cfg(test)]
@@ -113,8 +115,41 @@ macro_rules! test_func_evm {
     };
 }
 
+macro_rules! test_func_examples {
+    () => {
+        #[cfg(test)]
+        mod tests_examples {
+            use seq_macro::seq;
+            use crate::EXAMPLES;
+            use test_case::test_case;
+            use crate::run_example as run;
+            seq!(N in 0..=1 {
+            #(#[test_case(EXAMPLES[N])])*
+            fn example_(test: &str) {
+                run(test.to_string());
+            }
+            });
+    }
+    };
+}
+
 test_func!();
 test_func_evm!();
+test_func_examples!();
+
+// Mock prove (fast, but does not cover some potential issues)
+fn run_example(example_name: String) {
+    let status = Command::new("cargo")
+        .args([
+            "run",
+            "--release",
+            "--example",
+            format!("{}", example_name).as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
 
 // Mock prove (fast, but does not cover some potential issues)
 fn mock(example_name: String) {
