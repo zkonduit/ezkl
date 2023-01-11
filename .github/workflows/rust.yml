@@ -12,7 +12,7 @@ env:
 jobs:
   build:
 
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
@@ -26,7 +26,7 @@ jobs:
   
   benchmarks: 
 
-    runs-on: self-hosted
+    runs-on: ubuntu-latest-16-cores
 
     steps:
     - uses: actions/checkout@v3
@@ -40,7 +40,7 @@ jobs:
 
   docs:
 
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
@@ -54,7 +54,7 @@ jobs:
 
   library-tests:
 
-    runs-on: self-hosted
+    runs-on: ubuntu-latest-16-cores
 
     steps:
     - uses: actions/checkout@v3
@@ -70,7 +70,7 @@ jobs:
   
   mock-proving-tests:
 
-    runs-on: self-hosted
+    runs-on: ubuntu-latest-16-cores
     steps:
     - uses: actions/checkout@v3
       with:
@@ -90,7 +90,7 @@ jobs:
   
   full-proving-tests:
 
-    runs-on: self-hosted
+    runs-on: ubuntu-latest-16-cores
     steps:
     - uses: actions/checkout@v3
       with:
@@ -108,7 +108,7 @@ jobs:
 
   full-proving-evm-tests:
 
-    runs-on: self-hosted
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 480
     steps:
     - uses: actions/checkout@v3
@@ -127,7 +127,7 @@ jobs:
 
   prove-and-verify-tests:
 
-    runs-on: self-hosted
+    runs-on: ubuntu-latest-16-cores
     steps:
     - uses: actions/checkout@v3
       with:
