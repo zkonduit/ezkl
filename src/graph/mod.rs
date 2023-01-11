@@ -27,51 +27,64 @@ pub use vars::*;
 /// circuit related errors.
 #[derive(Debug, Error)]
 pub enum GraphError {
+    /// The wrong inputs were passed to a lookup node
+    InvalidLookupInputs,
     /// Shape mismatch in circuit construction
-    DimMismatch(String),
+    InvalidDims(usize, OpKind),
     /// Wrong method was called to configure an op
-    WrongMethod(OpKind),
+    WrongMethod(usize, OpKind),
     /// A requested node is missing in the graph
     MissingNode(usize),
-    /// A requested node is missing in the graph
-    OpMismatch(OpKind),
-    /// A requested node is missing in the graph
+    /// The wrong method was called on an operation
+    OpMismatch(usize, OpKind),
+    /// This operation is unsupported
     UnsupportedOp,
-    /// A requested node is missing in the graph
+    /// A node has missing parameters
     MissingParams(String),
     /// Error in the configuration of the visibility of variables
     Visibility,
-    ///
+    /// Ezkl only supports divisions by constants
     NonConstantDiv,
-    ///
+    /// Ezkl only supports constant powers
     NonConstantPower,
-    ///
+    /// Error when attempting to rescale an operation
     RescalingError(OpKind),
 }
 
 impl std::fmt::Display for GraphError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            GraphError::DimMismatch(op) => {
-                write!(f, "dimension mismatch in circuit construction: {}", op)
+            GraphError::InvalidLookupInputs => {
+                write!(f, "invalid inputs for a lookup node")
             }
-            GraphError::WrongMethod(op) => {
-                write!(f, "wrong method was called to configure: {}", op)
+            GraphError::InvalidDims(id, op) => {
+                write!(f, "invalid dimensions used for node {} ({})", id, op)
+            }
+            GraphError::WrongMethod(id, op) => {
+                write!(
+                    f,
+                    "wrong method was called to configure node {} ({})",
+                    id, op
+                )
             }
             GraphError::MissingNode(id) => {
                 write!(f, "a requested node is missing in the graph: {}", id)
             }
-            GraphError::OpMismatch(id) => {
-                write!(f, "a requested node is missing in the graph: {}", id)
+            GraphError::OpMismatch(id, op) => {
+                write!(
+                    f,
+                    "an unsupported method was called on node {} ({})",
+                    id, op
+                )
             }
             GraphError::UnsupportedOp => {
                 write!(f, "unsupported operation in graph")
             }
-            GraphError::MissingParams(id) => {
-                write!(f, "a requested node is missing in the graph: {}", id)
+            GraphError::MissingParams(params) => {
+                write!(f, "a node is missing required params: {}", params)
             }
             GraphError::Visibility => {
-                write!(f, "there should be at least 1 set of public variables")
+                write!(f, "there should be at least one set of public variables")
             }
             GraphError::NonConstantDiv => {
                 write!(f, "ezkl currently only supports division by a constant")

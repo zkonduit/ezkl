@@ -260,7 +260,6 @@ impl<F: FieldExt + TensorType> Config<F> {
         layouter: &mut impl Layouter<F>,
         values: &[ValTensor<F>],
     ) -> Result<ValTensor<F>, Box<dyn Error>> {
-        assert_eq!(values.len(), self.inputs.len());
         if values.len() != self.inputs.len() {
             return Err(Box::new(CircuitError::DimMismatch(
                 "polynomial layout".to_string(),

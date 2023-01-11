@@ -316,7 +316,7 @@ impl Model {
                 unimplemented!()
             }
             c => {
-                return Err(Box::new(GraphError::WrongMethod(c.clone())));
+                return Err(Box::new(GraphError::WrongMethod(node.idx, c.clone())));
             }
         }
     }
@@ -343,7 +343,7 @@ impl Model {
                 match &e.opkind {
                     OpKind::Poly(f) => f,
                     _ => {
-                        return Err(Box::new(GraphError::WrongMethod(e.opkind.clone())));
+                        return Err(Box::new(GraphError::WrongMethod(e.idx, e.opkind.clone())));
                     }
                 },
             );
@@ -447,7 +447,7 @@ impl Model {
         let op = match &node.opkind {
             OpKind::Lookup(l) => l,
             c => {
-                return Err(Box::new(GraphError::WrongMethod(c.clone())));
+                return Err(Box::new(GraphError::WrongMethod(node.idx, c.clone())));
             }
         };
 
@@ -563,9 +563,8 @@ impl Model {
                 Some(ac.layout(layouter, &values)?)
             }
             NodeConfig::Lookup(rc, idx) => {
-                assert_eq!(idx.len(), 1);
                 if idx.len() != 1 {
-                    return Err(Box::new(GraphError::DimMismatch("lookup".to_string())));
+                    return Err(Box::new(GraphError::InvalidLookupInputs));
                 }
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
                 Some(rc.layout(layouter, inputs.get(&idx[0]).unwrap())?)
@@ -596,20 +595,25 @@ impl Model {
         let mut bucketed_nodes = NodeGraph(BTreeMap::<Option<usize>, BTreeMap<usize, Node>>::new());
 
         for (_, node) in nodes.iter_mut() {
-            let prev_bucket: Option<usize> = node
+            let mut prev_buckets = vec![];
+            for n in node
                 .inputs
                 .iter()
                 .filter(|n| !bucketed_nodes.filter(n.node).opkind.is_const())
-                .map(|n| match bucketed_nodes.filter(n.node).bucket {
-                    Some(b) => b,
-                    None => panic!(),
-                })
-                .max();
+            {
+                match bucketed_nodes.filter(n.node).bucket {
+                    Some(b) => prev_buckets.push(b),
+                    None => {
+                        return Err(Box::new(GraphError::MissingNode(n.node)));
+                    }
+                }
+            }
+            let prev_bucket: Option<&usize> = prev_buckets.iter().max();
 
             match &node.opkind {
                 OpKind::Input => node.bucket = Some(0),
                 OpKind::Const => node.bucket = None,
-                OpKind::Poly(_) => node.bucket = Some(prev_bucket.unwrap()),
+                OpKind::Poly(_) => node.bucket = Some(*prev_bucket.unwrap()),
                 OpKind::Lookup(_) => node.bucket = Some(prev_bucket.unwrap() + 1),
                 _ => unimplemented!(),
             }

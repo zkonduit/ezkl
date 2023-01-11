@@ -134,30 +134,26 @@ pub fn prepare_circuit_and_public_input<F: FieldExt>(
     // as they are configured in that order as Column<Instances>
     let mut public_inputs = vec![];
     if model.visibility.input.is_public() {
-        let mut res: Vec<Tensor<i32>> = vec![];
         for (idx, v) in data.input_data.iter().enumerate() {
             let t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx])?;
-            res.push(t);
+            public_inputs.push(t);
         }
-        public_inputs.append(&mut res);
     }
-    let mut public_outputs = vec![];
-    if model.visibility.input.is_public() {
-        let mut res: Vec<Tensor<i32>> = vec![];
+    if model.visibility.output.is_public() {
         for (idx, v) in data.output_data.iter().enumerate() {
             let t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx])?;
-            res.push(t);
+            public_inputs.push(t);
         }
-        public_outputs.append(&mut res);
     }
     info!(
-        "public inputs  lengths: {:?}",
+        "public inputs lengths: {:?}",
         public_inputs
             .iter()
             .map(|i| i.len())
             .collect::<Vec<usize>>()
     );
     trace!("{:?}", public_inputs);
+
     Ok((circuit, public_inputs))
 }
 
@@ -168,8 +164,8 @@ pub fn prepare_circuit<F: FieldExt>(
 ) -> Result<ModelCircuit<F>, Box<dyn Error>> {
     // quantize the supplied data using the provided scale.
     let mut inputs: Vec<Tensor<i32>> = vec![];
-    for (idx, s) in data.input_data.iter().zip(data.input_shapes.clone()) {
-        let t = vector_to_quantized(idx, &s, 0.0, args.scale)?;
+    for (input, shape) in data.input_data.iter().zip(data.input_shapes.clone()) {
+        let t = vector_to_quantized(input, &shape, 0.0, args.scale)?;
         inputs.push(t);
     }
 
