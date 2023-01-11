@@ -1,4 +1,3 @@
-use crate::abort;
 use crate::commands::{Cli, Commands, ProofSystem};
 use crate::fieldutils::i32_to_felt;
 use crate::graph::Model;
@@ -34,7 +33,7 @@ use halo2curves::bn256::G1Affine;
 use halo2curves::bn256::{Bn256, Fr};
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp;
-use log::{error, info, trace};
+use log::{info, trace};
 #[cfg(feature = "evm")]
 use plonk_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
@@ -50,7 +49,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
             println!("{}", Table::new(om.nodes.flatten()));
         }
         Commands::Mock { ref data, model: _ } => {
-            let data = prepare_data(data.to_string());
+            let data = prepare_data(data.to_string())?;
             let (circuit, public_inputs) = prepare_circuit_and_public_input(&data, &args)?;
             info!("Mock proof");
             let pi: Vec<Vec<Fp>> = public_inputs
@@ -61,7 +60,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
             let prover = match MockProver::run(args.logrows, &circuit, pi) {
                 Ok(p) => p,
                 Err(e) => {
-                    abort!("mock prover failed to run {:?}", e);
+                    return Err(Box::new(e));
                 }
             };
             match prover.verify() {
@@ -84,7 +83,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
         } => {
             // A direct proof
 
-            let data = prepare_data(data.to_string());
+            let data = prepare_data(data.to_string())?;
 
             match pfsys {
                 ProofSystem::IPA => {
@@ -179,7 +178,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
             ref params_path,
             pfsys,
         } => {
-            let data = prepare_data(data.to_string());
+            let data = prepare_data(data.to_string())?;
 
             match pfsys {
                 ProofSystem::IPA => {
@@ -197,7 +196,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         &pk,
                     );
 
-                    proof.save(proof_path);
+                    proof.save(proof_path)?;
                     save_params::<IPACommitmentScheme<_>>(params_path, &params);
                     save_vk::<IPACommitmentScheme<_>>(vk_path, pk.get_vk());
                 }
@@ -216,7 +215,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         &circuit, &public_inputs, &params, &pk
                     );
 
-                    proof.save(proof_path);
+                    proof.save(proof_path)?;
                     save_params::<KZGCommitmentScheme<Bn256>>(params_path, &params);
                     save_vk::<KZGCommitmentScheme<Bn256>>(vk_path, pk.get_vk());
                 }
@@ -229,22 +228,22 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
             params_path,
             pfsys,
         } => {
-            let proof = Proof::load(&proof_path);
+            let proof = Proof::load(&proof_path)?;
             match pfsys {
                 ProofSystem::IPA => {
                     let params: ParamsIPA<vesta::Affine> =
-                        load_params::<IPACommitmentScheme<_>>(params_path);
+                        load_params::<IPACommitmentScheme<_>>(params_path)?;
                     let strategy = IPASingleStrategy::new(&params);
-                    let vk = load_vk::<IPACommitmentScheme<_>, Fp>(vk_path, &params);
+                    let vk = load_vk::<IPACommitmentScheme<_>, Fp>(vk_path, &params)?;
                     let result = verify_proof_model(proof, &params, &vk, strategy);
                     info!("verified: {}", result);
                     assert!(result);
                 }
                 ProofSystem::KZG => {
                     let params: ParamsKZG<Bn256> =
-                        load_params::<KZGCommitmentScheme<Bn256>>(params_path);
+                        load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
                     let strategy = KZGSingleStrategy::new(&params);
-                    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr>(vk_path, &params);
+                    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr>(vk_path, &params)?;
                     let result = verify_proof_model::<_, VerifierGWC<'_, Bn256>, _, _>(
                         proof, &params, &vk, strategy,
                     );

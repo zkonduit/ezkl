@@ -8,7 +8,7 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     let args = Cli::create();
     colog::init();
     banner();
-    info!("{}", &args.as_json());
+    info!("{}", &args.as_json()?);
     run(args)
 }
 

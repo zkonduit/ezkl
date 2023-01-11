@@ -2,7 +2,6 @@
 #[cfg(feature = "evm")]
 pub mod aggregation;
 
-use crate::abort;
 use crate::commands::{data_path, Cli};
 use crate::fieldutils::i32_to_felt;
 use crate::graph::{utilities::vector_to_quantized, Model, ModelCircuit};
@@ -50,34 +49,32 @@ pub struct Proof {
 
 impl Proof {
     /// Saves the Proof to a specified `proof_path`.
-    pub fn save(&self, proof_path: &PathBuf) {
+    pub fn save(&self, proof_path: &PathBuf) -> Result<(), Box<dyn Error>> {
         let serialized = match serde_json::to_string(&self) {
             Ok(s) => s,
-            Err(e) => {
-                abort!("failed to convert proof json to string {:?}", e);
-            }
+            Err(e) => return Err(Box::new(e)),
         };
 
         let mut file = std::fs::File::create(proof_path).expect("create failed");
         file.write_all(serialized.as_bytes()).expect("write failed");
+        Ok(())
     }
 
     /// Load a json serialized proof from the provided path.
-    pub fn load(proof_path: &PathBuf) -> Self {
+    pub fn load(proof_path: &PathBuf) -> Result<Self, Box<dyn Error>> {
         let mut file = match File::open(proof_path) {
             Ok(f) => f,
-            Err(e) => {
-                abort!("failed to open proof file {:?}", e);
-            }
+            Err(e) => return Err(Box::new(e)),
         };
         let mut data = String::new();
         match file.read_to_string(&mut data) {
             Ok(_) => {}
-            Err(e) => {
-                abort!("failed to read file {:?}", e);
-            }
+            Err(e) => return Err(Box::new(e)),
         };
-        serde_json::from_str(&data).expect("JSON was not well-formatted")
+        match serde_json::from_str(&data) {
+            Ok(a) => Ok(a),
+            Err(e) => Err(Box::new(e)),
+        }
     }
 }
 
@@ -130,43 +127,28 @@ pub fn prepare_circuit_and_public_input<F: FieldExt>(
 ) -> Result<(ModelCircuit<F>, Vec<Tensor<i32>>), Box<dyn Error>> {
     let model = Model::from_ezkl_conf(args.clone())?;
     let out_scales = model.get_output_scales();
-    let circuit = prepare_circuit(data, args);
+    let circuit = prepare_circuit(data, args)?;
 
     // quantize the supplied data using the provided scale.
     // the ordering here is important, we want the inputs to come before the outputs
     // as they are configured in that order as Column<Instances>
     let mut public_inputs = vec![];
     if model.visibility.input.is_public() {
-        let mut res = data
-            .input_data
-            .iter()
-            .enumerate()
-            .map(|(idx, v)| {
-                match vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx]) {
-                    Ok(q) => q,
-                    Err(e) => {
-                        abort!("failed to quantize vector {:?}", e);
-                    }
-                }
-            })
-            .collect();
+        let mut res: Vec<Tensor<i32>> = vec![];
+        for (idx, v) in data.input_data.iter().enumerate() {
+            let t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx])?;
+            res.push(t);
+        }
         public_inputs.append(&mut res);
     }
-    if model.visibility.output.is_public() {
-        let mut res = data
-            .output_data
-            .iter()
-            .enumerate()
-            .map(|(idx, v)| {
-                match vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx]) {
-                    Ok(q) => q,
-                    Err(e) => {
-                        abort!("failed to quantize vector {:?}", e);
-                    }
-                }
-            })
-            .collect();
-        public_inputs.append(&mut res);
+    let mut public_outputs = vec![];
+    if model.visibility.input.is_public() {
+        let mut res: Vec<Tensor<i32>> = vec![];
+        for (idx, v) in data.output_data.iter().enumerate() {
+            let t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx])?;
+            res.push(t);
+        }
+        public_outputs.append(&mut res);
     }
     info!(
         "public inputs  lengths: {:?}",
@@ -180,44 +162,41 @@ pub fn prepare_circuit_and_public_input<F: FieldExt>(
 }
 
 /// Initialize the model circuit
-pub fn prepare_circuit<F: FieldExt>(data: &ModelInput, args: &Cli) -> ModelCircuit<F> {
+pub fn prepare_circuit<F: FieldExt>(
+    data: &ModelInput,
+    args: &Cli,
+) -> Result<ModelCircuit<F>, Box<dyn Error>> {
     // quantize the supplied data using the provided scale.
-    let inputs = data
-        .input_data
-        .iter()
-        .zip(data.input_shapes.clone())
-        .map(|(i, s)| match vector_to_quantized(i, &s, 0.0, args.scale) {
-            Ok(q) => q,
-            Err(e) => {
-                abort!("failed to quantize vector {:?}", e);
-            }
-        })
-        .collect();
+    let mut inputs: Vec<Tensor<i32>> = vec![];
+    for (idx, s) in data.input_data.iter().zip(data.input_shapes.clone()) {
+        let t = vector_to_quantized(idx, &s, 0.0, args.scale)?;
+        inputs.push(t);
+    }
 
-    ModelCircuit::<F> {
+    Ok(ModelCircuit::<F> {
         inputs,
         _marker: PhantomData,
-    }
+    })
 }
 
 /// Deserializes the required inputs to a model at path `datapath` to a [ModelInput] struct.
-pub fn prepare_data(datapath: String) -> ModelInput {
+pub fn prepare_data(datapath: String) -> Result<ModelInput, Box<dyn Error>> {
     let mut file = match File::open(data_path(datapath)) {
         Ok(t) => t,
         Err(e) => {
-            abort!("failed to open data file {:?}", e);
+            return Err(Box::new(e));
         }
     };
     let mut data = String::new();
     match file.read_to_string(&mut data) {
         Ok(_) => {}
         Err(e) => {
-            abort!("failed to read file {:?}", e);
+            return Err(Box::new(e));
         }
     };
     let data: ModelInput = serde_json::from_str(&data).expect("JSON was not well-formatted");
 
-    data
+    Ok(data)
 }
 
 /// Creates a [VerifyingKey] and [ProvingKey] for a [ModelCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`).
@@ -346,7 +325,7 @@ where
 pub fn load_vk<Scheme: CommitmentScheme, F: FieldExt + TensorType>(
     path: PathBuf,
     params: &'_ Scheme::ParamsVerifier,
-) -> VerifyingKey<Scheme::Curve>
+) -> Result<VerifyingKey<Scheme::Curve>, Box<dyn Error>>
 where
     ModelCircuit<F>: Circuit<Scheme::Scalar>,
 {
@@ -354,24 +333,36 @@ where
     let f = match File::open(path) {
         Ok(f) => f,
         Err(e) => {
-            abort!("failed to load vk {}", e);
+            return Err(Box::new(e));
         }
     };
     let mut reader = BufReader::new(f);
-    VerifyingKey::<Scheme::Curve>::read::<_, ModelCircuit<F>>(&mut reader, params).unwrap()
+    match VerifyingKey::<Scheme::Curve>::read::<_, ModelCircuit<F>>(&mut reader, params) {
+        Ok(f) => Ok(f),
+        Err(e) => {
+            return Err(Box::new(e));
+        }
+    }
 }
 
 /// Loads the [CommitmentScheme::ParamsVerifier] at `path`.
-pub fn load_params<Scheme: CommitmentScheme>(path: PathBuf) -> Scheme::ParamsVerifier {
+pub fn load_params<Scheme: CommitmentScheme>(
+    path: PathBuf,
+) -> Result<Scheme::ParamsVerifier, Box<dyn Error>> {
     info!("loading params from {:?}", path);
     let f = match File::open(path) {
         Ok(f) => f,
         Err(e) => {
-            abort!("failed to load params {}", e);
+            return Err(Box::new(e));
         }
     };
     let mut reader = BufReader::new(f);
-    Params::<'_, Scheme::Curve>::read(&mut reader).unwrap()
+    match Params::<'_, Scheme::Curve>::read(&mut reader) {
+        Ok(f) => Ok(f),
+        Err(e) => {
+            return Err(Box::new(e));
+        }
+    }
 }
 
 /// Saves a [VerifyingKey] to `path`.
