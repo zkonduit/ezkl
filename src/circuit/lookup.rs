@@ -139,7 +139,7 @@ impl<F: FieldExt> Table<F> {
                     Ok(())
                 },
             )
-            .map_err(|e| Box::<dyn Error>::from(e))
+            .map_err(Box::<dyn Error>::from)
     }
 }
 
@@ -170,7 +170,7 @@ impl<F: FieldExt + TensorType> Config<F> {
         let mut configs: Vec<Config<F>> = vec![];
         for _ in 0..NUM {
             let l = match &table {
-                None => Self::configure(cs, input, output, bits, &nonlinearitities),
+                None => Self::configure(cs, input, output, bits, nonlinearitities),
                 Some(t) => Self::configure_with_table(cs, input, output, t.clone()),
             };
             table = Some(l.table.clone());
@@ -262,7 +262,7 @@ impl<F: FieldExt + TensorType> Config<F> {
         let table = Rc::new(RefCell::new(Table::<F>::configure(
             cs,
             bits,
-            &nonlinearitities,
+            nonlinearitities,
         )));
         Self::configure_with_table(cs, input, output, table)
     }
@@ -283,7 +283,7 @@ impl<F: FieldExt + TensorType> Config<F> {
                 |mut region| {
                     self.qlookup.enable(&mut region, 0)?;
 
-                    let w = self.input.assign(&mut region, 0, &values)?;
+                    let w = self.input.assign(&mut region, 0, values)?;
 
                     let mut res: Vec<i32> = vec![];
                     let _ = Tensor::from(w.iter().map(|acaf| (*acaf).value_field()).map(|vaf| {

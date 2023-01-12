@@ -439,7 +439,7 @@ impl Node {
 
                         opkind = OpKind::Lookup(LookupOp::PReLU {
                             scale: layer_scale,
-                            slopes: slopes.clone(),
+                            slopes,
                         }); // now the input will be scaled down to match
 
                         Node {
@@ -951,7 +951,7 @@ impl Node {
                             if shapes.iter().all(|x| x > &0) {
                                 let mut res = vec![];
                                 for x in shapes.iter() {
-                                    if !(x > &0) {
+                                    if x <= &0 {
                                         return Err(Box::new(GraphError::InvalidDims(idx, opkind)));
                                     }
                                     res.push(*x as usize);
@@ -961,7 +961,7 @@ impl Node {
                                 let num_entries: usize = input_node.out_dims.iter().product();
                                 let explicit_prod: i32 =
                                     shapes.iter().filter(|x| *x > &0).product();
-                                if !(explicit_prod > 0) {
+                                if explicit_prod <= 0 {
                                     return Err(Box::new(GraphError::InvalidDims(idx, opkind)));
                                 }
                                 let inferred = num_entries / (explicit_prod as usize);

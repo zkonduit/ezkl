@@ -240,7 +240,7 @@ impl VarTensor {
                         )
                     })
                 }
-                _ => return Err(halo2_proofs::plonk::Error::Synthesis),
+                _ => Err(halo2_proofs::plonk::Error::Synthesis),
             },
             ValTensor::Value { inner: v, .. } => v.enum_map(|coord, k| match &self {
                 VarTensor::Fixed { inner: fixed, .. } => {
@@ -257,7 +257,7 @@ impl VarTensor {
                     let (x, y) = self.cartesian_coord(offset + coord);
                     xcell.copy_advice(|| "k", region, advices[x], y)
                 }
-                _ => return Err(halo2_proofs::plonk::Error::Synthesis),
+                _ => Err(halo2_proofs::plonk::Error::Synthesis),
             }),
             ValTensor::AssignedValue { inner: v, .. } => v.enum_map(|coord, k| match &self {
                 VarTensor::Fixed { inner: fixed, .. } => {

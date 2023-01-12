@@ -50,28 +50,30 @@ pub struct Proof {
 impl Proof {
     /// Saves the Proof to a specified `proof_path`.
     pub fn save(&self, proof_path: &PathBuf) -> Result<(), Box<dyn Error>> {
-        let serialized = serde_json::to_string(&self).map_err(|e| Box::<dyn Error>::from(e))?;
+        let serialized = serde_json::to_string(&self).map_err(Box::<dyn Error>::from)?;
 
-        let mut file = std::fs::File::create(proof_path).map_err(|e| Box::<dyn Error>::from(e))?;
+        let mut file = std::fs::File::create(proof_path).map_err(Box::<dyn Error>::from)?;
         file.write_all(serialized.as_bytes())
-            .map_err(|e| Box::<dyn Error>::from(e))
+            .map_err(Box::<dyn Error>::from)
     }
 
     /// Load a json serialized proof from the provided path.
     pub fn load(proof_path: &PathBuf) -> Result<Self, Box<dyn Error>> {
-        let mut file = File::open(proof_path).map_err(|e| Box::<dyn Error>::from(e))?;
+        let mut file = File::open(proof_path).map_err(Box::<dyn Error>::from)?;
         let mut data = String::new();
         file.read_to_string(&mut data)
-            .map_err(|e| Box::<dyn Error>::from(e))?;
-        serde_json::from_str(&data).map_err(|e| Box::<dyn Error>::from(e))
+            .map_err(Box::<dyn Error>::from)?;
+        serde_json::from_str(&data).map_err(Box::<dyn Error>::from)
     }
 }
+
+type CircuitInputs<F> = (ModelCircuit<F>, Vec<Tensor<i32>>);
 
 /// Initialize the model circuit and quantize the provided float inputs from the provided `ModelInput`.
 pub fn prepare_circuit_and_public_input<F: FieldExt>(
     data: &ModelInput,
     args: &Cli,
-) -> Result<(ModelCircuit<F>, Vec<Tensor<i32>>), Box<dyn Error>> {
+) -> Result<CircuitInputs<F>, Box<dyn Error>> {
     let model = Model::from_ezkl_conf(args.clone())?;
     let out_scales = model.get_output_scales();
     let circuit = prepare_circuit(data, args)?;
@@ -124,11 +126,11 @@ pub fn prepare_circuit<F: FieldExt>(
 
 /// Deserializes the required inputs to a model at path `datapath` to a [ModelInput] struct.
 pub fn prepare_data(datapath: String) -> Result<ModelInput, Box<dyn Error>> {
-    let mut file = File::open(data_path(datapath)).map_err(|e| Box::<dyn Error>::from(e))?;
+    let mut file = File::open(data_path(datapath)).map_err(Box::<dyn Error>::from)?;
     let mut data = String::new();
     file.read_to_string(&mut data)
-        .map_err(|e| Box::<dyn Error>::from(e))?;
-    serde_json::from_str(&data).map_err(|e| Box::<dyn Error>::from(e))
+        .map_err(Box::<dyn Error>::from)?;
+    serde_json::from_str(&data).map_err(Box::<dyn Error>::from)
 }
 
 /// Creates a [VerifyingKey] and [ProvingKey] for a [ModelCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`).
@@ -257,10 +259,10 @@ where
     ModelCircuit<F>: Circuit<Scheme::Scalar>,
 {
     info!("loading verification key from {:?}", path);
-    let f = File::open(path).map_err(|e| Box::<dyn Error>::from(e))?;
+    let f = File::open(path).map_err(Box::<dyn Error>::from)?;
     let mut reader = BufReader::new(f);
     VerifyingKey::<Scheme::Curve>::read::<_, ModelCircuit<F>>(&mut reader, params)
-        .map_err(|e| Box::<dyn Error>::from(e))
+        .map_err(Box::<dyn Error>::from)
 }
 
 /// Loads the [CommitmentScheme::ParamsVerifier] at `path`.
@@ -268,9 +270,9 @@ pub fn load_params<Scheme: CommitmentScheme>(
     path: PathBuf,
 ) -> Result<Scheme::ParamsVerifier, Box<dyn Error>> {
     info!("loading params from {:?}", path);
-    let f = File::open(path).map_err(|e| Box::<dyn Error>::from(e))?;
+    let f = File::open(path).map_err(Box::<dyn Error>::from)?;
     let mut reader = BufReader::new(f);
-    Params::<'_, Scheme::Curve>::read(&mut reader).map_err(|e| Box::<dyn Error>::from(e))
+    Params::<'_, Scheme::Curve>::read(&mut reader).map_err(Box::<dyn Error>::from)
 }
 
 /// Saves a [VerifyingKey] to `path`.

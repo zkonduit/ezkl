@@ -67,7 +67,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                 .collect();
 
             let prover = MockProver::run(args.logrows, &circuit, pi)
-                .map_err(|e| Box::<dyn Error>::from(e))?;
+                .map_err(Box::<dyn Error>::from)?;
             prover
                 .verify()
                 .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
@@ -90,7 +90,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
 
                     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
                     let pk = create_keys::<IPACommitmentScheme<_>, Fp>(&circuit, &params)
-                        .map_err(|e| Box::<dyn Error>::from(e))?;
+                        .map_err(Box::<dyn Error>::from)?;
                     let strategy = IPASingleStrategy::new(&params);
                     trace!("params computed");
 
@@ -101,7 +101,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     >(
                         &circuit, &public_inputs, &params, &pk
                     )
-                    .map_err(|e| Box::<dyn Error>::from(e))?;
+                    .map_err(Box::<dyn Error>::from)?;
 
                     verify_proof_model(proof, &params, pk.get_vk(), strategy)?;
                 }
@@ -112,7 +112,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         prepare_circuit_and_public_input::<Fr>(&data, &args)?;
                     let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
                     let pk = create_keys::<KZGCommitmentScheme<_>, Fr>(&circuit, &params)
-                        .map_err(|e| Box::<dyn Error>::from(e))?;
+                        .map_err(Box::<dyn Error>::from)?;
                     let strategy = KZGSingleStrategy::new(&params);
                     trace!("params computed");
 
@@ -123,7 +123,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     >(
                         &circuit, &public_inputs, &params, &pk
                     )
-                    .map_err(|e| Box::<dyn Error>::from(e))?;
+                    .map_err(Box::<dyn Error>::from)?;
 
                     verify_proof_model::<_, VerifierGWC<'_, Bn256>, _, _>(
                         proof,
@@ -188,7 +188,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         prepare_circuit_and_public_input::<Fp>(&data, &args)?;
                     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
                     let pk = create_keys::<IPACommitmentScheme<_>, Fp>(&circuit, &params)
-                        .map_err(|e| Box::<dyn Error>::from(e))?;
+                        .map_err(Box::<dyn Error>::from)?;
                     trace!("params computed");
 
                     let (proof, _) =
@@ -198,7 +198,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                             &params,
                             &pk,
                         )
-                        .map_err(|e| Box::<dyn Error>::from(e))?;
+                        .map_err(Box::<dyn Error>::from)?;
 
                     proof.save(proof_path)?;
                     save_params::<IPACommitmentScheme<_>>(params_path, &params);
@@ -209,7 +209,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     let (circuit, public_inputs) = prepare_circuit_and_public_input(&data, &args)?;
                     let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
                     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr>(&circuit, &params)
-                        .map_err(|e| Box::<dyn Error>::from(e))?;
+                        .map_err(Box::<dyn Error>::from)?;
                     trace!("params computed");
 
                     let (proof, _input_dims) = create_proof_model::<
@@ -219,7 +219,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     >(
                         &circuit, &public_inputs, &params, &pk
                     )
-                    .map_err(|e| Box::<dyn Error>::from(e))?;
+                    .map_err(Box::<dyn Error>::from)?;
 
                     proof.save(proof_path)?;
                     save_params::<KZGCommitmentScheme<Bn256>>(params_path, &params);

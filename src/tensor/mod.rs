@@ -480,7 +480,7 @@ impl<T: Clone + TensorType> Tensor<T> {
             .enumerate()
             .map(|(i, e)| f(i, e.clone()))
             .collect();
-        let mut t: Tensor<G> = Tensor::from(vec?.iter().map(|e| e.clone()));
+        let mut t: Tensor<G> = Tensor::from(vec?.iter().cloned());
         t.reshape(self.dims());
         Ok(t)
     }

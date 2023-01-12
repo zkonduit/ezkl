@@ -97,6 +97,7 @@ impl Model {
     /// * `tolerance` - How much each quantized output is allowed to be off by
     /// * `mode` - The [Mode] we're using the model in.
     /// * `visibility` - Which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         path: impl AsRef<Path>,
         scale: i32,
@@ -219,7 +220,7 @@ impl Model {
                 .collect();
             if !non_op_nodes.is_empty() {
                 for (i, node) in non_op_nodes {
-                    let config = self.conf_non_op_node(&node)?;
+                    let config = self.conf_non_op_node(node)?;
                     results.insert(*i, config);
                 }
             }
@@ -314,9 +315,7 @@ impl Model {
             OpKind::Unknown(_c) => {
                 unimplemented!()
             }
-            c => {
-                return Err(Box::new(GraphError::WrongMethod(node.idx, c.clone())));
-            }
+            c => Err(Box::new(GraphError::WrongMethod(node.idx, c.clone()))),
         }
     }
 
@@ -450,17 +449,18 @@ impl Model {
             }
         };
 
-        let config = if tables.contains_key(&vec![op.clone()]) {
-            let table = tables.get(&vec![op.clone()]).unwrap();
-            let conf: LookupConfig<F> =
-                LookupConfig::configure_with_table(meta, input, output, table.clone());
-            NodeConfig::Lookup(conf, node_inputs)
-        } else {
-            let conf: LookupConfig<F> =
-                LookupConfig::configure(meta, input, output, self.bits, &[op.clone()]);
-            tables.insert(vec![op.clone()], conf.table.clone());
-            NodeConfig::Lookup(conf, node_inputs)
-        };
+        let config =
+            if let std::collections::btree_map::Entry::Vacant(e) = tables.entry(vec![op.clone()]) {
+                let conf: LookupConfig<F> =
+                    LookupConfig::configure(meta, input, output, self.bits, &[op.clone()]);
+                e.insert(conf.table.clone());
+                NodeConfig::Lookup(conf, node_inputs)
+            } else {
+                let table = tables.get(&vec![op.clone()]).unwrap();
+                let conf: LookupConfig<F> =
+                    LookupConfig::configure_with_table(meta, input, output, table.clone());
+                NodeConfig::Lookup(conf, node_inputs)
+            };
         Ok(config)
     }
 
