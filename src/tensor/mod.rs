@@ -465,9 +465,9 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     /// Maps a function to tensors and enumerates
     /// ```
-    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::{Tensor, TensorError};
     /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
-    /// let mut c = a.enum_map(|i, x| i32::pow(x + i as i32, 2)).unwrap();
+    /// let mut c = a.enum_map::<_,_,TensorError>(|i, x| Ok(i32::pow(x + i as i32, 2))).unwrap();
     /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
     /// ```
     pub fn enum_map<F: FnMut(usize, T) -> Result<G, E>, G: TensorType, E: Error>(
