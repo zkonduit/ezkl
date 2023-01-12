@@ -162,3 +162,4 @@ jobs:
       run: sh data.sh
     - name: Examples
       run: cargo test --release tests_examples      
+
