@@ -124,7 +124,7 @@ impl<F: FieldExt> Table<F> {
                                     row_offset,
                                     || Value::known(i32_to_felt::<F>(input)),
                                 )
-                                .expect("failed to assign table input cell");
+                                .expect("lookup: assign input failed");
 
                             table
                                 .assign_cell(
@@ -133,13 +133,13 @@ impl<F: FieldExt> Table<F> {
                                     row_offset,
                                     || Value::known(i32_to_felt::<F>(evals[row_offset])),
                                 )
-                                .expect("failed to assign table output cell");
+                                .expect("lookup: assign output failed");
                         })
-                        .expect("failed to assign table");
+                        .expect("lookup: assign table failed");
                     Ok(())
                 },
             )
-            .expect("failed to layout table");
+            .expect("lookup: layout failed");
         self.is_assigned = true;
         Ok(())
     }
@@ -285,7 +285,10 @@ impl<F: FieldExt + TensorType> Config<F> {
                 |mut region| {
                     self.qlookup.enable(&mut region, 0)?;
 
-                    let w = self.input.assign(&mut region, 0, &values).unwrap();
+                    let w = self
+                        .input
+                        .assign(&mut region, 0, &values)
+                        .expect("lookup: assign input failed");
 
                     let mut res: Vec<i32> = vec![];
                     let _ = Tensor::from(w.iter().map(|acaf| (*acaf).value_field()).map(|vaf| {
@@ -309,7 +312,7 @@ impl<F: FieldExt + TensorType> Config<F> {
                     Ok(self
                         .output
                         .assign(&mut region, 0, &ValTensor::from(output))
-                        .unwrap())
+                        .expect("lookup: assign output failed"))
                 },
             ) {
                 Ok(a) => a,

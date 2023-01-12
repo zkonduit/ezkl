@@ -1,5 +1,4 @@
 use super::*;
-use crate::abort;
 use crate::tensor::ops::*;
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
@@ -8,7 +7,6 @@ use halo2_proofs::{
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
 };
 use itertools::Itertools;
-use log::error;
 use std::error::Error;
 use std::fmt;
 use std::marker::PhantomData;
@@ -214,32 +212,20 @@ impl<F: FieldExt + TensorType> Config<F> {
             let qis = config
                 .inputs
                 .iter()
-                .map(|input| match input.query(meta, 0) {
-                    Ok(q) => q,
-                    Err(e) => {
-                        abort!("failed to query input {:?}", e);
-                    }
-                })
+                .map(|input| input.query(meta, 0).expect("poly: input query failed"))
                 .collect::<Vec<_>>();
 
             let mut config_outputs = vec![];
             for node in config.nodes.iter_mut() {
-                match Self::apply_op(node, &qis, &mut config_outputs) {
-                    Ok(res) => res,
-                    e => {
-                        abort!("apply op failed {:?}", e);
-                    }
-                };
+                Self::apply_op(node, &qis, &mut config_outputs).expect("poly: apply op failed");
             }
             let witnessed_output = &config_outputs[config.nodes.len() - 1];
 
             // Get output expressions for each input channel
-            let expected_output: Tensor<Expression<F>> = match config.output.query(meta, 0) {
-                Ok(res) => res,
-                Err(e) => {
-                    abort!("failed to query output during fused layer layout {:?}", e);
-                }
-            };
+            let expected_output: Tensor<Expression<F>> = config
+                .output
+                .query(meta, 0)
+                .expect("poly: output query failed");
 
             let constraints = witnessed_output
                 .enum_map(|i, o| o - expected_output[i].clone())
@@ -277,15 +263,10 @@ impl<F: FieldExt + TensorType> Config<F> {
                     let inp = utils::value_muxer(
                         &self.inputs[i],
                         &{
-                            match self.inputs[i].assign(&mut region, offset, input) {
-                                Ok(res) => res.map(|e| e.value_field().evaluate()),
-                                Err(e) => {
-                                    abort!(
-                                        "failed to assign inputs during fused layer layout {:?}",
-                                        e
-                                    );
-                                }
-                            }
+                            let res = self.inputs[i]
+                                .assign(&mut region, offset, input)
+                                .expect("poly: assign inputs failed");
+                            res.map(|e| e.value_field().evaluate())
                         },
                         input,
                     );
@@ -295,26 +276,21 @@ impl<F: FieldExt + TensorType> Config<F> {
                 let mut layout_outputs = vec![];
 
                 for node in self.nodes.iter_mut() {
-                    match Self::apply_op(node, &inputs, &mut layout_outputs) {
-                        Ok(res) => res,
-                        Err(e) => {
-                            abort!("apply op failed {:?}", e);
-                        }
-                    };
+                    Self::apply_op(node, &inputs, &mut layout_outputs)
+                        .expect("poly: apply op failed");
                 }
                 let output: ValTensor<F> = match layout_outputs.last() {
                     Some(a) => a.clone().into(),
                     None => {
-                        panic!("fused layer has empty outputs");
+                        panic!("poly: empty outputs");
                     }
                 };
 
-                match self.output.assign(&mut region, offset, &output) {
-                    Ok(a) => Ok(a),
-                    Err(e) => {
-                        abort!("failed to assign fused layer output {:?}", e);
-                    }
-                }
+                let output = self
+                    .output
+                    .assign(&mut region, offset, &output)
+                    .expect("poly: assign output failed");
+                Ok(output)
             },
         ) {
             Ok(a) => a,

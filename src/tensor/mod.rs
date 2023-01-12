@@ -33,6 +33,8 @@ pub enum TensorError {
     DimMismatch(String),
     /// Shape when instantiating
     DimError,
+    /// Wrong tensor type was used
+    WrongType,
 }
 
 impl fmt::Display for TensorError {
@@ -40,6 +42,7 @@ impl fmt::Display for TensorError {
         match self {
             TensorError::DimMismatch(op) => write!(f, "dimension mismatch in tensor op: {}", op),
             TensorError::DimError => write!(f, "dimensionality error when manipulating a tensor"),
+            TensorError::WrongType => write!(f, "the wrong tensor type was used"),
         }
     }
 }

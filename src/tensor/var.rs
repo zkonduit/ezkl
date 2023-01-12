@@ -1,6 +1,4 @@
 use super::*;
-use crate::abort;
-use log::error;
 use std::cmp::min;
 /// A wrapper around Halo2's `Column<Fixed>` or `Column<Advice>`.
 /// The wrapper allows for `VarTensor`'s dimensions to differ from that of the inner (wrapped) columns.
@@ -243,45 +241,36 @@ impl VarTensor {
                         ) {
                             Ok(v) => v,
                             Err(e) => {
-                                abort!("failed to assign advice from instance {:?}", e);
+                                panic!("failed to assign advice from instance {:?}", e);
                             }
                         }
                     })
                 }
                 _ => {
-                    abort!("should be an advice");
+                    return Err(Box::new(TensorError::WrongType));
                 }
             },
             ValTensor::Value { inner: v, dims: _ } => v.enum_map(|coord, k| match &self {
                 VarTensor::Fixed { inner: fixed, .. } => {
                     let (x, y) = self.cartesian_coord(offset + coord);
-                    match region.assign_fixed(|| "k", fixed[x], y, || k) {
-                        Ok(a) => a,
-                        Err(e) => {
-                            abort!("failed to assign ValTensor to VarTensor {:?}", e);
-                        }
-                    }
+                    region
+                        .assign_fixed(|| "k", fixed[x], y, || k)
+                        .expect("failed to assign ValTensor to VarTensor")
                 }
                 VarTensor::Advice { inner: advices, .. } => {
                     let (x, y) = self.cartesian_coord(offset + coord);
-                    match region.assign_advice(|| "k", advices[x], y, || k) {
-                        Ok(a) => a,
-                        Err(e) => {
-                            abort!("failed to assign ValTensor to VarTensor {:?}", e);
-                        }
-                    }
+                    region
+                        .assign_advice(|| "k", advices[x], y, || k)
+                        .expect("failed to assign ValTensor to VarTensor")
                 }
             }),
             ValTensor::PrevAssigned { inner: v, dims: _ } => {
                 v.enum_map(|coord, xcell| match &self {
                     VarTensor::Advice { inner: advices, .. } => {
                         let (x, y) = self.cartesian_coord(offset + coord);
-                        match xcell.copy_advice(|| "k", region, advices[x], y) {
-                            Ok(a) => a,
-                            Err(e) => {
-                                abort!("failed to copy ValTensor to VarTensor {:?}", e);
-                            }
-                        }
+                        xcell
+                            .copy_advice(|| "k", region, advices[x], y)
+                            .expect("failed to copy ValTensor to VarTensor")
                     }
                     _ => {
                         unimplemented!()
@@ -291,21 +280,17 @@ impl VarTensor {
             ValTensor::AssignedValue { inner: v, dims: _ } => v.enum_map(|coord, k| match &self {
                 VarTensor::Fixed { inner: fixed, .. } => {
                     let (x, y) = self.cartesian_coord(offset + coord);
-                    match region.assign_fixed(|| "k", fixed[x], y, || k) {
-                        Ok(a) => a.evaluate(),
-                        Err(e) => {
-                            abort!("failed to assign ValTensor to VarTensor {:?}", e);
-                        }
-                    }
+                    region
+                        .assign_fixed(|| "k", fixed[x], y, || k)
+                        .expect("failed to assign ValTensor to VarTensor")
+                        .evaluate()
                 }
                 VarTensor::Advice { inner: advices, .. } => {
                     let (x, y) = self.cartesian_coord(offset + coord);
-                    match region.assign_advice(|| "k", advices[x], y, || k) {
-                        Ok(a) => a.evaluate(),
-                        Err(e) => {
-                            abort!("failed to assign ValTensor to VarTensor {:?}", e);
-                        }
-                    }
+                    region
+                        .assign_advice(|| "k", advices[x], y, || k)
+                        .expect("failed to assign ValTensor to VarTensor")
+                        .evaluate()
                 }
             }),
         }

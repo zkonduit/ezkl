@@ -1,4 +1,3 @@
-use crate::abort;
 use crate::fieldutils::i32_to_felt;
 use crate::tensor::{TensorType, ValTensor, VarTensor};
 use halo2_proofs::{
@@ -6,7 +5,6 @@ use halo2_proofs::{
     circuit::Layouter,
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
 };
-use log::error;
 use std::error::Error;
 use std::marker::PhantomData;
 
@@ -46,20 +44,12 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
             //          v       |         1
 
             let q = cs.query_selector(config.selector);
-            let witnessed = match input.query(cs, 0) {
-                Ok(q) => q,
-                Err(e) => {
-                    abort!("failed to query input {:?}", e);
-                }
-            };
+            let witnessed = input.query(cs, 0).expect("failed to query range input");
 
             // Get output expressions for each input channel
-            let expected = match expected.query(cs, 0) {
-                Ok(q) => q,
-                Err(e) => {
-                    abort!("failed to query input {:?}", e);
-                }
-            };
+            let expected = expected
+                .query(cs, 0)
+                .expect("failed to query range expected value");
 
             // Given a range R and a value v, returns the expression
             // (v) * (1 - v) * (2 - v) * ... * (R - 1 - v)
@@ -97,22 +87,13 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
                 self.selector.enable(&mut region, offset)?;
 
                 // assigns the instance to the advice.
-                match self.input.assign(&mut region, offset, &input) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        abort!("failed to assign inputs during range layer layout {:?}", e);
-                    }
-                };
+                self.input
+                    .assign(&mut region, offset, &input)
+                    .expect("failed to assign inputs during range layer layout");
 
-                match self.expected.assign(&mut region, offset, &output) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        abort!(
-                            "failed to assign expected output during range layer layout {:?}",
-                            e
-                        );
-                    }
-                };
+                self.expected
+                    .assign(&mut region, offset, &output)
+                    .expect("failed to assign expected output during range layer layout");
 
                 Ok(())
             },
