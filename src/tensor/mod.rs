@@ -19,7 +19,6 @@ use halo2_proofs::{
 use itertools::Itertools;
 use std::cmp::max;
 use std::error::Error;
-use std::fmt;
 use std::fmt::Debug;
 use std::iter::Iterator;
 use std::ops::Deref;
@@ -30,21 +29,11 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum TensorError {
     /// Shape mismatch in a operation
+    #[error("dimension mismatch in tensor op: {0}")]
     DimMismatch(String),
     /// Shape when instantiating
+    #[error("dimensionality error when manipulating a tensor")]
     DimError,
-    /// Wrong tensor type was used
-    WrongType,
-}
-
-impl fmt::Display for TensorError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            TensorError::DimMismatch(op) => write!(f, "dimension mismatch in tensor op: {}", op),
-            TensorError::DimError => write!(f, "dimensionality error when manipulating a tensor"),
-            TensorError::WrongType => write!(f, "the wrong tensor type was used"),
-        }
-    }
 }
 
 /// The (inner) type of tensor elements.
@@ -236,13 +225,24 @@ impl<T: PartialEq + TensorType> PartialEq for Tensor<T> {
     }
 }
 
-impl<I: Iterator, T: Clone + TensorType + From<I::Item>> From<I> for Tensor<T>
+impl<I: Iterator> From<I> for Tensor<I::Item>
 where
-    I::Item: Clone + TensorType,
-    Vec<T>: FromIterator<I::Item>,
+    I::Item: TensorType + Clone,
+    Vec<I::Item>: FromIterator<I::Item>,
 {
-    fn from(value: I) -> Tensor<T> {
-        let data: Vec<T> = value.collect::<Vec<T>>();
+    fn from(value: I) -> Tensor<I::Item> {
+        let data: Vec<I::Item> = value.collect::<Vec<I::Item>>();
+        Tensor::new(Some(&data), &[data.len()]).unwrap()
+    }
+}
+
+impl<T> FromIterator<T> for Tensor<T>
+where
+    T: TensorType + Clone,
+    Vec<T>: FromIterator<T>,
+{
+    fn from_iter<I: IntoIterator<Item = T>>(value: I) -> Tensor<T> {
+        let data: Vec<I::Item> = value.into_iter().collect::<Vec<I::Item>>();
         Tensor::new(Some(&data), &[data.len()]).unwrap()
     }
 }
@@ -470,11 +470,17 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// let mut c = a.enum_map(|i, x| i32::pow(x + i as i32, 2)).unwrap();
     /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
     /// ```
-    pub fn enum_map<F: FnMut(usize, T) -> G, G: TensorType>(
+    pub fn enum_map<F: FnMut(usize, T) -> Result<G, E>, G: TensorType, E: Error>(
         &self,
         mut f: F,
-    ) -> Result<Tensor<G>, Box<dyn Error>> {
-        let mut t = Tensor::from(self.inner.iter().enumerate().map(|(i, e)| f(i, e.clone())));
+    ) -> Result<Tensor<G>, E> {
+        let vec: Result<Vec<G>, E> = self
+            .inner
+            .iter()
+            .enumerate()
+            .map(|(i, e)| f(i, e.clone()))
+            .collect();
+        let mut t: Tensor<G> = Tensor::from(vec?.iter().map(|e| e.clone()));
         t.reshape(self.dims());
         Ok(t)
     }

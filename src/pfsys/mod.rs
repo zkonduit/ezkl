@@ -6,6 +6,7 @@ use crate::commands::{data_path, Cli};
 use crate::fieldutils::i32_to_felt;
 use crate::graph::{utilities::vector_to_quantized, Model, ModelCircuit};
 use crate::tensor::{Tensor, TensorType};
+use halo2_proofs::arithmetic::FieldExt;
 use halo2_proofs::plonk::{
     create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey,
 };
@@ -14,8 +15,7 @@ use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{
     Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
 };
-use halo2_proofs::{arithmetic::FieldExt, dev::VerifyFailure};
-use log::{error, info, trace};
+use log::{info, trace};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -50,73 +50,20 @@ pub struct Proof {
 impl Proof {
     /// Saves the Proof to a specified `proof_path`.
     pub fn save(&self, proof_path: &PathBuf) -> Result<(), Box<dyn Error>> {
-        let serialized = match serde_json::to_string(&self) {
-            Ok(s) => s,
-            Err(e) => return Err(Box::new(e)),
-        };
+        let serialized = serde_json::to_string(&self).map_err(|e| Box::<dyn Error>::from(e))?;
 
-        let mut file = std::fs::File::create(proof_path).expect("create failed");
-        file.write_all(serialized.as_bytes()).expect("write failed");
-        Ok(())
+        let mut file = std::fs::File::create(proof_path).map_err(|e| Box::<dyn Error>::from(e))?;
+        file.write_all(serialized.as_bytes())
+            .map_err(|e| Box::<dyn Error>::from(e))
     }
 
     /// Load a json serialized proof from the provided path.
     pub fn load(proof_path: &PathBuf) -> Result<Self, Box<dyn Error>> {
-        let mut file = match File::open(proof_path) {
-            Ok(f) => f,
-            Err(e) => return Err(Box::new(e)),
-        };
+        let mut file = File::open(proof_path).map_err(|e| Box::<dyn Error>::from(e))?;
         let mut data = String::new();
-        match file.read_to_string(&mut data) {
-            Ok(_) => {}
-            Err(e) => return Err(Box::new(e)),
-        };
-        match serde_json::from_str(&data) {
-            Ok(a) => Ok(a),
-            Err(e) => Err(Box::new(e)),
-        }
-    }
-}
-
-/// Helper function to print helpful error messages after verification has failed.
-pub fn parse_prover_errors(f: &VerifyFailure) {
-    match f {
-        VerifyFailure::Lookup {
-            name,
-            location,
-            lookup_index,
-        } => {
-            error!("lookup {:?} is out of range, try increasing 'bits' or reducing 'scale' ({} and lookup index {}).",
-            name, location, lookup_index);
-        }
-        VerifyFailure::ConstraintNotSatisfied {
-            constraint,
-            location,
-            cell_values: _,
-        } => {
-            error!("{} was not satisfied {}).", constraint, location);
-        }
-        VerifyFailure::ConstraintPoisoned { constraint } => {
-            error!("constraint {:?} was poisoned", constraint);
-        }
-        VerifyFailure::Permutation { column, location } => {
-            error!(
-                "permutation did not preserve column cell value (try increasing 'scale') ({} {}).",
-                column, location
-            );
-        }
-        VerifyFailure::CellNotAssigned {
-            gate,
-            region,
-            gate_offset,
-            column,
-            offset,
-        } => {
-            error!(
-                "Unnassigned value in {} ({}) and {} ({:?}, {})",
-                gate, region, gate_offset, column, offset
-            );
-        }
+        file.read_to_string(&mut data)
+            .map_err(|e| Box::<dyn Error>::from(e))?;
+        serde_json::from_str(&data).map_err(|e| Box::<dyn Error>::from(e))
     }
 }
 
@@ -177,29 +124,18 @@ pub fn prepare_circuit<F: FieldExt>(
 
 /// Deserializes the required inputs to a model at path `datapath` to a [ModelInput] struct.
 pub fn prepare_data(datapath: String) -> Result<ModelInput, Box<dyn Error>> {
-    let mut file = match File::open(data_path(datapath)) {
-        Ok(t) => t,
-        Err(e) => {
-            return Err(Box::new(e));
-        }
-    };
+    let mut file = File::open(data_path(datapath)).map_err(|e| Box::<dyn Error>::from(e))?;
     let mut data = String::new();
-    match file.read_to_string(&mut data) {
-        Ok(_) => {}
-        Err(e) => {
-            return Err(Box::new(e));
-        }
-    };
-    let data: ModelInput = serde_json::from_str(&data).expect("JSON was not well-formatted");
-
-    Ok(data)
+    file.read_to_string(&mut data)
+        .map_err(|e| Box::<dyn Error>::from(e))?;
+    serde_json::from_str(&data).map_err(|e| Box::<dyn Error>::from(e))
 }
 
 /// Creates a [VerifyingKey] and [ProvingKey] for a [ModelCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`).
 pub fn create_keys<Scheme: CommitmentScheme, F: FieldExt + TensorType>(
     circuit: &ModelCircuit<F>,
     params: &'_ Scheme::ParamsProver,
-) -> ProvingKey<Scheme::Curve>
+) -> Result<ProvingKey<Scheme::Curve>, halo2_proofs::plonk::Error>
 where
     ModelCircuit<F>: Circuit<Scheme::Scalar>,
 {
@@ -209,12 +145,12 @@ where
     // Initialize the proving key
     let now = Instant::now();
     trace!("preparing VK");
-    let vk = keygen_vk(params, &empty_circuit).expect("keygen_vk should not fail");
+    let vk = keygen_vk(params, &empty_circuit)?;
     info!("VK took {}", now.elapsed().as_secs());
     let now = Instant::now();
-    let pk = keygen_pk(params, vk, &empty_circuit).expect("keygen_pk should not fail");
+    let pk = keygen_pk(params, vk, &empty_circuit)?;
     info!("PK took {}", now.elapsed().as_secs());
-    pk
+    Ok(pk)
 }
 
 /// a wrapper around halo2's create_proof
@@ -228,7 +164,7 @@ pub fn create_proof_model<
     public_inputs: &[Tensor<i32>],
     params: &'params Scheme::ParamsProver,
     pk: &ProvingKey<Scheme::Curve>,
-) -> (Proof, Vec<Vec<usize>>)
+) -> Result<(Proof, Vec<Vec<usize>>), halo2_proofs::plonk::Error>
 where
     ModelCircuit<F>: Circuit<Scheme::Scalar>,
 {
@@ -259,8 +195,7 @@ where
         instances,
         &mut rng,
         &mut transcript,
-    )
-    .expect("proof generation should not fail");
+    )?;
     let proof = transcript.finalize();
     info!("Proof took {}", now.elapsed().as_secs());
 
@@ -272,7 +207,7 @@ where
         proof,
     };
 
-    (checkable_pf, dims)
+    Ok((checkable_pf, dims))
 }
 
 /// A wrapper around halo2's verify_proof
@@ -287,7 +222,7 @@ pub fn verify_proof_model<
     params: &'params Scheme::ParamsVerifier,
     vk: &VerifyingKey<Scheme::Curve>,
     strategy: Strategy,
-) -> bool
+) -> Result<Strategy::Output, halo2_proofs::plonk::Error>
 where
     ModelCircuit<F>: Circuit<Scheme::Scalar>,
 {
@@ -309,12 +244,8 @@ where
 
     let now = Instant::now();
     let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof.proof[..]);
-
-    let result =
-        verify_proof::<Scheme, V, _, _, _>(params, vk, strategy, instances, &mut transcript)
-            .is_ok();
     info!("verify took {}", now.elapsed().as_secs());
-    result
+    verify_proof::<Scheme, V, _, _, _>(params, vk, strategy, instances, &mut transcript)
 }
 
 /// Loads a [VerifyingKey] at `path`.
@@ -326,19 +257,10 @@ where
     ModelCircuit<F>: Circuit<Scheme::Scalar>,
 {
     info!("loading verification key from {:?}", path);
-    let f = match File::open(path) {
-        Ok(f) => f,
-        Err(e) => {
-            return Err(Box::new(e));
-        }
-    };
+    let f = File::open(path).map_err(|e| Box::<dyn Error>::from(e))?;
     let mut reader = BufReader::new(f);
-    match VerifyingKey::<Scheme::Curve>::read::<_, ModelCircuit<F>>(&mut reader, params) {
-        Ok(f) => Ok(f),
-        Err(e) => {
-            return Err(Box::new(e));
-        }
-    }
+    VerifyingKey::<Scheme::Curve>::read::<_, ModelCircuit<F>>(&mut reader, params)
+        .map_err(|e| Box::<dyn Error>::from(e))
 }
 
 /// Loads the [CommitmentScheme::ParamsVerifier] at `path`.
@@ -346,19 +268,9 @@ pub fn load_params<Scheme: CommitmentScheme>(
     path: PathBuf,
 ) -> Result<Scheme::ParamsVerifier, Box<dyn Error>> {
     info!("loading params from {:?}", path);
-    let f = match File::open(path) {
-        Ok(f) => f,
-        Err(e) => {
-            return Err(Box::new(e));
-        }
-    };
+    let f = File::open(path).map_err(|e| Box::<dyn Error>::from(e))?;
     let mut reader = BufReader::new(f);
-    match Params::<'_, Scheme::Curve>::read(&mut reader) {
-        Ok(f) => Ok(f),
-        Err(e) => {
-            return Err(Box::new(e));
-        }
-    }
+    Params::<'_, Scheme::Curve>::read(&mut reader).map_err(|e| Box::<dyn Error>::from(e))
 }
 
 /// Saves a [VerifyingKey] to `path`.

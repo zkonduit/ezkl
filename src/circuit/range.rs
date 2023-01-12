@@ -1,3 +1,4 @@
+use super::CircuitError;
 use crate::fieldutils::i32_to_felt;
 use crate::tensor::{TensorType, ValTensor, VarTensor};
 use halo2_proofs::{
@@ -5,7 +6,6 @@ use halo2_proofs::{
     circuit::Layouter,
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
 };
-use std::error::Error;
 use std::marker::PhantomData;
 
 /// Configuration for a range check on the difference between `input` and `expected`.
@@ -44,12 +44,12 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
             //          v       |         1
 
             let q = cs.query_selector(config.selector);
-            let witnessed = input.query(cs, 0).expect("failed to query range input");
+            let witnessed = input.query(cs, 0).expect("range: failed to query input");
 
             // Get output expressions for each input channel
             let expected = expected
                 .query(cs, 0)
-                .expect("failed to query range expected value");
+                .expect("range: failed to query expected value");
 
             // Given a range R and a value v, returns the expression
             // (v) * (1 - v) * (2 - v) * ... * (R - 1 - v)
@@ -60,8 +60,10 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
             };
 
             let constraints = witnessed
-                .enum_map(|i, o| range_check(tol as i32, o - expected[i].clone()))
-                .unwrap();
+                .enum_map::<_, _, CircuitError>(|i, o| {
+                    Ok(range_check(tol as i32, o - expected[i].clone()))
+                })
+                .expect("range: failed to create constraints");
             Constraints::with_selector(q, constraints)
         });
 
@@ -77,7 +79,7 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
         mut layouter: impl Layouter<F>,
         input: ValTensor<F>,
         output: ValTensor<F>,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<(), halo2_proofs::plonk::Error> {
         match layouter.assign_region(
             || "range check layout",
             |mut region| {
@@ -87,23 +89,16 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
                 self.selector.enable(&mut region, offset)?;
 
                 // assigns the instance to the advice.
-                self.input
-                    .assign(&mut region, offset, &input)
-                    .expect("failed to assign inputs during range layer layout");
+                self.input.assign(&mut region, offset, &input)?;
 
-                self.expected
-                    .assign(&mut region, offset, &output)
-                    .expect("failed to assign expected output during range layer layout");
+                self.expected.assign(&mut region, offset, &output)?;
 
                 Ok(())
             },
         ) {
-            Ok(a) => a,
-            Err(e) => {
-                return Err(Box::new(e));
-            }
-        };
-        Ok(())
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        }
     }
 }
 

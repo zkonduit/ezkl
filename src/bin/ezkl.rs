@@ -1,6 +1,6 @@
 use ezkl::commands::Cli;
 use ezkl::execute::run;
-use log::info;
+use log::{error, info};
 use rand::seq::SliceRandom;
 use std::error::Error;
 
@@ -9,7 +9,12 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     colog::init();
     banner();
     info!("{}", &args.as_json()?);
-    run(args)
+    let res = run(args);
+    match &res {
+        Ok(_) => info!("verify succeeded"),
+        Err(e) => error!("verify failed: {}", e),
+    };
+    res
 }
 
 fn banner() {

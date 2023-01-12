@@ -119,8 +119,7 @@ impl Model {
             model: model.clone(),
             scale,
             tolerance,
-            nodes: Self::assign_execution_buckets(nodes)
-                .expect("failed to assign execution buckets"),
+            nodes: Self::assign_execution_buckets(nodes)?,
             bits,
             logrows,
             max_rotations,

@@ -111,37 +111,35 @@ impl<F: FieldExt> Table<F> {
         for nl in self.nonlinearities.clone() {
             evals = nl.f(inputs.clone());
         }
+        self.is_assigned = true;
         layouter
             .assign_table(
                 || "nl table",
                 |mut table| {
-                    inputs
-                        .enum_map(|row_offset, input| {
-                            table
-                                .assign_cell(
-                                    || format!("nl_i_col row {}", row_offset),
-                                    self.table_input,
-                                    row_offset,
-                                    || Value::known(i32_to_felt::<F>(input)),
-                                )
-                                .expect("lookup: assign input failed");
+                    let _ = inputs
+                        .iter()
+                        .enumerate()
+                        .map(|(row_offset, input)| {
+                            table.assign_cell(
+                                || format!("nl_i_col row {}", row_offset),
+                                self.table_input,
+                                row_offset,
+                                || Value::known(i32_to_felt::<F>(*input)),
+                            )?;
 
-                            table
-                                .assign_cell(
-                                    || format!("nl_o_col row {}", row_offset),
-                                    self.table_output,
-                                    row_offset,
-                                    || Value::known(i32_to_felt::<F>(evals[row_offset])),
-                                )
-                                .expect("lookup: assign output failed");
+                            table.assign_cell(
+                                || format!("nl_o_col row {}", row_offset),
+                                self.table_output,
+                                row_offset,
+                                || Value::known(i32_to_felt::<F>(evals[row_offset])),
+                            )?;
+                            Ok(())
                         })
-                        .expect("lookup: assign table failed");
+                        .collect::<Result<Vec<()>, halo2_proofs::plonk::Error>>()?;
                     Ok(())
                 },
             )
-            .expect("lookup: layout failed");
-        self.is_assigned = true;
-        Ok(())
+            .map_err(|e| Box::<dyn Error>::from(e))
     }
 }
 
@@ -285,10 +283,7 @@ impl<F: FieldExt + TensorType> Config<F> {
                 |mut region| {
                     self.qlookup.enable(&mut region, 0)?;
 
-                    let w = self
-                        .input
-                        .assign(&mut region, 0, &values)
-                        .expect("lookup: assign input failed");
+                    let w = self.input.assign(&mut region, 0, &values)?;
 
                     let mut res: Vec<i32> = vec![];
                     let _ = Tensor::from(w.iter().map(|acaf| (*acaf).value_field()).map(|vaf| {
@@ -309,10 +304,7 @@ impl<F: FieldExt + TensorType> Config<F> {
                         }
                     };
 
-                    Ok(self
-                        .output
-                        .assign(&mut region, 0, &ValTensor::from(output))
-                        .expect("lookup: assign output failed"))
+                    self.output.assign(&mut region, 0, &ValTensor::from(output))
                 },
             ) {
                 Ok(a) => a,

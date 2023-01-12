@@ -131,11 +131,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let x = config.l4.layout(&mut layouter, &x).unwrap();
         match x {
             ValTensor::PrevAssigned { inner: v, dims: _ } => v
-                .enum_map(|i, x| {
-                    layouter
-                        .constrain_instance(x.cell(), config.public_output, i)
-                        .unwrap()
-                })
+                .enum_map(|i, x| layouter.constrain_instance(x.cell(), config.public_output, i))
                 .unwrap(),
             _ => panic!("Should be assigned"),
         };

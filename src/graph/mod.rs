@@ -28,75 +28,38 @@ pub use vars::*;
 #[derive(Debug, Error)]
 pub enum GraphError {
     /// The wrong inputs were passed to a lookup node
+    #[error("invalid inputs for a lookup node")]
     InvalidLookupInputs,
     /// Shape mismatch in circuit construction
+    #[error("invalid dimensions used for node {0} ({1})")]
     InvalidDims(usize, OpKind),
     /// Wrong method was called to configure an op
+    #[error("wrong method was called to configure node {0} ({1})")]
     WrongMethod(usize, OpKind),
     /// A requested node is missing in the graph
+    #[error("a requested node is missing in the graph: {0}")]
     MissingNode(usize),
     /// The wrong method was called on an operation
+    #[error("an unsupported method was called on node {0} ({1})")]
     OpMismatch(usize, OpKind),
     /// This operation is unsupported
+    #[error("unsupported operation in graph")]
     UnsupportedOp,
     /// A node has missing parameters
+    #[error("a node is missing required params: {0}")]
     MissingParams(String),
     /// Error in the configuration of the visibility of variables
+    #[error("there should be at least one set of public variables")]
     Visibility,
     /// Ezkl only supports divisions by constants
+    #[error("ezkl currently only supports division by constants")]
     NonConstantDiv,
     /// Ezkl only supports constant powers
+    #[error("ezkl currently only supports constant exponents")]
     NonConstantPower,
     /// Error when attempting to rescale an operation
+    #[error("failed to rescale inputs for {0}")]
     RescalingError(OpKind),
-}
-
-impl std::fmt::Display for GraphError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            GraphError::InvalidLookupInputs => {
-                write!(f, "invalid inputs for a lookup node")
-            }
-            GraphError::InvalidDims(id, op) => {
-                write!(f, "invalid dimensions used for node {} ({})", id, op)
-            }
-            GraphError::WrongMethod(id, op) => {
-                write!(
-                    f,
-                    "wrong method was called to configure node {} ({})",
-                    id, op
-                )
-            }
-            GraphError::MissingNode(id) => {
-                write!(f, "a requested node is missing in the graph: {}", id)
-            }
-            GraphError::OpMismatch(id, op) => {
-                write!(
-                    f,
-                    "an unsupported method was called on node {} ({})",
-                    id, op
-                )
-            }
-            GraphError::UnsupportedOp => {
-                write!(f, "unsupported operation in graph")
-            }
-            GraphError::MissingParams(params) => {
-                write!(f, "a node is missing required params: {}", params)
-            }
-            GraphError::Visibility => {
-                write!(f, "there should be at least one set of public variables")
-            }
-            GraphError::NonConstantDiv => {
-                write!(f, "ezkl currently only supports division by a constant")
-            }
-            GraphError::NonConstantPower => {
-                write!(f, "ezkl currently only supports constant exponents")
-            }
-            GraphError::RescalingError(op) => {
-                write!(f, "failed to rescale inputs to {}", op)
-            }
-        }
-    }
 }
 
 /// Defines the circuit for a computational graph / model loaded from a `.onnx` file.

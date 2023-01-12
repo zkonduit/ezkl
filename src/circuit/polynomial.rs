@@ -228,8 +228,8 @@ impl<F: FieldExt + TensorType> Config<F> {
                 .expect("poly: output query failed");
 
             let constraints = witnessed_output
-                .enum_map(|i, o| o - expected_output[i].clone())
-                .unwrap();
+                .enum_map::<_, _, CircuitError>(|i, o| Ok(o - expected_output[i].clone()))
+                .expect("poly: failed to create constraints");
 
             Constraints::with_selector(selector, constraints)
         });
@@ -263,9 +263,7 @@ impl<F: FieldExt + TensorType> Config<F> {
                     let inp = utils::value_muxer(
                         &self.inputs[i],
                         &{
-                            let res = self.inputs[i]
-                                .assign(&mut region, offset, input)
-                                .expect("poly: assign inputs failed");
+                            let res = self.inputs[i].assign(&mut region, offset, input)?;
                             res.map(|e| e.value_field().evaluate())
                         },
                         input,
@@ -286,10 +284,7 @@ impl<F: FieldExt + TensorType> Config<F> {
                     }
                 };
 
-                let output = self
-                    .output
-                    .assign(&mut region, offset, &output)
-                    .expect("poly: assign output failed");
+                let output = self.output.assign(&mut region, offset, &output)?;
                 Ok(output)
             },
         ) {

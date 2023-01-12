@@ -262,11 +262,7 @@ where
 
         match l2out {
             ValTensor::PrevAssigned { inner: v, dims: _ } => v
-                .enum_map(|i, x| {
-                    layouter
-                        .constrain_instance(x.cell(), config.public_output, i)
-                        .unwrap()
-                })
+                .enum_map(|i, x| layouter.constrain_instance(x.cell(), config.public_output, i))
                 .unwrap(),
             _ => panic!("Should be assigned"),
         };
