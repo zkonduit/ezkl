@@ -232,18 +232,15 @@ impl VarTensor {
                     t.enum_map(|coord, _: usize| {
                         let (x, y) = self.cartesian_coord(offset + coord);
 
-                        match region.assign_advice_from_instance(
-                            || "pub input anchor",
-                            *instance,
-                            coord,
-                            v[x],
-                            y,
-                        ) {
-                            Ok(v) => v,
-                            Err(e) => {
-                                panic!("failed to assign advice from instance {:?}", e);
-                            }
-                        }
+                        region
+                            .assign_advice_from_instance(
+                                || "pub input anchor",
+                                *instance,
+                                coord,
+                                v[x],
+                                y,
+                            )
+                            .expect("failed to assign advice from instance")
                     })
                 }
                 _ => {
