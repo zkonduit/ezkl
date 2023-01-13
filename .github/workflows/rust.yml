@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ "main" ]
 
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -70,7 +76,7 @@ jobs:
   
   mock-proving-tests:
 
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with:
@@ -108,7 +114,7 @@ jobs:
 
   full-proving-evm-tests:
 
-    runs-on: ubuntu-latest-64-cores
+    runs-on: self-hosted
     timeout-minutes: 480
     steps:
     - uses: actions/checkout@v3
@@ -145,7 +151,7 @@ jobs:
 
   examples:
 
-    runs-on: ubuntu-latest-16-cores
+    runs-on: self-hosted
     steps:
     - uses: actions/checkout@v3
     - uses: actions-rs/toolchain@v1
@@ -157,4 +163,20 @@ jobs:
     - name: Download MNIST
       run: sh data.sh
     - name: Examples
-      run: cargo test --release tests_examples      
+      run: cargo test --release tests_examples  
+
+  neg-tests:
+
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+          submodules: recursive
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+
+    - name: Mock proving tests (should fail)
+      run: cargo test neg_tests::neg_examples_      

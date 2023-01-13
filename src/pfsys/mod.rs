@@ -139,15 +139,14 @@ pub fn prepare_circuit_and_public_input<F: FieldExt>(
         let mut res = data
             .input_data
             .iter()
-            .enumerate()
-            .map(|(idx, v)| {
-                match vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx]) {
+            .map(
+                |v| match vector_to_quantized(v, &Vec::from([v.len()]), 0.0, model.scale) {
                     Ok(q) => q,
                     Err(e) => {
                         abort!("failed to quantize vector {:?}", e);
                     }
-                }
-            })
+                },
+            )
             .collect();
         public_inputs.append(&mut res);
     }
