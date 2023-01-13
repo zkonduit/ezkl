@@ -544,7 +544,7 @@ impl Node {
                             let scale_diff =
                                 weight_node.out_scale + input_node.out_scale - bias_node.out_scale;
                             let mut bias_node = other_nodes.get_mut(&node.inputs[2].node).unwrap();
-                            bias_node = Self::scale_up_const_node(bias_node, scale_diff);
+                            bias_node = Self::scale_up_const_node(bias_node, scale + scale_diff);
                             assert_eq!(
                                 input_node.out_scale + weight_node.out_scale,
                                 bias_node.out_scale
@@ -697,7 +697,7 @@ impl Node {
                         let scale_diff =
                             weight_node.out_scale + input_node.out_scale - bias_node.out_scale;
                         let mut bias_node = other_nodes.get_mut(&node.inputs[2].node).unwrap();
-                        bias_node = Self::scale_up_const_node(bias_node, scale_diff);
+                        bias_node = Self::scale_up_const_node(bias_node, scale + scale_diff);
 
                         assert_eq!(
                             input_node.out_scale + weight_node.out_scale,
@@ -1134,20 +1134,19 @@ impl Node {
     }
 
     /// Re-quantizes a constant value node to a new scale.
-    fn scale_up_const_node(node: &mut Node, scale_diff: i32) -> &mut Node {
+    fn scale_up_const_node(node: &mut Node, scale: i32) -> &mut Node {
         assert!(matches!(node.opkind, OpKind::Const));
-        if scale_diff > 0 {
-            if let Some(val) = &node.const_value {
-                let mult = scale_to_multiplier(scale_diff);
-                node.const_value = Some(const_mult(val, mult as i32));
+        if scale > 0 {
+            if let Some(raw) = &node.raw_const_value {
+                let mult = scale_to_multiplier(scale);
+                let t = vector_to_quantized(&raw, raw.dims(), 0f32, scale).unwrap();
+                node.const_value = Some(t);
                 info!(
                     "------ scaled const node {:?}: {:?} -> {:?}",
-                    node.idx,
-                    node.in_scale,
-                    node.out_scale + scale_diff
+                    node.idx, node.in_scale, scale
                 );
                 node.output_max *= mult;
-                node.out_scale += scale_diff;
+                node.out_scale = scale;
             }
         }
         node
