@@ -157,4 +157,18 @@ jobs:
     - name: Download MNIST
       run: sh data.sh
     - name: Examples
-      run: cargo test --release tests_examples      
+      run: cargo test --release tests_examples  
+
+  neg_tests:
+
+    runs-on: ubuntu-latest-16-cores
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+
+    - name: Mock proving tests (should fail)
+      run: cargo test neg_tests::neg_examples_      
