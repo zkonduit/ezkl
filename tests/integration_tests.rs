@@ -28,7 +28,10 @@ const TESTS: [&str; 12] = [
     "2l_relu_sigmoid_conv",
 ];
 
-const NEG_TESTS: [&str; 3] = ["2l_relu_sigmoid_small", "2l_relu_small", "2l_relu_sigmoid"];
+const NEG_TESTS: [(&str, &str); 2] = [
+    ("2l_relu_sigmoid_small", "2l_relu_small"),
+    ("2l_relu_small", "2l_relu_sigmoid_small"),
+];
 
 const TESTS_EVM: [&str; 9] = [
     "1l_mlp",
@@ -145,8 +148,8 @@ macro_rules! test_neg_examples {
             use crate::neg_mock as run;
             seq!(N in 0..=1 {
             #(#[test_case(NEG_TESTS[N])])*
-            fn neg_examples_(test: &str) {
-                run(test.to_string(), NEG_TESTS[2].to_string());
+            fn neg_examples_(test: (&str, &str)) {
+                run(test.0.to_string(), test.1.to_string());
             }
             });
     }
