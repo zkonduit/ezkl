@@ -70,7 +70,7 @@ jobs:
   
   mock-proving-tests:
 
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with:
@@ -108,7 +108,7 @@ jobs:
 
   full-proving-evm-tests:
 
-    runs-on: ubuntu-latest-64-cores
+    runs-on: self-hosted
     timeout-minutes: 480
     steps:
     - uses: actions/checkout@v3
@@ -145,7 +145,7 @@ jobs:
 
   examples:
 
-    runs-on: ubuntu-latest-16-cores
+    runs-on: self-hosted
     steps:
     - uses: actions/checkout@v3
     - uses: actions-rs/toolchain@v1
@@ -161,7 +161,7 @@ jobs:
 
   neg-tests:
 
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with:
