@@ -328,11 +328,11 @@ impl Node {
                         if scale_diff > 0 {
                             let mult = scale_to_multiplier(scale_diff);
                             opkind = OpKind::Lookup(LookupOp::Sigmoid {
-                                scales: (mult as usize, scale as usize),
+                                scales: (mult as usize, scale_to_multiplier(scale) as usize),
                             });
                         } else {
                             opkind = OpKind::Lookup(LookupOp::Sigmoid {
-                                scales: (1, scale as usize),
+                                scales: (1, scale_to_multiplier(scale) as usize),
                             });
                         }
 
