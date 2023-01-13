@@ -261,7 +261,7 @@ impl Model {
         }
 
         let mut public_outputs = vec![];
-        if !self.visibility.output.is_public() {
+        if self.visibility.output.is_public() {
             public_outputs = self.range_check_outputs(meta, vars)
         };
 
