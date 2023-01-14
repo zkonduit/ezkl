@@ -1,6 +1,4 @@
-use std::error::Error;
-
-use crate::tensor::Tensor;
+use crate::tensor::{Tensor, TensorError};
 use anyhow::Result;
 use tract_onnx::prelude::{InferenceFact, Node};
 use tract_onnx::tract_hir::internal::InferenceOp;
@@ -18,7 +16,7 @@ pub fn vector_to_quantized(
     dims: &[usize],
     shift: f32,
     scale: i32,
-) -> Result<Tensor<i32>, Box<dyn Error>> {
+) -> Result<Tensor<i32>, TensorError> {
     let mult = scale_to_multiplier(scale);
     let scaled: Vec<i32> = vec
         .iter()

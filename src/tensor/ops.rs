@@ -1,7 +1,6 @@
 use super::TensorError;
 use crate::tensor::{Tensor, TensorType};
 use itertools::Itertools;
-use std::error::Error;
 pub use std::ops::{Add, Div, Mul, Sub};
 
 /// Matrix multiplies two 2D tensors (and adds an offset).
@@ -31,13 +30,13 @@ pub use std::ops::{Add, Div, Mul, Sub};
 /// ```
 pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     inputs: &Vec<Tensor<T>>,
-) -> Result<Tensor<T>, Box<dyn Error>> {
+) -> Result<Tensor<T>, TensorError> {
     let (mut input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
     if (inputs.len() != 3)
         || (bias.dims()[0] != kernel.dims()[0])
         || (input.dims()[0] != kernel.dims()[1])
     {
-        return Err(Box::new(TensorError::DimMismatch("affine".to_string())));
+        return Err(TensorError::DimMismatch("affine".to_string()));
     }
 
     // does matrix to vector multiplication
@@ -95,14 +94,12 @@ pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// ```
 pub fn scale_and_shift<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     inputs: &Vec<Tensor<T>>,
-) -> Result<Tensor<T>, Box<dyn Error>> {
+) -> Result<Tensor<T>, TensorError> {
     if (inputs.len() != 3)
         || (inputs[1].dims() != inputs[2].dims())
         || (inputs[0].dims() != inputs[1].dims())
     {
-        return Err(Box::new(TensorError::DimMismatch(
-            "scale and shift".to_string(),
-        )));
+        return Err(TensorError::DimMismatch("scale and shift".to_string()));
     }
     let (input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
     let mut output: Tensor<T> = input;
@@ -135,13 +132,13 @@ pub fn scale_and_shift<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// ```
 pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     inputs: &Vec<Tensor<T>>,
-) -> Result<Tensor<T>, Box<dyn Error>> {
+) -> Result<Tensor<T>, TensorError> {
     let (a, b) = (inputs[0].clone(), inputs[1].clone());
     if (inputs.len() != 2)
         || (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])
         || (a.dims()[0..a.dims().len() - 2] != b.dims()[0..a.dims().len() - 2])
     {
-        return Err(Box::new(TensorError::DimMismatch("matmul".to_string())));
+        return Err(TensorError::DimMismatch("matmul".to_string()));
     }
 
     let mut dims = Vec::from(&a.dims()[0..a.dims().len() - 2]);
@@ -189,16 +186,14 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// let expected = Tensor::<i32>::new(Some(&[4, 4, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn add<T: TensorType + Add<Output = T>>(
-    t: &Vec<Tensor<T>>,
-) -> Result<Tensor<T>, Box<dyn Error>> {
+pub fn add<T: TensorType + Add<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor<T>, TensorError> {
     // determines if we're multiplying by a 1D const
     if t.len() == 2 && t[1].dims().len() == 1 && t[1].dims()[0] == 1 {
         return const_add(&t[0], t[1][0].clone());
     }
     for e in t.iter() {
         if t[0].dims() != e.dims() {
-            return Err(Box::new(TensorError::DimMismatch("add".to_string())));
+            return Err(TensorError::DimMismatch("add".to_string()));
         }
     }
     // calculate value of output
@@ -234,7 +229,7 @@ pub fn add<T: TensorType + Add<Output = T>>(
 pub fn const_add<T: TensorType + Add<Output = T>>(
     a: &Tensor<T>,
     b: T,
-) -> Result<Tensor<T>, Box<dyn Error>> {
+) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut output: Tensor<T> = a.clone();
 
@@ -266,9 +261,7 @@ pub fn const_add<T: TensorType + Add<Output = T>>(
 /// let expected = Tensor::<i32>::new(Some(&[0, -2, 0, 0, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn sub<T: TensorType + Sub<Output = T>>(
-    t: &Vec<Tensor<T>>,
-) -> Result<Tensor<T>, Box<dyn Error>> {
+pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor<T>, TensorError> {
     // determines if we're multiplying by a 1D const
     if t.len() == 2 && t[1].dims().len() == 1 && t[1].dims()[0] == 1 {
         return const_sub(&t[0], t[1][0].clone());
@@ -276,7 +269,7 @@ pub fn sub<T: TensorType + Sub<Output = T>>(
 
     for e in t.iter() {
         if t[0].dims() != e.dims() {
-            return Err(Box::new(TensorError::DimMismatch("sub".to_string())));
+            return Err(TensorError::DimMismatch("sub".to_string()));
         }
     }
     // calculate value of output
@@ -312,7 +305,7 @@ pub fn sub<T: TensorType + Sub<Output = T>>(
 pub fn const_sub<T: TensorType + Sub<Output = T>>(
     a: &Tensor<T>,
     b: T,
-) -> Result<Tensor<T>, Box<dyn Error>> {
+) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut output: Tensor<T> = a.clone();
 
@@ -344,9 +337,7 @@ pub fn const_sub<T: TensorType + Sub<Output = T>>(
 /// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 1, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn mult<T: TensorType + Mul<Output = T>>(
-    t: &Vec<Tensor<T>>,
-) -> Result<Tensor<T>, Box<dyn Error>> {
+pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor<T>, TensorError> {
     // determines if we're multiplying by a 1D const
     if t.len() == 2 && t[1].dims().len() == 1 && t[1].dims()[0] == 1 {
         return const_mult(&t[0], t[1][0].clone());
@@ -354,7 +345,7 @@ pub fn mult<T: TensorType + Mul<Output = T>>(
 
     for e in t.iter() {
         if t[0].dims() != e.dims() {
-            return Err(Box::new(TensorError::DimMismatch("mult".to_string())));
+            return Err(TensorError::DimMismatch("mult".to_string()));
         }
     }
     // calculate value of output
@@ -393,9 +384,9 @@ pub fn mult<T: TensorType + Mul<Output = T>>(
 pub fn div<T: TensorType + Div<Output = T>>(
     t: Tensor<T>,
     d: Tensor<T>,
-) -> Result<Tensor<T>, Box<dyn Error>> {
+) -> Result<Tensor<T>, TensorError> {
     if t.dims() != d.dims() {
-        return Err(Box::new(TensorError::DimMismatch("div".to_string())));
+        return Err(TensorError::DimMismatch("div".to_string()));
     }
     // calculate value of output
     let mut output: Tensor<T> = t;
@@ -427,7 +418,7 @@ pub fn div<T: TensorType + Div<Output = T>>(
 pub fn const_mult<T: TensorType + Mul<Output = T>>(
     a: &Tensor<T>,
     b: T,
-) -> Result<Tensor<T>, Box<dyn Error>> {
+) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut output: Tensor<T> = a.clone();
 
@@ -459,7 +450,7 @@ pub fn const_mult<T: TensorType + Mul<Output = T>>(
 pub fn rescale<T: TensorType + Add<Output = T>>(
     a: &Tensor<T>,
     mult: usize,
-) -> Result<Tensor<T>, Box<dyn Error>> {
+) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut output: Tensor<T> = a.clone();
     for (i, a_i) in a.iter().enumerate() {
@@ -490,7 +481,7 @@ pub fn rescale<T: TensorType + Add<Output = T>>(
 pub fn pow<T: TensorType + Mul<Output = T>>(
     a: &Tensor<T>,
     pow: usize,
-) -> Result<Tensor<T>, Box<dyn Error>> {
+) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut output: Tensor<T> = a.clone();
     for (i, a_i) in a.iter().enumerate() {
@@ -518,7 +509,7 @@ pub fn pow<T: TensorType + Mul<Output = T>>(
 /// let expected = 21;
 /// assert_eq!(result[0], expected);
 /// ```
-pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, Box<dyn Error>> {
+pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut res = T::zero().unwrap();
     let _ = a.map(|a_i| res = res.clone() + a_i);
@@ -556,7 +547,7 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     inputs: &Vec<Tensor<T>>,
     padding: (usize, usize),
     stride: (usize, usize),
-) -> Result<Tensor<T>, Box<dyn Error>> {
+) -> Result<Tensor<T>, TensorError> {
     let has_bias = inputs.len() == 3;
     let (image, kernel) = (inputs[0].clone(), inputs[1].clone());
 
@@ -564,13 +555,13 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
         || (kernel.dims().len() != 4)
         || (image.dims()[0] != kernel.dims()[1])
     {
-        return Err(Box::new(TensorError::DimMismatch("conv".to_string())));
+        return Err(TensorError::DimMismatch("conv".to_string()));
     }
 
     if has_bias {
         let bias = inputs[2].clone();
         if (bias.dims().len() != 1) || (bias.dims()[0] != kernel.dims()[0]) {
-            return Err(Box::new(TensorError::DimMismatch("conv bias".to_string())));
+            return Err(TensorError::DimMismatch("conv bias".to_string()));
         }
     }
 
@@ -649,9 +640,9 @@ pub fn sumpool<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     padding: (usize, usize),
     stride: (usize, usize),
     kernel_shape: (usize, usize),
-) -> Result<Tensor<T>, Box<dyn Error>> {
+) -> Result<Tensor<T>, TensorError> {
     if image.dims().len() != 3 {
-        return Err(Box::new(TensorError::DimMismatch("sumpool".to_string())));
+        return Err(TensorError::DimMismatch("sumpool".to_string()));
     }
     let image_dims = image.dims();
 
@@ -714,9 +705,9 @@ pub fn max_pool2d<T: TensorType>(
     padding: (usize, usize),
     stride: (usize, usize),
     pool_dims: (usize, usize),
-) -> Result<Tensor<T>, Box<dyn Error>> {
+) -> Result<Tensor<T>, TensorError> {
     if image.dims().len() != 3 {
-        return Err(Box::new(TensorError::DimMismatch("max_pool2d".to_string())));
+        return Err(TensorError::DimMismatch("max_pool2d".to_string()));
     }
     let image_dims = image.dims();
 
@@ -778,9 +769,9 @@ pub fn max_pool2d<T: TensorType>(
 /// ```
 pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     inputs: &Vec<&Tensor<T>>,
-) -> Result<Tensor<T>, Box<dyn Error>> {
+) -> Result<Tensor<T>, TensorError> {
     if (inputs.len() != 2) || (inputs[0].clone().len() != inputs[1].clone().len()) {
-        return Err(Box::new(TensorError::DimMismatch("dot".to_string())));
+        return Err(TensorError::DimMismatch("dot".to_string()));
     }
     let (a, b): (Tensor<T>, Tensor<T>) = (inputs[0].clone(), inputs[1].clone());
     let res = a
@@ -814,9 +805,9 @@ pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 pub fn pad<T: TensorType>(
     image: Tensor<T>,
     padding: (usize, usize),
-) -> Result<Tensor<T>, Box<dyn Error>> {
+) -> Result<Tensor<T>, TensorError> {
     if image.dims().len() != 3 {
-        return Err(Box::new(TensorError::DimMismatch("pad".to_string())));
+        return Err(TensorError::DimMismatch("pad".to_string()));
     }
     let (channels, height, width) = (image.dims()[0], image.dims()[1], image.dims()[2]);
     let padded_height = height + 2 * padding.0;

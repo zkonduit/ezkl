@@ -108,7 +108,9 @@ impl Model {
         mode: Mode,
         visibility: VarVisibility,
     ) -> Result<Self, Box<dyn Error>> {
-        let model = tract_onnx::onnx().model_for_path(path).unwrap();
+        let model = tract_onnx::onnx()
+            .model_for_path(path)
+            .map_err(|_| GraphError::ModelLoad)?;
         info!("visibility: {}", visibility);
 
         let mut nodes = BTreeMap::<usize, Node>::new();
@@ -588,7 +590,7 @@ impl Model {
     /// * `nodes` - `BTreeMap` of (node index, [Node]) pairs.
     pub fn assign_execution_buckets(
         mut nodes: BTreeMap<usize, Node>,
-    ) -> Result<NodeGraph, Box<dyn Error>> {
+    ) -> Result<NodeGraph, GraphError> {
         info!("assigning configuration buckets to operations");
 
         let mut bucketed_nodes = NodeGraph(BTreeMap::<Option<usize>, BTreeMap<usize, Node>>::new());
@@ -603,7 +605,7 @@ impl Model {
                 match bucketed_nodes.filter(n.node).bucket {
                     Some(b) => prev_buckets.push(b),
                     None => {
-                        return Err(Box::new(GraphError::MissingNode(n.node)));
+                        return Err(GraphError::MissingNode(n.node));
                     }
                 }
             }
@@ -614,7 +616,9 @@ impl Model {
                 OpKind::Const => node.bucket = None,
                 OpKind::Poly(_) => node.bucket = Some(*prev_bucket.unwrap()),
                 OpKind::Lookup(_) => node.bucket = Some(prev_bucket.unwrap() + 1),
-                _ => unimplemented!(),
+                op => {
+                    return Err(GraphError::WrongMethod(node.idx, op.clone()));
+                }
             }
             bucketed_nodes.insert(node.bucket, node.idx, node.clone());
         }

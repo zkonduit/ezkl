@@ -104,6 +104,7 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
 
 #[cfg(test)]
 mod tests {
+
     use crate::tensor::Tensor;
     use halo2_proofs::{
         arithmetic::FieldExt,
@@ -159,6 +160,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn test_range_check() {
         let k = 4;
 

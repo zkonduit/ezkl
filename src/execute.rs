@@ -66,8 +66,8 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                 .map(|i| i.into_iter().map(i32_to_felt::<Fp>).collect())
                 .collect();
 
-            let prover = MockProver::run(args.logrows, &circuit, pi)
-                .map_err(Box::<dyn Error>::from)?;
+            let prover =
+                MockProver::run(args.logrows, &circuit, pi).map_err(Box::<dyn Error>::from)?;
             prover
                 .verify()
                 .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
@@ -147,14 +147,14 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     let now = Instant::now();
                     let snarks = [gen_application_snark(&params_app, &data, &args)?];
                     info!("Application proof took {}", now.elapsed().as_secs());
-                    let agg_circuit = AggregationCircuit::new(&params, snarks);
-                    let pk = gen_pk(&params, &agg_circuit);
+                    let agg_circuit = AggregationCircuit::new(&params, snarks)?;
+                    let pk = gen_pk(&params, &agg_circuit)?;
                     let deployment_code = gen_aggregation_evm_verifier(
                         &params,
                         pk.get_vk(),
                         AggregationCircuit::num_instance(),
                         AggregationCircuit::accumulator_indices(),
-                    );
+                    )?;
                     let now = Instant::now();
                     let proof = gen_kzg_proof::<
                         _,
@@ -163,10 +163,10 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         EvmTranscript<G1Affine, _, _, _>,
                     >(
                         &params, &pk, agg_circuit.clone(), agg_circuit.instances()
-                    );
+                    )?;
                     info!("Aggregation proof took {}", now.elapsed().as_secs());
                     let now = Instant::now();
-                    evm_verify(deployment_code, agg_circuit.instances(), proof);
+                    evm_verify(deployment_code, agg_circuit.instances(), proof)?;
                     info!("verify took {}", now.elapsed().as_secs());
                 }
             }
@@ -201,8 +201,8 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         .map_err(Box::<dyn Error>::from)?;
 
                     proof.save(proof_path)?;
-                    save_params::<IPACommitmentScheme<_>>(params_path, &params);
-                    save_vk::<IPACommitmentScheme<_>>(vk_path, pk.get_vk());
+                    save_params::<IPACommitmentScheme<_>>(params_path, &params)?;
+                    save_vk::<IPACommitmentScheme<_>>(vk_path, pk.get_vk())?;
                 }
                 ProofSystem::KZG => {
                     info!("proof with {}", pfsys);
@@ -222,8 +222,8 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     .map_err(Box::<dyn Error>::from)?;
 
                     proof.save(proof_path)?;
-                    save_params::<KZGCommitmentScheme<Bn256>>(params_path, &params);
-                    save_vk::<KZGCommitmentScheme<Bn256>>(vk_path, pk.get_vk());
+                    save_params::<KZGCommitmentScheme<Bn256>>(params_path, &params)?;
+                    save_vk::<KZGCommitmentScheme<Bn256>>(vk_path, pk.get_vk())?;
                 }
             };
         }

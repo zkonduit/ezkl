@@ -60,6 +60,9 @@ pub enum GraphError {
     /// Error when attempting to rescale an operation
     #[error("failed to rescale inputs for {0}")]
     RescalingError(OpKind),
+    /// Error when attempting to load a model
+    #[error("failed to load model")]
+    ModelLoad,
 }
 
 /// Defines the circuit for a computational graph / model loaded from a `.onnx` file.

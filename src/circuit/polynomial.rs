@@ -92,7 +92,7 @@ impl Op {
     pub fn f<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
         &self,
         mut inputs: Vec<Tensor<T>>,
-    ) -> Result<Tensor<T>, Box<dyn Error>> {
+    ) -> Result<Tensor<T>, TensorError> {
         match &self {
             Op::Identity => Ok(inputs[0].clone()),
             Op::Reshape(new_dims) => {
@@ -124,25 +124,19 @@ impl Op {
             Op::GlobalSumPool => unreachable!(),
             Op::Pow(u) => {
                 if 1 != inputs.len() {
-                    return Err(Box::new(CircuitError::DimMismatch(
-                        "pow constraint".to_string(),
-                    )));
+                    return Err(TensorError::DimMismatch("pow inputs".to_string()));
                 }
                 pow(&inputs[0], *u)
             }
             Op::Sum => {
                 if 1 != inputs.len() {
-                    return Err(Box::new(CircuitError::DimMismatch(
-                        "sum constraint".to_string(),
-                    )));
+                    return Err(TensorError::DimMismatch("sum inputs".to_string()));
                 }
                 sum(&inputs[0])
             }
             Op::Rescaled { inner, scale } => {
                 if scale.len() != inputs.len() {
-                    return Err(Box::new(CircuitError::DimMismatch(
-                        "rescaled constraint".to_string(),
-                    )));
+                    return Err(TensorError::DimMismatch("rescaled inputs".to_string()));
                 }
 
                 let mut rescaled_inputs = vec![];

@@ -1162,7 +1162,7 @@ impl Node {
         if scale > 0 {
             if let Some(val) = &node.raw_const_value {
                 let mult = scale_to_multiplier(scale);
-                let t = vector_to_quantized(val, val.dims(), 0f32, scale).unwrap();
+                let t = vector_to_quantized(val, val.dims(), 0f32, scale)?;
                 node.const_value = Some(t);
                 info!(
                     "------ scaled const node {:?}: {:?} -> {:?}",

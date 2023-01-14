@@ -34,6 +34,9 @@ pub enum TensorError {
     /// Shape when instantiating
     #[error("dimensionality error when manipulating a tensor")]
     DimError,
+    /// wrong method was called on a tensor-like struct
+    #[error("wrong method called")]
+    WrongMethod,
 }
 
 /// The (inner) type of tensor elements.
@@ -306,12 +309,12 @@ impl<F: FieldExt + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> {
 
 impl<T: Clone + TensorType> Tensor<T> {
     /// Sets (copies) the tensor values to the provided ones.
-    pub fn new(values: Option<&[T]>, dims: &[usize]) -> Result<Self, Box<dyn Error>> {
+    pub fn new(values: Option<&[T]>, dims: &[usize]) -> Result<Self, TensorError> {
         let total_dims: usize = dims.iter().product();
         match values {
             Some(v) => {
                 if total_dims != v.len() {
-                    return Err(Box::new(TensorError::DimError));
+                    return Err(TensorError::DimError);
                 }
                 Ok(Tensor {
                     inner: Vec::from(v),
@@ -374,9 +377,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///
     /// assert_eq!(a.get_slice(&[0..2]).unwrap(), b);
     /// ```
-    pub fn get_slice(&self, indices: &[Range<usize>]) -> Result<Tensor<T>, Box<dyn Error>> {
+    pub fn get_slice(&self, indices: &[Range<usize>]) -> Result<Tensor<T>, TensorError> {
         if self.dims.len() < indices.len() {
-            return Err(Box::new(TensorError::DimError));
+            return Err(TensorError::DimError);
         }
         let mut res = Vec::new();
         // if indices weren't specified we fill them in as required
@@ -495,7 +498,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     pub fn mc_enum_map<F: FnMut(&[usize], T) -> G, G: TensorType>(
         &self,
         mut f: F,
-    ) -> Result<Tensor<G>, Box<dyn Error>> {
+    ) -> Result<Tensor<G>, TensorError> {
         let mut indices = Vec::new();
         for i in self.dims.clone() {
             indices.push(0..i);
@@ -519,7 +522,7 @@ impl<T: Clone + TensorType> Tensor<Tensor<T>> {
     /// let mut d = c.combine().unwrap();
     /// assert_eq!(d.dims(), &[8]);
     /// ```
-    pub fn combine(&self) -> Result<Tensor<T>, Box<dyn Error>> {
+    pub fn combine(&self) -> Result<Tensor<T>, TensorError> {
         let mut dims = 0;
         let mut inner = Vec::new();
         for t in self.inner.clone().into_iter() {

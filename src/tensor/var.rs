@@ -228,6 +228,7 @@ impl VarTensor {
                 inner: instance, ..
             } => match &self {
                 VarTensor::Advice { inner: v, dims, .. } => {
+                    // this should never ever fail
                     let t: Tensor<i32> = Tensor::new(None, dims).unwrap();
                     t.enum_map(|coord, _| {
                         let (x, y) = self.cartesian_coord(offset + coord);

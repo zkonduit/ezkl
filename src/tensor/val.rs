@@ -96,7 +96,7 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                     dims: slice.dims().to_vec(),
                 }
             }
-            _ => unimplemented!(),
+            _ => return Err(Box::new(TensorError::WrongMethod)),
         };
         Ok(slice)
     }

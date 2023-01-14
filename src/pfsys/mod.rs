@@ -20,7 +20,7 @@ use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::path::PathBuf;
@@ -276,19 +276,27 @@ pub fn load_params<Scheme: CommitmentScheme>(
 }
 
 /// Saves a [VerifyingKey] to `path`.
-pub fn save_vk<Scheme: CommitmentScheme>(path: &PathBuf, vk: &VerifyingKey<Scheme::Curve>) {
+pub fn save_vk<Scheme: CommitmentScheme>(
+    path: &PathBuf,
+    vk: &VerifyingKey<Scheme::Curve>,
+) -> Result<(), io::Error> {
     info!("saving verification key 💾");
-    let f = File::create(path).unwrap();
+    let f = File::create(path)?;
     let mut writer = BufWriter::new(f);
-    vk.write(&mut writer).unwrap();
-    writer.flush().unwrap();
+    vk.write(&mut writer)?;
+    writer.flush()?;
+    Ok(())
 }
 
 /// Saves [CommitmentScheme] parameters to `path`.
-pub fn save_params<Scheme: CommitmentScheme>(path: &PathBuf, params: &'_ Scheme::ParamsVerifier) {
+pub fn save_params<Scheme: CommitmentScheme>(
+    path: &PathBuf,
+    params: &'_ Scheme::ParamsVerifier,
+) -> Result<(), io::Error> {
     info!("saving parameters 💾");
-    let f = File::create(path).unwrap();
+    let f = File::create(path)?;
     let mut writer = BufWriter::new(f);
-    params.write(&mut writer).unwrap();
-    writer.flush().unwrap();
+    params.write(&mut writer)?;
+    writer.flush()?;
+    Ok(())
 }
