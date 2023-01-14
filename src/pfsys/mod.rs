@@ -83,8 +83,8 @@ pub fn prepare_circuit_and_public_input<F: FieldExt>(
     // as they are configured in that order as Column<Instances>
     let mut public_inputs = vec![];
     if model.visibility.input.is_public() {
-        for (idx, v) in data.input_data.iter().enumerate() {
-            let t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx])?;
+        for v in data.input_data.iter() {
+            let t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, model.scale)?;
             public_inputs.push(t);
         }
     }

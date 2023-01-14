@@ -29,6 +29,11 @@ const TESTS: [&str; 12] = [
     "2l_relu_sigmoid_conv",
 ];
 
+const NEG_TESTS: [(&str, &str); 2] = [
+    ("2l_relu_sigmoid_small", "2l_relu_small"),
+    ("2l_relu_small", "2l_relu_sigmoid_small"),
+];
+
 const TESTS_EVM: [&str; 9] = [
     "1l_mlp",
     "1l_flatten",
@@ -134,9 +139,47 @@ macro_rules! test_func_examples {
     };
 }
 
+macro_rules! test_neg_examples {
+    () => {
+        #[cfg(test)]
+        mod neg_tests {
+            use seq_macro::seq;
+            use crate::NEG_TESTS;
+            use test_case::test_case;
+            use crate::neg_mock as run;
+            seq!(N in 0..=1 {
+            #(#[test_case(NEG_TESTS[N])])*
+            fn neg_examples_(test: (&str, &str)) {
+                run(test.0.to_string(), test.1.to_string());
+            }
+            });
+    }
+    };
+}
+
 test_func!();
 test_func_evm!();
 test_func_examples!();
+test_neg_examples!();
+
+// Mock prove (fast, but does not cover some potential issues)
+fn neg_mock(example_name: String, counter_example: String) {
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "mock",
+            "-D",
+            format!("./examples/onnx/examples/{}/input.json", counter_example).as_str(),
+            "-M",
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            // "-K",
+            // "2",  //causes failure
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(!status.success());
+}
 
 // Mock prove (fast, but does not cover some potential issues)
 fn run_example(example_name: String) {
