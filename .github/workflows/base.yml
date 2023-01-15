@@ -1,0 +1,95 @@
+name: Base
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy    
+    - name: Build
+      run: cargo build --verbose
+  
+  docs:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy    
+    - name: Docs
+      run: cargo doc --verbose
+
+  library-tests:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy 
+    - name: Doc tests
+      run: cargo test --doc --verbose
+    - name: Library tests
+      run: cargo test --lib --verbose
+  
+  mock-proving-tests:
+
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+          submodules: recursive
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy 
+
+    - name: Mock proving tests (public outputs)
+      run: cargo test --release --verbose tests::mock_public_outputs_ -- --test-threads 16
+    - name: Mock proving tests (public inputs)
+      run: cargo test --release --verbose tests::mock_public_inputs_ -- --test-threads 16
+    - name: Mock proving tests (public params)
+      run: cargo test --release --verbose tests::mock_public_params_ -- --test-threads 16
+
+  neg-tests:
+
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+          submodules: recursive
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+
+    - name: Mock proving tests (should fail)
+      run: cargo test neg_tests::neg_examples_      

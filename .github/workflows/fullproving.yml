@@ -1,0 +1,49 @@
+name: FullProving
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  
+  full-proving-tests-ipa:
+
+    runs-on: ubuntu-latest-16-cores
+    steps:
+    - uses: actions/checkout@v3
+      with:
+          submodules: recursive
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+
+    - name: IPA full-prove tests
+      run: cargo test --release --verbose tests::ipa_fullprove_ -- --test-threads 4
+
+  full-proving-tests-kzg:
+
+    runs-on: ubuntu-latest-16-cores
+    steps:
+    - uses: actions/checkout@v3
+      with:
+          submodules: recursive
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+
+    - name: KZG full-prove tests
+      run: cargo test --release --verbose tests::kzg_fullprove_ -- --test-threads 2
+
