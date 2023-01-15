@@ -145,7 +145,7 @@ jobs:
     - name: IPA prove and verify tests
       run: cargo test --release --verbose tests::ipa_prove_and_verify_ -- --test-threads 4
     - name: KZG prove and verify tests
-      run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 4
+      run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 2
 
   examples:
 
