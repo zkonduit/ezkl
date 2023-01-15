@@ -1,4 +1,4 @@
-name: FullProvingEVM
+name: ProveVerify
 
 on:
   push:
