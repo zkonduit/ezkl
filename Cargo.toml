@@ -59,7 +59,7 @@ bench = false
 required-features = ["ezkl"]
 
 [features]
-default = ["ezkl", "evm"]
+default = ["ezkl"]
 dev-graph = ["halo2_proofs/dev-graph", "plotters"]
 tensorflow = ["dep:tensorflow"]
 onnx = ["dep:tract-onnx"]

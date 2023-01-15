@@ -108,7 +108,7 @@ jobs:
     - name: IPA full-prove tests
       run: cargo test --release --verbose tests::ipa_fullprove_ -- --test-threads 4
     - name: KZG full-prove tests
-      run: cargo test --release --verbose tests::kzg_fullprove_ -- --test-threads 2
+      run: cargo test --release --verbose tests::kzg_fullprove_ -- --test-threads 4
 
   full-proving-evm-tests:
 
