@@ -44,11 +44,13 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        config.layout(
-            layouter.namespace(|| "Assign value"),
-            self.input.clone(),
-            self.output.clone(),
-        );
+        config
+            .layout(
+                layouter.namespace(|| "Assign value"),
+                self.input.clone(),
+                self.output.clone(),
+            )
+            .unwrap();
 
         Ok(())
     }

@@ -1,6 +1,4 @@
 use super::*;
-use crate::abort;
-use log::error;
 use std::cmp::min;
 /// A wrapper around Halo2's `Column<Fixed>` or `Column<Advice>`.
 /// The wrapper allows for `VarTensor`'s dimensions to differ from that of the inner (wrapped) columns.
@@ -184,7 +182,7 @@ impl VarTensor {
         &self,
         meta: &mut VirtualCells<'_, F>,
         offset: usize,
-    ) -> Result<Tensor<Expression<F>>, TensorError> {
+    ) -> Result<Tensor<Expression<F>>, halo2_proofs::plonk::Error> {
         match &self {
             VarTensor::Fixed {
                 inner: fixed, dims, ..
@@ -224,87 +222,57 @@ impl VarTensor {
         region: &mut Region<'_, F>,
         offset: usize,
         values: &ValTensor<F>,
-    ) -> Result<Tensor<AssignedCell<F, F>>, TensorError> {
+    ) -> Result<Tensor<AssignedCell<F, F>>, halo2_proofs::plonk::Error> {
         match values {
             ValTensor::Instance {
                 inner: instance, ..
             } => match &self {
                 VarTensor::Advice { inner: v, dims, .. } => {
-                    let t = Tensor::new(None, dims).unwrap();
-                    t.enum_map(|coord, _: usize| {
+                    // this should never ever fail
+                    let t: Tensor<i32> = Tensor::new(None, dims).unwrap();
+                    t.enum_map(|coord, _| {
                         let (x, y) = self.cartesian_coord(offset + coord);
-
-                        match region.assign_advice_from_instance(
+                        region.assign_advice_from_instance(
                             || "pub input anchor",
                             *instance,
                             coord,
                             v[x],
                             y,
-                        ) {
-                            Ok(v) => v,
-                            Err(e) => {
-                                abort!("failed to assign advice from instance {:?}", e);
-                            }
-                        }
+                        )
                     })
                 }
-                _ => {
-                    abort!("should be an advice");
-                }
+                _ => Err(halo2_proofs::plonk::Error::Synthesis),
             },
-            ValTensor::Value { inner: v, dims: _ } => v.enum_map(|coord, k| match &self {
+            ValTensor::Value { inner: v, .. } => v.enum_map(|coord, k| match &self {
                 VarTensor::Fixed { inner: fixed, .. } => {
                     let (x, y) = self.cartesian_coord(offset + coord);
-                    match region.assign_fixed(|| "k", fixed[x], y, || k) {
-                        Ok(a) => a,
-                        Err(e) => {
-                            abort!("failed to assign ValTensor to VarTensor {:?}", e);
-                        }
-                    }
+                    region.assign_fixed(|| "k", fixed[x], y, || k)
                 }
                 VarTensor::Advice { inner: advices, .. } => {
                     let (x, y) = self.cartesian_coord(offset + coord);
-                    match region.assign_advice(|| "k", advices[x], y, || k) {
-                        Ok(a) => a,
-                        Err(e) => {
-                            abort!("failed to assign ValTensor to VarTensor {:?}", e);
-                        }
-                    }
+                    region.assign_advice(|| "k", advices[x], y, || k)
                 }
             }),
-            ValTensor::PrevAssigned { inner: v, dims: _ } => {
-                v.enum_map(|coord, xcell| match &self {
-                    VarTensor::Advice { inner: advices, .. } => {
-                        let (x, y) = self.cartesian_coord(offset + coord);
-                        match xcell.copy_advice(|| "k", region, advices[x], y) {
-                            Ok(a) => a,
-                            Err(e) => {
-                                abort!("failed to copy ValTensor to VarTensor {:?}", e);
-                            }
-                        }
-                    }
-                    _ => {
-                        unimplemented!()
-                    }
-                })
-            }
-            ValTensor::AssignedValue { inner: v, dims: _ } => v.enum_map(|coord, k| match &self {
+            ValTensor::PrevAssigned { inner: v, .. } => v.enum_map(|coord, xcell| match &self {
+                VarTensor::Advice { inner: advices, .. } => {
+                    let (x, y) = self.cartesian_coord(offset + coord);
+                    xcell.copy_advice(|| "k", region, advices[x], y)
+                }
+                _ => Err(halo2_proofs::plonk::Error::Synthesis),
+            }),
+            ValTensor::AssignedValue { inner: v, .. } => v.enum_map(|coord, k| match &self {
                 VarTensor::Fixed { inner: fixed, .. } => {
                     let (x, y) = self.cartesian_coord(offset + coord);
                     match region.assign_fixed(|| "k", fixed[x], y, || k) {
-                        Ok(a) => a.evaluate(),
-                        Err(e) => {
-                            abort!("failed to assign ValTensor to VarTensor {:?}", e);
-                        }
+                        Ok(a) => Ok(a.evaluate()),
+                        Err(e) => Err(e),
                     }
                 }
                 VarTensor::Advice { inner: advices, .. } => {
                     let (x, y) = self.cartesian_coord(offset + coord);
                     match region.assign_advice(|| "k", advices[x], y, || k) {
-                        Ok(a) => a.evaluate(),
-                        Err(e) => {
-                            abort!("failed to assign ValTensor to VarTensor {:?}", e);
-                        }
+                        Ok(a) => Ok(a.evaluate()),
+                        Err(e) => Err(e),
                     }
                 }
             }),

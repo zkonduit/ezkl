@@ -1,9 +1,9 @@
 //use crate::onnx::OnnxModel;
-use crate::abort;
 use clap::{Parser, Subcommand, ValueEnum};
-use log::{error, info};
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::env;
+use std::error::Error;
 use std::io::{stdin, stdout, Write};
 use std::path::PathBuf;
 
@@ -44,14 +44,14 @@ pub struct Cli {
 
 impl Cli {
     /// Export the ezkl configuration as json
-    pub fn as_json(&self) -> String {
+    pub fn as_json(&self) -> Result<String, Box<dyn Error>> {
         let serialized = match serde_json::to_string(&self) {
             Ok(s) => s,
             Err(e) => {
-                abort!("failed to convert Cli to string {:?}", e);
+                return Err(Box::new(e));
             }
         };
-        serialized
+        Ok(serialized)
     }
     /// Parse an ezkl configuration from a json
     pub fn from_json(arg_json: &str) -> Result<Self, serde_json::Error> {

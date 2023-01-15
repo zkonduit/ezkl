@@ -1839,6 +1839,7 @@ dependencies = [
  "tabled",
  "tensorflow",
  "test-case",
+ "thiserror",
  "tract-onnx",
 ]
 

@@ -1,11 +1,13 @@
-use crate::abort;
+use std::error::Error;
+
 use crate::commands::Cli;
 use crate::tensor::TensorType;
 use crate::tensor::{ValTensor, VarTensor};
 use halo2_proofs::{arithmetic::FieldExt, plonk::ConstraintSystem};
 use itertools::Itertools;
-use log::error;
 use serde::Deserialize;
+
+use super::GraphError;
 
 /// Label Enum to track whether model input, model parameters, and model output are public or private
 #[derive(Clone, Debug, Deserialize)]
@@ -53,7 +55,7 @@ impl std::fmt::Display for VarVisibility {
 impl VarVisibility {
     /// Read from cli args whether the model input, model parameters, and model output are Public or Private to the prover.
     /// Place in [VarVisibility] struct.
-    pub fn from_args(args: Cli) -> Self {
+    pub fn from_args(args: Cli) -> Result<Self, Box<dyn Error>> {
         let input_vis = if args.public_inputs {
             Visibility::Public
         } else {
@@ -70,13 +72,13 @@ impl VarVisibility {
             Visibility::Private
         };
         if !output_vis.is_public() & !params_vis.is_public() & !input_vis.is_public() {
-            abort!("at least one set of variables should be public");
+            return Err(Box::new(GraphError::Visibility));
         }
-        Self {
+        Ok(Self {
             input: input_vis,
             params: params_vis,
             output: output_vis,
-        }
+        })
     }
 }
 

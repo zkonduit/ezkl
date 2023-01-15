@@ -1,4 +1,3 @@
-use crate::abort;
 use crate::commands::{Cli, Commands, ProofSystem};
 use crate::fieldutils::i32_to_felt;
 use crate::graph::Model;
@@ -9,9 +8,10 @@ use crate::pfsys::aggregation::{
 };
 use crate::pfsys::{create_keys, load_params, load_vk, Proof};
 use crate::pfsys::{
-    create_proof_model, parse_prover_errors, prepare_circuit_and_public_input, prepare_data,
-    save_params, save_vk, verify_proof_model,
+    create_proof_model, prepare_circuit_and_public_input, prepare_data, save_params, save_vk,
+    verify_proof_model,
 };
+use halo2_proofs::dev::VerifyFailure;
 #[cfg(feature = "evm")]
 use halo2_proofs::poly::commitment::Params;
 use halo2_proofs::poly::ipa::commitment::IPACommitmentScheme;
@@ -34,46 +34,43 @@ use halo2curves::bn256::G1Affine;
 use halo2curves::bn256::{Bn256, Fr};
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp;
-use log::{error, info, trace};
+use log::{info, trace};
 #[cfg(feature = "evm")]
 use plonk_verifier::system::halo2::transcript::evm::EvmTranscript;
+use std::error::Error;
 #[cfg(feature = "evm")]
 use std::time::Instant;
 use tabled::Table;
+use thiserror::Error;
+/// A wrapper for tensor related errors.
+#[derive(Debug, Error)]
+pub enum ExecutionError {
+    /// Shape mismatch in a operation
+    #[error("verification failed")]
+    VerifyError(Vec<VerifyFailure>),
+}
 
 /// Run an ezkl command with given args
-pub fn run(args: Cli) {
+pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
     match args.command {
         Commands::Table { model: _ } => {
-            let om = Model::from_ezkl_conf(args);
+            let om = Model::from_ezkl_conf(args)?;
             println!("{}", Table::new(om.nodes.flatten()));
         }
         Commands::Mock { ref data, model: _ } => {
-            let data = prepare_data(data.to_string());
-            let (circuit, public_inputs) = prepare_circuit_and_public_input(&data, &args);
+            let data = prepare_data(data.to_string())?;
+            let (circuit, public_inputs) = prepare_circuit_and_public_input(&data, &args)?;
             info!("Mock proof");
             let pi: Vec<Vec<Fp>> = public_inputs
                 .into_iter()
                 .map(|i| i.into_iter().map(i32_to_felt::<Fp>).collect())
                 .collect();
 
-            let prover = match MockProver::run(args.logrows, &circuit, pi) {
-                Ok(p) => p,
-                Err(e) => {
-                    abort!("mock prover failed to run {:?}", e);
-                }
-            };
-            match prover.verify() {
-                Ok(_) => {
-                    info!("verify succeeded")
-                }
-                Err(v) => {
-                    for e in v.iter() {
-                        parse_prover_errors(e)
-                    }
-                    panic!()
-                }
-            }
+            let prover =
+                MockProver::run(args.logrows, &circuit, pi).map_err(Box::<dyn Error>::from)?;
+            prover
+                .verify()
+                .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
         }
 
         Commands::Fullprove {
@@ -83,16 +80,17 @@ pub fn run(args: Cli) {
         } => {
             // A direct proof
 
-            let data = prepare_data(data.to_string());
+            let data = prepare_data(data.to_string())?;
 
             match pfsys {
                 ProofSystem::IPA => {
                     let (circuit, public_inputs) =
-                        prepare_circuit_and_public_input::<Fp>(&data, &args);
+                        prepare_circuit_and_public_input::<Fp>(&data, &args)?;
                     info!("full proof with {}", pfsys);
 
                     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
-                    let pk = create_keys::<IPACommitmentScheme<_>, Fp>(&circuit, &params);
+                    let pk = create_keys::<IPACommitmentScheme<_>, Fp>(&circuit, &params)
+                        .map_err(Box::<dyn Error>::from)?;
                     let strategy = IPASingleStrategy::new(&params);
                     trace!("params computed");
 
@@ -102,17 +100,19 @@ pub fn run(args: Cli) {
                         ProverIPA<_>,
                     >(
                         &circuit, &public_inputs, &params, &pk
-                    );
+                    )
+                    .map_err(Box::<dyn Error>::from)?;
 
-                    assert!(verify_proof_model(proof, &params, pk.get_vk(), strategy));
+                    verify_proof_model(proof, &params, pk.get_vk(), strategy)?;
                 }
                 #[cfg(not(feature = "evm"))]
                 ProofSystem::KZG => {
                     // A direct proof
                     let (circuit, public_inputs) =
-                        prepare_circuit_and_public_input::<Fr>(&data, &args);
+                        prepare_circuit_and_public_input::<Fr>(&data, &args)?;
                     let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
-                    let pk = create_keys::<KZGCommitmentScheme<_>, Fr>(&circuit, &params);
+                    let pk = create_keys::<KZGCommitmentScheme<_>, Fr>(&circuit, &params)
+                        .map_err(Box::<dyn Error>::from)?;
                     let strategy = KZGSingleStrategy::new(&params);
                     trace!("params computed");
 
@@ -122,14 +122,15 @@ pub fn run(args: Cli) {
                         ProverGWC<_>,
                     >(
                         &circuit, &public_inputs, &params, &pk
-                    );
+                    )
+                    .map_err(Box::<dyn Error>::from)?;
 
-                    assert!(verify_proof_model::<_, VerifierGWC<'_, Bn256>, _, _>(
+                    verify_proof_model::<_, VerifierGWC<'_, Bn256>, _, _>(
                         proof,
                         &params,
                         pk.get_vk(),
-                        strategy
-                    ));
+                        strategy,
+                    )?;
                 }
                 #[cfg(feature = "evm")]
                 ProofSystem::KZG => {
@@ -144,16 +145,16 @@ pub fn run(args: Cli) {
                         params
                     };
                     let now = Instant::now();
-                    let snarks = [(); 1].map(|_| gen_application_snark(&params_app, &data, &args));
+                    let snarks = [gen_application_snark(&params_app, &data, &args)?];
                     info!("Application proof took {}", now.elapsed().as_secs());
-                    let agg_circuit = AggregationCircuit::new(&params, snarks);
-                    let pk = gen_pk(&params, &agg_circuit);
+                    let agg_circuit = AggregationCircuit::new(&params, snarks)?;
+                    let pk = gen_pk(&params, &agg_circuit)?;
                     let deployment_code = gen_aggregation_evm_verifier(
                         &params,
                         pk.get_vk(),
                         AggregationCircuit::num_instance(),
                         AggregationCircuit::accumulator_indices(),
-                    );
+                    )?;
                     let now = Instant::now();
                     let proof = gen_kzg_proof::<
                         _,
@@ -162,10 +163,10 @@ pub fn run(args: Cli) {
                         EvmTranscript<G1Affine, _, _, _>,
                     >(
                         &params, &pk, agg_circuit.clone(), agg_circuit.instances()
-                    );
+                    )?;
                     info!("Aggregation proof took {}", now.elapsed().as_secs());
                     let now = Instant::now();
-                    evm_verify(deployment_code, agg_circuit.instances(), proof);
+                    evm_verify(deployment_code, agg_circuit.instances(), proof)?;
                     info!("verify took {}", now.elapsed().as_secs());
                 }
             }
@@ -178,33 +179,37 @@ pub fn run(args: Cli) {
             ref params_path,
             pfsys,
         } => {
-            let data = prepare_data(data.to_string());
+            let data = prepare_data(data.to_string())?;
 
             match pfsys {
                 ProofSystem::IPA => {
                     info!("proof with {}", pfsys);
                     let (circuit, public_inputs) =
-                        prepare_circuit_and_public_input::<Fp>(&data, &args);
+                        prepare_circuit_and_public_input::<Fp>(&data, &args)?;
                     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(args.logrows);
-                    let pk = create_keys::<IPACommitmentScheme<_>, Fp>(&circuit, &params);
+                    let pk = create_keys::<IPACommitmentScheme<_>, Fp>(&circuit, &params)
+                        .map_err(Box::<dyn Error>::from)?;
                     trace!("params computed");
 
-                    let (proof, _) = create_proof_model::<IPACommitmentScheme<_>, Fp, ProverIPA<_>>(
-                        &circuit,
-                        &public_inputs,
-                        &params,
-                        &pk,
-                    );
+                    let (proof, _) =
+                        create_proof_model::<IPACommitmentScheme<_>, Fp, ProverIPA<_>>(
+                            &circuit,
+                            &public_inputs,
+                            &params,
+                            &pk,
+                        )
+                        .map_err(Box::<dyn Error>::from)?;
 
-                    proof.save(proof_path);
-                    save_params::<IPACommitmentScheme<_>>(params_path, &params);
-                    save_vk::<IPACommitmentScheme<_>>(vk_path, pk.get_vk());
+                    proof.save(proof_path)?;
+                    save_params::<IPACommitmentScheme<_>>(params_path, &params)?;
+                    save_vk::<IPACommitmentScheme<_>>(vk_path, pk.get_vk())?;
                 }
                 ProofSystem::KZG => {
                     info!("proof with {}", pfsys);
-                    let (circuit, public_inputs) = prepare_circuit_and_public_input(&data, &args);
+                    let (circuit, public_inputs) = prepare_circuit_and_public_input(&data, &args)?;
                     let params: ParamsKZG<Bn256> = ParamsKZG::new(args.logrows);
-                    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr>(&circuit, &params);
+                    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr>(&circuit, &params)
+                        .map_err(Box::<dyn Error>::from)?;
                     trace!("params computed");
 
                     let (proof, _input_dims) = create_proof_model::<
@@ -213,11 +218,12 @@ pub fn run(args: Cli) {
                         ProverGWC<'_, Bn256>,
                     >(
                         &circuit, &public_inputs, &params, &pk
-                    );
+                    )
+                    .map_err(Box::<dyn Error>::from)?;
 
-                    proof.save(proof_path);
-                    save_params::<KZGCommitmentScheme<Bn256>>(params_path, &params);
-                    save_vk::<KZGCommitmentScheme<Bn256>>(vk_path, pk.get_vk());
+                    proof.save(proof_path)?;
+                    save_params::<KZGCommitmentScheme<Bn256>>(params_path, &params)?;
+                    save_vk::<KZGCommitmentScheme<Bn256>>(vk_path, pk.get_vk())?;
                 }
             };
         }
@@ -228,29 +234,31 @@ pub fn run(args: Cli) {
             params_path,
             pfsys,
         } => {
-            let proof = Proof::load(&proof_path);
+            let proof = Proof::load(&proof_path)?;
             match pfsys {
                 ProofSystem::IPA => {
                     let params: ParamsIPA<vesta::Affine> =
-                        load_params::<IPACommitmentScheme<_>>(params_path);
+                        load_params::<IPACommitmentScheme<_>>(params_path)?;
                     let strategy = IPASingleStrategy::new(&params);
-                    let vk = load_vk::<IPACommitmentScheme<_>, Fp>(vk_path, &params);
-                    let result = verify_proof_model(proof, &params, &vk, strategy);
+                    let vk = load_vk::<IPACommitmentScheme<_>, Fp>(vk_path, &params)?;
+                    let result = verify_proof_model(proof, &params, &vk, strategy).is_ok();
                     info!("verified: {}", result);
                     assert!(result);
                 }
                 ProofSystem::KZG => {
                     let params: ParamsKZG<Bn256> =
-                        load_params::<KZGCommitmentScheme<Bn256>>(params_path);
+                        load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
                     let strategy = KZGSingleStrategy::new(&params);
-                    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr>(vk_path, &params);
+                    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr>(vk_path, &params)?;
                     let result = verify_proof_model::<_, VerifierGWC<'_, Bn256>, _, _>(
                         proof, &params, &vk, strategy,
-                    );
+                    )
+                    .is_ok();
                     info!("verified: {}", result);
                     assert!(result);
                 }
             }
         }
     }
+    Ok(())
 }

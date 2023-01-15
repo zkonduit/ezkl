@@ -239,28 +239,30 @@ where
         mut config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let x = config.l0.layout(
-            &mut layouter,
-            &[
-                self.input.clone(),
-                self.l0_params[0].clone(),
-                self.l0_params[1].clone(),
-            ],
-        );
-        let mut x = config.l1.layout(&mut layouter, &x);
+        let x = config
+            .l0
+            .layout(
+                &mut layouter,
+                &[
+                    self.input.clone(),
+                    self.l0_params[0].clone(),
+                    self.l0_params[1].clone(),
+                ],
+            )
+            .unwrap();
+        let mut x = config.l1.layout(&mut layouter, &x).unwrap();
         x.flatten();
-        let l2out = config.l2.layout(
-            &mut layouter,
-            &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
-        );
+        let l2out = config
+            .l2
+            .layout(
+                &mut layouter,
+                &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
+            )
+            .unwrap();
 
         match l2out {
             ValTensor::PrevAssigned { inner: v, dims: _ } => v
-                .enum_map(|i, x| {
-                    layouter
-                        .constrain_instance(x.cell(), config.public_output, i)
-                        .unwrap()
-                })
+                .enum_map(|i, x| layouter.constrain_instance(x.cell(), config.public_output, i))
                 .unwrap(),
             _ => panic!("Should be assigned"),
         };
@@ -310,10 +312,11 @@ pub fn runconv() {
 
     let mut input: ValTensor<F> = train_data
         .get_slice(&[0..1, 0..28, 0..28])
+        .unwrap()
         .map(Value::known)
         .into();
 
-    input.reshape(&[1, 28, 28]);
+    input.reshape(&[1, 28, 28]).unwrap();
 
     let myparams = params::Params::new();
     let mut l0_kernels: ValTensor<F> = Tensor::<Value<F>>::from(
@@ -334,7 +337,9 @@ pub fn runconv() {
     )
     .into();
 
-    l0_kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
+    l0_kernels
+        .reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH])
+        .unwrap();
 
     let l0_bias: ValTensor<F> = Tensor::<Value<F>>::from(
         (0..OUT_CHANNELS).map(|_| Value::known(fieldutils::i32_to_felt(0))),
@@ -360,7 +365,7 @@ pub fn runconv() {
         }))
         .into();
 
-    l2_weights.reshape(&[CLASSES, LEN]);
+    l2_weights.reshape(&[CLASSES, LEN]).unwrap();
 
     let circuit = MyCircuit::<
         F,

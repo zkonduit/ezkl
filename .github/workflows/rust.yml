@@ -6,11 +6,9 @@ on:
   pull_request:
     branches: [ "main" ]
 
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-
 
 env:
   CARGO_TERM_COLOR: always
@@ -60,7 +58,7 @@ jobs:
 
   library-tests:
 
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
@@ -108,9 +106,9 @@ jobs:
           components: rustfmt, clippy
 
     - name: IPA full-prove tests
-      run: cargo test --release --verbose tests::ipa_fullprove_ -- --test-threads 1
+      run: cargo test --release --verbose tests::ipa_fullprove_ -- --test-threads 4
     - name: KZG full-prove tests
-      run: cargo test --release --verbose tests::kzg_fullprove_ -- --test-threads 1
+      run: cargo test --release --verbose tests::kzg_fullprove_ -- --test-threads 4
 
   full-proving-evm-tests:
 
@@ -129,7 +127,7 @@ jobs:
     - name: Install solc
       run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
     - name: KZG full-prove tests (EVM)
-      run: cargo test --release --verbose tests_evm::kzg_evm_fullprove_ -- --test-threads 1
+      run: cargo test --release --verbose tests_evm::kzg_evm_fullprove_ -- --test-threads 3
 
   prove-and-verify-tests:
 
@@ -145,9 +143,9 @@ jobs:
           components: rustfmt, clippy
 
     - name: IPA prove and verify tests
-      run: cargo test --release --verbose tests::ipa_prove_and_verify_ -- --test-threads 1
+      run: cargo test --release --verbose tests::ipa_prove_and_verify_ -- --test-threads 4
     - name: KZG prove and verify tests
-      run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 1
+      run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 4
 
   examples:
 

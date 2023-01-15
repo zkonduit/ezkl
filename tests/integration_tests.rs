@@ -3,7 +3,8 @@ use std::env::var;
 use std::process::Command;
 
 lazy_static! {
-    static ref CARGO_TARGET_DIR: String = var("CARGO_TARGET_DIR").unwrap_or("./target".to_string());
+    static ref CARGO_TARGET_DIR: String =
+        var("CARGO_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
 }
 
 #[cfg(test)]
@@ -183,12 +184,7 @@ fn neg_mock(example_name: String, counter_example: String) {
 // Mock prove (fast, but does not cover some potential issues)
 fn run_example(example_name: String) {
     let status = Command::new("cargo")
-        .args([
-            "run",
-            "--release",
-            "--example",
-            format!("{}", example_name).as_str(),
-        ])
+        .args(["run", "--release", "--example", example_name.as_str()])
         .status()
         .expect("failed to execute process");
     assert!(status.success());

@@ -1,13 +1,13 @@
 use super::*;
 use crate::tensor::ops::activations::*;
-use crate::{abort, fieldutils::felt_to_i32, fieldutils::i32_to_felt};
+use crate::{fieldutils::felt_to_i32, fieldutils::i32_to_felt};
 use halo2_proofs::{
     arithmetic::{Field, FieldExt},
     circuit::{Layouter, Value},
     plonk::{ConstraintSystem, Expression, Selector, TableColumn},
     poly::Rotation,
 };
-use log::error;
+use std::error::Error;
 use std::fmt;
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
@@ -98,8 +98,11 @@ impl<F: FieldExt> Table<F> {
         }
     }
     /// Assigns values to the constraints generated when calling `configure`.
-    pub fn layout(&mut self, layouter: &mut impl Layouter<F>) {
-        assert!(!self.is_assigned);
+    pub fn layout(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), Box<dyn Error>> {
+        if self.is_assigned {
+            return Err(Box::new(CircuitError::TableAlreadyAssigned));
+        }
+
         let base = 2i32;
         let smallest = -base.pow(self.bits as u32 - 1);
         let largest = base.pow(self.bits as u32 - 1);
@@ -108,36 +111,35 @@ impl<F: FieldExt> Table<F> {
         for nl in self.nonlinearities.clone() {
             evals = nl.f(inputs.clone());
         }
+        self.is_assigned = true;
         layouter
             .assign_table(
                 || "nl table",
                 |mut table| {
-                    inputs
-                        .enum_map(|row_offset, input| {
-                            table
-                                .assign_cell(
-                                    || format!("nl_i_col row {}", row_offset),
-                                    self.table_input,
-                                    row_offset,
-                                    || Value::known(i32_to_felt::<F>(input)),
-                                )
-                                .expect("failed to assign table input cell");
+                    let _ = inputs
+                        .iter()
+                        .enumerate()
+                        .map(|(row_offset, input)| {
+                            table.assign_cell(
+                                || format!("nl_i_col row {}", row_offset),
+                                self.table_input,
+                                row_offset,
+                                || Value::known(i32_to_felt::<F>(*input)),
+                            )?;
 
-                            table
-                                .assign_cell(
-                                    || format!("nl_o_col row {}", row_offset),
-                                    self.table_output,
-                                    row_offset,
-                                    || Value::known(i32_to_felt::<F>(evals[row_offset])),
-                                )
-                                .expect("failed to assign table output cell");
+                            table.assign_cell(
+                                || format!("nl_o_col row {}", row_offset),
+                                self.table_output,
+                                row_offset,
+                                || Value::known(i32_to_felt::<F>(evals[row_offset])),
+                            )?;
+                            Ok(())
                         })
-                        .expect("failed to assign table");
+                        .collect::<Result<Vec<()>, halo2_proofs::plonk::Error>>()?;
                     Ok(())
                 },
             )
-            .expect("failed to layout table");
-        self.is_assigned = true;
+            .map_err(Box::<dyn Error>::from)
     }
 }
 
@@ -163,24 +165,24 @@ impl<F: FieldExt + TensorType> Config<F> {
         output: &VarTensor,
         bits: usize,
         nonlinearitities: &[Op],
-    ) -> [Self; NUM] {
+    ) -> Result<[Self; NUM], Box<dyn Error>> {
         let mut table: Option<Rc<RefCell<Table<F>>>> = None;
-        let configs = (0..NUM)
-            .map(|_| {
-                let l = match &table {
-                    None => Self::configure(cs, input, output, bits, &nonlinearitities),
-                    Some(t) => Self::configure_with_table(cs, input, output, t.clone()),
-                };
-                table = Some(l.table.clone());
-                l
-            })
-            .collect::<Vec<Config<F>>>()
-            .try_into();
-
-        match configs {
-            Ok(x) => x,
-            Err(_) => panic!("failed to initialize layers"),
+        let mut configs: Vec<Config<F>> = vec![];
+        for _ in 0..NUM {
+            let l = match &table {
+                None => Self::configure(cs, input, output, bits, nonlinearitities),
+                Some(t) => Self::configure_with_table(cs, input, output, t.clone()),
+            };
+            table = Some(l.table.clone());
+            configs.push(l);
         }
+        let res: [Self; NUM] = match configs.try_into() {
+            Ok(a) => a,
+            Err(_) => {
+                return Err(Box::new(CircuitError::TableAlreadyAssigned));
+            }
+        };
+        Ok(res)
     }
 
     /// Configures and creates an elementwise operation within a circuit using a supplied lookup table.
@@ -260,16 +262,20 @@ impl<F: FieldExt + TensorType> Config<F> {
         let table = Rc::new(RefCell::new(Table::<F>::configure(
             cs,
             bits,
-            &nonlinearitities,
+            nonlinearitities,
         )));
         Self::configure_with_table(cs, input, output, table)
     }
 
     /// Assigns values to the variables created when calling `configure`.
     /// Values are supplied as a 1-element array of `[input]` VarTensors.
-    pub fn layout(&self, layouter: &mut impl Layouter<F>, values: &ValTensor<F>) -> ValTensor<F> {
+    pub fn layout(
+        &self,
+        layouter: &mut impl Layouter<F>,
+        values: &ValTensor<F>,
+    ) -> Result<ValTensor<F>, Box<dyn Error>> {
         if !self.table.borrow().is_assigned {
-            self.table.borrow_mut().layout(layouter)
+            self.table.borrow_mut().layout(layouter)?
         }
         let mut t = ValTensor::from(
             match layouter.assign_region(
@@ -277,7 +283,7 @@ impl<F: FieldExt + TensorType> Config<F> {
                 |mut region| {
                     self.qlookup.enable(&mut region, 0)?;
 
-                    let w = self.input.assign(&mut region, 0, &values).unwrap();
+                    let w = self.input.assign(&mut region, 0, values)?;
 
                     let mut res: Vec<i32> = vec![];
                     let _ = Tensor::from(w.iter().map(|acaf| (*acaf).value_field()).map(|vaf| {
@@ -298,20 +304,17 @@ impl<F: FieldExt + TensorType> Config<F> {
                         }
                     };
 
-                    Ok(self
-                        .output
-                        .assign(&mut region, 0, &ValTensor::from(output))
-                        .unwrap())
+                    self.output.assign(&mut region, 0, &ValTensor::from(output))
                 },
             ) {
                 Ok(a) => a,
                 Err(e) => {
-                    abort!("failed to assign elt-wise region {:?}", e);
+                    return Err(Box::new(e));
                 }
             },
         );
-        t.reshape(values.dims());
-        t
+        t.reshape(values.dims())?;
+        Ok(t)
     }
 }
 

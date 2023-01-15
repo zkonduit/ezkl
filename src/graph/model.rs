@@ -1,5 +1,6 @@
 use super::node::*;
 use super::vars::*;
+use super::GraphError;
 use crate::circuit::lookup::Config as LookupConfig;
 use crate::circuit::lookup::Op as LookupOp;
 use crate::circuit::lookup::Table as LookupTable;
@@ -14,8 +15,8 @@ use crate::circuit::range::*;
 use crate::commands::{Cli, Commands};
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
-use anyhow::{Context, Result};
 //use clap::Parser;
+use anyhow::{Context, Error as AnyError};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
@@ -26,13 +27,13 @@ use log::{debug, info, trace};
 use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::{BTreeMap, HashSet};
+use std::error::Error;
 use std::path::Path;
 use std::rc::Rc;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node as OnnxNode, OutletId};
 use tract_onnx::tract_hir::internal::InferenceOp;
-
 /// Mode we're using the model in.
 #[derive(Clone, Debug)]
 pub enum Mode {
@@ -96,6 +97,7 @@ impl Model {
     /// * `tolerance` - How much each quantized output is allowed to be off by
     /// * `mode` - The [Mode] we're using the model in.
     /// * `visibility` - Which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         path: impl AsRef<Path>,
         scale: i32,
@@ -105,26 +107,22 @@ impl Model {
         tolerance: usize,
         mode: Mode,
         visibility: VarVisibility,
-    ) -> Self {
-        let model = tract_onnx::onnx().model_for_path(path).unwrap();
+    ) -> Result<Self, Box<dyn Error>> {
+        let model = tract_onnx::onnx()
+            .model_for_path(path)
+            .map_err(|_| GraphError::ModelLoad)?;
         info!("visibility: {}", visibility);
 
         let mut nodes = BTreeMap::<usize, Node>::new();
-        let _ = model
-            .nodes()
-            .iter()
-            .enumerate()
-            .map(|(i, n)| {
-                let n = Node::new(n.clone(), &mut nodes, scale, i);
-                nodes.insert(i, n);
-            })
-            .collect_vec();
+        for (i, n) in model.nodes.iter().enumerate() {
+            let n = Node::new(n.clone(), &mut nodes, scale, i)?;
+            nodes.insert(i, n);
+        }
         let om = Model {
             model: model.clone(),
             scale,
             tolerance,
-            nodes: Self::assign_execution_buckets(nodes)
-                .expect("failed to assign execution buckets"),
+            nodes: Self::assign_execution_buckets(nodes)?,
             bits,
             logrows,
             max_rotations,
@@ -134,12 +132,12 @@ impl Model {
 
         debug!("{}", Table::new(om.nodes.flatten()).to_string());
 
-        om
+        Ok(om)
     }
 
     /// Creates a `Model` from parsed CLI arguments
-    pub fn from_ezkl_conf(args: Cli) -> Self {
-        let visibility = VarVisibility::from_args(args.clone());
+    pub fn from_ezkl_conf(args: Cli) -> Result<Self, Box<dyn Error>> {
+        let visibility = VarVisibility::from_args(args.clone())?;
         match args.command {
             Commands::Table { model } => Model::new(
                 model,
@@ -195,7 +193,7 @@ impl Model {
     }
 
     /// Creates a `Model` based on CLI arguments
-    pub fn from_arg() -> Self {
+    pub fn from_arg() -> Result<Self, Box<dyn Error>> {
         let args = Cli::create();
         Self::from_ezkl_conf(args)
     }
@@ -211,7 +209,7 @@ impl Model {
         &self,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-    ) -> Result<ModelConfig<F>> {
+    ) -> Result<ModelConfig<F>, Box<dyn Error>> {
         info!("configuring model");
         let mut results = BTreeMap::new();
         let mut tables = BTreeMap::new();
@@ -224,7 +222,7 @@ impl Model {
                 .collect();
             if !non_op_nodes.is_empty() {
                 for (i, node) in non_op_nodes {
-                    let config = self.conf_non_op_node(&node);
+                    let config = self.conf_non_op_node(node)?;
                     results.insert(*i, config);
                 }
             }
@@ -236,7 +234,7 @@ impl Model {
 
             if !lookup_ops.is_empty() {
                 for (i, node) in lookup_ops {
-                    let config = self.conf_table(node, meta, vars, &mut tables);
+                    let config = self.conf_table(node, meta, vars, &mut tables)?;
                     results.insert(*i, config);
                 }
             }
@@ -248,7 +246,7 @@ impl Model {
                 .collect();
             // preserves ordering
             if !poly_ops.is_empty() {
-                let config = self.conf_poly_ops(&poly_ops, meta, vars);
+                let config = self.conf_poly_ops(&poly_ops, meta, vars)?;
                 results.insert(**poly_ops.keys().max().unwrap(), config);
 
                 let mut display: String = "Poly nodes: ".to_string();
@@ -301,24 +299,25 @@ impl Model {
         configs
     }
     /// Configures non op related nodes (eg. representing an input or const value)
-    pub fn conf_non_op_node<F: FieldExt + TensorType>(&self, node: &Node) -> NodeConfig<F> {
+    pub fn conf_non_op_node<F: FieldExt + TensorType>(
+        &self,
+        node: &Node,
+    ) -> Result<NodeConfig<F>, Box<dyn Error>> {
         match &node.opkind {
             OpKind::Const => {
                 // Typically parameters for one or more layers.
                 // Currently this is handled in the consuming node(s), but will be moved here.
-                NodeConfig::Const
+                Ok(NodeConfig::Const)
             }
             OpKind::Input => {
                 // This is the input to the model (e.g. the image).
                 // Currently this is handled in the consuming node(s), but will be moved here.
-                NodeConfig::Input
+                Ok(NodeConfig::Input)
             }
             OpKind::Unknown(_c) => {
                 unimplemented!()
             }
-            c => {
-                panic!("wrong method called for {}", c)
-            }
+            c => Err(Box::new(GraphError::WrongMethod(node.idx, c.clone()))),
         }
     }
 
@@ -335,25 +334,27 @@ impl Model {
         nodes: &BTreeMap<&usize, &Node>,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-    ) -> NodeConfig<F> {
-        let input_nodes: BTreeMap<(&usize, &PolyOp), Vec<Node>> = nodes
-            .iter()
-            .map(|(i, e)| {
-                (
-                    (
-                        *i,
-                        match &e.opkind {
-                            OpKind::Poly(f) => f,
-                            _ => panic!(),
-                        },
-                    ),
-                    e.inputs
-                        .iter()
-                        .map(|i| self.nodes.filter(i.node))
-                        .collect_vec(),
-                )
-            })
-            .collect();
+    ) -> Result<NodeConfig<F>, Box<dyn Error>> {
+        let mut input_nodes: BTreeMap<(&usize, &PolyOp), Vec<Node>> = BTreeMap::new();
+
+        for (i, e) in nodes.iter() {
+            let key = (
+                *i,
+                match &e.opkind {
+                    OpKind::Poly(f) => f,
+                    _ => {
+                        return Err(Box::new(GraphError::WrongMethod(e.idx, e.opkind.clone())));
+                    }
+                },
+            );
+            let value = e
+                .inputs
+                .iter()
+                .map(|i| self.nodes.filter(i.node))
+                .collect_vec();
+            input_nodes.insert(key, value);
+        }
+
         // This works because retain only keeps items for which the predicate returns true, and
         // insert only returns true if the item was not previously present in the set.
         // Since the vector is traversed in order, we end up keeping just the first occurrence of each item.
@@ -412,7 +413,7 @@ impl Model {
 
         let inputs = inputs_to_layer.iter();
 
-        NodeConfig::Poly(
+        let config = NodeConfig::Poly(
             PolyConfig::configure(
                 meta,
                 &inputs.clone().map(|x| x.1.clone()).collect_vec(),
@@ -420,7 +421,8 @@ impl Model {
                 &fused_nodes,
             ),
             inputs.map(|x| x.0).collect_vec(),
-        )
+        );
+        Ok(config)
     }
 
     /// Configures a lookup table based operation. These correspond to operations that are represented in
@@ -436,7 +438,7 @@ impl Model {
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
         tables: &mut BTreeMap<Vec<LookupOp>, Rc<RefCell<LookupTable<F>>>>,
-    ) -> NodeConfig<F> {
+    ) -> Result<NodeConfig<F>, Box<dyn Error>> {
         let input_len = node.in_dims[0].iter().product();
         let input = &vars.advices[0].reshape(&[input_len]);
         let output = &vars.advices[1].reshape(&[input_len]);
@@ -444,20 +446,24 @@ impl Model {
 
         let op = match &node.opkind {
             OpKind::Lookup(l) => l,
-            c => panic!("wrong method called for {}", c),
+            c => {
+                return Err(Box::new(GraphError::WrongMethod(node.idx, c.clone())));
+            }
         };
 
-        if tables.contains_key(&vec![op.clone()]) {
-            let table = tables.get(&vec![op.clone()]).unwrap();
-            let conf: LookupConfig<F> =
-                LookupConfig::configure_with_table(meta, input, output, table.clone());
-            NodeConfig::Lookup(conf, node_inputs)
-        } else {
-            let conf: LookupConfig<F> =
-                LookupConfig::configure(meta, input, output, self.bits, &[op.clone()]);
-            tables.insert(vec![op.clone()], conf.table.clone());
-            NodeConfig::Lookup(conf, node_inputs)
-        }
+        let config =
+            if let std::collections::btree_map::Entry::Vacant(e) = tables.entry(vec![op.clone()]) {
+                let conf: LookupConfig<F> =
+                    LookupConfig::configure(meta, input, output, self.bits, &[op.clone()]);
+                e.insert(conf.table.clone());
+                NodeConfig::Lookup(conf, node_inputs)
+            } else {
+                let table = tables.get(&vec![op.clone()]).unwrap();
+                let conf: LookupConfig<F> =
+                    LookupConfig::configure_with_table(meta, input, output, table.clone());
+                NodeConfig::Lookup(conf, node_inputs)
+            };
+        Ok(config)
     }
 
     /// Assigns values to the regions created when calling `configure`.
@@ -472,7 +478,7 @@ impl Model {
         layouter: &mut impl Layouter<F>,
         inputs: &[ValTensor<F>],
         vars: &ModelVars<F>,
-    ) -> Result<()> {
+    ) -> Result<(), Box<dyn Error>> {
         info!("model layout");
         let mut results = BTreeMap::<usize, ValTensor<F>>::new();
         for i in inputs.iter().enumerate() {
@@ -533,7 +539,7 @@ impl Model {
         layouter: &mut impl Layouter<F>,
         inputs: &mut BTreeMap<usize, ValTensor<F>>,
         config: &NodeConfig<F>,
-    ) -> Result<Option<ValTensor<F>>> {
+    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         // The node kind and the config should be the same.
         let res = match config.clone() {
             NodeConfig::Poly(mut ac, idx) => {
@@ -555,17 +561,19 @@ impl Model {
                     })
                     .collect_vec();
 
-                Some(ac.layout(layouter, &values))
+                Some(ac.layout(layouter, &values)?)
             }
             NodeConfig::Lookup(rc, idx) => {
-                assert_eq!(idx.len(), 1);
+                if idx.len() != 1 {
+                    return Err(Box::new(GraphError::InvalidLookupInputs));
+                }
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
-                Some(rc.layout(layouter, inputs.get(&idx[0]).unwrap()))
+                Some(rc.layout(layouter, inputs.get(&idx[0]).unwrap())?)
             }
             NodeConfig::Input => None,
             NodeConfig::Const => None,
-            c => {
-                panic!("Not a configurable op {:?}", c)
+            _ => {
+                return Err(Box::new(GraphError::UnsupportedOp));
             }
         };
         Ok(res)
@@ -580,28 +588,37 @@ impl Model {
     /// # Arguments
     ///
     /// * `nodes` - `BTreeMap` of (node index, [Node]) pairs.
-    pub fn assign_execution_buckets(mut nodes: BTreeMap<usize, Node>) -> Result<NodeGraph> {
+    pub fn assign_execution_buckets(
+        mut nodes: BTreeMap<usize, Node>,
+    ) -> Result<NodeGraph, GraphError> {
         info!("assigning configuration buckets to operations");
 
         let mut bucketed_nodes = NodeGraph(BTreeMap::<Option<usize>, BTreeMap<usize, Node>>::new());
 
         for (_, node) in nodes.iter_mut() {
-            let prev_bucket: Option<usize> = node
+            let mut prev_buckets = vec![];
+            for n in node
                 .inputs
                 .iter()
                 .filter(|n| !bucketed_nodes.filter(n.node).opkind.is_const())
-                .map(|n| match bucketed_nodes.filter(n.node).bucket {
-                    Some(b) => b,
-                    None => panic!(),
-                })
-                .max();
+            {
+                match bucketed_nodes.filter(n.node).bucket {
+                    Some(b) => prev_buckets.push(b),
+                    None => {
+                        return Err(GraphError::MissingNode(n.node));
+                    }
+                }
+            }
+            let prev_bucket: Option<&usize> = prev_buckets.iter().max();
 
             match &node.opkind {
                 OpKind::Input => node.bucket = Some(0),
                 OpKind::Const => node.bucket = None,
-                OpKind::Poly(_) => node.bucket = Some(prev_bucket.unwrap()),
+                OpKind::Poly(_) => node.bucket = Some(*prev_bucket.unwrap()),
                 OpKind::Lookup(_) => node.bucket = Some(prev_bucket.unwrap() + 1),
-                _ => unimplemented!(),
+                op => {
+                    return Err(GraphError::WrongMethod(node.idx, op.clone()));
+                }
             }
             bucketed_nodes.insert(node.bucket, node.idx, node.clone());
         }
@@ -613,7 +630,7 @@ impl Model {
     /// Note that this order is not stable over multiple reloads of the model.  For example, it will freely
     /// interchange the order of evaluation of fixed parameters.   For example weight could have id 1 on one load,
     /// and bias id 2, and vice versa on the next load of the same file. The ids are also not stable.
-    pub fn eval_order(&self) -> Result<Vec<usize>> {
+    pub fn eval_order(&self) -> Result<Vec<usize>, AnyError> {
         self.model.eval_order()
     }
 
@@ -623,12 +640,12 @@ impl Model {
     }
 
     /// Returns the ID of the computational graph's inputs
-    pub fn input_outlets(&self) -> Result<Vec<OutletId>> {
+    pub fn input_outlets(&self) -> Result<Vec<OutletId>, Box<dyn Error>> {
         Ok(self.model.input_outlets()?.to_vec())
     }
 
     /// Returns the ID of the computational graph's outputs
-    pub fn output_outlets(&self) -> Result<Vec<OutletId>> {
+    pub fn output_outlets(&self) -> Result<Vec<OutletId>, Box<dyn Error>> {
         Ok(self.model.output_outlets()?.to_vec())
     }
 

@@ -1,5 +1,4 @@
 use super::*;
-use crate::abort;
 use crate::tensor::ops::*;
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
@@ -8,7 +7,7 @@ use halo2_proofs::{
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
 };
 use itertools::Itertools;
-use log::error;
+use std::error::Error;
 use std::fmt;
 use std::marker::PhantomData;
 
@@ -93,18 +92,18 @@ impl Op {
     pub fn f<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
         &self,
         mut inputs: Vec<Tensor<T>>,
-    ) -> Tensor<T> {
+    ) -> Result<Tensor<T>, TensorError> {
         match &self {
-            Op::Identity => inputs[0].clone(),
+            Op::Identity => Ok(inputs[0].clone()),
             Op::Reshape(new_dims) => {
                 let mut t = inputs[0].clone();
                 t.reshape(new_dims);
-                t
+                Ok(t)
             }
             Op::Flatten(new_dims) => {
                 let mut t = inputs[0].clone();
                 t.reshape(new_dims);
-                t
+                Ok(t)
             }
             Op::Add => add(&inputs),
             Op::Sub => sub(&inputs),
@@ -124,24 +123,27 @@ impl Op {
             } => sumpool(&inputs[0], *padding, *stride, *kernel_shape),
             Op::GlobalSumPool => unreachable!(),
             Op::Pow(u) => {
-                assert_eq!(inputs.len(), 1);
+                if 1 != inputs.len() {
+                    return Err(TensorError::DimMismatch("pow inputs".to_string()));
+                }
                 pow(&inputs[0], *u)
             }
             Op::Sum => {
-                assert_eq!(inputs.len(), 1);
+                if 1 != inputs.len() {
+                    return Err(TensorError::DimMismatch("sum inputs".to_string()));
+                }
                 sum(&inputs[0])
             }
             Op::Rescaled { inner, scale } => {
-                assert_eq!(scale.len(), inputs.len());
+                if scale.len() != inputs.len() {
+                    return Err(TensorError::DimMismatch("rescaled inputs".to_string()));
+                }
 
-                inner.f(inputs
-                    .iter_mut()
-                    .enumerate()
-                    .map(|(i, ri)| {
-                        assert_eq!(scale[i].0, i);
-                        rescale(ri, scale[i].1)
-                    })
-                    .collect_vec())
+                let mut rescaled_inputs = vec![];
+                for (i, ri) in inputs.iter_mut().enumerate() {
+                    rescaled_inputs.push(rescale(ri, scale[i].1)?);
+                }
+                Ok(inner.f(rescaled_inputs)?)
             }
         }
     }
@@ -204,31 +206,24 @@ impl<F: FieldExt + TensorType> Config<F> {
             let qis = config
                 .inputs
                 .iter()
-                .map(|input| match input.query(meta, 0) {
-                    Ok(q) => q,
-                    Err(e) => {
-                        abort!("failed to query input {:?}", e);
-                    }
-                })
+                .map(|input| input.query(meta, 0).expect("poly: input query failed"))
                 .collect::<Vec<_>>();
 
             let mut config_outputs = vec![];
             for node in config.nodes.iter_mut() {
-                Self::apply_op(node, &qis, &mut config_outputs);
+                Self::apply_op(node, &qis, &mut config_outputs).expect("poly: apply op failed");
             }
             let witnessed_output = &config_outputs[config.nodes.len() - 1];
 
             // Get output expressions for each input channel
-            let expected_output: Tensor<Expression<F>> = match config.output.query(meta, 0) {
-                Ok(res) => res,
-                Err(e) => {
-                    abort!("failed to query output during fused layer layout {:?}", e);
-                }
-            };
+            let expected_output: Tensor<Expression<F>> = config
+                .output
+                .query(meta, 0)
+                .expect("poly: output query failed");
 
             let constraints = witnessed_output
-                .enum_map(|i, o| o - expected_output[i].clone())
-                .unwrap();
+                .enum_map::<_, _, CircuitError>(|i, o| Ok(o - expected_output[i].clone()))
+                .expect("poly: failed to create constraints");
 
             Constraints::with_selector(selector, constraints)
         });
@@ -244,8 +239,12 @@ impl<F: FieldExt + TensorType> Config<F> {
         &mut self,
         layouter: &mut impl Layouter<F>,
         values: &[ValTensor<F>],
-    ) -> ValTensor<F> {
-        assert_eq!(values.len(), self.inputs.len());
+    ) -> Result<ValTensor<F>, Box<dyn Error>> {
+        if values.len() != self.inputs.len() {
+            return Err(Box::new(CircuitError::DimMismatch(
+                "polynomial layout".to_string(),
+            )));
+        }
 
         let t = match layouter.assign_region(
             || "assign inputs",
@@ -258,15 +257,8 @@ impl<F: FieldExt + TensorType> Config<F> {
                     let inp = utils::value_muxer(
                         &self.inputs[i],
                         &{
-                            match self.inputs[i].assign(&mut region, offset, input) {
-                                Ok(res) => res.map(|e| e.value_field().evaluate()),
-                                Err(e) => {
-                                    abort!(
-                                        "failed to assign inputs during fused layer layout {:?}",
-                                        e
-                                    );
-                                }
-                            }
+                            let res = self.inputs[i].assign(&mut region, offset, input)?;
+                            res.map(|e| e.value_field().evaluate())
                         },
                         input,
                     );
@@ -276,30 +268,27 @@ impl<F: FieldExt + TensorType> Config<F> {
                 let mut layout_outputs = vec![];
 
                 for node in self.nodes.iter_mut() {
-                    Self::apply_op(node, &inputs, &mut layout_outputs);
+                    Self::apply_op(node, &inputs, &mut layout_outputs)
+                        .expect("poly: apply op failed");
                 }
                 let output: ValTensor<F> = match layout_outputs.last() {
                     Some(a) => a.clone().into(),
                     None => {
-                        panic!("fused layer has empty outputs");
+                        panic!("poly: empty outputs");
                     }
                 };
 
-                match self.output.assign(&mut region, offset, &output) {
-                    Ok(a) => Ok(a),
-                    Err(e) => {
-                        abort!("failed to assign fused layer output {:?}", e);
-                    }
-                }
+                let output = self.output.assign(&mut region, offset, &output)?;
+                Ok(output)
             },
         ) {
             Ok(a) => a,
             Err(e) => {
-                abort!("failed to assign fused layer region {:?}", e);
+                return Err(Box::new(e));
             }
         };
 
-        ValTensor::from(t)
+        Ok(ValTensor::from(t))
     }
 
     /// Applies an operation represented by a [Op] to the set of inputs (both explicit and intermediate results) it indexes over.
@@ -307,7 +296,7 @@ impl<F: FieldExt + TensorType> Config<F> {
         node: &mut Node,
         inputs: &[Tensor<T>],
         outputs: &mut Vec<Tensor<T>>,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         let op_inputs = node
             .input_order
             .iter()
@@ -316,7 +305,8 @@ impl<F: FieldExt + TensorType> Config<F> {
                 InputType::Inter(u) => outputs[*u].clone(),
             })
             .collect_vec();
-        outputs.push(node.op.f(op_inputs));
+        outputs.push(node.op.f(op_inputs)?);
+        Ok(())
     }
 }
 

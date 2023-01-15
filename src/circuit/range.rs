@@ -1,4 +1,4 @@
-use crate::abort;
+use super::CircuitError;
 use crate::fieldutils::i32_to_felt;
 use crate::tensor::{TensorType, ValTensor, VarTensor};
 use halo2_proofs::{
@@ -6,7 +6,6 @@ use halo2_proofs::{
     circuit::Layouter,
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
 };
-use log::error;
 use std::marker::PhantomData;
 
 /// Configuration for a range check on the difference between `input` and `expected`.
@@ -45,20 +44,12 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
             //          v       |         1
 
             let q = cs.query_selector(config.selector);
-            let witnessed = match input.query(cs, 0) {
-                Ok(q) => q,
-                Err(e) => {
-                    abort!("failed to query input {:?}", e);
-                }
-            };
+            let witnessed = input.query(cs, 0).expect("range: failed to query input");
 
             // Get output expressions for each input channel
-            let expected = match expected.query(cs, 0) {
-                Ok(q) => q,
-                Err(e) => {
-                    abort!("failed to query input {:?}", e);
-                }
-            };
+            let expected = expected
+                .query(cs, 0)
+                .expect("range: failed to query expected value");
 
             // Given a range R and a value v, returns the expression
             // (v) * (1 - v) * (2 - v) * ... * (R - 1 - v)
@@ -69,8 +60,10 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
             };
 
             let constraints = witnessed
-                .enum_map(|i, o| range_check(tol as i32, o - expected[i].clone()))
-                .unwrap();
+                .enum_map::<_, _, CircuitError>(|i, o| {
+                    Ok(range_check(tol as i32, o - expected[i].clone()))
+                })
+                .expect("range: failed to create constraints");
             Constraints::with_selector(q, constraints)
         });
 
@@ -86,7 +79,7 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
         mut layouter: impl Layouter<F>,
         input: ValTensor<F>,
         output: ValTensor<F>,
-    ) {
+    ) -> Result<(), halo2_proofs::plonk::Error> {
         match layouter.assign_region(
             || "range check layout",
             |mut region| {
@@ -96,37 +89,22 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
                 self.selector.enable(&mut region, offset)?;
 
                 // assigns the instance to the advice.
-                match self.input.assign(&mut region, offset, &input) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        abort!("failed to assign inputs during range layer layout {:?}", e);
-                    }
-                };
+                self.input.assign(&mut region, offset, &input)?;
 
-                match self.expected.assign(&mut region, offset, &output) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        abort!(
-                            "failed to assign expected output during range layer layout {:?}",
-                            e
-                        );
-                    }
-                };
+                self.expected.assign(&mut region, offset, &output)?;
 
                 Ok(())
             },
         ) {
-            Ok(a) => a,
-            Err(e) => {
-                abort!("failed to assign fused layer region {:?}", e);
-            }
-        };
-        // ValTensor::from(t);
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
+
     use crate::tensor::Tensor;
     use halo2_proofs::{
         arithmetic::FieldExt,
@@ -169,17 +147,20 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            config.layout(
-                layouter.namespace(|| "assign value"),
-                self.input.clone(),
-                self.output.clone(),
-            );
+            config
+                .layout(
+                    layouter.namespace(|| "assign value"),
+                    self.input.clone(),
+                    self.output.clone(),
+                )
+                .unwrap();
 
             Ok(())
         }
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn test_range_check() {
         let k = 4;
 

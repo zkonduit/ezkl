@@ -1,17 +1,18 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
-use crate::abort;
 use crate::circuit::lookup::Config as LookupConfig;
 use crate::circuit::lookup::Op as LookupOp;
 use crate::circuit::polynomial::Config as PolyConfig;
 use crate::circuit::polynomial::Op as PolyOp;
+use crate::graph::GraphError;
 use crate::tensor::ops::{add, const_mult, div, mult};
 use crate::tensor::Tensor;
 use crate::tensor::TensorType;
 use anyhow::Result;
 use halo2_proofs::arithmetic::FieldExt;
 use itertools::Itertools;
-use log::{error, info, trace, warn};
+use log::{info, trace, warn};
 use std::collections::{btree_map::Entry, BTreeMap};
+use std::error::Error;
 use std::fmt;
 use std::ops::Deref;
 use tabled::Tabled;
@@ -294,7 +295,7 @@ impl Node {
         other_nodes: &mut BTreeMap<usize, Node>,
         scale: i32,
         idx: usize,
-    ) -> Self {
+    ) -> Result<Self, Box<dyn Error>> {
         trace!("Create {:?}", node);
         trace!("Create op {:?}", node.op);
         let output_shapes = match node_output_shapes(&node) {
@@ -302,20 +303,13 @@ impl Node {
             _ => None,
         };
 
-        let mut inputs: Vec<Node> = node
-            .inputs
-            .iter_mut()
-            // this shouldn't fail
-            .map(|i| {
-                match other_nodes.get(&i.node) {
-                    Some(n) => n,
-                    None => {
-                        abort!("input {} has not been initialized", i.node);
-                    }
-                }
-                .clone()
-            })
-            .collect();
+        let mut inputs = vec![];
+        for i in node.inputs.iter_mut() {
+            match other_nodes.get(&i.node) {
+                Some(n) => inputs.push(n.clone()),
+                None => return Err(Box::new(GraphError::MissingNode(i.node))),
+            }
+        }
 
         let mut opkind = OpKind::new(node.op().name().as_ref()); // parses the op name
 
@@ -386,11 +380,11 @@ impl Node {
                             Some(b) => match (*b).as_any().downcast_ref() {
                                 Some(b) => b,
                                 None => {
-                                    panic!("not a leaky relu!");
+                                    return Err(Box::new(GraphError::OpMismatch(idx, opkind)));
                                 }
                             },
                             None => {
-                                panic!("op is not a Tract Expansion!");
+                                return Err(Box::new(GraphError::OpMismatch(idx, opkind)));
                             }
                         };
 
@@ -445,7 +439,7 @@ impl Node {
 
                         opkind = OpKind::Lookup(LookupOp::PReLU {
                             scale: layer_scale,
-                            slopes: slopes.clone(),
+                            slopes,
                         }); // now the input will be scaled down to match
 
                         Node {
@@ -462,7 +456,7 @@ impl Node {
                     }
                     LookupOp::Div { .. } => {
                         if inputs[1].out_dims.clone() != [1] {
-                            abort!("ezkl currently only supports division by a constant");
+                            return Err(Box::new(GraphError::NonConstantDiv));
                         }
                         let mult = scale_to_multiplier(scale);
                         let div = inputs[1].output_max / mult;
@@ -516,27 +510,37 @@ impl Node {
                             Some(b) => match (*b).as_any().downcast_ref() {
                                 Some(b) => b,
                                 None => {
-                                    panic!("not a conv!");
+                                    return Err(Box::new(GraphError::OpMismatch(idx, opkind)));
                                 }
                             },
                             None => {
-                                panic!("op is not a Tract Expansion!");
+                                return Err(Box::new(GraphError::OpMismatch(idx, opkind)));
                             }
                         };
 
-                        // only support pytorch type formatting for now
-                        assert_eq!(conv_node.data_format, DataFormat::NCHW);
-                        assert_eq!(conv_node.kernel_fmt, KernelFormat::OIHW);
+                        if (conv_node.data_format != DataFormat::NCHW)
+                            || (conv_node.kernel_fmt != KernelFormat::OIHW)
+                        {
+                            return Err(Box::new(GraphError::MissingParams(
+                                "data or kernel in wrong format".to_string(),
+                            )));
+                        }
 
                         let stride = match conv_node.strides.clone() {
                             Some(s) => s,
                             None => {
-                                abort!("strides for node {} has not been initialized", idx);
+                                return Err(Box::new(GraphError::MissingParams(
+                                    "strides".to_string(),
+                                )));
                             }
                         };
                         let padding = match &conv_node.padding {
                             PaddingSpec::Explicit(p, _, _) => p,
-                            _ => panic!("padding is not explicitly specified"),
+                            _ => {
+                                return Err(Box::new(GraphError::MissingParams(
+                                    "padding".to_string(),
+                                )));
+                            }
                         };
 
                         if inputs.len() == 3 {
@@ -544,11 +548,11 @@ impl Node {
                             let scale_diff =
                                 weight_node.out_scale + input_node.out_scale - bias_node.out_scale;
                             let mut bias_node = other_nodes.get_mut(&node.inputs[2].node).unwrap();
-                            bias_node = Self::scale_up_const_node(bias_node, scale + scale_diff);
-                            assert_eq!(
-                                input_node.out_scale + weight_node.out_scale,
-                                bias_node.out_scale
-                            );
+                            bias_node = Self::scale_up_const_node(bias_node, scale + scale_diff)?;
+                            if (input_node.out_scale + weight_node.out_scale) != bias_node.out_scale
+                            {
+                                return Err(Box::new(GraphError::RescalingError(opkind)));
+                            }
                         }
 
                         let oihw = weight_node.out_dims.clone();
@@ -590,18 +594,28 @@ impl Node {
                         let op = Box::new(node.op());
                         let sumpool_node: &SumPool = match op.downcast_ref() {
                             Some(b) => b,
-                            None => panic!("op isn't a SumPool!"),
+                            None => {
+                                return Err(Box::new(GraphError::OpMismatch(idx, opkind)));
+                            }
                         };
 
                         let pool_spec: &PoolSpec = &sumpool_node.pool_spec;
 
                         // only support pytorch type formatting for now
-                        assert_eq!(pool_spec.data_format, DataFormat::NCHW);
+                        if pool_spec.data_format != DataFormat::NCHW {
+                            return Err(Box::new(GraphError::MissingParams(
+                                "data in wrong format".to_string(),
+                            )));
+                        }
 
                         let stride = pool_spec.strides.clone().unwrap();
                         let padding = match &pool_spec.padding {
                             PaddingSpec::Explicit(p, _, _) => p,
-                            _ => panic!("padding is not explicitly specified"),
+                            _ => {
+                                return Err(Box::new(GraphError::MissingParams(
+                                    "padding".to_string(),
+                                )));
+                            }
                         };
                         let kernel_shape = &pool_spec.kernel_shape;
 
@@ -697,12 +711,10 @@ impl Node {
                         let scale_diff =
                             weight_node.out_scale + input_node.out_scale - bias_node.out_scale;
                         let mut bias_node = other_nodes.get_mut(&node.inputs[2].node).unwrap();
-                        bias_node = Self::scale_up_const_node(bias_node, scale + scale_diff);
-
-                        assert_eq!(
-                            input_node.out_scale + weight_node.out_scale,
-                            bias_node.out_scale
-                        );
+                        bias_node = Self::scale_up_const_node(bias_node, scale + scale_diff)?;
+                        if (input_node.out_scale + weight_node.out_scale) != bias_node.out_scale {
+                            return Err(Box::new(GraphError::RescalingError(opkind)));
+                        }
 
                         let in_dim = weight_node.out_dims.clone()[1];
                         let out_dim = weight_node.out_dims.clone()[0];
@@ -727,34 +739,26 @@ impl Node {
                     PolyOp::BatchNorm => {
                         //Compute scale and shift from the four inputs,
                         // then replace the first two, and change this node to a ScaleAndShift
-
-                        // let (input_node, mut gamma_node, mut beta_node, mean_node, var_node) = (
-                        //     &mut inputs[0],
-                        //     &mut inputs[1],
-                        //     &mut inputs[2],
-                        //     &mut inputs[3],
-                        //     &mut inputs[4],
-                        // );
                         let gamma = inputs[1].raw_const_value.as_ref().unwrap();
                         let beta = inputs[2].raw_const_value.as_ref().unwrap();
                         let mu = inputs[3].raw_const_value.as_ref().unwrap();
                         let sigma = inputs[4].raw_const_value.as_ref().unwrap();
                         let num_entries = gamma.len();
 
-                        let a = div(gamma.clone(), sigma.clone());
-                        let amu: Tensor<f32> = mult(&vec![a.clone(), mu.clone()]);
-                        let amupb: Tensor<f32> = add(&vec![amu, beta.clone()]);
-                        let b = const_mult(&amupb, -1f32);
+                        let a = div(gamma.clone(), sigma.clone())?;
+                        let amu: Tensor<f32> = mult(&vec![a.clone(), mu.clone()])?;
+                        let amupb: Tensor<f32> = add(&vec![amu, beta.clone()])?;
+                        let b = const_mult(&amupb, -1f32)?;
 
                         let in_scale = inputs[0].out_scale;
                         let out_scale = 2 * inputs[0].out_scale;
                         // gamma node becomes the scale (weigh) in scale and shift
                         inputs[1].raw_const_value = Some(a);
-                        inputs[1].quantize_const_to_scale(in_scale);
+                        inputs[1].quantize_const_to_scale(in_scale)?;
 
                         // beta node becomes the shift (bias)
                         inputs[2].raw_const_value = Some(b);
-                        inputs[2].quantize_const_to_scale(out_scale);
+                        inputs[2].quantize_const_to_scale(out_scale)?;
 
                         Node {
                             idx,
@@ -772,7 +776,7 @@ impl Node {
                     }
 
                     PolyOp::Add => {
-                        opkind = Self::homogenize_input_scales(opkind, inputs.clone());
+                        opkind = Self::homogenize_input_scales(opkind, inputs.clone())?;
                         let output_max =
                             if let OpKind::Poly(PolyOp::Rescaled { scale, .. }) = &opkind {
                                 (inputs
@@ -785,8 +789,7 @@ impl Node {
                                     .unwrap() as f32)
                                     * (inputs.len() as f32)
                             } else {
-                                error!("failed to homogenize input scalings for node {}", idx);
-                                panic!()
+                                return Err(Box::new(GraphError::RescalingError(opkind)));
                             };
 
                         Node {
@@ -802,7 +805,9 @@ impl Node {
                         }
                     }
                     PolyOp::Sum => {
-                        assert!(inputs.len() == 1);
+                        if inputs.len() != 1 {
+                            return Err(Box::new(GraphError::InvalidDims(idx, opkind)));
+                        };
 
                         Node {
                             idx,
@@ -818,7 +823,7 @@ impl Node {
                         }
                     }
                     PolyOp::Sub => {
-                        opkind = Self::homogenize_input_scales(opkind, inputs.clone());
+                        opkind = Self::homogenize_input_scales(opkind, inputs.clone())?;
                         let output_max =
                             if let OpKind::Poly(PolyOp::Rescaled { inner: _, scale }) = &opkind {
                                 (inputs
@@ -831,8 +836,7 @@ impl Node {
                                     .unwrap() as f32)
                                     * (inputs.len() as f32)
                             } else {
-                                error!("failed to homogenize input scalings for node {}", idx);
-                                panic!()
+                                return Err(Box::new(GraphError::RescalingError(opkind)));
                             };
 
                         Node {
@@ -874,10 +878,9 @@ impl Node {
                         let pow = inputs[1].clone().raw_const_value.unwrap()[0];
                         node.inputs.pop();
                         if inputs[1].out_dims != [1] {
-                            error!(
-                                "ezkl currently only supports raising to the power by a constant"
-                            );
-                            unimplemented!()
+                            {
+                                return Err(Box::new(GraphError::NonConstantPower));
+                            }
                         }
 
                         Node {
@@ -900,8 +903,7 @@ impl Node {
                         }
                     }
                     PolyOp::Rescaled { .. } => {
-                        error!("operations should not already be rescaled at this stage");
-                        panic!()
+                        return Err(Box::new(GraphError::RescalingError(opkind)));
                     }
                     PolyOp::Identity => {
                         let input_node = &inputs[0];
@@ -939,33 +941,42 @@ impl Node {
                         let shape_const = match shape_const_node.const_value.as_ref() {
                             Some(sc) => sc,
                             None => {
-                                abort!("missing shape constant");
+                                return Err(Box::new(GraphError::MissingParams(
+                                    "shape constant".to_string(),
+                                )));
                             }
                         };
                         let shapes = &shape_const[0..];
-                        let new_dims: Vec<usize> = if shapes.iter().all(|x| x > &0) {
-                            shapes
-                                .iter()
-                                .map(|x| {
-                                    assert!(x > &0);
-                                    *x as usize
-                                })
-                                .collect()
-                        } else {
-                            let num_entries: usize = input_node.out_dims.iter().product();
-                            let explicit_prod: i32 = shapes.iter().filter(|x| *x > &0).product();
-                            assert!(explicit_prod > 0);
-                            let inferred = num_entries / (explicit_prod as usize);
-                            let mut new_dims: Vec<usize> = Vec::new();
-                            for i in shapes {
-                                match i {
-                                    -1 => new_dims.push(inferred),
-                                    0 => continue,
-                                    x => new_dims.push(*x as usize),
+                        let new_dims: Result<Vec<usize>, Box<dyn Error>> =
+                            if shapes.iter().all(|x| x > &0) {
+                                let mut res = vec![];
+                                for x in shapes.iter() {
+                                    if x <= &0 {
+                                        return Err(Box::new(GraphError::InvalidDims(idx, opkind)));
+                                    }
+                                    res.push(*x as usize);
                                 }
-                            }
-                            new_dims
-                        };
+                                Ok(res)
+                            } else {
+                                let num_entries: usize = input_node.out_dims.iter().product();
+                                let explicit_prod: i32 =
+                                    shapes.iter().filter(|x| *x > &0).product();
+                                if explicit_prod <= 0 {
+                                    return Err(Box::new(GraphError::InvalidDims(idx, opkind)));
+                                }
+                                let inferred = num_entries / (explicit_prod as usize);
+                                let mut new_dims: Vec<usize> = Vec::new();
+                                for i in shapes {
+                                    match i {
+                                        -1 => new_dims.push(inferred),
+                                        0 => continue,
+                                        x => new_dims.push(*x as usize),
+                                    }
+                                }
+                                Ok(new_dims)
+                            };
+
+                        let new_dims = new_dims?;
 
                         Node {
                             idx,
@@ -986,7 +997,7 @@ impl Node {
                 let const_node: &Const = match op.as_any().downcast_ref() {
                     Some(b) => b,
                     None => {
-                        abort!("op is not a const!");
+                        return Err(Box::new(GraphError::OpMismatch(idx, opkind)));
                     }
                 };
                 let dt = const_node.0.datum_type();
@@ -1081,16 +1092,18 @@ impl Node {
                 warn!("{:?} is unknown", opkind);
                 Node::default()
             }
-            o => {
-                error!("unsupported op {:?}", o);
-                panic!()
+            _ => {
+                return Err(Box::new(GraphError::UnsupportedOp));
             }
         };
-        mn
+        Ok(mn)
     }
 
     /// Ensures all inputs to a node have the same fixed point denominator.
-    fn homogenize_input_scales(opkind: OpKind, inputs: Vec<Node>) -> OpKind {
+    fn homogenize_input_scales(
+        opkind: OpKind,
+        inputs: Vec<Node>,
+    ) -> Result<OpKind, Box<dyn Error>> {
         let mut multipliers = vec![1; inputs.len()];
         let out_scales = inputs.windows(1).map(|w| w[0].out_scale).collect_vec();
         if !out_scales.windows(2).all(|w| w[0] == w[1]) {
@@ -1114,32 +1127,42 @@ impl Node {
                 .collect_vec();
         }
         if let OpKind::Poly(c) = &opkind {
-            OpKind::Poly(PolyOp::Rescaled {
+            Ok(OpKind::Poly(PolyOp::Rescaled {
                 inner: Box::new(c.clone()),
                 scale: (0..inputs.len()).zip(multipliers).collect_vec(),
-            })
+            }))
         } else {
-            error!("should not homegenize input scales for non fused ops.");
-            panic!()
+            Err(Box::new(GraphError::RescalingError(opkind)))
         }
     }
 
-    fn quantize_const_to_scale(&mut self, scale: i32) {
-        assert!(matches!(self.opkind, OpKind::Const));
+    fn quantize_const_to_scale(&mut self, scale: i32) -> Result<(), Box<dyn Error>> {
+        if !self.opkind.is_const() {
+            return Err(Box::new(GraphError::WrongMethod(
+                self.idx,
+                self.opkind.clone(),
+            )));
+        };
         let raw = self.raw_const_value.as_ref().unwrap();
         self.out_scale = scale;
         let t = vector_to_quantized(raw, raw.dims(), 0f32, self.out_scale).unwrap();
         self.output_max = 0f32; //t.iter().map(|x| x.abs()).max().unwrap() as f32;
         self.const_value = Some(t);
+        Ok(())
     }
 
     /// Re-quantizes a constant value node to a new scale.
-    fn scale_up_const_node(node: &mut Node, scale: i32) -> &mut Node {
-        assert!(matches!(node.opkind, OpKind::Const));
+    fn scale_up_const_node(node: &mut Node, scale: i32) -> Result<&mut Node, Box<dyn Error>> {
+        if !node.opkind.is_const() {
+            return Err(Box::new(GraphError::WrongMethod(
+                node.idx,
+                node.opkind.clone(),
+            )));
+        };
         if scale > 0 {
-            if let Some(raw) = &node.raw_const_value {
+            if let Some(val) = &node.raw_const_value {
                 let mult = scale_to_multiplier(scale);
-                let t = vector_to_quantized(&raw, raw.dims(), 0f32, scale).unwrap();
+                let t = vector_to_quantized(val, val.dims(), 0f32, scale)?;
                 node.const_value = Some(t);
                 info!(
                     "------ scaled const node {:?}: {:?} -> {:?}",
@@ -1149,6 +1172,6 @@ impl Node {
                 node.out_scale = scale;
             }
         }
-        node
+        Ok(node)
     }
 }
