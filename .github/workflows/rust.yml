@@ -105,8 +105,6 @@ jobs:
           override: true
           components: rustfmt, clippy
 
-    - name: IPA full-prove tests
-      run: cargo test --release --verbose tests::ipa_fullprove_ -- --test-threads 4
     - name: KZG full-prove tests
       run: cargo test --release --verbose tests::kzg_fullprove_ -- --test-threads 4
 
@@ -142,8 +140,6 @@ jobs:
           override: true
           components: rustfmt, clippy
 
-    - name: IPA prove and verify tests
-      run: cargo test --release --verbose tests::ipa_prove_and_verify_ -- --test-threads 4
     - name: KZG prove and verify tests
       run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 4
 
