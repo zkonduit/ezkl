@@ -311,7 +311,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0940dc441f31689269e10ac70eb1002a3a1d3ad1390e030043662eb7fe4688b"
 dependencies = [
- "block-padding",
+ "block-padding 0.1.5",
  "byte-tools",
  "byteorder",
  "generic-array 0.12.4",
@@ -323,6 +323,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4152116fd6e9dadb291ae18fc1ec3575ed6d84c29642d97890f4b4a3417297e4"
 dependencies = [
+ "block-padding 0.2.1",
  "generic-array 0.14.6",
 ]
 
@@ -343,6 +344,12 @@ checksum = "fa79dedbb091f449f1f39e53edf88d5dbe95f895dae6135a8d7b881fb5af73f5"
 dependencies = [
  "byte-tools",
 ]
+
+[[package]]
+name = "block-padding"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
 name = "bs58"
@@ -683,7 +690,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "sha2 0.10.6",
- "sha3",
+ "sha3 0.10.6",
  "thiserror",
 ]
 
@@ -1333,7 +1340,7 @@ checksum = "c9b0705efd4599c15a38151f4721f7bc388306f61084d3bfd50bd07fbca5cb60"
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=master#4d8016fa893f0bd5c0c86632f3081e237554b821"
+source = "git+https://github.com/privacy-scaling-explorations/halo2wrong?tag=v2023_01_20#aa1699b0ce988f7959d155f0db23d212cb7139ee"
 dependencies = [
  "group",
  "integer",
@@ -1433,7 +1440,7 @@ dependencies = [
  "rand",
  "rlp",
  "serde",
- "sha3",
+ "sha3 0.10.6",
  "zeroize",
 ]
 
@@ -1508,7 +1515,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.6",
- "sha3",
+ "sha3 0.10.6",
  "thiserror",
  "uuid",
 ]
@@ -1525,7 +1532,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "sha3",
+ "sha3 0.10.6",
  "thiserror",
  "uint",
 ]
@@ -1825,17 +1832,17 @@ dependencies = [
  "ethereum-types",
  "foundry-evm",
  "halo2_proofs",
- "halo2curves",
+ "halo2curves 0.3.1",
  "itertools",
  "lazy_static",
  "log",
  "mnist",
- "plonk_verifier",
  "plotters",
  "rand",
  "seq-macro",
  "serde",
  "serde_json",
+ "snark-verifier",
  "tabled",
  "tensorflow",
  "test-case",
@@ -2374,15 +2381,16 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/privacy-scaling-explorations/halo2?rev=50ee8ad#50ee8ad785c53232824e60b4ff6df32b69970358"
+source = "git+https://github.com/privacy-scaling-explorations/halo2?tag=v2023_01_20#c7e42e41f8141745ba0b90213438f240d55cb347"
 dependencies = [
  "blake2b_simd",
  "ff",
  "group",
- "halo2curves",
+ "halo2curves 0.3.1",
  "plotters",
  "rand_core",
  "rayon",
+ "sha3 0.9.1",
  "tabbycat",
  "tracing",
 ]
@@ -2405,9 +2413,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "halo2curves"
+version = "0.3.1"
+source = "git+https://github.com/privacy-scaling-explorations/halo2curves?tag=0.3.1#9b67e19bca30a35208b0c1b41c1723771e2c9f49"
+dependencies = [
+ "ff",
+ "group",
+ "lazy_static",
+ "num-bigint",
+ "num-traits",
+ "pasta_curves",
+ "rand",
+ "rand_core",
+ "static_assertions",
+ "subtle",
+]
+
+[[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=master#4d8016fa893f0bd5c0c86632f3081e237554b821"
+source = "git+https://github.com/privacy-scaling-explorations/halo2wrong?tag=v2023_01_20#aa1699b0ce988f7959d155f0db23d212cb7139ee"
 dependencies = [
  "group",
  "halo2_proofs",
@@ -2720,7 +2745,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=master#4d8016fa893f0bd5c0c86632f3081e237554b821"
+source = "git+https://github.com/privacy-scaling-explorations/halo2wrong?tag=v2023_01_20#aa1699b0ce988f7959d155f0db23d212cb7139ee"
 dependencies = [
  "group",
  "maingate",
@@ -2825,7 +2850,7 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "sha2 0.10.6",
- "sha3",
+ "sha3 0.10.6",
 ]
 
 [[package]]
@@ -3016,7 +3041,7 @@ dependencies = [
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=master#4d8016fa893f0bd5c0c86632f3081e237554b821"
+source = "git+https://github.com/privacy-scaling-explorations/halo2wrong?tag=v2023_01_20#aa1699b0ce988f7959d155f0db23d212cb7139ee"
 dependencies = [
  "group",
  "halo2wrong",
@@ -3708,29 +3733,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ac9a59f73473f1b8d852421e59e64809f025994837ef743615c6d0c5b305160"
 
 [[package]]
-name = "plonk_verifier"
-version = "0.1.0"
-source = "git+https://github.com/zkonduit/plonk-verifier?branch=main#4ae9470e037457e2e367de02651bb4afe7f11633"
-dependencies = [
- "bytes",
- "ecc",
- "halo2_proofs",
- "halo2curves",
- "hex",
- "itertools",
- "lazy_static",
- "num-bigint",
- "num-integer",
- "num-traits",
- "poseidon",
- "primitive-types",
- "rand",
- "revm",
- "rlp",
- "sha3",
-]
-
-[[package]]
 name = "plotters"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3794,7 +3796,7 @@ version = "0.2.0"
 source = "git+https://github.com/privacy-scaling-explorations/poseidon.git?tag=v2022_10_22#5d29df01a95e3df6334080d28e983407f56b5da3"
 dependencies = [
  "group",
- "halo2curves",
+ "halo2curves 0.2.1",
  "subtle",
 ]
 
@@ -4167,7 +4169,7 @@ dependencies = [
  "revm_precompiles",
  "rlp",
  "serde",
- "sha3",
+ "sha3 0.10.6",
 ]
 
 [[package]]
@@ -4185,7 +4187,7 @@ dependencies = [
  "ripemd",
  "secp256k1",
  "sha2 0.10.6",
- "sha3",
+ "sha3 0.10.6",
  "substrate-bn",
 ]
 
@@ -4617,6 +4619,18 @@ dependencies = [
 
 [[package]]
 name = "sha3"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f81199417d4e5de3f04b1e871023acea7389672c4135918f05aa9cbf2f2fa809"
+dependencies = [
+ "block-buffer 0.9.0",
+ "digest 0.9.0",
+ "keccak",
+ "opaque-debug 0.3.0",
+]
+
+[[package]]
+name = "sha3"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bdf0c33fae925bdc080598b84bc15c55e7b9a4a43b3c704da051f977469691c9"
@@ -4694,6 +4708,29 @@ name = "smallvec"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
+
+[[package]]
+name = "snark-verifier"
+version = "0.1.0"
+source = "git+https://github.com/zkonduit/plonk-verifier?rev=5a85fbb#5a85fbbb7336b9aaf8b843d7dfa923c68c8edb87"
+dependencies = [
+ "bytes",
+ "ecc",
+ "halo2_proofs",
+ "halo2curves 0.3.1",
+ "hex",
+ "itertools",
+ "lazy_static",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "poseidon",
+ "primitive-types",
+ "rand",
+ "revm",
+ "rlp",
+ "sha3 0.10.6",
+]
 
 [[package]]
 name = "socket2"
