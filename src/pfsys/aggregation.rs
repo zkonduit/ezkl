@@ -34,26 +34,25 @@ use halo2_wrong_ecc::{
 use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine};
 use itertools::Itertools;
 use log::trace;
-use plonk_verifier::{
+use rand::rngs::OsRng;
+use snark_verifier::{
     loader::evm::{self, encode_calldata, EvmLoader},
     system::halo2::transcript::evm::EvmTranscript,
 };
-use plonk_verifier::{
+use snark_verifier::{
     loader::native::NativeLoader,
     system::halo2::{compile, Config},
 };
-use plonk_verifier::{
+use snark_verifier::{
     loader::{self},
     pcs::{
-        kzg::{Gwc19, Kzg, KzgAccumulator, KzgAs, KzgSuccinctVerifyingKey, LimbsEncoding},
+        kzg::{Gwc19, KzgAccumulator, KzgAs, KzgSuccinctVerifyingKey, LimbsEncoding},
         AccumulationScheme, AccumulationSchemeProver,
     },
     system,
     util::arithmetic::{fe_to_limbs, FieldExt},
-    verifier::{self, PlonkVerifier},
-    Protocol,
+    verifier::{self, plonk::PlonkProtocol, SnarkVerifier},
 };
-use rand::rngs::OsRng;
 use std::error::Error;
 use std::io::Cursor;
 use std::{iter, rc::Rc};
@@ -61,10 +60,10 @@ use thiserror::Error;
 
 const LIMBS: usize = 4;
 const BITS: usize = 68;
-type Pcs = Kzg<Bn256, Gwc19>;
-type As = KzgAs<Pcs>;
+type As = KzgAs<Bn256, Gwc19>;
 /// Type for aggregator verification
-pub type Plonk = verifier::Plonk<Pcs, LimbsEncoding<LIMBS, BITS>>;
+type PlonkSuccinctVerifier = verifier::plonk::PlonkSuccinctVerifier<As, LimbsEncoding<LIMBS, BITS>>;
+type PlonkVerifier = verifier::plonk::PlonkVerifier<As, LimbsEncoding<LIMBS, BITS>>;
 
 const T: usize = 5;
 const RATE: usize = 4;
@@ -72,7 +71,8 @@ const R_F: usize = 8;
 const R_P: usize = 60;
 
 type Svk = KzgSuccinctVerifyingKey<G1Affine>;
-type BaseFieldEccChip = halo2_wrong_ecc::BaseFieldEccChip<G1Affine, LIMBS, BITS>;
+type BaseFieldEccChip =
+    snark_verifier::loader::halo2::halo2_wrong_ecc::BaseFieldEccChip<G1Affine, LIMBS, BITS>;
 /// The loader type used in the transcript definition
 type Halo2Loader<'a> = loader::halo2::Halo2Loader<'a, G1Affine, BaseFieldEccChip>;
 /// Application snark transcript
@@ -102,14 +102,14 @@ pub enum AggregationError {
 /// An application snark with proof and instance variables ready for aggregation (raw field element)
 #[derive(Debug)]
 pub struct Snark {
-    protocol: Protocol<G1Affine>,
+    protocol: PlonkProtocol<G1Affine>,
     instances: Vec<Vec<Fr>>,
     proof: Vec<u8>,
 }
 
 impl Snark {
     /// Create a new application snark from proof and instance variables ready for aggregation
-    pub fn new(protocol: Protocol<G1Affine>, instances: Vec<Vec<Fr>>, proof: Vec<u8>) -> Self {
+    pub fn new(protocol: PlonkProtocol<G1Affine>, instances: Vec<Vec<Fr>>, proof: Vec<u8>) -> Self {
         Self {
             protocol,
             instances,
@@ -135,7 +135,7 @@ impl From<Snark> for SnarkWitness {
 /// An application snark with proof and instance variables ready for aggregation (wrapped field element)
 #[derive(Clone, Debug)]
 pub struct SnarkWitness {
-    protocol: Protocol<G1Affine>,
+    protocol: PlonkProtocol<G1Affine>,
     instances: Vec<Vec<Value<Fr>>>,
     proof: Value<Vec<u8>>,
 }
@@ -183,20 +183,17 @@ pub fn aggregate<'a>(
         let protocol = snark.protocol.loaded(loader);
         let instances = assign_instances(&snark.instances);
         let mut transcript = PoseidonTranscript::<Rc<Halo2Loader>, _>::new(loader, snark.proof());
-        let proof = Plonk::read_proof(svk, &protocol, &instances, &mut transcript)
+        let proof = PlonkSuccinctVerifier::read_proof(svk, &protocol, &instances, &mut transcript)
             .map_err(|_| plonk::Error::Synthesis)?;
-        let mut accum = Plonk::succinct_verify(svk, &protocol, &instances, &proof)
+        let mut accum = PlonkSuccinctVerifier::verify(svk, &protocol, &instances, &proof)
             .map_err(|_| plonk::Error::Synthesis)?;
         accumulators.append(&mut accum);
     }
-
     let accumulator = {
         let mut transcript = PoseidonTranscript::<Rc<Halo2Loader>, _>::new(loader, as_proof);
-        let proof = As::read_proof(&Default::default(), &accumulators, &mut transcript)
-            .map_err(|_| plonk::Error::Synthesis)?;
+        let proof = As::read_proof(&Default::default(), &accumulators, &mut transcript).unwrap();
         As::verify(&Default::default(), &accumulators, &proof).map_err(|_| plonk::Error::Synthesis)
     };
-
     accumulator
 }
 
@@ -265,10 +262,16 @@ impl AggregationCircuit {
         for snark in snarks.iter() {
             trace!("Aggregating with snark instances {:?}", snark.instances);
             let mut transcript = PoseidonTranscript::<NativeLoader, _>::new(snark.proof.as_slice());
-            let proof = Plonk::read_proof(&svk, &snark.protocol, &snark.instances, &mut transcript)
-                .map_err(|_| AggregationError::ProofRead)?;
-            let mut accum = Plonk::succinct_verify(&svk, &snark.protocol, &snark.instances, &proof)
-                .map_err(|_| AggregationError::ProofVerify)?;
+            let proof = PlonkSuccinctVerifier::read_proof(
+                &svk,
+                &snark.protocol,
+                &snark.instances,
+                &mut transcript,
+            )
+            .map_err(|_| AggregationError::ProofRead)?;
+            let mut accum =
+                PlonkSuccinctVerifier::verify(&svk, &snark.protocol, &snark.instances, &proof)
+                    .map_err(|_| AggregationError::ProofVerify)?;
             accumulators.append(&mut accum);
         }
 
@@ -419,8 +422,6 @@ pub fn gen_aggregation_evm_verifier(
     num_instance: Vec<usize>,
     accumulator_indices: Vec<(usize, usize)>,
 ) -> Result<Vec<u8>, AggregationError> {
-    let svk = params.get_g()[0].into();
-    let dk = (params.g2(), params.s_g2()).into();
     let protocol = compile(
         params,
         vk,
@@ -428,15 +429,16 @@ pub fn gen_aggregation_evm_verifier(
             .with_num_instance(num_instance.clone())
             .with_accumulator_indices(Some(accumulator_indices)),
     );
+    let vk = (params.get_g()[0], params.g2(), params.s_g2()).into();
 
     let loader = EvmLoader::new::<Fq, Fr>();
     let protocol = protocol.loaded(&loader);
     let mut transcript = EvmTranscript::<_, Rc<EvmLoader>, _, _>::new(&loader);
 
     let instances = transcript.load_instances(num_instance);
-    let proof = Plonk::read_proof(&svk, &protocol, &instances, &mut transcript)
+    let proof = PlonkVerifier::read_proof(&vk, &protocol, &instances, &mut transcript)
         .map_err(|_| AggregationError::ProofRead)?;
-    Plonk::verify(&svk, &dk, &protocol, &instances, &proof)
+    PlonkVerifier::verify(&vk, &protocol, &instances, &proof)
         .map_err(|_| AggregationError::ProofVerify)?;
 
     Ok(evm::compile_yul(&loader.yul_code()))

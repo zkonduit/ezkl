@@ -116,7 +116,7 @@ pub enum Commands {
         #[arg(
             long,
             num_args = 0..=1,
-            default_value_t = ProofSystem::IPA,
+            default_value_t = ProofSystem::KZG,
 //            default_missing_value = "always",
             value_enum
         )]
@@ -150,7 +150,7 @@ pub enum Commands {
 	    short = 'B',
             require_equals = true,
             num_args = 0..=1,
-            default_value_t = ProofSystem::IPA,
+            default_value_t = ProofSystem::KZG,
             default_missing_value = "always",
             value_enum
         )]
@@ -182,7 +182,7 @@ pub enum Commands {
 	    short = 'B',
             require_equals = true,
             num_args = 0..=1,
-            default_value_t = ProofSystem::IPA,
+            default_value_t = ProofSystem::KZG,
             default_missing_value = "always",
             value_enum
         )]

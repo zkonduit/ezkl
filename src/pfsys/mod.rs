@@ -15,6 +15,9 @@ use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{
     Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
 };
+use halo2curves::group::ff::PrimeField;
+use halo2curves::serde::SerdeObject;
+use halo2curves::CurveAffine;
 use log::{info, trace};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -253,16 +256,20 @@ where
 /// Loads a [VerifyingKey] at `path`.
 pub fn load_vk<Scheme: CommitmentScheme, F: FieldExt + TensorType>(
     path: PathBuf,
-    params: &'_ Scheme::ParamsVerifier,
 ) -> Result<VerifyingKey<Scheme::Curve>, Box<dyn Error>>
 where
     ModelCircuit<F>: Circuit<Scheme::Scalar>,
+    Scheme::Curve: SerdeObject + CurveAffine,
+    Scheme::Scalar: PrimeField + SerdeObject,
 {
     info!("loading verification key from {:?}", path);
     let f = File::open(path).map_err(Box::<dyn Error>::from)?;
     let mut reader = BufReader::new(f);
-    VerifyingKey::<Scheme::Curve>::read::<_, ModelCircuit<F>>(&mut reader, params)
-        .map_err(Box::<dyn Error>::from)
+    VerifyingKey::<Scheme::Curve>::read::<_, ModelCircuit<F>>(
+        &mut reader,
+        halo2_proofs::SerdeFormat::Processed,
+    )
+    .map_err(Box::<dyn Error>::from)
 }
 
 /// Loads the [CommitmentScheme::ParamsVerifier] at `path`.
@@ -279,11 +286,15 @@ pub fn load_params<Scheme: CommitmentScheme>(
 pub fn save_vk<Scheme: CommitmentScheme>(
     path: &PathBuf,
     vk: &VerifyingKey<Scheme::Curve>,
-) -> Result<(), io::Error> {
+) -> Result<(), io::Error>
+where
+    Scheme::Curve: SerdeObject + CurveAffine,
+    Scheme::Scalar: PrimeField + SerdeObject,
+{
     info!("saving verification key 💾");
     let f = File::create(path)?;
     let mut writer = BufWriter::new(f);
-    vk.write(&mut writer)?;
+    vk.write(&mut writer, halo2_proofs::SerdeFormat::Processed)?;
     writer.flush()?;
     Ok(())
 }

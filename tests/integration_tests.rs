@@ -58,8 +58,8 @@ macro_rules! test_func {
             use crate::mock;
             use crate::mock_public_inputs;
             use crate::mock_public_params;
-            use crate::ipa_fullprove;
-            use crate::ipa_prove_and_verify;
+            // use crate::ipa_fullprove;
+            // use crate::ipa_prove_and_verify;
             use crate::kzg_fullprove;
             use crate::kzg_prove_and_verify;
             seq!(N in 0..=11 {
@@ -78,15 +78,15 @@ macro_rules! test_func {
                 mock_public_params(test.to_string());
             }
 
-            #(#[test_case(TESTS[N])])*
-            fn ipa_fullprove_(test: &str) {
-                ipa_fullprove(test.to_string());
-            }
+            // #(#[test_case(TESTS[N])])*
+            // fn ipa_fullprove_(test: &str) {
+            //     ipa_fullprove(test.to_string());
+            // }
 
-            #(#[test_case(TESTS[N])])*
-            fn ipa_prove_and_verify_(test: &str) {
-                ipa_prove_and_verify(test.to_string());
-            }
+            // #(#[test_case(TESTS[N])])*
+            // fn ipa_prove_and_verify_(test: &str) {
+            //     ipa_prove_and_verify(test.to_string());
+            // }
 
             #(#[test_case(TESTS[N])])*
             fn kzg_fullprove_(test: &str) {
@@ -250,63 +250,63 @@ fn mock_public_params(example_name: String) {
 }
 
 // full prove (slower, covers more, but still reuses the pk)
-fn ipa_fullprove(example_name: String) {
-    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "--bits=16",
-            "-K=17",
-            "fullprove",
-            "-D",
-            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
-            "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
-            // "-K",
-            // "2",  //causes failure
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
-}
+// fn ipa_fullprove(example_name: String) {
+//     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+//         .args([
+//             "--bits=16",
+//             "-K=17",
+//             "fullprove",
+//             "-D",
+//             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+//             "-M",
+//             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+//             // "-K",
+//             // "2",  //causes failure
+//         ])
+//         .status()
+//         .expect("failed to execute process");
+//     assert!(status.success());
+// }
 
 // prove-serialize-verify, the usual full path
-fn ipa_prove_and_verify(example_name: String) {
-    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "--bits=16",
-            "-K=17",
-            "prove",
-            "-D",
-            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
-            "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
-            "-O",
-            format!("ipa_{}.pf", example_name).as_str(),
-            "--vk-path",
-            format!("ipa_{}.vk", example_name).as_str(),
-            "--params-path",
-            format!("ipa_{}.params", example_name).as_str(),
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
-    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "--bits=16",
-            "-K=17",
-            "verify",
-            "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
-            "-P",
-            format!("ipa_{}.pf", example_name).as_str(),
-            "--vk-path",
-            format!("ipa_{}.vk", example_name).as_str(),
-            "--params-path",
-            format!("ipa_{}.params", example_name).as_str(),
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
-}
+// fn ipa_prove_and_verify(example_name: String) {
+//     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+//         .args([
+//             "--bits=16",
+//             "-K=17",
+//             "prove",
+//             "-D",
+//             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+//             "-M",
+//             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+//             "-O",
+//             format!("ipa_{}.pf", example_name).as_str(),
+//             "--vk-path",
+//             format!("ipa_{}.vk", example_name).as_str(),
+//             "--params-path",
+//             format!("ipa_{}.params", example_name).as_str(),
+//         ])
+//         .status()
+//         .expect("failed to execute process");
+//     assert!(status.success());
+//     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+//         .args([
+//             "--bits=16",
+//             "-K=17",
+//             "verify",
+//             "-M",
+//             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+//             "-P",
+//             format!("ipa_{}.pf", example_name).as_str(),
+//             "--vk-path",
+//             format!("ipa_{}.vk", example_name).as_str(),
+//             "--params-path",
+//             format!("ipa_{}.params", example_name).as_str(),
+//         ])
+//         .status()
+//         .expect("failed to execute process");
+//     assert!(status.success());
+// }
 
 // prove-serialize-verify, the usual full path
 fn kzg_prove_and_verify(example_name: String) {
