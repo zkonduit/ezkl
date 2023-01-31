@@ -20,6 +20,8 @@ use halo2_proofs::poly::kzg::{
     commitment::ParamsKZG, multiopen::VerifierGWC, strategy::SingleStrategy as KZGSingleStrategy,
 };
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
+#[cfg(feature = "evm")]
+use halo2curves::bn256::G1Affine;
 use halo2curves::bn256::{Bn256, Fr};
 use log::{info, trace};
 #[cfg(feature = "evm")]
