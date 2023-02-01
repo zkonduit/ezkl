@@ -11,7 +11,7 @@
 
 > "I ran my private neural network on some public data and it produced this output"
 
-> "I correctly this publicly available neural network on some public data and it produced this output"
+> "I correctly ran this publicly available neural network on some public data and it produced this output"
 
 The rust API is also sufficiently flexible to enable you to code up a computational graph, and resulting circuit, from scratch. For examples on how to do so see the **library examples** section below.
 
