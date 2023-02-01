@@ -23,7 +23,7 @@ tabled = { version = "0.9.0", optional = true}
 ethereum_types = { package = "ethereum-types", version = "0.14.1", default-features = false, features = ["std"], optional=true}
 foundry_evm = { git = "https://github.com/foundry-rs/foundry", package = "foundry-evm", rev = "4f21719", optional=true }
 halo2_wrong_ecc = { git = "https://github.com/privacy-scaling-explorations/halo2wrong", package = "ecc", tag = "v2023_01_20", optional=true}
-snark-verifier = { git = "https://github.com/zkonduit/plonk-verifier", rev = "5a85fbb"}
+snark-verifier = { git = "https://github.com/privacy-scaling-explorations/snark-verifier", rev = "2d5ef6b"}
 colog = { version = "1.1.0", optional = true }
 eq-float = "0.1.0"
 thiserror = "1.0.38"
