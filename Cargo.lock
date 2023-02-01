@@ -4712,7 +4712,7 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/plonk-verifier?rev=5a85fbb#5a85fbbb7336b9aaf8b843d7dfa923c68c8edb87"
+source = "git+https://github.com/privacy-scaling-explorations/snark-verifier?rev=2d5ef6b#2d5ef6b4cb7e4ac9504f188167a8a2dcfcb377be"
 dependencies = [
  "bytes",
  "ecc",
