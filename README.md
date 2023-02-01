@@ -13,9 +13,9 @@
 
 > "I correctly ran this publicly available neural network on some public data and it produced this output"
 
-The rust API is also sufficiently flexible to enable you to code up a computational graph, and resulting circuit, from scratch. For examples on how to do so see the **library examples** section below.
+The rust API is also sufficiently flexible to enable you to code up a computational graph and resulting circuit from scratch. For examples on how to do so see the **library examples** section below.
 
-In the backend, we use [Halo2](https://github.com/privacy-scaling-explorations/halo2) as a proof system.  
+In the backend we use [Halo2](https://github.com/privacy-scaling-explorations/halo2) as a proof system.  
 
 For more details on how to use `ezkl`, see below ! 
 
