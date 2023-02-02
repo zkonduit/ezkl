@@ -67,14 +67,14 @@ You can easily create an `.onnx` file using `pytorch`. For samples of Onnx files
 These examples are also available as a submodule in `./examples/onnx`. To generate a proof on one of the examples, first build ezkl (`cargo build --release`) and add it to your favourite `PATH` variables.   
 
 ```bash
-ezkl --bits=16 -K=17 prove -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx -O 1l_relu.pf --vk-path 1l_relu.vk --params-path 1l_relu.params
+ezkl --bits=16 -K=17 prove -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path 1l_relu.params
 ``` 
 
-This command generates a proof that the model was correctly run on private inputs (this is the default setting). It then outputs the resulting proof at the path specfifed by `-O`, parameters that can be used for subsequent verification at `--params-path` and the verifier key at `ipa_1l_relu.vk`. 
+This command generates a proof that the model was correctly run on private inputs (this is the default setting). It then outputs the resulting proof at the path specfifed by `--proof-path`, parameters that can be used for subsequent verification at `--params-path` and the verifier key at `--vk-path`. 
 Luckily `ezkl` also provides command to verify the generated proofs: 
 
 ```bash 
-ezkl --bits=16 -K=17 verify -M ./examples/onnx/examples/1l_relu/network.onnx -P 1l_relu.pf --vk-path 1l_relu.vk --params-path 1l_relu.params
+ezkl --bits=16 -K=17 verify -M ./examples/onnx/examples/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path 1l_relu.params
 ``` 
 
 The separate prove and verify steps can be combined into a single command, if you'd prefer to not write to your filesystem: 
@@ -82,6 +82,14 @@ The separate prove and verify steps can be combined into a single command, if yo
 ```bash
 ezkl --bits=16 -K=17 fullprove -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx 
 ```
+
+To display a table of the loaded onnx nodes, their associated parameters, set `RUST_LOG=DEBUG` or run:
+
+```bash
+cargo run --release --bin ezkl -- table -M ./examples/onnx/examples/1l_relu/network.onnx
+
+```
+
 #### verifying with the EVM ◊
 
 Note that `fullprove` can also be run with an EVM verifier.  We need to pass the `evm` feature flag to conditionally compile the requisite [foundry_evm](https://github.com/foundry-rs/foundry) dependencies. Using `foundry_evm` we spin up a local EVM executor and verify the generated proof. In future releases we'll create a simple pipeline for deploying to EVM based networks. Also note that this requires a local [solc](https://docs.soliditylang.org/en/v0.8.17/installing-solidity.html) installation. 
@@ -94,7 +102,7 @@ cargo run  --release --features evm --bin ezkl fullprove -D ./examples/onnx/exam
 ```
 
 
-### usage 🔧
+### general usage 🔧
 
 ```bash
 Usage: ezkl [OPTIONS] <COMMAND>
@@ -108,15 +116,16 @@ Commands:
   help       Print this message or the help of the given subcommand(s)
 
 Options:
-  -T, --tolerance <TOLERANCE>  The tolerance for error on model outputs [default: 0]
-  -S, --scale <SCALE>          The denominator in the fixed point representation used when quantizing [default: 7]
-  -B, --bits <BITS>            The number of bits used in lookup tables [default: 16]
-  -K, --logrows <LOGROWS>      The log_2 number of rows [default: 17]
-      --public-inputs          Flags whether inputs are public
-      --public-outputs         Flags whether outputs are public
-      --public-params          Flags whether params are public
-  -h, --help                   Print help information
-  -V, --version                Print version information
+  -T, --tolerance <TOLERANCE>          The tolerance for error on model outputs [default: 0]
+  -S, --scale <SCALE>                  The denominator in the fixed point representation used when quantizing [default: 7]
+  -B, --bits <BITS>                    The number of bits used in lookup tables [default: 16]
+  -K, --logrows <LOGROWS>              The log_2 number of rows [default: 17]
+      --public-inputs                  Flags whether inputs are public
+      --public-outputs                 Flags whether outputs are public
+      --public-params                  Flags whether params are public
+  -M, --max-rotations <MAX_ROTATIONS>  Flags to set maximum rotations [default: 512]
+  -h, --help                           Print help information
+  -V, --version                        Print version information
 ```
 
 `bits`, `scale`, `tolerance`, and `logrows` have default values. You can use tolerance to express a tolerance to a certain amount of quantization error on the output eg. if set to 2 the circuit will verify even if the generated output deviates by an absolute value of 2 on any dimension from the expected output. `prove`, `mock`, `fullprove` all require `-D` and `-M` parameters, which if not provided, the cli will query the user to manually enter the path(s).
@@ -143,18 +152,8 @@ The `.onnx` file can be generated using pytorch or tensorflow. The data json fil
 
 For examples of such files see `examples/onnx_models`.
 
-To run a simple example using the cli:
+To run a simple example using the cli see **python and cli tutorial** above.
 
-```bash
-cargo run --release --bin ezkl -- mock -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx
-```
-
-To display a table of loaded Onnx nodes, and their associated parameters, set `RUST_LOG=DEBUG` or run:
-
-```bash
-cargo run --release --bin ezkl -- table -M ./examples/onnx/examples/1l_relu/network.onnx
-
-```
 
 ## benchmarks ⏳
 

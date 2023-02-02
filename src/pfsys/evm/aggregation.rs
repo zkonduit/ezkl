@@ -1,7 +1,7 @@
-use super::prepare_circuit_and_public_input;
-use super::ModelInput;
 use crate::commands::Cli;
 use crate::fieldutils::i32_to_felt;
+use crate::pfsys::prepare_circuit_and_public_input;
+use crate::pfsys::ModelInput;
 use ethereum_types::Address;
 use foundry_evm::executor::{fork::MultiFork, Backend, ExecutorBuilder};
 use halo2_proofs::plonk::VerifyingKey;

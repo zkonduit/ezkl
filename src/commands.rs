@@ -88,7 +88,7 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     Table {
         /// The path to the .onnx model file
-        #[arg(short = 'M', long, default_value = "")]
+        #[arg(short = 'M', long)]
         model: String,
     },
 
@@ -96,10 +96,10 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     Mock {
         /// The path to the .json data file
-        #[arg(short = 'D', long, default_value = "")]
+        #[arg(short = 'D', long)]
         data: String,
         /// The path to the .onnx model file
-        #[arg(short = 'M', long, default_value = "")]
+        #[arg(short = 'M', long)]
         model: String,
     },
 
@@ -107,83 +107,74 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     Fullprove {
         /// The path to the .json data file
-        #[arg(short = 'D', long, default_value = "")]
+        #[arg(short = 'D', long)]
         data: String,
         /// The path to the .onnx model file
-        #[arg(short = 'M', long, default_value = "")]
+        #[arg(short = 'M', long)]
         model: String,
         //todo: optional Params
         #[arg(
             long,
             num_args = 0..=1,
             default_value_t = ProofSystem::KZG,
-//            default_missing_value = "always",
             value_enum
         )]
         pfsys: ProofSystem,
     },
 
-    /// Loads model and data, prepares vk and pk, and creates proof, saving proof in --output
+    /// Loads model and data, prepares vk and pk, and creates proof, saving proof in --proof-path
+    #[command(arg_required_else_help = true)]
     Prove {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'D', long, default_value = "")]
+        #[arg(short = 'D', long)]
         data: String,
-
         /// The path to the .onnx model file
-        #[arg(short = 'M', long, default_value = "")]
+        #[arg(short = 'M', long)]
         model: PathBuf,
         /// The path to the desired output file
-        #[arg(short = 'O', long, default_value = "")]
+        #[arg(long)]
         proof_path: PathBuf,
         /// The path to output to the desired verfication key file (optional)
-        #[arg(long, default_value = "")]
+        #[arg(long)]
         vk_path: PathBuf,
         /// The path to output to the desired verfication key file (optional)
-        #[arg(long, default_value = "")]
+        #[arg(long)]
         params_path: PathBuf,
-
-        // /// The path to the Params for the proof system
-        // #[arg(short = 'P', long, default_value = "")]
-        // params: PathBuf,
+        /// The [ProofSystem] we'll be using.
         #[arg(
             long,
 	    short = 'B',
             require_equals = true,
             num_args = 0..=1,
             default_value_t = ProofSystem::KZG,
-            default_missing_value = "always",
             value_enum
         )]
-        /// The [ProofSystem] we'll be using.
         pfsys: ProofSystem,
         // todo, optionally allow supplying proving key
     },
     /// Verifies a proof, returning accept or reject
+    #[command(arg_required_else_help = true)]
     Verify {
         /// The path to the .onnx model file
-        #[arg(short = 'M', long, default_value = "")]
+        #[arg(short = 'M', long)]
         model: PathBuf,
 
         /// The path to the proof file
-        #[arg(short = 'P', long, default_value = "")]
+        #[arg(long)]
         proof_path: PathBuf,
         /// The path to output to the desired verfication key file (optional)
-        #[arg(long, default_value = "")]
+        #[arg(long)]
         vk_path: PathBuf,
         /// The path to output to the desired verfication key file (optional)
-        #[arg(long, default_value = "")]
+        #[arg(long)]
         params_path: PathBuf,
 
-        // /// The path to the Params for the proof system
-        // #[arg(short = 'P', long, default_value = "")]
-        // params: PathBuf,
         #[arg(
             long,
 	    short = 'B',
             require_equals = true,
             num_args = 0..=1,
             default_value_t = ProofSystem::KZG,
-            default_missing_value = "always",
             value_enum
         )]
         pfsys: ProofSystem,

@@ -2,7 +2,7 @@ use crate::commands::{Cli, Commands, ProofSystem};
 use crate::fieldutils::i32_to_felt;
 use crate::graph::Model;
 #[cfg(feature = "evm")]
-use crate::pfsys::aggregation::{
+use crate::pfsys::evm::aggregation::{
     evm_verify, gen_aggregation_evm_verifier, gen_application_snark, gen_kzg_proof, gen_pk,
     gen_srs, AggregationCircuit,
 };

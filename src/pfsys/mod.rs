@@ -1,6 +1,6 @@
 /// Aggregation circuit
 #[cfg(feature = "evm")]
-pub mod aggregation;
+pub mod evm;
 
 use crate::commands::{data_path, Cli};
 use crate::fieldutils::i32_to_felt;
