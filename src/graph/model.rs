@@ -321,14 +321,14 @@ impl Model {
         }
     }
 
-    /// Configures a `BTreeMap` of 'fuseable' operations. These correspond to operations that are represented in
-    /// the `circuit::fused` module. A single configuration is output, representing the amalgamation of these operations into
+    /// Configures a [BTreeMap] of operations that can be constrained using polynomials. These correspond to operations that are represented in
+    /// the `circuit::polynomial` module. A single configuration is output, representing the amalgamation of these operations into
     /// a single Halo2 gate.
     /// # Arguments
     ///
-    /// * `nodes` - A `BTreeMap` of (node index, [Node] pairs). The [Node] must represent a fuseable op.
+    /// * `nodes` - A [BTreeMap] of (node index, [Node] pairs). The [Node] must represent a polynomial op.
     /// * `meta` - Halo2 ConstraintSystem.
-    /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure all the passed `nodes`.
+    /// * `vars` - [ModelVars] for the model.
     fn conf_poly_ops<F: FieldExt + TensorType>(
         &self,
         nodes: &BTreeMap<&usize, &Node>,
@@ -431,7 +431,7 @@ impl Model {
     ///
     /// * `node` - The [Node] must represent a lookup based op.
     /// * `meta` - Halo2 ConstraintSystem.
-    /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure the passed `node`.
+    /// * `vars` - [ModelVars] for the model.
     fn conf_table<F: FieldExt + TensorType>(
         &self,
         node: &Node,
@@ -533,7 +533,7 @@ impl Model {
     ///
     /// * `config` - [NodeConfig] the single region we will layout.
     /// * `layouter` - Halo2 Layouter.
-    /// * `inputs` - `BTreeMap` of values to feed into the NodeConfig, can also include previous intermediate results, i.e the output of other nodes.
+    /// * `inputs` - [BTreeMap] of values to feed into the [NodeConfig], can also include previous intermediate results, i.e the output of other nodes.
     fn layout_config<F: FieldExt + TensorType>(
         &self,
         layouter: &mut impl Layouter<F>,
@@ -583,11 +583,11 @@ impl Model {
     /// a) independent lookup operations (i.e operations that don't feed into one another so can be processed in parallel).
     /// b) operations that can be fused together, i.e the output of one op might feed into another.
     /// The logic for bucket assignment is thus: we assign all data intake nodes to the 0 bucket.
-    /// We iterate over each node in turn. If the node is a fuseable op, assign to it the maximum bucket of it's inputs.
+    /// We iterate over each node in turn. If the node is a polynomial op, assign to it the maximum bucket of it's inputs.
     /// If the node is a lookup table, assign to it the maximum bucket of it's inputs incremented by 1.
     /// # Arguments
     ///
-    /// * `nodes` - `BTreeMap` of (node index, [Node]) pairs.
+    /// * `nodes` - [BTreeMap] of (node index, [Node]) pairs.
     pub fn assign_execution_buckets(
         mut nodes: BTreeMap<usize, Node>,
     ) -> Result<NodeGraph, GraphError> {
