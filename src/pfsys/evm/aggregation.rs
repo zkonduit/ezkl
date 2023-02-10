@@ -3,14 +3,12 @@ use crate::fieldutils::i32_to_felt;
 use crate::pfsys::evm::*;
 use crate::pfsys::prepare_circuit_and_public_input;
 use crate::pfsys::ModelInput;
-use ethereum_types::Address;
-// use foundry_evm::executor::{fork::MultiFork, Backend, ExecutorBuilder};
 use halo2_proofs::plonk::VerifyingKey;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     dev::MockProver,
     plonk::{
-        self, create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ConstraintSystem,
+        self, create_proof, verify_proof, Circuit, ConstraintSystem,
         ProvingKey,
     },
     poly::{
@@ -37,7 +35,7 @@ use itertools::Itertools;
 use log::trace;
 use rand::rngs::OsRng;
 use snark_verifier::{
-    loader::evm::{self, encode_calldata, EvmLoader},
+    loader::evm::{self, EvmLoader},
     system::halo2::transcript::evm::EvmTranscript,
 };
 use snark_verifier::{
@@ -57,7 +55,6 @@ use snark_verifier::{
 use std::error::Error;
 use std::io::Cursor;
 use std::{iter, rc::Rc};
-use thiserror::Error;
 
 const LIMBS: usize = 4;
 const BITS: usize = 68;
@@ -79,26 +76,6 @@ type Halo2Loader<'a> = loader::halo2::Halo2Loader<'a, G1Affine, BaseFieldEccChip
 /// Application snark transcript
 pub type PoseidonTranscript<L, S> =
     system::halo2::transcript::halo2::PoseidonTranscript<G1Affine, L, S, T, RATE, R_F, R_P>;
-
-#[derive(Error, Debug)]
-/// Errors related to proof aggregation
-pub enum AggregationError {
-    /// A KZG proof could not be verified
-    #[error("failed to verify KZG proof")]
-    KZGProofVerification,
-    /// EVM execution errors
-    #[error("EVM execution of raw code failed")]
-    EVMRawExecution,
-    /// proof read errors
-    #[error("Failed to read proof")]
-    ProofRead,
-    /// proof verification errors
-    #[error("Failed to verify proof")]
-    ProofVerify,
-    /// proof creation errors
-    #[error("Failed to create proof")]
-    ProofCreate,
-}
 
 /// An application snark with proof and instance variables ready for aggregation (raw field element)
 #[derive(Debug)]
@@ -254,7 +231,7 @@ impl AggregationCircuit {
     pub fn new(
         params: &ParamsKZG<Bn256>,
         snarks: impl IntoIterator<Item = Snark>,
-    ) -> Result<Self, AggregationError> {
+    ) -> Result<Self, PipelineError> {
         let svk = params.get_g()[0].into();
         let snarks = snarks.into_iter().collect_vec();
 
@@ -269,10 +246,10 @@ impl AggregationCircuit {
                 &snark.instances,
                 &mut transcript,
             )
-            .map_err(|_| AggregationError::ProofRead)?;
+            .map_err(|_| PipelineError::ProofRead)?;
             let mut accum =
                 PlonkSuccinctVerifier::verify(&svk, &snark.protocol, &snark.instances, &proof)
-                    .map_err(|_| AggregationError::ProofVerify)?;
+                    .map_err(|_| PipelineError::ProofVerify)?;
             accumulators.append(&mut accum);
         }
 
@@ -281,7 +258,7 @@ impl AggregationCircuit {
             let mut transcript = PoseidonTranscript::<NativeLoader, _>::new(Vec::new());
             let accumulator =
                 As::create_proof(&Default::default(), &accumulators, &mut transcript, OsRng)
-                    .map_err(|_| AggregationError::ProofCreate)?;
+                    .map_err(|_| PipelineError::ProofCreate)?;
             (accumulator, transcript.finalize())
         };
 
@@ -422,7 +399,7 @@ pub fn gen_aggregation_evm_verifier(
     vk: &VerifyingKey<G1Affine>,
     num_instance: Vec<usize>,
     accumulator_indices: Vec<(usize, usize)>,
-) -> Result<Vec<u8>, AggregationError> {
+) -> Result<Vec<u8>, PipelineError> {
     let protocol = compile(
         params,
         vk,
@@ -438,51 +415,12 @@ pub fn gen_aggregation_evm_verifier(
 
     let instances = transcript.load_instances(num_instance);
     let proof = PlonkVerifier::read_proof(&vk, &protocol, &instances, &mut transcript)
-        .map_err(|_| AggregationError::ProofRead)?;
+        .map_err(|_| PipelineError::ProofRead)?;
     PlonkVerifier::verify(&vk, &protocol, &instances, &proof)
-        .map_err(|_| AggregationError::ProofVerify)?;
+        .map_err(|_| PipelineError::ProofVerify)?;
 
     Ok(evm::compile_yul(&loader.yul_code()))
 }
-
-// /// Verify by executing bytecode with instance variables and proof as input
-// pub fn evm_verify(
-//     deployment_code: Vec<u8>,
-//     instances: Vec<Vec<Fr>>,
-//     proof: Vec<u8>,
-// ) -> Result<bool, Box<dyn Error>> {
-//     let calldata = encode_calldata(&instances, &proof);
-//     let mut evm = ExecutorBuilder::default()
-//         .with_gas_limit(u64::MAX.into())
-//         .build(Backend::new(MultiFork::new().0, None));
-
-//     let caller = Address::from_low_u64_be(0xfe);
-//     let verifier = evm
-//         .deploy(caller, deployment_code.into(), 0.into(), None)
-//         .map_err(Box::new)?
-//         .address;
-//     let result = evm
-//         .call_raw(caller, verifier, calldata.into(), 0.into())
-//         .map_err(|_| Box::new(AggregationError::EVMRawExecution))?;
-
-//     dbg!(result.gas_used);
-
-//     Ok(!result.reverted)
-// }
-
-// /// Generate a structured reference string for testing. Not secure, do not use in production.
-// pub fn gen_srs(k: u32) -> ParamsKZG<Bn256> {
-//     ParamsKZG::<Bn256>::setup(k, OsRng)
-// }
-
-// /// Generate the proving key
-// pub fn gen_pk<C: Circuit<Fr>>(
-//     params: &ParamsKZG<Bn256>,
-//     circuit: &C,
-// ) -> Result<ProvingKey<G1Affine>, plonk::Error> {
-//     let vk = keygen_vk(params, circuit)?;
-//     keygen_pk(params, vk, circuit)
-// }
 
 /// Generates proof for either application circuit (model) or aggregation circuit.
 pub fn gen_kzg_proof<
@@ -529,7 +467,7 @@ pub fn gen_kzg_proof<
     let accept = VerificationStrategy::<_, VerifierGWC<_>>::finalize(verify);
 
     if !accept {
-        return Err(Box::new(AggregationError::KZGProofVerification));
+        return Err(Box::new(PipelineError::KZGProofVerification));
     }
     Ok(proof)
 }

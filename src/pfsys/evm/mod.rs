@@ -18,7 +18,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 /// Errors related to proof aggregation
-pub enum AggregationError {
+pub enum PipelineError {
     /// A KZG proof could not be verified
     #[error("failed to verify KZG proof")]
     KZGProofVerification,
@@ -54,7 +54,7 @@ pub fn evm_verify(
         .address;
     let result = evm
         .call_raw(caller, verifier, calldata.into(), 0.into())
-        .map_err(|_| Box::new(AggregationError::EVMRawExecution))?;
+        .map_err(|_| Box::new(PipelineError::EVMRawExecution))?;
 
     dbg!(result.gas_used);
 
