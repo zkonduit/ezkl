@@ -1,9 +1,10 @@
 use crate::commands::Cli;
 use crate::fieldutils::i32_to_felt;
+use crate::pfsys::evm::*;
 use crate::pfsys::prepare_circuit_and_public_input;
 use crate::pfsys::ModelInput;
 use ethereum_types::Address;
-use foundry_evm::executor::{fork::MultiFork, Backend, ExecutorBuilder};
+// use foundry_evm::executor::{fork::MultiFork, Backend, ExecutorBuilder};
 use halo2_proofs::plonk::VerifyingKey;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -444,44 +445,44 @@ pub fn gen_aggregation_evm_verifier(
     Ok(evm::compile_yul(&loader.yul_code()))
 }
 
-/// Verify by executing bytecode with instance variables and proof as input
-pub fn evm_verify(
-    deployment_code: Vec<u8>,
-    instances: Vec<Vec<Fr>>,
-    proof: Vec<u8>,
-) -> Result<bool, Box<dyn Error>> {
-    let calldata = encode_calldata(&instances, &proof);
-    let mut evm = ExecutorBuilder::default()
-        .with_gas_limit(u64::MAX.into())
-        .build(Backend::new(MultiFork::new().0, None));
+// /// Verify by executing bytecode with instance variables and proof as input
+// pub fn evm_verify(
+//     deployment_code: Vec<u8>,
+//     instances: Vec<Vec<Fr>>,
+//     proof: Vec<u8>,
+// ) -> Result<bool, Box<dyn Error>> {
+//     let calldata = encode_calldata(&instances, &proof);
+//     let mut evm = ExecutorBuilder::default()
+//         .with_gas_limit(u64::MAX.into())
+//         .build(Backend::new(MultiFork::new().0, None));
 
-    let caller = Address::from_low_u64_be(0xfe);
-    let verifier = evm
-        .deploy(caller, deployment_code.into(), 0.into(), None)
-        .map_err(Box::new)?
-        .address;
-    let result = evm
-        .call_raw(caller, verifier, calldata.into(), 0.into())
-        .map_err(|_| Box::new(AggregationError::EVMRawExecution))?;
+//     let caller = Address::from_low_u64_be(0xfe);
+//     let verifier = evm
+//         .deploy(caller, deployment_code.into(), 0.into(), None)
+//         .map_err(Box::new)?
+//         .address;
+//     let result = evm
+//         .call_raw(caller, verifier, calldata.into(), 0.into())
+//         .map_err(|_| Box::new(AggregationError::EVMRawExecution))?;
 
-    dbg!(result.gas_used);
+//     dbg!(result.gas_used);
 
-    Ok(!result.reverted)
-}
+//     Ok(!result.reverted)
+// }
 
-/// Generate a structured reference string for testing. Not secure, do not use in production.
-pub fn gen_srs(k: u32) -> ParamsKZG<Bn256> {
-    ParamsKZG::<Bn256>::setup(k, OsRng)
-}
+// /// Generate a structured reference string for testing. Not secure, do not use in production.
+// pub fn gen_srs(k: u32) -> ParamsKZG<Bn256> {
+//     ParamsKZG::<Bn256>::setup(k, OsRng)
+// }
 
-/// Generate the proving key
-pub fn gen_pk<C: Circuit<Fr>>(
-    params: &ParamsKZG<Bn256>,
-    circuit: &C,
-) -> Result<ProvingKey<G1Affine>, plonk::Error> {
-    let vk = keygen_vk(params, circuit)?;
-    keygen_pk(params, vk, circuit)
-}
+// /// Generate the proving key
+// pub fn gen_pk<C: Circuit<Fr>>(
+//     params: &ParamsKZG<Bn256>,
+//     circuit: &C,
+// ) -> Result<ProvingKey<G1Affine>, plonk::Error> {
+//     let vk = keygen_vk(params, circuit)?;
+//     keygen_pk(params, vk, circuit)
+// }
 
 /// Generates proof for either application circuit (model) or aggregation circuit.
 pub fn gen_kzg_proof<

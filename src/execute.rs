@@ -2,10 +2,9 @@ use crate::commands::{Cli, Commands, ProofSystem};
 use crate::fieldutils::i32_to_felt;
 use crate::graph::Model;
 #[cfg(feature = "evm")]
-use crate::pfsys::evm::aggregation::{
-    evm_verify, gen_aggregation_evm_verifier, gen_application_snark, gen_kzg_proof, gen_pk,
-    gen_srs, AggregationCircuit,
-};
+use crate::pfsys::evm::{evm_verify, gen_pk, gen_srs, aggregation::{
+     gen_aggregation_evm_verifier, gen_application_snark, gen_kzg_proof, AggregationCircuit,
+}};
 use crate::pfsys::{create_keys, load_params, load_vk, Proof};
 use crate::pfsys::{
     create_proof_model, prepare_circuit_and_public_input, prepare_data, save_params, save_vk,
