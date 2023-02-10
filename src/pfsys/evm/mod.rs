@@ -1,14 +1,13 @@
 /// Aggregate proof generation for EVM
 pub mod aggregation;
 
-/// Simple proof generation for EVM
-pub mod simple;
-
-use halo2curves::bn256::{Bn256,G1Affine,Fr};
-use halo2_proofs::poly::kzg::commitment::ParamsKZG;
 use halo2_proofs::plonk;
+use halo2_proofs::poly::kzg::commitment::ParamsKZG;
+/// Simple proof generation for EVM
+// pub mod simple;
+use halo2curves::bn256::{Bn256, Fr, G1Affine};
 
-use crate::pfsys::{keygen_pk, keygen_vk, ProvingKey, Circuit, OsRng, Error} ;
+use crate::pfsys::{keygen_pk, keygen_vk, Circuit, Error, OsRng, ProvingKey};
 
 use ethereum_types::Address;
 use foundry_evm::executor::{fork::MultiFork, Backend, ExecutorBuilder};
