@@ -7,6 +7,27 @@ use std::error::Error;
 use std::io::{stdin, stdout, Write};
 use std::path::PathBuf;
 
+#[allow(missing_docs)]
+#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub enum ProofSystem {
+    IPA,
+    KZG,
+    KZGAggr,
+}
+impl std::fmt::Display for ProofSystem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.to_possible_value()
+            .expect("no values are skipped")
+            .get_name()
+            .fmt(f)
+    }
+}
+
+// pub enum VerifierEnv {
+//     Native,
+//     KZG,
+// }
+
 const EZKLCONF: &str = "EZKLCONF";
 
 #[allow(missing_docs)]
@@ -67,21 +88,6 @@ impl Cli {
 }
 
 #[allow(missing_docs)]
-#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
-pub enum ProofSystem {
-    IPA,
-    KZG,
-}
-impl std::fmt::Display for ProofSystem {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.to_possible_value()
-            .expect("no values are skipped")
-            .get_name()
-            .fmt(f)
-    }
-}
-
-#[allow(missing_docs)]
 #[derive(Debug, Subcommand, Clone, Deserialize, Serialize)]
 pub enum Commands {
     /// Loads model and prints model table
@@ -122,6 +128,25 @@ pub enum Commands {
         pfsys: ProofSystem,
     },
 
+    /// Loads model and input and runs full prover (for testing)
+    #[command(arg_required_else_help = true)]
+    FullproveEVM {
+        /// The path to the .json data file
+        #[arg(short = 'D', long)]
+        data: String,
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: String,
+        //todo: optional Params
+        #[arg(
+             long,
+             num_args = 0..=1,
+             default_value_t = ProofSystem::KZG,
+             value_enum
+         )]
+        pfsys: ProofSystem,
+    },
+
     /// Loads model and data, prepares vk and pk, and creates proof, saving proof in --proof-path
     #[command(arg_required_else_help = true)]
     Prove {
@@ -140,6 +165,34 @@ pub enum Commands {
         /// The path to output to the desired verfication key file (optional)
         #[arg(long)]
         params_path: PathBuf,
+        /// The [ProofSystem] we'll be using.
+        #[arg(
+            long,
+	    short = 'B',
+            require_equals = true,
+            num_args = 0..=1,
+            default_value_t = ProofSystem::KZG,
+            value_enum
+        )]
+        pfsys: ProofSystem,
+        // todo, optionally allow supplying proving key
+    },
+
+    /// Loads model and data, prepares vk and pk, and creates proof, saving proof in --proof-path
+    #[command(arg_required_else_help = true)]
+    ProveEVM {
+        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'D', long)]
+        data: String,
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: PathBuf,
+        /// The path to the desired output file
+        #[arg(long)]
+        proof_path: PathBuf,
+        /// The path to output to the desired verfication key file (optional)
+        #[arg(long)]
+        deployment_code_path: PathBuf,
         /// The [ProofSystem] we'll be using.
         #[arg(
             long,
@@ -177,6 +230,31 @@ pub enum Commands {
             default_value_t = ProofSystem::KZG,
             value_enum
         )]
+        pfsys: ProofSystem,
+    },
+
+    /// Verifies a proof, returning accept or reject
+    #[command(arg_required_else_help = true)]
+    VerifyEVM {
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: PathBuf,
+
+        /// The path to the proof file
+        #[arg(long)]
+        proof_path: PathBuf,
+        /// The path to verifier contract's deployment code
+        #[arg(long)]
+        deployment_code_path: PathBuf,
+
+        #[arg(
+             long,
+         short = 'B',
+             require_equals = true,
+             num_args = 0..=1,
+             default_value_t = ProofSystem::KZG,
+             value_enum
+         )]
         pfsys: ProofSystem,
     },
 }

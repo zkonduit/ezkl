@@ -19,7 +19,6 @@ use halo2_proofs::{
 use log::{info, trace};
 pub use model::*;
 pub use node::*;
-use std::cmp::max;
 use std::marker::PhantomData;
 use thiserror::Error;
 pub use vars::*;
@@ -74,6 +73,16 @@ pub struct ModelCircuit<F: FieldExt> {
     pub _marker: PhantomData<F>,
 }
 
+impl<F: FieldExt + TensorType> ModelCircuit<F> {
+    /// Number of instances used by the circuit (useful for generating EVM bytecode)
+    pub fn num_instances(&self) -> usize {
+        let model = Model::from_arg().expect("model should load from args");
+        // for now the number of instances corresponds to the number of graph / model outputs
+        let (num_instances, _) = model.num_instances();
+        num_instances
+    }
+}
+
 impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
     type Config = ModelConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
@@ -84,33 +93,15 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let model = Model::from_arg().expect("model should load from args");
-        let mut num_fixed = 0;
-        let row_cap = model.max_node_size();
 
+        let row_cap = model.max_node_size();
         // TODO: extract max number of params in a given fused layer
-        let num_advice: usize = if model.visibility.params.is_public() {
-            num_fixed += model.max_node_params();
-            // this is the maximum of variables in non-fused layer, and the maximum of variables (non-params) in fused layers
-            max(model.max_node_vars_non_fused(), model.max_node_vars_fused())
-        } else {
-            // this is the maximum of variables in non-fused layer, and the maximum of variables (non-params) in fused layers
-            //  + the max number of params in a fused layer
-            max(
-                model.max_node_vars_non_fused(),
-                model.max_node_params() + model.max_node_vars_fused(),
-            )
-        };
+        let num_advice = model.num_advice();
+        let num_fixed = model.num_fixed();
+
         // for now the number of instances corresponds to the number of graph / model outputs
-        let mut num_instances = 0;
-        let mut instance_shapes = vec![];
-        if model.visibility.input.is_public() {
-            num_instances += model.num_inputs();
-            instance_shapes.extend(model.input_shapes());
-        }
-        if model.visibility.output.is_public() {
-            num_instances += model.num_outputs();
-            instance_shapes.extend(model.output_shapes());
-        }
+        let (num_instances, instance_shapes) = model.num_instances();
+
         let mut vars = ModelVars::new(
             cs,
             model.logrows as usize,

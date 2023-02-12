@@ -1,17 +1,14 @@
 use crate::commands::Cli;
-use crate::fieldutils::i32_to_felt;
-use crate::pfsys::prepare_circuit_and_public_input;
+use crate::fieldutils::{felt_to_i32, i32_to_felt};
+use crate::graph::ModelCircuit;
+use crate::pfsys::evm::DeploymentCode;
 use crate::pfsys::ModelInput;
-use ethereum_types::Address;
-use foundry_evm::executor::{fork::MultiFork, Backend, ExecutorBuilder};
+use crate::pfsys::{create_keys, prepare_circuit_and_public_input, Proof};
 use halo2_proofs::plonk::VerifyingKey;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     dev::MockProver,
-    plonk::{
-        self, create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ConstraintSystem,
-        ProvingKey,
-    },
+    plonk::{self, create_proof, verify_proof, Circuit, ConstraintSystem, ProvingKey},
     poly::{
         commitment::{Params, ParamsProver},
         kzg::{
@@ -36,7 +33,7 @@ use itertools::Itertools;
 use log::trace;
 use rand::rngs::OsRng;
 use snark_verifier::{
-    loader::evm::{self, encode_calldata, EvmLoader},
+    loader::evm::{self, EvmLoader},
     system::halo2::transcript::evm::EvmTranscript,
 };
 use snark_verifier::{
@@ -85,9 +82,6 @@ pub enum AggregationError {
     /// A KZG proof could not be verified
     #[error("failed to verify KZG proof")]
     KZGProofVerification,
-    /// EVM execution errors
-    #[error("EVM execution of raw code failed")]
-    EVMRawExecution,
     /// proof read errors
     #[error("Failed to read proof")]
     ProofRead,
@@ -392,7 +386,7 @@ pub fn gen_application_snark(
 ) -> Result<Snark, Box<dyn Error>> {
     let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(data, args)?;
 
-    let pk = gen_pk(params, &circuit)?;
+    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, params)?;
     let number_instance = public_inputs[0].len();
     trace!("number_instance {:?}", number_instance);
     let protocol = compile(
@@ -412,7 +406,7 @@ pub fn gen_application_snark(
         PoseidonTranscript<NativeLoader, _>,
         PoseidonTranscript<NativeLoader, _>,
     >(params, &pk, circuit, pi_inner.clone())?;
-    Ok(Snark::new(protocol, pi_inner, proof))
+    Ok(Snark::new(protocol, pi_inner, proof.proof))
 }
 
 /// Create aggregation EVM verifier bytecode
@@ -421,7 +415,7 @@ pub fn gen_aggregation_evm_verifier(
     vk: &VerifyingKey<G1Affine>,
     num_instance: Vec<usize>,
     accumulator_indices: Vec<(usize, usize)>,
-) -> Result<Vec<u8>, AggregationError> {
+) -> Result<DeploymentCode, AggregationError> {
     let protocol = compile(
         params,
         vk,
@@ -441,46 +435,9 @@ pub fn gen_aggregation_evm_verifier(
     PlonkVerifier::verify(&vk, &protocol, &instances, &proof)
         .map_err(|_| AggregationError::ProofVerify)?;
 
-    Ok(evm::compile_yul(&loader.yul_code()))
-}
-
-/// Verify by executing bytecode with instance variables and proof as input
-pub fn evm_verify(
-    deployment_code: Vec<u8>,
-    instances: Vec<Vec<Fr>>,
-    proof: Vec<u8>,
-) -> Result<bool, Box<dyn Error>> {
-    let calldata = encode_calldata(&instances, &proof);
-    let mut evm = ExecutorBuilder::default()
-        .with_gas_limit(u64::MAX.into())
-        .build(Backend::new(MultiFork::new().0, None));
-
-    let caller = Address::from_low_u64_be(0xfe);
-    let verifier = evm
-        .deploy(caller, deployment_code.into(), 0.into(), None)
-        .map_err(Box::new)?
-        .address;
-    let result = evm
-        .call_raw(caller, verifier, calldata.into(), 0.into())
-        .map_err(|_| Box::new(AggregationError::EVMRawExecution))?;
-
-    dbg!(result.gas_used);
-
-    Ok(!result.reverted)
-}
-
-/// Generate a structured reference string for testing. Not secure, do not use in production.
-pub fn gen_srs(k: u32) -> ParamsKZG<Bn256> {
-    ParamsKZG::<Bn256>::setup(k, OsRng)
-}
-
-/// Generate the proving key
-pub fn gen_pk<C: Circuit<Fr>>(
-    params: &ParamsKZG<Bn256>,
-    circuit: &C,
-) -> Result<ProvingKey<G1Affine>, plonk::Error> {
-    let vk = keygen_vk(params, circuit)?;
-    keygen_pk(params, vk, circuit)
+    Ok(DeploymentCode {
+        code: evm::compile_yul(&loader.yul_code()),
+    })
 }
 
 /// Generates proof for either application circuit (model) or aggregation circuit.
@@ -494,7 +451,7 @@ pub fn gen_kzg_proof<
     pk: &ProvingKey<G1Affine>,
     circuit: C,
     instances: Vec<Vec<Fr>>,
-) -> Result<Vec<u8>, Box<dyn Error>> {
+) -> Result<Proof, Box<dyn Error>> {
     MockProver::run(params.k(), &circuit, instances.clone())
         .map_err(Box::new)?
         .assert_satisfied();
@@ -530,5 +487,13 @@ pub fn gen_kzg_proof<
     if !accept {
         return Err(Box::new(AggregationError::KZGProofVerification));
     }
-    Ok(proof)
+    let checkable_pf = Proof {
+        public_inputs: instances
+            .iter()
+            .map(|i| (*i).iter().map(|i| felt_to_i32(*i)).collect())
+            .collect(),
+        proof,
+    };
+
+    Ok(checkable_pf)
 }

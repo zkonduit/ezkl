@@ -1,5 +1,4 @@
-/// Aggregation circuit
-#[cfg(feature = "evm")]
+/// EVM related proving and verification
 pub mod evm;
 
 use crate::commands::{data_path, Cli};
@@ -137,15 +136,15 @@ pub fn prepare_data(datapath: String) -> Result<ModelInput, Box<dyn Error>> {
 }
 
 /// Creates a [VerifyingKey] and [ProvingKey] for a [ModelCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`).
-pub fn create_keys<Scheme: CommitmentScheme, F: FieldExt + TensorType>(
-    circuit: &ModelCircuit<F>,
+pub fn create_keys<Scheme: CommitmentScheme, F: FieldExt + TensorType, C: Circuit<F>>(
+    circuit: &C,
     params: &'_ Scheme::ParamsProver,
 ) -> Result<ProvingKey<Scheme::Curve>, halo2_proofs::plonk::Error>
 where
-    ModelCircuit<F>: Circuit<Scheme::Scalar>,
+    C: Circuit<Scheme::Scalar>,
 {
     //	Real proof
-    let empty_circuit = circuit.without_witnesses();
+    let empty_circuit = <C as Circuit<F>>::without_witnesses(circuit);
 
     // Initialize the proving key
     let now = Instant::now();
