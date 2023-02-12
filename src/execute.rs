@@ -18,6 +18,7 @@ use halo2_proofs::poly::kzg::multiopen::ProverGWC;
 use halo2_proofs::poly::kzg::{
     commitment::ParamsKZG, multiopen::VerifierGWC, strategy::SingleStrategy as KZGSingleStrategy,
 };
+use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 use log::{info, trace};
@@ -82,21 +83,24 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     let strategy = KZGSingleStrategy::new(&params);
                     trace!("params computed");
 
-                    let (proof, _dims) = create_proof_model::<
-                        KZGCommitmentScheme<_>,
-                        Fr,
-                        ProverGWC<_>,
-                    >(
-                        &circuit, &public_inputs, &params, &pk
-                    )
-                    .map_err(Box::<dyn Error>::from)?;
+                    let (proof, _dims) =
+                        create_proof_model::<
+                            KZGCommitmentScheme<_>,
+                            Fr,
+                            ProverGWC<_>,
+                            Challenge255<_>,
+                            Blake2bWrite<_, _, _>,
+                        >(&circuit, &public_inputs, &params, &pk)
+                        .map_err(Box::<dyn Error>::from)?;
 
-                    verify_proof_model::<_, VerifierGWC<'_, Bn256>, _, _>(
-                        proof,
-                        &params,
-                        pk.get_vk(),
-                        strategy,
-                    )?;
+                    verify_proof_model::<
+                        _,
+                        VerifierGWC<'_, Bn256>,
+                        _,
+                        _,
+                        Challenge255<_>,
+                        Blake2bRead<_, _, _>,
+                    >(proof, &params, pk.get_vk(), strategy)?;
                 }
                 ProofSystem::KZGAggr => {
                     unimplemented!()
@@ -128,14 +132,15 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     .map_err(Box::<dyn Error>::from)?;
                     trace!("params computed");
 
-                    let (proof, _dims) = create_proof_model::<
-                        KZGCommitmentScheme<_>,
-                        Fr,
-                        ProverGWC<_>,
-                    >(
-                        &circuit, &public_inputs, &params, &pk
-                    )
-                    .map_err(Box::<dyn Error>::from)?;
+                    let (proof, _dims) =
+                        create_proof_model::<
+                            KZGCommitmentScheme<_>,
+                            Fr,
+                            ProverGWC<_>,
+                            _,
+                            EvmTranscript<G1Affine, _, _, _>,
+                        >(&circuit, &public_inputs, &params, &pk)
+                        .map_err(Box::<dyn Error>::from)?;
 
                     let deployment_code =
                         gen_evm_verifier(&params, pk.get_vk(), vec![circuit.num_instances()])?;
@@ -146,8 +151,9 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         .collect::<Vec<Vec<Fr>>>();
 
                     let now = Instant::now();
-                    evm_verify(deployment_code.code().clone(), instances, proof.proof)?;
+                    let res = evm_verify(deployment_code.code().clone(), instances, proof.proof)?;
                     info!("verify took {}", now.elapsed().as_secs());
+                    assert!(res)
                 }
                 ProofSystem::KZGAggr => {
                     // We will need aggregator k > application k > bits
@@ -185,12 +191,13 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     )?;
                     info!("Aggregation proof took {}", now.elapsed().as_secs());
                     let now = Instant::now();
-                    evm_verify(
+                    let res = evm_verify(
                         deployment_code.code().clone(),
                         agg_circuit.instances(),
                         proof.proof,
                     )?;
                     info!("verify took {}", now.elapsed().as_secs());
+                    assert!(res)
                 }
             }
         }
@@ -218,14 +225,15 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     .map_err(Box::<dyn Error>::from)?;
                     trace!("params computed");
 
-                    let (proof, _input_dims) = create_proof_model::<
-                        KZGCommitmentScheme<Bn256>,
-                        Fr,
-                        ProverGWC<'_, Bn256>,
-                    >(
-                        &circuit, &public_inputs, &params, &pk
-                    )
-                    .map_err(Box::<dyn Error>::from)?;
+                    let (proof, _input_dims) =
+                        create_proof_model::<
+                            KZGCommitmentScheme<Bn256>,
+                            Fr,
+                            ProverGWC<'_, Bn256>,
+                            Challenge255<_>,
+                            Blake2bWrite<_, _, _>,
+                        >(&circuit, &public_inputs, &params, &pk)
+                        .map_err(Box::<dyn Error>::from)?;
 
                     proof.save(proof_path)?;
                     save_params::<KZGCommitmentScheme<Bn256>>(params_path, &params)?;
@@ -259,14 +267,15 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     .map_err(Box::<dyn Error>::from)?;
                     trace!("params computed");
                     let now = Instant::now();
-                    let (proof, _input_dims) = create_proof_model::<
-                        KZGCommitmentScheme<Bn256>,
-                        Fr,
-                        ProverGWC<'_, Bn256>,
-                    >(
-                        &circuit, &public_inputs, &params, &pk
-                    )
-                    .map_err(Box::<dyn Error>::from)?;
+                    let (proof, _input_dims) =
+                        create_proof_model::<
+                            KZGCommitmentScheme<Bn256>,
+                            Fr,
+                            ProverGWC<'_, Bn256>,
+                            _,
+                            EvmTranscript<G1Affine, _, _, _>,
+                        >(&circuit, &public_inputs, &params, &pk)
+                        .map_err(Box::<dyn Error>::from)?;
                     info!("proof took {}", now.elapsed().as_secs());
 
                     let deployment_code =
@@ -332,9 +341,14 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
                     let strategy = KZGSingleStrategy::new(&params);
                     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr>(vk_path)?;
-                    let result = verify_proof_model::<_, VerifierGWC<'_, Bn256>, _, _>(
-                        proof, &params, &vk, strategy,
-                    )
+                    let result = verify_proof_model::<
+                        _,
+                        VerifierGWC<'_, Bn256>,
+                        _,
+                        _,
+                        Challenge255<_>,
+                        Blake2bRead<_, _, _>,
+                    >(proof, &params, &vk, strategy)
                     .is_ok();
                     info!("verified: {}", result);
                     assert!(result);
@@ -355,7 +369,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     unimplemented!()
                 }
                 ProofSystem::KZG | ProofSystem::KZGAggr => {
-                    evm_verify(
+                    let res = evm_verify(
                         code.code().clone(),
                         proof
                             .public_inputs
@@ -364,6 +378,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                             .collect(),
                         proof.proof,
                     )?;
+                    assert!(res)
                 }
             }
         }

@@ -11,9 +11,7 @@ use halo2_proofs::plonk::{
 };
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params, Prover, Verifier};
 use halo2_proofs::poly::VerificationStrategy;
-use halo2_proofs::transcript::{
-    Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
-};
+use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer, TranscriptWriterBuffer};
 use halo2curves::group::ff::PrimeField;
 use halo2curves::serde::SerdeObject;
 use halo2curves::CurveAffine;
@@ -22,7 +20,7 @@ use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs::File;
-use std::io::{self, BufReader, BufWriter, Read, Write};
+use std::io::{self, BufReader, BufWriter, Cursor, Read, Write};
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::path::PathBuf;
@@ -163,6 +161,8 @@ pub fn create_proof_model<
     Scheme: CommitmentScheme,
     F: FieldExt + TensorType,
     P: Prover<'params, Scheme>,
+    E: EncodedChallenge<Scheme::Curve>,
+    TW: TranscriptWriterBuffer<Vec<u8>, Scheme::Curve, E>,
 >(
     circuit: &ModelCircuit<F>,
     public_inputs: &[Tensor<i32>],
@@ -173,7 +173,7 @@ where
     ModelCircuit<F>: Circuit<Scheme::Scalar>,
 {
     let now = Instant::now();
-    let mut transcript = Blake2bWrite::<_, Scheme::Curve, Challenge255<_>>::init(vec![]);
+    let mut transcript = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);
     let mut rng = OsRng;
     let pi_inner: Vec<Vec<Scheme::Scalar>> = public_inputs
         .iter()
@@ -192,7 +192,7 @@ where
 
     let dims = circuit.inputs.iter().map(|i| i.dims().to_vec()).collect();
 
-    create_proof::<Scheme, P, _, _, _, _>(
+    create_proof::<Scheme, P, _, _, TW, _>(
         params,
         pk,
         &[circuit.clone()],
@@ -221,6 +221,8 @@ pub fn verify_proof_model<
     V: Verifier<'params, Scheme>,
     Scheme: CommitmentScheme,
     Strategy: VerificationStrategy<'params, Scheme, V>,
+    E: EncodedChallenge<Scheme::Curve>,
+    TR: TranscriptReadBuffer<Cursor<Vec<u8>>, Scheme::Curve, E>,
 >(
     proof: Proof,
     params: &'params Scheme::ParamsVerifier,
@@ -247,9 +249,9 @@ where
     trace!("instances {:?}", instances);
 
     let now = Instant::now();
-    let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof.proof[..]);
+    let mut transcript = TranscriptReadBuffer::init(Cursor::new(proof.proof.clone()));
     info!("verify took {}", now.elapsed().as_secs());
-    verify_proof::<Scheme, V, _, _, _>(params, vk, strategy, instances, &mut transcript)
+    verify_proof::<Scheme, V, _, TR, _>(params, vk, strategy, instances, &mut transcript)
 }
 
 /// Loads a [VerifyingKey] at `path`.
