@@ -4,7 +4,7 @@ use crate::graph::{Model, ModelCircuit};
 use crate::pfsys::evm::aggregation::{
     gen_aggregation_evm_verifier, gen_application_snark, gen_kzg_proof, AggregationCircuit,
 };
-use crate::pfsys::evm::simple::gen_evm_verifier;
+use crate::pfsys::evm::single::gen_evm_verifier;
 use crate::pfsys::evm::{evm_verify, gen_srs, DeploymentCode};
 use crate::pfsys::{create_keys, load_params, load_vk, Proof};
 use crate::pfsys::{

@@ -16,7 +16,7 @@ use thiserror::Error;
 /// Aggregate proof generation for EVM
 pub mod aggregation;
 /// Simple (single) proof generation for EVM
-pub mod simple;
+pub mod single;
 
 #[derive(Error, Debug)]
 /// Errors related to evm verification
