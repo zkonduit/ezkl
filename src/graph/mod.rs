@@ -73,16 +73,6 @@ pub struct ModelCircuit<F: FieldExt> {
     pub _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType> ModelCircuit<F> {
-    /// Number of instances used by the circuit (useful for generating EVM bytecode)
-    pub fn num_instances(&self) -> usize {
-        let model = Model::from_arg().expect("model should load from args");
-        // for now the number of instances corresponds to the number of graph / model outputs
-        let (num_instances, _) = model.num_instances();
-        num_instances
-    }
-}
-
 impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
     type Config = ModelConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;

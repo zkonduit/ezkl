@@ -109,44 +109,6 @@ pub enum Commands {
         model: String,
     },
 
-    /// Loads model and input and runs full prover (for testing)
-    #[command(arg_required_else_help = true)]
-    Fullprove {
-        /// The path to the .json data file
-        #[arg(short = 'D', long)]
-        data: String,
-        /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
-        model: String,
-        //todo: optional Params
-        #[arg(
-            long,
-            num_args = 0..=1,
-            default_value_t = ProofSystem::KZG,
-            value_enum
-        )]
-        pfsys: ProofSystem,
-    },
-
-    /// Loads model and input and runs full prover (for testing)
-    #[command(name = "fullprove-evm", arg_required_else_help = true)]
-    FullproveEVM {
-        /// The path to the .json data file
-        #[arg(short = 'D', long)]
-        data: String,
-        /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
-        model: String,
-        //todo: optional Params
-        #[arg(
-             long,
-             num_args = 0..=1,
-             default_value_t = ProofSystem::KZG,
-             value_enum
-         )]
-        pfsys: ProofSystem,
-    },
-
     /// Loads model and data, prepares vk and pk, and creates proof, saving proof in --proof-path
     #[command(arg_required_else_help = true)]
     Prove {

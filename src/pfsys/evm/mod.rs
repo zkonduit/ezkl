@@ -68,12 +68,11 @@ impl DeploymentCode {
 /// Verify by executing bytecode with instance variables and proof as input
 pub fn evm_verify(
     deployment_code: DeploymentCode,
-    instances: Vec<Vec<Fr>>,
-    proof: Proof,
+    proof: Proof<Fr>,
 ) -> Result<bool, Box<dyn Error>> {
     debug!("evm deployment code length: {:?}", deployment_code.len());
 
-    let calldata = encode_calldata(&instances, &proof.proof);
+    let calldata = encode_calldata(&proof.public_inputs, &proof.proof);
     let mut evm = ExecutorBuilder::default()
         .with_gas_limit(u64::MAX.into())
         .build();

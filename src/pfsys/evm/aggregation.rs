@@ -1,24 +1,18 @@
 use crate::commands::Cli;
-use crate::fieldutils::{felt_to_i32, i32_to_felt};
 use crate::graph::ModelCircuit;
 use crate::pfsys::evm::DeploymentCode;
-use crate::pfsys::ModelInput;
-use crate::pfsys::{create_keys, prepare_circuit_and_public_input, Proof};
-use halo2_proofs::plonk::VerifyingKey;
+use crate::pfsys::{create_keys, prepare_circuit_and_public_input};
+use crate::pfsys::{create_proof_model, ModelInput};
+use halo2_proofs::plonk::{self, VerifyingKey};
+use halo2_proofs::poly::kzg::multiopen::{ProverGWC, VerifierGWC};
+use halo2_proofs::poly::kzg::strategy::AccumulatorStrategy;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
-    dev::MockProver,
-    plonk::{self, create_proof, verify_proof, Circuit, ConstraintSystem, ProvingKey},
+    plonk::{Circuit, ConstraintSystem},
     poly::{
-        commitment::{Params, ParamsProver},
-        kzg::{
-            commitment::{KZGCommitmentScheme, ParamsKZG},
-            multiopen::{ProverGWC, VerifierGWC},
-            strategy::AccumulatorStrategy,
-        },
-        VerificationStrategy,
+        commitment::ParamsProver,
+        kzg::commitment::{KZGCommitmentScheme, ParamsKZG},
     },
-    transcript::{EncodedChallenge, TranscriptReadBuffer, TranscriptWriterBuffer},
 };
 use halo2_wrong_ecc::{
     integer::rns::Rns,
@@ -51,7 +45,6 @@ use snark_verifier::{
     verifier::{self, plonk::PlonkProtocol, SnarkVerifier},
 };
 use std::error::Error;
-use std::io::Cursor;
 use std::{iter, rc::Rc};
 use thiserror::Error;
 
@@ -387,26 +380,35 @@ pub fn gen_application_snark(
     let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(data, args)?;
 
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, params)?;
-    let number_instance = public_inputs[0].len();
+    let number_instance = public_inputs.iter().map(|x| x.len()).collect();
     trace!("number_instance {:?}", number_instance);
     let protocol = compile(
         params,
         pk.get_vk(),
-        Config::kzg().with_num_instance(public_inputs.iter().map(|x| x.len()).collect()),
+        Config::kzg().with_num_instance(number_instance),
     );
-    let pi_inner: Vec<Vec<Fr>> = public_inputs
-        .iter()
-        .map(|i| i.iter().map(|e| i32_to_felt::<Fr>(*e)).collect::<Vec<Fr>>())
-        .collect::<Vec<Vec<Fr>>>();
+
     //    let pi_inner = pi_inner.iter().map(|e| e.deref()).collect::<Vec<&[Fr]>>();
-    trace!("pi_inner {:?}", pi_inner);
-    let proof = gen_kzg_proof::<
+    trace!("pi_inner {:?}", public_inputs);
+    let proof = create_proof_model::<
+        KZGCommitmentScheme<_>,
+        Fr,
+        _,
+        ProverGWC<_>,
+        VerifierGWC<_>,
         _,
         _,
         PoseidonTranscript<NativeLoader, _>,
         PoseidonTranscript<NativeLoader, _>,
-    >(params, &pk, circuit, pi_inner.clone())?;
-    Ok(Snark::new(protocol, pi_inner, proof.proof))
+    >(
+        circuit,
+        public_inputs.clone(),
+        &params,
+        params.verifier_params(),
+        &pk,
+        AccumulatorStrategy::new(params.verifier_params()),
+    )?;
+    Ok(Snark::new(protocol, public_inputs, proof.proof))
 }
 
 /// Create aggregation EVM verifier bytecode
@@ -438,62 +440,4 @@ pub fn gen_aggregation_evm_verifier(
     Ok(DeploymentCode {
         code: evm::compile_yul(&loader.yul_code()),
     })
-}
-
-/// Generates proof for either application circuit (model) or aggregation circuit.
-pub fn gen_kzg_proof<
-    C: Circuit<Fr>,
-    E: EncodedChallenge<G1Affine>,
-    TR: TranscriptReadBuffer<Cursor<Vec<u8>>, G1Affine, E>,
-    TW: TranscriptWriterBuffer<Vec<u8>, G1Affine, E>,
->(
-    params: &ParamsKZG<Bn256>,
-    pk: &ProvingKey<G1Affine>,
-    circuit: C,
-    instances: Vec<Vec<Fr>>,
-) -> Result<Proof, Box<dyn Error>> {
-    MockProver::run(params.k(), &circuit, instances.clone())
-        .map_err(Box::new)?
-        .assert_satisfied();
-
-    let instances = instances
-        .iter()
-        .map(|instances| instances.as_slice())
-        .collect_vec();
-    let mut proof = TW::init(Vec::new());
-    create_proof::<KZGCommitmentScheme<Bn256>, ProverGWC<_>, _, _, TW, _>(
-        params,
-        pk,
-        &[circuit],
-        &[instances.as_slice()],
-        OsRng,
-        &mut proof,
-    )
-    .map_err(Box::new)?;
-    let proof = proof.finalize();
-
-    let mut transcript = TR::init(Cursor::new(proof.clone()));
-    let verify = verify_proof::<_, VerifierGWC<_>, _, TR, _>(
-        params.verifier_params(),
-        pk.get_vk(),
-        AccumulatorStrategy::new(params.verifier_params()),
-        &[instances.as_slice()],
-        &mut transcript,
-    )
-    .map_err(Box::new)?;
-
-    let accept = VerificationStrategy::<_, VerifierGWC<_>>::finalize(verify);
-
-    if !accept {
-        return Err(Box::new(AggregationError::KZGProofVerification));
-    }
-    let checkable_pf = Proof {
-        public_inputs: instances
-            .iter()
-            .map(|i| (*i).iter().map(|i| felt_to_i32(*i)).collect())
-            .collect(),
-        proof,
-    };
-
-    Ok(checkable_pf)
 }

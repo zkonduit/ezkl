@@ -139,10 +139,7 @@ impl Model {
     pub fn from_ezkl_conf(args: Cli) -> Result<Self, Box<dyn Error>> {
         let visibility = VarVisibility::from_args(args.clone())?;
         match args.command {
-            Commands::Table { model }
-            | Commands::Mock { model, .. }
-            | Commands::Fullprove { model, .. }
-            | Commands::FullproveEVM { model, .. } => Model::new(
+            Commands::Table { model } | Commands::Mock { model, .. } => Model::new(
                 model,
                 args.scale,
                 args.bits,
