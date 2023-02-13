@@ -2,6 +2,7 @@ use ethereum_types::Address;
 use foundry_evm::executor::{fork::MultiFork, Backend, ExecutorBuilder};
 use halo2_proofs::poly::kzg::commitment::ParamsKZG;
 use halo2curves::bn256::{Bn256, Fr};
+use log::{debug, trace};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use snark_verifier::loader::evm::encode_calldata;
@@ -73,7 +74,9 @@ pub fn evm_verify(
         .call_raw(caller, verifier, calldata.into(), 0.into())
         .map_err(|_| Box::new(EvmVerificationError::EVMRawExecution))?;
 
-    dbg!(result.gas_used);
+    trace!("evm execution result: {:?}", result);
+
+    debug!("gas used {}:", result.gas_used);
 
     Ok(!result.reverted)
 }

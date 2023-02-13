@@ -110,12 +110,32 @@ macro_rules! test_func_evm {
             use crate::TESTS_EVM;
             use test_case::test_case;
             use crate::kzg_evm_fullprove;
+            use crate::kzg_evm_aggr_fullprove;
+            use crate::kzg_evm_prove_and_verify;
+            use crate::kzg_evm_aggr_prove_and_verify;
             seq!(N in 0..=8 {
-            // these take a particularly long time to run
+
             #(#[test_case(TESTS_EVM[N])])*
             fn kzg_evm_fullprove_(test: &str) {
                 kzg_evm_fullprove(test.to_string());
             }
+            // these take a particularly long time to run
+            #(#[test_case(TESTS_EVM[N])])*
+            fn kzg_evm_aggr_fullprove_(test: &str) {
+                kzg_evm_aggr_fullprove(test.to_string());
+            }
+
+
+            #(#[test_case(TESTS_EVM[N])])*
+            fn kzg_evm_prove_and_verify_(test: &str) {
+                kzg_evm_prove_and_verify(test.to_string());
+            }
+            // these take a particularly long time to run
+            #(#[test_case(TESTS_EVM[N])])*
+            fn kzg_evm_aggr_prove_and_verify_(test: &str) {
+                kzg_evm_aggr_prove_and_verify(test.to_string());
+            }
+
             });
     }
     };
@@ -310,22 +330,110 @@ fn kzg_fullprove(example_name: String) {
     assert!(status.success());
 }
 
-// KZG / EVM tests
-// full prove (slower, covers more, but still reuses the pk)
-fn kzg_evm_fullprove(example_name: String) {
-    let status = Command::new("cargo")
+// prove-serialize-verify, the usual full path
+fn kzg_evm_aggr_prove_and_verify(example_name: String) {
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
-            "run",
-            "--release",
-            "--features",
-            "evm",
-            "--bin",
-            "ezkl",
-            "--",
             "--bits=16",
             "-K=17",
-            "fullprove",
+            "prove-evm",
+            "--pfsys=kzg-aggr",
+            "-D",
+            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+            "-M",
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            "--proof-path",
+            format!("kzg_{}.pf", example_name).as_str(),
+            "--deployment-code-path",
+            format!("kzg_{}.code", example_name).as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "verify-evm",
+            "--pfsys=kzg-aggr",
+            "-M",
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            "--proof-path",
+            format!("kzg_{}.pf", example_name).as_str(),
+            "--deployment-code-path",
+            format!("kzg_{}.code", example_name).as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+// prove-serialize-verify, the usual full path
+fn kzg_evm_prove_and_verify(example_name: String) {
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "prove-evm",
             "--pfsys=kzg",
+            "-D",
+            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+            "-M",
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            "--proof-path",
+            format!("kzg_{}.pf", example_name).as_str(),
+            "--deployment-code-path",
+            format!("kzg_{}.code", example_name).as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "verify-evm",
+            "--pfsys=kzg",
+            "-M",
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            "--proof-path",
+            format!("kzg_{}.pf", example_name).as_str(),
+            "--deployment-code-path",
+            format!("kzg_{}.code", example_name).as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+// KZG / EVM tests
+// full prove
+fn kzg_evm_fullprove(example_name: String) {
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "fullprove-evm",
+            "--pfsys=kzg",
+            "-D",
+            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+            "-M",
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+// KZG / EVM tests
+// full prove (slower, covers more, but still reuses the pk)
+fn kzg_evm_aggr_fullprove(example_name: String) {
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "fullprove-evm",
+            "--pfsys=kzg-aggr",
             "-D",
             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
             "-M",

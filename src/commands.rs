@@ -129,7 +129,7 @@ pub enum Commands {
     },
 
     /// Loads model and input and runs full prover (for testing)
-    #[command(arg_required_else_help = true)]
+    #[command(name = "fullprove-evm", arg_required_else_help = true)]
     FullproveEVM {
         /// The path to the .json data file
         #[arg(short = 'D', long)]
@@ -179,7 +179,7 @@ pub enum Commands {
     },
 
     /// Loads model and data, prepares vk and pk, and creates proof, saving proof in --proof-path
-    #[command(arg_required_else_help = true)]
+    #[command(name = "prove-evm", arg_required_else_help = true)]
     ProveEVM {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long)]
@@ -234,7 +234,7 @@ pub enum Commands {
     },
 
     /// Verifies a proof, returning accept or reject
-    #[command(arg_required_else_help = true)]
+    #[command(name = "verify-evm", arg_required_else_help = true)]
     VerifyEVM {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
