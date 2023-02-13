@@ -392,7 +392,7 @@ pub fn gen_application_snark(
     let protocol = compile(
         params,
         pk.get_vk(),
-        Config::kzg().with_num_instance(vec![number_instance]),
+        Config::kzg().with_num_instance(public_inputs.iter().map(|x| x.len()).collect()),
     );
     let pi_inner: Vec<Vec<Fr>> = public_inputs
         .iter()

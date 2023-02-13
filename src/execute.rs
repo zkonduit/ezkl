@@ -132,6 +132,12 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     .map_err(Box::<dyn Error>::from)?;
                     trace!("params computed");
 
+                    let deployment_code = gen_evm_verifier(
+                        &params,
+                        pk.get_vk(),
+                        public_inputs.iter().map(|x| x.len()).collect(),
+                    )?;
+
                     let (proof, _dims) =
                         create_proof_model::<
                             KZGCommitmentScheme<_>,
@@ -142,8 +148,19 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         >(&circuit, &public_inputs, &params, &pk)
                         .map_err(Box::<dyn Error>::from)?;
 
-                    let deployment_code =
-                        gen_evm_verifier(&params, pk.get_vk(), vec![circuit.num_instances()])?;
+                    // double check that the generated proof can be verified !
+                    let _is_valid = {
+                        let strategy = KZGSingleStrategy::new(&params);
+                        verify_proof_model::<
+                            _,
+                            VerifierGWC<'_, Bn256>,
+                            _,
+                            _,
+                            _,
+                            EvmTranscript<G1Affine, _, _, _>,
+                        >(proof.clone(), &params, pk.get_vk(), strategy)
+                        .map_err(Box::<dyn Error>::from)
+                    }?;
 
                     let instances: Vec<Vec<Fr>> = public_inputs
                         .iter()
@@ -151,7 +168,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         .collect::<Vec<Vec<Fr>>>();
 
                     let now = Instant::now();
-                    evm_verify(deployment_code.code().clone(), instances, proof.proof)?;
+                    evm_verify(deployment_code, instances, proof)?;
                     info!("verify took {}", now.elapsed().as_secs());
                 }
                 ProofSystem::KZGAggr => {
@@ -190,11 +207,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     )?;
                     info!("Aggregation proof took {}", now.elapsed().as_secs());
                     let now = Instant::now();
-                    evm_verify(
-                        deployment_code.code().clone(),
-                        agg_circuit.instances(),
-                        proof.proof,
-                    )?;
+                    evm_verify(deployment_code, agg_circuit.instances(), proof)?;
                     info!("verify took {}", now.elapsed().as_secs());
                 }
             }
@@ -276,8 +289,25 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         .map_err(Box::<dyn Error>::from)?;
                     info!("proof took {}", now.elapsed().as_secs());
 
-                    let deployment_code =
-                        gen_evm_verifier(&params, pk.get_vk(), vec![circuit.num_instances()])?;
+                    // double check that the generated proof can be verified !
+                    let _is_valid = {
+                        let strategy = KZGSingleStrategy::new(&params);
+                        verify_proof_model::<
+                            _,
+                            VerifierGWC<'_, Bn256>,
+                            _,
+                            _,
+                            _,
+                            EvmTranscript<G1Affine, _, _, _>,
+                        >(proof.clone(), &params, pk.get_vk(), strategy)
+                        .map_err(Box::<dyn Error>::from)
+                    }?;
+
+                    let deployment_code = gen_evm_verifier(
+                        &params,
+                        pk.get_vk(),
+                        public_inputs.iter().map(|x| x.len()).collect(),
+                    )?;
 
                     proof.save(proof_path)?;
                     deployment_code.save(deployment_code_path)?;
@@ -367,13 +397,13 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                 }
                 ProofSystem::KZG | ProofSystem::KZGAggr => {
                     evm_verify(
-                        code.code().clone(),
+                        code,
                         proof
                             .public_inputs
                             .iter()
                             .map(|sub_vec| sub_vec.iter().map(|i| i32_to_felt(*i)).collect())
                             .collect(),
-                        proof.proof,
+                        proof,
                     )?;
                 }
             }

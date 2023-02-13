@@ -1,3 +1,4 @@
+use crate::pfsys::Proof;
 use ethereum_types::Address;
 use halo2_proofs::poly::kzg::commitment::ParamsKZG;
 use halo2curves::bn256::{Bn256, Fr};
@@ -38,6 +39,10 @@ pub struct DeploymentCode {
 }
 impl DeploymentCode {
     /// Return (inner) byte code
+    pub fn len(&self) -> usize {
+        self.code.len()
+    }
+    /// Return (inner) byte code
     pub fn code(&self) -> &Vec<u8> {
         &self.code
     }
@@ -62,18 +67,20 @@ impl DeploymentCode {
 
 /// Verify by executing bytecode with instance variables and proof as input
 pub fn evm_verify(
-    deployment_code: Vec<u8>,
+    deployment_code: DeploymentCode,
     instances: Vec<Vec<Fr>>,
-    proof: Vec<u8>,
+    proof: Proof,
 ) -> Result<bool, Box<dyn Error>> {
-    let calldata = encode_calldata(&instances, &proof);
+    debug!("evm deployment code length: {:?}", deployment_code.len());
+
+    let calldata = encode_calldata(&instances, &proof.proof);
     let mut evm = ExecutorBuilder::default()
         .with_gas_limit(u64::MAX.into())
         .build();
 
     let caller = Address::from_low_u64_be(0xfe);
-    let deploy_result = evm.deploy(caller, deployment_code.into(), 0.into());
-    trace!("evm deploy outcome: {:?}", deploy_result.exit_reason);
+    let deploy_result = evm.deploy(caller, deployment_code.code.into(), 0.into());
+    debug!("evm deploy outcome: {:?}", deploy_result.exit_reason);
     trace!("full deploy result: {:?}", deploy_result);
     debug!("gas used for deployment: {}", deploy_result.gas_used);
 
