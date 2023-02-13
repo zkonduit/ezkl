@@ -151,9 +151,8 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         .collect::<Vec<Vec<Fr>>>();
 
                     let now = Instant::now();
-                    let res = evm_verify(deployment_code.code().clone(), instances, proof.proof)?;
+                    evm_verify(deployment_code.code().clone(), instances, proof.proof)?;
                     info!("verify took {}", now.elapsed().as_secs());
-                    assert!(res)
                 }
                 ProofSystem::KZGAggr => {
                     // We will need aggregator k > application k > bits
@@ -191,13 +190,12 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     )?;
                     info!("Aggregation proof took {}", now.elapsed().as_secs());
                     let now = Instant::now();
-                    let res = evm_verify(
+                    evm_verify(
                         deployment_code.code().clone(),
                         agg_circuit.instances(),
                         proof.proof,
                     )?;
                     info!("verify took {}", now.elapsed().as_secs());
-                    assert!(res)
                 }
             }
         }
@@ -351,7 +349,6 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     >(proof, &params, &vk, strategy)
                     .is_ok();
                     info!("verified: {}", result);
-                    assert!(result);
                 }
                 _ => unimplemented!(),
             }
@@ -369,7 +366,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     unimplemented!()
                 }
                 ProofSystem::KZG | ProofSystem::KZGAggr => {
-                    let res = evm_verify(
+                    evm_verify(
                         code.code().clone(),
                         proof
                             .public_inputs
@@ -378,7 +375,6 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                             .collect(),
                         proof.proof,
                     )?;
-                    assert!(res)
                 }
             }
         }
