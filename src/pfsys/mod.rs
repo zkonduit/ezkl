@@ -12,7 +12,7 @@ use halo2_proofs::dev::MockProver;
 use halo2_proofs::plonk::{
     create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey,
 };
-use halo2_proofs::poly::commitment::{CommitmentScheme, Params, Prover, Verifier};
+use halo2_proofs::poly::commitment::{CommitmentScheme, Params, ParamsProver, Prover, Verifier};
 use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer, TranscriptWriterBuffer};
 use halo2curves::group::ff::PrimeField;
@@ -259,12 +259,12 @@ pub fn create_proof_circuit<
     circuit: C,
     instances: Vec<Vec<Scheme::Scalar>>,
     params: &'params Scheme::ParamsProver,
-    verifier_params: &'params Scheme::ParamsVerifier,
     pk: &ProvingKey<Scheme::Curve>,
     strategy: Strategy,
 ) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, Box<dyn Error>>
 where
     C: Circuit<Scheme::Scalar>,
+    Scheme::ParamsVerifier: 'params,
 {
     // quickly mock prove as a sanity check
     {
@@ -314,9 +314,10 @@ where
     // sanity check that the generated proof is valid
     {
         debug!("verifying generated proof");
+        let verifier_params = params.verifier_params();
         verify_proof_circuit::<F, V, Scheme, Strategy, E, TR>(
             checkable_pf.clone(),
-            &verifier_params,
+            verifier_params,
             pk.get_vk(),
             strategy,
         )?;

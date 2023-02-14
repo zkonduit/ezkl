@@ -81,20 +81,19 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
 
                     // creates and verifies the proof
                     let strategy = KZGSingleStrategy::new(&params);
-                    let proof = create_proof_circuit::<
-                        KZGCommitmentScheme<_>,
-                        Fr,
-                        _,
-                        ProverGWC<_>,
-                        VerifierGWC<'_, Bn256>,
-                        _,
-                        Challenge255<_>,
-                        Blake2bWrite<_, _, _>,
-                        Blake2bRead<_, _, _>,
-                    >(
-                        circuit, public_inputs, &params, &params, &pk, strategy
-                    )
-                    .map_err(Box::<dyn Error>::from)?;
+                    let proof =
+                        create_proof_circuit::<
+                            KZGCommitmentScheme<_>,
+                            Fr,
+                            _,
+                            ProverGWC<_>,
+                            VerifierGWC<'_, Bn256>,
+                            _,
+                            Challenge255<_>,
+                            Blake2bWrite<_, _, _>,
+                            Blake2bRead<_, _, _>,
+                        >(circuit, public_inputs, &params, &pk, strategy)
+                        .map_err(Box::<dyn Error>::from)?;
 
                     proof.save(proof_path)?;
                     save_params::<KZGCommitmentScheme<Bn256>>(params_path, &params)?;
@@ -127,25 +126,24 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     )
                     .map_err(Box::<dyn Error>::from)?;
                     trace!("params computed");
-                    let now = Instant::now();
 
+                    let now = Instant::now();
                     let num_instance = public_inputs.iter().map(|x| x.len()).collect();
                     // creates and verifies the proof
                     let strategy = KZGSingleStrategy::new(&params);
-                    let proof = create_proof_circuit::<
-                        KZGCommitmentScheme<_>,
-                        Fr,
-                        _,
-                        ProverGWC<_>,
-                        VerifierGWC<_>,
-                        _,
-                        _,
-                        EvmTranscript<G1Affine, _, _, _>,
-                        EvmTranscript<G1Affine, _, _, _>,
-                    >(
-                        circuit, public_inputs, &params, &params, &pk, strategy
-                    )
-                    .map_err(Box::<dyn Error>::from)?;
+                    let proof =
+                        create_proof_circuit::<
+                            KZGCommitmentScheme<_>,
+                            Fr,
+                            _,
+                            ProverGWC<_>,
+                            VerifierGWC<_>,
+                            _,
+                            _,
+                            EvmTranscript<G1Affine, _, _, _>,
+                            EvmTranscript<G1Affine, _, _, _>,
+                        >(circuit, public_inputs, &params, &pk, strategy)
+                        .map_err(Box::<dyn Error>::from)?;
                     info!("proof took {}", now.elapsed().as_secs());
 
                     let deployment_code = gen_evm_verifier(&params, pk.get_vk(), num_instance)?;
@@ -191,7 +189,6 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                             circuit,
                             public_inputs.clone(),
                             &params_app,
-                            params_app.verifier_params(),
                             &pk,
                             AccumulatorStrategy::new(params_app.verifier_params()),
                         )?];
@@ -227,7 +224,6 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                             agg_circuit.clone(),
                             agg_circuit.instances(),
                             &params,
-                            &params.verifier_params(),
                             &pk,
                             AccumulatorStrategy::new(params.verifier_params()),
                         )
