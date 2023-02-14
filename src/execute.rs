@@ -178,7 +178,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         AggregationCircuit::accumulator_indices(),
                     )?;
                     let now = Instant::now();
-                    let proof = create_proof_model::<
+                    let snark = create_proof_model::<
                         KZGCommitmentScheme<_>,
                         Fr,
                         _,
@@ -197,8 +197,10 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         AccumulatorStrategy::new(params.verifier_params()),
                     )
                     .map_err(Box::<dyn Error>::from)?;
+                    assert_eq!(snark.instances, agg_circuit.instances());
+
                     info!("Aggregation proof took {}", now.elapsed().as_secs());
-                    proof.save(proof_path)?;
+                    snark.save(proof_path)?;
                     deployment_code.save(deployment_code_path)?;
                 }
             };

@@ -45,7 +45,8 @@ pub struct ModelInput {
 #[derive(Debug, Clone)]
 pub struct Snark<F: FieldExt, C: CurveAffine> {
     protocol: Option<PlonkProtocol<C>>,
-    instances: Vec<Vec<F>>,
+    /// public instances of the snark
+    pub instances: Vec<Vec<F>>,
     proof: Vec<u8>,
 }
 

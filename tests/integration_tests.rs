@@ -58,9 +58,7 @@ macro_rules! test_func {
             use crate::mock;
             use crate::mock_public_inputs;
             use crate::mock_public_params;
-            // use crate::ipa_fullprove;
-            // use crate::ipa_prove_and_verify;
-            use crate::kzg_fullprove;
+            use crate::kzg_prove;
             use crate::kzg_prove_and_verify;
             seq!(N in 0..=11 {
             #(#[test_case(TESTS[N])])*
@@ -78,19 +76,9 @@ macro_rules! test_func {
                 mock_public_params(test.to_string());
             }
 
-            // #(#[test_case(TESTS[N])])*
-            // fn ipa_fullprove_(test: &str) {
-            //     ipa_fullprove(test.to_string());
-            // }
-
-            // #(#[test_case(TESTS[N])])*
-            // fn ipa_prove_and_verify_(test: &str) {
-            //     ipa_prove_and_verify(test.to_string());
-            // }
-
             #(#[test_case(TESTS[N])])*
-            fn kzg_fullprove_(test: &str) {
-                kzg_fullprove(test.to_string());
+            fn kzg_prove_(test: &str) {
+                kzg_prove(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
@@ -109,20 +97,20 @@ macro_rules! test_func_evm {
             use seq_macro::seq;
             use crate::TESTS_EVM;
             use test_case::test_case;
-            use crate::kzg_evm_fullprove;
-            use crate::kzg_evm_aggr_fullprove;
+            use crate::kzg_evm_prove;
+            use crate::kzg_evm_aggr_prove;
             use crate::kzg_evm_prove_and_verify;
             use crate::kzg_evm_aggr_prove_and_verify;
             seq!(N in 0..=8 {
 
             #(#[test_case(TESTS_EVM[N])])*
-            fn kzg_evm_fullprove_(test: &str) {
-                kzg_evm_fullprove(test.to_string());
+            fn kzg_evm_prove_(test: &str) {
+                kzg_evm_prove(test.to_string());
             }
             // these take a particularly long time to run
             #(#[test_case(TESTS_EVM[N])])*
-            fn kzg_evm_aggr_fullprove_(test: &str) {
-                kzg_evm_aggr_fullprove(test.to_string());
+            fn kzg_evm_aggr_prove_(test: &str) {
+                kzg_evm_aggr_prove(test.to_string());
             }
 
 
@@ -313,12 +301,12 @@ fn kzg_prove_and_verify(example_name: String) {
 
 // KZG  tests
 // full prove (slower, covers more, but still reuses the pk)
-fn kzg_fullprove(example_name: String) {
+fn kzg_prove(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
             "-K=17",
-            "fullprove",
+            "prove",
             "--pfsys=kzg",
             "-D",
             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
@@ -408,12 +396,12 @@ fn kzg_evm_prove_and_verify(example_name: String) {
 
 // KZG / EVM tests
 // full prove
-fn kzg_evm_fullprove(example_name: String) {
+fn kzg_evm_prove(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
             "-K=17",
-            "fullprove-evm",
+            "prove-evm",
             "--pfsys=kzg",
             "-D",
             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
@@ -427,12 +415,12 @@ fn kzg_evm_fullprove(example_name: String) {
 
 // KZG / EVM tests
 // full prove (slower, covers more, but still reuses the pk)
-fn kzg_evm_aggr_fullprove(example_name: String) {
+fn kzg_evm_aggr_prove(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
             "-K=17",
-            "fullprove-evm",
+            "prove-evm",
             "--pfsys=kzg-aggr",
             "-D",
             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
