@@ -1,9 +1,7 @@
 use ethereum_types::Address;
-use halo2_proofs::poly::kzg::commitment::ParamsKZG;
+use halo2curves::bn256::Fr;
 use halo2curves::bn256::G1Affine;
-use halo2curves::bn256::{Bn256, Fr};
 use log::{debug, trace};
-use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use snark_verifier::loader::evm::encode_calldata;
 use snark_verifier::loader::evm::ExecutorBuilder;
@@ -101,9 +99,4 @@ pub fn evm_verify(
     } else {
         Err(Box::new(EvmVerificationError::Deploy))
     }
-}
-
-/// Generate a structured reference string for testing. Not secure, do not use in production.
-pub fn gen_srs(k: u32) -> ParamsKZG<Bn256> {
-    ParamsKZG::<Bn256>::setup(k, OsRng)
 }

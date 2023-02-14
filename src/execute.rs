@@ -4,7 +4,7 @@ use crate::pfsys::evm::aggregation::{
     gen_aggregation_evm_verifier, AggregationCircuit, PoseidonTranscript,
 };
 use crate::pfsys::evm::single::gen_evm_verifier;
-use crate::pfsys::evm::{evm_verify, gen_srs, DeploymentCode};
+use crate::pfsys::evm::{evm_verify, DeploymentCode};
 use crate::pfsys::{create_keys, load_params, load_vk, Snark};
 use crate::pfsys::{
     create_proof_circuit, prepare_circuit_and_public_input, prepare_data, save_params, save_vk,
@@ -157,7 +157,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
 
                     let aggregation_logrows = args.logrows + 6;
 
-                    let params = gen_srs(aggregation_logrows);
+                    let params = ParamsKZG::new(aggregation_logrows);
                     let params_app = {
                         let mut params = params.clone();
                         params.downsize(args.logrows);
