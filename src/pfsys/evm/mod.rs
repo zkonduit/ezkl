@@ -1,6 +1,6 @@
-use crate::pfsys::Proof;
 use ethereum_types::Address;
 use halo2_proofs::poly::kzg::commitment::ParamsKZG;
+use halo2curves::bn256::G1Affine;
 use halo2curves::bn256::{Bn256, Fr};
 use log::{debug, trace};
 use rand::rngs::OsRng;
@@ -12,6 +12,8 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use thiserror::Error;
+
+use super::Snark;
 
 /// Aggregate proof generation for EVM
 pub mod aggregation;
@@ -68,11 +70,11 @@ impl DeploymentCode {
 /// Verify by executing bytecode with instance variables and proof as input
 pub fn evm_verify(
     deployment_code: DeploymentCode,
-    proof: Proof<Fr>,
+    snark: Snark<Fr, G1Affine>,
 ) -> Result<bool, Box<dyn Error>> {
     debug!("evm deployment code length: {:?}", deployment_code.len());
 
-    let calldata = encode_calldata(&proof.public_inputs, &proof.proof);
+    let calldata = encode_calldata(&snark.instances, &snark.proof);
     let mut evm = ExecutorBuilder::default()
         .with_gas_limit(u64::MAX.into())
         .build();

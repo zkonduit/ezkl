@@ -1,7 +1,7 @@
 use crate::commands::Cli;
 use crate::graph::ModelCircuit;
 use crate::pfsys::evm::DeploymentCode;
-use crate::pfsys::{create_keys, prepare_circuit_and_public_input};
+use crate::pfsys::{create_keys, prepare_circuit_and_public_input, Snark, SnarkWitness};
 use crate::pfsys::{create_proof_model, ModelInput};
 use halo2_proofs::plonk::{self, VerifyingKey};
 use halo2_proofs::poly::kzg::multiopen::{ProverGWC, VerifierGWC};
@@ -42,7 +42,7 @@ use snark_verifier::{
     },
     system,
     util::arithmetic::{fe_to_limbs, FieldExt},
-    verifier::{self, plonk::PlonkProtocol, SnarkVerifier},
+    verifier::{self, SnarkVerifier},
 };
 use std::error::Error;
 use std::{iter, rc::Rc};
@@ -86,70 +86,11 @@ pub enum AggregationError {
     ProofCreate,
 }
 
-/// An application snark with proof and instance variables ready for aggregation (raw field element)
-#[derive(Debug)]
-pub struct Snark {
-    protocol: PlonkProtocol<G1Affine>,
-    instances: Vec<Vec<Fr>>,
-    proof: Vec<u8>,
-}
-
-impl Snark {
-    /// Create a new application snark from proof and instance variables ready for aggregation
-    pub fn new(protocol: PlonkProtocol<G1Affine>, instances: Vec<Vec<Fr>>, proof: Vec<u8>) -> Self {
-        Self {
-            protocol,
-            instances,
-            proof,
-        }
-    }
-}
-
-impl From<Snark> for SnarkWitness {
-    fn from(snark: Snark) -> Self {
-        Self {
-            protocol: snark.protocol,
-            instances: snark
-                .instances
-                .into_iter()
-                .map(|instances| instances.into_iter().map(Value::known).collect_vec())
-                .collect(),
-            proof: Value::known(snark.proof),
-        }
-    }
-}
-
-/// An application snark with proof and instance variables ready for aggregation (wrapped field element)
-#[derive(Clone, Debug)]
-pub struct SnarkWitness {
-    protocol: PlonkProtocol<G1Affine>,
-    instances: Vec<Vec<Value<Fr>>>,
-    proof: Value<Vec<u8>>,
-}
-
-impl SnarkWitness {
-    fn without_witnesses(&self) -> Self {
-        SnarkWitness {
-            protocol: self.protocol.clone(),
-            instances: self
-                .instances
-                .iter()
-                .map(|instances| vec![Value::unknown(); instances.len()])
-                .collect(),
-            proof: Value::unknown(),
-        }
-    }
-
-    fn proof(&self) -> Value<&[u8]> {
-        self.proof.as_ref().map(Vec::as_slice)
-    }
-}
-
 /// Aggregate one or more application snarks of the same shape into a KzgAccumulator
 pub fn aggregate<'a>(
     svk: &Svk,
     loader: &Rc<Halo2Loader<'a>>,
-    snarks: &[SnarkWitness],
+    snarks: &[SnarkWitness<Fr, G1Affine>],
     as_proof: Value<&'_ [u8]>,
 ) -> Result<KzgAccumulator<G1Affine, Rc<Halo2Loader<'a>>>, plonk::Error> {
     let assign_instances = |instances: &[Vec<Value<Fr>>]| {
@@ -230,7 +171,7 @@ impl AggregationConfig {
 #[derive(Clone, Debug)]
 pub struct AggregationCircuit {
     svk: Svk,
-    snarks: Vec<SnarkWitness>,
+    snarks: Vec<SnarkWitness<Fr, G1Affine>>,
     instances: Vec<Fr>,
     as_proof: Value<Vec<u8>>,
 }
@@ -239,7 +180,7 @@ impl AggregationCircuit {
     /// Create a new Aggregation Circuit with a SuccinctVerifyingKey, application snark witnesses (each with a proof and instance variables), and the instance variables and the resulting aggregation circuit proof.
     pub fn new(
         params: &ParamsKZG<Bn256>,
-        snarks: impl IntoIterator<Item = Snark>,
+        snarks: impl IntoIterator<Item = Snark<Fr, G1Affine>>,
     ) -> Result<Self, AggregationError> {
         let svk = params.get_g()[0].into();
         let snarks = snarks.into_iter().collect_vec();
@@ -251,14 +192,18 @@ impl AggregationCircuit {
             let mut transcript = PoseidonTranscript::<NativeLoader, _>::new(snark.proof.as_slice());
             let proof = PlonkSuccinctVerifier::read_proof(
                 &svk,
-                &snark.protocol,
+                &snark.protocol.as_ref().unwrap(),
                 &snark.instances,
                 &mut transcript,
             )
             .map_err(|_| AggregationError::ProofRead)?;
-            let mut accum =
-                PlonkSuccinctVerifier::verify(&svk, &snark.protocol, &snark.instances, &proof)
-                    .map_err(|_| AggregationError::ProofVerify)?;
+            let mut accum = PlonkSuccinctVerifier::verify(
+                &svk,
+                &snark.protocol.as_ref().unwrap(),
+                &snark.instances,
+                &proof,
+            )
+            .map_err(|_| AggregationError::ProofVerify)?;
             accumulators.append(&mut accum);
         }
 
@@ -371,26 +316,18 @@ impl Circuit<Fr> for AggregationCircuit {
     }
 }
 
-/// Create proof and instance variables for the application snark
+/// Create proof and instance variables for the application snark, this is really just a wrapper around create_proof_model to
+/// streamline `execute.rs` and also helps the user choose the correct transcript (PoseidonTranscript etc...)
 pub fn gen_application_snark(
     params: &ParamsKZG<Bn256>,
     data: &ModelInput,
     args: &Cli,
-) -> Result<Snark, Box<dyn Error>> {
+) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
     let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(data, args)?;
 
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, params)?;
-    let number_instance = public_inputs.iter().map(|x| x.len()).collect();
-    trace!("number_instance {:?}", number_instance);
-    let protocol = compile(
-        params,
-        pk.get_vk(),
-        Config::kzg().with_num_instance(number_instance),
-    );
-
-    //    let pi_inner = pi_inner.iter().map(|e| e.deref()).collect::<Vec<&[Fr]>>();
     trace!("pi_inner {:?}", public_inputs);
-    let proof = create_proof_model::<
+    let snark = create_proof_model::<
         KZGCommitmentScheme<_>,
         Fr,
         _,
@@ -408,7 +345,7 @@ pub fn gen_application_snark(
         &pk,
         AccumulatorStrategy::new(params.verifier_params()),
     )?;
-    Ok(Snark::new(protocol, public_inputs, proof.proof))
+    Ok(snark)
 }
 
 /// Create aggregation EVM verifier bytecode

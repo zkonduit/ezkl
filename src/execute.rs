@@ -5,7 +5,7 @@ use crate::pfsys::evm::aggregation::{
 };
 use crate::pfsys::evm::single::gen_evm_verifier;
 use crate::pfsys::evm::{evm_verify, gen_srs, DeploymentCode};
-use crate::pfsys::{create_keys, load_params, load_vk, Proof};
+use crate::pfsys::{create_keys, load_params, load_vk, Snark};
 use crate::pfsys::{
     create_proof_model, prepare_circuit_and_public_input, prepare_data, save_params, save_vk,
     verify_proof_model,
@@ -210,7 +210,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
             params_path,
             pfsys,
         } => {
-            let proof = Proof::load(&proof_path)?;
+            let proof = Snark::load(&proof_path)?;
             match pfsys {
                 ProofSystem::IPA => {
                     unimplemented!()
@@ -240,7 +240,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
             deployment_code_path,
             pfsys,
         } => {
-            let proof = Proof::load(&proof_path)?;
+            let proof = Snark::load(&proof_path)?;
             let code = DeploymentCode::load(&deployment_code_path)?;
             match pfsys {
                 ProofSystem::IPA => {
