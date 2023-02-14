@@ -2,11 +2,13 @@
 pub mod evm;
 
 use crate::commands::{data_path, Cli};
+use crate::execute::ExecutionError;
 use crate::fieldutils::{felt_to_i32, i32_to_felt};
 use crate::graph::{utilities::vector_to_quantized, Model, ModelCircuit};
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::arithmetic::FieldExt;
 use halo2_proofs::circuit::Value;
+use halo2_proofs::dev::MockProver;
 use halo2_proofs::plonk::{
     create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey,
 };
@@ -16,7 +18,7 @@ use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer, Transcrip
 use halo2curves::group::ff::PrimeField;
 use halo2curves::serde::SerdeObject;
 use halo2curves::CurveAffine;
-use log::{info, trace};
+use log::{debug, info, trace};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use snark_verifier::system::halo2::{compile, Config};
@@ -242,7 +244,7 @@ where
 }
 
 /// a wrapper around halo2's create_proof
-pub fn create_proof_model<
+pub fn create_proof_circuit<
     'params,
     Scheme: CommitmentScheme,
     F: FieldExt + TensorType,
@@ -255,20 +257,28 @@ pub fn create_proof_model<
     TR: TranscriptReadBuffer<Cursor<Vec<u8>>, Scheme::Curve, E>,
 >(
     circuit: C,
-    public_inputs: Vec<Vec<Scheme::Scalar>>,
+    instances: Vec<Vec<Scheme::Scalar>>,
     params: &'params Scheme::ParamsProver,
     verifier_params: &'params Scheme::ParamsVerifier,
     pk: &ProvingKey<Scheme::Curve>,
     strategy: Strategy,
-) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, halo2_proofs::plonk::Error>
+) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, Box<dyn Error>>
 where
     C: Circuit<Scheme::Scalar>,
 {
-    let now = Instant::now();
+    // quickly mock prove as a sanity check
+    {
+        debug!("running mock prover");
+        let prover = MockProver::run(params.k(), &circuit, instances.clone())
+            .map_err(Box::<dyn Error>::from)?;
+        prover
+            .verify()
+            .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
+    }
+
     let mut transcript = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);
     let mut rng = OsRng;
-
-    let number_instance = public_inputs.iter().map(|x| x.len()).collect();
+    let number_instance = instances.iter().map(|x| x.len()).collect();
     trace!("number_instance {:?}", number_instance);
     let protocol = compile(
         params,
@@ -276,18 +286,19 @@ where
         Config::kzg().with_num_instance(number_instance),
     );
 
-    let pi_inner = public_inputs
+    let pi_inner = instances
         .iter()
         .map(|e| e.deref())
         .collect::<Vec<&[Scheme::Scalar]>>();
-    let instances: &[&[&[Scheme::Scalar]]] = &[&pi_inner];
+    let pi_inner: &[&[&[Scheme::Scalar]]] = &[&pi_inner];
     trace!("instances {:?}", instances);
 
+    let now = Instant::now();
     create_proof::<Scheme, P, _, _, TW, _>(
         params,
         pk,
         &[circuit],
-        instances,
+        pi_inner,
         &mut rng,
         &mut transcript,
     )?;
@@ -296,15 +307,14 @@ where
 
     let checkable_pf = Snark {
         protocol: Some(protocol),
-        instances: public_inputs
-            .iter()
-            .map(|i| i.clone().into_iter().collect())
-            .collect(),
+        instances,
         proof,
     };
 
+    // sanity check that the generated proof is valid
     {
-        verify_proof_model::<F, V, Scheme, Strategy, E, TR>(
+        debug!("verifying generated proof");
+        verify_proof_circuit::<F, V, Scheme, Strategy, E, TR>(
             checkable_pf.clone(),
             &verifier_params,
             pk.get_vk(),
@@ -316,7 +326,7 @@ where
 }
 
 /// A wrapper around halo2's verify_proof
-pub fn verify_proof_model<
+pub fn verify_proof_circuit<
     'params,
     F: FieldExt,
     V: Verifier<'params, Scheme>,

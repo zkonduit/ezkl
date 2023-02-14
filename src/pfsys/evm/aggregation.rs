@@ -1,18 +1,10 @@
-use crate::commands::Cli;
-use crate::graph::ModelCircuit;
 use crate::pfsys::evm::DeploymentCode;
-use crate::pfsys::{create_keys, prepare_circuit_and_public_input, Snark, SnarkWitness};
-use crate::pfsys::{create_proof_model, ModelInput};
+use crate::pfsys::{Snark, SnarkWitness};
 use halo2_proofs::plonk::{self, VerifyingKey};
-use halo2_proofs::poly::kzg::multiopen::{ProverGWC, VerifierGWC};
-use halo2_proofs::poly::kzg::strategy::AccumulatorStrategy;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem},
-    poly::{
-        commitment::ParamsProver,
-        kzg::commitment::{KZGCommitmentScheme, ParamsKZG},
-    },
+    poly::{commitment::ParamsProver, kzg::commitment::ParamsKZG},
 };
 use halo2_wrong_ecc::{
     integer::rns::Rns,
@@ -37,15 +29,17 @@ use snark_verifier::{
 use snark_verifier::{
     loader::{self},
     pcs::{
-        kzg::{Gwc19, KzgAccumulator, KzgAs, KzgSuccinctVerifyingKey, LimbsEncoding},
+        kzg::{
+            Gwc19, KzgAccumulator, KzgAs, KzgSuccinctVerifyingKey, LimbsEncoding,
+            LimbsEncodingInstructions,
+        },
         AccumulationScheme, AccumulationSchemeProver,
     },
     system,
     util::arithmetic::{fe_to_limbs, FieldExt},
     verifier::{self, SnarkVerifier},
 };
-use std::error::Error;
-use std::{iter, rc::Rc};
+use std::rc::Rc;
 use thiserror::Error;
 
 const LIMBS: usize = 4;
@@ -285,67 +279,36 @@ impl Circuit<Fr> for AggregationCircuit {
 
         range_chip.load_table(&mut layouter)?;
 
-        let (lhs, rhs) = layouter.assign_region(
+        let accumulator_limbs = layouter.assign_region(
             || "",
             |region| {
                 let ctx = RegionCtx::new(region, 0);
 
                 let ecc_chip = config.ecc_chip();
                 let loader = Halo2Loader::new(ecc_chip, ctx);
-                let KzgAccumulator { lhs, rhs } =
-                    aggregate(&self.svk, &loader, &self.snarks, self.as_proof())?;
+                let accumulator = aggregate(&self.svk, &loader, &self.snarks, self.as_proof())?;
 
-                let lhs = lhs.assigned().clone();
-                let rhs = rhs.assigned().clone();
+                let accumulator_limbs = [accumulator.lhs, accumulator.rhs]
+                    .iter()
+                    .map(|ec_point| {
+                        loader
+                            .ecc_chip()
+                            .assign_ec_point_to_limbs(&mut loader.ctx_mut(), ec_point.assigned())
+                    })
+                    .collect::<Result<Vec<_>, plonk::Error>>()?
+                    .into_iter()
+                    .flatten();
 
-                Ok((lhs, rhs))
+                Ok(accumulator_limbs)
             },
         )?;
 
-        for (limb, row) in iter::empty()
-            .chain(lhs.x().limbs())
-            .chain(lhs.y().limbs())
-            .chain(rhs.x().limbs())
-            .chain(rhs.y().limbs())
-            .zip(0..)
-        {
-            main_gate.expose_public(layouter.namespace(|| ""), limb.into(), row)?;
+        for (row, limb) in accumulator_limbs.enumerate() {
+            main_gate.expose_public(layouter.namespace(|| ""), limb, row)?;
         }
 
         Ok(())
     }
-}
-
-/// Create proof and instance variables for the application snark, this is really just a wrapper around create_proof_model to
-/// streamline `execute.rs` and also helps the user choose the correct transcript (PoseidonTranscript etc...)
-pub fn gen_application_snark(
-    params: &ParamsKZG<Bn256>,
-    data: &ModelInput,
-    args: &Cli,
-) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
-    let (circuit, public_inputs) = prepare_circuit_and_public_input::<Fr>(data, args)?;
-
-    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, params)?;
-    trace!("pi_inner {:?}", public_inputs);
-    let snark = create_proof_model::<
-        KZGCommitmentScheme<_>,
-        Fr,
-        _,
-        ProverGWC<_>,
-        VerifierGWC<_>,
-        _,
-        _,
-        PoseidonTranscript<NativeLoader, _>,
-        PoseidonTranscript<NativeLoader, _>,
-    >(
-        circuit,
-        public_inputs.clone(),
-        &params,
-        params.verifier_params(),
-        &pk,
-        AccumulatorStrategy::new(params.verifier_params()),
-    )?;
-    Ok(snark)
 }
 
 /// Create aggregation EVM verifier bytecode

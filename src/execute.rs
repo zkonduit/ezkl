@@ -1,14 +1,14 @@
 use crate::commands::{Cli, Commands, ProofSystem};
 use crate::graph::{Model, ModelCircuit};
 use crate::pfsys::evm::aggregation::{
-    gen_aggregation_evm_verifier, gen_application_snark, AggregationCircuit,
+    gen_aggregation_evm_verifier, AggregationCircuit, PoseidonTranscript,
 };
 use crate::pfsys::evm::single::gen_evm_verifier;
 use crate::pfsys::evm::{evm_verify, gen_srs, DeploymentCode};
 use crate::pfsys::{create_keys, load_params, load_vk, Snark};
 use crate::pfsys::{
-    create_proof_model, prepare_circuit_and_public_input, prepare_data, save_params, save_vk,
-    verify_proof_model,
+    create_proof_circuit, prepare_circuit_and_public_input, prepare_data, save_params, save_vk,
+    verify_proof_circuit,
 };
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::poly::commitment::Params;
@@ -22,6 +22,7 @@ use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 use log::{info, trace};
+use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
 use std::time::Instant;
@@ -80,7 +81,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
 
                     // creates and verifies the proof
                     let strategy = KZGSingleStrategy::new(&params);
-                    let proof = create_proof_model::<
+                    let proof = create_proof_circuit::<
                         KZGCommitmentScheme<_>,
                         Fr,
                         _,
@@ -131,7 +132,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     let num_instance = public_inputs.iter().map(|x| x.len()).collect();
                     // creates and verifies the proof
                     let strategy = KZGSingleStrategy::new(&params);
-                    let proof = create_proof_model::<
+                    let proof = create_proof_circuit::<
                         KZGCommitmentScheme<_>,
                         Fr,
                         _,
@@ -155,6 +156,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                 ProofSystem::KZGAggr => {
                     // We will need aggregator k > application k > bits
                     //		    let application_logrows = args.logrows; //bits + 1;
+
                     let aggregation_logrows = args.logrows + 6;
 
                     let params = gen_srs(aggregation_logrows);
@@ -163,43 +165,77 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         params.downsize(args.logrows);
                         params
                     };
-                    let now = Instant::now();
-                    let snarks = [gen_application_snark(&params_app, &data, &args)?];
-                    info!("Application proof took {}", now.elapsed().as_secs());
-                    let agg_circuit = AggregationCircuit::new(&params, snarks)?;
-                    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
-                        &agg_circuit,
-                        &params,
-                    )?;
-                    let deployment_code = gen_aggregation_evm_verifier(
-                        &params,
-                        pk.get_vk(),
-                        AggregationCircuit::num_instance(),
-                        AggregationCircuit::accumulator_indices(),
-                    )?;
-                    let now = Instant::now();
-                    let snark = create_proof_model::<
-                        KZGCommitmentScheme<_>,
-                        Fr,
-                        _,
-                        ProverGWC<_>,
-                        VerifierGWC<_>,
-                        _,
-                        _,
-                        EvmTranscript<G1Affine, _, _, _>,
-                        EvmTranscript<G1Affine, _, _, _>,
-                    >(
-                        agg_circuit.clone(),
-                        agg_circuit.instances(),
-                        &params,
-                        &params.verifier_params(),
-                        &pk,
-                        AccumulatorStrategy::new(params.verifier_params()),
-                    )
-                    .map_err(Box::<dyn Error>::from)?;
-                    assert_eq!(snark.instances, agg_circuit.instances());
 
-                    info!("Aggregation proof took {}", now.elapsed().as_secs());
+                    // application snarks to be aggregated
+                    let snarks = {
+                        let (circuit, public_inputs) =
+                            prepare_circuit_and_public_input::<Fr>(&data, &args)?;
+
+                        let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
+                            &circuit,
+                            &params_app,
+                        )?;
+
+                        let now = Instant::now();
+                        let snarks = [create_proof_circuit::<
+                            KZGCommitmentScheme<_>,
+                            Fr,
+                            _,
+                            ProverGWC<_>,
+                            VerifierGWC<_>,
+                            _,
+                            _,
+                            PoseidonTranscript<NativeLoader, _>,
+                            PoseidonTranscript<NativeLoader, _>,
+                        >(
+                            circuit,
+                            public_inputs.clone(),
+                            &params_app,
+                            params_app.verifier_params(),
+                            &pk,
+                            AccumulatorStrategy::new(params_app.verifier_params()),
+                        )?];
+                        info!("Application proof took {}", now.elapsed().as_secs());
+                        snarks
+                    };
+
+                    // proof aggregation
+                    let (snark, deployment_code) = {
+                        let agg_circuit = AggregationCircuit::new(&params, snarks)?;
+                        let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
+                            &agg_circuit,
+                            &params,
+                        )?;
+                        let deployment_code = gen_aggregation_evm_verifier(
+                            &params,
+                            pk.get_vk(),
+                            AggregationCircuit::num_instance(),
+                            AggregationCircuit::accumulator_indices(),
+                        )?;
+                        let now = Instant::now();
+                        let snark = create_proof_circuit::<
+                            KZGCommitmentScheme<_>,
+                            Fr,
+                            _,
+                            ProverGWC<_>,
+                            VerifierGWC<_>,
+                            _,
+                            _,
+                            EvmTranscript<G1Affine, _, _, _>,
+                            EvmTranscript<G1Affine, _, _, _>,
+                        >(
+                            agg_circuit.clone(),
+                            agg_circuit.instances(),
+                            &params,
+                            &params.verifier_params(),
+                            &pk,
+                            AccumulatorStrategy::new(params.verifier_params()),
+                        )
+                        .map_err(Box::<dyn Error>::from)?;
+                        info!("Aggregation proof took {}", now.elapsed().as_secs());
+                        (snark, deployment_code)
+                    };
+
                     snark.save(proof_path)?;
                     deployment_code.save(deployment_code_path)?;
                 }
@@ -222,7 +258,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
                     let strategy = KZGSingleStrategy::new(&params);
                     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr>(vk_path)?;
-                    let result = verify_proof_model::<
+                    let result = verify_proof_circuit::<
                         Fr,
                         VerifierGWC<'_, Bn256>,
                         _,
