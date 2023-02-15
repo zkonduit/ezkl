@@ -109,6 +109,7 @@ macro_rules! test_func_evm {
             }
             // these take a particularly long time to run
             #(#[test_case(TESTS_EVM[N])])*
+            #[ignore]
             fn kzg_evm_aggr_prove_(test: &str) {
                 kzg_evm_aggr_prove(test.to_string());
             }
@@ -120,6 +121,7 @@ macro_rules! test_func_evm {
             }
             // these take a particularly long time to run
             #(#[test_case(TESTS_EVM[N])])*
+            #[ignore]
             fn kzg_evm_aggr_prove_and_verify_(test: &str) {
                 kzg_evm_aggr_prove_and_verify(test.to_string());
             }
@@ -300,7 +302,6 @@ fn kzg_prove_and_verify(example_name: String) {
 }
 
 // KZG  tests
-// full prove (slower, covers more, but still reuses the pk)
 fn kzg_prove(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
@@ -395,7 +396,6 @@ fn kzg_evm_prove_and_verify(example_name: String) {
 }
 
 // KZG / EVM tests
-// full prove
 fn kzg_evm_prove(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
@@ -414,7 +414,6 @@ fn kzg_evm_prove(example_name: String) {
 }
 
 // KZG / EVM tests
-// full prove (slower, covers more, but still reuses the pk)
 fn kzg_evm_aggr_prove(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([

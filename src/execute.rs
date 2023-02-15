@@ -155,11 +155,11 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     // We will need aggregator k > application k > bits
                     //		    let application_logrows = args.logrows; //bits + 1;
 
-                    let aggregation_logrows = args.logrows + 6;
+                    let aggregation_logrows = 22;
 
-                    let params = ParamsKZG::new(aggregation_logrows);
+                    let params_agg = ParamsKZG::new(aggregation_logrows);
                     let params_app = {
-                        let mut params = params.clone();
+                        let mut params = params_agg.clone();
                         params.downsize(args.logrows);
                         params
                     };
@@ -169,43 +169,46 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         let (circuit, public_inputs) =
                             prepare_circuit_and_public_input::<Fr>(&data, &args)?;
 
-                        let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
-                            &circuit,
-                            &params_app,
-                        )?;
-
                         let now = Instant::now();
-                        let snarks = [create_proof_circuit::<
-                            KZGCommitmentScheme<_>,
-                            Fr,
-                            _,
-                            ProverGWC<_>,
-                            VerifierGWC<_>,
-                            _,
-                            _,
-                            PoseidonTranscript<NativeLoader, _>,
-                            PoseidonTranscript<NativeLoader, _>,
-                        >(
-                            circuit,
-                            public_inputs.clone(),
-                            &params_app,
-                            &pk,
-                            AccumulatorStrategy::new(params_app.verifier_params()),
-                        )?];
+                        let snarks = [{
+                            let pk_app = create_keys::<
+                                KZGCommitmentScheme<Bn256>,
+                                Fr,
+                                ModelCircuit<Fr>,
+                            >(&circuit, &params_app)?;
+                            create_proof_circuit::<
+                                KZGCommitmentScheme<_>,
+                                Fr,
+                                _,
+                                ProverGWC<_>,
+                                VerifierGWC<_>,
+                                _,
+                                _,
+                                PoseidonTranscript<NativeLoader, _>,
+                                PoseidonTranscript<NativeLoader, _>,
+                            >(
+                                circuit,
+                                public_inputs.clone(),
+                                &params_app,
+                                &pk_app,
+                                AccumulatorStrategy::new(params_app.verifier_params()),
+                            )?
+                        }];
                         info!("Application proof took {}", now.elapsed().as_secs());
                         snarks
                     };
 
                     // proof aggregation
-                    let (snark, deployment_code) = {
-                        let agg_circuit = AggregationCircuit::new(&params, snarks)?;
-                        let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
-                            &agg_circuit,
-                            &params,
-                        )?;
+                    let (agg_snark, deployment_code) = {
+                        let agg_circuit = AggregationCircuit::new(&params_agg, snarks)?;
+                        let agg_pk = create_keys::<
+                            KZGCommitmentScheme<Bn256>,
+                            Fr,
+                            AggregationCircuit,
+                        >(&agg_circuit, &params_app)?;
                         let deployment_code = gen_aggregation_evm_verifier(
-                            &params,
-                            pk.get_vk(),
+                            &params_agg,
+                            agg_pk.get_vk(),
                             AggregationCircuit::num_instance(),
                             AggregationCircuit::accumulator_indices(),
                         )?;
@@ -223,16 +226,16 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         >(
                             agg_circuit.clone(),
                             agg_circuit.instances(),
-                            &params,
-                            &pk,
-                            AccumulatorStrategy::new(params.verifier_params()),
+                            &params_agg,
+                            &agg_pk,
+                            AccumulatorStrategy::new(params_agg.verifier_params()),
                         )
                         .map_err(Box::<dyn Error>::from)?;
                         info!("Aggregation proof took {}", now.elapsed().as_secs());
                         (snark, deployment_code)
                     };
 
-                    snark.save(proof_path)?;
+                    agg_snark.save(proof_path)?;
                     deployment_code.save(deployment_code_path)?;
                 }
             };
