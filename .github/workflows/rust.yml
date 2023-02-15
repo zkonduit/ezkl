@@ -92,7 +92,7 @@ jobs:
     - name: Mock proving tests (public params)
       run: cargo test --release --verbose tests::mock_public_params_ -- --test-threads 16
   
-  full-proving-tests:
+  proving-tests:
 
     runs-on: ubuntu-latest-16-cores
     steps:
@@ -105,12 +105,12 @@ jobs:
           override: true
           components: rustfmt, clippy
 
-    - name: KZG full-prove tests
-      run: cargo test --release --verbose tests::kzg_fullprove_ -- --test-threads 4
+    - name: KZG prove tests
+      run: cargo test --release --verbose tests::kzg_prove_ -- --test-threads 4
 
-  full-proving-evm-tests:
+  proving-evm-tests:
 
-    runs-on: self-hosted
+    runs-on: ubuntu-latest-16-cores
     timeout-minutes: 480
     steps:
     - uses: actions/checkout@v3
@@ -124,8 +124,24 @@ jobs:
 
     - name: Install solc
       run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
-    - name: KZG full-prove tests (EVM)
-      run: cargo test --release --verbose tests_evm::kzg_evm_fullprove_ -- --test-threads 3
+    - name: KZG prove tests (EVM)
+      run: cargo test --release --verbose tests_evm::kzg_evm_prove_ -- --test-threads 3
+  
+  prove-and-verify-evm-tests:
+
+    runs-on: ubuntu-latest-16-cores
+    steps:
+    - uses: actions/checkout@v3
+      with:
+          submodules: recursive
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+
+    - name: KZG prove and verify tests (EVM)
+      run: cargo test --release --verbose tests::kzg_evm_prove_and_verify_ -- --test-threads 4
 
   prove-and-verify-tests:
 
