@@ -155,7 +155,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     // We will need aggregator k > application k > bits
                     //		    let application_logrows = args.logrows; //bits + 1;
 
-                    let aggregation_logrows = 22;
+                    let aggregation_logrows = args.logrows + 6;
 
                     let params_agg = ParamsKZG::new(aggregation_logrows);
                     let params_app = {
@@ -205,7 +205,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                             KZGCommitmentScheme<Bn256>,
                             Fr,
                             AggregationCircuit,
-                        >(&agg_circuit, &params_app)?;
+                        >(&agg_circuit, &params_agg)?;
                         let deployment_code = gen_aggregation_evm_verifier(
                             &params_agg,
                             agg_pk.get_vk(),
