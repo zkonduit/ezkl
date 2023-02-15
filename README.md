@@ -77,12 +77,6 @@ Luckily `ezkl` also provides command to verify the generated proofs:
 ezkl --bits=16 -K=17 verify -M ./examples/onnx/examples/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path 1l_relu.params
 ``` 
 
-The separate prove and verify steps can be combined into a single command, if you'd prefer to not write to your filesystem: 
-
-```bash
-ezkl --bits=16 -K=17 fullprove -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx 
-```
-
 To display a table of the loaded onnx nodes, their associated parameters, set `RUST_LOG=DEBUG` or run:
 
 ```bash
@@ -92,14 +86,18 @@ cargo run --release --bin ezkl -- table -M ./examples/onnx/examples/1l_relu/netw
 
 #### verifying with the EVM ◊
 
-Note that `fullprove` can also be run with an EVM verifier.  We need to pass the `evm` feature flag to conditionally compile the requisite [foundry_evm](https://github.com/foundry-rs/foundry) dependencies. Using `foundry_evm` we spin up a local EVM executor and verify the generated proof. In future releases we'll create a simple pipeline for deploying to EVM based networks. Also note that this requires a local [solc](https://docs.soliditylang.org/en/v0.8.17/installing-solidity.html) installation. 
-
-
-Example:
+Note that the above prove and verify stats can also be run with an EVM verifier.  This can be done done by running the respective `prove-evm` and `verify-evm` commands: 
 
 ```bash
-cargo run  --release --features evm --bin ezkl fullprove -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx 
+ezkl --bits=16 -K=17 prove-evm -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx --proof-path 1l_relu.pf --deployment-code-path 1l_relu.code
 ```
+```bash 
+ezkl --bits=16 -K=17 verify-evm -M ./examples/onnx/examples/1l_relu/network.onnx --proof-path 1l_relu.pf --deployment-code-path 1l_relu.code 
+``` 
+
+The above pipeline can also be run using [proof aggregation](https://ethresear.ch/t/leveraging-snark-proof-aggregation-to-achieve-large-scale-pbft-based-consensus/11588) to reduce proof size and verifying times, so as to be more suitable for EVM deployment. This is done simply by passing `--pfsys=kzg-aggr` to both the `prove-evm` and `verify-evm` commands. 
+
+Also note that this may require a local [solc](https://docs.soliditylang.org/en/v0.8.17/installing-solidity.html) installation. 
 
 
 ### general usage 🔧
@@ -108,12 +106,13 @@ cargo run  --release --features evm --bin ezkl fullprove -D ./examples/onnx/exam
 Usage: ezkl [OPTIONS] <COMMAND>
 
 Commands:
-  table      Loads model and prints model table
-  mock       Loads model and input and runs mock prover (for testing)
-  fullprove  Loads model and input and runs full prover (for testing)
-  prove      Loads model and data, prepares vk and pk, and creates proof, saving proof in --output
-  verify     Verifies a proof, returning accept or reject
-  help       Print this message or the help of the given subcommand(s)
+  table       Loads model and prints model table
+  mock        Loads model and input and runs mock prover (for testing)
+  prove       Loads model and data, prepares vk and pk, and creates proof, saving proof in --proof-path
+  prove-evm   Loads model and data, prepares vk and pk, and creates proof, saving proof in --proof-path
+  verify      Verifies a proof, returning accept or reject
+  verify-evm  Verifies a proof, returning accept or reject
+  help        Print this message or the help of the given subcommand(s)
 
 Options:
   -T, --tolerance <TOLERANCE>          The tolerance for error on model outputs [default: 0]
@@ -128,7 +127,7 @@ Options:
   -V, --version                        Print version information
 ```
 
-`bits`, `scale`, `tolerance`, and `logrows` have default values. You can use tolerance to express a tolerance to a certain amount of quantization error on the output eg. if set to 2 the circuit will verify even if the generated output deviates by an absolute value of 2 on any dimension from the expected output. `prove`, `mock`, `fullprove` all require `-D` and `-M` parameters, which if not provided, the cli will query the user to manually enter the path(s).
+`bits`, `scale`, `tolerance`, and `logrows` have default values. You can use tolerance to express a tolerance to a certain amount of quantization error on the output eg. if set to 2 the circuit will verify even if the generated output deviates by an absolute value of 2 on any dimension from the expected output. `prove` and `mock`, all require `-D` and `-M` parameters, which if not provided, the cli will query the user to manually enter the path(s).
 
 ```bash
 

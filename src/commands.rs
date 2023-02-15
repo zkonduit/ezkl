@@ -109,7 +109,7 @@ pub enum Commands {
         model: String,
     },
 
-    /// Loads model and data, prepares vk and pk, and creates proof, saving proof in --proof-path
+    /// Loads model and data, prepares vk and pk, creates proof, and saves proof in --proof-path
     #[command(arg_required_else_help = true)]
     Prove {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
@@ -140,7 +140,7 @@ pub enum Commands {
         // todo, optionally allow supplying proving key
     },
 
-    /// Loads model and data, prepares vk and pk, and creates proof, saving proof in --proof-path
+    /// Loads model and data, prepares vk and pk, creates proof, saves proof in --proof-path, and saves evm verifier code in --deployment_code_path
     #[command(name = "prove-evm", arg_required_else_help = true)]
     ProveEVM {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
@@ -195,7 +195,7 @@ pub enum Commands {
         pfsys: ProofSystem,
     },
 
-    /// Verifies a proof, returning accept or reject
+    /// Verifies a proof using a local EVM executor, returning accept or reject
     #[command(name = "verify-evm", arg_required_else_help = true)]
     VerifyEVM {
         /// The path to the .onnx model file
