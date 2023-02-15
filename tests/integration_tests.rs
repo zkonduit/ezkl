@@ -332,9 +332,9 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
             "-M",
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             "--proof-path",
-            format!("kzg_{}.pf", example_name).as_str(),
+            format!("kzg_aggr_{}.pf", example_name).as_str(),
             "--deployment-code-path",
-            format!("kzg_{}.code", example_name).as_str(),
+            format!("kzg_aggr_{}.code", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");
@@ -348,9 +348,9 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
             "-M",
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             "--proof-path",
-            format!("kzg_{}.pf", example_name).as_str(),
+            format!("kzg_aggr_{}.pf", example_name).as_str(),
             "--deployment-code-path",
-            format!("kzg_{}.code", example_name).as_str(),
+            format!("kzg_aggr_{}.code", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");
@@ -407,6 +407,10 @@ fn kzg_evm_prove(example_name: String) {
             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
             "-M",
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            "--proof-path",
+            format!("kzg_{}.pf", example_name).as_str(),
+            "--deployment-code-path",
+            format!("kzg_{}.code", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");
@@ -425,6 +429,10 @@ fn kzg_evm_aggr_prove(example_name: String) {
             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
             "-M",
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            "--proof-path",
+            format!("kzg_aggr_{}.pf", example_name).as_str(),
+            "--deployment-code-path",
+            format!("kzg_aggr_{}.code", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");
