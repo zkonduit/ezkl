@@ -278,9 +278,6 @@ pub enum Commands {
     /// Loads model and data, prepares vk and pk, creates proof, saves proof in --proof-path, and saves evm verifier code in --deployment_code_path
     #[command(name = "create-evm-verifier-aggr", arg_required_else_help = true)]
     CreateEVMVerifierAggr {
-        /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
-        model: PathBuf,
         /// The path to load the desired params file
         #[arg(long)]
         params_path: PathBuf,
@@ -308,7 +305,6 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
-
         /// The path to the proof file
         #[arg(long)]
         proof_path: PathBuf,
@@ -327,16 +323,50 @@ pub enum Commands {
             value_enum
         )]
         pfsys: ProofSystem,
+        #[arg(
+            long,
+            require_equals = true,
+            num_args = 0..=1,
+            default_value_t = TranscriptType::Blake,
+            value_enum
+        )]
+        transcript: TranscriptType,
+    },
+
+    /// Verifies a proof, returning accept or reject
+    #[command(arg_required_else_help = true)]
+    VerifyAggr {
+        /// The path to the proof file
+        #[arg(long)]
+        proof_path: PathBuf,
+        /// The path to output the desired verfication key file (optional)
+        #[arg(long)]
+        vk_path: PathBuf,
+        /// The path to load the desired verfication key file (optional)
+        #[arg(long)]
+        params_path: PathBuf,
+
+        #[arg(
+             long,
+             require_equals = true,
+             num_args = 0..=1,
+             default_value_t = ProofSystem::KZG,
+             value_enum
+         )]
+        pfsys: ProofSystem,
+        #[arg(
+             long,
+             require_equals = true,
+             num_args = 0..=1,
+             default_value_t = TranscriptType::Blake,
+             value_enum
+         )]
         transcript: TranscriptType,
     },
 
     /// Verifies a proof using a local EVM executor, returning accept or reject
     #[command(name = "verify-evm", arg_required_else_help = true)]
     VerifyEVM {
-        /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
-        model: PathBuf,
-
         /// The path to the proof file
         #[arg(long)]
         proof_path: PathBuf,

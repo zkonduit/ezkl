@@ -21,7 +21,7 @@ fn init() {
         ])
         .status()
         .expect("failed to execute process");
-    assert!(!status.success());
+    assert!(status.success());
 }
 
 const TESTS: [&str; 12] = [
@@ -69,6 +69,7 @@ macro_rules! test_func {
             use crate::mock_public_inputs;
             use crate::mock_public_params;
             use crate::kzg_prove_and_verify;
+            use crate::kzg_aggr_prove_and_verify;
             seq!(N in 0..=11 {
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
@@ -89,7 +90,14 @@ macro_rules! test_func {
             fn kzg_prove_and_verify_(test: &str) {
                 kzg_prove_and_verify(test.to_string());
             }
+            #(#[test_case(TESTS[N])])*
+            fn kzg_aggr_prove_and_verify_(test: &str) {
+                kzg_aggr_prove_and_verify(test.to_string());
+            }
+
             });
+
+
     }
     };
 }
@@ -250,6 +258,145 @@ fn mock_public_params(example_name: String) {
 }
 
 // prove-serialize-verify, the usual full path
+fn kzg_aggr_prove_and_verify(example_name: String) {
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "prove",
+            "--pfsys=kzg",
+            "-D",
+            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+            "-M",
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            "--proof-path",
+            format!("kzg_{}.pf", example_name).as_str(),
+            "--vk-path",
+            format!("kzg_{}.vk", example_name).as_str(),
+            "--params-path=kzg.params",
+            "--transcript=poseidon",
+            "--strategy=accum",
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "aggregate",
+            "--pfsys=kzg",
+            "-M",
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            "--aggregation-snarks",
+            format!("kzg_{}.pf", example_name).as_str(),
+            "--aggregation-vk-paths",
+            format!("kzg_{}.vk", example_name).as_str(),
+            "--proof-path",
+            format!("kzg_aggr_{}.pf", example_name).as_str(),
+            "--vk-path",
+            format!("kzg_aggr_{}.vk", example_name).as_str(),
+            "--params-path=kzg.params",
+            "--transcript=blake",
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "verify-aggr",
+            "--pfsys=kzg",
+            "--proof-path",
+            format!("kzg_aggr_{}.pf", example_name).as_str(),
+            "--vk-path",
+            format!("kzg_aggr_{}.vk", example_name).as_str(),
+            "--params-path=kzg.params",
+            "--transcript=blake",
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+// prove-serialize-verify, the usual full path
+fn kzg_evm_aggr_prove_and_verify(example_name: String) {
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "prove",
+            "--pfsys=kzg",
+            "-D",
+            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+            "-M",
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            "--proof-path",
+            format!("kzg_{}.pf", example_name).as_str(),
+            "--vk-path",
+            format!("kzg_{}.vk", example_name).as_str(),
+            "--params-path=kzg.params",
+            "--transcript=poseidon",
+            "--strategy=accum",
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "aggregate",
+            "--pfsys=kzg",
+            "-M",
+            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            "--aggregation-snarks",
+            format!("kzg_{}.pf", example_name).as_str(),
+            "--aggregation-vk-paths",
+            format!("kzg_{}.vk", example_name).as_str(),
+            "--proof-path",
+            format!("kzg_aggr_{}.pf", example_name).as_str(),
+            "--vk-path",
+            format!("kzg_aggr_{}.vk", example_name).as_str(),
+            "--params-path=kzg.params",
+            "--transcript=evm",
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "create-evm-verifier-aggr",
+            "--pfsys=kzg",
+            "--deployment-code-path",
+            format!("kzg_aggr_{}.code", example_name).as_str(),
+            "--params-path=kzg.params",
+            "--vk-path",
+            format!("kzg_aggr_{}.vk", example_name).as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "verify-evm",
+            "--pfsys=kzg",
+            "--proof-path",
+            format!("kzg_aggr_{}.pf", example_name).as_str(),
+            "--deployment-code-path",
+            format!("kzg_aggr_{}.code", example_name).as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+// prove-serialize-verify, the usual full path
 fn kzg_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
@@ -286,69 +433,6 @@ fn kzg_prove_and_verify(example_name: String) {
             format!("kzg_{}.vk", example_name).as_str(),
             "--params-path=kzg.params",
             "--transcript=blake",
-            "--strategy=single",
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
-}
-
-// prove-serialize-verify, the usual full path
-fn kzg_evm_aggr_prove_and_verify(example_name: String) {
-    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "--bits=16",
-            "-K=17",
-            "prove",
-            "--pfsys=kzg",
-            "-D",
-            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
-            "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
-            "--proof-path",
-            format!("kzg_aggr_{}.pf", example_name).as_str(),
-            "--deployment-code-path",
-            format!("kzg_aggr_{}.code", example_name).as_str(),
-            "--params-path=kzg.params",
-            "--transcript=poseidon",
-            "--strategy=accum",
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
-    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "--bits=16",
-            "-K=17",
-            "aggregate",
-            "--pfsys=kzg",
-            "-D",
-            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
-            "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
-            "--proof-path",
-            format!("kzg_aggr_{}.pf", example_name).as_str(),
-            "--deployment-code-path",
-            format!("kzg_aggr_{}.code", example_name).as_str(),
-            "--params-path=kzg.params",
-            "--transcript=poseidon",
-            "--strategy=accum",
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
-    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "--bits=16",
-            "-K=17",
-            "verify-evm",
-            "--pfsys=kzg-aggr",
-            "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
-            "--proof-path",
-            format!("kzg_aggr_{}.pf", example_name).as_str(),
-            "--deployment-code-path",
-            format!("kzg_aggr_{}.code", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");
@@ -361,7 +445,7 @@ fn kzg_evm_prove_and_verify(example_name: String) {
         .args([
             "--bits=16",
             "-K=17",
-            "prove-evm",
+            "prove",
             "--pfsys=kzg",
             "-D",
             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
@@ -369,8 +453,8 @@ fn kzg_evm_prove_and_verify(example_name: String) {
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
             "--proof-path",
             format!("kzg_{}.pf", example_name).as_str(),
-            "--deployment-code-path",
-            format!("kzg_{}.code", example_name).as_str(),
+            "--vk-path",
+            format!("kzg_{}.vk", example_name).as_str(),
             "--params-path=kzg.params",
             "--transcript=evm",
             "--strategy=single",
@@ -382,10 +466,27 @@ fn kzg_evm_prove_and_verify(example_name: String) {
         .args([
             "--bits=16",
             "-K=17",
-            "verify-evm",
+            "create-evm-verifier",
             "--pfsys=kzg",
+            "-D",
+            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
             "-M",
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            "--deployment-code-path",
+            format!("kzg_{}.code", example_name).as_str(),
+            "--params-path=kzg.params",
+            "--vk-path",
+            format!("kzg_{}.vk", example_name).as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "verify-evm",
+            "--pfsys=kzg",
             "--proof-path",
             format!("kzg_{}.pf", example_name).as_str(),
             "--deployment-code-path",

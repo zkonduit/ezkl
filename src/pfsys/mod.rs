@@ -155,7 +155,7 @@ impl<F: FieldExt, C: CurveAffine> Snark<F, C> {
             })
             .collect::<Vec<Vec<Scheme::Scalar>>>();
 
-        println!("instances {:?}", instances);
+        trace!("instances {:?}", instances);
 
         if params.is_none() || vk.is_none() {
             Ok(Snark {
@@ -182,13 +182,13 @@ impl<F: FieldExt, C: CurveAffine> Snark<F, C> {
 type CircuitInputs<F> = (ModelCircuit<F>, Vec<Vec<F>>);
 
 /// Initialize the model circuit and quantize the provided float inputs from the provided `ModelInput`.
-pub fn prepare_circuit_and_public_input<F: FieldExt>(
+pub fn prepare_model_circuit_and_public_input<F: FieldExt>(
     data: &ModelInput,
     args: &Cli,
 ) -> Result<CircuitInputs<F>, Box<dyn Error>> {
     let model = Model::from_ezkl_conf(args.clone())?;
     let out_scales = model.get_output_scales();
-    let circuit = prepare_circuit(data, args)?;
+    let circuit = prepare_model_circuit(data, args)?;
 
     // quantize the supplied data using the provided scale.
     // the ordering here is important, we want the inputs to come before the outputs
@@ -224,7 +224,7 @@ pub fn prepare_circuit_and_public_input<F: FieldExt>(
 }
 
 /// Initialize the model circuit
-pub fn prepare_circuit<F: FieldExt>(
+pub fn prepare_model_circuit<F: FieldExt>(
     data: &ModelInput,
     args: &Cli,
 ) -> Result<ModelCircuit<F>, Box<dyn Error>> {
@@ -390,41 +390,35 @@ pub fn verify_proof_circuit<
 }
 
 /// Loads a [VerifyingKey] at `path`.
-pub fn load_vk<Scheme: CommitmentScheme, F: FieldExt + TensorType>(
+pub fn load_vk<Scheme: CommitmentScheme, F: FieldExt + TensorType, C: Circuit<F>>(
     path: PathBuf,
 ) -> Result<VerifyingKey<Scheme::Curve>, Box<dyn Error>>
 where
-    ModelCircuit<F>: Circuit<Scheme::Scalar>,
+    C: Circuit<Scheme::Scalar>,
     Scheme::Curve: SerdeObject + CurveAffine,
     Scheme::Scalar: PrimeField + SerdeObject,
 {
     info!("loading verification key from {:?}", path);
     let f = File::open(path).map_err(Box::<dyn Error>::from)?;
     let mut reader = BufReader::new(f);
-    VerifyingKey::<Scheme::Curve>::read::<_, ModelCircuit<F>>(
-        &mut reader,
-        halo2_proofs::SerdeFormat::Processed,
-    )
-    .map_err(Box::<dyn Error>::from)
+    VerifyingKey::<Scheme::Curve>::read::<_, C>(&mut reader, halo2_proofs::SerdeFormat::Processed)
+        .map_err(Box::<dyn Error>::from)
 }
 
 /// Loads a [ProvingKey] at `path`.
-pub fn load_pk<Scheme: CommitmentScheme, F: FieldExt + TensorType>(
+pub fn load_pk<Scheme: CommitmentScheme, F: FieldExt + TensorType, C: Circuit<F>>(
     path: PathBuf,
 ) -> Result<ProvingKey<Scheme::Curve>, Box<dyn Error>>
 where
-    ModelCircuit<F>: Circuit<Scheme::Scalar>,
+    C: Circuit<Scheme::Scalar>,
     Scheme::Curve: SerdeObject + CurveAffine,
     Scheme::Scalar: PrimeField + SerdeObject,
 {
     info!("loading proving key from {:?}", path);
     let f = File::open(path).map_err(Box::<dyn Error>::from)?;
     let mut reader = BufReader::new(f);
-    ProvingKey::<Scheme::Curve>::read::<_, ModelCircuit<F>>(
-        &mut reader,
-        halo2_proofs::SerdeFormat::Processed,
-    )
-    .map_err(Box::<dyn Error>::from)
+    ProvingKey::<Scheme::Curve>::read::<_, C>(&mut reader, halo2_proofs::SerdeFormat::Processed)
+        .map_err(Box::<dyn Error>::from)
 }
 
 /// Loads the [CommitmentScheme::ParamsVerifier] at `path`.

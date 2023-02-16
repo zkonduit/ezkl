@@ -150,11 +150,9 @@ impl Model {
                 visibility,
             ),
             Commands::CreateEVMVerifier { model, .. }
-            | Commands::CreateEVMVerifierAggr { model, .. }
             | Commands::Prove { model, .. }
             | Commands::Verify { model, .. }
-            | Commands::Aggregate { model, .. }
-            | Commands::VerifyEVM { model, .. } => Model::new(
+            | Commands::Aggregate { model, .. } => Model::new(
                 model,
                 args.scale,
                 args.bits,
