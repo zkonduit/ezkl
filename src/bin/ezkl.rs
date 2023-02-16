@@ -11,8 +11,8 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     info!("{}", &args.as_json()?);
     let res = run(args);
     match &res {
-        Ok(_) => info!("verify succeeded"),
-        Err(e) => error!("verify failed: {}", e),
+        Ok(_) => info!("succeeded"),
+        Err(e) => error!("failed: {}", e),
     };
     res
 }

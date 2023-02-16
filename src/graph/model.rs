@@ -162,6 +162,7 @@ impl Model {
                 Mode::Table,
                 visibility,
             ),
+            _ => panic!(),
         }
     }
 

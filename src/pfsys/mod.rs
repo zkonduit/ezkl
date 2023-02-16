@@ -221,6 +221,11 @@ pub fn prepare_data(datapath: String) -> Result<ModelInput, Box<dyn Error>> {
     serde_json::from_str(&data).map_err(Box::<dyn Error>::from)
 }
 
+/// Helper function for generating SRS. !!! Only use for testing
+pub fn gen_srs<Scheme: CommitmentScheme>(k: u32) -> Scheme::ParamsProver {
+    Scheme::ParamsProver::new(k)
+}
+
 /// Creates a [VerifyingKey] and [ProvingKey] for a [ModelCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`).
 pub fn create_keys<Scheme: CommitmentScheme, F: FieldExt + TensorType, C: Circuit<F>>(
     circuit: &C,
@@ -374,6 +379,25 @@ where
     .map_err(Box::<dyn Error>::from)
 }
 
+/// Loads a [ProvingKey] at `path`.
+pub fn load_pk<Scheme: CommitmentScheme, F: FieldExt + TensorType>(
+    path: PathBuf,
+) -> Result<ProvingKey<Scheme::Curve>, Box<dyn Error>>
+where
+    ModelCircuit<F>: Circuit<Scheme::Scalar>,
+    Scheme::Curve: SerdeObject + CurveAffine,
+    Scheme::Scalar: PrimeField + SerdeObject,
+{
+    info!("loading proving key from {:?}", path);
+    let f = File::open(path).map_err(Box::<dyn Error>::from)?;
+    let mut reader = BufReader::new(f);
+    ProvingKey::<Scheme::Curve>::read::<_, ModelCircuit<F>>(
+        &mut reader,
+        halo2_proofs::SerdeFormat::Processed,
+    )
+    .map_err(Box::<dyn Error>::from)
+}
+
 /// Loads the [CommitmentScheme::ParamsVerifier] at `path`.
 pub fn load_params<Scheme: CommitmentScheme>(
     path: PathBuf,
@@ -382,6 +406,23 @@ pub fn load_params<Scheme: CommitmentScheme>(
     let f = File::open(path).map_err(Box::<dyn Error>::from)?;
     let mut reader = BufReader::new(f);
     Params::<'_, Scheme::Curve>::read(&mut reader).map_err(Box::<dyn Error>::from)
+}
+
+/// Saves a [ProvingKey] to `path`.
+pub fn save_pk<Scheme: CommitmentScheme>(
+    path: &PathBuf,
+    vk: &ProvingKey<Scheme::Curve>,
+) -> Result<(), io::Error>
+where
+    Scheme::Curve: SerdeObject + CurveAffine,
+    Scheme::Scalar: PrimeField + SerdeObject,
+{
+    info!("saving proving key 💾");
+    let f = File::create(path)?;
+    let mut writer = BufWriter::new(f);
+    vk.write(&mut writer, halo2_proofs::SerdeFormat::Processed)?;
+    writer.flush()?;
+    Ok(())
 }
 
 /// Saves a [VerifyingKey] to `path`.

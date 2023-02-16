@@ -98,6 +98,23 @@ pub enum Commands {
         model: String,
     },
 
+    /// Generates a dummy SRS
+    #[command(arg_required_else_help = true)]
+    GenSrs {
+        /// The path to output to the desired params file (optional)
+        #[arg(long)]
+        params_path: PathBuf,
+        /// The [ProofSystem] we'll be using.
+        #[arg(
+            long,
+	    short = 'B',
+            require_equals = true,
+            num_args = 0..=1,
+            default_value_t = ProofSystem::KZG,
+            value_enum
+        )]
+        pfsys: ProofSystem,
+    },
     /// Loads model and input and runs mock prover (for testing)
     #[command(arg_required_else_help = true)]
     Mock {
@@ -108,7 +125,6 @@ pub enum Commands {
         #[arg(short = 'M', long)]
         model: String,
     },
-
     /// Loads model and data, prepares vk and pk, creates proof, and saves proof in --proof-path
     #[command(arg_required_else_help = true)]
     Prove {
@@ -121,10 +137,10 @@ pub enum Commands {
         /// The path to the desired output file
         #[arg(long)]
         proof_path: PathBuf,
-        /// The path to output to the desired verfication key file (optional)
+        /// The path to output to the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
-        /// The path to output to the desired verfication key file (optional)
+        /// The path to load the desired params file
         #[arg(long)]
         params_path: PathBuf,
         /// The [ProofSystem] we'll be using.
@@ -152,6 +168,9 @@ pub enum Commands {
         /// The path to the desired output file
         #[arg(long)]
         proof_path: PathBuf,
+        /// The path to load the desired params file
+        #[arg(long)]
+        params_path: PathBuf,
         /// The path to output to the desired verfication key file (optional)
         #[arg(long)]
         deployment_code_path: PathBuf,
@@ -177,10 +196,10 @@ pub enum Commands {
         /// The path to the proof file
         #[arg(long)]
         proof_path: PathBuf,
-        /// The path to output to the desired verfication key file (optional)
+        /// The path to output the desired verfication key file (optional)
         #[arg(long)]
         vk_path: PathBuf,
-        /// The path to output to the desired verfication key file (optional)
+        /// The path to load the desired verfication key file (optional)
         #[arg(long)]
         params_path: PathBuf,
 

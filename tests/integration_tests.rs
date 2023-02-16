@@ -12,6 +12,16 @@ lazy_static! {
 fn init() {
     println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
     build_ezkl();
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "-K=23",
+            "gen-srs",
+            "--pfsys=kzg",
+            "--params-path=kzg.params",
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(!status.success());
 }
 
 const TESTS: [&str; 12] = [
@@ -275,8 +285,7 @@ fn kzg_prove_and_verify(example_name: String) {
             format!("kzg_{}.pf", example_name).as_str(),
             "--vk-path",
             format!("kzg_{}.vk", example_name).as_str(),
-            "--params-path",
-            format!("kzg_{}.params", example_name).as_str(),
+            "--params-path=kzg.params",
         ])
         .status()
         .expect("failed to execute process");
@@ -293,8 +302,7 @@ fn kzg_prove_and_verify(example_name: String) {
             format!("kzg_{}.pf", example_name).as_str(),
             "--vk-path",
             format!("kzg_{}.vk", example_name).as_str(),
-            "--params-path",
-            format!("kzg_{}.params", example_name).as_str(),
+            "--params-path=kzg.params",
         ])
         .status()
         .expect("failed to execute process");
@@ -313,6 +321,7 @@ fn kzg_prove(example_name: String) {
             format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
             "-M",
             format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            "--params-path=kzg.params",
         ])
         .status()
         .expect("failed to execute process");
@@ -335,6 +344,7 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
             format!("kzg_aggr_{}.pf", example_name).as_str(),
             "--deployment-code-path",
             format!("kzg_aggr_{}.code", example_name).as_str(),
+            "--params-path=kzg.params",
         ])
         .status()
         .expect("failed to execute process");
@@ -373,6 +383,7 @@ fn kzg_evm_prove_and_verify(example_name: String) {
             format!("kzg_{}.pf", example_name).as_str(),
             "--deployment-code-path",
             format!("kzg_{}.code", example_name).as_str(),
+            "--params-path=kzg.params",
         ])
         .status()
         .expect("failed to execute process");
