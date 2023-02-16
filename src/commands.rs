@@ -12,9 +12,39 @@ use std::path::PathBuf;
 pub enum ProofSystem {
     IPA,
     KZG,
-    KZGAggr,
 }
 impl std::fmt::Display for ProofSystem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.to_possible_value()
+            .expect("no values are skipped")
+            .get_name()
+            .fmt(f)
+    }
+}
+
+#[allow(missing_docs)]
+#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub enum TranscriptType {
+    Blake,
+    Poseidon,
+    EVM,
+}
+impl std::fmt::Display for TranscriptType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.to_possible_value()
+            .expect("no values are skipped")
+            .get_name()
+            .fmt(f)
+    }
+}
+
+#[allow(missing_docs)]
+#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub enum StrategyType {
+    Single,
+    Accum,
+}
+impl std::fmt::Display for StrategyType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.to_possible_value()
             .expect("no values are skipped")
@@ -99,7 +129,7 @@ pub enum Commands {
     },
 
     /// Generates a dummy SRS
-    #[command(arg_required_else_help = true)]
+    #[command(name = "gen-srs", arg_required_else_help = true)]
     GenSrs {
         /// The path to output to the desired params file (optional)
         #[arg(long)]
@@ -125,7 +155,49 @@ pub enum Commands {
         #[arg(short = 'M', long)]
         model: String,
     },
-    /// Loads model and data, prepares vk and pk, creates proof, and saves proof in --proof-path
+
+    /// Loads model and data, prepares vk and pk, creates proof, saves proof in --proof-path, and saves evm verifier code in --deployment_code_path
+    #[command(arg_required_else_help = true)]
+    Aggregate {
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: PathBuf,
+        /// The path to the desired output file
+        #[arg(long)]
+        aggregation_snarks: Vec<PathBuf>,
+        /// The path to load the desired verfication key file
+        #[arg(long)]
+        aggregation_vk_paths: Vec<PathBuf>,
+        /// The path to save the desired verfication key file
+        #[arg(long)]
+        vk_path: PathBuf,
+        /// The path to the desired output file
+        #[arg(long)]
+        proof_path: PathBuf,
+        /// The path to load the desired params file
+        #[arg(long)]
+        params_path: PathBuf,
+        /// The [ProofSystem] we'll be using.
+        #[arg(
+            long,
+            require_equals = true,
+            num_args = 0..=1,
+            default_value_t = ProofSystem::KZG,
+            value_enum
+        )]
+        pfsys: ProofSystem,
+        #[arg(
+            long,
+            require_equals = true,
+            num_args = 0..=1,
+            default_value_t = TranscriptType::EVM,
+            value_enum
+        )]
+        transcript: TranscriptType,
+        // todo, optionally allow supplying proving key
+    },
+
+    /// Loads model and data, prepares vk and pk, creates proof, saves proof in --proof-path, and saves evm verifier code in --deployment_code_path
     #[command(arg_required_else_help = true)]
     Prove {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
@@ -134,15 +206,62 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
-        /// The path to the desired output file
-        #[arg(long)]
-        proof_path: PathBuf,
         /// The path to output to the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
+        /// The path to the desired output file
+        #[arg(long)]
+        proof_path: PathBuf,
         /// The path to load the desired params file
         #[arg(long)]
         params_path: PathBuf,
+        /// The [ProofSystem] we'll be using.
+        #[arg(
+            long,
+	    short = 'B',
+            require_equals = true,
+            num_args = 0..=1,
+            default_value_t = ProofSystem::KZG,
+            value_enum
+        )]
+        pfsys: ProofSystem,
+        #[arg(
+            long,
+            require_equals = true,
+            num_args = 0..=1,
+            default_value_t = TranscriptType::EVM,
+            value_enum
+        )]
+        transcript: TranscriptType,
+        #[arg(
+            long,
+            require_equals = true,
+            num_args = 0..=1,
+            default_value_t = StrategyType::Single,
+            value_enum
+        )]
+        strategy: StrategyType,
+        // todo, optionally allow supplying proving key
+    },
+
+    /// Loads model and data, prepares vk and pk, creates proof, saves proof in --proof-path, and saves evm verifier code in --deployment_code_path
+    #[command(name = "create-evm-verifier", arg_required_else_help = true)]
+    CreateEVMVerifier {
+        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'D', long)]
+        data: String,
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: PathBuf,
+        /// The path to load the desired params file
+        #[arg(long)]
+        params_path: PathBuf,
+        /// The path to load the desired verfication key file
+        #[arg(long)]
+        vk_path: PathBuf,
+        /// The path to output to the desired verfication key file (optional)
+        #[arg(long, required_if_eq("transcript", "evm"))]
+        deployment_code_path: Option<PathBuf>,
         /// The [ProofSystem] we'll be using.
         #[arg(
             long,
@@ -157,27 +276,23 @@ pub enum Commands {
     },
 
     /// Loads model and data, prepares vk and pk, creates proof, saves proof in --proof-path, and saves evm verifier code in --deployment_code_path
-    #[command(name = "prove-evm", arg_required_else_help = true)]
-    ProveEVM {
-        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'D', long)]
-        data: String,
+    #[command(name = "create-evm-verifier-aggr", arg_required_else_help = true)]
+    CreateEVMVerifierAggr {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
-        /// The path to the desired output file
-        #[arg(long)]
-        proof_path: PathBuf,
         /// The path to load the desired params file
         #[arg(long)]
         params_path: PathBuf,
-        /// The path to output to the desired verfication key file (optional)
+        /// The path to output to load the desired verfication key file
         #[arg(long)]
-        deployment_code_path: PathBuf,
+        vk_path: PathBuf,
+        /// The path to output to the desired verification code
+        #[arg(long, required_if_eq("transcript", " "))]
+        deployment_code_path: Option<PathBuf>,
         /// The [ProofSystem] we'll be using.
         #[arg(
             long,
-	    short = 'B',
             require_equals = true,
             num_args = 0..=1,
             default_value_t = ProofSystem::KZG,
@@ -186,6 +301,7 @@ pub enum Commands {
         pfsys: ProofSystem,
         // todo, optionally allow supplying proving key
     },
+
     /// Verifies a proof, returning accept or reject
     #[command(arg_required_else_help = true)]
     Verify {
@@ -205,13 +321,13 @@ pub enum Commands {
 
         #[arg(
             long,
-	    short = 'B',
             require_equals = true,
             num_args = 0..=1,
             default_value_t = ProofSystem::KZG,
             value_enum
         )]
         pfsys: ProofSystem,
+        transcript: TranscriptType,
     },
 
     /// Verifies a proof using a local EVM executor, returning accept or reject
@@ -230,7 +346,6 @@ pub enum Commands {
 
         #[arg(
              long,
-         short = 'B',
              require_equals = true,
              num_args = 0..=1,
              default_value_t = ProofSystem::KZG,

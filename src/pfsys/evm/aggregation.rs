@@ -102,7 +102,7 @@ pub fn aggregate<'a>(
     let mut accumulators = vec![];
 
     for snark in snarks.iter() {
-        let protocol = snark.protocol.loaded(loader);
+        let protocol = snark.protocol.as_ref().unwrap().loaded(loader);
         let instances = assign_instances(&snark.instances);
         let mut transcript = PoseidonTranscript::<Rc<Halo2Loader>, _>::new(loader, snark.proof());
         let proof = PlonkSuccinctVerifier::read_proof(svk, &protocol, &instances, &mut transcript)

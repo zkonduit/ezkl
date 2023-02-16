@@ -149,10 +149,12 @@ impl Model {
                 Mode::Table,
                 visibility,
             ),
-            Commands::Prove { model, .. }
+            Commands::CreateEVMVerifier { model, .. }
+            | Commands::CreateEVMVerifierAggr { model, .. }
+            | Commands::Prove { model, .. }
             | Commands::Verify { model, .. }
-            | Commands::VerifyEVM { model, .. }
-            | Commands::ProveEVM { model, .. } => Model::new(
+            | Commands::Aggregate { model, .. }
+            | Commands::VerifyEVM { model, .. } => Model::new(
                 model,
                 args.scale,
                 args.bits,

@@ -22,7 +22,7 @@ use tract_onnx::tract_hir::{
     infer::Factoid,
     internal::InferenceOp,
     ops::activations::LeakyRelu,
-    ops::cnn::{Conv, PoolSpec, SumPool}, //MaxPool,},
+    ops::cnn::{Conv, PoolSpec, SumPool},
     ops::expandable::Expansion,
     ops::nn::DataFormat,
     tract_core::ops::{
