@@ -156,7 +156,7 @@ pub enum Commands {
         model: String,
     },
 
-    /// Loads model and data, prepares vk and pk, creates proof, saves proof in --proof-path, and saves evm verifier code in --deployment_code_path
+    /// Aggregates proofs :)
     #[command(arg_required_else_help = true)]
     Aggregate {
         /// The path to the .onnx model file
@@ -197,7 +197,7 @@ pub enum Commands {
         // todo, optionally allow supplying proving key
     },
 
-    /// Loads model and data, prepares vk and pk, creates proof, saves proof in --proof-path, and saves evm verifier code in --deployment_code_path
+    /// Loads model and data, prepares vk and pk, and creates proof
     #[command(arg_required_else_help = true)]
     Prove {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
@@ -244,7 +244,7 @@ pub enum Commands {
         // todo, optionally allow supplying proving key
     },
 
-    /// Loads model and data, prepares vk and pk, creates proof, saves proof in --proof-path, and saves evm verifier code in --deployment_code_path
+    /// Creates an EVM verifier for a single proof
     #[command(name = "create-evm-verifier", arg_required_else_help = true)]
     CreateEVMVerifier {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
@@ -275,7 +275,7 @@ pub enum Commands {
         // todo, optionally allow supplying proving key
     },
 
-    /// Loads model and data, prepares vk and pk, creates proof, saves proof in --proof-path, and saves evm verifier code in --deployment_code_path
+    /// Creates an EVM verifier for an aggregate proof
     #[command(name = "create-evm-verifier-aggr", arg_required_else_help = true)]
     CreateEVMVerifierAggr {
         /// The path to load the desired params file
@@ -333,7 +333,7 @@ pub enum Commands {
         transcript: TranscriptType,
     },
 
-    /// Verifies a proof, returning accept or reject
+    /// Verifies an aggregate proof, returning accept or reject
     #[command(arg_required_else_help = true)]
     VerifyAggr {
         /// The path to the proof file
