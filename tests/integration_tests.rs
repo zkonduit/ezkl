@@ -14,7 +14,7 @@ fn init() {
     build_ezkl();
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
-            "-K=22",
+            "-K=23",
             "gen-srs",
             "--pfsys=kzg",
             "--params-path=kzg.params",
