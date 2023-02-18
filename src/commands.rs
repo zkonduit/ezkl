@@ -262,6 +262,9 @@ pub enum Commands {
         /// The path to output to the desired verfication key file (optional)
         #[arg(long, required_if_eq("transcript", "evm"))]
         deployment_code_path: Option<PathBuf>,
+        /// The path to output the Yul code (which needs further modification)
+        #[arg(long, required_if_eq("transcript", "evm"))]
+        yul_code_path: Option<PathBuf>,
         /// The [ProofSystem] we'll be using.
         #[arg(
             long,
@@ -373,6 +376,23 @@ pub enum Commands {
         /// The path to verifier contract's deployment code
         #[arg(long)]
         deployment_code_path: PathBuf,
+
+        #[arg(
+             long,
+             require_equals = true,
+             num_args = 0..=1,
+             default_value_t = ProofSystem::KZG,
+             value_enum
+         )]
+        pfsys: ProofSystem,
+    },
+
+    /// Print the proof in hexadecimal
+    #[command(name = "print-proof-hex", arg_required_else_help = true)]
+    PrintProofHex {
+        /// The path to the proof file
+        #[arg(long)]
+        proof_path: PathBuf,
 
         #[arg(
              long,

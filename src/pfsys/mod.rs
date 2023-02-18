@@ -59,7 +59,8 @@ pub struct Snark<F: FieldExt + SerdeObject, C: CurveAffine> {
     protocol: Option<PlonkProtocol<C>>,
     /// public instances of the snark
     pub instances: Vec<Vec<F>>,
-    proof: Vec<u8>,
+    /// the proof
+    pub proof: Vec<u8>,
 }
 
 impl<F: FieldExt + SerdeObject, C: CurveAffine> Snark<F, C> {
