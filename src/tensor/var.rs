@@ -263,17 +263,15 @@ impl VarTensor {
             ValTensor::AssignedValue { inner: v, .. } => v.enum_map(|coord, k| match &self {
                 VarTensor::Fixed { inner: fixed, .. } => {
                     let (x, y) = self.cartesian_coord(offset + coord);
-                    match region.assign_fixed(|| "k", fixed[x], y, || k) {
-                        Ok(a) => Ok(a.evaluate()),
-                        Err(e) => Err(e),
-                    }
+                    region
+                        .assign_fixed(|| "k", fixed[x], y, || k)
+                        .map(|a| a.evaluate())
                 }
                 VarTensor::Advice { inner: advices, .. } => {
                     let (x, y) = self.cartesian_coord(offset + coord);
-                    match region.assign_advice(|| "k", advices[x], y, || k) {
-                        Ok(a) => Ok(a.evaluate()),
-                        Err(e) => Err(e),
-                    }
+                    region
+                        .assign_advice(|| "k", advices[x], y, || k)
+                        .map(|a| a.evaluate())
                 }
             }),
         }
