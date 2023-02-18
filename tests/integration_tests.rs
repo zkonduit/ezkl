@@ -39,6 +39,19 @@ const TESTS: [&str; 12] = [
     "2l_relu_sigmoid_conv",
 ];
 
+const TESTS_AGGR: [&str; 10] = [
+    "1l_mlp",
+    "1l_flatten",
+    "1l_average",
+    "1l_reshape",
+    "1l_sigmoid",
+    "1l_leakyrelu",
+    "1l_relu",
+    "2l_relu_sigmoid_small",
+    "2l_relu_small",
+    "1l_conv",
+];
+
 const NEG_TESTS: [(&str, &str); 2] = [
     ("2l_relu_sigmoid_small", "2l_relu_small"),
     ("2l_relu_small", "2l_relu_sigmoid_small"),
@@ -58,6 +71,28 @@ const TESTS_EVM: [&str; 9] = [
 
 const EXAMPLES: [&str; 2] = ["mlp_4d", "conv2d_mnist"];
 
+macro_rules! test_func_aggr {
+    () => {
+        #[cfg(test)]
+        mod tests_aggr {
+            use seq_macro::seq;
+            use crate::TESTS_AGGR;
+            use test_case::test_case;
+            use crate::kzg_aggr_prove_and_verify;
+            seq!(N in 0..=9 {
+
+            #(#[test_case(TESTS_AGGR[N])])*
+            fn kzg_aggr_prove_and_verify_(test: &str) {
+                kzg_aggr_prove_and_verify(test.to_string());
+            }
+
+            });
+
+
+    }
+    };
+}
+
 macro_rules! test_func {
     () => {
         #[cfg(test)]
@@ -69,7 +104,6 @@ macro_rules! test_func {
             use crate::mock_public_inputs;
             use crate::mock_public_params;
             use crate::kzg_prove_and_verify;
-            use crate::kzg_aggr_prove_and_verify;
             seq!(N in 0..=11 {
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
@@ -90,10 +124,7 @@ macro_rules! test_func {
             fn kzg_prove_and_verify_(test: &str) {
                 kzg_prove_and_verify(test.to_string());
             }
-            #(#[test_case(TESTS[N])])*
-            fn kzg_aggr_prove_and_verify_(test: &str) {
-                kzg_aggr_prove_and_verify(test.to_string());
-            }
+
 
             });
 
@@ -166,6 +197,7 @@ macro_rules! test_neg_examples {
 }
 
 test_func!();
+test_func_aggr!();
 test_func_evm!();
 test_func_examples!();
 test_neg_examples!();

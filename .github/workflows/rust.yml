@@ -140,7 +140,7 @@ jobs:
           components: rustfmt, clippy
 
     - name: KZG prove and verify aggr tests
-      run: cargo test --release --verbose tests::kzg_aggr_prove_and_verify_ -- --test-threads 1
+      run: cargo test --release --verbose tests_aggr::kzg_aggr_prove_and_verify_ -- --test-threads 1
 
   prove-and-verify-evm-aggr-tests:
 
