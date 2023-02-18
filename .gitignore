@@ -2,6 +2,7 @@ target
 data
 *.pf
 *.vk
+*.code
 *.params
 *~
 \#*\#

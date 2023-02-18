@@ -139,7 +139,7 @@ impl Model {
     pub fn from_ezkl_conf(args: Cli) -> Result<Self, Box<dyn Error>> {
         let visibility = VarVisibility::from_args(args.clone())?;
         match args.command {
-            Commands::Table { model } => Model::new(
+            Commands::Table { model } | Commands::Mock { model, .. } => Model::new(
                 model,
                 args.scale,
                 args.bits,
@@ -149,46 +149,20 @@ impl Model {
                 Mode::Table,
                 visibility,
             ),
-            Commands::Mock { model, .. } => Model::new(
+            Commands::CreateEVMVerifier { model, .. }
+            | Commands::Prove { model, .. }
+            | Commands::Verify { model, .. }
+            | Commands::Aggregate { model, .. } => Model::new(
                 model,
                 args.scale,
                 args.bits,
                 args.logrows,
                 args.max_rotations,
                 args.tolerance,
-                Mode::Mock,
+                Mode::Table,
                 visibility,
             ),
-            Commands::Fullprove { model, .. } => Model::new(
-                model,
-                args.scale,
-                args.bits,
-                args.logrows,
-                args.max_rotations,
-                args.tolerance,
-                Mode::FullProve,
-                visibility,
-            ),
-            Commands::Prove { model, .. } => Model::new(
-                model,
-                args.scale,
-                args.bits,
-                args.logrows,
-                args.max_rotations,
-                args.tolerance,
-                Mode::Prove,
-                visibility,
-            ),
-            Commands::Verify { model, .. } => Model::new(
-                model,
-                args.scale,
-                args.bits,
-                args.logrows,
-                args.max_rotations,
-                args.tolerance,
-                Mode::Verify,
-                visibility,
-            ),
+            _ => panic!(),
         }
     }
 
@@ -774,5 +748,46 @@ impl Model {
         }
         // add 1 for layer output
         maximum_number_inputs + 1
+    }
+
+    /// Number of instances used by the circuit
+    pub fn num_instances(&self) -> (usize, Vec<Vec<usize>>) {
+        // for now the number of instances corresponds to the number of graph / model outputs
+        let mut num_instances = 0;
+        let mut instance_shapes = vec![];
+        if self.visibility.input.is_public() {
+            num_instances += self.num_inputs();
+            instance_shapes.extend(self.input_shapes());
+        }
+        if self.visibility.output.is_public() {
+            num_instances += self.num_outputs();
+            instance_shapes.extend(self.output_shapes());
+        }
+        (num_instances, instance_shapes)
+    }
+
+    /// Number of advice used by the circuit
+    pub fn num_advice(&self) -> usize {
+        // TODO: extract max number of params in a given fused layer
+        if self.visibility.params.is_public() {
+            // this is the maximum of variables in non-fused layer, and the maximum of variables (non-params) in fused layers
+            max(self.max_node_vars_non_fused(), self.max_node_vars_fused())
+        } else {
+            // this is the maximum of variables in non-fused layer, and the maximum of variables (non-params) in fused layers
+            //  + the max number of params in a fused layer
+            max(
+                self.max_node_vars_non_fused(),
+                self.max_node_params() + self.max_node_vars_fused(),
+            )
+        }
+    }
+
+    /// Number of fixed columns used by the circuit
+    pub fn num_fixed(&self) -> usize {
+        let mut num_fixed = 0;
+        if self.visibility.params.is_public() {
+            num_fixed += self.max_node_params();
+        }
+        num_fixed
     }
 }
