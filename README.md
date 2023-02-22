@@ -94,10 +94,12 @@ Note that the above prove and verify stats can also be run with an EVM verifier.
 # gen proof
 ezkl --bits=16 -K=17 prove -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path=kzg.params --transcript=evm
 # gen evm verifier
-target/release/ezkl -K=17 --bits=16 create-evm-verifier --pfsys=kzg --deployment-code-path 1l_relu.code --params-path=kzg.params --vk-path 1l_relu.vk
+target/release/ezkl -K=17 --bits=16 create-evm-verifier --pfsys=kzg --deployment-code-path 1l_relu.code --params-path=kzg.params --vk-path 1l_relu.vk --sol-code-path 1l_relu.sol
 # Verify (EVM) 
 target/release/ezkl -K=17 --bits=16 verify-evm --pfsys=kzg --proof-path 1l_relu.pf --deployment-code-path 1l_relu.code
 ```
+
+Note that the `.sol` file above can be deployed and composed with other Solidity contracts, via a `verify()` function. Please read [this document](https://hackmd.io/QOHOPeryRsOraO7FUnG-tg) for more information about the interface of the contract, how to obtain the data needed for its function parameters, and its limitations.
 
 The above pipeline can also be run using [proof aggregation](https://ethresear.ch/t/leveraging-snark-proof-aggregation-to-achieve-large-scale-pbft-based-consensus/11588) to reduce proof size and verifying times, so as to be more suitable for EVM deployment. A sample pipeline for doing so would be: 
 
@@ -116,7 +118,7 @@ target/release/ezkl -K=17 --bits=16 verify-evm --pfsys=kzg --proof-path aggr_1l_
  
 ```
 
-Also note that this may require a local [solc](https://docs.soliditylang.org/en/v0.8.17/installing-solidity.html) installation. 
+Also note that this may require a local [solc](https://docs.soliditylang.org/en/v0.8.17/installing-solidity.html) installation, and that aggregated proof verification in Solidity is not currently supported.
 
 
 ### general usage 🔧
