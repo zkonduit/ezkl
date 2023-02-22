@@ -23,5 +23,3 @@ pub enum CircuitError {
     #[error("attempting to initialize an already instantiated lookup table")]
     TableAlreadyAssigned,
 }
-
-

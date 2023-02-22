@@ -698,8 +698,9 @@ impl Model {
                 .iter()
                 .flat_map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
                 // here we remove intermediary calculation / nodes within the layer
-                .filter(|id| !fused_ops.contains_key(id))
-                .filter(|id| self.nodes.filter(*id).opkind.is_const())
+                .filter(|id| {
+                    !fused_ops.contains_key(id) && self.nodes.filter(*id).opkind.is_const()
+                })
                 .unique()
                 .collect_vec();
 
@@ -722,8 +723,9 @@ impl Model {
                 .iter()
                 .flat_map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
                 // here we remove intermediary calculation / nodes within the layer
-                .filter(|id| !fused_ops.contains_key(id))
-                .filter(|id| !self.nodes.filter(*id).opkind.is_const())
+                .filter(|id| {
+                    !fused_ops.contains_key(id) && !self.nodes.filter(*id).opkind.is_const()
+                })
                 .unique()
                 .collect_vec();
 
