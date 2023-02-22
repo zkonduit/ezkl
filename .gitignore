@@ -1,5 +1,6 @@
 target
 data
+*.sol
 *.pf
 *.vk
 *.code

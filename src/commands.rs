@@ -259,12 +259,12 @@ pub enum Commands {
         /// The path to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
-        /// The path to output to the desired verfication key file (optional)
+        /// The path to output to the desired EVM bytecode file (optional)
         #[arg(long, required_if_eq("transcript", "evm"))]
         deployment_code_path: Option<PathBuf>,
-        /// The path to output the Yul code (which needs further modification)
+        /// The path to output the Solidity code
         #[arg(long, required_if_eq("transcript", "evm"))]
-        yul_code_path: Option<PathBuf>,
+        sol_code_path: Option<PathBuf>,
         /// The [ProofSystem] we'll be using.
         #[arg(
             long,
