@@ -27,12 +27,12 @@ use log::{info, trace};
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
-use std::time::Instant;
-use tabled::Table;
-use thiserror::Error;
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
+use std::time::Instant;
+use tabled::Table;
+use thiserror::Error;
 
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
@@ -61,7 +61,7 @@ fn verify_proof_circuit_kzg<
             _,
             Challenge255<_>,
             Blake2bRead<_, _, _>,
-        >(&proof, &params, &vk, strategy),
+        >(&proof, params, vk, strategy),
         TranscriptType::EVM => verify_proof_circuit::<
             Fr,
             VerifierGWC<'_, Bn256>,
@@ -69,7 +69,7 @@ fn verify_proof_circuit_kzg<
             _,
             _,
             EvmTranscript<G1Affine, _, _, _>,
-        >(&proof, &params, &vk, strategy),
+        >(&proof, params, vk, strategy),
         TranscriptType::Poseidon => verify_proof_circuit::<
             Fr,
             VerifierGWC<'_, Bn256>,
@@ -77,7 +77,7 @@ fn verify_proof_circuit_kzg<
             _,
             _,
             PoseidonTranscript<NativeLoader, _>,
-        >(&proof, &params, &vk, strategy),
+        >(&proof, params, vk, strategy),
     }
 }
 
@@ -105,7 +105,7 @@ fn create_proof_circuit_kzg<
             _,
             EvmTranscript<G1Affine, _, _, _>,
             EvmTranscript<G1Affine, _, _, _>,
-        >(circuit, public_inputs, &params, &pk, strategy)
+        >(circuit, public_inputs, params, pk, strategy)
         .map_err(Box::<dyn Error>::from),
         TranscriptType::Poseidon => create_proof_circuit::<
             KZGCommitmentScheme<_>,
@@ -117,7 +117,7 @@ fn create_proof_circuit_kzg<
             _,
             PoseidonTranscript<NativeLoader, _>,
             PoseidonTranscript<NativeLoader, _>,
-        >(circuit, public_inputs, &params, &pk, strategy)
+        >(circuit, public_inputs, params, pk, strategy)
         .map_err(Box::<dyn Error>::from),
         TranscriptType::Blake => create_proof_circuit::<
             KZGCommitmentScheme<_>,
@@ -129,34 +129,34 @@ fn create_proof_circuit_kzg<
             Challenge255<_>,
             Blake2bWrite<_, _, _>,
             Blake2bRead<_, _, _>,
-        >(circuit, public_inputs, &params, &pk, strategy)
+        >(circuit, public_inputs, params, pk, strategy)
         .map_err(Box::<dyn Error>::from),
     }
 }
 
 /// Run an ezkl command with given args
-pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
-    match args.command {
+pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
+    match cli.command {
         Commands::GenSrs { params_path, pfsys } => match pfsys {
             ProofSystem::IPA => {
                 unimplemented!()
             }
             ProofSystem::KZG => {
-                let params = gen_srs::<KZGCommitmentScheme<Bn256>>(args.logrows);
+                let params = gen_srs::<KZGCommitmentScheme<Bn256>>(cli.args.logrows);
                 save_params::<KZGCommitmentScheme<Bn256>>(&params_path, &params)?;
             }
         },
         Commands::Table { model: _ } => {
-            let om = Model::from_ezkl_conf(args)?;
+            let om = Model::from_ezkl_conf(cli)?;
             println!("{}", Table::new(om.nodes.flatten()));
         }
         Commands::Mock { ref data, model: _ } => {
             let data = prepare_data(data.to_string())?;
             let (circuit, public_inputs) =
-                prepare_model_circuit_and_public_input::<Fr>(&data, &args)?;
+                prepare_model_circuit_and_public_input::<Fr>(&data, &cli)?;
             info!("Mock proof");
 
-            let prover = MockProver::run(args.logrows, &circuit, public_inputs)
+            let prover = MockProver::run(cli.args.logrows, &circuit, public_inputs)
                 .map_err(Box::<dyn Error>::from)?;
             prover
                 .verify()
@@ -179,18 +179,18 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                 ProofSystem::KZG => {
                     //let _ = (data, vk_path, params_path, deployment_code_path);
                     let (_, public_inputs) =
-                        prepare_model_circuit_and_public_input::<Fr>(&data, &args)?;
+                        prepare_model_circuit_and_public_input::<Fr>(&data, &cli)?;
                     let num_instance = public_inputs.iter().map(|x| x.len()).collect();
                     let mut params: ParamsKZG<Bn256> =
                         load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
-                    params.downsize(args.logrows);
+                    params.downsize(cli.args.logrows);
                     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
                         vk_path.to_path_buf(),
                     )?;
                     trace!("params computed");
 
                     let (deployment_code, yul_code) = gen_evm_verifier(&params, &vk, num_instance)?;
-                    deployment_code.save(&deployment_code_path.as_ref().unwrap())?;
+                    deployment_code.save(deployment_code_path.as_ref().unwrap())?;
 
                     let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
                     let _ = f.write(yul_code.as_bytes());
@@ -218,10 +218,10 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
             }
             ProofSystem::KZG => {
                 let params: ParamsKZG<Bn256> =
-                    load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
+                    load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
 
                 let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
-                    vk_path.to_path_buf(),
+                    vk_path,
                 )?;
 
                 let deployment_code = gen_aggregation_evm_verifier(
@@ -230,7 +230,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     AggregationCircuit::num_instance(),
                     AggregationCircuit::accumulator_indices(),
                 )?;
-                deployment_code.save(&deployment_code_path.as_ref().unwrap())?;
+                deployment_code.save(deployment_code_path.as_ref().unwrap())?;
             }
         },
         Commands::Prove {
@@ -252,10 +252,10 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                 ProofSystem::KZG => {
                     info!("proof with {}", pfsys);
                     let (circuit, public_inputs) =
-                        prepare_model_circuit_and_public_input(&data, &args)?;
+                        prepare_model_circuit_and_public_input(&data, &cli)?;
                     let mut params: ParamsKZG<Bn256> =
                         load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
-                    params.downsize(args.logrows);
+                    params.downsize(cli.args.logrows);
                     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
                         &circuit, &params,
                     )
@@ -322,11 +322,11 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         )?;
                         let params_app = {
                             let mut params_app = params.clone();
-                            params_app.downsize(args.logrows);
+                            params_app.downsize(cli.args.logrows);
                             params_app
                         };
                         snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(
-                            &proof_path,
+                            proof_path,
                             Some(&params_app),
                             Some(&vk),
                         )?);
@@ -371,14 +371,14 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
             ProofSystem::KZG => {
                 let mut params: ParamsKZG<Bn256> =
                     load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
-                params.downsize(args.logrows);
+                params.downsize(cli.args.logrows);
 
                 let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
 
-                let strategy = KZGSingleStrategy::new(&params.verifier_params());
+                let strategy = KZGSingleStrategy::new(params.verifier_params());
                 let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path)?;
                 let result = verify_proof_circuit_kzg(
-                    &params.verifier_params(),
+                    params.verifier_params(),
                     proof,
                     &vk,
                     transcript,
@@ -401,11 +401,11 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
             ProofSystem::KZG => {
                 let mut params: ParamsKZG<Bn256> =
                     load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
-                params.downsize(args.logrows);
+                params.downsize(cli.args.logrows);
 
                 let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
 
-                let strategy = AccumulatorStrategy::new(&params.verifier_params());
+                let strategy = AccumulatorStrategy::new(params.verifier_params());
                 let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path)?;
                 let result = verify_proof_circuit_kzg(&params, proof, &vk, transcript, strategy);
                 info!("verified: {}", result.is_ok());
@@ -425,10 +425,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                 evm_verify(code, proof)?;
             }
         },
-        Commands::PrintProofHex {
-            proof_path,
-            pfsys,
-        } => match pfsys {
+        Commands::PrintProofHex { proof_path, pfsys } => match pfsys {
             ProofSystem::IPA => {
                 unimplemented!()
             }

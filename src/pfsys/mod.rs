@@ -1,7 +1,7 @@
 /// EVM related proving and verification
 pub mod evm;
 
-use crate::commands::{data_path, Cli};
+use crate::commands::{data_path, Cli, RunArgs};
 use crate::execute::ExecutionError;
 use crate::fieldutils::i32_to_felt;
 use crate::graph::{utilities::vector_to_quantized, Model, ModelCircuit};
@@ -184,11 +184,11 @@ type CircuitInputs<F> = (ModelCircuit<F>, Vec<Vec<F>>);
 /// Initialize the model circuit and quantize the provided float inputs from the provided `ModelInput`.
 pub fn prepare_model_circuit_and_public_input<F: FieldExt>(
     data: &ModelInput,
-    args: &Cli,
+    cli: &Cli,
 ) -> Result<CircuitInputs<F>, Box<dyn Error>> {
-    let model = Model::from_ezkl_conf(args.clone())?;
+    let model = Model::from_ezkl_conf(cli.clone())?;
     let out_scales = model.get_output_scales();
-    let circuit = prepare_model_circuit(data, args)?;
+    let circuit = prepare_model_circuit(data, &cli.args)?;
 
     // quantize the supplied data using the provided scale.
     // the ordering here is important, we want the inputs to come before the outputs
@@ -196,7 +196,7 @@ pub fn prepare_model_circuit_and_public_input<F: FieldExt>(
     let mut public_inputs = vec![];
     if model.visibility.input.is_public() {
         for v in data.input_data.iter() {
-            let t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, model.scale)?;
+            let t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, model.run_args.scale)?;
             public_inputs.push(t);
         }
     }
@@ -226,7 +226,7 @@ pub fn prepare_model_circuit_and_public_input<F: FieldExt>(
 /// Initialize the model circuit
 pub fn prepare_model_circuit<F: FieldExt>(
     data: &ModelInput,
-    args: &Cli,
+    args: &RunArgs,
 ) -> Result<ModelCircuit<F>, Box<dyn Error>> {
     // quantize the supplied data using the provided scale.
     let mut inputs: Vec<Tensor<i32>> = vec![];

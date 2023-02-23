@@ -5,7 +5,7 @@ use rand::seq::SliceRandom;
 use std::error::Error;
 
 pub fn main() -> Result<(), Box<dyn Error>> {
-    let args = Cli::create();
+    let args = Cli::create()?;
     colog::init();
     banner();
     info!("{}", &args.as_json()?);

@@ -1,10 +1,11 @@
 //use crate::onnx::OnnxModel;
-use clap::{Parser, Subcommand, ValueEnum};
-use log::info;
+use clap::{Args, Parser, Subcommand, ValueEnum};
+use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::error::Error;
-use std::io::{stdin, stdout, Write};
+use std::fs::File;
+use std::io::{stdin, stdout, Read, Write};
 use std::path::PathBuf;
 
 #[allow(missing_docs)]
@@ -53,20 +54,9 @@ impl std::fmt::Display for StrategyType {
     }
 }
 
-// pub enum VerifierEnv {
-//     Native,
-//     KZG,
-// }
-
-const EZKLCONF: &str = "EZKLCONF";
-
-#[allow(missing_docs)]
-#[derive(Parser, Debug, Clone, Deserialize, Serialize)]
-#[command(author, version, about, long_about = None)]
-pub struct Cli {
-    #[command(subcommand)]
-    #[allow(missing_docs)]
-    pub command: Commands,
+/// Parameters specific to a proving run
+#[derive(Debug, Args, Deserialize, Serialize, Clone)]
+pub struct RunArgs {
     /// The tolerance for error on model outputs
     #[arg(short = 'T', long, default_value = "0")]
     pub tolerance: usize,
@@ -93,6 +83,21 @@ pub struct Cli {
     pub max_rotations: usize,
 }
 
+const EZKLCONF: &str = "EZKLCONF";
+const RUNARGS: &str = "RUNARGS";
+
+#[allow(missing_docs)]
+#[derive(Parser, Debug, Clone, Deserialize, Serialize)]
+#[command(author, version, about, long_about = None)]
+pub struct Cli {
+    #[command(subcommand)]
+    #[allow(missing_docs)]
+    pub command: Commands,
+    /// The tolerance for error on model outputs
+    #[clap(flatten)]
+    pub args: RunArgs,
+}
+
 impl Cli {
     /// Export the ezkl configuration as json
     pub fn as_json(&self) -> Result<String, Box<dyn Error>> {
@@ -109,10 +114,32 @@ impl Cli {
         serde_json::from_str(arg_json)
     }
     /// Create an ezkl configuration: if there is an EZKLCONF env variable, parse its value, else read it from the command line.
-    pub fn create() -> Self {
+    pub fn create() -> Result<Self, Box<dyn Error>> {
         match env::var(EZKLCONF) {
-            Ok(val) => Self::from_json(&val).unwrap(),
-            Err(_e) => Cli::parse(),
+            Ok(path) => {
+                debug!("loading ezkl conf from {}", path);
+                let mut file = File::open(path).map_err(Box::<dyn Error>::from)?;
+                let mut data = String::new();
+                file.read_to_string(&mut data)
+                    .map_err(Box::<dyn Error>::from)?;
+                Self::from_json(&data).map_err(Box::<dyn Error>::from)
+            }
+            Err(_e) => match env::var(RUNARGS) {
+                Ok(path) => {
+                    debug!("loading run args from {}", path);
+                    let mut file = File::open(path).map_err(Box::<dyn Error>::from)?;
+                    let mut data = String::new();
+                    file.read_to_string(&mut data)
+                        .map_err(Box::<dyn Error>::from)?;
+                    let args: RunArgs =
+                        serde_json::from_str(&data).map_err(Box::<dyn Error>::from)?;
+                    Ok(Cli {
+                        command: Cli::parse().command,
+                        args,
+                    })
+                }
+                Err(_e) => Ok(Cli::parse()),
+            },
         }
     }
 }
