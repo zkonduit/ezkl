@@ -94,8 +94,8 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
 
         let mut vars = ModelVars::new(
             cs,
-            model.logrows as usize,
-            model.max_rotations,
+            model.run_args.logrows as usize,
+            model.run_args.max_rotations,
             (num_advice, row_cap),
             (num_fixed, row_cap),
             (num_instances, instance_shapes),

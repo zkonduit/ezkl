@@ -15,23 +15,15 @@
     unused_parens,
     while_true,
     missing_docs,
-    missing_debug_implementations,
-    missing_docs,
     trivial_casts,
     trivial_numeric_casts,
     unused_extern_crates,
     unused_import_braces,
     unused_qualifications,
     missing_debug_implementations,
-    missing_docs,
-    unsafe_code,
-    trivial_casts,
-    trivial_numeric_casts,
-    unused_extern_crates,
-    unused_import_braces,
-    unused_qualifications
+    unsafe_code
 )]
-#![feature(slice_flatten)]
+
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!
 

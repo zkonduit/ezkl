@@ -1,5 +1,5 @@
 //use crate::onnx::OnnxModel;
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -53,20 +53,9 @@ impl std::fmt::Display for StrategyType {
     }
 }
 
-// pub enum VerifierEnv {
-//     Native,
-//     KZG,
-// }
-
-const EZKLCONF: &str = "EZKLCONF";
-
-#[allow(missing_docs)]
-#[derive(Parser, Debug, Clone, Deserialize, Serialize)]
-#[command(author, version, about, long_about = None)]
-pub struct Cli {
-    #[command(subcommand)]
-    #[allow(missing_docs)]
-    pub command: Commands,
+/// Parameters specific to a proving run
+#[derive(Debug, Args, Deserialize, Serialize, Clone)]
+pub struct RunArgs {
     /// The tolerance for error on model outputs
     #[arg(short = 'T', long, default_value = "0")]
     pub tolerance: usize,
@@ -91,6 +80,20 @@ pub struct Cli {
     /// Flags to set maximum rotations
     #[arg(short = 'M', long, default_value = "512")]
     pub max_rotations: usize,
+}
+
+const EZKLCONF: &str = "EZKLCONF";
+
+#[allow(missing_docs)]
+#[derive(Parser, Debug, Clone, Deserialize, Serialize)]
+#[command(author, version, about, long_about = None)]
+pub struct Cli {
+    #[command(subcommand)]
+    #[allow(missing_docs)]
+    pub command: Commands,
+    /// The tolerance for error on model outputs
+    #[clap(flatten)]
+    pub args: RunArgs,
 }
 
 impl Cli {

@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use crate::commands::Cli;
+use crate::commands::RunArgs;
 use crate::tensor::TensorType;
 use crate::tensor::{ValTensor, VarTensor};
 use halo2_proofs::{arithmetic::FieldExt, plonk::ConstraintSystem};
@@ -55,7 +55,7 @@ impl std::fmt::Display for VarVisibility {
 impl VarVisibility {
     /// Read from cli args whether the model input, model parameters, and model output are Public or Private to the prover.
     /// Place in [VarVisibility] struct.
-    pub fn from_args(args: Cli) -> Result<Self, Box<dyn Error>> {
+    pub fn from_args(args: RunArgs) -> Result<Self, Box<dyn Error>> {
         let input_vis = if args.public_inputs {
             Visibility::Public
         } else {

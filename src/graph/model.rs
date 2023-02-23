@@ -12,6 +12,7 @@ use crate::circuit::polynomial::Op as PolyOp;
 // use crate::circuit::polynomial::InputType as PolyInputType;
 
 use crate::circuit::range::*;
+use crate::commands::RunArgs;
 use crate::commands::{Cli, Commands};
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
@@ -69,16 +70,7 @@ pub struct Model {
     /// Graph of nodes we are loading from Onnx.
     pub nodes: NodeGraph, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
     /// bits used in lookup tables
-    pub bits: usize,
-    /// Log rows available in circuit.
-    pub logrows: u32,
-    /// Maximum number of permitted rotations.
-    pub max_rotations: usize,
-    /// Exponent used in the fixed point representation.
-    pub scale: i32,
-    /// The divergence from the expected output (if using public outputs) we can tolerate. This is in absolute value across each dimension.
-    /// eg. for a tolerance of 1 and for a 2D output we could tolerate at most off by 1 errors for each of the 2 outputs.
-    pub tolerance: usize,
+    pub run_args: RunArgs,
     /// The [Mode] we're using the model in.
     pub mode: Mode,
     /// Defines which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
@@ -100,11 +92,7 @@ impl Model {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         path: impl AsRef<Path>,
-        scale: i32,
-        bits: usize,
-        logrows: u32,
-        max_rotations: usize,
-        tolerance: usize,
+        run_args: RunArgs,
         mode: Mode,
         visibility: VarVisibility,
     ) -> Result<Self, Box<dyn Error>> {
@@ -115,17 +103,13 @@ impl Model {
 
         let mut nodes = BTreeMap::<usize, Node>::new();
         for (i, n) in model.nodes.iter().enumerate() {
-            let n = Node::new(n.clone(), &mut nodes, scale, i)?;
+            let n = Node::new(n.clone(), &mut nodes, run_args.scale, i)?;
             nodes.insert(i, n);
         }
         let om = Model {
             model: model.clone(),
-            scale,
-            tolerance,
+            run_args,
             nodes: Self::assign_execution_buckets(nodes)?,
-            bits,
-            logrows,
-            max_rotations,
             mode,
             visibility,
         };
@@ -136,32 +120,18 @@ impl Model {
     }
 
     /// Creates a `Model` from parsed CLI arguments
-    pub fn from_ezkl_conf(args: Cli) -> Result<Self, Box<dyn Error>> {
-        let visibility = VarVisibility::from_args(args.clone())?;
-        match args.command {
-            Commands::Table { model } | Commands::Mock { model, .. } => Model::new(
-                model,
-                args.scale,
-                args.bits,
-                args.logrows,
-                args.max_rotations,
-                args.tolerance,
-                Mode::Table,
-                visibility,
-            ),
+    pub fn from_ezkl_conf(cli: Cli) -> Result<Self, Box<dyn Error>> {
+        let visibility = VarVisibility::from_args(cli.args.clone())?;
+        match cli.command {
+            Commands::Table { model } | Commands::Mock { model, .. } => {
+                Model::new(model, cli.args, Mode::Table, visibility)
+            }
             Commands::CreateEVMVerifier { model, .. }
             | Commands::Prove { model, .. }
             | Commands::Verify { model, .. }
-            | Commands::Aggregate { model, .. } => Model::new(
-                model,
-                args.scale,
-                args.bits,
-                args.logrows,
-                args.max_rotations,
-                args.tolerance,
-                Mode::Table,
-                visibility,
-            ),
+            | Commands::Aggregate { model, .. } => {
+                Model::new(model, cli.args, Mode::Table, visibility)
+            }
             _ => panic!(),
         }
     }
@@ -267,7 +237,7 @@ impl Model {
                 meta,
                 &input,
                 &output,
-                self.tolerance,
+                self.run_args.tolerance,
             ));
         }
         configs
@@ -428,7 +398,7 @@ impl Model {
         let config =
             if let std::collections::btree_map::Entry::Vacant(e) = tables.entry(vec![op.clone()]) {
                 let conf: LookupConfig<F> =
-                    LookupConfig::configure(meta, input, output, self.bits, &[op.clone()]);
+                    LookupConfig::configure(meta, input, output, self.run_args.bits, &[op.clone()]);
                 e.insert(conf.table.clone());
                 NodeConfig::Lookup(conf, node_inputs)
             } else {
