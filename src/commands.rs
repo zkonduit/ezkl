@@ -376,6 +376,9 @@ pub enum Commands {
         /// The path to verifier contract's deployment code
         #[arg(long)]
         deployment_code_path: PathBuf,
+        /// The path to the Solidity code
+        #[arg(long, required_if_eq("transcript", "evm"))]
+        sol_code_path: Option<PathBuf>,
 
         #[arg(
              long,

@@ -51,3 +51,5 @@ pub mod graph;
 pub mod pfsys;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
+/// Utility functions for contracts
+pub mod eth;
