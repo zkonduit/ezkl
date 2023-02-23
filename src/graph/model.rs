@@ -69,7 +69,7 @@ pub struct Model {
     pub model: Graph<InferenceFact, Box<dyn InferenceOp>>,
     /// Graph of nodes we are loading from Onnx.
     pub nodes: NodeGraph, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
-    /// bits used in lookup tables
+    /// The [RunArgs] being used
     pub run_args: RunArgs,
     /// The [Mode] we're using the model in.
     pub mode: Mode,
@@ -138,7 +138,7 @@ impl Model {
 
     /// Creates a `Model` based on CLI arguments
     pub fn from_arg() -> Result<Self, Box<dyn Error>> {
-        let args = Cli::create();
+        let args = Cli::create()?;
         Self::from_ezkl_conf(args)
     }
 

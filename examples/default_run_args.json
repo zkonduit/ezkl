@@ -1,0 +1,10 @@
+{
+    "tolerance": 0,
+    "scale": 7,
+    "bits": 11,
+    "logrows": 17,
+    "public_inputs": false,
+    "public_outputs": true,
+    "public_params": false,
+    "max_rotations": 512
+}

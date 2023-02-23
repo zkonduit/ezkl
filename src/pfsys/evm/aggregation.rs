@@ -186,14 +186,14 @@ impl AggregationCircuit {
             let mut transcript = PoseidonTranscript::<NativeLoader, _>::new(snark.proof.as_slice());
             let proof = PlonkSuccinctVerifier::read_proof(
                 &svk,
-                &snark.protocol.as_ref().unwrap(),
+                snark.protocol.as_ref().unwrap(),
                 &snark.instances,
                 &mut transcript,
             )
             .map_err(|_| AggregationError::ProofRead)?;
             let mut accum = PlonkSuccinctVerifier::verify(
                 &svk,
-                &snark.protocol.as_ref().unwrap(),
+                snark.protocol.as_ref().unwrap(),
                 &snark.instances,
                 &proof,
             )
