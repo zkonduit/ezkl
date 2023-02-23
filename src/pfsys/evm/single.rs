@@ -29,7 +29,7 @@ pub fn gen_evm_verifier(
     params: &ParamsKZG<Bn256>,
     vk: &VerifyingKey<G1Affine>,
     num_instance: Vec<usize>,
-) -> Result<DeploymentCode, SimpleError> {
+) -> Result<(DeploymentCode, String), SimpleError> {
     let protocol = compile(
         params,
         vk,
@@ -47,7 +47,9 @@ pub fn gen_evm_verifier(
     PlonkVerifier::verify(&vk, &protocol, &instances, &proof)
         .map_err(|_| SimpleError::ProofVerify)?;
 
-    Ok(DeploymentCode {
-        code: evm::compile_yul(&loader.yul_code()),
-    })
+    let yul_code = &loader.yul_code();
+
+    Ok((DeploymentCode {
+        code: evm::compile_yul(yul_code),
+    }, yul_code.clone()))
 }

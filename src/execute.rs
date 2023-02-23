@@ -30,6 +30,10 @@ use std::error::Error;
 use std::time::Instant;
 use tabled::Table;
 use thiserror::Error;
+use std::fs::File;
+use std::io::Write;
+use std::process::Command;
+
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
 pub enum ExecutionError {
@@ -164,6 +168,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
             ref vk_path,
             ref params_path,
             ref deployment_code_path,
+            ref sol_code_path,
             pfsys,
         } => {
             let data = prepare_data(data.to_string())?;
@@ -172,6 +177,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     unimplemented!()
                 }
                 ProofSystem::KZG => {
+                    //let _ = (data, vk_path, params_path, deployment_code_path);
                     let (_, public_inputs) =
                         prepare_model_circuit_and_public_input::<Fr>(&data, &args)?;
                     let num_instance = public_inputs.iter().map(|x| x.len()).collect();
@@ -183,8 +189,21 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     )?;
                     trace!("params computed");
 
-                    let deployment_code = gen_evm_verifier(&params, &vk, num_instance)?;
+                    let (deployment_code, yul_code) = gen_evm_verifier(&params, &vk, num_instance)?;
                     deployment_code.save(&deployment_code_path.as_ref().unwrap())?;
+
+                    let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
+                    let _ = f.write(yul_code.as_bytes());
+
+                    let cmd = Command::new("python3")
+                        .arg("fix_verifier_sol.py")
+                        .arg(sol_code_path.as_ref().unwrap())
+                        .output()
+                        .unwrap();
+                    let output = cmd.stdout;
+
+                    let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
+                    let _ = f.write(output.as_slice());
                 }
             }
         }
@@ -404,6 +423,21 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                 let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
                 let code = DeploymentCode::load(&deployment_code_path)?;
                 evm_verify(code, proof)?;
+            }
+        },
+        Commands::PrintProofHex {
+            proof_path,
+            pfsys,
+        } => match pfsys {
+            ProofSystem::IPA => {
+                unimplemented!()
+            }
+            ProofSystem::KZG => {
+                let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
+                for instance in proof.instances {
+                    println!("{:?}", instance);
+                }
+                println!("{}", hex::encode(proof.proof))
             }
         },
     }
