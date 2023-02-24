@@ -23,7 +23,6 @@ use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
-use halo2curves::group::ff::PrimeField;
 use log::{info, trace};
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
@@ -34,11 +33,7 @@ use thiserror::Error;
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
-use ethers_solc::Solc;
-use ethers::contract::ContractFactory;
-use ethers::contract::abigen;
-use ethers::types::U256;
-use super::eth::setup_eth_backend;
+use super::eth::verify_proof_via_solidity;
 
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
@@ -198,18 +193,21 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                     let (deployment_code, yul_code) = gen_evm_verifier(&params, &vk, num_instance)?;
                     deployment_code.save(deployment_code_path.as_ref().unwrap())?;
 
-                    let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
-                    let _ = f.write(yul_code.as_bytes());
+                    if sol_code_path.is_some() {
 
-                    let cmd = Command::new("python3")
-                        .arg("fix_verifier_sol.py")
-                        .arg(sol_code_path.as_ref().unwrap())
-                        .output()
-                        .unwrap();
-                    let output = cmd.stdout;
+                        let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
+                        let _ = f.write(yul_code.as_bytes());
 
-                    let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
-                    let _ = f.write(output.as_slice());
+                        let cmd = Command::new("python3")
+                            .arg("fix_verifier_sol.py")
+                            .arg(sol_code_path.as_ref().unwrap())
+                            .output()
+                            .unwrap();
+                        let output = cmd.stdout;
+
+                        let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
+                        let _ = f.write(output.as_slice());
+                    }
                 }
             }
         }
@@ -432,34 +430,14 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 evm_verify(code, proof.clone())?;
 
                 if sol_code_path.is_some() {
-                    let (anvil, client) = setup_eth_backend().await;
-
-                    let compiled = Solc::default().compile_source(sol_code_path.unwrap())?;
-                    let (abi, bytecode, _runtime_bytecode) =
-                        compiled.find("Verifier").expect("could not find contract").into_parts_or_default();
-                    let factory = ContractFactory::new(abi, bytecode, client.clone());
-                    let contract = factory.deploy(())?.send().await?;
-                    let addr = contract.address();
-
-                    abigen!(Verifier, "./Verifier.json");
-                    let contract = Verifier::new(addr, client.clone());
-
-                    let mut public_inputs = vec![];
-                    for val in &proof.instances[0] {
-                        let bytes = val.to_repr();
-                        let u = U256::from_little_endian(bytes.as_slice());
-                        public_inputs.push(u);
-                    }
-
-                    let result = contract.verify(
-                        public_inputs,
-                        ethers::types::Bytes::from(proof.proof.to_vec()),
-                    ).call().await.unwrap();
+                    let result = verify_proof_via_solidity(
+                        proof,
+                        sol_code_path.unwrap(),
+                    ).await.unwrap();
 
                     info!("Solidity verification result: {}", result);
-                    assert!(result);
 
-                    drop(anvil);
+                    assert!(result);
                 }
             }
         },

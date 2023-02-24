@@ -69,15 +69,6 @@ const TESTS_EVM: [&str; 9] = [
     "2l_relu_small",
 ];
 
-/// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
-/// specify a few that will
-const TESTS_SOLIDITY: [&str; 4] = [
-    "1l_relu",
-    "1l_leakyrelu",
-    "1l_sigmoid",
-    "1l_reshape",
-];
-
 const EXAMPLES: [&str; 2] = ["mlp_4d", "conv2d_mnist"];
 
 macro_rules! test_func_aggr {
@@ -142,25 +133,6 @@ macro_rules! test_func {
     };
 }
 
-macro_rules! test_func_solidity {
-    () => {
-        #[cfg(test)]
-        mod tests_solidity {
-            use seq_macro::seq;
-            use crate::TESTS_SOLIDITY;
-            use test_case::test_case;
-            use crate::kzg_evm_prove_and_verify;
-            use crate::kzg_evm_aggr_prove_and_verify;
-            seq!(N in 0..4 {
-            #(#[test_case(TESTS_SOLIDITY[N])])*
-            fn kzg_evm_prove_and_verify_(test: &str) {
-                kzg_evm_prove_and_verify(test.to_string(), true);
-            }
-            });
-    }
-    };
-}
-
 macro_rules! test_func_evm {
     () => {
         #[cfg(test)]
@@ -170,18 +142,28 @@ macro_rules! test_func_evm {
             use test_case::test_case;
             use crate::kzg_evm_prove_and_verify;
             use crate::kzg_evm_aggr_prove_and_verify;
+
+            /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
+            /// specify a few that will
+            const TESTS_SOLIDITY: [&str; 4] = [
+                "1l_relu",
+                "1l_leakyrelu",
+                "1l_sigmoid",
+                "1l_reshape",
+            ];
+
             seq!(N in 0..=8 {
 
-            #(#[test_case(TESTS_EVM[N])])*
-            fn kzg_evm_prove_and_verify_(test: &str) {
-                kzg_evm_prove_and_verify(test.to_string(), false);
-            }
-            // these take a particularly long time to run
-            #(#[test_case(TESTS_EVM[N])])*
-            #[ignore]
-            fn kzg_evm_aggr_prove_and_verify_(test: &str) {
-                kzg_evm_aggr_prove_and_verify(test.to_string());
-            }
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_prove_and_verify_(test: &str) {
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test));
+                }
+                // these take a particularly long time to run
+                #(#[test_case(TESTS_EVM[N])])*
+                #[ignore]
+                fn kzg_evm_aggr_prove_and_verify_(test: &str) {
+                    kzg_evm_aggr_prove_and_verify(test.to_string());
+                }
 
             });
     }
@@ -229,7 +211,6 @@ test_func_aggr!();
 test_func_evm!();
 test_func_examples!();
 test_neg_examples!();
-test_func_solidity!();
 
 // Mock prove (fast, but does not cover some potential issues)
 fn neg_mock(example_name: String, counter_example: String) {
