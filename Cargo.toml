@@ -26,7 +26,6 @@ hex = "0.4.3"
 ethereum_types = { package = "ethereum-types", version = "0.14.1", default-features = false, features = ["std"]}
 halo2_wrong_ecc = { git = "https://github.com/privacy-scaling-explorations/halo2wrong", package = "ecc", tag = "v2023_02_02"}
 snark-verifier = { git = "https://github.com/privacy-scaling-explorations/snark-verifier", tag = "v2023_02_02"}
-hex = "0.4.3"
 # evm related deps
 ethers = "1.0.2"
 ethers-solc = "1.0.2"
