@@ -69,15 +69,6 @@ const TESTS_EVM: [&str; 9] = [
     "2l_relu_small",
 ];
 
-/// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
-/// specify a few that will
-const TESTS_SOLIDITY: [&str; 4] = [
-    "1l_relu",
-    "1l_leakyrelu",
-    "1l_sigmoid",
-    "1l_reshape",
-];
-
 const EXAMPLES: [&str; 2] = ["mlp_4d", "conv2d_mnist"];
 
 macro_rules! test_func_aggr {
@@ -170,6 +161,16 @@ macro_rules! test_func_evm {
             use test_case::test_case;
             use crate::kzg_evm_prove_and_verify;
             use crate::kzg_evm_aggr_prove_and_verify;
+
+            /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
+            /// specify a few that will
+            const TESTS_SOLIDITY: [&str; 4] = [
+                "1l_relu",
+                "1l_leakyrelu",
+                "1l_sigmoid",
+                "1l_reshape",
+            ];
+
             seq!(N in 0..=8 {
 
                 #(#[test_case(TESTS_EVM[N])])*
