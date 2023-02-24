@@ -153,7 +153,7 @@ macro_rules! test_func_solidity {
             use crate::kzg_evm_aggr_prove_and_verify;
             seq!(N in 0..4 {
             #(#[test_case(TESTS_SOLIDITY[N])])*
-            fn kzg_evm_prove_and_verify_(test: &str) {
+            fn kzg_evm_prove_and_verify_solidity_(test: &str) {
                 kzg_evm_prove_and_verify(test.to_string(), true);
             }
             });

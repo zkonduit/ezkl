@@ -112,6 +112,24 @@ jobs:
     - name: KZG prove and verify tests (EVM)
       run: cargo test --release --verbose tests::kzg_evm_prove_and_verify_ -- --test-threads 4
 
+  prove-and-verify-evm-solidity-tests:
+
+    runs-on: ubuntu-latest-16-cores
+    steps:
+    - uses: actions/checkout@v3
+      with:
+          submodules: recursive
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+
+    - name: Install solc
+      run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
+    - name: KZG prove and verify tests (EVM)
+      run: cargo test --release --verbose tests::kzg_evm_prove_and_verify_solidity_ -- --test-threads 4
+
   prove-and-verify-tests:
 
     runs-on: ubuntu-latest-16-cores
