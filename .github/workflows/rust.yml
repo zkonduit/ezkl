@@ -27,6 +27,8 @@ jobs:
           components: rustfmt, clippy    
     - name: Build
       run: cargo build --verbose
+    - name: Install Anvil
+      run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
   
   benchmarks: 
 

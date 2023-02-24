@@ -23,6 +23,7 @@ use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
+use halo2curves::group::ff::PrimeField;
 use log::{info, trace};
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
@@ -33,6 +34,14 @@ use std::process::Command;
 use std::time::Instant;
 use tabled::Table;
 use thiserror::Error;
+use std::fs::File;
+use std::io::Write;
+use std::process::Command;
+use ethers_solc::Solc;
+use ethers::contract::ContractFactory;
+use ethers::contract::abigen;
+use ethers::types::U256;
+use super::eth::setup_eth_backend;
 
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
@@ -135,8 +144,11 @@ fn create_proof_circuit_kzg<
 }
 
 /// Run an ezkl command with given args
-pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
-    match cli.command {
+pub async fn run(args: Cli) -> Result<(), Box<dyn Error>> {
+    // The Verifier contract ABI
+    //abigen!(Verifier, "./Verifier.json");
+
+    match args.command {
         Commands::GenSrs { params_path, pfsys } => match pfsys {
             ProofSystem::IPA => {
                 unimplemented!()
@@ -190,7 +202,7 @@ pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                     trace!("params computed");
 
                     let (deployment_code, yul_code) = gen_evm_verifier(&params, &vk, num_instance)?;
-                    deployment_code.save(deployment_code_path.as_ref().unwrap())?;
+                    deployment_code.save(&deployment_code_path.as_ref().unwrap())?;
 
                     let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
                     let _ = f.write(yul_code.as_bytes());
@@ -414,6 +426,7 @@ pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         Commands::VerifyEVM {
             proof_path,
             deployment_code_path,
+            sol_code_path,
             pfsys,
         } => match pfsys {
             ProofSystem::IPA => {
@@ -422,7 +435,53 @@ pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             ProofSystem::KZG => {
                 let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
                 let code = DeploymentCode::load(&deployment_code_path)?;
-                evm_verify(code, proof)?;
+                evm_verify(code, proof.clone())?;
+
+                if sol_code_path.is_some() {
+                    let (anvil, client) = setup_eth_backend().await;
+
+                    let compiled = Solc::default().compile_source(sol_code_path.unwrap())?;
+                    let (abi, bytecode, _runtime_bytecode) =
+                        compiled.find("Verifier").expect("could not find contract").into_parts_or_default();
+                    let factory = ContractFactory::new(abi, bytecode, client.clone());
+                    let contract = factory.deploy(())?.send().await?;
+                    let addr = contract.address();
+
+                    abigen!(Verifier, "./Verifier.json");
+                    let contract = Verifier::new(addr, client.clone());
+
+                    let mut public_inputs = vec![];
+                    for val in &proof.instances[0] {
+                        let bytes = val.to_repr();
+                        let u = U256::from_little_endian(bytes.as_slice());
+                        public_inputs.push(u);
+                    }
+
+                    let result = contract.verify(
+                        public_inputs,
+                        ethers::types::Bytes::from(proof.proof.to_vec()),
+                    ).call().await.unwrap();
+
+                    println!("verification result: {}", result);
+                    assert!(result);
+
+                    drop(anvil);
+                }
+            }
+        },
+        Commands::PrintProofHex {
+            proof_path,
+            pfsys,
+        } => match pfsys {
+            ProofSystem::IPA => {
+                unimplemented!()
+            }
+            ProofSystem::KZG => {
+                let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
+                for instance in proof.instances {
+                    println!("{:?}", instance);
+                }
+                println!("{}", hex::encode(proof.proof))
             }
         },
         Commands::PrintProofHex { proof_path, pfsys } => match pfsys {
