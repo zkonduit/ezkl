@@ -433,23 +433,6 @@ pub enum Commands {
          )]
         pfsys: ProofSystem,
     },
-
-    /// Print the proof in hexadecimal
-    #[command(name = "print-proof-hex", arg_required_else_help = true)]
-    PrintProofHex {
-        /// The path to the proof file
-        #[arg(long)]
-        proof_path: PathBuf,
-
-        #[arg(
-             long,
-             require_equals = true,
-             num_args = 0..=1,
-             default_value_t = ProofSystem::KZG,
-             value_enum
-         )]
-        pfsys: ProofSystem,
-    },
 }
 
 /// Loads the path to a path `data` represented as a [String]. If empty queries the user for an input.

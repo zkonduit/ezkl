@@ -28,9 +28,6 @@ use log::{info, trace};
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
-use std::fs::File;
-use std::io::Write;
-use std::process::Command;
 use std::time::Instant;
 use tabled::Table;
 use thiserror::Error;
@@ -144,8 +141,8 @@ fn create_proof_circuit_kzg<
 }
 
 /// Run an ezkl command with given args
-pub async fn run(args: Cli) -> Result<(), Box<dyn Error>> {
-    match args.command {
+pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
+    match cli.command {
         Commands::GenSrs { params_path, pfsys } => match pfsys {
             ProofSystem::IPA => {
                 unimplemented!()
@@ -199,7 +196,7 @@ pub async fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     trace!("params computed");
 
                     let (deployment_code, yul_code) = gen_evm_verifier(&params, &vk, num_instance)?;
-                    deployment_code.save(&deployment_code_path.as_ref().unwrap())?;
+                    deployment_code.save(deployment_code_path.as_ref().unwrap())?;
 
                     let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
                     let _ = f.write(yul_code.as_bytes());
@@ -459,26 +456,11 @@ pub async fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                         ethers::types::Bytes::from(proof.proof.to_vec()),
                     ).call().await.unwrap();
 
-                    println!("verification result: {}", result);
+                    info!("Solidity verification result: {}", result);
                     assert!(result);
 
                     drop(anvil);
                 }
-            }
-        },
-        Commands::PrintProofHex {
-            proof_path,
-            pfsys,
-        } => match pfsys {
-            ProofSystem::IPA => {
-                unimplemented!()
-            }
-            ProofSystem::KZG => {
-                let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
-                for instance in proof.instances {
-                    println!("{:?}", instance);
-                }
-                println!("{}", hex::encode(proof.proof))
             }
         },
         Commands::PrintProofHex { proof_path, pfsys } => match pfsys {

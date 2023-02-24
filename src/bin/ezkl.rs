@@ -6,7 +6,7 @@ use std::error::Error;
 
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn Error>> {
-    let args = Cli::create();
+    let args = Cli::create().unwrap();
     colog::init();
     banner();
     info!("{}", &args.as_json()?);
