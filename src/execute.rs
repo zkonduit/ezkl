@@ -145,9 +145,6 @@ fn create_proof_circuit_kzg<
 
 /// Run an ezkl command with given args
 pub async fn run(args: Cli) -> Result<(), Box<dyn Error>> {
-    // The Verifier contract ABI
-    //abigen!(Verifier, "./Verifier.json");
-
     match args.command {
         Commands::GenSrs { params_path, pfsys } => match pfsys {
             ProofSystem::IPA => {
