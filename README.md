@@ -66,7 +66,7 @@ You can easily create an `.onnx` file using `pytorch`. For samples of Onnx files
 
 These examples are also available as a submodule in `./examples/onnx`. To generate a proof on one of the examples, first build ezkl (`cargo build --release`) and add it to your favourite `PATH` variables, then generate a structured reference string (SRS): 
 ```bash
-ezkl --bits=16 -K=17 gen-srs --pfsys=kzg --params-path=kzg.params
+ezkl -K=17 gen-srs --pfsys=kzg --params-path=kzg.params
 ``` 
 
 ```bash
@@ -90,13 +90,18 @@ cargo run --release --bin ezkl -- table -M ./examples/onnx/examples/1l_relu/netw
 #### verifying with the EVM ◊
 
 Note that the above prove and verify stats can also be run with an EVM verifier. This can be done by generating a verifier smart contract after generating the proof 
+
 ```bash
 # gen proof
 ezkl --bits=16 -K=17 prove -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path=kzg.params --transcript=evm
+```
+```bash
 # gen evm verifier
-target/release/ezkl -K=17 --bits=16 create-evm-verifier --pfsys=kzg --deployment-code-path 1l_relu.code --params-path=kzg.params --vk-path 1l_relu.vk --sol-code-path 1l_relu.sol
+ezkl -K=17 --bits=16 create-evm-verifier -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx --pfsys=kzg --deployment-code-path 1l_relu.code --params-path=kzg.params --vk-path 1l_relu.vk --sol-code-path 1l_relu.sol
+```
+```bash
 # Verify (EVM) 
-target/release/ezkl -K=17 --bits=16 verify-evm --pfsys=kzg --proof-path 1l_relu.pf --deployment-code-path 1l_relu.code
+ezkl -K=17 --bits=16 verify-evm --pfsys=kzg --proof-path 1l_relu.pf --deployment-code-path 1l_relu.code
 ```
 
 Note that the `.sol` file above can be deployed and composed with other Solidity contracts, via a `verify()` function. Please read [this document](https://hackmd.io/QOHOPeryRsOraO7FUnG-tg) for more information about the interface of the contract, how to obtain the data needed for its function parameters, and its limitations.
@@ -106,15 +111,26 @@ The above pipeline can also be run using [proof aggregation](https://ethresear.c
 ```bash 
 # Single proof -> single proof we are going to feed into aggregation circuit. (Mock)-verifies + verifies natively as sanity check
 ezkl -K=17 --bits=16 prove --pfsys=kzg --transcript=poseidon --strategy=accum -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx --proof-path 1l_relu.pf --params-path=kzg.params  --vk-path=1l_relu.vk
+```
 
+```bash
+# Generate a new SRS with 2^20 rows
+ezkl -K=20 gen-srs --pfsys=kzg --params-path=kzg.params
+```
+
+```bash
 # Aggregate -> generates aggregate proof and also (mock)-verifies + verifies natively as sanity check
-ezkl -K=17 --bits=16 aggregate --transcript=evm -M ./examples/onnx/examples/1l_relu/network.onnx --pfsys=kzg --aggregation-snarks=1l_relu.pf --aggregation-vk-paths 1l_relu.vk --vk-path aggr_1l_relu.vk --proof-path aggr_1l_relu.pf --params-path=kzg.params  
+ezkl -K=17 --bits=16 aggregate --transcript=evm -M ./examples/onnx/examples/1l_relu/network.onnx --pfsys=kzg --aggregation-snarks=1l_relu.pf --aggregation-vk-paths 1l_relu.vk --vk-path aggr_1l_relu.vk --proof-path aggr_1l_relu.pf --params-path=kzg.params
+``` 
 
+```bash
 # Generate verifier code -> create the EVM verifier code 
 ezkl -K=17 --bits=16 aggregate create-evm-verifier-aggr --pfsys=kzg --deployment-code-path aggr_1l_relu.code --params-path=kzg.params --vk-path aggr_1l_relu.vk
+```
 
+```bash
 # Verify (EVM) -> 
-target/release/ezkl -K=17 --bits=16 verify-evm --pfsys=kzg --proof-path aggr_1l_relu.pf --deployment-code-path aggr_1l_relu.code
+ezkl -K=17 --bits=16 verify-evm --pfsys=kzg --proof-path aggr_1l_relu.pf --deployment-code-path aggr_1l_relu.code
  
 ```
 
