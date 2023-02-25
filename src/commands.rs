@@ -256,7 +256,7 @@ pub enum Commands {
             long,
             require_equals = true,
             num_args = 0..=1,
-            default_value_t = TranscriptType::EVM,
+            default_value_t = TranscriptType::Blake,
             value_enum
         )]
         transcript: TranscriptType,
