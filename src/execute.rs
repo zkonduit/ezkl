@@ -1,3 +1,4 @@
+use super::eth::verify_proof_via_solidity;
 use crate::commands::{Cli, Commands, ProofSystem, StrategyType, TranscriptType};
 use crate::graph::{Model, ModelCircuit};
 use crate::pfsys::evm::aggregation::{
@@ -5,10 +6,10 @@ use crate::pfsys::evm::aggregation::{
 };
 use crate::pfsys::evm::single::gen_evm_verifier;
 use crate::pfsys::evm::{evm_verify, DeploymentCode};
-use crate::pfsys::{create_keys, load_params, load_vk, Snark};
+use crate::pfsys::{create_keys, load_params_kzg, load_vk, Snark};
 use crate::pfsys::{
     create_proof_circuit, gen_srs, prepare_data, prepare_model_circuit_and_public_input,
-    save_params, save_vk, verify_proof_circuit,
+    save_params_kzg, save_vk, verify_proof_circuit,
 };
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::plonk::{Circuit, ProvingKey, VerifyingKey};
@@ -27,13 +28,12 @@ use log::{info, trace};
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
-use std::time::Instant;
-use tabled::Table;
-use thiserror::Error;
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
-use super::eth::verify_proof_via_solidity;
+use std::time::Instant;
+use tabled::Table;
+use thiserror::Error;
 
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
@@ -144,7 +144,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             }
             ProofSystem::KZG => {
                 let params = gen_srs::<KZGCommitmentScheme<Bn256>>(cli.args.logrows);
-                save_params::<KZGCommitmentScheme<Bn256>>(&params_path, &params)?;
+                save_params_kzg(&params_path, &params)?;
             }
         },
         Commands::Table { model: _ } => {
@@ -182,8 +182,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                     let (_, public_inputs) =
                         prepare_model_circuit_and_public_input::<Fr>(&data, &cli)?;
                     let num_instance = public_inputs.iter().map(|x| x.len()).collect();
-                    let mut params: ParamsKZG<Bn256> =
-                        load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
+                    let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
                     params.downsize(cli.args.logrows);
                     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
                         vk_path.to_path_buf(),
@@ -194,7 +193,6 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                     deployment_code.save(deployment_code_path.as_ref().unwrap())?;
 
                     if sol_code_path.is_some() {
-
                         let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
                         let _ = f.write(yul_code.as_bytes());
 
@@ -221,12 +219,10 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 unimplemented!()
             }
             ProofSystem::KZG => {
-                let params: ParamsKZG<Bn256> =
-                    load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
+                let params: ParamsKZG<Bn256> = load_params_kzg(params_path)?;
 
-                let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
-                    vk_path,
-                )?;
+                let agg_vk =
+                    load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path)?;
 
                 let deployment_code = gen_aggregation_evm_verifier(
                     &params,
@@ -257,8 +253,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                     info!("proof with {}", pfsys);
                     let (circuit, public_inputs) =
                         prepare_model_circuit_and_public_input(&data, &cli)?;
-                    let mut params: ParamsKZG<Bn256> =
-                        load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
+                    let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
                     params.downsize(cli.args.logrows);
                     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
                         &circuit, &params,
@@ -315,8 +310,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                     unimplemented!()
                 }
                 ProofSystem::KZG => {
-                    let params: ParamsKZG<Bn256> =
-                        load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
+                    let params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
 
                     let mut snarks = vec![];
                     for (proof_path, vk_path) in aggregation_snarks.iter().zip(aggregation_vk_paths)
@@ -373,8 +367,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 unimplemented!()
             }
             ProofSystem::KZG => {
-                let mut params: ParamsKZG<Bn256> =
-                    load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
+                let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path)?;
                 params.downsize(cli.args.logrows);
 
                 let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
@@ -403,8 +396,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 unimplemented!()
             }
             ProofSystem::KZG => {
-                let mut params: ParamsKZG<Bn256> =
-                    load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
+                let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path)?;
                 params.downsize(cli.args.logrows);
 
                 let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
@@ -430,10 +422,9 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 evm_verify(code, proof.clone())?;
 
                 if sol_code_path.is_some() {
-                    let result = verify_proof_via_solidity(
-                        proof,
-                        sol_code_path.unwrap(),
-                    ).await.unwrap();
+                    let result = verify_proof_via_solidity(proof, sol_code_path.unwrap())
+                        .await
+                        .unwrap();
 
                     info!("Solidity verification result: {}", result);
 

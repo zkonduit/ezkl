@@ -33,6 +33,8 @@ tokio = { version = "1.22.0", features = ["macros"] }
 
 [dev-dependencies]
 criterion = {version = "0.3",  features = ["html_reports"]}
+tempfile = "3.3.0"
+reqwest = "0.11.14"
 lazy_static = "1.4.0"
 mnist = "0.5"
 seq-macro = "0.3.1"

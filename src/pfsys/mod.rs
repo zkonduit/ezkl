@@ -13,8 +13,10 @@ use halo2_proofs::plonk::{
     create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey,
 };
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params, ParamsProver, Prover, Verifier};
+use halo2_proofs::poly::kzg::commitment::ParamsKZG;
 use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer, TranscriptWriterBuffer};
+use halo2curves::bn256::Bn256;
 use halo2curves::group::ff::PrimeField;
 use halo2curves::serde::SerdeObject;
 use halo2curves::CurveAffine;
@@ -431,6 +433,15 @@ pub fn load_params<Scheme: CommitmentScheme>(
     Params::<'_, Scheme::Curve>::read(&mut reader).map_err(Box::<dyn Error>::from)
 }
 
+/// Loads the [ParamsKZG] at `path`.
+pub fn load_params_kzg(path: PathBuf) -> Result<ParamsKZG<Bn256>, Box<dyn Error>> {
+    info!("loading params from {:?}", path);
+    let f = File::open(path).map_err(Box::<dyn Error>::from)?;
+    let mut reader = BufReader::new(f);
+    ParamsKZG::<Bn256>::read_custom(&mut reader, halo2_proofs::SerdeFormat::Processed)
+        .map_err(Box::<dyn Error>::from)
+}
+
 /// Saves a [ProvingKey] to `path`.
 pub fn save_pk<Scheme: CommitmentScheme>(
     path: &PathBuf,
@@ -476,4 +487,60 @@ pub fn save_params<Scheme: CommitmentScheme>(
     params.write(&mut writer)?;
     writer.flush()?;
     Ok(())
+}
+
+/// Saves [ParamsKZG] to `path`.
+pub fn save_params_kzg(path: &PathBuf, params: &'_ ParamsKZG<Bn256>) -> Result<(), io::Error> {
+    info!("saving parameters 💾");
+    let f = File::create(path)?;
+    let mut writer = BufWriter::new(f);
+    params.write_custom(&mut writer, halo2_proofs::SerdeFormat::Processed)?;
+    writer.flush()?;
+    Ok(())
+}
+
+////////////////////////
+
+#[cfg(test)]
+mod tests {
+    use std::io::copy;
+
+    use super::*;
+    use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+    use tempfile::Builder;
+
+    #[tokio::test]
+    async fn test_can_load_pre_generated_srs() {
+        let tmp_dir = Builder::new().prefix("example").tempdir().unwrap();
+        // lets hope this link never rots
+        let target = "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/hermez-1";
+        let response = reqwest::get(target).await.unwrap();
+
+        let fname = response
+            .url()
+            .path_segments()
+            .and_then(|segments| segments.last())
+            .and_then(|name| if name.is_empty() { None } else { Some(name) })
+            .unwrap_or("tmp.bin");
+
+        println!("file to download: '{}'", fname);
+        let fname = tmp_dir.path().join(fname);
+        println!("will be located under: '{:?}'", fname);
+        let mut dest = File::create(fname.clone()).unwrap();
+        let content = response.bytes().await.unwrap();
+        copy(&mut &content[..], &mut dest).unwrap();
+        let res = load_params_kzg(fname);
+        assert!(res.is_ok())
+    }
+
+    #[tokio::test]
+    async fn test_can_load_saved_srs() {
+        let tmp_dir = Builder::new().prefix("example").tempdir().unwrap();
+        let fname = tmp_dir.path().join("kzg.params");
+        let srs = gen_srs::<KZGCommitmentScheme<Bn256>>(1);
+        let res = save_params_kzg(&fname, &srs);
+        assert!(res.is_ok());
+        let res = load_params_kzg(fname);
+        assert!(res.is_ok())
+    }
 }
