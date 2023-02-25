@@ -108,14 +108,14 @@ Note that the `.sol` file above can be deployed and composed with other Solidity
 
 The above pipeline can also be run using [proof aggregation](https://ethresear.ch/t/leveraging-snark-proof-aggregation-to-achieve-large-scale-pbft-based-consensus/11588) to reduce proof size and verifying times, so as to be more suitable for EVM deployment. A sample pipeline for doing so would be: 
 
-```bash 
-# Single proof -> single proof we are going to feed into aggregation circuit. (Mock)-verifies + verifies natively as sanity check
-ezkl -K=17 --bits=16 prove --pfsys=kzg --transcript=poseidon --strategy=accum -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx --proof-path 1l_relu.pf --params-path=kzg.params  --vk-path=1l_relu.vk
-```
-
 ```bash
 # Generate a new 2^20 SRS
 ezkl -K=20 gen-srs --pfsys=kzg --params-path=kzg.params
+```
+
+```bash 
+# Single proof -> single proof we are going to feed into aggregation circuit. (Mock)-verifies + verifies natively as sanity check
+ezkl -K=17 --bits=16 prove --pfsys=kzg --transcript=poseidon --strategy=accum -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx --proof-path 1l_relu.pf --params-path=kzg.params  --vk-path=1l_relu.vk
 ```
 
 ```bash
