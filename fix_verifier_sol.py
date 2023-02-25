@@ -64,8 +64,8 @@ if __name__ == "__main__":
             addr_as_num = int(addr, 16)
 
             if addr_as_num <= max_pubinputs_addr:
-                proof_addr = hex(addr_as_num)
-                line = line.replace(calldata_and_addr, "mload(add(pubInputs, " + proof_addr + "))")
+                pub_addr = hex(addr_as_num + 32)
+                line = line.replace(calldata_and_addr, "mload(add(pubInputs, " + pub_addr + "))")
             else:
                 proof_addr = hex(addr_as_num - max_pubinputs_addr)
                 line = line.replace(calldata_and_addr, "mload(add(proof, " + proof_addr + "))")
@@ -183,13 +183,13 @@ pragma solidity ^0.8.17;
 
 contract Verifier {{
     function verify(
-        uint256[{}] memory pubInputs,
+        uint256[] memory pubInputs,
         bytes memory proof
     ) public view returns (bool) {{
         bool success = true;
         bytes32[{}] memory transcript;
         assembly {{
-    """.strip().format(num_pubinputs, max_transcript_addr))
+    """.strip().format(max_transcript_addr))
     for line in modified_lines[16:-7]:
         print(line, end="")
     print("""}

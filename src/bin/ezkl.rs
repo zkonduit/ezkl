@@ -4,12 +4,13 @@ use log::{error, info};
 use rand::seq::SliceRandom;
 use std::error::Error;
 
-pub fn main() -> Result<(), Box<dyn Error>> {
-    let args = Cli::create()?;
+#[tokio::main]
+pub async fn main() -> Result<(), Box<dyn Error>> {
+    let args = Cli::create().unwrap();
     colog::init();
     banner();
     info!("{}", &args.as_json()?);
-    let res = run(args);
+    let res = run(args).await;
     match &res {
         Ok(_) => info!("succeeded"),
         Err(e) => error!("failed: {}", e),

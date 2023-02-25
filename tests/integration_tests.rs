@@ -142,18 +142,28 @@ macro_rules! test_func_evm {
             use test_case::test_case;
             use crate::kzg_evm_prove_and_verify;
             use crate::kzg_evm_aggr_prove_and_verify;
+
+            /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
+            /// specify a few that will
+            const TESTS_SOLIDITY: [&str; 4] = [
+                "1l_relu",
+                "1l_leakyrelu",
+                "1l_sigmoid",
+                "1l_reshape",
+            ];
+
             seq!(N in 0..=8 {
 
-            #(#[test_case(TESTS_EVM[N])])*
-            fn kzg_evm_prove_and_verify_(test: &str) {
-                kzg_evm_prove_and_verify(test.to_string());
-            }
-            // these take a particularly long time to run
-            #(#[test_case(TESTS_EVM[N])])*
-            #[ignore]
-            fn kzg_evm_aggr_prove_and_verify_(test: &str) {
-                kzg_evm_aggr_prove_and_verify(test.to_string());
-            }
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_prove_and_verify_(test: &str) {
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test));
+                }
+                // these take a particularly long time to run
+                #(#[test_case(TESTS_EVM[N])])*
+                #[ignore]
+                fn kzg_evm_aggr_prove_and_verify_(test: &str) {
+                    kzg_evm_aggr_prove_and_verify(test.to_string());
+                }
 
             });
     }
@@ -472,7 +482,7 @@ fn kzg_prove_and_verify(example_name: String) {
 }
 
 // prove-serialize-verify, the usual full path
-fn kzg_evm_prove_and_verify(example_name: String) {
+fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
@@ -494,36 +504,59 @@ fn kzg_evm_prove_and_verify(example_name: String) {
         .status()
         .expect("failed to execute process");
     assert!(status.success());
+
+    let input_arg = format!("./examples/onnx/examples/{}/input.json", example_name);
+    let network_arg = format!("./examples/onnx/examples/{}/network.onnx", example_name);
+    let code_arg = format!("kzg_{}.code", example_name);
+    let vk_arg = format!("kzg_{}.vk", example_name);
+
+    let mut args = vec![
+        "--bits=16",
+        "-K=17",
+        "create-evm-verifier",
+        "--pfsys=kzg",
+        "-D",
+        input_arg.as_str(),
+        "-M",
+        network_arg.as_str(),
+        "--deployment-code-path",
+        code_arg.as_str(),
+        "--params-path=kzg.params",
+        "--vk-path",
+        vk_arg.as_str(),
+    ];
+
+    let sol_arg = format!("kzg_{}.sol", example_name);
+
+    if with_solidity {
+        args.push("--sol-code-path");
+        args.push(sol_arg.as_str());
+    }
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "--bits=16",
-            "-K=17",
-            "create-evm-verifier",
-            "--pfsys=kzg",
-            "-D",
-            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
-            "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
-            "--deployment-code-path",
-            format!("kzg_{}.code", example_name).as_str(),
-            "--params-path=kzg.params",
-            "--vk-path",
-            format!("kzg_{}.vk", example_name).as_str(),
-        ])
+        .args(&args)
         .status()
         .expect("failed to execute process");
     assert!(status.success());
+
+    let pf_arg = format!("kzg_{}.pf", example_name);
+
+    let mut args = vec![
+        "--bits=16",
+        "-K=17",
+        "verify-evm",
+        "--pfsys=kzg",
+        "--proof-path",
+        pf_arg.as_str(),
+        "--deployment-code-path",
+        code_arg.as_str(),
+    ];
+    if with_solidity {
+        args.push("--sol-code-path");
+        //args.push(format!("kzg_{}.sol", example_name).as_str());
+        args.push(sol_arg.as_str());
+    }
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "--bits=16",
-            "-K=17",
-            "verify-evm",
-            "--pfsys=kzg",
-            "--proof-path",
-            format!("kzg_{}.pf", example_name).as_str(),
-            "--deployment-code-path",
-            format!("kzg_{}.code", example_name).as_str(),
-        ])
+        .args(args)
         .status()
         .expect("failed to execute process");
     assert!(status.success());

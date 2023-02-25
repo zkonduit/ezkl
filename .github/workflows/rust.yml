@@ -107,8 +107,10 @@ jobs:
 
     - name: Install solc
       run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
+    - name: Install Anvil
+      run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
     - name: KZG prove and verify tests (EVM)
-      run: cargo test --release --verbose tests::kzg_evm_prove_and_verify_ -- --test-threads 4
+      run: cargo test --release --verbose tests_evm -- --test-threads 4
 
   prove-and-verify-tests:
 

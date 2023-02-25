@@ -21,6 +21,12 @@ pub mod single;
 #[derive(Error, Debug)]
 /// Errors related to evm verification
 pub enum EvmVerificationError {
+    /// If the Solidity verifier worked but returned false
+    #[error("Solidity verifier found the proof invalid")]
+    InvalidProof,
+    /// If the Solidity verifier threw and error (e.g. OutOfGas)
+    #[error("Execution of Solidity code failed")]
+    SolidityExecution,
     /// EVM execution errors
     #[error("EVM execution of raw code failed")]
     RawExecution,

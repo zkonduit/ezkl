@@ -27,12 +27,13 @@ use log::{info, trace};
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
-use std::fs::File;
-use std::io::Write;
-use std::process::Command;
 use std::time::Instant;
 use tabled::Table;
 use thiserror::Error;
+use std::fs::File;
+use std::io::Write;
+use std::process::Command;
+use super::eth::verify_proof_via_solidity;
 
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
@@ -135,7 +136,7 @@ fn create_proof_circuit_kzg<
 }
 
 /// Run an ezkl command with given args
-pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
+pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     match cli.command {
         Commands::GenSrs { params_path, pfsys } => match pfsys {
             ProofSystem::IPA => {
@@ -192,18 +193,21 @@ pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                     let (deployment_code, yul_code) = gen_evm_verifier(&params, &vk, num_instance)?;
                     deployment_code.save(deployment_code_path.as_ref().unwrap())?;
 
-                    let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
-                    let _ = f.write(yul_code.as_bytes());
+                    if sol_code_path.is_some() {
 
-                    let cmd = Command::new("python3")
-                        .arg("fix_verifier_sol.py")
-                        .arg(sol_code_path.as_ref().unwrap())
-                        .output()
-                        .unwrap();
-                    let output = cmd.stdout;
+                        let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
+                        let _ = f.write(yul_code.as_bytes());
 
-                    let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
-                    let _ = f.write(output.as_slice());
+                        let cmd = Command::new("python3")
+                            .arg("fix_verifier_sol.py")
+                            .arg(sol_code_path.as_ref().unwrap())
+                            .output()
+                            .unwrap();
+                        let output = cmd.stdout;
+
+                        let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
+                        let _ = f.write(output.as_slice());
+                    }
                 }
             }
         }
@@ -414,6 +418,7 @@ pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         Commands::VerifyEVM {
             proof_path,
             deployment_code_path,
+            sol_code_path,
             pfsys,
         } => match pfsys {
             ProofSystem::IPA => {
@@ -422,7 +427,18 @@ pub fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             ProofSystem::KZG => {
                 let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
                 let code = DeploymentCode::load(&deployment_code_path)?;
-                evm_verify(code, proof)?;
+                evm_verify(code, proof.clone())?;
+
+                if sol_code_path.is_some() {
+                    let result = verify_proof_via_solidity(
+                        proof,
+                        sol_code_path.unwrap(),
+                    ).await.unwrap();
+
+                    info!("Solidity verification result: {}", result);
+
+                    assert!(result);
+                }
             }
         },
         Commands::PrintProofHex { proof_path, pfsys } => match pfsys {
