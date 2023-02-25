@@ -130,7 +130,7 @@ jobs:
 
   prove-and-verify-aggr-tests:
 
-    runs-on: ubuntu-latest-16-cores
+    runs-on: self-hosted
     steps:
     - uses: actions/checkout@v3
       with:
@@ -142,11 +142,11 @@ jobs:
           components: rustfmt, clippy
 
     - name: KZG prove and verify aggr tests
-      run: cargo test --release --verbose tests_aggr::kzg_aggr_prove_and_verify_ -- --test-threads 1
+      run: cargo test --release --verbose tests_aggr::kzg_aggr_prove_and_verify_ -- --test-threads 2
 
   prove-and-verify-evm-aggr-tests:
 
-    runs-on: ubuntu-latest-16-cores
+    runs-on: self-hosted
     steps:
     - uses: actions/checkout@v3
       with:
@@ -159,7 +159,7 @@ jobs:
     - name: Install solc
       run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
     - name: KZG prove and verify aggr tests
-      run: cargo test --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ -- --test-threads 1 --include-ignored
+      run: cargo test --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ -- --test-threads 2 --include-ignored
 
   examples:
 
