@@ -114,7 +114,7 @@ ezkl -K=17 --bits=16 prove --pfsys=kzg --transcript=poseidon --strategy=accum -D
 ```
 
 ```bash
-# Generate a new SRS with 2^20 rows
+# Generate a new 2^20 SRS
 ezkl -K=20 gen-srs --pfsys=kzg --params-path=kzg.params
 ```
 
