@@ -103,6 +103,7 @@ macro_rules! test_func {
             use crate::mock;
             use crate::mock_public_inputs;
             use crate::mock_public_params;
+            use crate::forward_pass;
             use crate::kzg_prove_and_verify;
             seq!(N in 0..=11 {
             #(#[test_case(TESTS[N])])*
@@ -118,6 +119,11 @@ macro_rules! test_func {
             #(#[test_case(TESTS[N])])*
             fn mock_public_params_(test: &str) {
                 mock_public_params(test.to_string());
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn forward_pass_(test: &str) {
+                forward_pass(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
@@ -235,6 +241,43 @@ fn neg_mock(example_name: String, counter_example: String) {
 fn run_example(example_name: String) {
     let status = Command::new("cargo")
         .args(["run", "--release", "--example", example_name.as_str()])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+// Mock prove (fast, but does not cover some potential issues)
+fn forward_pass(example_name: String) {
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "forward",
+            "-D",
+            format!("./examples/onnx/{}/input.json", example_name).as_str(),
+            "-M",
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+            "-O",
+            format!("./examples/onnx/{}/input_forward.json", example_name).as_str(),
+            // "-K",
+            // "2",  //causes failure
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "mock",
+            "-D",
+            format!("./examples/onnx/{}/input_forward.json", example_name).as_str(),
+            "-M",
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+            // "-K",
+            // "2",  //causes failure
+        ])
         .status()
         .expect("failed to execute process");
     assert!(status.success());

@@ -155,6 +155,20 @@ pub enum Commands {
         model: String,
     },
 
+    /// Loads model and input and runs mock prover (for testing)
+    #[command(arg_required_else_help = true)]
+    Forward {
+        /// The path to the .json data file
+        #[arg(short = 'D', long)]
+        data: String,
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: String,
+        /// Output to the new .json file
+        #[arg(short = 'O', long)]
+        output: String,
+    },
+
     /// Generates a dummy SRS
     #[command(name = "gen-srs", arg_required_else_help = true)]
     GenSrs {

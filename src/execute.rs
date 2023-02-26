@@ -1,6 +1,6 @@
 use super::eth::verify_proof_via_solidity;
 use crate::commands::{Cli, Commands, ProofSystem, StrategyType, TranscriptType};
-use crate::graph::{Model, ModelCircuit};
+use crate::graph::{vector_to_quantized, Model, ModelCircuit};
 use crate::pfsys::evm::aggregation::{
     gen_aggregation_evm_verifier, AggregationCircuit, PoseidonTranscript,
 };
@@ -150,6 +150,28 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         Commands::Table { model: _ } => {
             let om = Model::from_ezkl_conf(cli)?;
             println!("{}", Table::new(om.nodes.flatten()));
+        }
+        Commands::Forward {
+            ref data,
+            model,
+            output,
+        } => {
+            let mut data = prepare_data(data.to_string())?;
+
+            // quantize the supplied data using the provided scale.
+            let mut model_inputs = vec![];
+            for v in data.input_data.iter() {
+                let t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, cli.args.scale)?;
+                model_inputs.push(t);
+            }
+
+            let res = Model::forward(model, &model_inputs, cli.args)?;
+
+            let float_res: Vec<Vec<f32>> = res.iter().map(|t| t.to_vec()).collect();
+            trace!("forward pass output: {:?}", float_res);
+            data.output_data = float_res;
+
+            serde_json::to_writer(&File::create(output)?, &data)?;
         }
         Commands::Mock { ref data, model: _ } => {
             let data = prepare_data(data.to_string())?;
