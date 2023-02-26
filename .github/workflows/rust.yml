@@ -69,13 +69,30 @@ jobs:
         run: cargo test --lib --verbose
 
   mock-proving-tests:
-    runs-on: ubuntu-latest
+
+    runs-on: ubuntu-32-latest
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
-      - uses: actions-rs/toolchain@v1
-        with:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy 
+
+    - name: Mock proving tests (public outputs)
+      run: cargo test --release --verbose tests::mock_public_outputs_ -- --test-threads 32
+    - name: Mock proving tests (public inputs)
+      run: cargo test --release --verbose tests::mock_public_inputs_ -- --test-threads 32
+    - name: Mock proving tests (public params)
+      run: cargo test --release --verbose tests::mock_public_params_ -- --test-threads 32
+  
+  prove-and-verify-evm-tests:
+
+    runs-on: ubuntu-latest-16-cores
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
           toolchain: nightly
           override: true
           components: rustfmt, clippy
@@ -109,11 +126,9 @@ jobs:
   prove-and-verify-tests:
     runs-on: ubuntu-latest-16-cores
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
-      - uses: actions-rs/toolchain@v1
-        with:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
           toolchain: nightly
           override: true
           components: rustfmt, clippy
@@ -129,31 +144,26 @@ jobs:
           submodules: recursive
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
-          override: true
-          components: rustfmt, clippy
+    - uses: actions/checkout@v3
+    - name: KZG prove and verify aggr tests
+      run: cargo test --release --verbose tests_aggr::kzg_aggr_prove_and_verify_
 
-      - name: KZG prove and verify aggr tests
-        run: cargo test --release --verbose tests_aggr::kzg_aggr_prove_and_verify_ -- --test-threads 4
-
-  prove-and-verify-evm-aggr-tests:
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
-      - uses: actions-rs/toolchain@v1
-        with:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
           toolchain: nightly
           override: true
           components: rustfmt, clippy
-      - name: Install solc
-        run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
-      - name: KZG prove and verify aggr tests
-        run: cargo test --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ -- --test-threads 4 --include-ignored
+    - name: Install solc
+      run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
+    - name: KZG prove and verify aggr tests
+      run: cargo test --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ --include-ignored
 
   examples:
-    runs-on: self-hosted
+
+    runs-on: ubuntu-latest-32-cores
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -170,11 +180,9 @@ jobs:
   neg-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
-      - uses: actions-rs/toolchain@v1
-        with:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
           toolchain: nightly
           override: true
           components: rustfmt, clippy
