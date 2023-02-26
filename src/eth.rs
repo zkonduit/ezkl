@@ -1,21 +1,21 @@
+use crate::pfsys::evm::EvmVerificationError;
+use crate::pfsys::Snark;
+use ethers::contract::abigen;
+use ethers::contract::ContractFactory;
 use ethers::core::k256::ecdsa::SigningKey;
 use ethers::middleware::SignerMiddleware;
 use ethers::providers::{Http, Provider};
 use ethers::signers::Signer;
+use ethers::types::U256;
 use ethers::utils::AnvilInstance;
 use ethers::{
     prelude::{LocalWallet, Wallet},
     utils::Anvil,
 };
-use crate::pfsys::evm::EvmVerificationError;
-use crate::pfsys::Snark;
-use std::{convert::TryFrom, sync::Arc, time::Duration};
 use ethers_solc::Solc;
-use ethers::contract::ContractFactory;
-use ethers::contract::abigen;
-use ethers::types::U256;
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
+use std::{convert::TryFrom, sync::Arc, time::Duration};
 
 /// A local ethers-rs based client
 pub type EthersClient = Arc<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>;
@@ -50,8 +50,10 @@ pub async fn verify_proof_via_solidity(
     let (anvil, client) = setup_eth_backend().await;
 
     let compiled = Solc::default().compile_source(sol_code_path).unwrap();
-    let (abi, bytecode, _runtime_bytecode) =
-        compiled.find("Verifier").expect("could not find contract").into_parts_or_default();
+    let (abi, bytecode, _runtime_bytecode) = compiled
+        .find("Verifier")
+        .expect("could not find contract")
+        .into_parts_or_default();
     let factory = ContractFactory::new(abi, bytecode, client.clone());
     let contract = factory.deploy(()).unwrap().send().await.unwrap();
     let addr = contract.address();
@@ -66,14 +68,17 @@ pub async fn verify_proof_via_solidity(
         public_inputs.push(u);
     }
 
-    let result = contract.verify(
-        public_inputs,
-        ethers::types::Bytes::from(proof.proof.to_vec()),
-        ).call().await;
+    let result = contract
+        .verify(
+            public_inputs,
+            ethers::types::Bytes::from(proof.proof.to_vec()),
+        )
+        .call()
+        .await;
 
     if result.is_err() {
         return Err(Box::new(EvmVerificationError::SolidityExecution));
-    } 
+    }
     let result = result.unwrap();
     if !result {
         return Err(Box::new(EvmVerificationError::InvalidProof));
