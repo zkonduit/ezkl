@@ -155,7 +155,7 @@ pub enum Commands {
         model: String,
     },
 
-    /// Loads model and input and runs mock prover (for testing)
+    /// Runs a vanilla forward pass, produces a quantized output, and saves it to a .json file
     #[command(arg_required_else_help = true)]
     Forward {
         /// The path to the .json data file
@@ -164,7 +164,7 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: String,
-        /// Output to the new .json file
+        /// Path to the new .json file
         #[arg(short = 'O', long)]
         output: String,
     },
