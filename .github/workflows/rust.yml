@@ -67,6 +67,19 @@ jobs:
       - name: Library tests
         run: cargo test --lib --verbose
 
+  forward-pass-tests:
+    runs-on: ubuntu-latest-16-cores
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+
+      - name: Mock proving tests (public outputs)
+        run: cargo test --release --verbose tests::forward_pass_
+
   mock-proving-tests:
     runs-on: ubuntu-latest-32-cores
     steps:
