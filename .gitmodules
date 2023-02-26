@@ -1,4 +1,0 @@
-[submodule "examples/onnx"]
-	path = examples/onnx
-	url = https://github.com/zkonduit/onnx-examples
-	branch = main
