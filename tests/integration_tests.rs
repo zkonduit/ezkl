@@ -220,9 +220,9 @@ fn neg_mock(example_name: String, counter_example: String) {
             "-K=17",
             "mock",
             "-D",
-            format!("./examples/onnx/examples/{}/input.json", counter_example).as_str(),
+            format!("./examples/onnx/{}/input.json", counter_example).as_str(),
             "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
             // "-K",
             // "2",  //causes failure
         ])
@@ -248,9 +248,9 @@ fn mock(example_name: String) {
             "-K=17",
             "mock",
             "-D",
-            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+            format!("./examples/onnx/{}/input.json", example_name).as_str(),
             "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
             // "-K",
             // "2",  //causes failure
         ])
@@ -268,9 +268,9 @@ fn mock_public_inputs(example_name: String) {
             "-K=17",
             "mock",
             "-D",
-            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+            format!("./examples/onnx/{}/input.json", example_name).as_str(),
             "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
             // "-K",
             // "2",  //causes failure
         ])
@@ -288,9 +288,9 @@ fn mock_public_params(example_name: String) {
             "-K=17",
             "mock",
             "-D",
-            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+            format!("./examples/onnx/{}/input.json", example_name).as_str(),
             "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
             // "-K",
             // "2",  //causes failure
         ])
@@ -308,9 +308,9 @@ fn kzg_aggr_prove_and_verify(example_name: String) {
             "prove",
             "--pfsys=kzg",
             "-D",
-            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+            format!("./examples/onnx/{}/input.json", example_name).as_str(),
             "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
             "--proof-path",
             format!("kzg_{}.pf", example_name).as_str(),
             "--vk-path",
@@ -329,7 +329,7 @@ fn kzg_aggr_prove_and_verify(example_name: String) {
             "aggregate",
             "--pfsys=kzg",
             "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
             "--aggregation-snarks",
             format!("kzg_{}.pf", example_name).as_str(),
             "--aggregation-vk-paths",
@@ -371,9 +371,9 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
             "prove",
             "--pfsys=kzg",
             "-D",
-            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+            format!("./examples/onnx/{}/input.json", example_name).as_str(),
             "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
             "--proof-path",
             format!("kzg_{}.pf", example_name).as_str(),
             "--vk-path",
@@ -392,7 +392,7 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
             "aggregate",
             "--pfsys=kzg",
             "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
             "--aggregation-snarks",
             format!("kzg_{}.pf", example_name).as_str(),
             "--aggregation-vk-paths",
@@ -447,9 +447,9 @@ fn kzg_prove_and_verify(example_name: String) {
             "prove",
             "--pfsys=kzg",
             "-D",
-            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+            format!("./examples/onnx/{}/input.json", example_name).as_str(),
             "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
             "--proof-path",
             format!("kzg_{}.pf", example_name).as_str(),
             "--vk-path",
@@ -468,7 +468,7 @@ fn kzg_prove_and_verify(example_name: String) {
             "verify",
             "--pfsys=kzg",
             "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
             "--proof-path",
             format!("kzg_{}.pf", example_name).as_str(),
             "--vk-path",
@@ -490,9 +490,9 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
             "prove",
             "--pfsys=kzg",
             "-D",
-            format!("./examples/onnx/examples/{}/input.json", example_name).as_str(),
+            format!("./examples/onnx/{}/input.json", example_name).as_str(),
             "-M",
-            format!("./examples/onnx/examples/{}/network.onnx", example_name).as_str(),
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
             "--proof-path",
             format!("kzg_{}.pf", example_name).as_str(),
             "--vk-path",
@@ -505,8 +505,8 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
         .expect("failed to execute process");
     assert!(status.success());
 
-    let input_arg = format!("./examples/onnx/examples/{}/input.json", example_name);
-    let network_arg = format!("./examples/onnx/examples/{}/network.onnx", example_name);
+    let input_arg = format!("./examples/onnx/{}/input.json", example_name);
+    let network_arg = format!("./examples/onnx/{}/network.onnx", example_name);
     let code_arg = format!("kzg_{}.code", example_name);
     let vk_arg = format!("kzg_{}.vk", example_name);
 

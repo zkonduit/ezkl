@@ -46,8 +46,6 @@ Note that the library requires a nightly version of the rust toolchain. You can 
 rustup override set nightly         
 ```
 
-This repository includes onnx example files as a submodule for testing out the cli. Either pass the `--recurse-submodules` flag to the `clone` command or after cloning run `git submodule update --init --recursive`. 
-
 ### docs 📖
 
 Use `cargo doc --open` to compile and open the docs in your default browser.
@@ -64,26 +62,26 @@ The `ezkl` cli provides a simple interface to load `.onnx` files, which represen
 
 You can easily create an `.onnx` file using `pytorch`. For samples of Onnx files see [here](https://github.com/zkonduit/onnx-examples). For a tutorial on how to quickly generate Onnx files using python, check out [pyezkl](https://github.com/zkonduit/pyezkl). 
 
-These examples are also available as a submodule in `./examples/onnx`. To generate a proof on one of the examples, first build ezkl (`cargo build --release`) and add it to your favourite `PATH` variables, then generate a structured reference string (SRS): 
+Sample onnx files are also available in `./examples/onnx`. To generate a proof on one of the examples, first build ezkl (`cargo build --release`) and add it to your favourite `PATH` variables, then generate a structured reference string (SRS): 
 ```bash
 ezkl -K=17 gen-srs --pfsys=kzg --params-path=kzg.params
 ``` 
 
 ```bash
-ezkl --bits=16 -K=17 prove -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path=kzg.params
+ezkl --bits=16 -K=17 prove -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path=kzg.params
 ``` 
 
 This command generates a proof that the model was correctly run on private inputs (this is the default setting). It then outputs the resulting proof at the path specfifed by `--proof-path`, parameters that can be used for subsequent verification at `--params-path` and the verifier key at `--vk-path`. 
 Luckily `ezkl` also provides command to verify the generated proofs: 
 
 ```bash 
-ezkl --bits=16 -K=17 verify -M ./examples/onnx/examples/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path=kzg.params
+ezkl --bits=16 -K=17 verify -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path=kzg.params
 ``` 
 
 To display a table of the loaded onnx nodes, their associated parameters, set `RUST_LOG=DEBUG` or run:
 
 ```bash
-cargo run --release --bin ezkl -- table -M ./examples/onnx/examples/1l_relu/network.onnx
+cargo run --release --bin ezkl -- table -M ./examples/onnx/1l_relu/network.onnx
 
 ```
 
@@ -93,11 +91,11 @@ Note that the above prove and verify stats can also be run with an EVM verifier.
 
 ```bash
 # gen proof
-ezkl --bits=16 -K=17 prove -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path=kzg.params --transcript=evm
+ezkl --bits=16 -K=17 prove -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path=kzg.params --transcript=evm
 ```
 ```bash
 # gen evm verifier
-ezkl -K=17 --bits=16 create-evm-verifier -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx --pfsys=kzg --deployment-code-path 1l_relu.code --params-path=kzg.params --vk-path 1l_relu.vk --sol-code-path 1l_relu.sol
+ezkl -K=17 --bits=16 create-evm-verifier -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --pfsys=kzg --deployment-code-path 1l_relu.code --params-path=kzg.params --vk-path 1l_relu.vk --sol-code-path 1l_relu.sol
 ```
 ```bash
 # Verify (EVM) 
@@ -115,12 +113,12 @@ ezkl -K=20 gen-srs --pfsys=kzg --params-path=kzg.params
 
 ```bash 
 # Single proof -> single proof we are going to feed into aggregation circuit. (Mock)-verifies + verifies natively as sanity check
-ezkl -K=17 --bits=16 prove --pfsys=kzg --transcript=poseidon --strategy=accum -D ./examples/onnx/examples/1l_relu/input.json -M ./examples/onnx/examples/1l_relu/network.onnx --proof-path 1l_relu.pf --params-path=kzg.params  --vk-path=1l_relu.vk
+ezkl -K=17 --bits=16 prove --pfsys=kzg --transcript=poseidon --strategy=accum -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --params-path=kzg.params  --vk-path=1l_relu.vk
 ```
 
 ```bash
 # Aggregate -> generates aggregate proof and also (mock)-verifies + verifies natively as sanity check
-ezkl -K=17 --bits=16 aggregate --transcript=evm -M ./examples/onnx/examples/1l_relu/network.onnx --pfsys=kzg --aggregation-snarks=1l_relu.pf --aggregation-vk-paths 1l_relu.vk --vk-path aggr_1l_relu.vk --proof-path aggr_1l_relu.pf --params-path=kzg.params
+ezkl -K=17 --bits=16 aggregate --transcript=evm -M ./examples/onnx/1l_relu/network.onnx --pfsys=kzg --aggregation-snarks=1l_relu.pf --aggregation-vk-paths 1l_relu.vk --vk-path aggr_1l_relu.vk --proof-path aggr_1l_relu.pf --params-path=kzg.params
 ``` 
 
 ```bash
@@ -218,6 +216,18 @@ criterion_group! {
   targets = runrelu
 }
 ```
+
+## onnx examples 
+
+This repository includes onnx example files as a submodule for testing out the cli.
+
+If you want to add a model to `examples/onnx`, open a PR creating a new folder within `examples/onnx` with a descriptive model name. This folder should contain: 
+- an `input.json` input file, with the fields expected by the  [ezkl](https://github.com/zkonduit/ezkl) cli. 
+- a `network.onnx` file representing the trained model 
+- a `gen.py` file for generating the `.json` and `.onnx` files following the general structure of `examples/tutorial/tutorial.py`.
+
+
+TODO: add associated python files in the onnx model directories. 
 
 ## library examples 🔍
 

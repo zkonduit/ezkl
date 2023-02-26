@@ -1,0 +1,27 @@
+pytorch1.13.1:¿
+š
+input
+layer.weight
+
+layer.biasoutput/layer/Conv"Conv*
+	dilations@@ *
+group *
+kernel_shape@@ *
+pads@@@@ *
+strides@@ 	torch_jit*&Blayer.weightJ´‚¾(È¾F
+Õ¾*B
+layer.biasJPW»¾Z)
+input 
+
+
+batch_size
+
+
+b*
+output 
+
+
+batch_size
+
+
+B
