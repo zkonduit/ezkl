@@ -146,6 +146,7 @@ Usage: ezkl [OPTIONS] <COMMAND>
 
 Commands:
   table                     Loads model and prints model table
+  forward                   Loads model and input and runs mock prover (for testing)
   gen-srs                   Generates a dummy SRS
   mock                      Loads model and input and runs mock prover (for testing)
   aggregate                 Aggregates proofs :)
@@ -155,6 +156,7 @@ Commands:
   verify                    Verifies a proof, returning accept or reject
   verify-aggr               Verifies an aggregate proof, returning accept or reject
   verify-evm                Verifies a proof using a local EVM executor, returning accept or reject
+  print-proof-hex           Print the proof in hexadecimal
   help                      Print this message or the help of the given subcommand(s)
 
 Options:
@@ -166,8 +168,8 @@ Options:
       --public-outputs                 Flags whether outputs are public
       --public-params                  Flags whether params are public
   -M, --max-rotations <MAX_ROTATIONS>  Flags to set maximum rotations [default: 512]
-  -h, --help                           Print help information
-  -V, --version                        Print version information
+  -h, --help                           Print help
+  -V, --version                        Print version
 ```
 
 `bits`, `scale`, `tolerance`, and `logrows` have default values. You can use tolerance to express a tolerance to a certain amount of quantization error on the output eg. if set to 2 the circuit will verify even if the generated output deviates by an absolute value of 2 on any dimension from the expected output. `prove` and `mock`, all require `-D` and `-M` parameters, which if not provided, the cli will query the user to manually enter the path(s).

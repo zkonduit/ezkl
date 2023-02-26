@@ -14,6 +14,7 @@ use crate::circuit::polynomial::Op as PolyOp;
 use crate::circuit::range::*;
 use crate::commands::RunArgs;
 use crate::commands::{Cli, Commands};
+use crate::graph::scale_to_multiplier;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
 //use clap::Parser;
@@ -82,14 +83,9 @@ impl Model {
     /// # Arguments
     ///
     /// * `path` - A path to an Onnx file.
-    /// * `scale` - The denominator used for fixed point arithmetic (relevant for quantizing input data and model parameters).
-    /// * `bits` - Number of bits to use.
-    /// * `logrows` -  Log rows available in circuit.
-    /// * `max_rotations` - Maximum number of permitted rotations.
-    /// * `tolerance` - How much each quantized output is allowed to be off by
+    /// * `run_args` - [RunArgs]
     /// * `mode` - The [Mode] we're using the model in.
     /// * `visibility` - Which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         path: impl AsRef<Path>,
         run_args: RunArgs,
@@ -117,6 +113,80 @@ impl Model {
         debug!("{}", Table::new(om.nodes.flatten()).to_string());
 
         Ok(om)
+    }
+
+    /// Runs a dummy forward pass on sample data !
+    /// # Arguments
+    ///
+    /// * `path` - A path to an Onnx file.
+    /// * `run_args` - [RunArgs]
+    pub fn forward(
+        model_path: impl AsRef<Path>,
+        model_inputs: &[Tensor<i32>],
+        run_args: RunArgs,
+    ) -> Result<Vec<Tensor<f32>>, Box<dyn Error>> {
+        let model = tract_onnx::onnx()
+            .model_for_path(model_path)
+            .map_err(|_| GraphError::ModelLoad)?;
+        info!("running forward pass");
+
+        let mut nodes = BTreeMap::<usize, Node>::new();
+        for (i, n) in model.nodes.iter().enumerate() {
+            let n = Node::new(n.clone(), &mut nodes, run_args.scale, i)?;
+            nodes.insert(i, n);
+        }
+
+        debug!("{}", Table::new(nodes.clone()).to_string());
+
+        let mut results: BTreeMap<&usize, Tensor<i32>> = BTreeMap::new();
+        for (i, n) in nodes.iter() {
+            let mut inputs = vec![];
+            for i in n.inputs.iter() {
+                match results.get(&i.node) {
+                    Some(value) => inputs.push(value.clone()),
+                    None => return Err(Box::new(GraphError::MissingNode(i.node))),
+                }
+            }
+            match &n.opkind {
+                OpKind::Lookup(op) => {
+                    assert_eq!(inputs.len(), 1);
+                    results.insert(i, op.f(inputs[0].clone()));
+                }
+                OpKind::Poly(op) => {
+                    results.insert(i, op.f(inputs)?);
+                }
+                OpKind::Input => {
+                    let mut t = model_inputs[*i].clone();
+                    t.reshape(&n.out_dims);
+                    results.insert(i, t);
+                }
+                OpKind::Const => {
+                    results.insert(i, n.const_value.as_ref().unwrap().clone());
+                }
+                _ => {
+                    panic!("unsupported op")
+                }
+            }
+        }
+
+        let output_nodes = model.outputs.iter();
+        info!(
+            "model outputs are nodes: {:?}",
+            output_nodes.clone().map(|o| o.node).collect_vec()
+        );
+        let outputs = output_nodes
+            .map(|o| {
+                let n = nodes.get(&o.node).unwrap();
+                let scale = scale_to_multiplier(n.out_scale);
+                results
+                    .get(&o.node)
+                    .unwrap()
+                    .clone()
+                    .map(|x| (x as f32) / scale)
+            })
+            .collect_vec();
+
+        Ok(outputs)
     }
 
     /// Creates a `Model` from parsed CLI arguments
