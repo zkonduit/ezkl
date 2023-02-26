@@ -116,8 +116,6 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3
-        with:
-          submodules: recursive
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
