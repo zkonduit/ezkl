@@ -831,14 +831,14 @@ pub fn pad<T: TensorType>(
 }
 
 // ---------------------------------------------------------------------------------------------------------
-// -- Activation Functions ---------------------------------------------------------------------------------
+// -- nonlinear Functions ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------
 
 /// Activation functions
-pub mod activations {
+pub mod nonlinearities {
     use super::*;
     /// Elementwise applies sigmoid to a tensor of integers.
     /// # Arguments
@@ -849,7 +849,7 @@ pub mod activations {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::activations::sigmoid;
+    /// use ezkl::tensor::ops::nonlinearities::sigmoid;
     /// let x = Tensor::<i32>::new(
     ///     Some(&[2, 15, 2, 1, 1, 0]),
     ///     &[2, 3],
@@ -871,6 +871,37 @@ pub mod activations {
         output
     }
 
+    /// Elementwise applies sigmoid to a tensor of integers.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::sqrt;
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[4, 25, 8, 1, 1, 0]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = sqrt(&x, 1, 1);
+    /// let expected = Tensor::<i32>::new(Some(&[2, 5, 3, 1, 1, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn sqrt(a: &Tensor<i32>, scale_input: usize, scale_output: usize) -> Tensor<i32> {
+        // calculate value of output
+        let mut output: Tensor<i32> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            let kix = (*a_i as f32) / (scale_input as f32);
+            let fout = (scale_output as f32) * kix.sqrt();
+            let rounded = fout.round();
+            output[i] = rounded as i32;
+        }
+        output
+    }
+
     /// Elementwise applies leaky relu to a tensor of integers.
     /// # Arguments
     ///
@@ -880,7 +911,7 @@ pub mod activations {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::activations::leakyrelu;
+    /// use ezkl::tensor::ops::nonlinearities::leakyrelu;
     /// let x = Tensor::<i32>::new(
     ///     Some(&[2, 15, 2, 1, 1, -5]),
     ///     &[2, 3],
@@ -914,7 +945,7 @@ pub mod activations {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::activations::prelu;
+    /// use ezkl::tensor::ops::nonlinearities::prelu;
     /// let x = Tensor::<i32>::new(
     ///     Some(&[-10, 15, 2, 1, 1, -5]),
     ///     &[2, 3],
@@ -954,7 +985,7 @@ pub mod activations {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::activations::const_div;
+    /// use ezkl::tensor::ops::nonlinearities::const_div;
     /// let x = Tensor::<i32>::new(
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],
