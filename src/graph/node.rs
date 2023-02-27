@@ -67,6 +67,7 @@ impl OpKind {
                 slope: eq_float::F32(0.0),
             }),
             "Sigmoid" => OpKind::Lookup(LookupOp::Sigmoid { scales: (1, 1) }),
+            "Sqrt" => OpKind::Lookup(LookupOp::Sqrt { scales: (1, 1) }),
             "Div" => OpKind::Lookup(LookupOp::Div { scale: 1 }),
             "Const" => OpKind::Const,
             "Source" => OpKind::Input,
@@ -326,6 +327,33 @@ impl Node {
                             });
                         } else {
                             opkind = OpKind::Lookup(LookupOp::Sigmoid {
+                                scales: (1, scale_to_multiplier(scale) as usize),
+                            });
+                        }
+
+                        Node {
+                            idx,
+                            opkind,
+                            inputs: node.inputs.clone(),
+                            in_dims: vec![input_node.out_dims.clone()],
+                            out_dims: input_node.out_dims.clone(),
+                            in_scale: input_node.out_scale,
+                            out_scale: scale,
+                            output_max: scale_to_multiplier(scale),
+                            ..Default::default()
+                        }
+                    }
+
+                    LookupOp::Sqrt { .. } => {
+                        let input_node = &inputs[0];
+                        let scale_diff = input_node.out_scale;
+                        if scale_diff > 0 {
+                            let mult = scale_to_multiplier(scale_diff);
+                            opkind = OpKind::Lookup(LookupOp::Sqrt {
+                                scales: (mult as usize, scale_to_multiplier(scale) as usize),
+                            });
+                        } else {
+                            opkind = OpKind::Lookup(LookupOp::Sqrt {
                                 scales: (1, scale_to_multiplier(scale) as usize),
                             });
                         }

@@ -1,5 +1,5 @@
 use super::*;
-use crate::tensor::ops::activations::*;
+use crate::tensor::ops::nonlinearities::*;
 use crate::{fieldutils::felt_to_i32, fieldutils::i32_to_felt};
 use halo2_proofs::{
     arithmetic::{Field, FieldExt},
@@ -19,6 +19,9 @@ pub enum Op {
     },
     ReLU {
         scale: usize,
+    },
+    Sqrt {
+        scales: (usize, usize),
     },
     LeakyReLU {
         scale: usize,
@@ -45,6 +48,7 @@ impl fmt::Display for Op {
                 write!(f, "leaky-relu w/ scale: {}, slopes: {:#?}", scale, slopes)
             }
             Op::Sigmoid { scales } => write!(f, "sigmoid  w/ scale: {}", scales.0),
+            Op::Sqrt { scales } => write!(f, "sqrt  w/ scale: {}", scales.0),
         }
     }
 }
@@ -58,6 +62,7 @@ impl Op {
             Op::LeakyReLU { scale, slope } => leakyrelu(&x, *scale, slope.0),
             Op::PReLU { scale, slopes } => leakyrelu(&x, *scale, slopes[0].0),
             Op::Sigmoid { scales } => sigmoid(&x, scales.0, scales.1),
+            Op::Sqrt { scales } => sqrt(&x, scales.0, scales.1),
         }
     }
 
