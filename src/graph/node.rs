@@ -501,6 +501,9 @@ impl Node {
                 match s {
                     PolyOp::Dot => todo!(),
                     PolyOp::Conv { .. } => {
+                        let input_node = other_nodes.get_mut(&node.inputs[0].node).unwrap();
+                        inputs[0] = Self::format_3d_inputs(input_node)?.clone();
+
                         let (input_node, weight_node) = (&inputs[0], &inputs[1]);
 
                         // Extract the padding and stride layer hyperparams
@@ -588,6 +591,10 @@ impl Node {
                     }
 
                     PolyOp::SumPool { .. } => {
+                        // input_nodes come in all shapes and sizes we gotta homogenize, especially for 2D (single channel images)
+                        let input_node = other_nodes.get_mut(&node.inputs[0].node).unwrap();
+                        inputs[0] = Self::format_3d_inputs(input_node)?.clone();
+
                         let input_node = &inputs[0];
 
                         // Extract the padding and stride layer hyperparams
@@ -650,6 +657,10 @@ impl Node {
                     }
 
                     PolyOp::GlobalSumPool => {
+                        // input_nodes come in all shapes and sizes we gotta homogenize, especially for 2D (single channel images)
+                        let input_node = other_nodes.get_mut(&node.inputs[0].node).unwrap();
+                        inputs[0] = Self::format_3d_inputs(input_node)?.clone();
+
                         let input_node = &inputs[0];
                         let input_channels = input_node.out_dims[0];
                         let input_height = input_node.out_dims[1];
@@ -946,7 +957,14 @@ impl Node {
                                 )));
                             }
                         };
-                        let shapes = &shape_const[0..];
+
+                        let mut shapes = &shape_const[0..];
+
+                        // we remove batch dims as we assume single elem batches
+                        if shapes[0] == -1 && shapes.len() > 1 {
+                            shapes = &shapes[1..];
+                        }
+
                         let new_dims: Result<Vec<usize>, Box<dyn Error>> =
                             if shapes.iter().all(|x| x > &0) {
                                 let mut res = vec![];
@@ -1172,6 +1190,67 @@ impl Node {
                 node.out_scale = scale;
             }
         }
+        Ok(node)
+    }
+
+    /// Formats 3d inputs if they have under or overspecified dims (casting 2D -> 3D and nD -> 3D)
+    fn format_3d_inputs(mut node: &mut Node) -> Result<&mut Node, Box<dyn Error>> {
+        if node.opkind.is_const() {
+            return Err(Box::new(GraphError::WrongMethod(
+                node.idx,
+                node.opkind.clone(),
+            )));
+        };
+        // input_nodes come in all shapes and sizes we gotta homogenize, especially for 2D (single channel images)
+        if node.out_dims.len() == 2 {
+            node = Self::pad_channel_input_node(node)?;
+        } else if node.out_dims.len() > 3 {
+            node = Self::rm_redundant_3d_channels(node)?;
+        };
+
+        if !(node.out_dims.len() == 3) {
+            return Err(Box::new(GraphError::InvalidDims(
+                node.idx,
+                node.clone().opkind,
+            )));
+        }
+        Ok(node)
+    }
+
+    /// Adds an extra channel dim to nodes that need it.
+    fn pad_channel_input_node(node: &mut Node) -> Result<&mut Node, Box<dyn Error>> {
+        if node.opkind.is_const() {
+            return Err(Box::new(GraphError::WrongMethod(
+                node.idx,
+                node.opkind.clone(),
+            )));
+        };
+        let mut dims = vec![1];
+        dims.append(&mut node.out_dims);
+        node.out_dims = dims;
+        Ok(node)
+    }
+
+    /// Removes excess channels for an image
+    fn rm_redundant_3d_channels(node: &mut Node) -> Result<&mut Node, Box<dyn Error>> {
+        if node.opkind.is_const() {
+            return Err(Box::new(GraphError::WrongMethod(
+                node.idx,
+                node.opkind.clone(),
+            )));
+        };
+        let dims = &node.out_dims;
+        let last_dims = &dims[dims.len() - 3..];
+        let channel_dims = &dims[..dims.len() - 3];
+        for dim in channel_dims {
+            if *dim != 1 {
+                return Err(Box::new(GraphError::InvalidDims(
+                    node.idx,
+                    node.opkind.clone(),
+                )));
+            }
+        }
+        node.out_dims = last_dims.to_vec();
         Ok(node)
     }
 }
