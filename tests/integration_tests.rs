@@ -24,7 +24,7 @@ fn init() {
     assert!(status.success());
 }
 
-const TESTS: [&str; 12] = [
+const TESTS: [&str; 13] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -37,6 +37,7 @@ const TESTS: [&str; 12] = [
     "2l_relu_sigmoid",
     "1l_conv",
     "2l_relu_sigmoid_conv",
+    "2l_relu_conv",
 ];
 
 const TESTS_AGGR: [&str; 10] = [
@@ -105,7 +106,7 @@ macro_rules! test_func {
             use crate::mock_public_params;
             use crate::forward_pass;
             use crate::kzg_prove_and_verify;
-            seq!(N in 0..=11 {
+            seq!(N in 0..=12 {
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
                 mock(test.to_string());
