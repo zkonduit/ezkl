@@ -24,12 +24,13 @@ fn init() {
     assert!(status.success());
 }
 
-const TESTS: [&str; 13] = [
+const TESTS: [&str; 14] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
     "1l_reshape",
     "1l_sigmoid",
+    "1l_sqrt",
     "1l_leakyrelu",
     "1l_relu",
     "2l_relu_sigmoid_small",
@@ -40,12 +41,13 @@ const TESTS: [&str; 13] = [
     "2l_relu_conv",
 ];
 
-const TESTS_AGGR: [&str; 10] = [
+const TESTS_AGGR: [&str; 11] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
     "1l_reshape",
     "1l_sigmoid",
+    "1l_sqrt",
     "1l_leakyrelu",
     "1l_relu",
     "2l_relu_sigmoid_small",
@@ -58,12 +60,13 @@ const NEG_TESTS: [(&str, &str); 2] = [
     ("2l_relu_small", "2l_relu_sigmoid_small"),
 ];
 
-const TESTS_EVM: [&str; 9] = [
+const TESTS_EVM: [&str; 10] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
     "1l_reshape",
     "1l_sigmoid",
+    "1l_sqrt",
     "1l_leakyrelu",
     "1l_relu",
     "2l_relu_sigmoid_small",
@@ -106,7 +109,7 @@ macro_rules! test_func {
             use crate::mock_public_params;
             use crate::forward_pass;
             use crate::kzg_prove_and_verify;
-            seq!(N in 0..=12 {
+            seq!(N in 0..=13 {
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
                 mock(test.to_string());
@@ -159,7 +162,7 @@ macro_rules! test_func_evm {
                 "1l_reshape",
             ];
 
-            seq!(N in 0..=8 {
+            seq!(N in 0..=9 {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
