@@ -882,11 +882,11 @@ pub mod nonlinearities {
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::sqrt;
     /// let x = Tensor::<i32>::new(
-    ///     Some(&[2, 15, 2, 1, 1, 0]),
+    ///     Some(&[4, 25, 8, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = sqrt(&x, 1, 1);
-    /// let expected = Tensor::<i32>::new(Some(&[1, 1, 1, 1, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[2, 5, 3, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn sqrt(a: &Tensor<i32>, scale_input: usize, scale_output: usize) -> Tensor<i32> {
