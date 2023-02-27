@@ -24,7 +24,7 @@ fn init() {
     assert!(status.success());
 }
 
-const TESTS: [&str; 14] = [
+const TESTS: [&str; 15] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -38,7 +38,8 @@ const TESTS: [&str; 14] = [
     "2l_relu_sigmoid",
     "1l_conv",
     "2l_relu_sigmoid_conv",
-    "2l_relu_conv",
+    "3l_relu_conv_fc",
+    "4l_relu_conv_fc",
 ];
 
 const TESTS_AGGR: [&str; 11] = [
@@ -109,7 +110,7 @@ macro_rules! test_func {
             use crate::mock_public_params;
             use crate::forward_pass;
             use crate::kzg_prove_and_verify;
-            seq!(N in 0..=13 {
+            seq!(N in 0..=14 {
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
                 mock(test.to_string());
@@ -155,9 +156,10 @@ macro_rules! test_func_evm {
 
             /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
             /// specify a few that will
-            const TESTS_SOLIDITY: [&str; 4] = [
+            const TESTS_SOLIDITY: [&str; 5] = [
                 "1l_relu",
                 "1l_leakyrelu",
+                "1l_sqrt",
                 "1l_sigmoid",
                 "1l_reshape",
             ];
