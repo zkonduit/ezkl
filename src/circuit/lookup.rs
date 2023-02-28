@@ -297,7 +297,7 @@ impl<F: FieldExt + TensorType> Config<F> {
                     // finally convert to vector of integers
                     let mut integer_evals: Vec<i32> = vec![];
                     let _ = w_vaf.map(|vaf| {
-                        // we have to push to an externally created vector or else vaf.map return an element wrapped within Value<> (which we don't want)
+                        // we have to push to an externally created vector or else vaf.map() returns an evaluation wrapped in Value<> (which we don't want)
                         vaf.map(|f| {
                             integer_evals.push(felt_to_i32(f.evaluate()));
                         })
