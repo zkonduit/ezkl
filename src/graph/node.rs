@@ -8,6 +8,7 @@ use crate::tensor::ops::{add, const_mult, div, mult};
 use crate::tensor::Tensor;
 use crate::tensor::TensorType;
 use anyhow::Result;
+use eq_float::F32;
 use halo2_proofs::arithmetic::FieldExt;
 use itertools::Itertools;
 use log::{info, trace, warn};
@@ -22,6 +23,7 @@ use tract_onnx::tract_hir::{
     infer::Factoid,
     internal::InferenceOp,
     ops::activations::LeakyRelu,
+    ops::array::{Pad, PadMode},
     ops::cnn::{Conv, PoolSpec, SumPool},
     ops::expandable::Expansion,
     ops::nn::DataFormat,
@@ -64,7 +66,7 @@ impl OpKind {
             }),
             "LeakyRelu" => OpKind::Lookup(LookupOp::LeakyReLU {
                 scale: 1,
-                slope: eq_float::F32(0.0),
+                slope: F32(0.0),
             }),
             "Sigmoid" => OpKind::Lookup(LookupOp::Sigmoid { scales: (1, 1) }),
             "Sqrt" => OpKind::Lookup(LookupOp::Sqrt { scales: (1, 1) }),
@@ -93,10 +95,10 @@ impl OpKind {
                 kernel_shape: (1, 1),
             }),
             "GlobalAvgPool" => OpKind::Poly(PolyOp::GlobalSumPool),
+            "Pad" => OpKind::Poly(PolyOp::Pad(0, 0)),
             "Reshape" => OpKind::Poly(PolyOp::Reshape(Vec::new())),
             "Flatten" => OpKind::Poly(PolyOp::Flatten(Vec::new())),
             "BatchNorm" => OpKind::Poly(PolyOp::BatchNorm),
-            "Pad" => OpKind::Poly(PolyOp::Identity),
             c => {
                 warn!("{:?} is not currently supported", c);
                 OpKind::Unknown(c.to_string())
@@ -426,7 +428,7 @@ impl Node {
 
                         opkind = OpKind::Lookup(LookupOp::LeakyReLU {
                             scale: layer_scale,
-                            slope: eq_float::F32(leaky_op.0),
+                            slope: F32(leaky_op.0),
                         }); // now the input will be scaled down to match
 
                         Node {
@@ -453,7 +455,7 @@ impl Node {
                             .unwrap()
                             .deref()
                             .iter()
-                            .map(|value| eq_float::F32(*value))
+                            .map(|value| F32(*value))
                             .collect_vec();
                         node.inputs.pop();
 
@@ -527,6 +529,67 @@ impl Node {
             }
             OpKind::Poly(ref s) => {
                 match s {
+                    PolyOp::Pad(..) => {
+                        let input_node = other_nodes.get_mut(&node.inputs[0].node).unwrap();
+                        // we only support padding for 3D images
+                        inputs[0] = Self::format_3d_inputs(input_node)?.clone();
+
+                        let pad_node: &Pad = match node.op().downcast_ref::<Pad>() {
+                            Some(b) => b,
+                            None => {
+                                return Err(Box::new(GraphError::OpMismatch(idx, opkind)));
+                            }
+                        };
+                        // we only support constant 0 padding
+                        if pad_node.mode
+                            != PadMode::Constant(tract_onnx::prelude::Arc::new(
+                                tract_onnx::prelude::Tensor::zero::<f32>(&[])?,
+                            ))
+                        {
+                            return Err(Box::new(GraphError::MisformedParams(
+                                "pad mode or pad type".to_string(),
+                            )));
+                        }
+
+                        let padding_len = pad_node.pads.len();
+
+                        // we only support symmetrical padding that affects the last 2 (height and width params)
+                        for (i, pad_params) in pad_node.pads.iter().enumerate() {
+                            if (i < padding_len - 2) && ((pad_params.0 != 0) || (pad_params.1 != 0))
+                            {
+                                return Err(Box::new(GraphError::MisformedParams(
+                                    "ezkl currently only supports padding height and width dimensions".to_string(),
+                                )));
+                            }
+                            if pad_params.0 != pad_params.1 {
+                                return Err(Box::new(GraphError::MisformedParams(
+                                    "ezkl currently only supports symmetric padding".to_string(),
+                                )));
+                            }
+                        }
+
+                        let (padding_h, padding_w) = (
+                            pad_node.pads[padding_len - 2].0,
+                            pad_node.pads[padding_len - 1].0,
+                        );
+
+                        let input_channels = input_node.out_dims[0];
+
+                        let out_height = input_node.out_dims[1] + 2 * padding_h;
+                        let out_width = input_node.out_dims[2] + 2 * padding_w;
+
+                        Node {
+                            idx,
+                            opkind: OpKind::Poly(PolyOp::Pad(padding_h, padding_w)),
+                            inputs: node.inputs.clone(),
+                            in_dims: vec![input_node.out_dims.clone()],
+                            out_dims: vec![input_channels, out_height, out_width],
+                            in_scale: input_node.out_scale,
+                            out_scale: input_node.out_scale,
+                            output_max: input_node.output_max,
+                            ..Default::default()
+                        }
+                    }
                     PolyOp::Dot => todo!(),
                     PolyOp::Conv { .. } => {
                         let input_node = other_nodes.get_mut(&node.inputs[0].node).unwrap();
@@ -552,7 +615,7 @@ impl Node {
                         if (conv_node.data_format != DataFormat::NCHW)
                             || (conv_node.kernel_fmt != KernelFormat::OIHW)
                         {
-                            return Err(Box::new(GraphError::MissingParams(
+                            return Err(Box::new(GraphError::MisformedParams(
                                 "data or kernel in wrong format".to_string(),
                             )));
                         }
