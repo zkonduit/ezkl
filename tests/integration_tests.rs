@@ -301,7 +301,7 @@ fn render_circuit(example_name: String) {
         .args([
             "--bits=16",
             "-K=17",
-            "mock",
+            "render-circuit",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
             "-M",
