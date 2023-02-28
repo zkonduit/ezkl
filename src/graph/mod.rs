@@ -47,6 +47,9 @@ pub enum GraphError {
     /// A node has missing parameters
     #[error("a node is missing required params: {0}")]
     MissingParams(String),
+    /// A node has missing parameters
+    #[error("a node is has misformed params: {0}")]
+    MisformedParams(String),
     /// Error in the configuration of the visibility of variables
     #[error("there should be at least one set of public variables")]
     Visibility,
