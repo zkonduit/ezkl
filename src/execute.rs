@@ -1,5 +1,5 @@
 use super::eth::verify_proof_via_solidity;
-use crate::commands::{Cli, Commands, ProofSystem, StrategyType, TranscriptType};
+use crate::commands::{Cli, Commands, StrategyType, TranscriptType};
 use crate::graph::{vector_to_quantized, Model, ModelCircuit};
 use crate::pfsys::evm::aggregation::{
     gen_aggregation_evm_verifier, AggregationCircuit, PoseidonTranscript,
@@ -138,15 +138,10 @@ fn create_proof_circuit_kzg<
 /// Run an ezkl command with given args
 pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     match cli.command {
-        Commands::GenSrs { params_path, pfsys } => match pfsys {
-            ProofSystem::IPA => {
-                unimplemented!()
-            }
-            ProofSystem::KZG => {
-                let params = gen_srs::<KZGCommitmentScheme<Bn256>>(cli.args.logrows);
-                save_params_kzg(&params_path, &params)?;
-            }
-        },
+        Commands::GenSrs { params_path } => {
+            let params = gen_srs::<KZGCommitmentScheme<Bn256>>(cli.args.logrows);
+            save_params_kzg(&params_path, &params)?;
+        }
         Commands::Table { model: _ } => {
             let om = Model::from_ezkl_conf(cli)?;
             println!("{}", Table::new(om.nodes.flatten()));
@@ -192,130 +187,103 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             ref params_path,
             ref deployment_code_path,
             ref sol_code_path,
-            pfsys,
         } => {
             let data = prepare_data(data.to_string())?;
-            match pfsys {
-                ProofSystem::IPA => {
-                    unimplemented!()
-                }
-                ProofSystem::KZG => {
-                    //let _ = (data, vk_path, params_path, deployment_code_path);
-                    let (_, public_inputs) =
-                        prepare_model_circuit_and_public_input::<Fr>(&data, &cli)?;
-                    let num_instance = public_inputs.iter().map(|x| x.len()).collect();
-                    let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
-                    params.downsize(cli.args.logrows);
-                    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
-                        vk_path.to_path_buf(),
-                    )?;
-                    trace!("params computed");
 
-                    let (deployment_code, yul_code) = gen_evm_verifier(&params, &vk, num_instance)?;
-                    deployment_code.save(deployment_code_path.as_ref().unwrap())?;
+            //let _ = (data, vk_path, params_path, deployment_code_path);
+            let (_, public_inputs) = prepare_model_circuit_and_public_input::<Fr>(&data, &cli)?;
+            let num_instance = public_inputs.iter().map(|x| x.len()).collect();
+            let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
+            params.downsize(cli.args.logrows);
+            let vk =
+                load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path.to_path_buf())?;
+            trace!("params computed");
 
-                    if sol_code_path.is_some() {
-                        let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
-                        let _ = f.write(yul_code.as_bytes());
+            let (deployment_code, yul_code) = gen_evm_verifier(&params, &vk, num_instance)?;
+            deployment_code.save(deployment_code_path.as_ref().unwrap())?;
 
-                        let cmd = Command::new("python3")
-                            .arg("fix_verifier_sol.py")
-                            .arg(sol_code_path.as_ref().unwrap())
-                            .output()
-                            .unwrap();
-                        let output = cmd.stdout;
+            if sol_code_path.is_some() {
+                let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
+                let _ = f.write(yul_code.as_bytes());
 
-                        let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
-                        let _ = f.write(output.as_slice());
-                    }
-                }
+                let cmd = Command::new("python3")
+                    .arg("fix_verifier_sol.py")
+                    .arg(sol_code_path.as_ref().unwrap())
+                    .output()
+                    .unwrap();
+                let output = cmd.stdout;
+
+                let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
+                let _ = f.write(output.as_slice());
             }
         }
         Commands::CreateEVMVerifierAggr {
             params_path,
             deployment_code_path,
-            pfsys,
             vk_path,
-        } => match pfsys {
-            ProofSystem::IPA => {
-                unimplemented!()
-            }
-            ProofSystem::KZG => {
-                let params: ParamsKZG<Bn256> = load_params_kzg(params_path)?;
+        } => {
+            let params: ParamsKZG<Bn256> = load_params_kzg(params_path)?;
 
-                let agg_vk =
-                    load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path)?;
+            let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path)?;
 
-                let deployment_code = gen_aggregation_evm_verifier(
-                    &params,
-                    &agg_vk,
-                    AggregationCircuit::num_instance(),
-                    AggregationCircuit::accumulator_indices(),
-                )?;
-                deployment_code.save(deployment_code_path.as_ref().unwrap())?;
-            }
-        },
+            let deployment_code = gen_aggregation_evm_verifier(
+                &params,
+                &agg_vk,
+                AggregationCircuit::num_instance(),
+                AggregationCircuit::accumulator_indices(),
+            )?;
+            deployment_code.save(deployment_code_path.as_ref().unwrap())?;
+        }
         Commands::Prove {
             ref data,
             model: _,
             ref vk_path,
             ref proof_path,
             ref params_path,
-            pfsys,
             transcript,
             strategy,
         } => {
             let data = prepare_data(data.to_string())?;
 
-            match pfsys {
-                ProofSystem::IPA => {
-                    unimplemented!()
-                }
-                ProofSystem::KZG => {
-                    info!("proof with {}", pfsys);
-                    let (circuit, public_inputs) =
-                        prepare_model_circuit_and_public_input(&data, &cli)?;
-                    let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
-                    params.downsize(cli.args.logrows);
-                    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
-                        &circuit, &params,
-                    )
+            let (circuit, public_inputs) = prepare_model_circuit_and_public_input(&data, &cli)?;
+            let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
+            params.downsize(cli.args.logrows);
+            let pk =
+                create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
                     .map_err(Box::<dyn Error>::from)?;
-                    trace!("params computed");
+            trace!("params computed");
 
-                    let now = Instant::now();
-                    // creates and verifies the proof
-                    let snark = match strategy {
-                        StrategyType::Single => {
-                            let strategy = KZGSingleStrategy::new(&params);
-                            create_proof_circuit_kzg(
-                                circuit,
-                                &params,
-                                public_inputs,
-                                &pk,
-                                transcript,
-                                strategy,
-                            )?
-                        }
-                        StrategyType::Accum => {
-                            let strategy = AccumulatorStrategy::new(&params);
-                            create_proof_circuit_kzg(
-                                circuit,
-                                &params,
-                                public_inputs,
-                                &pk,
-                                transcript,
-                                strategy,
-                            )?
-                        }
-                    };
-
-                    info!("proof took {}", now.elapsed().as_secs());
-
-                    snark.save(proof_path)?;
-                    save_vk::<KZGCommitmentScheme<Bn256>>(vk_path, pk.get_vk())?;
+            let now = Instant::now();
+            // creates and verifies the proof
+            let snark = match strategy {
+                StrategyType::Single => {
+                    let strategy = KZGSingleStrategy::new(&params);
+                    create_proof_circuit_kzg(
+                        circuit,
+                        &params,
+                        public_inputs,
+                        &pk,
+                        transcript,
+                        strategy,
+                    )?
+                }
+                StrategyType::Accum => {
+                    let strategy = AccumulatorStrategy::new(&params);
+                    create_proof_circuit_kzg(
+                        circuit,
+                        &params,
+                        public_inputs,
+                        &pk,
+                        transcript,
+                        strategy,
+                    )?
                 }
             };
+
+            info!("proof took {}", now.elapsed().as_secs());
+
+            snark.save(proof_path)?;
+            save_vk::<KZGCommitmentScheme<Bn256>>(vk_path, pk.get_vk())?;
         }
         Commands::Aggregate {
             model: _,
@@ -324,58 +292,48 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             ref aggregation_vk_paths,
             ref vk_path,
             ref params_path,
-            pfsys,
             transcript,
         } => {
-            match pfsys {
-                ProofSystem::IPA => {
-                    unimplemented!()
-                }
-                ProofSystem::KZG => {
-                    let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
-                    params.downsize(cli.args.logrows);
+            let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
+            params.downsize(cli.args.logrows);
 
-                    let mut snarks = vec![];
-                    for (proof_path, vk_path) in aggregation_snarks.iter().zip(aggregation_vk_paths)
-                    {
-                        let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
-                            vk_path.to_path_buf(),
-                        )?;
-                        let params_app = {
-                            let mut params_app = params.clone();
-                            params_app.downsize(cli.args.logrows);
-                            params_app
-                        };
-                        snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(
-                            proof_path,
-                            Some(&params_app),
-                            Some(&vk),
-                        )?);
-                    }
-                    // proof aggregation
-                    {
-                        let agg_circuit = AggregationCircuit::new(&params, snarks)?;
-                        let agg_pk = create_keys::<
-                            KZGCommitmentScheme<Bn256>,
-                            Fr,
-                            AggregationCircuit,
-                        >(&agg_circuit, &params)?;
+            let mut snarks = vec![];
+            for (proof_path, vk_path) in aggregation_snarks.iter().zip(aggregation_vk_paths) {
+                let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
+                    vk_path.to_path_buf(),
+                )?;
+                let params_app = {
+                    let mut params_app = params.clone();
+                    params_app.downsize(cli.args.logrows);
+                    params_app
+                };
+                snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(
+                    proof_path,
+                    Some(&params_app),
+                    Some(&vk),
+                )?);
+            }
+            // proof aggregation
+            {
+                let agg_circuit = AggregationCircuit::new(&params, snarks)?;
+                let agg_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
+                    &agg_circuit,
+                    &params,
+                )?;
 
-                        let now = Instant::now();
-                        let snark = create_proof_circuit_kzg(
-                            agg_circuit.clone(),
-                            &params,
-                            agg_circuit.instances(),
-                            &agg_pk,
-                            transcript,
-                            AccumulatorStrategy::new(&params),
-                        )?;
+                let now = Instant::now();
+                let snark = create_proof_circuit_kzg(
+                    agg_circuit.clone(),
+                    &params,
+                    agg_circuit.instances(),
+                    &agg_pk,
+                    transcript,
+                    AccumulatorStrategy::new(&params),
+                )?;
 
-                        info!("Aggregation proof took {}", now.elapsed().as_secs());
-                        snark.save(&proof_path)?;
-                        save_vk::<KZGCommitmentScheme<Bn256>>(vk_path, agg_pk.get_vk())?;
-                    }
-                }
+                info!("Aggregation proof took {}", now.elapsed().as_secs());
+                snark.save(&proof_path)?;
+                save_vk::<KZGCommitmentScheme<Bn256>>(vk_path, agg_pk.get_vk())?;
             }
         }
         Commands::Verify {
@@ -383,90 +341,67 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             proof_path,
             vk_path,
             params_path,
-            pfsys,
             transcript,
-        } => match pfsys {
-            ProofSystem::IPA => {
-                unimplemented!()
-            }
-            ProofSystem::KZG => {
-                let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path)?;
-                params.downsize(cli.args.logrows);
+        } => {
+            let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path)?;
+            params.downsize(cli.args.logrows);
 
-                let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
+            let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
 
-                let strategy = KZGSingleStrategy::new(params.verifier_params());
-                let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path)?;
-                let result = verify_proof_circuit_kzg(
-                    params.verifier_params(),
-                    proof,
-                    &vk,
-                    transcript,
-                    strategy,
-                );
-                info!("verified: {}", result.is_ok());
-            }
-        },
+            let strategy = KZGSingleStrategy::new(params.verifier_params());
+            let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path)?;
+            let result = verify_proof_circuit_kzg(
+                params.verifier_params(),
+                proof,
+                &vk,
+                transcript,
+                strategy,
+            );
+            info!("verified: {}", result.is_ok());
+        }
 
         Commands::VerifyAggr {
             proof_path,
             vk_path,
             params_path,
-            pfsys,
             transcript,
-        } => match pfsys {
-            ProofSystem::IPA => {
-                unimplemented!()
-            }
-            ProofSystem::KZG => {
-                let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path)?;
-                params.downsize(cli.args.logrows);
+        } => {
+            let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path)?;
+            params.downsize(cli.args.logrows);
 
-                let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
+            let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
 
-                let strategy = AccumulatorStrategy::new(params.verifier_params());
-                let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path)?;
-                let result = verify_proof_circuit_kzg(&params, proof, &vk, transcript, strategy);
-                info!("verified: {}", result.is_ok());
-            }
-        },
+            let strategy = AccumulatorStrategy::new(params.verifier_params());
+            let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path)?;
+            let result = verify_proof_circuit_kzg(&params, proof, &vk, transcript, strategy);
+            info!("verified: {}", result.is_ok());
+        }
         Commands::VerifyEVM {
             proof_path,
             deployment_code_path,
             sol_code_path,
-            pfsys,
-        } => match pfsys {
-            ProofSystem::IPA => {
-                unimplemented!()
-            }
-            ProofSystem::KZG => {
-                let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
-                let code = DeploymentCode::load(&deployment_code_path)?;
-                evm_verify(code, proof.clone())?;
+        } => {
+            let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
+            let code = DeploymentCode::load(&deployment_code_path)?;
+            evm_verify(code, proof.clone())?;
 
-                if sol_code_path.is_some() {
-                    let result = verify_proof_via_solidity(proof, sol_code_path.unwrap())
-                        .await
-                        .unwrap();
+            if sol_code_path.is_some() {
+                let result = verify_proof_via_solidity(proof, sol_code_path.unwrap())
+                    .await
+                    .unwrap();
 
-                    info!("Solidity verification result: {}", result);
+                info!("Solidity verification result: {}", result);
 
-                    assert!(result);
-                }
+                assert!(result);
             }
-        },
-        Commands::PrintProofHex { proof_path, pfsys } => match pfsys {
-            ProofSystem::IPA => {
-                unimplemented!()
+        }
+        Commands::PrintProofHex { proof_path } => {
+            let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
+            for instance in proof.instances {
+                println!("{:?}", instance);
             }
-            ProofSystem::KZG => {
-                let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
-                for instance in proof.instances {
-                    println!("{:?}", instance);
-                }
-                println!("{}", hex::encode(proof.proof))
-            }
-        },
+            println!("{}", hex::encode(proof.proof))
+        }
     }
     Ok(())
 }
