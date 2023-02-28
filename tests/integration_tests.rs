@@ -48,7 +48,7 @@ const TESTS_AGGR: [&str; 12] = [
     "1l_flatten",
     "1l_average",
     "1l_reshape",
-    "1l_padding",
+    "1l_pad",
     "1l_sigmoid",
     "1l_sqrt",
     "1l_leakyrelu",
