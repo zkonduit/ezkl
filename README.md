@@ -46,7 +46,8 @@ Note that the library requires a nightly version of the rust toolchain. You can 
 rustup override set nightly         
 ```
 
-IF you want to 
+Note that if you want to generate EVM verifiers this might require a local [solc](https://docs.soliditylang.org/en/v0.8.17/installing-solidity.html) installation.
+
 
 ### docs 📖
 
