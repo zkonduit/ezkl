@@ -28,7 +28,7 @@ const TESTS: [&str; 16] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
-    "1l_padding",
+    "1l_pad",
     "1l_reshape",
     "1l_sigmoid",
     "1l_sqrt",

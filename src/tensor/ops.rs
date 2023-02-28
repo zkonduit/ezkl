@@ -795,7 +795,7 @@ pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 3, 3],
 /// ).unwrap();
-/// let result = pad::<i32>(x, (1, 1)).unwrap();
+/// let result = pad::<i32>(&x, (1, 1)).unwrap();
 /// let expected = Tensor::<i32>::new(
 ///     Some(&[0, 0, 0, 0, 0, 0, 5, 2, 3, 0, 0, 0, 4, -1, 0, 0, 3, 1, 6, 0, 0, 0, 0, 0, 0]),
 ///     &[1, 5, 5],
