@@ -46,6 +46,8 @@ Note that the library requires a nightly version of the rust toolchain. You can 
 rustup override set nightly         
 ```
 
+IF you want to 
+
 ### docs 📖
 
 Use `cargo doc --open` to compile and open the docs in your default browser.
@@ -118,7 +120,7 @@ ezkl -K=17 --bits=16 prove --transcript=poseidon --strategy=accum -D ./examples/
 
 ```bash
 # Aggregate -> generates aggregate proof and also (mock)-verifies + verifies natively as sanity check
-ezkl -K=20 --bits=16 aggregate --transcript=evm -M ./examples/onnx/1l_relu/network.onnx --aggregation-snarks=1l_relu.pf --aggregation-vk-paths 1l_relu.vk --vk-path aggr_1l_relu.vk --proof-path aggr_1l_relu.pf --params-path=kzg.params
+ezkl -K=20 --bits=16 aggregate --app-logrows=17 --transcript=evm -M ./examples/onnx/1l_relu/network.onnx --aggregation-snarks=1l_relu.pf --aggregation-vk-paths 1l_relu.vk --vk-path aggr_1l_relu.vk --proof-path aggr_1l_relu.pf --params-path=kzg.params
 ``` 
 
 ```bash
