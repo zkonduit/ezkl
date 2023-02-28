@@ -1,6 +1,8 @@
 use super::*;
 use crate::tensor::ops::nonlinearities::*;
 use crate::{fieldutils::felt_to_i32, fieldutils::i32_to_felt};
+use halo2_proofs::circuit::AssignedCell;
+use halo2_proofs::plonk::Assigned;
 use halo2_proofs::{
     arithmetic::{Field, FieldExt},
     circuit::{Layouter, Value},
@@ -288,20 +290,25 @@ impl<F: FieldExt + TensorType> Config<F> {
                 |mut region| {
                     self.qlookup.enable(&mut region, 0)?;
 
-                    let w = self.input.assign(&mut region, 0, values)?;
-
-                    let mut res: Vec<i32> = vec![];
-                    let _ = Tensor::from(w.iter().map(|acaf| (*acaf).value_field()).map(|vaf| {
+                    let w: Tensor<AssignedCell<F, F>> =
+                        self.input.assign(&mut region, 0, values)?;
+                    // convert assigned cells to Value<Assigned<F>> so we can extract the inner field element
+                    let w_vaf: Tensor<Value<Assigned<F>>> = w.map(|acaf| (acaf).value_field());
+                    // finally convert to vector of integers
+                    let mut integer_evals: Vec<i32> = vec![];
+                    let _ = w_vaf.map(|vaf| {
+                        // we have to push to an externally created vector or else vaf.map() returns an evaluation wrapped in Value<> (which we don't want)
                         vaf.map(|f| {
-                            res.push(felt_to_i32(f.evaluate()));
+                            integer_evals.push(felt_to_i32(f.evaluate()));
                         })
-                    }));
-
-                    // for key generation res will be empty and we need to return a set of unassigned values
-                    let output: Tensor<Value<F>> = match res.len() {
+                    });
+                    // for key generation integer_evals will be empty and we need to return a set of unassigned values
+                    let output: Tensor<Value<F>> = match integer_evals.len() {
+                        // if empty return an unknown val
                         0 => w.map(|_| Value::unknown()),
+                        // if not empty apply the nonlinearity !
                         _ => {
-                            let mut x = res.into_iter().into();
+                            let mut x = integer_evals.into_iter().into();
                             for nl in self.table.borrow().nonlinearities.clone() {
                                 x = nl.f(x);
                             }
