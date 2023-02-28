@@ -553,7 +553,7 @@ impl Node {
 
                         let padding_len = pad_node.pads.len();
 
-                        // we only support symmetrical padding that affects the last 2 (height and width params)
+                        // we only support symmetrical padding that affects the last 2 dims (height and width params)
                         for (i, pad_params) in pad_node.pads.iter().enumerate() {
                             if (i < padding_len - 2) && ((pad_params.0 != 0) || (pad_params.1 != 0))
                             {
