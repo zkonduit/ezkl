@@ -80,6 +80,19 @@ jobs:
       - name: Mock proving tests (public outputs)
         run: cargo test --release --verbose tests::forward_pass_
 
+  render-circuit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+
+      - name: Mock proving tests (public outputs)
+        run: cargo test --release --verbose tests::render_circuit_
+
   mock-proving-tests:
     runs-on: ubuntu-latest-32-cores
     steps:

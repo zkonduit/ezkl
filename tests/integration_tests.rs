@@ -110,7 +110,15 @@ macro_rules! test_func {
             use crate::mock_public_params;
             use crate::forward_pass;
             use crate::kzg_prove_and_verify;
+            use crate::render_circuit;
+
             seq!(N in 0..=14 {
+
+            #(#[test_case(TESTS[N])])*
+            fn render_circuit_(test: &str) {
+                render_circuit(test.to_string());
+            }
+
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
                 mock(test.to_string());
@@ -281,8 +289,25 @@ fn forward_pass(example_name: String) {
             format!("./examples/onnx/{}/input_forward.json", example_name).as_str(),
             "-M",
             format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-            // "-K",
-            // "2",  //causes failure
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+// Mock prove (fast, but does not cover some potential issues)
+fn render_circuit(example_name: String) {
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "mock",
+            "-D",
+            format!("./examples/onnx/{}/input.json", example_name).as_str(),
+            "-M",
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+            "-O",
+            format!("./examples/onnx/{}/render.png", example_name).as_str(),
         ])
         .status()
         .expect("failed to execute process");
@@ -300,8 +325,6 @@ fn mock(example_name: String) {
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
             "-M",
             format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-            // "-K",
-            // "2",  //causes failure
         ])
         .status()
         .expect("failed to execute process");
@@ -320,8 +343,6 @@ fn mock_public_inputs(example_name: String) {
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
             "-M",
             format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-            // "-K",
-            // "2",  //causes failure
         ])
         .status()
         .expect("failed to execute process");
@@ -340,8 +361,6 @@ fn mock_public_params(example_name: String) {
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
             "-M",
             format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-            // "-K",
-            // "2",  //causes failure
         ])
         .status()
         .expect("failed to execute process");

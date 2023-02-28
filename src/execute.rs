@@ -6,7 +6,7 @@ use crate::pfsys::evm::aggregation::{
 };
 use crate::pfsys::evm::single::gen_evm_verifier;
 use crate::pfsys::evm::{evm_verify, DeploymentCode};
-use crate::pfsys::{create_keys, load_params_kzg, load_vk, Snark};
+use crate::pfsys::{create_keys, load_params_kzg, load_vk, prepare_model_circuit, Snark};
 use crate::pfsys::{
     create_proof_circuit, gen_srs, prepare_data, prepare_model_circuit_and_public_input,
     save_params_kzg, save_vk, verify_proof_circuit,
@@ -25,6 +25,7 @@ use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 use log::{info, trace};
+use plotters::prelude::*;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
@@ -150,6 +151,27 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         Commands::Table { model: _ } => {
             let om = Model::from_ezkl_conf(cli)?;
             println!("{}", Table::new(om.nodes.flatten()));
+        }
+        Commands::RenderCircuit {
+            ref data,
+            model: _,
+            ref output,
+        } => {
+            let data = prepare_data(data.to_string())?;
+            let circuit = prepare_model_circuit::<Fr>(&data, &cli.args)?;
+            info!("Rendering circuit");
+
+            // Create the area we want to draw on.
+            // We could use SVGBackend if we want to render to .svg instead.
+            // for an overview of how to interpret these plots, see https://zcash.github.io/halo2/user/dev-tools.html
+            let root = BitMapBackend::new(output, (512, 512)).into_drawing_area();
+            root.fill(&TRANSPARENT).unwrap();
+            let root = root.titled("Layout", ("sans-serif", 20))?;
+
+            halo2_proofs::dev::CircuitLayout::default()
+                // We hide labels, else most circuits become impossible to decipher because of overlaid text
+                .show_labels(false)
+                .render(cli.args.logrows, &circuit, &root)?;
         }
         Commands::Forward {
             ref data,
