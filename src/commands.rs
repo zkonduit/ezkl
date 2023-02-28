@@ -301,10 +301,10 @@ pub enum Commands {
         #[arg(long)]
         vk_path: PathBuf,
         /// The path to output to the desired EVM bytecode file (optional)
-        #[arg(long, required_if_eq("transcript", "evm"))]
+        #[arg(long)]
         deployment_code_path: Option<PathBuf>,
         /// The path to output the Solidity code
-        #[arg(long, required_if_eq("transcript", "evm"))]
+        #[arg(long)]
         sol_code_path: Option<PathBuf>,
         /// The [ProofSystem] we'll be using.
         #[arg(
