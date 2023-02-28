@@ -632,7 +632,14 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
 
 fn build_ezkl() {
     let status = Command::new("cargo")
-        .args(["build", "--release", "--bin", "ezkl"])
+        .args([
+            "build",
+            "--release",
+            "--features",
+            "render",
+            "--bin",
+            "ezkl",
+        ])
         .status()
         .expect("failed to execute process");
     assert!(status.success());

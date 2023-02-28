@@ -6,7 +6,9 @@ use crate::pfsys::evm::aggregation::{
 };
 use crate::pfsys::evm::single::gen_evm_verifier;
 use crate::pfsys::evm::{evm_verify, DeploymentCode};
-use crate::pfsys::{create_keys, load_params_kzg, load_vk, prepare_model_circuit, Snark};
+#[cfg(feature = "render")]
+use crate::pfsys::prepare_model_circuit;
+use crate::pfsys::{create_keys, load_params_kzg, load_vk, Snark};
 use crate::pfsys::{
     create_proof_circuit, gen_srs, prepare_data, prepare_model_circuit_and_public_input,
     save_params_kzg, save_vk, verify_proof_circuit,
@@ -25,6 +27,7 @@ use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 use log::{info, trace};
+#[cfg(feature = "render")]
 use plotters::prelude::*;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
@@ -152,6 +155,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             let om = Model::from_ezkl_conf(cli)?;
             println!("{}", Table::new(om.nodes.flatten()));
         }
+        #[cfg(feature = "render")]
         Commands::RenderCircuit {
             ref data,
             model: _,

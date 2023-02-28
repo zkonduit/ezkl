@@ -193,15 +193,17 @@ impl Model {
     pub fn from_ezkl_conf(cli: Cli) -> Result<Self, Box<dyn Error>> {
         let visibility = VarVisibility::from_args(cli.args.clone())?;
         match cli.command {
-            Commands::Table { model }
-            | Commands::Mock { model, .. }
-            | Commands::RenderCircuit { model, .. } => {
+            Commands::Table { model } | Commands::Mock { model, .. } => {
                 Model::new(model, cli.args, Mode::Table, visibility)
             }
             Commands::CreateEVMVerifier { model, .. }
             | Commands::Prove { model, .. }
             | Commands::Verify { model, .. }
             | Commands::Aggregate { model, .. } => {
+                Model::new(model, cli.args, Mode::Table, visibility)
+            }
+            #[cfg(feature = "render")]
+            Commands::RenderCircuit { model, .. } => {
                 Model::new(model, cli.args, Mode::Table, visibility)
             }
             _ => panic!(),

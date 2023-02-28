@@ -155,6 +155,7 @@ pub enum Commands {
         model: String,
     },
 
+    #[cfg(feature = "render")]
     /// Renders the model circuit to a .png file. For an overview of how to interpret these plots, see https://zcash.github.io/halo2/user/dev-tools.html
     #[command(arg_required_else_help = true)]
     RenderCircuit {
