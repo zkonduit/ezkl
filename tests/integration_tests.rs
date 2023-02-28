@@ -374,7 +374,7 @@ fn kzg_aggr_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=23",
             "aggregate",
             "--pfsys=kzg",
             "-M",
@@ -437,7 +437,7 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=23",
             "aggregate",
             "--pfsys=kzg",
             "-M",

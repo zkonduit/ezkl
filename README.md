@@ -118,12 +118,12 @@ ezkl -K=17 --bits=16 prove --pfsys=kzg --transcript=poseidon --strategy=accum -D
 
 ```bash
 # Aggregate -> generates aggregate proof and also (mock)-verifies + verifies natively as sanity check
-ezkl -K=17 --bits=16 aggregate --transcript=evm -M ./examples/onnx/1l_relu/network.onnx --pfsys=kzg --aggregation-snarks=1l_relu.pf --aggregation-vk-paths 1l_relu.vk --vk-path aggr_1l_relu.vk --proof-path aggr_1l_relu.pf --params-path=kzg.params
+ezkl -K=20 --bits=16 aggregate --transcript=evm -M ./examples/onnx/1l_relu/network.onnx --pfsys=kzg --aggregation-snarks=1l_relu.pf --aggregation-vk-paths 1l_relu.vk --vk-path aggr_1l_relu.vk --proof-path aggr_1l_relu.pf --params-path=kzg.params
 ``` 
 
 ```bash
 # Generate verifier code -> create the EVM verifier code 
-ezkl -K=17 --bits=16 aggregate create-evm-verifier-aggr --pfsys=kzg --deployment-code-path aggr_1l_relu.code --params-path=kzg.params --vk-path aggr_1l_relu.vk
+ezkl -K=17 --bits=16 create-evm-verifier-aggr --pfsys=kzg --deployment-code-path aggr_1l_relu.code --params-path=kzg.params --vk-path aggr_1l_relu.vk
 ```
 
 ```bash

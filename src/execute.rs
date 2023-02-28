@@ -332,7 +332,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                     unimplemented!()
                 }
                 ProofSystem::KZG => {
-                    let params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
+                    let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
+                    params.downsize(cli.args.logrows);
 
                     let mut snarks = vec![];
                     for (proof_path, vk_path) in aggregation_snarks.iter().zip(aggregation_vk_paths)
