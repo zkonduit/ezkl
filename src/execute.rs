@@ -292,6 +292,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             ref aggregation_vk_paths,
             ref vk_path,
             ref params_path,
+            app_logrows,
             transcript,
         } => {
             let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
@@ -304,7 +305,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 )?;
                 let params_app = {
                     let mut params_app = params.clone();
-                    params_app.downsize(cli.args.logrows);
+                    params_app.downsize(app_logrows);
                     params_app
                 };
                 snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(

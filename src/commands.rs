@@ -178,10 +178,13 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
-        /// The path to the desired output file
+        ///the logrows used when generating the snarks we're aggregating
+        #[arg(long)]
+        app_logrows: u32,
+        /// The path to the snarks to aggregate over
         #[arg(long)]
         aggregation_snarks: Vec<PathBuf>,
-        /// The path to load the desired verfication key file
+        /// The path to load the desired verfication key file for the snarks we're aggregating over
         #[arg(long)]
         aggregation_vk_paths: Vec<PathBuf>,
         /// The path to save the desired verfication key file
