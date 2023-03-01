@@ -321,19 +321,21 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             app_logrows,
             transcript,
         } => {
+            // the K used for the aggregation circuit
             let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
             params.downsize(cli.args.logrows);
 
             let mut snarks = vec![];
+            // the K used when generating the application snark proof. we assume K is homogenous across snarks to aggregate
+            let params_app = {
+                let mut params_app = params.clone();
+                params_app.downsize(app_logrows);
+                params_app
+            };
             for (proof_path, vk_path) in aggregation_snarks.iter().zip(aggregation_vk_paths) {
                 let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
                     vk_path.to_path_buf(),
                 )?;
-                let params_app = {
-                    let mut params_app = params.clone();
-                    params_app.downsize(app_logrows);
-                    params_app
-                };
                 snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(
                     proof_path,
                     Some(&params_app),
