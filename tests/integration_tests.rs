@@ -13,12 +13,7 @@ fn init() {
     println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
     build_ezkl();
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "-K=23",
-            "gen-srs",
-            "--pfsys=kzg",
-            "--params-path=kzg.params",
-        ])
+        .args(["-K=23", "gen-srs", "--params-path=kzg.params"])
         .status()
         .expect("failed to execute process");
     assert!(status.success());
@@ -378,7 +373,6 @@ fn kzg_aggr_prove_and_verify(example_name: String) {
             "--bits=16",
             "-K=17",
             "prove",
-            "--pfsys=kzg",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
             "-M",
@@ -397,9 +391,9 @@ fn kzg_aggr_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=23",
             "aggregate",
-            "--pfsys=kzg",
+            "--app-logrows=17",
             "-M",
             format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
             "--aggregation-snarks",
@@ -421,7 +415,6 @@ fn kzg_aggr_prove_and_verify(example_name: String) {
             "--bits=16",
             "-K=17",
             "verify-aggr",
-            "--pfsys=kzg",
             "--proof-path",
             format!("kzg_aggr_{}.pf", example_name).as_str(),
             "--vk-path",
@@ -441,7 +434,6 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
             "--bits=16",
             "-K=17",
             "prove",
-            "--pfsys=kzg",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
             "-M",
@@ -460,9 +452,9 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=23",
             "aggregate",
-            "--pfsys=kzg",
+            "--app-logrows=17",
             "-M",
             format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
             "--aggregation-snarks",
@@ -484,7 +476,6 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
             "--bits=16",
             "-K=17",
             "create-evm-verifier-aggr",
-            "--pfsys=kzg",
             "--deployment-code-path",
             format!("kzg_aggr_{}.code", example_name).as_str(),
             "--params-path=kzg.params",
@@ -499,7 +490,6 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
             "--bits=16",
             "-K=17",
             "verify-evm",
-            "--pfsys=kzg",
             "--proof-path",
             format!("kzg_aggr_{}.pf", example_name).as_str(),
             "--deployment-code-path",
@@ -517,7 +507,6 @@ fn kzg_prove_and_verify(example_name: String) {
             "--bits=16",
             "-K=17",
             "prove",
-            "--pfsys=kzg",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
             "-M",
@@ -538,7 +527,6 @@ fn kzg_prove_and_verify(example_name: String) {
             "--bits=16",
             "-K=17",
             "verify",
-            "--pfsys=kzg",
             "-M",
             format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
             "--proof-path",
@@ -560,7 +548,6 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
             "--bits=16",
             "-K=17",
             "prove",
-            "--pfsys=kzg",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
             "-M",
@@ -586,7 +573,6 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
         "--bits=16",
         "-K=17",
         "create-evm-verifier",
-        "--pfsys=kzg",
         "-D",
         input_arg.as_str(),
         "-M",
@@ -616,7 +602,6 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
         "--bits=16",
         "-K=17",
         "verify-evm",
-        "--pfsys=kzg",
         "--proof-path",
         pf_arg.as_str(),
         "--deployment-code-path",
