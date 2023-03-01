@@ -216,11 +216,13 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => {
             let data = prepare_data(data.to_string())?;
 
-            //let _ = (data, vk_path, params_path, deployment_code_path);
             let (_, public_inputs) = prepare_model_circuit_and_public_input::<Fr>(&data, &cli)?;
             let num_instance = public_inputs.iter().map(|x| x.len()).collect();
             let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
-            params.downsize(cli.args.logrows);
+            if cli.args.logrows < params.k() {
+                params.downsize(cli.args.logrows);
+            }
+
             let vk =
                 load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path.to_path_buf())?;
             trace!("params computed");
@@ -273,7 +275,9 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
 
             let (circuit, public_inputs) = prepare_model_circuit_and_public_input(&data, &cli)?;
             let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
-            params.downsize(cli.args.logrows);
+            if cli.args.logrows < params.k() {
+                params.downsize(cli.args.logrows);
+            }
             let pk =
                 create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
                     .map_err(Box::<dyn Error>::from)?;
@@ -323,15 +327,17 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => {
             // the K used for the aggregation circuit
             let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
-            params.downsize(cli.args.logrows);
+            if cli.args.logrows < params.k() {
+                params.downsize(cli.args.logrows);
+            }
 
             let mut snarks = vec![];
             // the K used when generating the application snark proof. we assume K is homogenous across snarks to aggregate
-            let params_app = {
-                let mut params_app = params.clone();
+            let mut params_app = params.clone();
+            if app_logrows < params.k() {
                 params_app.downsize(app_logrows);
-                params_app
-            };
+            }
+
             for (proof_path, vk_path) in aggregation_snarks.iter().zip(aggregation_vk_paths) {
                 let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
                     vk_path.to_path_buf(),
@@ -373,7 +379,9 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             transcript,
         } => {
             let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path)?;
-            params.downsize(cli.args.logrows);
+            if cli.args.logrows < params.k() {
+                params.downsize(cli.args.logrows);
+            }
 
             let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
 
@@ -396,7 +404,9 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             transcript,
         } => {
             let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path)?;
-            params.downsize(cli.args.logrows);
+            if cli.args.logrows < params.k() {
+                params.downsize(cli.args.logrows);
+            }
 
             let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
 
