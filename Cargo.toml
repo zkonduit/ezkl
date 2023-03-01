@@ -65,7 +65,7 @@ required-features = ["ezkl"]
 
 [features]
 default = ["ezkl"]
-dev-graph = ["halo2_proofs/dev-graph", "plotters"]
+render = ["halo2_proofs/dev-graph", "plotters"]
 tensorflow = ["dep:tensorflow"]
 onnx = ["dep:tract-onnx"]
 ezkl = ["onnx", "serde", "serde_json", "log", "colog", "tabled"]

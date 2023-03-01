@@ -202,6 +202,10 @@ impl Model {
             | Commands::Aggregate { model, .. } => {
                 Model::new(model, cli.args, Mode::Table, visibility)
             }
+            #[cfg(feature = "render")]
+            Commands::RenderCircuit { model, .. } => {
+                Model::new(model, cli.args, Mode::Table, visibility)
+            }
             _ => panic!(),
         }
     }
