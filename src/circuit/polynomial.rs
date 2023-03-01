@@ -18,6 +18,7 @@ pub enum Op {
     Identity,
     Reshape(Vec<usize>),
     Flatten(Vec<usize>),
+    Pad(usize, usize),
     Add,
     Sub,
     Sum,
@@ -50,6 +51,7 @@ impl fmt::Display for Op {
             Op::Identity => write!(f, "identity"),
             Op::Reshape(new_dims) => write!(f, "reshape to {:?}", new_dims),
             Op::Flatten(new_dims) => write!(f, "flatten to {:?}", new_dims),
+            Op::Pad(dim1, dim2) => write!(f, "padding: ({:?}, {:?})", dim1, dim2),
             Op::Add => write!(f, "add"),
             Op::Sub => write!(f, "sub"),
             Op::Sum => write!(f, "sum"),
@@ -104,6 +106,12 @@ impl Op {
                 let mut t = inputs[0].clone();
                 t.reshape(new_dims);
                 Ok(t)
+            }
+            Op::Pad(dim1, dim2) => {
+                if 1 != inputs.len() {
+                    return Err(TensorError::DimMismatch("pad inputs".to_string()));
+                }
+                pad(&inputs[0], (*dim1, *dim2))
             }
             Op::Add => add(&inputs),
             Op::Sub => sub(&inputs),
