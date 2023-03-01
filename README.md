@@ -113,6 +113,7 @@ cargo run --release --bin ezkl -- table -M ./examples/onnx/1l_relu/network.onnx
 
 ```
 
+
 #### verifying with the EVM ◊
 
 Note that the above prove and verify stats can also be run with an EVM verifier. This can be done by generating a verifier smart contract after generating the proof
@@ -225,6 +226,33 @@ The `.onnx` file can be generated using pytorch or tensorflow. The data json fil
 For examples of such files see `examples/onnx_models`.
 
 To run a simple example using the cli see **python and cli tutorial** above.
+
+If the above commands get too heavy and it becomes difficult to track parameters across commands; `ezkl` also supports loading global arguments (those specified before a subcommand) from a `.json` file. This can be done using the `RUNARGS` environment variable. For instance: 
+
+```bash
+RUNARGS=/path/to/args.json ezkl subcommand --subcommand-params... 
+```
+For an example of such a file see `examples/default_run_args.json`: 
+```json
+{
+    "tolerance": 0,
+    "scale": 7,
+    "bits": 11,
+    "logrows": 17,
+    "public_inputs": false,
+    "public_outputs": true,
+    "public_params": false,
+    "max_rotations": 512
+}
+```
+
+Note that command-wide arguments can be specified using the `EZKLCONF` environment variable; which supercedes `RUNARGS` in priority ! 
+This json includes both global level arguments _and_ subcommand specific arguments. Usage is thus as such: 
+```bash
+EZKLCONF=/path/to/fullconfig.json ezkl 
+```
+
+
 
 
 ## benchmarks ⏳
