@@ -99,36 +99,38 @@ impl<F: FieldExt + TensorType> ModelVars<F> {
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         max_rotations: usize,
-        advice_dims: (usize, usize),
-        fixed_dims: (usize, usize),
-        instance_dims: (usize, Vec<Vec<usize>>),
+        // len is max number of advice, and each elem is the max advice size at that index
+        advice_dims: Vec<usize>,
+        // len is max number of fixed, and each elem is the max fixed size at that index
+        fixed_dims: Vec<usize>,
+        instance_dims: Vec<Vec<usize>>,
     ) -> Self {
-        let advices = (0..advice_dims.0)
-            .map(|_| {
+        let advices = (0..advice_dims.len())
+            .map(|i| {
                 VarTensor::new_advice(
                     cs,
                     logrows,
-                    advice_dims.1,
-                    vec![advice_dims.1],
+                    advice_dims[i],
+                    vec![advice_dims[i]],
                     true,
                     max_rotations,
                 )
             })
             .collect_vec();
-        let fixed = (0..fixed_dims.0)
-            .map(|_| {
+        let fixed = (0..fixed_dims.len())
+            .map(|i| {
                 VarTensor::new_fixed(
                     cs,
                     logrows,
-                    fixed_dims.1,
-                    vec![fixed_dims.1],
+                    fixed_dims[i],
+                    vec![fixed_dims[i]],
                     true,
                     max_rotations,
                 )
             })
             .collect_vec();
-        let instances = (0..instance_dims.0)
-            .map(|i| ValTensor::new_instance(cs, instance_dims.1[i].clone(), true))
+        let instances = (0..instance_dims.len())
+            .map(|i| ValTensor::new_instance(cs, instance_dims[i].clone(), true))
             .collect_vec();
         ModelVars {
             advices,

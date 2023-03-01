@@ -28,6 +28,7 @@ use itertools::Itertools;
 use log::{debug, info, trace};
 use std::cell::RefCell;
 use std::cmp::max;
+use std::cmp::min;
 use std::collections::{BTreeMap, HashSet};
 use std::error::Error;
 use std::path::Path;
@@ -705,33 +706,9 @@ impl Model {
             .collect_vec()
     }
 
-    /// Max number of inlets or outlets to a node
-    pub fn max_node_size(&self) -> usize {
-        max(
-            self.nodes
-                .flatten()
-                .iter()
-                .map(|e| {
-                    e.in_dims
-                        .iter()
-                        .map(|dims| dims.iter().product::<usize>())
-                        .max()
-                        .unwrap()
-                })
-                .max()
-                .unwrap(),
-            self.nodes
-                .flatten()
-                .iter()
-                .map(|e| e.out_dims.iter().product())
-                .max()
-                .unwrap(),
-        )
-    }
-
-    /// Max number of parameters (i.e trainable weights) across the computational graph
-    pub fn max_node_params(&self) -> usize {
-        let mut maximum_number_inputs = 0;
+    /// Max parameter sizes (i.e trainable weights) across the computational graph
+    pub fn max_params_poly(&self) -> Vec<usize> {
+        let mut maximum_sizes = vec![];
         for (_, bucket_nodes) in self.nodes.0.iter() {
             let fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
@@ -748,15 +725,66 @@ impl Model {
                 .unique()
                 .collect_vec();
 
-            maximum_number_inputs = max(maximum_number_inputs, params.len());
+            for (i, id) in params.iter().enumerate() {
+                let param_size = self.nodes.filter(*id).out_dims.iter().product();
+                if i >= maximum_sizes.len() {
+                    // we've already ascertained this is a param node so out_dims = parameter shape
+                    maximum_sizes.push(param_size)
+                } else {
+                    maximum_sizes[i] = max(maximum_sizes[i], param_size);
+                }
+            }
         }
         // add 1 for layer output
-        maximum_number_inputs + 1
+        maximum_sizes
     }
 
     /// Maximum number of input variables in fused layers
-    pub fn max_node_vars_fused(&self) -> usize {
-        let mut maximum_number_inputs = 0;
+    pub fn max_vars_and_params_poly(&self) -> Vec<usize> {
+        let mut maximum_sizes = vec![];
+        for (_, bucket_nodes) in self.nodes.0.iter() {
+            let fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
+                .iter()
+                .filter(|(_, n)| n.opkind.is_poly())
+                .collect();
+
+            let fused_inputs = fused_ops
+                .iter()
+                .flat_map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
+                // here we remove intermediary calculation / nodes within the layer
+                .filter(|id| !fused_ops.contains_key(id))
+                .unique()
+                .collect_vec();
+
+            let mut max_id = 0;
+            for (i, id) in fused_inputs.iter().enumerate() {
+                let input_size = self.nodes.filter(*id).out_dims.iter().product();
+                max_id = max(max_id, *id);
+                if i >= maximum_sizes.len() {
+                    // we've already ascertained this is the input node so out_dims = input shape
+                    maximum_sizes.push(input_size)
+                } else {
+                    maximum_sizes[i] = max(maximum_sizes[i], input_size);
+                }
+            }
+
+            // handle output variables
+            let output_size = self.nodes.filter(max_id).out_dims.iter().product();
+            if (fused_inputs.len() + 1) >= maximum_sizes.len() {
+                maximum_sizes.push(output_size)
+            } else {
+                let output_idx = maximum_sizes.clone().len() - 1;
+                // set last entry to be the output column
+                maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
+            }
+        }
+        // add 1 for layer output
+        maximum_sizes
+    }
+
+    /// Maximum of non params variable sizes in fused layers
+    pub fn max_vars_poly(&self) -> Vec<usize> {
+        let mut maximum_sizes = vec![];
         for (_, bucket_nodes) in self.nodes.0.iter() {
             let fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
@@ -773,67 +801,107 @@ impl Model {
                 .unique()
                 .collect_vec();
 
-            maximum_number_inputs = max(maximum_number_inputs, fused_inputs.len());
+            let mut max_id = 0;
+            for (i, id) in fused_inputs.iter().enumerate() {
+                let input_size = self.nodes.filter(*id).out_dims.iter().product();
+                max_id = max(max_id, *id);
+                if i >= maximum_sizes.len() {
+                    // we've already ascertained this is the input node so out_dims = input shape
+                    maximum_sizes.push(input_size)
+                } else {
+                    maximum_sizes[i] = max(maximum_sizes[i], input_size);
+                }
+            }
+
+            // handle output variables
+            let output_size = self.nodes.filter(max_id).out_dims.iter().product();
+            if (fused_inputs.len() + 1) >= maximum_sizes.len() {
+                maximum_sizes.push(output_size)
+            } else {
+                let output_idx = maximum_sizes.clone().len() - 1;
+                // set last entry to be the output column
+                maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
+            }
         }
         // add 1 for layer output
-        maximum_number_inputs + 1
+        maximum_sizes
     }
 
-    /// Maximum number of input variables in non-fused layers
-    pub fn max_node_vars_non_fused(&self) -> usize {
-        let mut maximum_number_inputs = 0;
+    /// Maximum variable sizes in non-fused layers
+    pub fn max_vars_lookup(&self) -> Vec<usize> {
+        let mut maximum_sizes = vec![];
         for (_, bucket_nodes) in self.nodes.0.iter() {
-            let non_fused_ops = bucket_nodes
+            let non_fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
-                .filter(|(_, n)| !n.opkind.is_poly())
-                .map(|(_, n)| n.inputs.len())
-                .max()
-                .unwrap_or(0);
+                .filter(|(_, n)| n.opkind.is_lookup())
+                .collect();
 
-            maximum_number_inputs = max(maximum_number_inputs, non_fused_ops);
+            for (_, n) in non_fused_ops {
+                for (j, dims) in n.in_dims.iter().enumerate() {
+                    let input_size = dims.iter().product();
+                    if j >= maximum_sizes.len() {
+                        maximum_sizes.push(input_size)
+                    } else {
+                        maximum_sizes[j] = max(maximum_sizes[j], input_size);
+                    }
+                }
+                // handle output variables
+                let output_size = n.out_dims.iter().product();
+                if (n.in_dims.len() + 1) > maximum_sizes.len() {
+                    maximum_sizes.push(output_size)
+                } else {
+                    let output_idx = maximum_sizes.clone().len() - 1;
+                    // set last entry to be the output column
+                    maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
+                }
+            }
         }
-        // add 1 for layer output
-        maximum_number_inputs + 1
+        maximum_sizes
     }
 
     /// Number of instances used by the circuit
-    pub fn num_instances(&self) -> (usize, Vec<Vec<usize>>) {
+    pub fn instance_shapes(&self) -> Vec<Vec<usize>> {
         // for now the number of instances corresponds to the number of graph / model outputs
-        let mut num_instances = 0;
         let mut instance_shapes = vec![];
         if self.visibility.input.is_public() {
-            num_instances += self.num_inputs();
             instance_shapes.extend(self.input_shapes());
         }
         if self.visibility.output.is_public() {
-            num_instances += self.num_outputs();
             instance_shapes.extend(self.output_shapes());
         }
-        (num_instances, instance_shapes)
+        instance_shapes
     }
 
     /// Number of advice used by the circuit
-    pub fn num_advice(&self) -> usize {
-        // TODO: extract max number of params in a given fused layer
-        if self.visibility.params.is_public() {
-            // this is the maximum of variables in non-fused layer, and the maximum of variables (non-params) in fused layers
-            max(self.max_node_vars_non_fused(), self.max_node_vars_fused())
+    pub fn advice_shapes(&self) -> Vec<usize> {
+        // max sizes in lookup
+        let max_lookup_sizes = self.max_vars_lookup();
+        let max_poly_sizes = if self.visibility.params.is_public() {
+            // max sizes for poly inputs
+            self.max_vars_poly()
         } else {
-            // this is the maximum of variables in non-fused layer, and the maximum of variables (non-params) in fused layers
-            //  + the max number of params in a fused layer
-            max(
-                self.max_node_vars_non_fused(),
-                self.max_node_params() + self.max_node_vars_fused(),
-            )
+            // max sizes for poly inputs + params
+            self.max_vars_and_params_poly()
+        };
+
+        let mut advice_shapes = if max_poly_sizes.len() >= max_lookup_sizes.len() {
+            max_poly_sizes.clone()
+        } else {
+            max_lookup_sizes.clone()
+        };
+
+        for i in 0..min(max_poly_sizes.len(), max_lookup_sizes.len()) {
+            advice_shapes[i] = max(max_poly_sizes[i], max_lookup_sizes[i]);
         }
+        advice_shapes
     }
 
-    /// Number of fixed columns used by the circuit
-    pub fn num_fixed(&self) -> usize {
-        let mut num_fixed = 0;
+    /// Maximum sizes of fixed columns (and their sizes) used by the circuit
+    pub fn fixed_shapes(&self) -> Vec<usize> {
+        let mut fixed_shapes = vec![];
         if self.visibility.params.is_public() {
-            num_fixed += self.max_node_params();
+            fixed_shapes = self.max_params_poly();
         }
-        num_fixed
+        fixed_shapes
     }
 }
