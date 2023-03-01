@@ -743,23 +743,21 @@ impl Model {
     pub fn max_vars_and_params_poly(&self) -> Vec<usize> {
         let mut maximum_sizes = vec![];
         for (_, bucket_nodes) in self.nodes.0.iter() {
-            let fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
+            let poly_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
                 .filter(|(_, n)| n.opkind.is_poly())
                 .collect();
 
-            let fused_inputs = fused_ops
+            let inputs = poly_ops
                 .iter()
                 .flat_map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
                 // here we remove intermediary calculation / nodes within the layer
-                .filter(|id| !fused_ops.contains_key(id))
+                .filter(|id| !poly_ops.contains_key(id))
                 .unique()
                 .collect_vec();
 
-            let mut max_id = 0;
-            for (i, id) in fused_inputs.iter().enumerate() {
+            for (i, id) in inputs.iter().enumerate() {
                 let input_size = self.nodes.filter(*id).out_dims.iter().product();
-                max_id = max(max_id, *id);
                 if i >= maximum_sizes.len() {
                     // we've already ascertained this is the input node so out_dims = input shape
                     maximum_sizes.push(input_size)
@@ -769,13 +767,20 @@ impl Model {
             }
 
             // handle output variables
-            let output_size = self.nodes.filter(max_id).out_dims.iter().product();
-            if fused_inputs.len() == maximum_sizes.len() {
-                maximum_sizes.push(output_size)
-            } else {
-                let output_idx = fused_inputs.len();
-                // set last entry to be the output column
-                maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
+            let max_id = poly_ops.keys().max();
+            match max_id {
+                Some(m) => {
+                    let output_size = self.nodes.filter(**m).out_dims.iter().product();
+                    if inputs.len() == maximum_sizes.len() {
+                        maximum_sizes.push(output_size)
+                    } else {
+                        let output_idx = inputs.len();
+                        // set last entry to be the output column
+                        maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
+                    }
+                }
+                // None if the bucket is empty
+                None => {}
             }
         }
         // add 1 for layer output
@@ -791,7 +796,7 @@ impl Model {
                 .filter(|(_, n)| n.opkind.is_poly())
                 .collect();
 
-            let fused_inputs = fused_ops
+            let inputs = fused_ops
                 .iter()
                 .flat_map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
                 // here we remove intermediary calculation / nodes within the layer
@@ -801,10 +806,8 @@ impl Model {
                 .unique()
                 .collect_vec();
 
-            let mut max_id = 0;
-            for (i, id) in fused_inputs.iter().enumerate() {
+            for (i, id) in inputs.iter().enumerate() {
                 let input_size = self.nodes.filter(*id).out_dims.iter().product();
-                max_id = max(max_id, *id);
                 if i >= maximum_sizes.len() {
                     // we've already ascertained this is the input node so out_dims = input shape
                     maximum_sizes.push(input_size)
@@ -814,13 +817,20 @@ impl Model {
             }
 
             // handle output variables
-            let output_size = self.nodes.filter(max_id).out_dims.iter().product();
-            if (fused_inputs.len()) == maximum_sizes.len() {
-                maximum_sizes.push(output_size)
-            } else {
-                let output_idx = fused_inputs.len();
-                // set last entry to be the output column
-                maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
+            let max_id = fused_ops.keys().max();
+            match max_id {
+                Some(m) => {
+                    let output_size = self.nodes.filter(**m).out_dims.iter().product();
+                    if inputs.len() == maximum_sizes.len() {
+                        maximum_sizes.push(output_size)
+                    } else {
+                        let output_idx = inputs.len();
+                        // set last entry to be the output column
+                        maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
+                    }
+                }
+                // None if the bucket is empty
+                None => {}
             }
         }
         // add 1 for layer output
