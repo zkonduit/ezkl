@@ -53,7 +53,7 @@ After which you may build the library
 cargo build --release
 ```
 
-A folder `./target/release` will be generated. Add this folder the your PATH environment variable to call `ezkl` from CLI.
+A folder `./target/release` will be generated. Add this folder to your PATH environment variable to call `ezkl` from the CLI.
 
 ```bash
 # For UNIX like systems
