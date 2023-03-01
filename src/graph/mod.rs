@@ -87,23 +87,20 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let model = Model::from_arg().expect("model should load from args");
 
-        let row_cap = model.max_node_size();
-        // TODO: extract max number of params in a given fused layer
-        let num_advice = model.num_advice();
-        let num_fixed = model.num_fixed();
+        let advice_shapes = model.advice_shapes();
+        let fixed_shapes = model.fixed_shapes();
 
         // for now the number of instances corresponds to the number of graph / model outputs
-        let (num_instances, instance_shapes) = model.num_instances();
+        let instance_shapes = model.instance_shapes();
 
         let mut vars = ModelVars::new(
             cs,
             model.run_args.logrows as usize,
             model.run_args.max_rotations,
-            (num_advice, row_cap),
-            (num_fixed, row_cap),
-            (num_instances, instance_shapes),
+            advice_shapes,
+            fixed_shapes,
+            instance_shapes.clone(),
         );
-        info!("row cap: {:?}", row_cap);
         info!(
             "number of advices used: {:?}",
             vars.advices.iter().map(|a| a.num_cols()).sum::<usize>()
@@ -112,7 +109,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
             "number of fixed used: {:?}",
             vars.fixed.iter().map(|a| a.num_cols()).sum::<usize>()
         );
-        info!("number of instances used: {:?}", num_instances);
+        info!("number of instances used: {:?}", instance_shapes.len());
         model.configure(cs, &mut vars).unwrap()
     }
 

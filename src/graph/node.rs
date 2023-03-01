@@ -1299,7 +1299,7 @@ impl Node {
             node = Self::rm_redundant_3d_channels(node)?;
         };
 
-        if !(node.out_dims.len() == 3) {
+        if node.out_dims.len() != 3 {
             return Err(Box::new(GraphError::InvalidDims(
                 node.idx,
                 node.clone().opkind,
