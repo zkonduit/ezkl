@@ -770,10 +770,10 @@ impl Model {
 
             // handle output variables
             let output_size = self.nodes.filter(max_id).out_dims.iter().product();
-            if (fused_inputs.len() + 1) >= maximum_sizes.len() {
+            if fused_inputs.len() == maximum_sizes.len() {
                 maximum_sizes.push(output_size)
             } else {
-                let output_idx = maximum_sizes.clone().len() - 1;
+                let output_idx = fused_inputs.len();
                 // set last entry to be the output column
                 maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
             }
@@ -815,10 +815,10 @@ impl Model {
 
             // handle output variables
             let output_size = self.nodes.filter(max_id).out_dims.iter().product();
-            if (fused_inputs.len() + 1) >= maximum_sizes.len() {
+            if (fused_inputs.len()) == maximum_sizes.len() {
                 maximum_sizes.push(output_size)
             } else {
-                let output_idx = maximum_sizes.clone().len() - 1;
+                let output_idx = fused_inputs.len();
                 // set last entry to be the output column
                 maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
             }
@@ -847,10 +847,10 @@ impl Model {
                 }
                 // handle output variables
                 let output_size = n.out_dims.iter().product();
-                if (n.in_dims.len() + 1) > maximum_sizes.len() {
+                if (n.in_dims.len()) == maximum_sizes.len() {
                     maximum_sizes.push(output_size)
                 } else {
-                    let output_idx = maximum_sizes.clone().len() - 1;
+                    let output_idx = n.in_dims.len();
                     // set last entry to be the output column
                     maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
                 }

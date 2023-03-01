@@ -651,7 +651,7 @@ pub fn sumpool<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     let (output_channels, kernel_height, kernel_width) =
         (image_channels, kernel_shape.0, kernel_shape.1);
 
-    let padded_image = pad::<T>(&image, padding)?;
+    let padded_image = pad::<T>(image, padding)?;
 
     let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
     let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
@@ -714,7 +714,7 @@ pub fn max_pool2d<T: TensorType>(
     let input_channels = image_dims[0];
     let (image_height, image_width) = (image_dims[1], image_dims[2]);
 
-    let padded_image = pad::<T>(&image, padding)?;
+    let padded_image = pad::<T>(image, padding)?;
 
     let horz_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
     let vert_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
