@@ -24,7 +24,7 @@ fn init() {
     assert!(status.success());
 }
 
-const TESTS: [&str; 16] = [
+const TESTS: [&str; 17] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -44,7 +44,7 @@ const TESTS: [&str; 16] = [
     "4l_relu_conv_fc",
 ];
 
-const TESTS_AGGR: [&str; 12] = [
+const TESTS_AGGR: [&str; 13] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -89,7 +89,7 @@ macro_rules! test_func_aggr {
             use crate::TESTS_AGGR;
             use test_case::test_case;
             use crate::kzg_aggr_prove_and_verify;
-            seq!(N in 0..=11 {
+            seq!(N in 0..=12 {
 
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_prove_and_verify_(test: &str) {
@@ -117,7 +117,7 @@ macro_rules! test_func {
             use crate::kzg_prove_and_verify;
             use crate::render_circuit;
 
-            seq!(N in 0..=15 {
+            seq!(N in 0..=16 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
