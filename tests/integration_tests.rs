@@ -19,7 +19,7 @@ fn init() {
     assert!(status.success());
 }
 
-const TESTS: [&str; 16] = [
+const TESTS: [&str; 17] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -30,6 +30,7 @@ const TESTS: [&str; 16] = [
     "1l_leakyrelu",
     "1l_relu",
     "2l_relu_sigmoid_small",
+    "2l_relu_fc",
     "2l_relu_small",
     "2l_relu_sigmoid",
     "1l_conv",
@@ -38,7 +39,7 @@ const TESTS: [&str; 16] = [
     "4l_relu_conv_fc",
 ];
 
-const TESTS_AGGR: [&str; 12] = [
+const TESTS_AGGR: [&str; 13] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -48,6 +49,7 @@ const TESTS_AGGR: [&str; 12] = [
     "1l_sqrt",
     "1l_leakyrelu",
     "1l_relu",
+    "2l_relu_fc",
     "2l_relu_sigmoid_small",
     "2l_relu_small",
     "1l_conv",
@@ -58,7 +60,7 @@ const NEG_TESTS: [(&str, &str); 2] = [
     ("2l_relu_small", "2l_relu_sigmoid_small"),
 ];
 
-const TESTS_EVM: [&str; 10] = [
+const TESTS_EVM: [&str; 11] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -69,6 +71,7 @@ const TESTS_EVM: [&str; 10] = [
     "1l_relu",
     "2l_relu_sigmoid_small",
     "2l_relu_small",
+    "2l_relu_fc",
 ];
 
 const EXAMPLES: [&str; 2] = ["mlp_4d", "conv2d_mnist"];
@@ -81,7 +84,7 @@ macro_rules! test_func_aggr {
             use crate::TESTS_AGGR;
             use test_case::test_case;
             use crate::kzg_aggr_prove_and_verify;
-            seq!(N in 0..=10 {
+            seq!(N in 0..=12 {
 
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_prove_and_verify_(test: &str) {
@@ -109,7 +112,7 @@ macro_rules! test_func {
             use crate::kzg_prove_and_verify;
             use crate::render_circuit;
 
-            seq!(N in 0..=15 {
+            seq!(N in 0..=16 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
@@ -161,15 +164,16 @@ macro_rules! test_func_evm {
 
             /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
             /// specify a few that will
-            const TESTS_SOLIDITY: [&str; 5] = [
+            const TESTS_SOLIDITY: [&str; 6] = [
                 "1l_relu",
                 "1l_leakyrelu",
                 "1l_sqrt",
                 "1l_sigmoid",
                 "1l_reshape",
+                "2l_relu_fc"
             ];
 
-            seq!(N in 0..=9 {
+            seq!(N in 0..=10 {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
@@ -240,8 +244,6 @@ fn neg_mock(example_name: String, counter_example: String) {
             format!("./examples/onnx/{}/input.json", counter_example).as_str(),
             "-M",
             format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-            // "-K",
-            // "2",  //causes failure
         ])
         .status()
         .expect("failed to execute process");
