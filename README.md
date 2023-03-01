@@ -91,8 +91,9 @@ You can easily create an `.onnx` file using `pytorch`. For samples of Onnx files
 
 Sample onnx files are also available in `./examples/onnx`. To generate a proof on one of the examples, first build ezkl (`cargo build --release`) and add it to your favourite `PATH` variables, then generate a structured reference string (SRS):
 ```bash
-ezkl -K=17 gen-srs --pfsys=kzg --params-path=kzg.params
-```
+ezkl -K=17 gen-srs --params-path=kzg.params
+``` 
+
 
 ```bash
 ezkl --bits=16 -K=17 prove -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path=kzg.params
@@ -122,11 +123,11 @@ ezkl --bits=16 -K=17 prove -D ./examples/onnx/1l_relu/input.json -M ./examples/o
 ```
 ```bash
 # gen evm verifier
-ezkl -K=17 --bits=16 create-evm-verifier -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --pfsys=kzg --deployment-code-path 1l_relu.code --params-path=kzg.params --vk-path 1l_relu.vk --sol-code-path 1l_relu.sol
+ezkl -K=17 --bits=16 create-evm-verifier -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --deployment-code-path 1l_relu.code --params-path=kzg.params --vk-path 1l_relu.vk --sol-code-path 1l_relu.sol
 ```
 ```bash
-# Verify (EVM)
-ezkl -K=17 --bits=16 verify-evm --pfsys=kzg --proof-path 1l_relu.pf --deployment-code-path 1l_relu.code
+# Verify (EVM) 
+ezkl -K=17 --bits=16 verify-evm --proof-path 1l_relu.pf --deployment-code-path 1l_relu.code
 ```
 
 Note that the `.sol` file above can be deployed and composed with other Solidity contracts, via a `verify()` function. Please read [this document](https://hackmd.io/QOHOPeryRsOraO7FUnG-tg) for more information about the interface of the contract, how to obtain the data needed for its function parameters, and its limitations.
@@ -135,28 +136,27 @@ The above pipeline can also be run using [proof aggregation](https://ethresear.c
 
 ```bash
 # Generate a new 2^20 SRS
-ezkl -K=20 gen-srs --pfsys=kzg --params-path=kzg.params
+ezkl -K=20 gen-srs --params-path=kzg.params
 ```
 
 ```bash
 # Single proof -> single proof we are going to feed into aggregation circuit. (Mock)-verifies + verifies natively as sanity check
-ezkl -K=17 --bits=16 prove --pfsys=kzg --transcript=poseidon --strategy=accum -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --params-path=kzg.params  --vk-path=1l_relu.vk
+ezkl -K=17 --bits=16 prove --transcript=poseidon --strategy=accum -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --params-path=kzg.params  --vk-path=1l_relu.vk
 ```
 
 ```bash
 # Aggregate -> generates aggregate proof and also (mock)-verifies + verifies natively as sanity check
-ezkl -K=17 --bits=16 aggregate --transcript=evm -M ./examples/onnx/1l_relu/network.onnx --pfsys=kzg --aggregation-snarks=1l_relu.pf --aggregation-vk-paths 1l_relu.vk --vk-path aggr_1l_relu.vk --proof-path aggr_1l_relu.pf --params-path=kzg.params
+ezkl -K=20 --bits=16 aggregate --app-logrows=17 --transcript=evm -M ./examples/onnx/1l_relu/network.onnx --aggregation-snarks=1l_relu.pf --aggregation-vk-paths 1l_relu.vk --vk-path aggr_1l_relu.vk --proof-path aggr_1l_relu.pf --params-path=kzg.params
+``` 
+
+```bash
+# Generate verifier code -> create the EVM verifier code 
+ezkl -K=17 --bits=16 create-evm-verifier-aggr --deployment-code-path aggr_1l_relu.code --params-path=kzg.params --vk-path aggr_1l_relu.vk
 ```
 
 ```bash
-# Generate verifier code -> create the EVM verifier code
-ezkl -K=17 --bits=16 aggregate create-evm-verifier-aggr --pfsys=kzg --deployment-code-path aggr_1l_relu.code --params-path=kzg.params --vk-path aggr_1l_relu.vk
-```
-
-```bash
-# Verify (EVM) ->
-ezkl -K=17 --bits=16 verify-evm --pfsys=kzg --proof-path aggr_1l_relu.pf --deployment-code-path aggr_1l_relu.code
-
+# Verify (EVM) -> 
+ezkl -K=17 --bits=16 verify-evm --proof-path aggr_1l_relu.pf --deployment-code-path aggr_1l_relu.code
 ```
 
 Also note that this may require a local [solc](https://docs.soliditylang.org/en/v0.8.17/installing-solidity.html) installation, and that aggregated proof verification in Solidity is not currently supported.

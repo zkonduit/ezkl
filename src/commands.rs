@@ -10,21 +10,6 @@ use std::path::PathBuf;
 
 #[allow(missing_docs)]
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
-pub enum ProofSystem {
-    IPA,
-    KZG,
-}
-impl std::fmt::Display for ProofSystem {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.to_possible_value()
-            .expect("no values are skipped")
-            .get_name()
-            .fmt(f)
-    }
-}
-
-#[allow(missing_docs)]
-#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub enum TranscriptType {
     Blake,
     Poseidon,
@@ -190,16 +175,6 @@ pub enum Commands {
         /// The path to output to the desired params file (optional)
         #[arg(long)]
         params_path: PathBuf,
-        /// The [ProofSystem] we'll be using.
-        #[arg(
-            long,
-	    short = 'B',
-            require_equals = true,
-            num_args = 0..=1,
-            default_value_t = ProofSystem::KZG,
-            value_enum
-        )]
-        pfsys: ProofSystem,
     },
     /// Loads model and input and runs mock prover (for testing)
     #[command(arg_required_else_help = true)]
@@ -218,10 +193,13 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
-        /// The path to the desired output file
+        ///the logrows used when generating the snarks we're aggregating
+        #[arg(long)]
+        app_logrows: u32,
+        /// The path to the snarks to aggregate over
         #[arg(long)]
         aggregation_snarks: Vec<PathBuf>,
-        /// The path to load the desired verfication key file
+        /// The path to load the desired verfication key file for the snarks we're aggregating over
         #[arg(long)]
         aggregation_vk_paths: Vec<PathBuf>,
         /// The path to save the desired verfication key file
@@ -233,15 +211,6 @@ pub enum Commands {
         /// The path to load the desired params file
         #[arg(long)]
         params_path: PathBuf,
-        /// The [ProofSystem] we'll be using.
-        #[arg(
-            long,
-            require_equals = true,
-            num_args = 0..=1,
-            default_value_t = ProofSystem::KZG,
-            value_enum
-        )]
-        pfsys: ProofSystem,
         #[arg(
             long,
             require_equals = true,
@@ -271,16 +240,6 @@ pub enum Commands {
         /// The path to load the desired params file
         #[arg(long)]
         params_path: PathBuf,
-        /// The [ProofSystem] we'll be using.
-        #[arg(
-            long,
-	    short = 'B',
-            require_equals = true,
-            num_args = 0..=1,
-            default_value_t = ProofSystem::KZG,
-            value_enum
-        )]
-        pfsys: ProofSystem,
         #[arg(
             long,
             require_equals = true,
@@ -321,16 +280,6 @@ pub enum Commands {
         /// The path to output the Solidity code
         #[arg(long, required_if_eq("transcript", "evm"))]
         sol_code_path: Option<PathBuf>,
-        /// The [ProofSystem] we'll be using.
-        #[arg(
-            long,
-	    short = 'B',
-            require_equals = true,
-            num_args = 0..=1,
-            default_value_t = ProofSystem::KZG,
-            value_enum
-        )]
-        pfsys: ProofSystem,
         // todo, optionally allow supplying proving key
     },
 
@@ -346,15 +295,6 @@ pub enum Commands {
         /// The path to output to the desired verification code
         #[arg(long, required_if_eq("transcript", " "))]
         deployment_code_path: Option<PathBuf>,
-        /// The [ProofSystem] we'll be using.
-        #[arg(
-            long,
-            require_equals = true,
-            num_args = 0..=1,
-            default_value_t = ProofSystem::KZG,
-            value_enum
-        )]
-        pfsys: ProofSystem,
         // todo, optionally allow supplying proving key
     },
 
@@ -373,15 +313,6 @@ pub enum Commands {
         /// The path to load the desired verfication key file (optional)
         #[arg(long)]
         params_path: PathBuf,
-
-        #[arg(
-            long,
-            require_equals = true,
-            num_args = 0..=1,
-            default_value_t = ProofSystem::KZG,
-            value_enum
-        )]
-        pfsys: ProofSystem,
         #[arg(
             long,
             require_equals = true,
@@ -404,15 +335,6 @@ pub enum Commands {
         /// The path to load the desired verfication key file (optional)
         #[arg(long)]
         params_path: PathBuf,
-
-        #[arg(
-             long,
-             require_equals = true,
-             num_args = 0..=1,
-             default_value_t = ProofSystem::KZG,
-             value_enum
-         )]
-        pfsys: ProofSystem,
         #[arg(
              long,
              require_equals = true,
@@ -435,15 +357,6 @@ pub enum Commands {
         /// The path to the Solidity code
         #[arg(long, required_if_eq("transcript", "evm"))]
         sol_code_path: Option<PathBuf>,
-
-        #[arg(
-             long,
-             require_equals = true,
-             num_args = 0..=1,
-             default_value_t = ProofSystem::KZG,
-             value_enum
-         )]
-        pfsys: ProofSystem,
     },
 
     /// Print the proof in hexadecimal
@@ -452,15 +365,6 @@ pub enum Commands {
         /// The path to the proof file
         #[arg(long)]
         proof_path: PathBuf,
-
-        #[arg(
-             long,
-             require_equals = true,
-             num_args = 0..=1,
-             default_value_t = ProofSystem::KZG,
-             value_enum
-         )]
-        pfsys: ProofSystem,
     },
 }
 
