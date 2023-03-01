@@ -173,7 +173,8 @@ Usage: ezkl [OPTIONS] <COMMAND>
 
 Commands:
   table                     Loads model and prints model table
-  forward                   Loads model and input and runs mock prover (for testing)
+  render-circuit            Renders the model circuit to a .png file. For an overview of how to interpret these plots, see https://zcash.github.io/halo2/user/dev-tools.html
+  forward                   Runs a vanilla forward pass, produces a quantized output, and saves it to a .json file
   gen-srs                   Generates a dummy SRS
   mock                      Loads model and input and runs mock prover (for testing)
   aggregate                 Aggregates proofs :)

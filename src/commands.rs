@@ -155,6 +155,21 @@ pub enum Commands {
         model: String,
     },
 
+    #[cfg(feature = "render")]
+    /// Renders the model circuit to a .png file. For an overview of how to interpret these plots, see https://zcash.github.io/halo2/user/dev-tools.html
+    #[command(arg_required_else_help = true)]
+    RenderCircuit {
+        /// The path to the .json data file
+        #[arg(short = 'D', long)]
+        data: String,
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: String,
+        /// Path to save the .png circuit render
+        #[arg(short = 'O', long)]
+        output: String,
+    },
+
     /// Runs a vanilla forward pass, produces a quantized output, and saves it to a .json file
     #[command(arg_required_else_help = true)]
     Forward {
