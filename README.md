@@ -1,4 +1,15 @@
-# EZKL
+<h1 align="center">
+	<br>
+	 :sparkles:
+	<br>
+	<br>
+	EZKL
+	<br>
+	<br>
+	<br>
+</h1>
+
+> Zero-knowledge inference
 
 [![Test](https://github.com/zkonduit/ezkl/workflows/Rust/badge.svg)](https://github.com/zkonduit/ezkl/actions?query=workflow%3ARust)
 
