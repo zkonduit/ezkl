@@ -1,5 +1,6 @@
 //use crate::onnx::OnnxModel;
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use ethereum_types::Address;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -300,8 +301,8 @@ pub enum Commands {
     },
 
     /// Deploys an EVM verifier
-    #[command(name = "deploy-verifier", arg_required_else_help = true)]
-    DeployVerifier {
+    #[command(name = "deploy-verifier-evm", arg_required_else_help = true)]
+    DeployVerifierEVM {
         /// The path to the wallet mnemonic
         #[arg(short = 'S', long)]
         secret: PathBuf,
@@ -315,6 +316,23 @@ pub enum Commands {
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
         // todo, optionally allow supplying proving key
+    },
+
+    /// Send a proof to be verified to an already deployed verifier
+    #[command(name = "send-proof-evm", arg_required_else_help = true)]
+    SendProofEVM {
+        /// The path to the wallet mnemonic
+        #[arg(short = 'S', long)]
+        secret: PathBuf,
+        /// RPC Url
+        #[arg(short = 'U', long)]
+        rpc_url: String,
+        /// The deployed verifier address
+        #[arg(long)]
+        addr: Address,
+        /// The path to the proof
+        #[arg(long)]
+        proof_path: PathBuf,
     },
 
     /// Verifies a proof, returning accept or reject

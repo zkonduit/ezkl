@@ -1,6 +1,6 @@
 use super::eth::verify_proof_via_solidity;
 use crate::commands::{Cli, Commands, StrategyType, TranscriptType};
-use crate::eth::deploy_verifier;
+use crate::eth::{deploy_verifier, send_proof};
 use crate::graph::{vector_to_quantized, Model, ModelCircuit};
 use crate::pfsys::evm::aggregation::{
     gen_aggregation_evm_verifier, AggregationCircuit, PoseidonTranscript,
@@ -143,7 +143,16 @@ fn create_proof_circuit_kzg<
 /// Run an ezkl command with given args
 pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     match cli.command {
-        Commands::DeployVerifier {
+        Commands::SendProofEVM {
+            secret,
+            rpc_url,
+            addr,
+            proof_path,
+        } => {
+            let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
+            send_proof(secret, rpc_url, addr, proof).await?;
+        }
+        Commands::DeployVerifierEVM {
             secret,
             rpc_url,
             deployment_code_path,

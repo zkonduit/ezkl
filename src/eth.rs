@@ -1,6 +1,7 @@
 use crate::pfsys::evm::DeploymentCode;
 use crate::pfsys::evm::EvmVerificationError;
 use crate::pfsys::Snark;
+use ethereum_types::Address;
 use ethers::abi::ethabi::Bytes;
 use ethers::abi::Abi;
 use ethers::abi::AbiEncode;
@@ -34,7 +35,7 @@ const DEFAULT_DERIVATION_PATH_PREFIX: &str = "m/44'/60'/0'/0/";
 pub type EthersClient = Arc<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>;
 
 /// Return an instance of Anvil and a local client
-pub async fn setup_eth_backend() -> (AnvilInstance, EthersClient) {
+pub async fn setup_eth_backend() -> Result<(AnvilInstance, EthersClient), Box<dyn Error>> {
     // Launch anvil
     let anvil = Anvil::new().spawn();
 
@@ -42,9 +43,8 @@ pub async fn setup_eth_backend() -> (AnvilInstance, EthersClient) {
     let wallet: LocalWallet = anvil.keys()[0].clone().into();
 
     // Connect to the network
-    let provider = Provider::<Http>::try_from(anvil.endpoint())
-        .unwrap()
-        .interval(Duration::from_millis(10u64));
+    let provider =
+        Provider::<Http>::try_from(anvil.endpoint())?.interval(Duration::from_millis(10u64));
 
     // Instantiate the client with the wallet
     let client = Arc::new(SignerMiddleware::new(
@@ -52,23 +52,23 @@ pub async fn setup_eth_backend() -> (AnvilInstance, EthersClient) {
         wallet.with_chain_id(anvil.chain_id()),
     ));
 
-    (anvil, client)
+    Ok((anvil, client))
 }
 
 /// Verify a proof using a Solidity verifier contract
 pub async fn verify_proof_via_solidity(
     proof: Snark<Fr, G1Affine>,
     sol_code_path: PathBuf,
-) -> Result<bool, Box<EvmVerificationError>> {
-    let (anvil, client) = setup_eth_backend().await;
+) -> Result<bool, Box<dyn Error>> {
+    let (anvil, client) = setup_eth_backend().await?;
 
-    let compiled = Solc::default().compile_source(sol_code_path).unwrap();
+    let compiled = Solc::default().compile_source(sol_code_path)?;
     let (abi, bytecode, _runtime_bytecode) = compiled
         .find("Verifier")
         .expect("could not find contract")
         .into_parts_or_default();
     let factory = ContractFactory::new(abi, bytecode, client.clone());
-    let contract = factory.deploy(()).unwrap().send().await.unwrap();
+    let contract = factory.deploy(())?.send().await?;
     let addr = contract.address();
 
     abigen!(Verifier, "./Verifier.json");
@@ -112,11 +112,14 @@ fn parse_private_key(private_key: U256) -> Result<SigningKey, Bytes> {
 }
 
 /// Parses a private key into a [Wallet]  
-fn get_signing_wallet(private_key: U256, chain_id: u64) -> Wallet<SigningKey> {
+fn get_signing_wallet(
+    private_key: U256,
+    chain_id: u64,
+) -> Result<Wallet<SigningKey>, Box<dyn Error>> {
     let private_key = parse_private_key(private_key).unwrap();
     let wallet: Wallet<SigningKey> = private_key.into();
 
-    wallet.with_chain_id(chain_id)
+    Ok(wallet.with_chain_id(chain_id))
 }
 
 /// Derives a key from a mnemonic phrase
@@ -154,7 +157,7 @@ pub async fn get_signing_provider(
     // provider.for_chain(Chain::try_from(3141));
     let chain_id = provider.get_chainid().await.unwrap();
     let private_key = derive_key(mnemonic, DEFAULT_DERIVATION_PATH_PREFIX, 0).unwrap();
-    let signing_wallet = get_signing_wallet(private_key, chain_id.as_u64());
+    let signing_wallet = get_signing_wallet(private_key, chain_id.as_u64()).unwrap();
 
     let provider = Arc::new(provider);
 
@@ -218,6 +221,55 @@ pub async fn deploy_verifier(
     let addr = deploy_transaction.address();
 
     info!("contract address: {}", addr);
+
+    // uncomment if want to test on local anvil
+    // drop(anvil);
+
+    Ok(())
+}
+
+/// Sends a proof to an already deployed verifier contract
+pub async fn send_proof(
+    secret: PathBuf,
+    rpc_url: String,
+    addr: Address,
+    proof: Snark<Fr, G1Affine>,
+) -> Result<(), Box<dyn Error>> {
+    info!("contract address: {}", addr);
+    // comment the following two lines if want to deploy to anvil
+    let mnemonic = read_to_string(secret)?;
+    let client = Arc::new(get_signing_provider(&mnemonic, &rpc_url).await);
+    // uncomment if want to test on local anvil
+    // let (anvil, client) = setup_eth_backend().await;
+
+    let gas = client.provider().get_gas_price().await?;
+    info!("gas price: {:#?}", gas);
+
+    abigen!(Verifier, "./Verifier.json");
+    let contract = Verifier::new(addr, client.clone());
+
+    let mut public_inputs = vec![];
+    for val in &proof.instances[0] {
+        let bytes = val.to_repr();
+        let u = U256::from_little_endian(bytes.as_slice());
+        public_inputs.push(u);
+    }
+
+    let result = contract
+        .verify(
+            public_inputs,
+            ethers::types::Bytes::from(proof.proof.to_vec()),
+        )
+        .call()
+        .await;
+
+    if result.is_err() {
+        return Err(Box::new(EvmVerificationError::SolidityExecution));
+    }
+    let result = result.unwrap();
+    if !result {
+        return Err(Box::new(EvmVerificationError::InvalidProof));
+    }
 
     // uncomment if want to test on local anvil
     // drop(anvil);
