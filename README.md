@@ -1,6 +1,5 @@
 <h1 align="center">
 	<br>
-	 :sparkles:
 	<br>
 	<br>
 EZKL
