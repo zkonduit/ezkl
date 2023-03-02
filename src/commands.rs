@@ -208,7 +208,7 @@ pub enum Commands {
         /// The path to the desired output file
         #[arg(long)]
         proof_path: PathBuf,
-        /// The path to load the desired params file
+        /// The transcript type
         #[arg(long)]
         params_path: PathBuf,
         #[arg(
@@ -237,7 +237,7 @@ pub enum Commands {
         /// The path to the desired output file
         #[arg(long)]
         proof_path: PathBuf,
-        /// The path to load the desired params file
+        /// The transcript type
         #[arg(long)]
         params_path: PathBuf,
         #[arg(
@@ -248,6 +248,7 @@ pub enum Commands {
             value_enum
         )]
         transcript: TranscriptType,
+        /// The proving strategy  
         #[arg(
             long,
             require_equals = true,
@@ -298,6 +299,24 @@ pub enum Commands {
         // todo, optionally allow supplying proving key
     },
 
+    /// Deploys an EVM verifier
+    #[command(name = "deploy-verifier", arg_required_else_help = true)]
+    DeployVerifier {
+        /// The path to the wallet mnemonic
+        #[arg(short = 'S', long)]
+        secret: PathBuf,
+        /// RPC Url
+        #[arg(short = 'U', long)]
+        rpc_url: String,
+        /// The path to the desired EVM bytecode file (optional), either set this or sol_code_path
+        #[arg(long)]
+        deployment_code_path: Option<PathBuf>,
+        /// The path to output the Solidity code (optional) supercedes deployment_code_path in priority
+        #[arg(long)]
+        sol_code_path: Option<PathBuf>,
+        // todo, optionally allow supplying proving key
+    },
+
     /// Verifies a proof, returning accept or reject
     #[command(arg_required_else_help = true)]
     Verify {
@@ -310,7 +329,7 @@ pub enum Commands {
         /// The path to output the desired verfication key file (optional)
         #[arg(long)]
         vk_path: PathBuf,
-        /// The path to load the desired verfication key file (optional)
+        /// The transcript type
         #[arg(long)]
         params_path: PathBuf,
         #[arg(
