@@ -3,13 +3,13 @@
 	 :sparkles:
 	<br>
 	<br>
-	EZKL
+EZKL
 	<br>
 	<br>
 	<br>
 </h1>
 
-> Zero-knowledge inference
+> Easy Zero-Knowledge Inference
 
 [![Test](https://github.com/zkonduit/ezkl/workflows/Rust/badge.svg)](https://github.com/zkonduit/ezkl/actions?query=workflow%3ARust)
 
