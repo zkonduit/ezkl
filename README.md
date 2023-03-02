@@ -173,6 +173,55 @@ ezkl -K=17 --bits=16 verify-evm --proof-path aggr_1l_relu.pf --deployment-code-p
 
 Also note that this may require a local [solc](https://docs.soliditylang.org/en/v0.8.17/installing-solidity.html) installation, and that aggregated proof verification in Solidity is not currently supported.
 
+For both pipelines the resulting verifier can be deployed to an EVM instance (mainnet or otherwise !) using the `deploy-verifier-evm` command: 
+
+```bash
+Deploys an EVM verifier
+
+Usage: ezkl deploy-verifier-evm [OPTIONS] --secret <SECRET> --rpc-url <RPC_URL>
+
+Options:
+  -S, --secret <SECRET>
+          The path to the wallet mnemonic
+  -U, --rpc-url <RPC_URL>
+          RPC Url
+      --deployment-code-path <DEPLOYMENT_CODE_PATH>
+          The path to the desired EVM bytecode file (optional), either set this or sol_code_path
+      --sol-code-path <SOL_CODE_PATH>
+          The path to output the Solidity code (optional) supercedes deployment_code_path in priority
+  -h, --help
+          Print help
+
+```
+
+For instance: 
+
+```bash 
+ezkl deploy-verifier-evm -S ./mymnemonic.txt -U myethnode.xyz --deployment-code-path aggr_1l_relu.code
+```
+
+You can also send proofs to be verified on deployed contracts using `send-proof`: 
+
+```bash
+Send a proof to be verified to an already deployed verifier
+
+Usage: ezkl send-proof-evm --secret <SECRET> --rpc-url <RPC_URL> --addr <ADDR> --proof-path <PROOF_PATH>
+
+Options:
+  -S, --secret <SECRET>          The path to the wallet mnemonic
+  -U, --rpc-url <RPC_URL>        RPC Url
+      --addr <ADDR>              The deployed verifier address
+      --proof-path <PROOF_PATH>  The path to the proof
+  -h, --help                     Print help
+
+```
+
+For instance: 
+
+```bash 
+ezkl send-proof-evm -S ./mymnemonic.txt -U myethnode.xyz --addr 0xFFFF --proof-path my.snark
+```
+
 #### using pre-generated SRS
 
 Note that you can use pre-generated KZG SRS. These SRS can be converted to a format that is ingestable by the `pse/halo2` prover ezkl uses by leveraging [han0110/halo2-kzg-srs](https://github.com/han0110/halo2-kzg-srs). This repo also contains pre-converted SRS from large projects such as Hermez and the [perpetual powers of tau repo](https://github.com/privacy-scaling-explorations/perpetualpowersoftau). Simply download the pre-converted file locally and point `--params-path` to the file !
@@ -193,6 +242,7 @@ Commands:
   prove                     Loads model and data, prepares vk and pk, and creates proof
   create-evm-verifier       Creates an EVM verifier for a single proof
   create-evm-verifier-aggr  Creates an EVM verifier for an aggregate proof
+  deploy-verifier           Deploys an EVM verifier
   verify                    Verifies a proof, returning accept or reject
   verify-aggr               Verifies an aggregate proof, returning accept or reject
   verify-evm                Verifies a proof using a local EVM executor, returning accept or reject

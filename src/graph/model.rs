@@ -768,20 +768,17 @@ impl Model {
 
             // handle output variables
             let max_id = poly_ops.keys().max();
-            match max_id {
-                Some(m) => {
-                    let output_size = self.nodes.filter(**m).out_dims.iter().product();
-                    if inputs.len() == maximum_sizes.len() {
-                        maximum_sizes.push(output_size)
-                    } else {
-                        let output_idx = inputs.len();
-                        // set last entry to be the output column
-                        maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
-                    }
+            // is None if the bucket is empty
+            if let Some(m) = max_id {
+                let output_size = self.nodes.filter(**m).out_dims.iter().product();
+                if inputs.len() == maximum_sizes.len() {
+                    maximum_sizes.push(output_size)
+                } else {
+                    let output_idx = inputs.len();
+                    // set last entry to be the output column
+                    maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
                 }
-                // None if the bucket is empty
-                None => {}
-            }
+            };
         }
         // add 1 for layer output
         maximum_sizes
@@ -818,21 +815,19 @@ impl Model {
 
             // handle output variables
             let max_id = fused_ops.keys().max();
-            match max_id {
-                Some(m) => {
-                    let output_size = self.nodes.filter(**m).out_dims.iter().product();
-                    if inputs.len() == maximum_sizes.len() {
-                        maximum_sizes.push(output_size)
-                    } else {
-                        let output_idx = inputs.len();
-                        // set last entry to be the output column
-                        maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
-                    }
+            // None if the bucket is empty
+            if let Some(m) = max_id {
+                let output_size = self.nodes.filter(**m).out_dims.iter().product();
+                if inputs.len() == maximum_sizes.len() {
+                    maximum_sizes.push(output_size)
+                } else {
+                    let output_idx = inputs.len();
+                    // set last entry to be the output column
+                    maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
                 }
-                // None if the bucket is empty
-                None => {}
-            }
+            };
         }
+
         // add 1 for layer output
         maximum_sizes
     }
