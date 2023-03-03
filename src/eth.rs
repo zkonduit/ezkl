@@ -14,6 +14,8 @@ use ethers::providers::{Http, Provider};
 use ethers::signers::coins_bip39::English;
 use ethers::signers::MnemonicBuilder;
 use ethers::signers::Signer;
+use ethers::types::transaction::eip2718::TypedTransaction;
+use ethers::types::TransactionRequest;
 use ethers::types::U256;
 use ethers::utils::AnvilInstance;
 use ethers::{
@@ -24,6 +26,7 @@ use ethers_solc::Solc;
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
 use log::{debug, info};
+use snark_verifier::loader::evm::encode_calldata;
 use std::error::Error;
 use std::fs::read_to_string;
 use std::path::PathBuf;
@@ -215,12 +218,9 @@ pub async fn deploy_verifier(
         "estimated deployment gas cost: {:#?}",
         client.estimate_gas(tx, None).await?
     );
-    let deploy_transaction = deployer.send().await?;
-    debug!("deploy receipt: {:#?}", deploy_transaction);
-
-    let addr = deploy_transaction.address();
-
-    info!("contract address: {}", addr);
+    let (contract, deploy_receipt) = deployer.send_with_receipt().await?;
+    debug!("deploy receipt: {:#?}", deploy_receipt);
+    info!("contract address: {}", contract.address());
 
     // uncomment if want to test on local anvil
     // drop(anvil);
@@ -233,7 +233,8 @@ pub async fn send_proof(
     secret: PathBuf,
     rpc_url: String,
     addr: Address,
-    proof: Snark<Fr, G1Affine>,
+    snark: Snark<Fr, G1Affine>,
+    has_abi: bool,
 ) -> Result<(), Box<dyn Error>> {
     info!("contract address: {}", addr);
     // comment the following two lines if want to deploy to anvil
@@ -245,31 +246,50 @@ pub async fn send_proof(
     let gas = client.provider().get_gas_price().await?;
     info!("gas price: {:#?}", gas);
 
-    abigen!(Verifier, "./Verifier.json");
-    let contract = Verifier::new(addr, client.clone());
+    let mut verify_tx: TypedTransaction = if has_abi {
+        info!("using contract abi");
+        abigen!(Verifier, "./Verifier.json");
+        let contract = Verifier::new(addr, client.clone());
 
-    let mut public_inputs = vec![];
-    for val in &proof.instances[0] {
-        let bytes = val.to_repr();
-        let u = U256::from_little_endian(bytes.as_slice());
-        public_inputs.push(u);
-    }
+        let mut public_inputs = vec![];
+        for val in &snark.instances[0] {
+            let bytes = val.to_repr();
+            let u = U256::from_little_endian(bytes.as_slice());
+            public_inputs.push(u);
+        }
 
-    let result = contract
-        .verify(
-            public_inputs,
-            ethers::types::Bytes::from(proof.proof.to_vec()),
-        )
-        .call()
-        .await;
+        contract
+            .verify(
+                public_inputs,
+                ethers::types::Bytes::from(snark.proof.to_vec()),
+            )
+            .tx
+    } else {
+        info!("not using contract abi");
+        let calldata = encode_calldata(&snark.instances, &snark.proof);
+        TransactionRequest::default()
+            .to(addr)
+            .from(client.address())
+            .data(calldata)
+            .into()
+    };
+
+    info!("created tx");
+
+    // let gas = client.estimate_gas(&verify_tx, None).await?;
+    // debug!("transaction {:#?}", verify_tx);
+    // info!("estimated deployment gas cost: {:#?}", gas);
+
+    // verify_tx.set_gas_price(gas);
+
+    let result = client.send_transaction(verify_tx, None).await?.await;
 
     if result.is_err() {
         return Err(Box::new(EvmVerificationError::SolidityExecution));
     }
     let result = result.unwrap();
-    if !result {
-        return Err(Box::new(EvmVerificationError::InvalidProof));
-    }
+
+    debug!("transaction {:#?}", result);
 
     // uncomment if want to test on local anvil
     // drop(anvil);

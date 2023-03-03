@@ -333,6 +333,9 @@ pub enum Commands {
         /// The path to the proof
         #[arg(long)]
         proof_path: PathBuf,
+        /// If we have the contract abi locally (i.e adheres to format in Verifier.json)
+        #[arg(long)]
+        has_abi: bool,
     },
 
     /// Verifies a proof, returning accept or reject
