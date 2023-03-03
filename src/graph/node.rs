@@ -4,7 +4,6 @@ use crate::circuit::lookup::Op as LookupOp;
 use crate::circuit::polynomial::Config as PolyConfig;
 use crate::circuit::polynomial::Op as PolyOp;
 use crate::graph::GraphError;
-use crate::tensor::ops::{add, const_mult, div, mult};
 use crate::tensor::Tensor;
 use crate::tensor::TensorType;
 use anyhow::Result;
@@ -847,10 +846,10 @@ impl Node {
                         let sigma = inputs[4].raw_const_value.as_ref().unwrap();
                         let num_entries = gamma.len();
 
-                        let a = div(gamma.clone(), sigma.clone())?;
-                        let amu: Tensor<f32> = mult(&vec![a.clone(), mu.clone()])?;
-                        let amupb: Tensor<f32> = add(&vec![amu, beta.clone()])?;
-                        let b = const_mult(&amupb, -1f32)?;
+                        let a = (gamma.clone() / sigma.clone())?;
+                        let amu: Tensor<f32> = (a.clone() * mu.clone())?;
+                        let amupb: Tensor<f32> = (amu + beta.clone())?;
+                        let b = (amupb * Tensor::new(Some(&[-1f32]), &[1])?)?;
 
                         let in_scale = inputs[0].out_scale;
                         let out_scale = 2 * inputs[0].out_scale;
