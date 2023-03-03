@@ -544,6 +544,13 @@ impl<T: TensorType + Add<Output = T>> Add for Tensor<T> {
             for i in 0..output.len() {
                 output[i] = output[i].clone() + rhs[0].clone();
             }
+        }
+        // make 1D casting commutative
+        else if self.dims().len() == 1 && self.dims()[0] == 1 {
+            output = rhs.clone();
+            for i in 0..rhs.len() {
+                output[i] = output[i].clone() + self[0].clone();
+            }
         } else {
             if self.dims() != rhs.dims() {
                 return Err(TensorError::DimMismatch("add".to_string()));
@@ -567,6 +574,13 @@ impl<T: TensorType + Sub<Output = T>> Sub for Tensor<T> {
         if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
             for i in 0..output.len() {
                 output[i] = output[i].clone() - rhs[0].clone();
+            }
+        }
+        // make 1D casting commutative
+        else if self.dims().len() == 1 && self.dims()[0] == 1 {
+            output = rhs.clone();
+            for i in 0..rhs.len() {
+                output[i] = output[i].clone() - self[0].clone();
             }
         } else {
             if self.dims() != rhs.dims() {
@@ -592,6 +606,13 @@ impl<T: TensorType + Mul<Output = T>> Mul for Tensor<T> {
             for i in 0..output.len() {
                 output[i] = output[i].clone() * rhs[0].clone();
             }
+        }
+        // make 1D casting commutative
+        else if self.dims().len() == 1 && self.dims()[0] == 1 {
+            output = rhs.clone();
+            for i in 0..rhs.len() {
+                output[i] = output[i].clone() * self[0].clone();
+            }
         } else {
             if self.dims() != rhs.dims() {
                 return Err(TensorError::DimMismatch("mul".to_string()));
@@ -615,6 +636,11 @@ impl<T: TensorType + Div<Output = T>> Div for Tensor<T> {
         if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
             for i in 0..output.len() {
                 output[i] = output[i].clone() / rhs[0].clone();
+            }
+        } else if self.dims().len() == 1 && self.dims()[0] == 1 {
+            output = rhs.clone();
+            for i in 0..rhs.len() {
+                output[i] = self[0].clone() / output[i].clone();
             }
         } else {
             if self.dims() != rhs.dims() {

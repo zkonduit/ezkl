@@ -191,8 +191,10 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let k = 2;
-/// let result = add(&x, k).unwrap();
+/// let k = Tensor::<i32>::new(
+///     Some(&[2]),
+///     &[1]).unwrap();
+/// let result = add(&vec![x, k]).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 3, 3, 3]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -233,8 +235,11 @@ pub fn add<T: TensorType + Add<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let k = 2;
-/// let result = sub(&x, k).unwrap();
+/// let k = Tensor::<i32>::new(
+///     Some(&[2]),
+///     &[1],
+/// ).unwrap();
+/// let result = sub(&vec![x, k]).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[0, -1, 0, -1, -1, -1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -249,7 +254,7 @@ pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor
     Ok(output)
 }
 
-/// Elementwise multiplies two tensors.
+/// Elementwise multiplies multiple tensors.
 /// # Arguments
 ///
 /// * `a` - Tensor
@@ -275,8 +280,10 @@ pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let k = 2;
-/// let result = mult(&x, k).unwrap();
+/// let k = Tensor::<i32>::new(
+///     Some(&[2]),
+///     &[1]).unwrap();
+/// let result = mult(&vec![x, k]).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -310,6 +317,19 @@ pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tenso
 /// ).unwrap();
 /// let result = div(x, y).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[2, 1, 2, 1, 1, 4]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// // test 1D casting
+/// let x = Tensor::<i32>::new(
+///     Some(&[4, 1, 4, 1, 1, 4]),
+///     &[2, 3],
+/// ).unwrap();
+/// let y = Tensor::<i32>::new(
+///     Some(&[2]),
+///     &[1],
+/// ).unwrap();
+/// let result = div(x, y).unwrap();
+/// let expected = Tensor::<i32>::new(Some(&[2, 0, 2, 0, 0, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn div<T: TensorType + Div<Output = T>>(
@@ -374,11 +394,10 @@ pub fn pow<T: TensorType + Mul<Output = T>>(
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut output: Tensor<T> = a.clone();
-    for (i, a_i) in a.iter().enumerate() {
-        for _ in 1..pow {
-            output[i] = output[i].clone() * a_i.clone();
-        }
+    for _ in 1..pow {
+        output = (output * a.clone())?;
     }
+
     Ok(output)
 }
 
