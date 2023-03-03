@@ -275,12 +275,12 @@ pub async fn send_proof(
     };
 
     info!("created tx");
+    debug!("transaction {:#?}", verify_tx);
 
-    // let gas = client.estimate_gas(&verify_tx, None).await?;
-    // debug!("transaction {:#?}", verify_tx);
-    // info!("estimated deployment gas cost: {:#?}", gas);
+    let gas = client.estimate_gas(&verify_tx, None).await?;
+    info!("estimated deployment gas cost: {:#?}", gas);
 
-    // verify_tx.set_gas_price(gas);
+    verify_tx.set_gas_price(gas);
 
     let result = client.send_transaction(verify_tx, None).await?.await;
 
