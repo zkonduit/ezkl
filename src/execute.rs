@@ -148,9 +148,10 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             rpc_url,
             addr,
             proof_path,
+            has_abi,
         } => {
             let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
-            send_proof(secret, rpc_url, addr, proof).await?;
+            send_proof(secret, rpc_url, addr, proof, has_abi).await?;
         }
         Commands::DeployVerifierEVM {
             secret,
