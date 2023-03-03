@@ -157,7 +157,6 @@ pub async fn get_signing_provider(
     let provider =
         Provider::<Http>::try_from(rpc_url).expect("could not instantiate HTTP Provider");
     debug!("{:#?}", provider);
-    // provider.for_chain(Chain::try_from(3141));
     let chain_id = provider.get_chainid().await.unwrap();
     let private_key = derive_key(mnemonic, DEFAULT_DERIVATION_PATH_PREFIX, 0).unwrap();
     let signing_wallet = get_signing_wallet(private_key, chain_id.as_u64()).unwrap();
@@ -277,11 +276,13 @@ pub async fn send_proof(
     info!("created tx");
     debug!("transaction {:#?}", verify_tx);
 
-    let gas = client.estimate_gas(&verify_tx, None).await?;
-    info!("estimated deployment gas cost: {:#?}", gas);
+    let gas = client.provider().get_gas_price().await.unwrap();
+    info!("gas price: {:#?}", gas);
 
-    verify_tx.set_gas_price(gas);
+    let gas_estimate = client.estimate_gas(&verify_tx, None).await?;
+    info!("estimated function call gas cost: {:#?}", gas_estimate);
 
+    client.fill_transaction(&mut verify_tx, None).await?;
     let result = client.send_transaction(verify_tx, None).await?.await;
 
     if result.is_err() {
