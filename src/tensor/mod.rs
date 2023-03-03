@@ -17,13 +17,13 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use itertools::Itertools;
-use std::cmp::max;
-use std::error::Error;
-use std::fmt::Debug;
-use std::iter::Iterator;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
+use std::{cmp::max, ops::Add};
+use std::{error::Error, ops::Mul};
+use std::{fmt::Debug, ops::Sub};
+use std::{iter::Iterator, ops::Div};
 use thiserror::Error;
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
@@ -530,6 +530,102 @@ impl<T: Clone + TensorType> Tensor<Tensor<T>> {
             inner.extend(t.inner);
         }
         Tensor::new(Some(&inner), &[dims])
+    }
+}
+
+impl<T: TensorType + Add<Output = T>> Add for Tensor<T> {
+    type Output = Result<Tensor<T>, TensorError>;
+    fn add(self, rhs: Self) -> Self::Output {
+        // calculate value of output
+        let mut output: Tensor<T> = self.clone();
+
+        // casts a 1D addition
+        if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
+            for i in 0..output.len() {
+                output[i] = output[i].clone() + rhs[0].clone();
+            }
+        } else {
+            if self.dims() != rhs.dims() {
+                return Err(TensorError::DimMismatch("add".to_string()));
+            }
+
+            for (i, e_i) in rhs.iter().enumerate() {
+                output[i] = output[i].clone() + e_i.clone()
+            }
+        }
+        Ok(output)
+    }
+}
+
+impl<T: TensorType + Sub<Output = T>> Sub for Tensor<T> {
+    type Output = Result<Tensor<T>, TensorError>;
+    fn sub(self, rhs: Self) -> Self::Output {
+        // calculate value of output
+        let mut output: Tensor<T> = self.clone();
+
+        // casts a 1D addition
+        if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
+            for i in 0..output.len() {
+                output[i] = output[i].clone() - rhs[0].clone();
+            }
+        } else {
+            if self.dims() != rhs.dims() {
+                return Err(TensorError::DimMismatch("sub".to_string()));
+            }
+
+            for (i, e_i) in rhs.iter().enumerate() {
+                output[i] = output[i].clone() - e_i.clone()
+            }
+        }
+        Ok(output)
+    }
+}
+
+impl<T: TensorType + Mul<Output = T>> Mul for Tensor<T> {
+    type Output = Result<Tensor<T>, TensorError>;
+    fn mul(self, rhs: Self) -> Self::Output {
+        // calculate value of output
+        let mut output: Tensor<T> = self.clone();
+
+        // casts a 1D multiplication
+        if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
+            for i in 0..output.len() {
+                output[i] = output[i].clone() * rhs[0].clone();
+            }
+        } else {
+            if self.dims() != rhs.dims() {
+                return Err(TensorError::DimMismatch("mul".to_string()));
+            }
+
+            for (i, e_i) in rhs.iter().enumerate() {
+                output[i] = output[i].clone() * e_i.clone()
+            }
+        }
+        Ok(output)
+    }
+}
+
+impl<T: TensorType + Div<Output = T>> Div for Tensor<T> {
+    type Output = Result<Tensor<T>, TensorError>;
+    fn div(self, rhs: Self) -> Self::Output {
+        // calculate value of output
+        let mut output: Tensor<T> = self.clone();
+
+        // casts a 1D multiplication
+        if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
+            for i in 0..output.len() {
+                output[i] = output[i].clone() / rhs[0].clone();
+            }
+        } else {
+            if self.dims() != rhs.dims() {
+                return Err(TensorError::DimMismatch("div".to_string()));
+            }
+
+            for (i, e_i) in rhs.iter().enumerate() {
+                output[i] = output[i].clone() / e_i.clone()
+            }
+        }
+        Ok(output)
     }
 }
 

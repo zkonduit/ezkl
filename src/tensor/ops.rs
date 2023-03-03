@@ -185,56 +185,23 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// let result = add(&vec![x, k]).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[4, 4, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
-/// ```
-pub fn add<T: TensorType + Add<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor<T>, TensorError> {
-    // determines if we're multiplying by a 1D const
-    if t.len() == 2 && t[1].dims().len() == 1 && t[1].dims()[0] == 1 {
-        return const_add(&t[0], t[1][0].clone());
-    }
-    for e in t.iter() {
-        if t[0].dims() != e.dims() {
-            return Err(TensorError::DimMismatch("add".to_string()));
-        }
-    }
-    // calculate value of output
-    let mut output: Tensor<T> = t[0].clone();
-
-    for e in t[1..].iter() {
-        for (i, e_i) in e.iter().enumerate() {
-            output[i] = output[i].clone() + e_i.clone()
-        }
-    }
-
-    Ok(output)
-}
-
-/// Elementwise adds a tensor with a const element.
-/// # Arguments
 ///
-/// * `a` - Tensor
-/// * `b` - Single value
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::const_add;
+/// // Now test 1D casting
 /// let x = Tensor::<i32>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
 /// let k = 2;
-/// let result = const_add(&x, k).unwrap();
+/// let result = add(&x, k).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 3, 3, 3]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn const_add<T: TensorType + Add<Output = T>>(
-    a: &Tensor<T>,
-    b: T,
-) -> Result<Tensor<T>, TensorError> {
+pub fn add<T: TensorType + Add<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
-    let mut output: Tensor<T> = a.clone();
+    let mut output: Tensor<T> = t[0].clone();
 
-    for i in 0..output.len() {
-        output[i] = output[i].clone() + b.clone();
+    for e in t[1..].iter() {
+        output = (output + e.clone())?;
     }
 
     Ok(output)
@@ -260,57 +227,23 @@ pub fn const_add<T: TensorType + Add<Output = T>>(
 /// let result = sub(&vec![x, k]).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[0, -2, 0, 0, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
-/// ```
-pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor<T>, TensorError> {
-    // determines if we're multiplying by a 1D const
-    if t.len() == 2 && t[1].dims().len() == 1 && t[1].dims()[0] == 1 {
-        return const_sub(&t[0], t[1][0].clone());
-    }
-
-    for e in t.iter() {
-        if t[0].dims() != e.dims() {
-            return Err(TensorError::DimMismatch("sub".to_string()));
-        }
-    }
-    // calculate value of output
-    let mut output: Tensor<T> = t[0].clone();
-
-    for e in t[1..].iter() {
-        for (i, e_i) in e.iter().enumerate() {
-            output[i] = output[i].clone() - e_i.clone()
-        }
-    }
-
-    Ok(output)
-}
-
-/// Elementwise subtracts a tensor with a const element.
-/// # Arguments
 ///
-/// * `a` - Tensor
-/// * `b` - Single value
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::const_sub;
+/// // Now test 1D sub
 /// let x = Tensor::<i32>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
 /// let k = 2;
-/// let result = const_sub(&x, k).unwrap();
+/// let result = sub(&x, k).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[0, -1, 0, -1, -1, -1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn const_sub<T: TensorType + Sub<Output = T>>(
-    a: &Tensor<T>,
-    b: T,
-) -> Result<Tensor<T>, TensorError> {
+pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
-    let mut output: Tensor<T> = a.clone();
+    let mut output: Tensor<T> = t[0].clone();
 
-    for i in 0..output.len() {
-        output[i] = output[i].clone() - b.clone();
+    for e in t[1..].iter() {
+        output = (output - e.clone())?;
     }
 
     Ok(output)
@@ -336,25 +269,23 @@ pub fn const_sub<T: TensorType + Sub<Output = T>>(
 /// let result = mult(&vec![x, k]).unwrap();
 /// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 1, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
+///
+/// // Now test 1D mult
+/// let x = Tensor::<i32>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let k = 2;
+/// let result = mult(&x, k).unwrap();
+/// let expected = Tensor::<i32>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
 /// ```
 pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor<T>, TensorError> {
-    // determines if we're multiplying by a 1D const
-    if t.len() == 2 && t[1].dims().len() == 1 && t[1].dims()[0] == 1 {
-        return const_mult(&t[0], t[1][0].clone());
-    }
-
-    for e in t.iter() {
-        if t[0].dims() != e.dims() {
-            return Err(TensorError::DimMismatch("mult".to_string()));
-        }
-    }
     // calculate value of output
     let mut output: Tensor<T> = t[0].clone();
 
     for e in t[1..].iter() {
-        for (i, e_i) in e.iter().enumerate() {
-            output[i] = output[i].clone() * e_i.clone()
-        }
+        output = (output * e.clone())?;
     }
 
     Ok(output)
@@ -385,48 +316,7 @@ pub fn div<T: TensorType + Div<Output = T>>(
     t: Tensor<T>,
     d: Tensor<T>,
 ) -> Result<Tensor<T>, TensorError> {
-    if t.dims() != d.dims() {
-        return Err(TensorError::DimMismatch("div".to_string()));
-    }
-    // calculate value of output
-    let mut output: Tensor<T> = t;
-
-    for (i, d_i) in d.iter().enumerate() {
-        output[i] = output[i].clone() / d_i.clone()
-    }
-    Ok(output)
-}
-
-/// Elementwise multiplies a tensor with a const element.
-/// # Arguments
-///
-/// * `a` - Tensor
-/// * `b` - Single value
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::const_mult;
-/// let x = Tensor::<i32>::new(
-///     Some(&[2, 1, 2, 1, 1, 1]),
-///     &[2, 3],
-/// ).unwrap();
-/// let k = 2;
-/// let result = const_mult(&x, k).unwrap();
-/// let expected = Tensor::<i32>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn const_mult<T: TensorType + Mul<Output = T>>(
-    a: &Tensor<T>,
-    b: T,
-) -> Result<Tensor<T>, TensorError> {
-    // calculate value of output
-    let mut output: Tensor<T> = a.clone();
-
-    for i in 0..output.len() {
-        output[i] = output[i].clone() * b.clone();
-    }
-
-    Ok(output)
+    t / d
 }
 
 /// Rescale a tensor with a const integer (similar to const_mult).
