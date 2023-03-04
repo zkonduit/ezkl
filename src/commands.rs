@@ -67,6 +67,10 @@ pub struct RunArgs {
     /// Flags to set maximum rotations
     #[arg(short = 'M', long, default_value = "512")]
     pub max_rotations: usize,
+    /// Base used to pack the public-inputs to the circuit. (value > 1) to pack instances as a single int.
+    /// Useful when verifying on the EVM.  
+    #[arg(long, default_value = "1")]
+    pub pack_base: usize,
 }
 
 const EZKLCONF: &str = "EZKLCONF";

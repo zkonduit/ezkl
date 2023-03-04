@@ -5,6 +5,7 @@ use crate::commands::{data_path, Cli, RunArgs};
 use crate::execute::ExecutionError;
 use crate::fieldutils::i32_to_felt;
 use crate::graph::{utilities::vector_to_quantized, Model, ModelCircuit};
+use crate::tensor::ops::pack;
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::arithmetic::FieldExt;
 use halo2_proofs::circuit::Value;
@@ -204,7 +205,10 @@ pub fn prepare_model_circuit_and_public_input<F: FieldExt>(
     }
     if model.visibility.output.is_public() {
         for (idx, v) in data.output_data.iter().enumerate() {
-            let t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx])?;
+            let mut t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx])?;
+            if cli.args.pack_base > 1 {
+                t = pack(&t, cli.args.pack_base as i32, cli.args.scale as usize)?;
+            }
             public_inputs.push(t);
         }
     }

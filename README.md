@@ -258,6 +258,7 @@ Options:
       --public-outputs                 Flags whether outputs are public
       --public-params                  Flags whether params are public
   -M, --max-rotations <MAX_ROTATIONS>  Flags to set maximum rotations [default: 512]
+  --pack-base <PACK_BASE>              Base used to pack the public-inputs to the circuit. (value > 1) to pack instances as a single int. Useful  when verifying on the EVM.   [default: 1]
   -h, --help                           Print help
   -V, --version                        Print version
 ```

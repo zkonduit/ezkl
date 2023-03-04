@@ -205,7 +205,7 @@ impl<F: FieldExt + TensorType> Config<F> {
             .map(|i| {
                 let _ = cs.lookup("lk", |cs| {
                     let qlookup = cs.query_selector(qlookup);
-                    let not_qlookup = Expression::Constant(F::one()) - qlookup.clone();
+                    let not_qlookup = Expression::Constant(<F as Field>::one()) - qlookup.clone();
                     let default_x = <F as Field>::zero();
                     let mut default_y = vec![0_i32].into_iter().into();
                     for nl in table.borrow().nonlinearities.clone() {

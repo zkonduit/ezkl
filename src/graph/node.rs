@@ -528,6 +528,11 @@ impl Node {
             }
             OpKind::Poly(ref s) => {
                 match s {
+                    PolyOp::Pack(_, _) => {
+                        return Err(Box::new(GraphError::MisformedParams(
+                            "pack op should not be configured here".to_string(),
+                        )));
+                    }
                     PolyOp::Pad(..) => {
                         let input_node = other_nodes.get_mut(&node.inputs[0].node).unwrap();
                         // we only support padding for 3D images
@@ -1196,6 +1201,7 @@ impl Node {
                     ..Default::default()
                 }
             }
+
             OpKind::Unknown(_) => {
                 warn!("{:?} is unknown", opkind);
                 Node::default()

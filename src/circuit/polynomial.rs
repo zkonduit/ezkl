@@ -28,6 +28,7 @@ pub enum Op {
     Affine,
     BatchNorm,
     ScaleAndShift,
+    Pack(usize, usize),
     Conv {
         padding: (usize, usize),
         stride: (usize, usize),
@@ -58,6 +59,7 @@ impl fmt::Display for Op {
             Op::Mult => write!(f, "mult"),
             Op::Matmul => write!(f, "matmul"),
             Op::Dot => write!(f, "dot"),
+            Op::Pack(base, _) => write!(f, "pack with base {:?}", base),
             Op::Affine => write!(f, "affine"),
             Op::BatchNorm => write!(f, "batchnorm"),
             Op::ScaleAndShift => write!(f, "scale & shift"),
@@ -130,6 +132,18 @@ impl Op {
                 kernel_shape,
             } => sumpool(&inputs[0], *padding, *stride, *kernel_shape),
             Op::GlobalSumPool => unreachable!(),
+            Op::Pack(base, scale) => {
+                if 1 != inputs.len() {
+                    return Err(TensorError::DimMismatch("pow inputs".to_string()));
+                }
+                // these unwraps should never ever fail if the Tensortypes are correctly implemented
+                // if anything we want these to hard fail if not implemented
+                let mut base_t = T::one().unwrap();
+                for _ in 1..*base {
+                    base_t = base_t + T::one().unwrap();
+                }
+                pack(&inputs[0], base_t, *scale)
+            }
             Op::Pow(u) => {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("pow inputs".to_string()));

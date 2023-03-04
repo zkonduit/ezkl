@@ -60,6 +60,8 @@ pub struct ModelConfig<F: FieldExt + TensorType> {
     pub model: Model,
     /// (optional) range checked outputs of the model graph
     pub public_outputs: Vec<RangeCheckConfig<F>>,
+    /// (optional) packed outputs of the model graph
+    pub packed_outputs: Vec<PolyConfig<F>>,
     /// A wrapper for holding all columns that will be assigned to by the model
     pub vars: ModelVars<F>,
 }
@@ -278,23 +280,37 @@ impl Model {
         }
 
         let mut public_outputs = vec![];
+        let mut packed_outputs = vec![];
         if self.visibility.output.is_public() {
-            public_outputs = self.range_check_outputs(meta, vars)
+            if self.run_args.pack_base > 1 {
+                info!("packing outputs...");
+                packed_outputs = self.pack_outputs(meta, vars, self.run_args.pack_base);
+                public_outputs = self.range_check_outputs(
+                    meta,
+                    vars,
+                    // outputs are now 1D
+                    self.output_shapes().iter().map(|_| vec![1]).collect(),
+                );
+            } else {
+                public_outputs = self.range_check_outputs(meta, vars, self.output_shapes());
+            }
         };
 
         Ok(ModelConfig {
             configs: results,
             model: self.clone(),
             public_outputs,
+            packed_outputs,
             vars: vars.clone(),
         })
     }
 
-    fn range_check_outputs<F: FieldExt + TensorType>(
+    fn pack_outputs<F: FieldExt + TensorType>(
         &self,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-    ) -> Vec<RangeCheckConfig<F>> {
+        base: usize,
+    ) -> Vec<PolyConfig<F>> {
         let mut configs = vec![];
         let output_nodes = self.model.outputs.clone();
         let output_shapes = output_nodes
@@ -302,6 +318,30 @@ impl Model {
             .map(|o| self.nodes.filter(o.node).out_dims)
             .collect_vec();
 
+        for s in &output_shapes {
+            let input = vars.advices[0].reshape(s);
+            let output = vars.advices[1].reshape(&[1]);
+
+            // tells the config layer to add a pack op to the circuit gate
+            let pack_node = PolyNode {
+                op: PolyOp::Pack(base, self.run_args.scale as usize),
+                input_order: vec![PolyInputType::Input(0)],
+            };
+
+            let config = PolyConfig::<F>::configure(meta, &[input.clone()], &output, &[pack_node]);
+
+            configs.push(config);
+        }
+        configs
+    }
+
+    fn range_check_outputs<F: FieldExt + TensorType>(
+        &self,
+        meta: &mut ConstraintSystem<F>,
+        vars: &mut ModelVars<F>,
+        output_shapes: Vec<Vec<usize>>,
+    ) -> Vec<RangeCheckConfig<F>> {
+        let mut configs = vec![];
         info!("output_shapes {:?}", output_shapes);
 
         for s in &output_shapes {
@@ -493,7 +533,7 @@ impl Model {
     /// * `inputs` - The values to feed into the circuit.
     pub fn layout<F: FieldExt + TensorType>(
         &self,
-        config: ModelConfig<F>,
+        mut config: ModelConfig<F>,
         layouter: &mut impl Layouter<F>,
         inputs: &[ValTensor<F>],
         vars: &ModelVars<F>,
@@ -523,9 +563,16 @@ impl Model {
             "model outputs are nodes: {:?}",
             output_nodes.clone().map(|o| o.node).collect_vec()
         );
-        let outputs = output_nodes
+        let mut outputs = output_nodes
             .map(|o| results.get(&o.node).unwrap().clone())
             .collect_vec();
+
+        // pack outputs if need be
+        for (i, packed_output) in config.packed_outputs.iter_mut().enumerate() {
+            info!("packing outputs...");
+            outputs[i] = packed_output.layout(layouter, &outputs[i..i + 1])?;
+        }
+
         let _ = config
             .public_outputs
             .iter()

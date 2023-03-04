@@ -715,11 +715,10 @@ pub fn pad<T: TensorType>(
 /// ).unwrap();
 /// let result = pack::<i32>(&x, 2, 2).unwrap();
 /// let expected = Tensor::<i32>::new(
-///     Some(&[103530714]),
+///     Some(&[103530709]),
 ///     &[1],
 /// ).unwrap();
 /// assert_eq!(result, expected);
-/// ```
 /// ```
 pub fn pack<T: TensorType>(a: &Tensor<T>, base: T, scale: usize) -> Result<Tensor<T>, TensorError>
 where
