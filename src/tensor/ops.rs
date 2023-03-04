@@ -698,6 +698,44 @@ pub fn pad<T: TensorType>(
     Ok(output)
 }
 
+/// Packs a multi-dim tensor into a single elem tensor
+/// # Arguments
+///
+/// * `a` - Tensor.
+/// * `base` - Base to use when packing
+/// * `scale` - fixed point representation scale
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::pack;
+///
+/// let x = Tensor::<i32>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[1, 3, 3],
+/// ).unwrap();
+/// let result = pack::<i32>(&x, 2, 2).unwrap();
+/// let expected = Tensor::<i32>::new(
+///     Some(&[103530714]),
+///     &[1],
+/// ).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+/// ```
+pub fn pack<T: TensorType>(a: &Tensor<T>, base: T, scale: usize) -> Result<Tensor<T>, TensorError>
+where
+    T: Add<Output = T>,
+    T: Mul<Output = T>,
+{
+    // base ^ (scale + tensor)
+    let mut output = T::zero().unwrap();
+    let base_tensor = Tensor::new(Some(&vec![base]), &[1])?;
+    for (i, a_i) in a.iter().enumerate() {
+        let pow_value = &pow(&base_tensor, i * (scale + 1))?[0];
+        output = output + pow_value.clone() * a_i.clone();
+    }
+    Ok(Tensor::new(Some(&vec![output]), &[1])?)
+}
+
 // ---------------------------------------------------------------------------------------------------------
 // -- nonlinear Functions ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------
