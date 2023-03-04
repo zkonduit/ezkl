@@ -535,6 +535,39 @@ impl<T: Clone + TensorType> Tensor<Tensor<T>> {
 
 impl<T: TensorType + Add<Output = T>> Add for Tensor<T> {
     type Output = Result<Tensor<T>, TensorError>;
+    /// Adds tensors.
+    /// # Arguments
+    ///
+    /// * `self` - Tensor
+    /// * `rhs` - Tensor
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use std::ops::Add;
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[2, 1, 2, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<i32>::new(
+    ///     Some(&[2, 3, 2, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = x.add(k).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[4, 4, 4, 2, 2, 2]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// // Now test 1D casting
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[2, 1, 2, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<i32>::new(
+    ///     Some(&[2]),
+    ///     &[1]).unwrap();
+    /// let result = x.add(k).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 3, 3, 3]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
     fn add(self, rhs: Self) -> Self::Output {
         // calculate value of output
         let mut output: Tensor<T> = self.clone();
@@ -566,6 +599,40 @@ impl<T: TensorType + Add<Output = T>> Add for Tensor<T> {
 
 impl<T: TensorType + Sub<Output = T>> Sub for Tensor<T> {
     type Output = Result<Tensor<T>, TensorError>;
+    /// Subtracts tensors.
+    /// # Arguments
+    ///
+    /// * `self` - Tensor
+    /// * `rhs` - Tensor
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use std::ops::Sub;
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[2, 1, 2, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<i32>::new(
+    ///     Some(&[2, 3, 2, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = x.sub(k).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[0, -2, 0, 0, 0, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// // Now test 1D sub
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[2, 1, 2, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<i32>::new(
+    ///     Some(&[2]),
+    ///     &[1],
+    /// ).unwrap();
+    /// let result = x.sub(k).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[0, -1, 0, -1, -1, -1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
     fn sub(self, rhs: Self) -> Self::Output {
         // calculate value of output
         let mut output: Tensor<T> = self.clone();
@@ -580,7 +647,7 @@ impl<T: TensorType + Sub<Output = T>> Sub for Tensor<T> {
         else if self.dims().len() == 1 && self.dims()[0] == 1 {
             output = rhs.clone();
             for i in 0..rhs.len() {
-                output[i] = output[i].clone() - self[0].clone();
+                output[i] = self[0].clone() - output[i].clone();
             }
         } else {
             if self.dims() != rhs.dims() {
@@ -597,6 +664,39 @@ impl<T: TensorType + Sub<Output = T>> Sub for Tensor<T> {
 
 impl<T: TensorType + Mul<Output = T>> Mul for Tensor<T> {
     type Output = Result<Tensor<T>, TensorError>;
+    /// Elementwise multiplies tensors.
+    /// # Arguments
+    ///
+    /// * `self` - Tensor
+    /// * `rhs` - Tensor
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use std::ops::Mul;
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[2, 1, 2, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<i32>::new(
+    ///     Some(&[2, 3, 2, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = x.mul(k).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 1, 1, 1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// // Now test 1D mult
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[2, 1, 2, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<i32>::new(
+    ///     Some(&[2]),
+    ///     &[1]).unwrap();
+    /// let result = x.mul(k).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
     fn mul(self, rhs: Self) -> Self::Output {
         // calculate value of output
         let mut output: Tensor<T> = self.clone();
@@ -628,6 +728,40 @@ impl<T: TensorType + Mul<Output = T>> Mul for Tensor<T> {
 
 impl<T: TensorType + Div<Output = T>> Div for Tensor<T> {
     type Output = Result<Tensor<T>, TensorError>;
+    /// Elementwise divide a tensor with another tensor.
+    /// # Arguments
+    ///
+    /// * `self` - Tensor
+    /// * `rhs` - Tensor
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use std::ops::Div;
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[4, 1, 4, 1, 1, 4]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let y = Tensor::<i32>::new(
+    ///     Some(&[2, 1, 2, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = x.div(y).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[2, 1, 2, 1, 1, 4]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// // test 1D casting
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[4, 1, 4, 1, 1, 4]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let y = Tensor::<i32>::new(
+    ///     Some(&[2]),
+    ///     &[1],
+    /// ).unwrap();
+    /// let result = x.div(y).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[2, 0, 2, 0, 0, 2]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
     fn div(self, rhs: Self) -> Self::Output {
         // calculate value of output
         let mut output: Tensor<T> = self.clone();

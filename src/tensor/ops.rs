@@ -298,47 +298,6 @@ pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tenso
     Ok(output)
 }
 
-/// Elementwise divide a tensor with another tensor.
-/// # Arguments
-///
-/// * `t` - Tensor
-/// * `d` - Tensor
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::div;
-/// let x = Tensor::<i32>::new(
-///     Some(&[4, 1, 4, 1, 1, 4]),
-///     &[2, 3],
-/// ).unwrap();
-/// let y = Tensor::<i32>::new(
-///     Some(&[2, 1, 2, 1, 1, 1]),
-///     &[2, 3],
-/// ).unwrap();
-/// let result = div(x, y).unwrap();
-/// let expected = Tensor::<i32>::new(Some(&[2, 1, 2, 1, 1, 4]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-///
-/// // test 1D casting
-/// let x = Tensor::<i32>::new(
-///     Some(&[4, 1, 4, 1, 1, 4]),
-///     &[2, 3],
-/// ).unwrap();
-/// let y = Tensor::<i32>::new(
-///     Some(&[2]),
-///     &[1],
-/// ).unwrap();
-/// let result = div(x, y).unwrap();
-/// let expected = Tensor::<i32>::new(Some(&[2, 0, 2, 0, 0, 2]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn div<T: TensorType + Div<Output = T>>(
-    t: Tensor<T>,
-    d: Tensor<T>,
-) -> Result<Tensor<T>, TensorError> {
-    t / d
-}
-
 /// Rescale a tensor with a const integer (similar to const_mult).
 /// # Arguments
 ///
