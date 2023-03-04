@@ -535,10 +535,11 @@ impl<T: Clone + TensorType> Tensor<Tensor<T>> {
 
 impl<T: TensorType + Add<Output = T>> Add for Tensor<T> {
     type Output = Result<Tensor<T>, TensorError>;
-    /// Adds multiple tensors.
+    /// Adds tensors.
     /// # Arguments
     ///
-    /// * `t` - Vector of tensors
+    /// * `self` - Tensor
+    /// * `rhs` - Tensor
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
@@ -730,8 +731,8 @@ impl<T: TensorType + Div<Output = T>> Div for Tensor<T> {
     /// Elementwise divide a tensor with another tensor.
     /// # Arguments
     ///
-    /// * `t` - Tensor
-    /// * `d` - Tensor
+    /// * `self` - Tensor
+    /// * `rhs` - Tensor
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
