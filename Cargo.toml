@@ -30,6 +30,7 @@ snark-verifier = { git = "https://github.com/privacy-scaling-explorations/snark-
 ethers = "1.0.2"
 ethers-solc = "1.0.2"
 tokio = { version = "1.22.0", features = ["macros"] }
+regex = "1"
 
 [dev-dependencies]
 criterion = {version = "0.3",  features = ["html_reports"]}
