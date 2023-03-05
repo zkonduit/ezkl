@@ -617,7 +617,7 @@ impl Model {
                                 let val = node
                                     .const_value
                                     .clone()
-                                    .context("Tensor<i32> should already be loaded")
+                                    .context("Tensor<i128> should already be loaded")
                                     .unwrap();
                                 <Tensor<i128> as Into<Tensor<Value<F>>>>::into(val).into()
                             }
