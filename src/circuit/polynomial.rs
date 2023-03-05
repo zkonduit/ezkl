@@ -134,7 +134,7 @@ impl Op {
             Op::GlobalSumPool => unreachable!(),
             Op::Pack(base, scale) => {
                 if 1 != inputs.len() {
-                    return Err(TensorError::DimMismatch("pow inputs".to_string()));
+                    return Err(TensorError::DimMismatch("pack inputs".to_string()));
                 }
                 // these unwraps should never ever fail if the Tensortypes are correctly implemented
                 // if anything we want these to hard fail if not implemented

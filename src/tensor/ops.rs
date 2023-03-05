@@ -710,12 +710,12 @@ pub fn pad<T: TensorType>(
 /// use ezkl::tensor::ops::pack;
 ///
 /// let x = Tensor::<i32>::new(
-///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
-///     &[1, 3, 3],
+///     Some(&[5, 2, 1]),
+///     &[1, 3],
 /// ).unwrap();
 /// let result = pack::<i32>(&x, 2, 2).unwrap();
 /// let expected = Tensor::<i32>::new(
-///     Some(&[103530709]),
+///     Some(&[90]),
 ///     &[1],
 /// ).unwrap();
 /// assert_eq!(result, expected);
