@@ -59,7 +59,7 @@ pub struct ModelConfig<F: FieldExt + TensorType> {
     /// The model struct
     pub model: Model,
     /// (optional) range checked outputs of the model graph
-    pub public_outputs: Vec<RangeCheckConfig<F>>,
+    pub range_checks: Vec<RangeCheckConfig<F>>,
     /// (optional) packed outputs of the model graph
     pub packed_outputs: Vec<PolyConfig<F>>,
     /// A wrapper for holding all columns that will be assigned to by the model
@@ -197,13 +197,13 @@ impl Model {
         let visibility = VarVisibility::from_args(cli.args.clone())?;
         match cli.command {
             Commands::Table { model } | Commands::Mock { model, .. } => {
-                Model::new(model, cli.args, Mode::Table, visibility)
+                Model::new(model, cli.args, Mode::Mock, visibility)
             }
             Commands::CreateEVMVerifier { model, .. }
             | Commands::Prove { model, .. }
             | Commands::Verify { model, .. }
             | Commands::Aggregate { model, .. } => {
-                Model::new(model, cli.args, Mode::Table, visibility)
+                Model::new(model, cli.args, Mode::Prove, visibility)
             }
             #[cfg(feature = "render")]
             Commands::RenderCircuit { model, .. } => {
@@ -279,27 +279,27 @@ impl Model {
             }
         }
 
-        let mut public_outputs = vec![];
+        let mut range_checks = vec![];
         let mut packed_outputs = vec![];
         if self.visibility.output.is_public() {
             if self.run_args.pack_base > 1 {
                 info!("packing outputs...");
-                packed_outputs = self.pack_outputs(meta, vars, self.run_args.pack_base);
-                public_outputs = self.range_check_outputs(
+                packed_outputs = self.pack_outputs(meta, vars, self.output_shapes());
+                range_checks = self.range_check_outputs(
                     meta,
                     vars,
                     // outputs are now 1D
                     self.output_shapes().iter().map(|_| vec![1]).collect(),
                 );
             } else {
-                public_outputs = self.range_check_outputs(meta, vars, self.output_shapes());
+                range_checks = self.range_check_outputs(meta, vars, self.output_shapes());
             }
         };
 
         Ok(ModelConfig {
             configs: results,
             model: self.clone(),
-            public_outputs,
+            range_checks,
             packed_outputs,
             vars: vars.clone(),
         })
@@ -309,14 +309,9 @@ impl Model {
         &self,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-        base: usize,
+        output_shapes: Vec<Vec<usize>>,
     ) -> Vec<PolyConfig<F>> {
         let mut configs = vec![];
-        let output_nodes = self.model.outputs.clone();
-        let output_shapes = output_nodes
-            .iter()
-            .map(|o| self.nodes.filter(o.node).out_dims)
-            .collect_vec();
 
         for s in &output_shapes {
             let input = vars.advices[0].reshape(s);
@@ -324,7 +319,7 @@ impl Model {
 
             // tells the config layer to add a pack op to the circuit gate
             let pack_node = PolyNode {
-                op: PolyOp::Pack(base, self.run_args.scale as usize),
+                op: PolyOp::Pack(self.run_args.pack_base, self.run_args.scale as usize),
                 input_order: vec![PolyInputType::Input(0)],
             };
 
@@ -571,10 +566,14 @@ impl Model {
         for (i, packed_output) in config.packed_outputs.iter_mut().enumerate() {
             info!("packing outputs...");
             outputs[i] = packed_output.layout(layouter, &outputs[i..i + 1])?;
+            // only use with mock prover
+            if matches!(self.mode, Mode::Mock) {
+                trace!("------------ packed output {:?}", outputs[i].show());
+            }
         }
 
         let _ = config
-            .public_outputs
+            .range_checks
             .iter()
             .zip(outputs)
             .enumerate()
