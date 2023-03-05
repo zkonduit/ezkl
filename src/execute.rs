@@ -27,7 +27,7 @@ use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
-use log::{info, trace};
+use log::{info, trace, warn};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
 use snark_verifier::loader::native::NativeLoader;
@@ -253,8 +253,25 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
                 let _ = f.write(yul_code.as_bytes());
 
-                let cmd = Command::new("python3")
-                    .arg("fix_verifier_sol.py")
+                let cmd = match std::env::current_exe() {
+                    Ok(exe_path) => {
+                        let parent = match exe_path.parent() {
+                            Some(p) => p.display().to_string(),
+                            None => "./".to_string(),
+                        };
+                        let exec_path = format!("{}/fix_verifier_sol.py", parent);
+                        info!("executing .sol generation from: {}", exec_path);
+                        exec_path
+                    }
+                    Err(e) => {
+                        warn!("failed to get current exe path: {e}");
+                        let exec_path = format!("fix_verifier_sol.py");
+                        info!("executing .sol generation from: {}", exec_path);
+                        exec_path
+                    }
+                };
+
+                let cmd = Command::new(cmd)
                     .arg(sol_code_path.as_ref().unwrap())
                     .output()
                     .unwrap();
