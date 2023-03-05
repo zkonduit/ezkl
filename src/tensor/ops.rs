@@ -66,22 +66,6 @@ pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     Ok(output)
 }
 
-///
-pub fn pack<T: TensorType>(a: &Tensor<T>, scale: usize) -> Result<Tensor<T>, TensorError>
-where
-    T: Add<Output = T>,
-    T: Mul<Output = T>,
-    T: From<u32>,
-{
-    // base ^ (scale + tensor)
-    let mut output = T::zero().unwrap();
-    for (i, a_i) in a.iter().enumerate() {
-        let pow_value = T::from(2_u32.pow((i as u32) * (scale as u32 + 1_u32)));
-        output = output + pow_value * a_i.clone();
-    }
-    Ok(Tensor::new(Some(&vec![output]), &[1])?)
-}
-
 /// Scales and shifts a tensor.
 /// Given inputs (x,k,b) computes k*x + b elementwise
 /// # Arguments
