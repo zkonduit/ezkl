@@ -15,19 +15,19 @@ pub fn vector_to_quantized(
     vec: &[f32],
     dims: &[usize],
     shift: f32,
-    scale: i32,
-) -> Result<Tensor<i32>, TensorError> {
+    scale: u32,
+) -> Result<Tensor<i128>, TensorError> {
     let mult = scale_to_multiplier(scale);
-    let scaled: Vec<i32> = vec
+    let scaled: Vec<i128> = vec
         .iter()
-        .map(|e| (mult * e + shift).round() as i32)
+        .map(|e| (mult * e + shift).round() as i128)
         .collect();
     Tensor::new(Some(&scaled), dims)
 }
 
 /// Converts a scale (log base 2) to a fixed point multiplier.
-pub fn scale_to_multiplier(scale: i32) -> f32 {
-    i32::pow(2, scale as u32) as f32
+pub fn scale_to_multiplier(scale: u32) -> f32 {
+    i32::pow(2, scale) as f32
 }
 
 /// Gets the shape of a onnx node's outlets.

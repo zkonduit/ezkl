@@ -71,7 +71,7 @@ pub enum GraphError {
 #[derive(Clone, Debug)]
 pub struct ModelCircuit<F: FieldExt> {
     /// Vector of input tensors to the model / graph of computations.
-    pub inputs: Vec<Tensor<i32>>,
+    pub inputs: Vec<Tensor<i128>>,
     /// Represents the Field we are using.
     pub _marker: PhantomData<F>,
 }
@@ -122,7 +122,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
         let inputs = self
             .inputs
             .iter()
-            .map(|i| ValTensor::from(<Tensor<i32> as Into<Tensor<Value<F>>>>::into(i.clone())))
+            .map(|i| ValTensor::from(<Tensor<i128> as Into<Tensor<Value<F>>>>::into(i.clone())))
             .collect::<Vec<ValTensor<F>>>();
         trace!("Setting output in synthesize");
         config

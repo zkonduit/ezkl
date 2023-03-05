@@ -59,7 +59,9 @@ pub struct ModelConfig<F: FieldExt + TensorType> {
     /// The model struct
     pub model: Model,
     /// (optional) range checked outputs of the model graph
-    pub public_outputs: Vec<RangeCheckConfig<F>>,
+    pub range_checks: Vec<RangeCheckConfig<F>>,
+    /// (optional) packed outputs of the model graph
+    pub packed_outputs: Vec<PolyConfig<F>>,
     /// A wrapper for holding all columns that will be assigned to by the model
     pub vars: ModelVars<F>,
 }
@@ -123,7 +125,7 @@ impl Model {
     /// * `run_args` - [RunArgs]
     pub fn forward(
         model_path: impl AsRef<Path>,
-        model_inputs: &[Tensor<i32>],
+        model_inputs: &[Tensor<i128>],
         run_args: RunArgs,
     ) -> Result<Vec<Tensor<f32>>, Box<dyn Error>> {
         let model = tract_onnx::onnx()
@@ -139,7 +141,7 @@ impl Model {
 
         debug!("{}", Table::new(nodes.clone()).to_string());
 
-        let mut results: BTreeMap<&usize, Tensor<i32>> = BTreeMap::new();
+        let mut results: BTreeMap<&usize, Tensor<i128>> = BTreeMap::new();
         for (i, n) in nodes.iter() {
             let mut inputs = vec![];
             for i in n.inputs.iter() {
@@ -195,13 +197,13 @@ impl Model {
         let visibility = VarVisibility::from_args(cli.args.clone())?;
         match cli.command {
             Commands::Table { model } | Commands::Mock { model, .. } => {
-                Model::new(model, cli.args, Mode::Table, visibility)
+                Model::new(model, cli.args, Mode::Mock, visibility)
             }
             Commands::CreateEVMVerifier { model, .. }
             | Commands::Prove { model, .. }
             | Commands::Verify { model, .. }
             | Commands::Aggregate { model, .. } => {
-                Model::new(model, cli.args, Mode::Table, visibility)
+                Model::new(model, cli.args, Mode::Prove, visibility)
             }
             #[cfg(feature = "render")]
             Commands::RenderCircuit { model, .. } => {
@@ -277,31 +279,64 @@ impl Model {
             }
         }
 
-        let mut public_outputs = vec![];
+        let mut range_checks = vec![];
+        let mut packed_outputs = vec![];
         if self.visibility.output.is_public() {
-            public_outputs = self.range_check_outputs(meta, vars)
+            if self.run_args.pack_base > 1 {
+                info!("packing outputs...");
+                packed_outputs = self.pack_outputs(meta, vars, self.output_shapes());
+                range_checks = self.range_check_outputs(
+                    meta,
+                    vars,
+                    // outputs are now 1D
+                    self.output_shapes().iter().map(|_| vec![1]).collect(),
+                );
+            } else {
+                range_checks = self.range_check_outputs(meta, vars, self.output_shapes());
+            }
         };
 
         Ok(ModelConfig {
             configs: results,
             model: self.clone(),
-            public_outputs,
+            range_checks,
+            packed_outputs,
             vars: vars.clone(),
         })
+    }
+
+    fn pack_outputs<F: FieldExt + TensorType>(
+        &self,
+        meta: &mut ConstraintSystem<F>,
+        vars: &mut ModelVars<F>,
+        output_shapes: Vec<Vec<usize>>,
+    ) -> Vec<PolyConfig<F>> {
+        let mut configs = vec![];
+
+        for s in &output_shapes {
+            let input = vars.advices[0].reshape(s);
+            let output = vars.advices[1].reshape(&[1]);
+
+            // tells the config layer to add a pack op to the circuit gate
+            let pack_node = PolyNode {
+                op: PolyOp::Pack(self.run_args.pack_base, self.run_args.scale),
+                input_order: vec![PolyInputType::Input(0)],
+            };
+
+            let config = PolyConfig::<F>::configure(meta, &[input.clone()], &output, &[pack_node]);
+
+            configs.push(config);
+        }
+        configs
     }
 
     fn range_check_outputs<F: FieldExt + TensorType>(
         &self,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
+        output_shapes: Vec<Vec<usize>>,
     ) -> Vec<RangeCheckConfig<F>> {
         let mut configs = vec![];
-        let output_nodes = self.model.outputs.clone();
-        let output_shapes = output_nodes
-            .iter()
-            .map(|o| self.nodes.filter(o.node).out_dims)
-            .collect_vec();
-
         info!("output_shapes {:?}", output_shapes);
 
         for s in &output_shapes {
@@ -493,7 +528,7 @@ impl Model {
     /// * `inputs` - The values to feed into the circuit.
     pub fn layout<F: FieldExt + TensorType>(
         &self,
-        config: ModelConfig<F>,
+        mut config: ModelConfig<F>,
         layouter: &mut impl Layouter<F>,
         inputs: &[ValTensor<F>],
         vars: &ModelVars<F>,
@@ -523,11 +558,22 @@ impl Model {
             "model outputs are nodes: {:?}",
             output_nodes.clone().map(|o| o.node).collect_vec()
         );
-        let outputs = output_nodes
+        let mut outputs = output_nodes
             .map(|o| results.get(&o.node).unwrap().clone())
             .collect_vec();
+
+        // pack outputs if need be
+        for (i, packed_output) in config.packed_outputs.iter_mut().enumerate() {
+            info!("packing outputs...");
+            outputs[i] = packed_output.layout(layouter, &outputs[i..i + 1])?;
+            // only use with mock prover
+            if matches!(self.mode, Mode::Mock) {
+                trace!("------------ packed output {:?}", outputs[i].show());
+            }
+        }
+
         let _ = config
-            .public_outputs
+            .range_checks
             .iter()
             .zip(outputs)
             .enumerate()
@@ -571,9 +617,9 @@ impl Model {
                                 let val = node
                                     .const_value
                                     .clone()
-                                    .context("Tensor<i32> should already be loaded")
+                                    .context("Tensor<i128> should already be loaded")
                                     .unwrap();
-                                <Tensor<i32> as Into<Tensor<Value<F>>>>::into(val).into()
+                                <Tensor<i128> as Into<Tensor<Value<F>>>>::into(val).into()
                             }
                             _ => inputs.get(i).unwrap().clone(),
                         }
@@ -699,7 +745,7 @@ impl Model {
     }
 
     /// Returns the fixed point scale of the computational graph's outputs
-    pub fn get_output_scales(&self) -> Vec<i32> {
+    pub fn get_output_scales(&self) -> Vec<u32> {
         let output_nodes = self.model.outputs.iter();
         output_nodes
             .map(|o| self.nodes.filter(o.node).out_scale)
