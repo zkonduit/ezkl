@@ -3,7 +3,7 @@ pub mod evm;
 
 use crate::commands::{data_path, Cli, RunArgs};
 use crate::execute::ExecutionError;
-use crate::fieldutils::{felt_to_i128, i128_to_felt};
+use crate::fieldutils::i128_to_felt;
 use crate::graph::{utilities::vector_to_quantized, Model, ModelCircuit};
 use crate::tensor::ops::pack;
 use crate::tensor::{Tensor, TensorType};
@@ -21,7 +21,7 @@ use halo2curves::bn256::Bn256;
 use halo2curves::group::ff::PrimeField;
 use halo2curves::serde::SerdeObject;
 use halo2curves::CurveAffine;
-use log::{debug, info, trace, warn};
+use log::{debug, info, trace};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use snark_verifier::system::halo2::{compile, Config};
@@ -33,6 +33,15 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::time::Instant;
+use thiserror::Error as thisError;
+
+#[derive(thisError, Debug)]
+/// Errors related to pfsys
+pub enum PfSysError {
+    /// Packing exponent is too large
+    #[error("largest packing exponent exceeds max. try reducing the scale")]
+    PackingExponent,
+}
 
 /// The input tensor data and shape, and output data for the computational graph (model) as floats.
 /// For example, the input might be the image data for a neural network, and the output class scores.
@@ -209,15 +218,10 @@ pub fn prepare_model_circuit_and_public_input<F: FieldExt + TensorType>(
             let len = t.len();
             if cli.args.pack_base > 1 {
                 let max_exponent = (((len - 1) as u32) * (cli.args.scale + 1)) as f64;
-                if max_exponent > (2_u128.pow(64) as f64).log(cli.args.pack_base as f64) {
-                    warn!("largest packing exponent exceeds max. try reducing the scale")
+                if max_exponent > (i128::MAX as f64).log(cli.args.pack_base as f64) {
+                    return Err(Box::new(PfSysError::PackingExponent));
                 }
-                let field_t = pack(
-                    &t.map(|x| i128_to_felt::<F>(x)),
-                    i128_to_felt::<F>(cli.args.pack_base as i128),
-                    cli.args.scale,
-                )?;
-                t = field_t.map(|x| felt_to_i128(x));
+                t = pack(&t, cli.args.pack_base as i128, cli.args.scale)?;
             }
             public_inputs.push(t);
         }

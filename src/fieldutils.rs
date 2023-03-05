@@ -21,7 +21,7 @@ pub fn i128_to_felt<F: FieldExt>(x: i128) -> F {
 
 /// Converts a Field element to an i32.
 pub fn felt_to_i32<F: FieldExt>(x: F) -> i32 {
-    if x > F::from(2_u64.pow(16)) {
+    if x > F::from(i32::MAX as u64) {
         -((-x).get_lower_32() as i32)
     } else {
         x.get_lower_32() as i32
@@ -30,7 +30,7 @@ pub fn felt_to_i32<F: FieldExt>(x: F) -> i32 {
 
 /// Converts a Field element to an i32.
 pub fn felt_to_i128<F: FieldExt>(x: F) -> i128 {
-    if x > F::from_u128(2_u128.pow(64)) {
+    if x > F::from_u128(i128::MAX as u128) {
         -((-x).get_lower_128() as i128)
     } else {
         x.get_lower_128() as i128
@@ -48,8 +48,14 @@ mod test {
         let res: F = i32_to_felt(-15i32);
         assert_eq!(res, -F::from(15));
 
+        let res: F = i32_to_felt(2_i32.pow(17));
+        assert_eq!(res, F::from(131072));
+
         let res: F = i128_to_felt(-15i128);
         assert_eq!(res, -F::from(15));
+
+        let res: F = i128_to_felt(2_i128.pow(17));
+        assert_eq!(res, F::from(131072));
     }
 
     #[test]
