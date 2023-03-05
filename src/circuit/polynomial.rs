@@ -28,7 +28,7 @@ pub enum Op {
     Affine,
     BatchNorm,
     ScaleAndShift,
-    Pack(usize, usize),
+    Pack(u32, u32),
     Conv {
         padding: (usize, usize),
         stride: (usize, usize),
@@ -39,7 +39,7 @@ pub enum Op {
         kernel_shape: (usize, usize),
     },
     GlobalSumPool,
-    Pow(usize),
+    Pow(u32),
     Rescaled {
         inner: Box<Op>,
         scale: Vec<(usize, usize)>,
@@ -138,8 +138,8 @@ impl Op {
                 }
                 // these unwraps should never ever fail if the Tensortypes are correctly implemented
                 // if anything we want these to hard fail if not implemented
-                let mut base_t = T::one().unwrap();
-                for _ in 1..*base {
+                let mut base_t = T::zero().unwrap();
+                for _ in 0..*base {
                     base_t = base_t + T::one().unwrap();
                 }
                 pack(&inputs[0], base_t, *scale)
@@ -148,7 +148,7 @@ impl Op {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("pow inputs".to_string()));
                 }
-                pow(&inputs[0], *u)
+                inputs[0].pow(*u)
             }
             Op::Sum => {
                 if 1 != inputs.len() {

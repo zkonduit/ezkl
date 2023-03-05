@@ -125,7 +125,7 @@ impl Model {
     /// * `run_args` - [RunArgs]
     pub fn forward(
         model_path: impl AsRef<Path>,
-        model_inputs: &[Tensor<i32>],
+        model_inputs: &[Tensor<i128>],
         run_args: RunArgs,
     ) -> Result<Vec<Tensor<f32>>, Box<dyn Error>> {
         let model = tract_onnx::onnx()
@@ -141,7 +141,7 @@ impl Model {
 
         debug!("{}", Table::new(nodes.clone()).to_string());
 
-        let mut results: BTreeMap<&usize, Tensor<i32>> = BTreeMap::new();
+        let mut results: BTreeMap<&usize, Tensor<i128>> = BTreeMap::new();
         for (i, n) in nodes.iter() {
             let mut inputs = vec![];
             for i in n.inputs.iter() {
@@ -319,7 +319,7 @@ impl Model {
 
             // tells the config layer to add a pack op to the circuit gate
             let pack_node = PolyNode {
-                op: PolyOp::Pack(self.run_args.pack_base, self.run_args.scale as usize),
+                op: PolyOp::Pack(self.run_args.pack_base, self.run_args.scale),
                 input_order: vec![PolyInputType::Input(0)],
             };
 
@@ -619,7 +619,7 @@ impl Model {
                                     .clone()
                                     .context("Tensor<i32> should already be loaded")
                                     .unwrap();
-                                <Tensor<i32> as Into<Tensor<Value<F>>>>::into(val).into()
+                                <Tensor<i128> as Into<Tensor<Value<F>>>>::into(val).into()
                             }
                             _ => inputs.get(i).unwrap().clone(),
                         }
@@ -745,7 +745,7 @@ impl Model {
     }
 
     /// Returns the fixed point scale of the computational graph's outputs
-    pub fn get_output_scales(&self) -> Vec<i32> {
+    pub fn get_output_scales(&self) -> Vec<u32> {
         let output_nodes = self.model.outputs.iter();
         output_nodes
             .map(|o| self.nodes.filter(o.node).out_scale)

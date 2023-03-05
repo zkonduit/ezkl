@@ -227,7 +227,7 @@ fn display_inputs(o: &Vec<OutletId>) -> String {
     }
 }
 
-fn display_tensor(o: &Option<Tensor<i32>>) -> String {
+fn display_tensor(o: &Option<Tensor<i128>>) -> String {
     match o {
         Some(s) => format!("[{:#?}...]", s[0]),
         None => String::new(),
@@ -258,12 +258,12 @@ pub struct Node {
     /// The inferred maximum value that can appear in the output tensor given previous quantization choices.
     pub output_max: f32,
     /// The denominator in the fixed point representation for the node's input. Tensors of differing scales should not be combined.
-    pub in_scale: i32,
+    pub in_scale: u32,
     /// The denominator in the fixed point representation for the node's output. Tensors of differing scales should not be combined.
-    pub out_scale: i32,
+    pub out_scale: u32,
     #[tabled(display_with = "display_tensor")]
     /// The quantized constants potentially associated with this self.
-    pub const_value: Option<Tensor<i32>>,
+    pub const_value: Option<Tensor<i128>>,
     #[tabled(display_with = "display_tensorf32")]
     /// The un-quantized constants potentially associated with this self.
     pub raw_const_value: Option<Tensor<f32>>,
@@ -295,7 +295,7 @@ impl Node {
     pub fn new(
         mut node: OnnxNode<InferenceFact, Box<dyn InferenceOp>>,
         other_nodes: &mut BTreeMap<usize, Node>,
-        scale: i32,
+        scale: u32,
         idx: usize,
     ) -> Result<Self, Box<dyn Error>> {
         trace!("Create {:?}", node);
@@ -746,7 +746,7 @@ impl Node {
                             in_scale: input_node.out_scale,
                             out_scale: input_node.out_scale,
                             output_max: input_node.output_max
-                                * f32::powi(2.0, input_node.out_scale),
+                                * f32::powi(2.0, input_node.out_scale as i32),
                             ..Default::default()
                         }
                     }
@@ -889,7 +889,7 @@ impl Node {
                                     .iter()
                                     .enumerate()
                                     .map(|(idx, n)| {
-                                        ((scale[idx].1 as f32) * (n.output_max.ceil())) as i32
+                                        ((scale[idx].1 as f32) * (n.output_max.ceil())) as i128
                                     })
                                     .max()
                                     .unwrap() as f32)
@@ -936,7 +936,7 @@ impl Node {
                                     .iter()
                                     .enumerate()
                                     .map(|(idx, n)| {
-                                        ((scale[idx].1 as f32) * (n.output_max.ceil())) as i32
+                                        ((scale[idx].1 as f32) * (n.output_max.ceil())) as i128
                                     })
                                     .max()
                                     .unwrap() as f32)
@@ -967,11 +967,11 @@ impl Node {
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: inputs[0].out_dims.clone(),
                             in_scale: input_node.out_scale,
-                            out_scale: inputs.iter().map(|input| input.out_scale).sum::<i32>(),
+                            out_scale: inputs.iter().map(|input| input.out_scale).sum::<u32>(),
                             output_max: f32::powf(
                                 inputs
                                     .iter()
-                                    .map(|input| input.output_max.ceil() as i32)
+                                    .map(|input| input.output_max.ceil() as i128)
                                     .max()
                                     .unwrap() as f32,
                                 inputs.len() as f32,
@@ -991,16 +991,16 @@ impl Node {
 
                         Node {
                             idx,
-                            opkind: OpKind::Poly(PolyOp::Pow(pow as usize)),
+                            opkind: OpKind::Poly(PolyOp::Pow(pow as u32)),
                             inputs: node.inputs,
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
-                            out_scale: input_node.out_scale * (pow as i32),
+                            out_scale: input_node.out_scale * (pow as u32),
                             output_max: f32::powf(
                                 inputs
                                     .iter()
-                                    .map(|input| input.output_max.ceil() as i32)
+                                    .map(|input| input.output_max.ceil() as i128)
                                     .max()
                                     .unwrap() as f32,
                                 pow,
@@ -1072,7 +1072,7 @@ impl Node {
                                 Ok(res)
                             } else {
                                 let num_entries: usize = input_node.out_dims.iter().product();
-                                let explicit_prod: i32 =
+                                let explicit_prod: i128 =
                                     shapes.iter().filter(|x| *x > &0).product();
                                 if explicit_prod <= 0 {
                                     return Err(Box::new(GraphError::InvalidDims(idx, opkind)));
@@ -1143,8 +1143,8 @@ impl Node {
                     DatumType::I64 => {
                         // Generally a shape or hyperparam
                         let vec = const_node.0.as_slice::<i64>().unwrap().to_vec();
-                        let cast: Vec<i32> = vec.iter().map(|x| *x as i32).collect();
-                        let t = Tensor::<i32>::new(Some(&cast), &dims).unwrap();
+                        let cast: Vec<i128> = vec.iter().map(|x| *x as i128).collect();
+                        let t = Tensor::<i128>::new(Some(&cast), &dims).unwrap();
 
                         Node {
                             idx,
@@ -1179,7 +1179,7 @@ impl Node {
                     the_shape
                         .unwrap()
                         .iter()
-                        .map(|x| (*x as i32) as usize)
+                        .map(|x| (*x as i128) as usize)
                         .collect()
                 };
                 // remove batch dim for now
@@ -1250,7 +1250,7 @@ impl Node {
         }
     }
 
-    fn quantize_const_to_scale(&mut self, scale: i32) -> Result<(), Box<dyn Error>> {
+    fn quantize_const_to_scale(&mut self, scale: u32) -> Result<(), Box<dyn Error>> {
         if !self.opkind.is_const() {
             return Err(Box::new(GraphError::WrongMethod(
                 self.idx,
@@ -1266,7 +1266,7 @@ impl Node {
     }
 
     /// Re-quantizes a constant value node to a new scale.
-    fn scale_up_const_node(node: &mut Node, scale: i32) -> Result<&mut Node, Box<dyn Error>> {
+    fn scale_up_const_node(node: &mut Node, scale: u32) -> Result<&mut Node, Box<dyn Error>> {
         if !node.opkind.is_const() {
             return Err(Box::new(GraphError::WrongMethod(
                 node.idx,

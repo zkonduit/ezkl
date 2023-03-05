@@ -48,7 +48,7 @@ pub struct RunArgs {
     pub tolerance: usize,
     /// The denominator in the fixed point representation used when quantizing
     #[arg(short = 'S', long, default_value = "7")]
-    pub scale: i32,
+    pub scale: u32,
     /// The number of bits used in lookup tables
     #[arg(short = 'B', long, default_value = "16")]
     pub bits: usize,
@@ -70,7 +70,7 @@ pub struct RunArgs {
     /// Base used to pack the public-inputs to the circuit. (value > 1) to pack instances as a single int.
     /// Useful when verifying on the EVM.  
     #[arg(long, default_value = "1")]
-    pub pack_base: usize,
+    pub pack_base: u32,
 }
 
 const EZKLCONF: &str = "EZKLCONF";
