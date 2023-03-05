@@ -167,7 +167,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         }
         Commands::Table { model: _ } => {
             let om = Model::from_ezkl_conf(cli)?;
-            println!("{}", Table::new(om.nodes.flatten()));
+            info!("{}", Table::new(om.nodes.flatten()));
         }
         #[cfg(feature = "render")]
         Commands::RenderCircuit {
@@ -458,7 +458,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             for instance in proof.instances {
                 println!("{:?}", instance);
             }
-            println!("{}", hex::encode(proof.proof))
+            info!("{}", hex::encode(proof.proof))
         }
     }
     Ok(())

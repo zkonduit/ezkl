@@ -3,8 +3,9 @@ pub mod evm;
 
 use crate::commands::{data_path, Cli, RunArgs};
 use crate::execute::ExecutionError;
-use crate::fieldutils::i32_to_felt;
+use crate::fieldutils::i128_to_felt;
 use crate::graph::{utilities::vector_to_quantized, Model, ModelCircuit};
+use crate::tensor::ops::pack;
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::arithmetic::FieldExt;
 use halo2_proofs::circuit::Value;
@@ -32,6 +33,15 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::time::Instant;
+use thiserror::Error as thisError;
+
+#[derive(thisError, Debug)]
+/// Errors related to pfsys
+pub enum PfSysError {
+    /// Packing exponent is too large
+    #[error("largest packing exponent exceeds max. try reducing the scale")]
+    PackingExponent,
+}
 
 /// The input tensor data and shape, and output data for the computational graph (model) as floats.
 /// For example, the input might be the image data for a neural network, and the output class scores.
@@ -77,7 +87,7 @@ impl<F: FieldExt + SerdeObject, C: CurveAffine> Snark<F, C> {
 
     /// Saves the Proof to a specified `proof_path`.
     pub fn save(&self, proof_path: &PathBuf) -> Result<(), Box<dyn Error>> {
-        let self_i32 = Snarkbytes {
+        let self_i128 = Snarkbytes {
             num_instance: self.protocol.as_ref().unwrap().num_instance.clone(),
             instances: self
                 .instances
@@ -87,7 +97,7 @@ impl<F: FieldExt + SerdeObject, C: CurveAffine> Snark<F, C> {
             proof: self.proof.clone(),
         };
 
-        let serialized = serde_json::to_string(&self_i32).map_err(Box::<dyn Error>::from)?;
+        let serialized = serde_json::to_string(&self_i128).map_err(Box::<dyn Error>::from)?;
 
         let mut file = std::fs::File::create(proof_path).map_err(Box::<dyn Error>::from)?;
         file.write_all(serialized.as_bytes())
@@ -184,7 +194,7 @@ impl<F: FieldExt + SerdeObject, C: CurveAffine> From<Snark<F, C>> for SnarkWitne
 type CircuitInputs<F> = (ModelCircuit<F>, Vec<Vec<F>>);
 
 /// Initialize the model circuit and quantize the provided float inputs from the provided `ModelInput`.
-pub fn prepare_model_circuit_and_public_input<F: FieldExt>(
+pub fn prepare_model_circuit_and_public_input<F: FieldExt + TensorType>(
     data: &ModelInput,
     cli: &Cli,
 ) -> Result<CircuitInputs<F>, Box<dyn Error>> {
@@ -204,7 +214,15 @@ pub fn prepare_model_circuit_and_public_input<F: FieldExt>(
     }
     if model.visibility.output.is_public() {
         for (idx, v) in data.output_data.iter().enumerate() {
-            let t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx])?;
+            let mut t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx])?;
+            let len = t.len();
+            if cli.args.pack_base > 1 {
+                let max_exponent = (((len - 1) as u32) * (cli.args.scale + 1)) as f64;
+                if max_exponent > (i128::MAX as f64).log(cli.args.pack_base as f64) {
+                    return Err(Box::new(PfSysError::PackingExponent));
+                }
+                t = pack(&t, cli.args.pack_base as i128, cli.args.scale)?;
+            }
             public_inputs.push(t);
         }
     }
@@ -219,7 +237,7 @@ pub fn prepare_model_circuit_and_public_input<F: FieldExt>(
 
     let pi_inner: Vec<Vec<F>> = public_inputs
         .iter()
-        .map(|i| i.iter().map(|e| i32_to_felt::<F>(*e)).collect::<Vec<F>>())
+        .map(|i| i.iter().map(|e| i128_to_felt::<F>(*e)).collect::<Vec<F>>())
         .collect::<Vec<Vec<F>>>();
 
     Ok((circuit, pi_inner))
@@ -231,7 +249,7 @@ pub fn prepare_model_circuit<F: FieldExt>(
     args: &RunArgs,
 ) -> Result<ModelCircuit<F>, Box<dyn Error>> {
     // quantize the supplied data using the provided scale.
-    let mut inputs: Vec<Tensor<i32>> = vec![];
+    let mut inputs: Vec<Tensor<i128>> = vec![];
     for (input, shape) in data.input_data.iter().zip(data.input_shapes.clone()) {
         let t = vector_to_quantized(input, &shape, 0.0, args.scale)?;
         inputs.push(t);
@@ -523,9 +541,9 @@ mod tests {
             .and_then(|name| if name.is_empty() { None } else { Some(name) })
             .unwrap_or("tmp.bin");
 
-        println!("file to download: '{}'", fname);
+        info!("file to download: '{}'", fname);
         let fname = tmp_dir.path().join(fname);
-        println!("will be located under: '{:?}'", fname);
+        info!("will be located under: '{:?}'", fname);
         let mut dest = File::create(fname.clone()).unwrap();
         let content = response.bytes().await.unwrap();
         copy(&mut &content[..], &mut dest).unwrap();

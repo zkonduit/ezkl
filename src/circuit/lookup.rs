@@ -1,6 +1,6 @@
 use super::*;
+use crate::fieldutils::{felt_to_i128, i128_to_felt};
 use crate::tensor::ops::nonlinearities::*;
-use crate::{fieldutils::felt_to_i32, fieldutils::i32_to_felt};
 use halo2_proofs::circuit::AssignedCell;
 use halo2_proofs::plonk::Assigned;
 use halo2_proofs::{
@@ -57,9 +57,9 @@ impl fmt::Display for Op {
 
 impl Op {
     /// forward function
-    pub fn f(&self, x: Tensor<i32>) -> Tensor<i32> {
+    pub fn f(&self, x: Tensor<i128>) -> Tensor<i128> {
         match &self {
-            Op::Div { scale } => const_div(&x, *scale as i32),
+            Op::Div { scale } => const_div(&x, *scale as i128),
             Op::ReLU { scale } => leakyrelu(&x, *scale, 0_f32),
             Op::LeakyReLU { scale, slope } => leakyrelu(&x, *scale, slope.0),
             Op::PReLU { scale, slopes } => leakyrelu(&x, *scale, slopes[0].0),
@@ -70,8 +70,8 @@ impl Op {
 
     /// a value which is always in the table
     pub fn default_pair<F: FieldExt>(&self) -> (F, F) {
-        let x = vec![0_i32].into_iter().into();
-        (F::zero(), i32_to_felt(self.f(x)[0]))
+        let x = vec![0_i128].into_iter().into();
+        (F::zero(), i128_to_felt(self.f(x)[0]))
     }
 }
 
@@ -110,7 +110,7 @@ impl<F: FieldExt> Table<F> {
             return Err(Box::new(CircuitError::TableAlreadyAssigned));
         }
 
-        let base = 2i32;
+        let base = 2i128;
         let smallest = -base.pow(self.bits as u32 - 1);
         let largest = base.pow(self.bits as u32 - 1);
         let inputs = Tensor::from(smallest..largest);
@@ -131,14 +131,14 @@ impl<F: FieldExt> Table<F> {
                                 || format!("nl_i_col row {}", row_offset),
                                 self.table_input,
                                 row_offset,
-                                || Value::known(i32_to_felt::<F>(*input)),
+                                || Value::known(i128_to_felt::<F>(*input)),
                             )?;
 
                             table.assign_cell(
                                 || format!("nl_o_col row {}", row_offset),
                                 self.table_output,
                                 row_offset,
-                                || Value::known(i32_to_felt::<F>(evals[row_offset])),
+                                || Value::known(i128_to_felt::<F>(evals[row_offset])),
                             )?;
                             Ok(())
                         })
@@ -205,13 +205,13 @@ impl<F: FieldExt + TensorType> Config<F> {
             .map(|i| {
                 let _ = cs.lookup("lk", |cs| {
                     let qlookup = cs.query_selector(qlookup);
-                    let not_qlookup = Expression::Constant(F::one()) - qlookup.clone();
+                    let not_qlookup = Expression::Constant(<F as Field>::one()) - qlookup.clone();
                     let default_x = <F as Field>::zero();
-                    let mut default_y = vec![0_i32].into_iter().into();
+                    let mut default_y = vec![0_i128].into_iter().into();
                     for nl in table.borrow().nonlinearities.clone() {
                         default_y = nl.f(default_y)
                     }
-                    let default_y: F = i32_to_felt(default_y[0]);
+                    let default_y: F = i128_to_felt(default_y[0]);
                     let (x, y) = input.cartesian_coord(i);
                     vec![
                         (
@@ -295,11 +295,11 @@ impl<F: FieldExt + TensorType> Config<F> {
                     // convert assigned cells to Value<Assigned<F>> so we can extract the inner field element
                     let w_vaf: Tensor<Value<Assigned<F>>> = w.map(|acaf| (acaf).value_field());
                     // finally convert to vector of integers
-                    let mut integer_evals: Vec<i32> = vec![];
+                    let mut integer_evals: Vec<i128> = vec![];
                     let _ = w_vaf.map(|vaf| {
                         // we have to push to an externally created vector or else vaf.map() returns an evaluation wrapped in Value<> (which we don't want)
                         vaf.map(|f| {
-                            integer_evals.push(felt_to_i32(f.evaluate()));
+                            integer_evals.push(felt_to_i128(f.evaluate()));
                         })
                     });
                     // for key generation integer_evals will be empty and we need to return a set of unassigned values
@@ -312,7 +312,7 @@ impl<F: FieldExt + TensorType> Config<F> {
                             for nl in self.table.borrow().nonlinearities.clone() {
                                 x = nl.f(x);
                             }
-                            x.map(|elem| Value::known(i32_to_felt(elem)))
+                            x.map(|elem| Value::known(i128_to_felt(elem)))
                         }
                     };
 

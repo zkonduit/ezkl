@@ -8,7 +8,7 @@ pub mod var;
 pub use val::*;
 pub use var::*;
 
-use crate::fieldutils::{felt_to_i32, i32_to_felt};
+use crate::fieldutils::{felt_to_i32, i128_to_felt, i32_to_felt};
 
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -45,6 +45,10 @@ pub trait TensorType: Clone + Debug + 'static {
     fn zero() -> Option<Self> {
         None
     }
+    /// Returns the unit value.
+    fn one() -> Option<Self> {
+        None
+    }
     /// Max operator for ordering values.
     fn tmax(&self, _: &Self) -> Option<Self> {
         None
@@ -52,10 +56,13 @@ pub trait TensorType: Clone + Debug + 'static {
 }
 
 macro_rules! tensor_type {
-    ($rust_type:ty, $tensor_type:ident, $zero:expr) => {
+    ($rust_type:ty, $tensor_type:ident, $zero:expr, $one:expr) => {
         impl TensorType for $rust_type {
             fn zero() -> Option<Self> {
                 Some($zero)
+            }
+            fn one() -> Option<Self> {
+                Some($one)
             }
 
             fn tmax(&self, other: &Self) -> Option<Self> {
@@ -88,19 +95,27 @@ impl TensorType for f32 {
     }
 }
 
-tensor_type!(i32, Int32, 0);
-tensor_type!(usize, USize, 0);
-tensor_type!((), Empty, ());
+tensor_type!(i128, Int128, 0, 1);
+tensor_type!(i32, Int32, 0, 1);
+tensor_type!(usize, USize, 0, 1);
+tensor_type!((), Empty, (), ());
 
 impl<T: TensorType> TensorType for Tensor<T> {
     fn zero() -> Option<Self> {
         Some(Tensor::new(Some(&[T::zero().unwrap()]), &[1]).unwrap())
+    }
+    fn one() -> Option<Self> {
+        Some(Tensor::new(Some(&[T::one().unwrap()]), &[1]).unwrap())
     }
 }
 
 impl<T: TensorType> TensorType for Value<T> {
     fn zero() -> Option<Self> {
         Some(Value::known(T::zero().unwrap()))
+    }
+
+    fn one() -> Option<Self> {
+        Some(Value::known(T::one().unwrap()))
     }
 
     fn tmax(&self, other: &Self) -> Option<Self> {
@@ -117,6 +132,10 @@ impl<F: FieldExt> TensorType for Assigned<F> {
         Some(F::zero().into())
     }
 
+    fn one() -> Option<Self> {
+        Some(F::one().into())
+    }
+
     fn tmax(&self, other: &Self) -> Option<Self> {
         if self.evaluate() >= other.evaluate() {
             Some(*self)
@@ -129,6 +148,10 @@ impl<F: FieldExt> TensorType for Assigned<F> {
 impl<F: FieldExt> TensorType for Expression<F> {
     fn zero() -> Option<Self> {
         Some(Expression::Constant(F::zero()))
+    }
+
+    fn one() -> Option<Self> {
+        Some(Expression::Constant(F::one()))
     }
 
     fn tmax(&self, _: &Self) -> Option<Self> {
@@ -173,6 +196,10 @@ impl TensorType for halo2curves::pasta::Fp {
         Some(halo2curves::pasta::Fp::zero())
     }
 
+    fn one() -> Option<Self> {
+        Some(halo2curves::pasta::Fp::one())
+    }
+
     fn tmax(&self, other: &Self) -> Option<Self> {
         Some((*self).max(*other))
     }
@@ -181,6 +208,10 @@ impl TensorType for halo2curves::pasta::Fp {
 impl TensorType for halo2curves::bn256::Fr {
     fn zero() -> Option<Self> {
         Some(halo2curves::bn256::Fr::zero())
+    }
+
+    fn one() -> Option<Self> {
+        Some(halo2curves::bn256::Fr::one())
     }
 
     fn tmax(&self, other: &Self) -> Option<Self> {
@@ -302,6 +333,15 @@ impl<F: FieldExt + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> {
     fn from(t: Tensor<i32>) -> Tensor<Value<F>> {
         let mut ta: Tensor<Value<F>> =
             Tensor::from((0..t.len()).map(|i| Value::known(i32_to_felt::<F>(t[i]))));
+        ta.reshape(t.dims());
+        ta
+    }
+}
+
+impl<F: FieldExt + TensorType + Clone> From<Tensor<i128>> for Tensor<Value<F>> {
+    fn from(t: Tensor<i128>) -> Tensor<Value<F>> {
+        let mut ta: Tensor<Value<F>> =
+            Tensor::from((0..t.len()).map(|i| Value::known(i128_to_felt::<F>(t[i]))));
         ta.reshape(t.dims());
         ta
     }
@@ -723,6 +763,45 @@ impl<T: TensorType + Mul<Output = T>> Mul for Tensor<T> {
             }
         }
         Ok(output)
+    }
+}
+
+impl<T: TensorType + Mul<Output = T>> Tensor<T> {
+    /// Elementwise raise a tensor to the nth power.
+    /// # Arguments
+    ///
+    /// * `self` - Tensor
+    /// * `b` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use std::ops::Mul;
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[2, 15, 2, 1, 1, 0]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = x.pow(3).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[8, 3375, 8, 1, 1, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn pow(&self, mut exp: u32) -> Result<Self, TensorError> {
+        // calculate value of output
+        let mut base = self.clone();
+        let mut acc = base.map(|_| T::one().unwrap());
+
+        while exp > 1 {
+            if (exp & 1) == 1 {
+                acc = acc.mul(base.clone())?;
+            }
+            exp /= 2;
+            base = base.clone().mul(base)?;
+        }
+
+        // since exp!=0, finally the exp must be 1.
+        // Deal with the final bit of the exponent separately, since
+        // squaring the base afterwards is not necessary and may cause a
+        // needless overflow.
+        acc.mul(base)
     }
 }
 
