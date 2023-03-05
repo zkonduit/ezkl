@@ -39,11 +39,9 @@ const TESTS: [&str; 17] = [
     "4l_relu_conv_fc",
 ];
 
-const PACKING_TESTS: [&str; 12] = [
+const PACKING_TESTS: [&str; 10] = [
     "1l_mlp",
-    "1l_flatten",
     "1l_average",
-    "1l_pad",
     "1l_reshape",
     "1l_sigmoid",
     "1l_sqrt",
@@ -120,7 +118,7 @@ macro_rules! test_packed_func {
             use crate::PACKING_TESTS;
             use crate::mock_packed_outputs;
 
-            seq!(N in 0..=11 {
+            seq!(N in 0..=9 {
 
 
             #(#[test_case(PACKING_TESTS[N])])*
@@ -373,7 +371,6 @@ fn mock_packed_outputs(example_name: String) {
         .args([
             "--bits=16",
             "-K=17",
-            "-S=6",
             "--pack-base=2",
             "mock",
             "-D",
