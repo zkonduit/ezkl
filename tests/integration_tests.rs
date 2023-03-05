@@ -39,6 +39,21 @@ const TESTS: [&str; 17] = [
     "4l_relu_conv_fc",
 ];
 
+const PACKING_TESTS: [&str; 12] = [
+    "1l_mlp",
+    "1l_flatten",
+    "1l_average",
+    "1l_pad",
+    "1l_reshape",
+    "1l_sigmoid",
+    "1l_sqrt",
+    "1l_leakyrelu",
+    "1l_relu",
+    "2l_relu_sigmoid_small",
+    "2l_relu_fc",
+    "2l_relu_small",
+];
+
 const TESTS_AGGR: [&str; 13] = [
     "1l_mlp",
     "1l_flatten",
@@ -92,6 +107,28 @@ macro_rules! test_func_aggr {
             }
 
             });
+    }
+    };
+}
+
+macro_rules! test_packed_func {
+    () => {
+        #[cfg(test)]
+        mod packed_tests {
+            use seq_macro::seq;
+            use test_case::test_case;
+            use crate::PACKING_TESTS;
+            use crate::mock_packed_outputs;
+
+            seq!(N in 0..=11 {
+
+
+            #(#[test_case(PACKING_TESTS[N])])*
+            fn mock_packed_outputs_(test: &str) {
+                mock_packed_outputs(test.to_string());
+            }
+
+            });
 
 
     }
@@ -111,7 +148,6 @@ macro_rules! test_func {
             use crate::forward_pass;
             use crate::kzg_prove_and_verify;
             use crate::render_circuit;
-            use crate::mock_packed_outputs;
 
             seq!(N in 0..=16 {
 
@@ -123,11 +159,6 @@ macro_rules! test_func {
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
                 mock(test.to_string());
-            }
-
-            #(#[test_case(TESTS[N])])*
-            fn mock_packed_outputs_(test: &str) {
-                mock_packed_outputs(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
@@ -149,7 +180,6 @@ macro_rules! test_func {
             fn kzg_prove_and_verify_(test: &str) {
                 kzg_prove_and_verify(test.to_string());
             }
-
 
             });
 
@@ -238,6 +268,7 @@ test_func_aggr!();
 test_func_evm!();
 test_func_examples!();
 test_neg_examples!();
+test_packed_func!();
 
 // Mock prove (fast, but does not cover some potential issues)
 fn neg_mock(example_name: String, counter_example: String) {
@@ -342,6 +373,7 @@ fn mock_packed_outputs(example_name: String) {
         .args([
             "--bits=16",
             "-K=17",
+            "-S=6",
             "--pack-base=2",
             "mock",
             "-D",
