@@ -141,11 +141,9 @@ fn derive_key(mnemonic: &str, path: &str, index: u32) -> Result<U256, Bytes> {
         .build()
         .map_err(|err| err.to_string().encode())?;
 
-    info!("Wallet key we use: {:#?}", wallet);
+    info!("wallet address: {:#?}", wallet.address());
 
     let private_key = U256::from_big_endian(wallet.signer().to_bytes().as_slice());
-
-    info!("Private key we use: {:#?}", private_key);
 
     Ok(private_key)
 }
