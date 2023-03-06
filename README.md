@@ -222,9 +222,13 @@ For instance:
 ezkl send-proof-evm -S ./mymnemonic.txt -U myethnode.xyz --addr 0xFFFF --proof-path my.snark
 ```
 
-#### using pre-generated SRS
 
-Note that you can use pre-generated KZG SRS. These SRS can be converted to a format that is ingestable by the `pse/halo2` prover ezkl uses by leveraging [han0110/halo2-kzg-srs](https://github.com/han0110/halo2-kzg-srs). This repo also contains pre-converted SRS from large projects such as Hermez and the [perpetual powers of tau repo](https://github.com/privacy-scaling-explorations/perpetualpowersoftau). Simply download the pre-converted file locally and point `--params-path` to the file !
+### using pre-generated SRS
+
+Note that you can use pre-generated KZG SRS. These SRS can be converted to a format that is ingestable by the `pse/halo2` prover ezkl uses by leveraging [han0110/halo2-kzg-srs](https://github.com/han0110/halo2-kzg-srs). This repo also contains pre-converted SRS from large projects such as Hermez and the [perpetual powers of tau repo](https://github.com/privacy-scaling-explorations/perpetualpowersoftau). Simply download the pre-converted file locally and point `--params-path` to the file. 
+
+> Note: Ensure you download the files in raw format. As this will be more performant and is the serialization format `ezkl` assumes.
+
 
 
 ### general usage 🔧
@@ -315,6 +319,7 @@ EZKLCONF=/path/to/fullconfig.json ezkl
 ```
 
 
+----------------------
 
 
 ## benchmarks ⏳
@@ -336,6 +341,8 @@ criterion_group! {
   targets = runrelu
 }
 ```
+----------------------
+
 
 ## onnx examples
 
@@ -348,6 +355,9 @@ If you want to add a model to `examples/onnx`, open a PR creating a new folder w
 
 
 TODO: add associated python files in the onnx model directories.
+
+----------------------
+
 
 ## library examples 🔍
 

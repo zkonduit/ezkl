@@ -9,10 +9,10 @@ use crate::pfsys::evm::single::gen_evm_verifier;
 use crate::pfsys::evm::{evm_verify, DeploymentCode};
 #[cfg(feature = "render")]
 use crate::pfsys::prepare_model_circuit;
-use crate::pfsys::{create_keys, load_params_kzg, load_vk, Snark};
+use crate::pfsys::{create_keys, load_params, load_vk, save_params, Snark};
 use crate::pfsys::{
-    create_proof_circuit, gen_srs, prepare_data, prepare_model_circuit_and_public_input,
-    save_params_kzg, save_vk, verify_proof_circuit,
+    create_proof_circuit, gen_srs, prepare_data, prepare_model_circuit_and_public_input, save_vk,
+    verify_proof_circuit,
 };
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::plonk::{Circuit, ProvingKey, VerifyingKey};
@@ -162,7 +162,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         }
         Commands::GenSrs { params_path } => {
             let params = gen_srs::<KZGCommitmentScheme<Bn256>>(cli.args.logrows);
-            save_params_kzg(&params_path, &params)?;
+            save_params::<KZGCommitmentScheme<Bn256>>(&params_path, &params)?;
         }
         Commands::Table { model: _ } => {
             let om = Model::from_ezkl_conf(cli)?;
@@ -236,7 +236,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
 
             let (_, public_inputs) = prepare_model_circuit_and_public_input::<Fr>(&data, &cli)?;
             let num_instance = public_inputs.iter().map(|x| x.len()).collect();
-            let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
+            let mut params: ParamsKZG<Bn256> =
+                load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
@@ -263,7 +264,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             deployment_code_path,
             vk_path,
         } => {
-            let params: ParamsKZG<Bn256> = load_params_kzg(params_path)?;
+            let params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
 
             let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path)?;
 
@@ -287,7 +288,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             let data = prepare_data(data.to_string())?;
 
             let (circuit, public_inputs) = prepare_model_circuit_and_public_input(&data, &cli)?;
-            let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
+            let mut params: ParamsKZG<Bn256> =
+                load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
@@ -339,7 +341,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             transcript,
         } => {
             // the K used for the aggregation circuit
-            let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path.to_path_buf())?;
+            let mut params: ParamsKZG<Bn256> =
+                load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
@@ -391,7 +394,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             params_path,
             transcript,
         } => {
-            let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path)?;
+            let mut params: ParamsKZG<Bn256> =
+                load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
@@ -416,7 +420,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             params_path,
             transcript,
         } => {
-            let mut params: ParamsKZG<Bn256> = load_params_kzg(params_path)?;
+            let mut params: ParamsKZG<Bn256> =
+                load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
