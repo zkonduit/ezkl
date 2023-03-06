@@ -1,6 +1,6 @@
 use super::eth::verify_proof_via_solidity;
 use crate::commands::{Cli, Commands, StrategyType, TranscriptType};
-use crate::eth::{deploy_verifier, send_proof};
+use crate::eth::{deploy_verifier, fix_verifier_sol, send_proof};
 use crate::graph::{vector_to_quantized, Model, ModelCircuit};
 use crate::pfsys::evm::aggregation::{
     gen_aggregation_evm_verifier, AggregationCircuit, PoseidonTranscript,
@@ -35,7 +35,6 @@ use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
 use std::fs::File;
 use std::io::Write;
-use std::process::Command;
 use std::time::Instant;
 use tabled::Table;
 use thiserror::Error;
@@ -250,18 +249,13 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             deployment_code.save(deployment_code_path.as_ref().unwrap())?;
 
             if sol_code_path.is_some() {
-                let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
+                let mut f = File::create(sol_code_path.as_ref().unwrap())?;
                 let _ = f.write(yul_code.as_bytes());
 
-                let cmd = Command::new("python3")
-                    .arg("fix_verifier_sol.py")
-                    .arg(sol_code_path.as_ref().unwrap())
-                    .output()
-                    .unwrap();
-                let output = cmd.stdout;
+                let output = fix_verifier_sol(sol_code_path.as_ref().unwrap().clone())?;
 
-                let mut f = File::create(sol_code_path.as_ref().unwrap()).unwrap();
-                let _ = f.write(output.as_slice());
+                let mut f = File::create(sol_code_path.as_ref().unwrap())?;
+                let _ = f.write(output.as_bytes());
             }
         }
         Commands::CreateEVMVerifierAggr {
