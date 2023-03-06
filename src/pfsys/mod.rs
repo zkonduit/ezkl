@@ -14,10 +14,8 @@ use halo2_proofs::plonk::{
     create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey,
 };
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params, ParamsProver, Prover, Verifier};
-use halo2_proofs::poly::kzg::commitment::ParamsKZG;
 use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer, TranscriptWriterBuffer};
-use halo2curves::bn256::Bn256;
 use halo2curves::group::ff::PrimeField;
 use halo2curves::serde::SerdeObject;
 use halo2curves::CurveAffine;
@@ -421,7 +419,7 @@ where
     info!("loading verification key from {:?}", path);
     let f = File::open(path).map_err(Box::<dyn Error>::from)?;
     let mut reader = BufReader::new(f);
-    VerifyingKey::<Scheme::Curve>::read::<_, C>(&mut reader, halo2_proofs::SerdeFormat::Processed)
+    VerifyingKey::<Scheme::Curve>::read::<_, C>(&mut reader, halo2_proofs::SerdeFormat::RawBytes)
         .map_err(Box::<dyn Error>::from)
 }
 
@@ -437,7 +435,7 @@ where
     info!("loading proving key from {:?}", path);
     let f = File::open(path).map_err(Box::<dyn Error>::from)?;
     let mut reader = BufReader::new(f);
-    ProvingKey::<Scheme::Curve>::read::<_, C>(&mut reader, halo2_proofs::SerdeFormat::Processed)
+    ProvingKey::<Scheme::Curve>::read::<_, C>(&mut reader, halo2_proofs::SerdeFormat::RawBytes)
         .map_err(Box::<dyn Error>::from)
 }
 
@@ -449,15 +447,6 @@ pub fn load_params<Scheme: CommitmentScheme>(
     let f = File::open(path).map_err(Box::<dyn Error>::from)?;
     let mut reader = BufReader::new(f);
     Params::<'_, Scheme::Curve>::read(&mut reader).map_err(Box::<dyn Error>::from)
-}
-
-/// Loads the [ParamsKZG] at `path`.
-pub fn load_params_kzg(path: PathBuf) -> Result<ParamsKZG<Bn256>, Box<dyn Error>> {
-    info!("loading params from {:?}", path);
-    let f = File::open(path).map_err(Box::<dyn Error>::from)?;
-    let mut reader = BufReader::new(f);
-    ParamsKZG::<Bn256>::read_custom(&mut reader, halo2_proofs::SerdeFormat::Processed)
-        .map_err(Box::<dyn Error>::from)
 }
 
 /// Saves a [ProvingKey] to `path`.
@@ -472,7 +461,7 @@ where
     info!("saving proving key 💾");
     let f = File::create(path)?;
     let mut writer = BufWriter::new(f);
-    vk.write(&mut writer, halo2_proofs::SerdeFormat::Processed)?;
+    vk.write(&mut writer, halo2_proofs::SerdeFormat::RawBytes)?;
     writer.flush()?;
     Ok(())
 }
@@ -489,7 +478,7 @@ where
     info!("saving verification key 💾");
     let f = File::create(path)?;
     let mut writer = BufWriter::new(f);
-    vk.write(&mut writer, halo2_proofs::SerdeFormat::Processed)?;
+    vk.write(&mut writer, halo2_proofs::SerdeFormat::RawBytes)?;
     writer.flush()?;
     Ok(())
 }
@@ -507,16 +496,6 @@ pub fn save_params<Scheme: CommitmentScheme>(
     Ok(())
 }
 
-/// Saves [ParamsKZG] to `path`.
-pub fn save_params_kzg(path: &PathBuf, params: &'_ ParamsKZG<Bn256>) -> Result<(), io::Error> {
-    info!("saving parameters 💾");
-    let f = File::create(path)?;
-    let mut writer = BufWriter::new(f);
-    params.write_custom(&mut writer, halo2_proofs::SerdeFormat::Processed)?;
-    writer.flush()?;
-    Ok(())
-}
-
 ////////////////////////
 
 #[cfg(test)]
@@ -525,13 +504,14 @@ mod tests {
 
     use super::*;
     use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+    use halo2curves::bn256::Bn256;
     use tempfile::Builder;
 
     #[tokio::test]
     async fn test_can_load_pre_generated_srs() {
         let tmp_dir = Builder::new().prefix("example").tempdir().unwrap();
         // lets hope this link never rots
-        let target = "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/hermez-1";
+        let target = "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/hermez-raw-1";
         let response = reqwest::get(target).await.unwrap();
 
         let fname = response
@@ -547,7 +527,7 @@ mod tests {
         let mut dest = File::create(fname.clone()).unwrap();
         let content = response.bytes().await.unwrap();
         copy(&mut &content[..], &mut dest).unwrap();
-        let res = load_params_kzg(fname);
+        let res = load_params::<KZGCommitmentScheme<Bn256>>(fname);
         assert!(res.is_ok())
     }
 
@@ -556,9 +536,9 @@ mod tests {
         let tmp_dir = Builder::new().prefix("example").tempdir().unwrap();
         let fname = tmp_dir.path().join("kzg.params");
         let srs = gen_srs::<KZGCommitmentScheme<Bn256>>(1);
-        let res = save_params_kzg(&fname, &srs);
+        let res = save_params::<KZGCommitmentScheme<Bn256>>(&fname, &srs);
         assert!(res.is_ok());
-        let res = load_params_kzg(fname);
+        let res = load_params::<KZGCommitmentScheme<Bn256>>(fname);
         assert!(res.is_ok())
     }
 }
