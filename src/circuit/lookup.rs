@@ -280,6 +280,7 @@ impl<F: FieldExt + TensorType> Config<F> {
         &self,
         layouter: &mut impl Layouter<F>,
         values: &ValTensor<F>,
+        offset: usize,
     ) -> Result<ValTensor<F>, Box<dyn Error>> {
         if !self.table.borrow().is_assigned {
             self.table.borrow_mut().layout(layouter)?
@@ -288,10 +289,10 @@ impl<F: FieldExt + TensorType> Config<F> {
             match layouter.assign_region(
                 || "Elementwise", // the name of the region
                 |mut region| {
-                    self.qlookup.enable(&mut region, 0)?;
+                    self.qlookup.enable(&mut region, offset)?;
 
                     let w: Tensor<AssignedCell<F, F>> =
-                        self.input.assign(&mut region, 0, values)?;
+                        self.input.assign(&mut region, offset, values)?;
                     // convert assigned cells to Value<Assigned<F>> so we can extract the inner field element
                     let w_vaf: Tensor<Value<Assigned<F>>> = w.map(|acaf| (acaf).value_field());
                     // finally convert to vector of integers
@@ -316,7 +317,8 @@ impl<F: FieldExt + TensorType> Config<F> {
                         }
                     };
 
-                    self.output.assign(&mut region, 0, &ValTensor::from(output))
+                    self.output
+                        .assign(&mut region, offset, &ValTensor::from(output))
                 },
             ) {
                 Ok(a) => a,
@@ -369,7 +371,7 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
         ) -> Result<(), Error> {
-            let _ = config.layout(&mut layouter, &self.input);
+            let _ = config.layout(&mut layouter, &self.input, 0);
 
             Ok(())
         }

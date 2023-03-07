@@ -19,6 +19,7 @@ use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
 //use clap::Parser;
 use anyhow::{Context, Error as AnyError};
+use core::panic;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
@@ -255,7 +256,49 @@ impl Model {
 
             if !lookup_ops.is_empty() {
                 for (i, node) in lookup_ops {
-                    let config = self.conf_table(node, meta, vars, &mut tables)?;
+                    let config = if !self.run_args.single_lookup {
+                        self.conf_table(node, meta, vars, &mut tables)?
+                    } else {
+                        match &node.opkind {
+                            OpKind::Lookup(op) => {
+                                let mut conf = None;
+                                // iterate in reverse order so we get the last relevant op
+                                for (i, prev_config) in results.iter().rev() {
+                                    match prev_config {
+                                        NodeConfig::Lookup { config, offset, .. } => {
+                                            if config.table.borrow().nonlinearities
+                                                == vec![op.clone()]
+                                            {
+                                                conf = Some(NodeConfig::Lookup {
+                                                    config: config.clone(),
+                                                    inputs: node
+                                                        .inputs
+                                                        .iter()
+                                                        .map(|e| e.node)
+                                                        .collect(),
+                                                    offset: offset
+                                                        + self
+                                                            .nodes
+                                                            .filter(*i)
+                                                            .out_dims
+                                                            .iter()
+                                                            .product::<usize>(),
+                                                });
+                                                break;
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                match conf {
+                                    None => self.conf_table(node, meta, vars, &mut tables)?,
+                                    Some(c) => c,
+                                }
+                            }
+                            // should never reach here
+                            _ => panic!(),
+                        }
+                    };
                     results.insert(*i, config);
                 }
             }
@@ -467,15 +510,15 @@ impl Model {
 
         let inputs = inputs_to_layer.iter();
 
-        let config = NodeConfig::Poly(
-            PolyConfig::configure(
+        let config = NodeConfig::Poly {
+            config: PolyConfig::configure(
                 meta,
                 &inputs.clone().map(|x| x.1.clone()).collect_vec(),
                 output,
                 &fused_nodes,
             ),
-            inputs.map(|x| x.0).collect_vec(),
-        );
+            inputs: inputs.map(|x| x.0).collect_vec(),
+        };
         Ok(config)
     }
 
@@ -507,15 +550,23 @@ impl Model {
 
         let config =
             if let std::collections::btree_map::Entry::Vacant(e) = tables.entry(vec![op.clone()]) {
-                let conf: LookupConfig<F> =
+                let config: LookupConfig<F> =
                     LookupConfig::configure(meta, input, output, self.run_args.bits, &[op.clone()]);
-                e.insert(conf.table.clone());
-                NodeConfig::Lookup(conf, node_inputs)
+                e.insert(config.table.clone());
+                NodeConfig::Lookup {
+                    config,
+                    inputs: node_inputs,
+                    offset: 0,
+                }
             } else {
                 let table = tables.get(&vec![op.clone()]).unwrap();
-                let conf: LookupConfig<F> =
+                let config: LookupConfig<F> =
                     LookupConfig::configure_with_table(meta, input, output, table.clone());
-                NodeConfig::Lookup(conf, node_inputs)
+                NodeConfig::Lookup {
+                    config,
+                    inputs: node_inputs,
+                    offset: 0,
+                }
             };
         Ok(config)
     }
@@ -607,7 +658,10 @@ impl Model {
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         // The node kind and the config should be the same.
         let res = match config.clone() {
-            NodeConfig::Poly(mut ac, idx) => {
+            NodeConfig::Poly {
+                mut config,
+                inputs: idx,
+            } => {
                 let values: Vec<ValTensor<F>> = idx
                     .iter()
                     .map(|i| {
@@ -626,14 +680,18 @@ impl Model {
                     })
                     .collect_vec();
 
-                Some(ac.layout(layouter, &values)?)
+                Some(config.layout(layouter, &values)?)
             }
-            NodeConfig::Lookup(rc, idx) => {
+            NodeConfig::Lookup {
+                config,
+                inputs: idx,
+                offset,
+            } => {
                 if idx.len() != 1 {
                     return Err(Box::new(GraphError::InvalidLookupInputs));
                 }
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
-                Some(rc.layout(layouter, inputs.get(&idx[0]).unwrap())?)
+                Some(config.layout(layouter, inputs.get(&idx[0]).unwrap(), offset)?)
             }
             NodeConfig::Input => None,
             NodeConfig::Const => None,
@@ -878,16 +936,57 @@ impl Model {
         maximum_sizes
     }
 
-    /// Maximum variable sizes in non-fused layers
-    pub fn max_vars_lookup(&self) -> Vec<usize> {
-        let mut maximum_sizes = vec![];
+    /// Total number of variables in lookup layers
+    pub fn num_vars_lookup(&self) -> Vec<usize> {
+        let mut count = BTreeMap::<LookupOp, (usize, usize)>::new();
         for (_, bucket_nodes) in self.nodes.0.iter() {
-            let non_fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
+            let lookup_ops: BTreeMap<&usize, &Node> = bucket_nodes
                 .iter()
                 .filter(|(_, n)| n.opkind.is_lookup())
                 .collect();
 
-            for (_, n) in non_fused_ops {
+            for (_, n) in lookup_ops {
+                match &n.opkind {
+                    OpKind::Lookup(op) => {
+                        let elem = count.get_mut(&op);
+                        // lookups currently only accepts a single input var
+                        let input_size: usize = n.in_dims[0].iter().product();
+                        // handle output variables
+                        let output_size: usize = n.out_dims.iter().product();
+                        match elem {
+                            None => {
+                                count.insert(op.clone(), (input_size, 0));
+                            }
+                            Some(m) => {
+                                m.0 += input_size;
+                                m.1 += output_size;
+                            }
+                        }
+                    }
+                    // should never reach here
+                    _ => panic!(),
+                }
+            }
+        }
+        // now get the max across all ops
+        let (mut num_inputs, mut num_outputs) = (0, 0);
+        for (_, v) in count.iter() {
+            num_inputs = max(num_inputs, v.0);
+            num_outputs = max(num_outputs, v.1);
+        }
+        vec![num_inputs, num_outputs]
+    }
+
+    /// Maximum variable sizes in lookup layers
+    pub fn max_vars_lookup(&self) -> Vec<usize> {
+        let mut maximum_sizes = vec![];
+        for (_, bucket_nodes) in self.nodes.0.iter() {
+            let lookup_ops: BTreeMap<&usize, &Node> = bucket_nodes
+                .iter()
+                .filter(|(_, n)| n.opkind.is_lookup())
+                .collect();
+
+            for (_, n) in lookup_ops {
                 for (j, dims) in n.in_dims.iter().enumerate() {
                     let input_size = dims.iter().product();
                     if j >= maximum_sizes.len() {
@@ -926,7 +1025,11 @@ impl Model {
     /// Number of advice used by the circuit
     pub fn advice_shapes(&self) -> Vec<usize> {
         // max sizes in lookup
-        let max_lookup_sizes = self.max_vars_lookup();
+        let max_lookup_sizes = if self.run_args.single_lookup {
+            self.num_vars_lookup()
+        } else {
+            self.max_vars_lookup()
+        };
         let max_poly_sizes = if self.visibility.params.is_public() {
             // max sizes for poly inputs
             self.max_vars_poly()

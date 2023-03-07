@@ -142,8 +142,15 @@ impl fmt::Display for OpKind {
 #[allow(missing_docs)]
 #[derive(Clone, Default, Debug)]
 pub enum NodeConfig<F: FieldExt + TensorType> {
-    Lookup(LookupConfig<F>, Vec<usize>),
-    Poly(PolyConfig<F>, Vec<usize>),
+    Lookup {
+        config: LookupConfig<F>,
+        inputs: Vec<usize>,
+        offset: usize,
+    },
+    Poly {
+        config: PolyConfig<F>,
+        inputs: Vec<usize>,
+    },
     Const,
     Input,
     #[default]
