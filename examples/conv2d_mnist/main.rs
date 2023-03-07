@@ -250,7 +250,7 @@ where
                 ],
             )
             .unwrap();
-        let mut x = config.l1.layout(&mut layouter, &x).unwrap();
+        let mut x = config.l1.layout(&mut layouter, &x, 0).unwrap();
         x.flatten();
         let l2out = config
             .l2
