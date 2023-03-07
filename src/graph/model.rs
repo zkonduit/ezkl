@@ -595,11 +595,11 @@ impl Model {
     ) -> Result<(), Box<dyn Error>> {
         info!("model layout");
         let mut results = BTreeMap::<usize, ValTensor<F>>::new();
-        for i in inputs.iter().enumerate() {
+        for (i, input_value) in inputs.iter().enumerate() {
             if self.visibility.input.is_public() {
-                results.insert(i.0, vars.instances[i.0].clone());
+                results.insert(i, vars.instances[i].clone());
             } else {
-                results.insert(i.0, i.1.clone());
+                results.insert(i, input_value.clone());
             }
         }
         for (idx, config) in config.configs.iter() {
