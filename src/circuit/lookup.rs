@@ -285,11 +285,12 @@ impl<F: FieldExt + TensorType> Config<F> {
         if !self.table.borrow().is_assigned {
             self.table.borrow_mut().layout(layouter)?
         }
+        let region_name = format!("Elementwise {:#?}", self.table.borrow().nonlinearities[0]);
         let mut t = ValTensor::from(
             match layouter.assign_region(
-                || "Elementwise", // the name of the region
+                || &region_name, // the name of the region
                 |mut region| {
-                    self.qlookup.enable(&mut region, offset)?;
+                    self.qlookup.enable(&mut region, 0)?;
 
                     let w: Tensor<AssignedCell<F, F>> =
                         self.input.assign(&mut region, offset, values)?;

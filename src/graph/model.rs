@@ -257,47 +257,11 @@ impl Model {
             if !lookup_ops.is_empty() {
                 for (i, node) in lookup_ops {
                     let config = if !self.run_args.single_lookup {
-                        self.conf_table(node, meta, vars, &mut tables)?
+                        // assume a single input
+                        let input_len = node.in_dims[0].iter().product();
+                        self.conf_lookup(node, input_len, meta, vars, &mut tables)?
                     } else {
-                        match &node.opkind {
-                            OpKind::Lookup(op) => {
-                                let mut conf = None;
-                                // iterate in reverse order so we get the last relevant op
-                                for (i, prev_config) in results.iter().rev() {
-                                    match prev_config {
-                                        NodeConfig::Lookup { config, offset, .. } => {
-                                            if config.table.borrow().nonlinearities
-                                                == vec![op.clone()]
-                                            {
-                                                conf = Some(NodeConfig::Lookup {
-                                                    config: config.clone(),
-                                                    inputs: node
-                                                        .inputs
-                                                        .iter()
-                                                        .map(|e| e.node)
-                                                        .collect(),
-                                                    offset: offset
-                                                        + self
-                                                            .nodes
-                                                            .filter(*i)
-                                                            .out_dims
-                                                            .iter()
-                                                            .product::<usize>(),
-                                                });
-                                                break;
-                                            }
-                                        }
-                                        _ => {}
-                                    }
-                                }
-                                match conf {
-                                    None => self.conf_table(node, meta, vars, &mut tables)?,
-                                    Some(c) => c,
-                                }
-                            }
-                            // should never reach here
-                            _ => panic!(),
-                        }
+                        self.reuse_lookup_conf(*i, node, &results, meta, vars, &mut tables)?
                     };
                     results.insert(*i, config);
                 }
@@ -371,6 +335,51 @@ impl Model {
             configs.push(config);
         }
         configs
+    }
+
+    fn reuse_lookup_conf<F: FieldExt + TensorType>(
+        &self,
+        i: usize,
+        node: &Node,
+        prev_configs: &BTreeMap<usize, NodeConfig<F>>,
+        meta: &mut ConstraintSystem<F>,
+        vars: &mut ModelVars<F>,
+        tables: &mut BTreeMap<Vec<LookupOp>, Rc<RefCell<LookupTable<F>>>>,
+    ) -> Result<NodeConfig<F>, Box<dyn Error>> {
+        match &node.opkind {
+            OpKind::Lookup(op) => {
+                let mut conf = None;
+                // iterate in reverse order so we get the last relevant op
+                for (i, prev_config) in prev_configs.iter().rev() {
+                    match prev_config {
+                        NodeConfig::Lookup { config, offset, .. } => {
+                            // check if there's a config for the same op
+                            if config.table.borrow().nonlinearities == vec![op.clone()] {
+                                conf = Some(NodeConfig::Lookup {
+                                    config: config.clone(),
+                                    inputs: node.inputs.iter().map(|e| e.node).collect(),
+                                    offset: offset
+                                        + self.nodes.filter(*i).out_dims.iter().product::<usize>(),
+                                });
+
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                let conf = match conf {
+                    None => {
+                        let input_len = self.num_vars_lookup_op(op)[0];
+                        self.conf_lookup(node, input_len, meta, vars, tables)?
+                    }
+                    Some(c) => c,
+                };
+                Ok(conf)
+            }
+            // should never reach here
+            _ => Err(Box::new(GraphError::OpMismatch(i, node.opkind.clone()))),
+        }
     }
 
     fn range_check_outputs<F: FieldExt + TensorType>(
@@ -529,14 +538,14 @@ impl Model {
     /// * `node` - The [Node] must represent a lookup based op.
     /// * `meta` - Halo2 ConstraintSystem.
     /// * `vars` - [ModelVars] for the model.
-    fn conf_table<F: FieldExt + TensorType>(
+    fn conf_lookup<F: FieldExt + TensorType>(
         &self,
         node: &Node,
+        input_len: usize,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
         tables: &mut BTreeMap<Vec<LookupOp>, Rc<RefCell<LookupTable<F>>>>,
     ) -> Result<NodeConfig<F>, Box<dyn Error>> {
-        let input_len = node.in_dims[0].iter().product();
         let input = &vars.advices[0].reshape(&[input_len]);
         let output = &vars.advices[1].reshape(&[input_len]);
         let node_inputs = node.inputs.iter().map(|e| e.node).collect();
@@ -839,7 +848,6 @@ impl Model {
                 }
             }
         }
-        // add 1 for layer output
         maximum_sizes
     }
 
@@ -937,6 +945,46 @@ impl Model {
     }
 
     /// Total number of variables in lookup layers
+    pub fn num_vars_lookup_op(&self, lookup_op: &LookupOp) -> Vec<usize> {
+        let mut count = BTreeMap::<LookupOp, (usize, usize)>::new();
+        for (_, bucket_nodes) in self.nodes.0.iter() {
+            let lookup_ops: BTreeMap<&usize, &Node> = bucket_nodes
+                .iter()
+                .filter(|(_, n)| (n.opkind == OpKind::Lookup(lookup_op.clone())))
+                .collect();
+
+            for (_, n) in lookup_ops {
+                match &n.opkind {
+                    OpKind::Lookup(op) => {
+                        let elem = count.get_mut(&op);
+                        // handle output variables
+                        let output_size: usize = n.out_dims.iter().product();
+                        let input_size = output_size;
+                        match elem {
+                            None => {
+                                count.insert(op.clone(), (input_size, output_size));
+                            }
+                            Some(m) => {
+                                m.0 += input_size;
+                                m.1 += output_size;
+                            }
+                        }
+                    }
+                    // should never reach here
+                    _ => panic!(),
+                }
+            }
+        }
+        // now get the max across all ops
+        let (mut num_inputs, mut num_outputs) = (0, 0);
+        for (_, v) in count.iter() {
+            num_inputs = max(num_inputs, v.0);
+            num_outputs = max(num_outputs, v.1);
+        }
+        vec![num_inputs, num_outputs]
+    }
+
+    /// Total number of variables in lookup layers
     pub fn num_vars_lookup(&self) -> Vec<usize> {
         let mut count = BTreeMap::<LookupOp, (usize, usize)>::new();
         for (_, bucket_nodes) in self.nodes.0.iter() {
@@ -949,13 +997,12 @@ impl Model {
                 match &n.opkind {
                     OpKind::Lookup(op) => {
                         let elem = count.get_mut(&op);
-                        // lookups currently only accepts a single input var
-                        let input_size: usize = n.in_dims[0].iter().product();
                         // handle output variables
                         let output_size: usize = n.out_dims.iter().product();
+                        let input_size = output_size;
                         match elem {
                             None => {
-                                count.insert(op.clone(), (input_size, 0));
+                                count.insert(op.clone(), (input_size, output_size));
                             }
                             Some(m) => {
                                 m.0 += input_size;
@@ -987,6 +1034,7 @@ impl Model {
                 .collect();
 
             for (_, n) in lookup_ops {
+                // lookups currently only accept a single input var
                 for (j, dims) in n.in_dims.iter().enumerate() {
                     let input_size = dims.iter().product();
                     if j >= maximum_sizes.len() {

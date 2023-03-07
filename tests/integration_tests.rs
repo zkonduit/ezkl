@@ -19,7 +19,7 @@ fn init() {
     assert!(status.success());
 }
 
-const TESTS: [&str; 17] = [
+const TESTS: [&str; 18] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -34,6 +34,7 @@ const TESTS: [&str; 17] = [
     "2l_relu_small",
     "2l_relu_sigmoid",
     "1l_conv",
+    "1l_relu_fc",
     "2l_relu_sigmoid_conv",
     "3l_relu_conv_fc",
     "4l_relu_conv_fc",
@@ -146,8 +147,9 @@ macro_rules! test_func {
             use crate::forward_pass;
             use crate::kzg_prove_and_verify;
             use crate::render_circuit;
+            use crate::mock_single_lookup;
 
-            seq!(N in 0..=16 {
+            seq!(N in 0..=17 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
@@ -157,6 +159,11 @@ macro_rules! test_func {
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
                 mock(test.to_string());
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_single_lookup_(test: &str) {
+                mock_single_lookup(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
@@ -372,6 +379,24 @@ fn mock_packed_outputs(example_name: String) {
             "--bits=16",
             "-K=17",
             "--pack-base=2",
+            "mock",
+            "-D",
+            format!("./examples/onnx/{}/input.json", example_name).as_str(),
+            "-M",
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+// Mock prove (fast, but does not cover some potential issues)
+fn mock_single_lookup(example_name: String) {
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "--single-lookup",
             "mock",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
