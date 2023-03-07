@@ -8,8 +8,8 @@ class MyModel(nn.Module):
         self.fc = nn.Linear(1, 1)
 
     def forward(self, x):
-        x = self.relu(self.relu(x))
-        x = self.relu(self.fc(x))
+        x = self.relu(x)
+        x = self.relu(self.relu(self.fc(x)))
         return x
 
 circuit = MyModel()
