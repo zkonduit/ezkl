@@ -469,6 +469,7 @@ fn mock_public_inputs(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--public-inputs",
+            "--public-outputs=false",
             "--bits=16",
             "-K=17",
             "mock",
@@ -487,6 +488,7 @@ fn mock_public_params(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--public-params",
+            "--public-outputs=false",
             "--bits=16",
             "-K=17",
             "mock",

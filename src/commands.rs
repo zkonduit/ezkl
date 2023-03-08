@@ -59,7 +59,7 @@ pub struct RunArgs {
     #[arg(long, default_value = "false")]
     pub public_inputs: bool,
     /// Flags whether outputs are public
-    #[arg(long, default_value = "true")]
+    #[arg(long, default_value = "true", action = clap::ArgAction::Set)]
     pub public_outputs: bool,
     /// Flags whether params are public
     #[arg(long, default_value = "false")]
