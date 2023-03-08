@@ -7,5 +7,5 @@
     "public_outputs": true,
     "public_params": false,
     "max_rotations": 512,
-    "single_output": false
+    "single_lookup": false
 }
