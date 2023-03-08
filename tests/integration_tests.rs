@@ -148,6 +148,7 @@ macro_rules! test_func {
             use crate::kzg_prove_and_verify;
             use crate::render_circuit;
             use crate::mock_single_lookup;
+            use crate::kzg_prove_and_verify_single_lookup;
 
             seq!(N in 0..=17 {
 
@@ -184,6 +185,11 @@ macro_rules! test_func {
             #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_(test: &str) {
                 kzg_prove_and_verify(test.to_string());
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn kzg_prove_and_verify_single_lookup_(test: &str) {
+                kzg_prove_and_verify_single_lookup(test.to_string());
             }
 
             });
@@ -572,6 +578,49 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
             format!("kzg_aggr_{}.pf", example_name).as_str(),
             "--deployment-code-path",
             format!("kzg_aggr_{}.code", example_name).as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+// prove-serialize-verify, the usual full path
+fn kzg_prove_and_verify_single_lookup(example_name: String) {
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "--single-lookup",
+            "-K=17",
+            "prove",
+            "-D",
+            format!("./examples/onnx/{}/input.json", example_name).as_str(),
+            "-M",
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+            "--proof-path",
+            format!("kzg_{}.pf", example_name).as_str(),
+            "--vk-path",
+            format!("kzg_{}.vk", example_name).as_str(),
+            "--params-path=kzg.params",
+            "--transcript=blake",
+            "--strategy=single",
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "--single-lookup",
+            "-K=17",
+            "verify",
+            "-M",
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+            "--proof-path",
+            format!("kzg_{}.pf", example_name).as_str(),
+            "--vk-path",
+            format!("kzg_{}.vk", example_name).as_str(),
+            "--params-path=kzg.params",
+            "--transcript=blake",
         ])
         .status()
         .expect("failed to execute process");
