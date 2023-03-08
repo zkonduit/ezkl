@@ -677,17 +677,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "colog"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d76e185a1b1027ecf407c1505a270e78652d5d066cde992ecd813d9ee686d4b5"
-dependencies = [
- "colored",
- "env_logger",
- "log",
-]
-
-[[package]]
 name = "color_quant"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -702,6 +691,18 @@ dependencies = [
  "atty",
  "lazy_static",
  "winapi",
+]
+
+[[package]]
+name = "colored_json"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "633215cdbb84194508d4c07c08d06e92ee9d489d54e68d17913d8d1bacfcfdeb"
+dependencies = [
+ "atty",
+ "serde",
+ "serde_json",
+ "yansi",
 ]
 
 [[package]]
@@ -1375,12 +1376,12 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.9.3"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a12e6657c4c97ebab115a42dcee77225f7f482cdd841cf7088c657a42e9e00e7"
+checksum = "85cdab6a89accf66733ad5a1693a4dcced6aeff64602b634530dd73c1f3ee9f0"
 dependencies = [
- "atty",
  "humantime",
+ "is-terminal",
  "log",
  "regex",
  "termcolor",
@@ -1743,11 +1744,14 @@ name = "ezkl"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap 4.1.6",
- "colog",
+ "colored",
+ "colored_json",
  "criterion",
  "ctor",
  "ecc",
+ "env_logger",
  "eq-float",
  "ethereum-types",
  "ethers",
