@@ -284,13 +284,10 @@ impl<F: FieldExt + TensorType> Config<F> {
         &mut self,
         layouter: &mut impl Layouter<F>,
         values: &ValTensor<F>,
-        offset: usize,
     ) -> Result<ValTensor<F>, Box<dyn Error>> {
         if !self.table.borrow().is_assigned {
             self.table.borrow_mut().layout(layouter)?
         }
-
-        self.input_buffer.push(values.clone());
 
         let integer_evals = values
             .get_int_evals()
@@ -312,10 +309,14 @@ impl<F: FieldExt + TensorType> Config<F> {
             }
         };
 
-        let buffer_to_fill = values.dims().iter().product::<usize>();
-        let total_buffer = self.input.dims().iter().product::<usize>();
+        let values_len = values.dims().iter().product::<usize>();
+        let mut currently_filled_buffer = 0;
+        for l in self.input_buffer.iter() {
+            currently_filled_buffer += l.dims().iter().product::<usize>();
+        }
+        let buffer_capacity = self.input.dims().iter().product::<usize>();
 
-        let region_name = if (offset + buffer_to_fill) == total_buffer {
+        let region_name = if (currently_filled_buffer + values_len) == buffer_capacity {
             format!("Lookup for {:#?}", self.table.borrow().nonlinearities[0])
         } else {
             format!(
@@ -323,39 +324,36 @@ impl<F: FieldExt + TensorType> Config<F> {
                 self.table.borrow().nonlinearities[0]
             )
         };
-
         let mut t = match layouter.assign_region(
             || &region_name, // the name of the region
             |mut region| {
-                if (offset + buffer_to_fill) == total_buffer {
+                if (currently_filled_buffer + values_len) == buffer_capacity {
                     self.qlookup.enable(&mut region, 0)?;
                     //  can now safely unwrap
                     let mut region_offset = 0;
-                    for input in self.input_buffer.iter() {
+                    for (input, output) in self.input_buffer.iter().zip(&self.output_buffer) {
                         self.input.assign(&mut region, region_offset, input)?;
+                        self.output.assign(&mut region, region_offset, output)?;
+                        // input and output should be the same size
                         region_offset += input.dims().iter().product::<usize>();
                     }
-                    let mut region_offset = 0;
-                    // we haven't appended the new output yet
-                    for output in self.output_buffer.iter() {
-                        self.output.assign(&mut region, region_offset, output)?;
-                        region_offset += output.dims().iter().product::<usize>();
-                    }
-                    // this is the new output
-                    Ok(ValTensor::from(self.output.assign(
+
+                    self.input.assign(&mut region, region_offset, values)?;
+                    let assigned_output = self.output.assign(
                         &mut region,
-                        offset,
+                        region_offset,
                         &ValTensor::from(output.clone()),
-                    )?))
+                    )?;
+
+                    // this is the new output
+                    Ok(ValTensor::from(assigned_output))
                 } else {
-                    let output = ValTensor::from(self.output.assign(
+                    // constrain the calculated output to a column
+                    Ok(ValTensor::from(self.input.assign(
                         &mut region,
                         0,
                         &ValTensor::from(output.clone()),
-                    )?);
-                    self.output_buffer.push(output);
-                    // because of steps above this should never ever be empty
-                    Ok(self.output_buffer.last().unwrap().clone())
+                    )?))
                 }
             },
         ) {
@@ -364,7 +362,11 @@ impl<F: FieldExt + TensorType> Config<F> {
                 return Err(Box::new(e));
             }
         };
+
         t.reshape(values.dims())?;
+        self.input_buffer.push(values.clone());
+        self.output_buffer.push(t.clone());
+
         Ok(t)
     }
 }
@@ -408,7 +410,7 @@ mod tests {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
         ) -> Result<(), Error> {
-            let _ = config.layout(&mut layouter, &self.input, 0);
+            let _ = config.layout(&mut layouter, &self.input);
 
             Ok(())
         }

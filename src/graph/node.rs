@@ -11,10 +11,12 @@ use eq_float::F32;
 use halo2_proofs::arithmetic::FieldExt;
 use itertools::Itertools;
 use log::{info, trace, warn};
+use std::cell::RefCell;
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::error::Error;
 use std::fmt;
 use std::ops::Deref;
+use std::rc::Rc;
 use tabled::Tabled;
 use tract_onnx;
 use tract_onnx::prelude::{DatumType, InferenceFact, Node as OnnxNode, OutletId};
@@ -143,9 +145,8 @@ impl fmt::Display for OpKind {
 #[derive(Clone, Default, Debug)]
 pub enum NodeConfig<F: FieldExt + TensorType> {
     Lookup {
-        config: LookupConfig<F>,
+        config: Rc<RefCell<LookupConfig<F>>>,
         inputs: Vec<usize>,
-        offset: usize,
     },
     Poly {
         config: PolyConfig<F>,

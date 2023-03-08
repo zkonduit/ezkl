@@ -119,7 +119,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                 ],
             )
             .unwrap();
-        let x = config.l1.layout(&mut layouter, &x, 0).unwrap();
+        let x = config.l1.layout(&mut layouter, &x).unwrap();
         let x = config
             .l2
             .layout(
@@ -127,8 +127,8 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                 &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
             )
             .unwrap();
-        let x = config.l3.layout(&mut layouter, &x, 0).unwrap();
-        let x = config.l4.layout(&mut layouter, &x, 0).unwrap();
+        let x = config.l3.layout(&mut layouter, &x).unwrap();
+        let x = config.l4.layout(&mut layouter, &x).unwrap();
         match x {
             ValTensor::PrevAssigned { inner: v, dims: _ } => v
                 .enum_map(|i, x| layouter.constrain_instance(x.cell(), config.public_output, i))

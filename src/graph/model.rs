@@ -350,16 +350,14 @@ impl Model {
             OpKind::Lookup(op) => {
                 let mut conf = None;
                 // iterate in reverse order so we get the last relevant op
-                for (i, prev_config) in prev_configs.iter().rev() {
+                for (_, prev_config) in prev_configs.iter().rev() {
                     match prev_config {
-                        NodeConfig::Lookup { config, offset, .. } => {
+                        NodeConfig::Lookup { config, .. } => {
                             // check if there's a config for the same op
-                            if config.table.borrow().nonlinearities == vec![op.clone()] {
+                            if config.borrow().table.borrow().nonlinearities == vec![op.clone()] {
                                 conf = Some(NodeConfig::Lookup {
                                     config: config.clone(),
                                     inputs: node.inputs.iter().map(|e| e.node).collect(),
-                                    offset: offset
-                                        + self.nodes.filter(*i).out_dims.iter().product::<usize>(),
                                 });
 
                                 break;
@@ -563,18 +561,16 @@ impl Model {
                     LookupConfig::configure(meta, input, output, self.run_args.bits, &[op.clone()]);
                 e.insert(config.table.clone());
                 NodeConfig::Lookup {
-                    config,
+                    config: Rc::new(RefCell::new(config)),
                     inputs: node_inputs,
-                    offset: 0,
                 }
             } else {
                 let table = tables.get(&vec![op.clone()]).unwrap();
                 let config: LookupConfig<F> =
                     LookupConfig::configure_with_table(meta, input, output, table.clone());
                 NodeConfig::Lookup {
-                    config,
+                    config: Rc::new(RefCell::new(config)),
                     inputs: node_inputs,
-                    offset: 0,
                 }
             };
         Ok(config)
@@ -692,15 +688,18 @@ impl Model {
                 Some(config.layout(layouter, &values)?)
             }
             NodeConfig::Lookup {
-                mut config,
+                config,
                 inputs: idx,
-                offset,
             } => {
                 if idx.len() != 1 {
                     return Err(Box::new(GraphError::InvalidLookupInputs));
                 }
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
-                Some(config.layout(layouter, inputs.get(&idx[0]).unwrap(), offset)?)
+                Some(
+                    config
+                        .borrow_mut()
+                        .layout(layouter, inputs.get(&idx[0]).unwrap())?,
+                )
             }
             NodeConfig::Input => None,
             NodeConfig::Const => None,
