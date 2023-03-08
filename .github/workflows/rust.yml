@@ -109,6 +109,8 @@ jobs:
 
       - name: Mock proving tests (public outputs)
         run: cargo test --release --verbose tests::mock_public_outputs_ -- --test-threads 32
+      - name: Mock proving tests (public outputs and single lookup)
+        run: cargo test --release --verbose tests::mock_single_lookup_ -- --test-threads 32
       - name: Mock proving tests (public and packed outputs)
         run: cargo test --release --verbose tests::mock_packed_outputs_ -- --test-threads 32
       - name: Mock proving tests (public inputs)
