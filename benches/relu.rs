@@ -51,7 +51,6 @@ impl<F: FieldExt + TensorType> Circuit<F> for NLCircuit<F> {
 }
 
 fn runrelu(c: &mut Criterion) {
-    colog::init();
     let mut group = c.benchmark_group("relu");
 
     let mut rng = rand::thread_rng();

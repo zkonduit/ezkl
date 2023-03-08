@@ -70,7 +70,6 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
 }
 
 fn runaffine(c: &mut Criterion) {
-    colog::init();
     let mut group = c.benchmark_group("affine");
     for &len in [4, 8, 16, 32, 64].iter() {
         unsafe {
