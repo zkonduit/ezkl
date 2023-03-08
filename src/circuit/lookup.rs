@@ -289,26 +289,6 @@ impl<F: FieldExt + TensorType> Config<F> {
             self.table.borrow_mut().layout(layouter)?
         }
 
-        let integer_evals = values
-            .get_int_evals()
-            .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
-
-        // for key generation integer_evals will be empty and we need to return a set of unassigned values
-        let output: Tensor<Value<F>> = match integer_evals.len() {
-            // if empty return an unknown val
-            0 => {
-                Tensor::from((0..values.dims().iter().product::<usize>()).map(|_| Value::unknown()))
-            }
-            // if not empty apply the nonlinearity !
-            _ => {
-                let mut x = integer_evals.into_iter().into();
-                for nl in self.table.borrow().nonlinearities.clone() {
-                    x = nl.f(x);
-                }
-                x.map(|elem| Value::known(i128_to_felt(elem)))
-            }
-        };
-
         let values_len = values.dims().iter().product::<usize>();
         let mut currently_filled_buffer = 0;
         for l in self.input_buffer.iter() {
@@ -327,34 +307,62 @@ impl<F: FieldExt + TensorType> Config<F> {
         let mut t = match layouter.assign_region(
             || &region_name, // the name of the region
             |mut region| {
+                let w = match values {
+                    // if an instance we need to constrain to an advice to access values
+                    ValTensor::Instance { .. } => {
+                        ValTensor::from(self.input.assign(&mut region, 0, values)?)
+                    }
+                    // if not, we can just pull in the passed in values
+                    _ => values.clone(),
+                };
+                // extract integer_valuations
+                let integer_evals = w
+                    .get_int_evals()
+                    .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+                // for key generation integer_evals will be empty and we need to return a set of unassigned values
+                let output: Tensor<Value<F>> = match integer_evals.len() {
+                    // if empty return an unknown val
+                    0 => Tensor::from(
+                        (0..values.dims().iter().product::<usize>()).map(|_| Value::unknown()),
+                    ),
+                    // if not empty apply the nonlinearity !
+                    _ => {
+                        let mut x = integer_evals.into_iter().into();
+                        for nl in self.table.borrow().nonlinearities.clone() {
+                            x = nl.f(x);
+                        }
+                        x.map(|elem| Value::known(i128_to_felt(elem)))
+                    }
+                };
+
                 if (currently_filled_buffer + values_len) == buffer_capacity {
                     self.qlookup.enable(&mut region, 0)?;
                     //  can now safely unwrap
-                    let mut region_offset = 0;
+                    let mut region_offset = values_len;
                     for (input, output) in self.input_buffer.iter().zip(&self.output_buffer) {
                         self.input.assign(&mut region, region_offset, input)?;
                         self.output.assign(&mut region, region_offset, output)?;
                         // input and output should be the same size
                         region_offset += input.dims().iter().product::<usize>();
                     }
+                    // if an instance we have already assigned above
+                    match values {
+                        ValTensor::Instance { .. } => {}
+                        _ => {
+                            self.input.assign(&mut region, 0, values)?;
+                        }
+                    };
+                };
 
-                    self.input.assign(&mut region, region_offset, values)?;
-                    let assigned_output = self.output.assign(
-                        &mut region,
-                        region_offset,
-                        &ValTensor::from(output.clone()),
-                    )?;
+                self.input_buffer.push(w.clone());
 
-                    // this is the new output
-                    Ok(ValTensor::from(assigned_output))
-                } else {
-                    // constrain the calculated output to a column
-                    Ok(ValTensor::from(self.input.assign(
-                        &mut region,
-                        0,
-                        &ValTensor::from(output.clone()),
-                    )?))
-                }
+                // constrain the calculated output to a column
+                Ok(ValTensor::from(self.output.assign(
+                    &mut region,
+                    0,
+                    &ValTensor::from(output.clone()),
+                )?))
             },
         ) {
             Ok(a) => a,
@@ -364,7 +372,6 @@ impl<F: FieldExt + TensorType> Config<F> {
         };
 
         t.reshape(values.dims())?;
-        self.input_buffer.push(values.clone());
         self.output_buffer.push(t.clone());
 
         Ok(t)

@@ -34,7 +34,7 @@ const TESTS: [&str; 18] = [
     "2l_relu_small",
     "2l_relu_sigmoid",
     "1l_conv",
-    "1l_relu_fc",
+    "2l_sigmoid_small",
     "2l_relu_sigmoid_conv",
     "3l_relu_conv_fc",
     "4l_relu_conv_fc",
@@ -264,10 +264,16 @@ macro_rules! test_neg_examples {
             use crate::NEG_TESTS;
             use test_case::test_case;
             use crate::neg_mock as run;
+            use crate::neg_mock_single_lookup as run_single_lookup;
             seq!(N in 0..=1 {
             #(#[test_case(NEG_TESTS[N])])*
             fn neg_examples_(test: (&str, &str)) {
                 run(test.0.to_string(), test.1.to_string());
+            }
+
+            #(#[test_case(NEG_TESTS[N])])*
+            fn neg_examples_single_lookup_(test: (&str, &str)) {
+                run_single_lookup(test.0.to_string(), test.1.to_string());
             }
             });
     }
@@ -286,6 +292,24 @@ fn neg_mock(example_name: String, counter_example: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
+            "-K=17",
+            "mock",
+            "-D",
+            format!("./examples/onnx/{}/input.json", counter_example).as_str(),
+            "-M",
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(!status.success());
+}
+
+// Mock prove (fast, but does not cover some potential issues)
+fn neg_mock_single_lookup(example_name: String, counter_example: String) {
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "--single-lookup",
             "-K=17",
             "mock",
             "-D",
