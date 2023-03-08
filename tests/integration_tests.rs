@@ -118,6 +118,7 @@ macro_rules! test_packed_func {
             use test_case::test_case;
             use crate::PACKING_TESTS;
             use crate::mock_packed_outputs;
+            use crate::mock_everything;
 
             seq!(N in 0..=9 {
 
@@ -125,6 +126,11 @@ macro_rules! test_packed_func {
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_packed_outputs_(test: &str) {
                 mock_packed_outputs(test.to_string());
+            }
+
+            #(#[test_case(PACKING_TESTS[N])])*
+            fn mock_everything_(test: &str) {
+                mock_everything(test.to_string());
             }
 
             });
@@ -408,6 +414,26 @@ fn mock_packed_outputs(example_name: String) {
         .args([
             "--bits=16",
             "-K=17",
+            "--pack-base=2",
+            "mock",
+            "-D",
+            format!("./examples/onnx/{}/input.json", example_name).as_str(),
+            "-M",
+            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+// Mock prove (fast, but does not cover some potential issues)
+fn mock_everything(example_name: String) {
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--bits=16",
+            "-K=17",
+            "--single-lookup",
+            "--public-inputs",
             "--pack-base=2",
             "mock",
             "-D",
