@@ -5,11 +5,13 @@ class MyModel(nn.Module):
     def __init__(self):
         super(MyModel, self).__init__()
         self.relu = nn.ReLU()
-        self.fc = nn.Linear(1, 1)
+        self.sigmoid = nn.Sigmoid()
+        self.fc = nn.Linear(3, 2)
 
     def forward(self, x):
-        x = self.relu(x)
-        x = self.relu(self.relu(self.fc(x)))
+        x = self.sigmoid(x)
+        x = self.sigmoid(x)
+
         return x
 
 circuit = MyModel()

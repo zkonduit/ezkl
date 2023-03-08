@@ -692,7 +692,7 @@ impl Model {
                 Some(config.layout(layouter, &values)?)
             }
             NodeConfig::Lookup {
-                config,
+                mut config,
                 inputs: idx,
                 offset,
             } => {

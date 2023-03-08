@@ -72,6 +72,43 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         ValTensor::Instance { inner: col, dims }
     }
 
+    /// Calls `int_evals` on the inner tensor.
+    pub fn get_int_evals(&self) -> Result<Vec<i128>, Box<dyn Error>> {
+        // finally convert to vector of integers
+        let mut integer_evals: Vec<i128> = vec![];
+        match self {
+            ValTensor::Value { inner: v, dims: _ } => {
+                let _ = v.map(|vaf| {
+                    // we have to push to an externally created vector or else vaf.map() returns an evaluation wrapped in Value<> (which we don't want)
+                    vaf.map(|f| {
+                        integer_evals.push(crate::fieldutils::felt_to_i128(f));
+                    })
+                });
+            }
+            ValTensor::AssignedValue { inner: v, dims: _ } => {
+                let _ = v.map(|vaf| {
+                    // we have to push to an externally created vector or else vaf.map() returns an evaluation wrapped in Value<> (which we don't want)
+                    vaf.map(|f| {
+                        integer_evals.push(crate::fieldutils::felt_to_i128(f.evaluate()));
+                    })
+                });
+            }
+            ValTensor::PrevAssigned { inner: v, dims: _ } => {
+                // convert assigned cells to Value<Assigned<F>> so we can extract the inner field element
+                let w_vaf: Tensor<Value<Assigned<F>>> = v.map(|acaf| (acaf).value_field());
+
+                let _ = w_vaf.map(|vaf| {
+                    // we have to push to an externally created vector or else vaf.map() returns an evaluation wrapped in Value<> (which we don't want)
+                    vaf.map(|f| {
+                        integer_evals.push(crate::fieldutils::felt_to_i128(f.evaluate()));
+                    })
+                });
+            }
+            _ => return Err(Box::new(TensorError::WrongMethod)),
+        };
+        Ok(integer_evals)
+    }
+
     /// Calls `get_slice` on the inner tensor.
     pub fn get_slice(&self, indices: &[Range<usize>]) -> Result<ValTensor<F>, Box<dyn Error>> {
         let slice = match self {

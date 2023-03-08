@@ -1,8 +1,6 @@
 use super::*;
-use crate::fieldutils::{felt_to_i128, i128_to_felt};
+use crate::fieldutils::i128_to_felt;
 use crate::tensor::ops::nonlinearities::*;
-use halo2_proofs::circuit::AssignedCell;
-use halo2_proofs::plonk::Assigned;
 use halo2_proofs::{
     arithmetic::{Field, FieldExt},
     circuit::{Layouter, Value},
@@ -162,6 +160,10 @@ pub struct Config<F: FieldExt + TensorType> {
     ///  table used to represent the non-linearity
     pub table: Rc<RefCell<Table<F>>>,
     _marker: PhantomData<F>,
+    /// the inputs to the lookup operations.
+    pub input_buffer: Vec<ValTensor<F>>,
+    /// the outputs to the lookup operations.
+    pub output_buffer: Vec<ValTensor<F>>,
 }
 
 impl<F: FieldExt + TensorType> Config<F> {
@@ -252,6 +254,8 @@ impl<F: FieldExt + TensorType> Config<F> {
             table,
             qlookup,
             _marker: PhantomData,
+            input_buffer: vec![],
+            output_buffer: vec![],
         }
     }
 }
@@ -277,7 +281,7 @@ impl<F: FieldExt + TensorType> Config<F> {
     /// Assigns values to the variables created when calling `configure`.
     /// Values are supplied as a 1-element array of `[input]` VarTensors.
     pub fn layout(
-        &self,
+        &mut self,
         layouter: &mut impl Layouter<F>,
         values: &ValTensor<F>,
         offset: usize,
@@ -285,49 +289,81 @@ impl<F: FieldExt + TensorType> Config<F> {
         if !self.table.borrow().is_assigned {
             self.table.borrow_mut().layout(layouter)?
         }
-        let region_name = format!("Elementwise {:#?}", self.table.borrow().nonlinearities[0]);
-        let mut t = ValTensor::from(
-            match layouter.assign_region(
-                || &region_name, // the name of the region
-                |mut region| {
+
+        self.input_buffer.push(values.clone());
+
+        let integer_evals = values
+            .get_int_evals()
+            .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+        // for key generation integer_evals will be empty and we need to return a set of unassigned values
+        let output: Tensor<Value<F>> = match integer_evals.len() {
+            // if empty return an unknown val
+            0 => {
+                Tensor::from((0..values.dims().iter().product::<usize>()).map(|_| Value::unknown()))
+            }
+            // if not empty apply the nonlinearity !
+            _ => {
+                let mut x = integer_evals.into_iter().into();
+                for nl in self.table.borrow().nonlinearities.clone() {
+                    x = nl.f(x);
+                }
+                x.map(|elem| Value::known(i128_to_felt(elem)))
+            }
+        };
+
+        let buffer_to_fill = values.dims().iter().product::<usize>();
+        let total_buffer = self.input.dims().iter().product::<usize>();
+
+        let region_name = if (offset + buffer_to_fill) == total_buffer {
+            format!("Lookup for {:#?}", self.table.borrow().nonlinearities[0])
+        } else {
+            format!(
+                "Lookup buffering for {:#?}",
+                self.table.borrow().nonlinearities[0]
+            )
+        };
+
+        let mut t = match layouter.assign_region(
+            || &region_name, // the name of the region
+            |mut region| {
+                if (offset + buffer_to_fill) == total_buffer {
                     self.qlookup.enable(&mut region, 0)?;
-
-                    let w: Tensor<AssignedCell<F, F>> =
-                        self.input.assign(&mut region, offset, values)?;
-                    // convert assigned cells to Value<Assigned<F>> so we can extract the inner field element
-                    let w_vaf: Tensor<Value<Assigned<F>>> = w.map(|acaf| (acaf).value_field());
-                    // finally convert to vector of integers
-                    let mut integer_evals: Vec<i128> = vec![];
-                    let _ = w_vaf.map(|vaf| {
-                        // we have to push to an externally created vector or else vaf.map() returns an evaluation wrapped in Value<> (which we don't want)
-                        vaf.map(|f| {
-                            integer_evals.push(felt_to_i128(f.evaluate()));
-                        })
-                    });
-                    // for key generation integer_evals will be empty and we need to return a set of unassigned values
-                    let output: Tensor<Value<F>> = match integer_evals.len() {
-                        // if empty return an unknown val
-                        0 => w.map(|_| Value::unknown()),
-                        // if not empty apply the nonlinearity !
-                        _ => {
-                            let mut x = integer_evals.into_iter().into();
-                            for nl in self.table.borrow().nonlinearities.clone() {
-                                x = nl.f(x);
-                            }
-                            x.map(|elem| Value::known(i128_to_felt(elem)))
-                        }
-                    };
-
-                    self.output
-                        .assign(&mut region, offset, &ValTensor::from(output))
-                },
-            ) {
-                Ok(a) => a,
-                Err(e) => {
-                    return Err(Box::new(e));
+                    //  can now safely unwrap
+                    let mut region_offset = 0;
+                    for input in self.input_buffer.iter() {
+                        self.input.assign(&mut region, region_offset, input)?;
+                        region_offset += input.dims().iter().product::<usize>();
+                    }
+                    let mut region_offset = 0;
+                    // we haven't appended the new output yet
+                    for output in self.output_buffer.iter() {
+                        self.output.assign(&mut region, region_offset, output)?;
+                        region_offset += output.dims().iter().product::<usize>();
+                    }
+                    // this is the new output
+                    Ok(ValTensor::from(self.output.assign(
+                        &mut region,
+                        offset,
+                        &ValTensor::from(output.clone()),
+                    )?))
+                } else {
+                    let output = ValTensor::from(self.output.assign(
+                        &mut region,
+                        0,
+                        &ValTensor::from(output.clone()),
+                    )?);
+                    self.output_buffer.push(output);
+                    // because of steps above this should never ever be empty
+                    Ok(self.output_buffer.last().unwrap().clone())
                 }
             },
-        );
+        ) {
+            Ok(a) => a,
+            Err(e) => {
+                return Err(Box::new(e));
+            }
+        };
         t.reshape(values.dims())?;
         Ok(t)
     }
@@ -369,7 +405,7 @@ mod tests {
 
         fn synthesize(
             &self,
-            config: Self::Config,
+            mut config: Self::Config,
             mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
         ) -> Result<(), Error> {
             let _ = config.layout(&mut layouter, &self.input, 0);
