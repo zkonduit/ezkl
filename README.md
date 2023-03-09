@@ -387,8 +387,12 @@ cargo run --release --example mlp_4d
 
 The cli can also be compiled to for `wasm32-wasi` target (browser bindings with `wasm32-unknown-unknown` coming soon). To do so first ensure that [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/). Is installed. 
 
+
+
 You can then run: 
 ```bash
+rustup target add wasm32-wasi
+
 wasm-pack build --bin ezkl --target wasm32-wasi
 ```
 >Note: On Mac you may need to install llvm using llvvm and clang using homebrew then explicitly set the `CC` and `AR` arguments. For instance: `AR=/opt/homebrew/opt/llvm/bin/llvm-ar CC=/opt/homebrew/opt/llvm/bin/clang wasm-pack build --bin ezkl --target wasm32-wasi`
