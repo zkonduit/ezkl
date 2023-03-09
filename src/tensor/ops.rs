@@ -865,18 +865,18 @@ pub mod nonlinearities {
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let k = 2;
+    /// let k = 2.0;
     /// let result = const_div(&x, k);
     /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 4, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn const_div(a: &Tensor<i128>, scale: i128) -> Tensor<i128> {
+    pub fn const_div(a: &Tensor<i128>, denom: f32) -> Tensor<i128> {
         // calculate value of output
         // calculate value of output
         let mut output: Tensor<i128> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
-            let d_inv_x = (*a_i as f32) / (scale as f32);
+            let d_inv_x = (*a_i as f32) / denom;
             output[i] = d_inv_x.round() as i128;
         }
         output
