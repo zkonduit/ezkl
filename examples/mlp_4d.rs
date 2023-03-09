@@ -1,3 +1,4 @@
+use eq_float::F32;
 use ezkl::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
 use ezkl::circuit::polynomial::{
     Config as PolyConfig, InputType as PolyInputType, Node as PolyNode, Op as PolyOp,
@@ -87,8 +88,15 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         .unwrap();
 
         // sets up a new Divide by table
-        let l4 =
-            LookupConfig::configure(cs, &input, &output, BITS, &[LookupOp::Div { scale: 128 }]);
+        let l4 = LookupConfig::configure(
+            cs,
+            &input,
+            &output,
+            BITS,
+            &[LookupOp::Div {
+                denom: F32::from(128.),
+            }],
+        );
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
