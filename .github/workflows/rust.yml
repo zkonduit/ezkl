@@ -43,7 +43,9 @@ jobs:
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@v0.4.0
       - name: Install wasmtime
-        run: curl https://wasmtime.dev/install.sh -sSf | bash
+        run: |
+          curl https://wasmtime.dev/install.sh -sSf | bash
+          source /home/runner/.bashrc
       - name: Install wasm32-wasi
         run: rustup target add wasm32-wasi
       - name: Build wasm
