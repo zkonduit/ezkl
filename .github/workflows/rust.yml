@@ -46,6 +46,7 @@ jobs:
         run: |
           curl https://wasmtime.dev/install.sh -sSf | bash
           source /home/runner/.bashrc
+          wasmtime --help
       - name: Install wasm32-wasi
         run: rustup target add wasm32-wasi
       - name: Build wasm
