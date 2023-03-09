@@ -865,7 +865,7 @@ pub mod nonlinearities {
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let k = 2;
+    /// let k = 2.0;
     /// let result = const_div(&x, k);
     /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 4, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
