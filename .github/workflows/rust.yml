@@ -109,12 +109,16 @@ jobs:
 
       - name: Mock proving tests (public outputs)
         run: cargo test --release --verbose tests::mock_public_outputs_ -- --test-threads 32
+      - name: Mock proving tests (public outputs and single lookup)
+        run: cargo test --release --verbose tests::mock_single_lookup_ -- --test-threads 32
       - name: Mock proving tests (public and packed outputs)
         run: cargo test --release --verbose tests::mock_packed_outputs_ -- --test-threads 32
       - name: Mock proving tests (public inputs)
         run: cargo test --release --verbose tests::mock_public_inputs_ -- --test-threads 32
       - name: Mock proving tests (public params)
         run: cargo test --release --verbose tests::mock_public_params_ -- --test-threads 32
+      - name: Mock 'everything' tests (public and packed outputs, public inputs, and single lookup)
+        run: cargo test --release --verbose tests::mock_everything_ -- --test-threads 32
 
   prove-and-verify-evm-tests:
     runs-on: ubuntu-latest-16-cores
@@ -133,7 +137,7 @@ jobs:
         run: cargo test --release --verbose tests_evm -- --test-threads 4
 
   prove-and-verify-tests:
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-latest-32-cores
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -142,7 +146,9 @@ jobs:
           override: true
           components: rustfmt, clippy
       - name: KZG prove and verify tests
-        run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 4
+        run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 8
+      - name: KZG prove and verify tests (single lookup)
+        run: cargo test --release --verbose tests::kzg_prove_and_verify_single_lookup_ -- --test-threads 8
 
   prove-and-verify-aggr-tests:
     runs-on: self-hosted

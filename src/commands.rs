@@ -59,7 +59,7 @@ pub struct RunArgs {
     #[arg(long, default_value = "false")]
     pub public_inputs: bool,
     /// Flags whether outputs are public
-    #[arg(long, default_value = "true")]
+    #[arg(long, default_value = "true", action = clap::ArgAction::Set)]
     pub public_outputs: bool,
     /// Flags whether params are public
     #[arg(long, default_value = "false")]
@@ -71,6 +71,9 @@ pub struct RunArgs {
     /// Useful when verifying on the EVM. Note that this will often break for very long inputs. Use with caution, still experimental.
     #[arg(long, default_value = "1")]
     pub pack_base: u32,
+    /// use a single argument for all lookups
+    #[arg(long, default_value = "false")]
+    pub single_lookup: bool,
 }
 
 const EZKLCONF: &str = "EZKLCONF";
@@ -299,7 +302,7 @@ pub enum Commands {
         #[arg(long)]
         vk_path: PathBuf,
         /// The path to output to the desired verification code
-        #[arg(long, required_if_eq("transcript", " "))]
+        #[arg(long)]
         deployment_code_path: Option<PathBuf>,
         // todo, optionally allow supplying proving key
     },
@@ -399,7 +402,7 @@ pub enum Commands {
         #[arg(long)]
         deployment_code_path: PathBuf,
         /// The path to the Solidity code
-        #[arg(long, required_if_eq("transcript", "evm"))]
+        #[arg(long)]
         sol_code_path: Option<PathBuf>,
     },
 

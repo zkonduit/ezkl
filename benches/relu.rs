@@ -41,7 +41,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for NLCircuit<F> {
 
     fn synthesize(
         &self,
-        config: Self::Config,
+        mut config: Self::Config,
         mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
     ) -> Result<(), Error> {
         config.layout(&mut layouter, &self.input).unwrap();

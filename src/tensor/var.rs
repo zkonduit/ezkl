@@ -225,9 +225,10 @@ impl VarTensor {
     ) -> Result<Tensor<AssignedCell<F, F>>, halo2_proofs::plonk::Error> {
         match values {
             ValTensor::Instance {
-                inner: instance, ..
+                inner: instance,
+                dims,
             } => match &self {
-                VarTensor::Advice { inner: v, dims, .. } => {
+                VarTensor::Advice { inner: v, .. } => {
                     // this should never ever fail
                     let t: Tensor<i32> = Tensor::new(None, dims).unwrap();
                     t.enum_map(|coord, _| {
