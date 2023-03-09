@@ -15,7 +15,7 @@ use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Op {
     Div {
-        scale: usize,
+        denom: eq_float::F32,
     },
     ReLU {
         scale: usize,
@@ -39,7 +39,7 @@ pub enum Op {
 impl fmt::Display for Op {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Op::Div { scale } => write!(f, "div  w/ scale: {}", scale),
+            Op::Div { denom } => write!(f, "div  w/ denom: {}", denom),
             Op::ReLU { scale } => write!(f, "relu w/ scale: {}", scale),
             Op::LeakyReLU { scale, slope } => {
                 write!(f, "leaky-relu w/ scale: {}, slope: {}", scale, slope)
@@ -57,7 +57,7 @@ impl Op {
     /// forward function
     pub fn f(&self, x: Tensor<i128>) -> Tensor<i128> {
         match &self {
-            Op::Div { scale } => const_div(&x, *scale as i128),
+            Op::Div { denom } => const_div(&x, f32::from(*denom)),
             Op::ReLU { scale } => leakyrelu(&x, *scale, 0_f32),
             Op::LeakyReLU { scale, slope } => leakyrelu(&x, *scale, slope.0),
             Op::PReLU { scale, slopes } => leakyrelu(&x, *scale, slopes[0].0),
