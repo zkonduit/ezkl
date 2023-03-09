@@ -71,7 +71,7 @@ impl OpKind {
             }),
             "Sigmoid" => OpKind::Lookup(LookupOp::Sigmoid { scales: (1, 1) }),
             "Sqrt" => OpKind::Lookup(LookupOp::Sqrt { scales: (1, 1) }),
-            "Div" => OpKind::Lookup(LookupOp::Div { scale: 1 }),
+            "Div" => OpKind::Lookup(LookupOp::Div { denom: F32(1.0) }),
             "Const" => OpKind::Const,
             "Source" => OpKind::Input,
             "Add" => OpKind::Poly(PolyOp::Add),
@@ -492,15 +492,17 @@ impl Node {
                         }
                     }
                     LookupOp::Div { .. } => {
-                        if inputs[1].out_dims.clone() != [1] {
+                        if (inputs[1].out_dims.clone() != [1])
+                            || !matches!(inputs[1].opkind, OpKind::Const)
+                        {
                             return Err(Box::new(GraphError::NonConstantDiv));
                         }
-                        let mult = scale_to_multiplier(scale);
-                        let div = inputs[1].output_max / mult;
-                        let input_node = &inputs[0];
 
+                        let input_node = &inputs[0];
                         let mut input_outlets = node.inputs.clone();
                         input_outlets.pop();
+
+                        let denom = inputs[1].raw_const_value.as_ref().unwrap()[0];
 
                         let scale_diff = input_node.out_scale - scale;
                         // We can also consider adjusting the scale of all inputs and the output in a more custom way.
@@ -508,14 +510,12 @@ impl Node {
                         if scale_diff > 0 {
                             let mult = scale_to_multiplier(scale_diff);
                             opkind = OpKind::Lookup(LookupOp::Div {
-                                scale: (div * mult) as usize,
+                                denom: F32(denom * mult),
                             }); // now the input will be scaled down to match
-                            output_max = input_node.output_max / (div * mult);
+                            output_max = input_node.output_max / (denom * mult);
                         } else {
-                            opkind = OpKind::Lookup(LookupOp::Div {
-                                scale: div as usize,
-                            }); // now the input will be scaled down to match
-                            output_max = input_node.output_max / (div);
+                            opkind = OpKind::Lookup(LookupOp::Div { denom: F32(denom) }); // now the input will be scaled down to match
+                            output_max = input_node.output_max / (denom);
                         }
 
                         Node {
