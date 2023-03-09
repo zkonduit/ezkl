@@ -31,6 +31,24 @@ jobs:
       - name: Build
         run: cargo build --verbose
 
+  build-wasm:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+          components: rustfmt, clippy
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - name: Install wasmtime
+        run: curl https://wasmtime.dev/install.sh -sSf | bash
+      - name: Build wasm
+        run: wasm-pack build --bin ezkl --target wasm32-wasi
+      - name: Run help
+        run: wasmtime run './target/wasm32-wasi/release/ezkl.wasm' -- --help
+
   benchmarks:
     runs-on: ubuntu-latest-16-cores
 

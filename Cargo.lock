@@ -1740,11 +1740,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "ezkl"
+name = "ezkl-lib"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "chrono",
  "clap 4.1.6",
  "colored",
  "colored_json",

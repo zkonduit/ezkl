@@ -1,5 +1,6 @@
 //use crate::onnx::OnnxModel;
 use clap::{Args, Parser, Subcommand, ValueEnum};
+#[cfg(not(target_arch = "wasm32"))]
 use ethereum_types::Address;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
@@ -267,7 +268,7 @@ pub enum Commands {
         strategy: StrategyType,
         // todo, optionally allow supplying proving key
     },
-
+    #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for a single proof
     #[command(name = "create-evm-verifier", arg_required_else_help = true)]
     CreateEVMVerifier {
@@ -292,6 +293,7 @@ pub enum Commands {
         // todo, optionally allow supplying proving key
     },
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for an aggregate proof
     #[command(name = "create-evm-verifier-aggr", arg_required_else_help = true)]
     CreateEVMVerifierAggr {
@@ -307,6 +309,7 @@ pub enum Commands {
         // todo, optionally allow supplying proving key
     },
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// Deploys an EVM verifier
     #[command(name = "deploy-verifier-evm", arg_required_else_help = true)]
     DeployVerifierEVM {
@@ -325,6 +328,7 @@ pub enum Commands {
         // todo, optionally allow supplying proving key
     },
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// Send a proof to be verified to an already deployed verifier
     #[command(name = "send-proof-evm", arg_required_else_help = true)]
     SendProofEVM {
@@ -392,6 +396,7 @@ pub enum Commands {
         transcript: TranscriptType,
     },
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// Verifies a proof using a local EVM executor, returning accept or reject
     #[command(name = "verify-evm", arg_required_else_help = true)]
     VerifyEVM {

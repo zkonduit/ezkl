@@ -1,9 +1,9 @@
-use ezkl::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
-use ezkl::circuit::polynomial::{
+use ezkl_lib::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
+use ezkl_lib::circuit::polynomial::{
     Config as PolyConfig, InputType as PolyInputType, Node as PolyNode, Op as PolyOp,
 };
-use ezkl::fieldutils::i32_to_felt;
-use ezkl::tensor::*;
+use ezkl_lib::fieldutils::i32_to_felt;
+use ezkl_lib::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::FieldExt,

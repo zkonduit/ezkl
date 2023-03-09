@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::circuit::polynomial::*;
-use ezkl::tensor::*;
+use ezkl_lib::circuit::polynomial::*;
+use ezkl_lib::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::{Field, FieldExt},

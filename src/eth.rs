@@ -9,6 +9,8 @@ use ethers::contract::abigen;
 use ethers::contract::ContractFactory;
 use ethers::core::k256::ecdsa::SigningKey;
 use ethers::middleware::SignerMiddleware;
+#[cfg(target_arch = "wasm32")]
+use ethers::prelude::Wallet;
 use ethers::providers::Middleware;
 use ethers::providers::{Http, Provider};
 use ethers::signers::coins_bip39::English;
@@ -17,10 +19,10 @@ use ethers::signers::Signer;
 use ethers::types::transaction::eip2718::TypedTransaction;
 use ethers::types::TransactionRequest;
 use ethers::types::U256;
-use ethers::utils::AnvilInstance;
+#[cfg(not(target_arch = "wasm32"))]
 use ethers::{
     prelude::{LocalWallet, Wallet},
-    utils::Anvil,
+    utils::{Anvil, AnvilInstance},
 };
 use ethers_solc::Solc;
 use halo2curves::bn256::{Fr, G1Affine};
@@ -31,7 +33,9 @@ use std::error::Error;
 use std::fmt::Write;
 use std::fs::read_to_string;
 use std::path::PathBuf;
-use std::{convert::TryFrom, sync::Arc, time::Duration};
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Duration;
+use std::{convert::TryFrom, sync::Arc};
 
 const DEFAULT_DERIVATION_PATH_PREFIX: &str = "m/44'/60'/0'/0/";
 
@@ -39,6 +43,7 @@ const DEFAULT_DERIVATION_PATH_PREFIX: &str = "m/44'/60'/0'/0/";
 pub type EthersClient = Arc<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>;
 
 /// Return an instance of Anvil and a local client
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn setup_eth_backend() -> Result<(AnvilInstance, EthersClient), Box<dyn Error>> {
     // Launch anvil
     let anvil = Anvil::new().spawn();
@@ -60,6 +65,7 @@ pub async fn setup_eth_backend() -> Result<(AnvilInstance, EthersClient), Box<dy
 }
 
 /// Verify a proof using a Solidity verifier contract
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn verify_proof_via_solidity(
     proof: Snark<Fr, G1Affine>,
     sol_code_path: PathBuf,

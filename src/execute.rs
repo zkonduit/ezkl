@@ -1,11 +1,11 @@
-use super::eth::verify_proof_via_solidity;
 use crate::commands::{Cli, Commands, StrategyType, TranscriptType};
-use crate::eth::{deploy_verifier, fix_verifier_sol, send_proof};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::eth::{deploy_verifier, fix_verifier_sol, send_proof, verify_proof_via_solidity};
 use crate::graph::{vector_to_quantized, Model, ModelCircuit};
-use crate::pfsys::evm::aggregation::{
-    gen_aggregation_evm_verifier, AggregationCircuit, PoseidonTranscript,
-};
-use crate::pfsys::evm::single::gen_evm_verifier;
+use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::pfsys::evm::{aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::{evm_verify, DeploymentCode};
 #[cfg(feature = "render")]
 use crate::pfsys::prepare_model_circuit;
@@ -34,6 +34,7 @@ use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
 use std::fs::File;
+#[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
 use std::time::Instant;
 use tabled::Table;
@@ -142,6 +143,7 @@ fn create_proof_circuit_kzg<
 /// Run an ezkl command with given args
 pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     match cli.command {
+        #[cfg(not(target_arch = "wasm32"))]
         Commands::SendProofEVM {
             secret,
             rpc_url,
@@ -152,6 +154,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
             send_proof(secret, rpc_url, addr, proof, has_abi).await?;
         }
+        #[cfg(not(target_arch = "wasm32"))]
         Commands::DeployVerifierEVM {
             secret,
             rpc_url,
@@ -224,6 +227,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 .verify()
                 .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
         }
+        #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
             ref data,
             model: _,
@@ -259,6 +263,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 let _ = f.write(output.as_bytes());
             }
         }
+        #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifierAggr {
             params_path,
             deployment_code_path,
@@ -433,6 +438,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             let result = verify_proof_circuit_kzg(&params, proof, &vk, transcript, strategy);
             info!("verified: {}", result.is_ok());
         }
+        #[cfg(not(target_arch = "wasm32"))]
         Commands::VerifyEVM {
             proof_path,
             deployment_code_path,

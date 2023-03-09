@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::circuit::lookup::{Config, Op};
-use ezkl::tensor::*;
+use ezkl_lib::circuit::lookup::{Config, Op};
+use ezkl_lib::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::FieldExt,
