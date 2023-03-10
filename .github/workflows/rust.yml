@@ -23,6 +23,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -36,6 +37,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -57,6 +59,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0s
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -70,6 +73,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -82,6 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -96,6 +101,7 @@ jobs:
     runs-on: ubuntu-latest-16-cores
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -109,6 +115,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -122,6 +129,7 @@ jobs:
     runs-on: ubuntu-latest-32-cores
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -145,6 +153,7 @@ jobs:
     runs-on: ubuntu-latest-32-cores
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -173,6 +182,7 @@ jobs:
     runs-on: ubuntu-latest-16-cores
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -189,6 +199,7 @@ jobs:
     runs-on: ubuntu-latest-32-cores
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -203,6 +214,7 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -215,6 +227,7 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -229,6 +242,7 @@ jobs:
     runs-on: ubuntu-latest-32-cores
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -244,6 +258,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
