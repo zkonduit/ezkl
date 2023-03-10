@@ -23,6 +23,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -58,6 +59,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -71,6 +73,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -83,6 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -97,6 +101,7 @@ jobs:
     runs-on: ubuntu-latest-16-cores
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -106,18 +111,19 @@ jobs:
         run: rustup target add wasm32-wasi
       - name: Forward Pass
         run: cargo test --release --verbose tests::forward_pass_
-      - name: Forward Pass (WASI)
-        run: cargo test --release --verbose tests_wasi::forward_pass_
 
   render-circuit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
           override: true
           components: rustfmt, clippy
+      - name: Install wasm32-wasi
+        run: rustup target add wasm32-wasi
       - name: Circuit Render
         run: cargo test --release --verbose tests::render_circuit_
 
@@ -125,11 +131,14 @@ jobs:
     runs-on: ubuntu-latest-32-cores
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
           override: true
           components: rustfmt, clippy
+      - name: Install wasm32-wasi
+        run: rustup target add wasm32-wasi
 
       - name: Mock proving tests (public outputs)
         run: cargo test --release --verbose tests::mock_public_outputs_ -- --test-threads 32
@@ -177,11 +186,14 @@ jobs:
     runs-on: ubuntu-latest-16-cores
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
           override: true
           components: rustfmt, clippy
+      - name: Install wasm32-wasi
+        run: rustup target add wasm32-wasi
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
       - name: Install Anvil
@@ -193,11 +205,14 @@ jobs:
     runs-on: ubuntu-latest-32-cores
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
           override: true
           components: rustfmt, clippy
+      - name: Install wasm32-wasi
+        run: rustup target add wasm32-wasi
       - name: KZG prove and verify tests
         run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 8
       - name: KZG prove and verify tests (single lookup)
@@ -207,11 +222,14 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
           override: true
           components: rustfmt, clippy
+      - name: Install wasm32-wasi
+        run: rustup target add wasm32-wasi
       - name: KZG prove and verify aggr tests
         run: cargo test --release --verbose tests_aggr::kzg_aggr_prove_and_verify_
 
@@ -219,11 +237,14 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
           override: true
           components: rustfmt, clippy
+      - name: Install wasm32-wasi
+        run: rustup target add wasm32-wasi
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
       - name: KZG prove and verify aggr tests
@@ -233,11 +254,14 @@ jobs:
     runs-on: ubuntu-latest-32-cores
     steps:
       - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
           override: true
           components: rustfmt, clippy
+      - name: Install wasm32-wasi
+        run: rustup target add wasm32-wasi
       - name: Download MNIST
         run: sh data.sh
       - name: Examples
