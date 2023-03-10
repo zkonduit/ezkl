@@ -11,7 +11,6 @@ lazy_static! {
 #[ctor::ctor]
 fn init() {
     println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
-    build_ezkl_wasm();
 }
 
 const TESTS: [&str; 19] = [
@@ -64,17 +63,20 @@ macro_rules! wasi_test_packed_func {
             use crate::PACKING_TESTS;
             use crate::mock_packed_outputs;
             use crate::mock_everything;
+            use crate::build_ezkl_wasm;
 
             seq!(N in 0..=10 {
 
 
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_packed_outputs_(test: &str) {
+                build_ezkl_wasm();
                 mock_packed_outputs(test.to_string());
             }
 
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_everything_(test: &str) {
+                build_ezkl_wasm();
                 mock_everything(test.to_string());
             }
 
@@ -97,32 +99,38 @@ macro_rules! wasi_test_func {
             use crate::mock_public_params;
             use crate::forward_pass;
             use crate::mock_single_lookup;
+            use crate::build_ezkl_wasm;
 
             seq!(N in 0..=18 {
 
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
+                build_ezkl_wasm();
                 mock(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_single_lookup_(test: &str) {
+                build_ezkl_wasm();
                 mock_single_lookup(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_inputs_(test: &str) {
+                build_ezkl_wasm();
                 mock_public_inputs(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_params_(test: &str) {
+                build_ezkl_wasm();
                 mock_public_params(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
             fn forward_pass_(test: &str) {
+                build_ezkl_wasm();
                 forward_pass(test.to_string());
             }
 
@@ -142,14 +150,18 @@ macro_rules! wasi_test_neg_examples {
             use test_case::test_case;
             use crate::neg_mock as run;
             use crate::neg_mock_single_lookup as run_single_lookup;
+            use crate::build_ezkl_wasm;
+
             seq!(N in 0..=1 {
             #(#[test_case(NEG_TESTS[N])])*
             fn neg_examples_(test: (&str, &str)) {
+                build_ezkl_wasm();
                 run(test.0.to_string(), test.1.to_string());
             }
 
             #(#[test_case(NEG_TESTS[N])])*
             fn neg_examples_single_lookup_(test: (&str, &str)) {
+                build_ezkl_wasm();
                 run_single_lookup(test.0.to_string(), test.1.to_string());
             }
             });
