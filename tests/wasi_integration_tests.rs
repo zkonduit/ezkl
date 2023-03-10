@@ -384,7 +384,14 @@ fn mock_public_params(example_name: String) {
 
 fn build_ezkl_wasm() {
     let status = Command::new("wasm-pack")
-        .args(["build", "--release", "--bin", "ezkl"])
+        .args([
+            "build",
+            "--release",
+            "--bin",
+            "ezkl",
+            "--target",
+            "wasm32-wasi",
+        ])
         .status()
         .expect("failed to execute process");
     assert!(status.success());
