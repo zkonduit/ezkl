@@ -58,7 +58,7 @@ const NEG_TESTS: [(&str, &str); 2] = [
 macro_rules! wasi_test_packed_func {
     () => {
         #[cfg(test)]
-        mod wasi_packed_tests {
+        mod packed_tests_wasi {
             use seq_macro::seq;
             use test_case::test_case;
             use crate::PACKING_TESTS;
@@ -88,7 +88,7 @@ macro_rules! wasi_test_packed_func {
 macro_rules! wasi_test_func {
     () => {
         #[cfg(test)]
-        mod wasi_tests {
+        mod tests_wasi {
             use seq_macro::seq;
             use crate::TESTS;
             use test_case::test_case;
@@ -136,7 +136,7 @@ macro_rules! wasi_test_func {
 macro_rules! wasi_test_neg_examples {
     () => {
         #[cfg(test)]
-        mod wasi_neg_tests {
+        mod neg_tests_wasi {
             use seq_macro::seq;
             use crate::NEG_TESTS;
             use test_case::test_case;
