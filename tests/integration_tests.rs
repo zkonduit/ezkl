@@ -719,7 +719,6 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
             "-K=17",
             "verify-evm",
             "--proof-path",
-            "--proof-path",
             &format!(
                 "{}/{}_evm_aggr.pf",
                 TEST_DIR.path().to_str().unwrap(),
