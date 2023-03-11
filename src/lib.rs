@@ -31,6 +31,9 @@
 pub mod circuit;
 /// CLI commands.
 pub mod commands;
+#[cfg(not(target_arch = "wasm32"))]
+/// Utility functions for contracts
+pub mod eth;
 /// Command execution
 pub mod execute;
 /// Utilities for converting from Halo2 Field types to integers (and vice-versa).
@@ -43,5 +46,3 @@ pub mod graph;
 pub mod pfsys;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
-/// Utility functions for contracts
-pub mod eth;

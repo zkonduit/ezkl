@@ -9,8 +9,8 @@ pub use std::ops::{Add, Div, Mul, Sub};
 /// * `inputs` - A vector of tensors holding in order: input data, affine kernel, convolution bias.
 /// # Examples
 /// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::affine;
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::affine;
 ///
 /// let x = Tensor::<i128>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 2, 1, 1]),
@@ -73,8 +73,8 @@ pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// * `inputs` - Vector of tensors of length 2
 /// # Examples
 /// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::scale_and_shift;
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::scale_and_shift;
 ///
 /// let x = Tensor::<i128>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
@@ -115,8 +115,8 @@ pub fn scale_and_shift<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// * `inputs` - Vector of tensors of length 2
 /// # Examples
 /// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::matmul;
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::matmul;
 ///
 /// let x = Tensor::<i128>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 2, 1, 1]),
@@ -172,8 +172,8 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// * `t` - Vector of tensors
 /// # Examples
 /// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::add;
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::add;
 /// let x = Tensor::<i128>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
@@ -216,8 +216,8 @@ pub fn add<T: TensorType + Add<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor
 /// * `b` - Tensor
 /// # Examples
 /// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::sub;
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::sub;
 /// let x = Tensor::<i128>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
@@ -261,8 +261,8 @@ pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor
 /// * `b` - Tensor
 /// # Examples
 /// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::mult;
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::mult;
 /// let x = Tensor::<i128>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
@@ -305,8 +305,8 @@ pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tenso
 /// * `b` - Single value
 /// # Examples
 /// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::rescale;
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::rescale;
 /// let x = Tensor::<i128>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
@@ -337,8 +337,8 @@ pub fn rescale<T: TensorType + Add<Output = T>>(
 /// * `b` - Single value
 /// # Examples
 /// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::sum;
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::sum;
 /// let x = Tensor::<i128>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
@@ -362,8 +362,8 @@ pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, 
 /// * `stride` - Tuple of stride values in x and y directions.
 /// # Examples
 /// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::convolution;
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::convolution;
 ///
 /// let x = Tensor::<i128>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -459,8 +459,8 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// * `pool_dims` - Tuple of pooling window size in x and y directions.
 /// # Examples
 /// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::sumpool;
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::sumpool;
 /// use halo2_proofs::circuit::Value;
 /// use halo2_proofs::plonk::Assigned;
 /// use halo2curves::pasta::Fp as F;
@@ -524,8 +524,8 @@ pub fn sumpool<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// * `pool_dims` - Tuple of pooling window size in x and y directions.
 /// # Examples
 /// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::max_pool2d;
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::max_pool2d;
 /// use halo2_proofs::circuit::Value;
 /// use halo2_proofs::plonk::Assigned;
 /// use halo2curves::pasta::Fp as F;
@@ -592,8 +592,8 @@ pub fn max_pool2d<T: TensorType>(
 /// * `inputs` - Vector of tensors of length 2.
 /// # Examples
 /// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::dot;
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::dot;
 ///
 /// let x = Tensor::<i128>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -626,8 +626,8 @@ pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// * `padding` - Tuple of padding values in x and y directions.
 /// # Examples
 /// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::pad;
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::pad;
 ///
 /// let x = Tensor::<i128>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -676,8 +676,8 @@ pub fn pad<T: TensorType>(
 /// * `scale` - fixed point representation scale
 /// # Examples
 /// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::pack;
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::pack;
 ///
 /// let x = Tensor::<i128>::new(
 ///     Some(&[5, 2, 1]),
@@ -723,8 +723,8 @@ pub mod nonlinearities {
     /// * `scale_output` - Single value
     /// # Examples
     /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::nonlinearities::sigmoid;
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::sigmoid;
     /// let x = Tensor::<i128>::new(
     ///     Some(&[2, 15, 2, 1, 1, 0]),
     ///     &[2, 3],
@@ -754,8 +754,8 @@ pub mod nonlinearities {
     /// * `scale_output` - Single value
     /// # Examples
     /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::nonlinearities::sqrt;
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::sqrt;
     /// let x = Tensor::<i128>::new(
     ///     Some(&[4, 25, 8, 1, 1, 0]),
     ///     &[2, 3],
@@ -785,8 +785,8 @@ pub mod nonlinearities {
     /// * `slope` - Single value
     /// # Examples
     /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::nonlinearities::leakyrelu;
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::leakyrelu;
     /// let x = Tensor::<i128>::new(
     ///     Some(&[2, 15, 2, 1, 1, -5]),
     ///     &[2, 3],
@@ -819,8 +819,8 @@ pub mod nonlinearities {
     /// * `slopes` - Array of values
     /// # Examples
     /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::nonlinearities::prelu;
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::prelu;
     /// let x = Tensor::<i128>::new(
     ///     Some(&[-10, 15, 2, 1, 1, -5]),
     ///     &[2, 3],
@@ -859,8 +859,8 @@ pub mod nonlinearities {
     /// * `b` - Single value
     /// # Examples
     /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::nonlinearities::const_div;
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::const_div;
     /// let x = Tensor::<i128>::new(
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],

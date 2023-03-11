@@ -1,15 +1,15 @@
-use chrono::Local;
 use colored::*;
 use colored_json::prelude::*;
 use env_logger::Builder;
-use ezkl::commands::Cli;
-use ezkl::execute::run;
+use ezkl_lib::commands::Cli;
+use ezkl_lib::execute::run;
 use log::{error, info, Level, LevelFilter, Record};
 use rand::seq::SliceRandom;
 use std::env;
 use std::error::Error;
 use std::fmt::Formatter;
 use std::io::Write;
+use std::time::Instant;
 
 #[allow(dead_code)]
 pub fn level_color(level: &log::Level, msg: &str) -> String {
@@ -54,13 +54,15 @@ pub fn format(buf: &mut Formatter, record: &Record<'_>) -> Result<(), std::fmt::
 }
 
 pub fn init_logger() {
+    let start = Instant::now();
     let mut builder = Builder::new();
-    builder.format(|buf, record| {
+
+    builder.format(move |buf, record| {
         writeln!(
             buf,
-            "{} [{}, {}] - {}",
+            "{} [{}s, {}] - {}",
             prefix_token(&record.level()),
-            Local::now().format("%Y-%m-%dT%H:%M:%S"),
+            start.elapsed().as_secs(),
             record.metadata().target(),
             format!("{}", record.args()).replace("\n", &format!("\n{} ", " | ".white().bold())),
         )
@@ -73,7 +75,7 @@ pub fn init_logger() {
     builder.init();
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 pub async fn main() -> Result<(), Box<dyn Error>> {
     let args = Cli::create().unwrap();
     init_logger();

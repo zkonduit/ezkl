@@ -380,7 +380,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Set one single value on the tensor.
     ///
     /// ```
-    /// use ezkl::tensor::Tensor;
+    /// use ezkl_lib::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(None, &[3, 3, 3]).unwrap();
     ///
     /// a.set(&[0, 0, 1], 10);
@@ -397,7 +397,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Get a single value from the Tensor.
     ///
     /// ```
-    /// use ezkl::tensor::Tensor;
+    /// use ezkl_lib::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(None, &[2, 3, 5]).unwrap();
     ///
     /// a[1*15 + 1*5 + 1] = 5;
@@ -411,7 +411,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Get a slice from the Tensor.
     ///
     /// ```
-    /// use ezkl::tensor::Tensor;
+    /// use ezkl_lib::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
     /// let mut b = Tensor::<i32>::new(Some(&[1, 2]), &[2]).unwrap();
     ///
@@ -445,7 +445,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Get the array index from rows / columns indices.
     ///
     /// ```
-    /// use ezkl::tensor::Tensor;
+    /// use ezkl_lib::tensor::Tensor;
     /// let a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
     ///
     /// assert_eq!(a.get_index(&[2, 2, 2]), 26);
@@ -472,7 +472,7 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     ///Reshape the tensor
     /// ```
-    /// use ezkl::tensor::Tensor;
+    /// use ezkl_lib::tensor::Tensor;
     /// let mut a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
     /// a.reshape(&[9, 3]);
     /// assert_eq!(a.dims(), &[9, 3]);
@@ -484,7 +484,7 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     ///Flatten the tensor shape
     /// ```
-    /// use ezkl::tensor::Tensor;
+    /// use ezkl_lib::tensor::Tensor;
     /// let mut a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
     /// a.flatten();
     /// assert_eq!(a.dims(), &[27]);
@@ -495,7 +495,7 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     /// Maps a function to tensors
     /// ```
-    /// use ezkl::tensor::Tensor;
+    /// use ezkl_lib::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
     /// let mut c = a.map(|x| i32::pow(x,2));
     /// assert_eq!(c, Tensor::from([1, 16].into_iter()))
@@ -508,7 +508,7 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     /// Maps a function to tensors and enumerates
     /// ```
-    /// use ezkl::tensor::{Tensor, TensorError};
+    /// use ezkl_lib::tensor::{Tensor, TensorError};
     /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
     /// let mut c = a.enum_map::<_,_,TensorError>(|i, x| Ok(i32::pow(x + i as i32, 2))).unwrap();
     /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
@@ -530,7 +530,7 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     /// Maps a function to tensors and enumerates using multi cartesian coordinates
     /// ```
-    /// use ezkl::tensor::Tensor;
+    /// use ezkl_lib::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
     /// let mut c = a.mc_enum_map(|i, x| i32::pow(x + i[0] as i32, 2)).unwrap();
     /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
@@ -555,7 +555,7 @@ impl<T: Clone + TensorType> Tensor<T> {
 impl<T: Clone + TensorType> Tensor<Tensor<T>> {
     /// Flattens a tensor of tensors
     /// ```
-    /// use ezkl::tensor::Tensor;
+    /// use ezkl_lib::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
     /// let mut b = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
     /// let mut c = Tensor::new(Some(&[a,b]), &[2]).unwrap();
@@ -582,7 +582,7 @@ impl<T: TensorType + Add<Output = T>> Add for Tensor<T> {
     /// * `rhs` - Tensor
     /// # Examples
     /// ```
-    /// use ezkl::tensor::Tensor;
+    /// use ezkl_lib::tensor::Tensor;
     /// use std::ops::Add;
     /// let x = Tensor::<i32>::new(
     ///     Some(&[2, 1, 2, 1, 1, 1]),
@@ -646,7 +646,7 @@ impl<T: TensorType + Sub<Output = T>> Sub for Tensor<T> {
     /// * `rhs` - Tensor
     /// # Examples
     /// ```
-    /// use ezkl::tensor::Tensor;
+    /// use ezkl_lib::tensor::Tensor;
     /// use std::ops::Sub;
     /// let x = Tensor::<i32>::new(
     ///     Some(&[2, 1, 2, 1, 1, 1]),
@@ -711,7 +711,7 @@ impl<T: TensorType + Mul<Output = T>> Mul for Tensor<T> {
     /// * `rhs` - Tensor
     /// # Examples
     /// ```
-    /// use ezkl::tensor::Tensor;
+    /// use ezkl_lib::tensor::Tensor;
     /// use std::ops::Mul;
     /// let x = Tensor::<i32>::new(
     ///     Some(&[2, 1, 2, 1, 1, 1]),
@@ -774,7 +774,7 @@ impl<T: TensorType + Mul<Output = T>> Tensor<T> {
     /// * `b` - Single value
     /// # Examples
     /// ```
-    /// use ezkl::tensor::Tensor;
+    /// use ezkl_lib::tensor::Tensor;
     /// use std::ops::Mul;
     /// let x = Tensor::<i32>::new(
     ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -814,7 +814,7 @@ impl<T: TensorType + Div<Output = T>> Div for Tensor<T> {
     /// * `rhs` - Tensor
     /// # Examples
     /// ```
-    /// use ezkl::tensor::Tensor;
+    /// use ezkl_lib::tensor::Tensor;
     /// use std::ops::Div;
     /// let x = Tensor::<i32>::new(
     ///     Some(&[4, 1, 4, 1, 1, 4]),

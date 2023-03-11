@@ -200,10 +200,13 @@ impl Model {
             Commands::Table { model } | Commands::Mock { model, .. } => {
                 Model::new(model, cli.args, Mode::Mock, visibility)
             }
-            Commands::CreateEVMVerifier { model, .. }
-            | Commands::Prove { model, .. }
+            Commands::Prove { model, .. }
             | Commands::Verify { model, .. }
             | Commands::Aggregate { model, .. } => {
+                Model::new(model, cli.args, Mode::Prove, visibility)
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            Commands::CreateEVMVerifier { model, .. } => {
                 Model::new(model, cli.args, Mode::Prove, visibility)
             }
             #[cfg(feature = "render")]
