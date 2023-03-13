@@ -88,7 +88,7 @@ fn verify_proof_circuit_kzg<
 }
 
 /// helper function
-fn create_proof_circuit_kzg<
+pub fn create_proof_circuit_kzg<
     'params,
     C: Circuit<Fr>,
     Strategy: VerificationStrategy<'params, KZGCommitmentScheme<Bn256>, VerifierGWC<'params, Bn256>>,

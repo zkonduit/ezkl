@@ -1,4 +1,6 @@
 use crate::tensor::*;
+/// Structs and methods for configuring and assigning "accumulated" polynomial constraints to a gate within a Halo2 circuit.
+pub mod accumulated_dot;
 /// Element-wise operations using lookup tables.
 pub mod lookup;
 /// Structs and methods for configuring and assigning polynomial constraints to a gate within a Halo2 circuit.

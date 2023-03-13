@@ -55,7 +55,7 @@ jobs:
         run: wasmtime run './target/wasm32-wasi/release/ezkl.wasm' -- --help
 
   benchmarks:
-    runs-on: ubuntu-latest-16-cores
+    runs-on: self-hosted
 
     steps:
       - uses: actions/checkout@v3

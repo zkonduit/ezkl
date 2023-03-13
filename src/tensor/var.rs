@@ -178,6 +178,39 @@ impl VarTensor {
 impl VarTensor {
     /// Retrieve the values represented within the columns of the `VarTensor` (recall that `VarTensor`
     /// is a Tensor of Halo2 columns).
+    pub fn query_rng<F: FieldExt>(
+        &self,
+        meta: &mut VirtualCells<'_, F>,
+        offset: usize,
+        rng: usize,
+    ) -> Result<Tensor<Expression<F>>, halo2_proofs::plonk::Error> {
+        match &self {
+            VarTensor::Fixed { inner: fixed, .. } => {
+                let c = Tensor::from(
+                    // this should fail if dims is empty, should be impossible
+                    (0..rng).map(|i| {
+                        let (x, y) = self.cartesian_coord(i);
+                        meta.query_fixed(fixed[x], Rotation(offset as i32 + y as i32))
+                    }),
+                );
+                Ok(c)
+            }
+            // when advice we have 1 col per row
+            VarTensor::Advice { inner: advices, .. } => {
+                let c = Tensor::from(
+                    // this should fail if dims is empty, should be impossible
+                    (0..rng).map(|i| {
+                        let (x, y) = self.cartesian_coord(i);
+                        meta.query_advice(advices[x], Rotation(offset as i32 + y as i32))
+                    }),
+                );
+                Ok(c)
+            }
+        }
+    }
+
+    /// Retrieve the values represented within the columns of the `VarTensor` (recall that `VarTensor`
+    /// is a Tensor of Halo2 columns).
     pub fn query<F: FieldExt>(
         &self,
         meta: &mut VirtualCells<'_, F>,

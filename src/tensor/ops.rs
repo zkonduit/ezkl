@@ -882,3 +882,54 @@ pub mod nonlinearities {
         output
     }
 }
+
+/// Ops that return the transcript i.e intermediate calcs of an op
+pub mod accumulated {
+    use super::*;
+
+    /// Dot product of two tensors.
+    /// # Arguments
+    ///
+    /// * `inputs` - Vector of tensors of length 2.
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::accumulated::dot;
+    ///
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[5, 2]),
+    ///     &[2],
+    /// ).unwrap();
+    /// let y = Tensor::<i128>::new(
+    ///     Some(&[5, 5]),
+    ///     &[2],
+    /// ).unwrap();
+    /// let expected = Tensor::<i128>::new(
+    ///     Some(&[0, 25, 35]),
+    ///     &[3],
+    /// ).unwrap();
+    /// assert_eq!(dot(&vec![x, y]).unwrap(), expected);
+    /// ```
+    pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+        inputs: &Vec<Tensor<T>>,
+    ) -> Result<Tensor<T>, TensorError> {
+        if (inputs.len() != 2) || (inputs[0].clone().len() != inputs[1].clone().len()) {
+            return Err(TensorError::DimMismatch("dot".to_string()));
+        }
+        let (a, b): (Tensor<T>, Tensor<T>) = (inputs[0].clone(), inputs[1].clone());
+
+        let res: Tensor<T> = Tensor::new(None, &[1])?;
+        let transcript: Tensor<T> = a
+            .iter()
+            .zip(b)
+            .scan(T::zero().unwrap(), |acc, (k, i)| {
+                *acc = acc.clone() + k.clone() * i;
+                Some(acc.clone())
+            })
+            .collect();
+
+        let combination = Tensor::new(Some(&[res, transcript]), &[2])?;
+
+        combination.combine()
+    }
+}
