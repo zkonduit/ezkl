@@ -55,6 +55,15 @@ name = "affine"
 harness = false
 
 [[bench]]
+name = "dot"
+harness = false
+
+[[bench]]
+name = "accum_dot"
+harness = false
+
+
+[[bench]]
 name = "cnvrl"
 harness = false
 
