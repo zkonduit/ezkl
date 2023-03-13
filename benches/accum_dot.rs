@@ -37,7 +37,7 @@ impl Circuit<Fr> for MyCircuit {
 
         let a = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
         let b = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
-        let output = VarTensor::new_advice(cs, K, len, vec![1], true, 512);
+        let output = VarTensor::new_advice(cs, K, len, vec![len + 1], true, 512);
 
         Self::Config::configure(cs, &[a, b], &output)
     }
@@ -55,7 +55,7 @@ impl Circuit<Fr> for MyCircuit {
 fn rundot(c: &mut Criterion) {
     let mut group = c.benchmark_group("dot");
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    for &len in [4, 8, 16, 32, 64, 128, 256, 512].iter() {
+    for &len in [4, 8, 16, 32, 64, 128, 256].iter() {
         unsafe {
             LEN = len;
         };

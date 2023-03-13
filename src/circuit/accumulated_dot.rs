@@ -164,7 +164,8 @@ impl<F: FieldExt + TensorType> Config<F> {
                         .enable(&mut region, i)?;
                 }
 
-                Ok(output)
+                // last element is the result
+                Ok(output.get_slice(&[output.len() - 1..output.len()]))
             },
         ) {
             Ok(a) => a,
