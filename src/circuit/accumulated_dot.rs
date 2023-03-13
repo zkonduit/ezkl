@@ -165,7 +165,9 @@ impl<F: FieldExt + TensorType> Config<F> {
                 }
 
                 // last element is the result
-                Ok(output.get_slice(&[output.len() - 1..output.len()]))
+                Ok(output
+                    .get_slice(&[output.len() - 1..output.len()])
+                    .expect("accum poly: failed to fetch last elem"))
             },
         ) {
             Ok(a) => a,
