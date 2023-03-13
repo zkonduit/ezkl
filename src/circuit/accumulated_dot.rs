@@ -68,7 +68,7 @@ pub struct Config<F: FieldExt + TensorType> {
 }
 
 impl<F: FieldExt + TensorType> Config<F> {
-    /// Configures the sequence of operations into a circuit gate, represented as an array of [Node].
+    /// Configures the sequence of operations into a circuit gate.
     /// # Arguments
     /// * `inputs` - The explicit inputs to the operations.
     /// * `output` - The variable representing the (currently singular) output of the operations.
@@ -120,7 +120,7 @@ impl<F: FieldExt + TensorType> Config<F> {
 
     /// Assigns variables to the regions created when calling `configure`.
     /// # Arguments
-    /// * `values` - The explicit values to the operations. [Node]s index over these inputs using their `input_order` attribute. They can also index over the intermediate outputs of other [Node]s.
+    /// * `values` - The explicit values to the operations.
     /// * `layouter` - A Halo2 Layouter.
     pub fn layout(
         &mut self,
