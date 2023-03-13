@@ -12,7 +12,7 @@ use std::fmt;
 use std::marker::PhantomData;
 
 #[allow(missing_docs)]
-/// An enum representing the operations that can be used to expressed more complex operations via accumulation
+/// An enum representing the operations that can be used to express more complex operations via accumulation
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum BaseOp {
     Dot,
@@ -55,14 +55,14 @@ impl fmt::Display for Op {
     }
 }
 
-/// Configuration for a basic sequence of operations all fused together in a single gate.
+/// Configuration for an accumulated arg.
 #[derive(Clone, Debug)]
 pub struct Config<F: FieldExt + TensorType> {
     /// the inputs to the fused operations.
     pub inputs: Vec<VarTensor>,
     /// the (currently singular) output of the fused operations.
     pub output: VarTensor,
-    /// [Selector] generated when configuring the layer.
+    /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many base gates.
     pub selectors: BTreeMap<BaseOp, Selector>,
     _marker: PhantomData<F>,
 }
@@ -70,9 +70,8 @@ pub struct Config<F: FieldExt + TensorType> {
 impl<F: FieldExt + TensorType> Config<F> {
     /// Configures the sequence of operations into a circuit gate, represented as an array of [Node].
     /// # Arguments
-    /// * `inputs` - The explicit inputs to the operations. [Node]s index over these inputs using their `input_order` attribute. They can also index over the intermediate outputs of other [Node]s.
-    /// * `output` - The variable representing the (currently singular) output of the fused operations.
-    /// * `nodes` - The sequence of operations (in order of execution) that constitute the fused operation.
+    /// * `inputs` - The explicit inputs to the operations.
+    /// * `output` - The variable representing the (currently singular) output of the operations.
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         inputs: &[VarTensor],
@@ -157,6 +156,13 @@ impl<F: FieldExt + TensorType> Config<F> {
                     .expect("accum poly: dot op failed")
                     .into();
                 let output = self.output.assign(&mut region, offset, &accumulated_dot)?;
+
+                for i in 0..inputs[0].len() {
+                    self.selectors
+                        .get(&BaseOp::Dot)
+                        .unwrap()
+                        .enable(&mut region, i)?;
+                }
 
                 Ok(output)
             },
