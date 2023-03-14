@@ -1,5 +1,6 @@
 use super::*;
-use crate::tensor::ops::*;
+use crate::circuit::{utils, CircuitError};
+use crate::tensor::{ops::*, ValTensor, VarTensor};
 use crate::tensor::{Tensor, TensorType};
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -8,52 +9,7 @@ use halo2_proofs::{
 };
 use std::collections::BTreeMap;
 use std::error::Error;
-use std::fmt;
 use std::marker::PhantomData;
-
-#[allow(missing_docs)]
-/// An enum representing the operations that can be used to express more complex operations via accumulation
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum BaseOp {
-    Dot,
-}
-
-/// Matches a [Op] to an operation in the `tensor::ops` module.
-impl BaseOp {
-    /// forward func
-    pub fn f<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
-        &self,
-        inputs: (T, T, T),
-    ) -> T {
-        let (a, b, m) = inputs;
-        match &self {
-            BaseOp::Dot => a * b + m,
-        }
-    }
-}
-
-impl fmt::Display for BaseOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            BaseOp::Dot => write!(f, "base accum dot"),
-        }
-    }
-}
-
-#[allow(missing_docs)]
-/// An enum representing the operations that can be merged into a single circuit gate.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Op {
-    Dot,
-}
-
-impl fmt::Display for Op {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Op::Dot => write!(f, "accum dot"),
-        }
-    }
-}
 
 /// Configuration for an accumulated arg.
 #[derive(Clone, Debug)]
@@ -63,7 +19,7 @@ pub struct Config<F: FieldExt + TensorType> {
     /// the (currently singular) output of the fused operations.
     pub output: VarTensor,
     /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many base gates.
-    pub selectors: BTreeMap<BaseOp, Selector>,
+    pub selectors: BTreeMap<(BaseOp, usize), Selector>,
     _marker: PhantomData<F>,
 }
 
@@ -78,7 +34,10 @@ impl<F: FieldExt + TensorType> Config<F> {
         output: &VarTensor,
     ) -> Self {
         // setup a selector per base op
-        let selectors = BTreeMap::from([(BaseOp::Dot, meta.selector())]);
+        let mut selectors = BTreeMap::new();
+        for i in 0..inputs[0].num_cols() {
+            selectors.insert((BaseOp::Dot, i), meta.selector());
+        }
         let config = Self {
             selectors,
             inputs: inputs.to_vec(),
@@ -86,7 +45,7 @@ impl<F: FieldExt + TensorType> Config<F> {
             _marker: PhantomData,
         };
 
-        for (base_op, selector) in config.selectors.iter() {
+        for ((base_op, i), selector) in config.selectors.iter() {
             meta.create_gate("accum dot", |meta| {
                 let selector = meta.query_selector(*selector);
 
@@ -95,8 +54,8 @@ impl<F: FieldExt + TensorType> Config<F> {
                     .iter()
                     .map(|input| {
                         input
-                            .query_rng(meta, 0, 1)
-                            .expect("poly: input query failed")[0]
+                            .query_rng(meta, i * input.col_size(), 1)
+                            .expect("accum: input query failed")[0]
                             .clone()
                     })
                     .collect::<Vec<_>>();
@@ -158,10 +117,11 @@ impl<F: FieldExt + TensorType> Config<F> {
                 let output = self.output.assign(&mut region, offset, &accumulated_dot)?;
 
                 for i in 0..inputs[0].len() {
+                    let (x, y) = self.inputs[0].cartesian_coord(i);
                     self.selectors
-                        .get(&BaseOp::Dot)
+                        .get(&(BaseOp::Dot, x))
                         .unwrap()
-                        .enable(&mut region, i)?;
+                        .enable(&mut region, y)?;
                 }
 
                 // last element is the result
@@ -194,7 +154,7 @@ mod tests {
     use rand::rngs::OsRng;
 
     const K: usize = 4;
-    const LEN: usize = 2;
+    const LEN: usize = 4;
 
     #[derive(Clone)]
     struct MyCircuit<F: FieldExt + TensorType> {
@@ -213,7 +173,7 @@ mod tests {
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
             let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let output = VarTensor::new_advice(cs, K, LEN + 1, vec![LEN + 1], true, 512);
 
             Self::Config::configure(cs, &[a, b], &output)
         }

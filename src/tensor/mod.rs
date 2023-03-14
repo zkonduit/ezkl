@@ -299,11 +299,15 @@ impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<F, F>>> for Tens
     fn from(value: Tensor<AssignedCell<F, F>>) -> Tensor<i32> {
         let mut output = Vec::new();
         value.map(|x| {
+            let mut i = 0;
             x.value().map(|y| {
                 let e = felt_to_i32(*y);
                 output.push(e);
-                e
-            })
+                i += 1;
+            });
+            if i == 0 {
+                output.push(0);
+            }
         });
         Tensor::new(Some(&output), value.dims()).unwrap()
     }
@@ -318,6 +322,25 @@ impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>
             output.push(x.value_field().evaluate());
         }
         Tensor::new(Some(&output), value.dims()).unwrap()
+    }
+}
+
+impl<F: FieldExt + TensorType + Clone> From<Tensor<Value<F>>> for Tensor<i32> {
+    fn from(t: Tensor<Value<F>>) -> Tensor<i32> {
+        let mut output = Vec::new();
+        t.map(|x| {
+            let mut i = 0;
+            x.map(|y| {
+                let e = felt_to_i32(y);
+                output.push(e);
+                i += 1;
+            });
+            if i == 0 {
+                output.push(0);
+            }
+        });
+        println!("{:?} {:?}", output, t);
+        Tensor::new(Some(&output), t.dims()).unwrap()
     }
 }
 
@@ -549,6 +572,48 @@ impl<T: Clone + TensorType> Tensor<T> {
         }
 
         Tensor::new(Some(&res), self.dims())
+    }
+
+    /// Transposes a 2D tensor
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 3, 2, 4]), &[2, 2]).unwrap();
+    /// a.transpose_2d();
+    /// assert_eq!(a, expected);
+    /// ```
+    pub fn transpose_2d(&mut self) -> Result<(), TensorError> {
+        if self.dims().len() != 2 {
+            return Err(TensorError::DimError);
+        }
+        let mut indices = Vec::new();
+        for i in self.dims.clone() {
+            indices.push(0..i);
+        }
+        let mut v_transpose = Tensor::new(None, &[self.dims()[1], self.dims()[0]])?;
+        for coord in indices.iter().cloned().multi_cartesian_product() {
+            v_transpose.set(&[coord[1], coord[0]], self.get(&coord));
+        }
+        *self = v_transpose;
+        Ok(())
+    }
+
+    /// Tiles a tensor n times
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
+    /// let mut c = a.tile(2).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 4, 1, 4]), &[2, 2]).unwrap();
+    /// assert_eq!(c, expected);
+    /// ```
+    pub fn tile(&self, n: usize) -> Result<Tensor<T>, TensorError> {
+        let mut res = vec![];
+        for _ in 0..n {
+            res.push(self.clone());
+        }
+        let mut tiled = Tensor::new(Some(&res), &[n])?.combine()?;
+        tiled.reshape(&[&[n], self.dims()].concat());
+        Ok(tiled)
     }
 }
 
@@ -902,7 +967,7 @@ mod tests {
     #[test]
     fn tensor_slice() {
         let a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
-        let b = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
+        let b = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
         assert_eq!(a.get_slice(&[0..2, 0..1]).unwrap(), b);
     }
 }

@@ -62,6 +62,14 @@ harness = false
 name = "accum_dot"
 harness = false
 
+[[bench]]
+name = "matmul"
+harness = false
+
+[[bench]]
+name = "accum_matmul"
+harness = false
+
 
 [[bench]]
 name = "cnvrl"

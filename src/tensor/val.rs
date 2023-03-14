@@ -138,6 +138,28 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         Ok(slice)
     }
 
+    /// Transposes the inner tensor
+    pub fn transpose_2d(&mut self) -> Result<(), Box<dyn Error>> {
+        match self {
+            ValTensor::Value { inner: v, dims: d } => {
+                v.transpose_2d()?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::AssignedValue { inner: v, dims: d } => {
+                v.transpose_2d()?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::PrevAssigned { inner: v, dims: d } => {
+                v.transpose_2d()?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { dims: d, .. } => {
+                *d = vec![d.iter().product()];
+            }
+        }
+        Ok(())
+    }
+
     /// Sets the [ValTensor]'s shape.
     pub fn reshape(&mut self, new_dims: &[usize]) -> Result<(), Box<dyn Error>> {
         match self {
@@ -184,6 +206,49 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         }
     }
 
+    /// Calls `tile` on the inner [Tensor].
+    pub fn tile(&mut self, n: usize) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value { inner: v, dims: d } => {
+                *v = v.tile(n)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::AssignedValue { inner: v, dims: d } => {
+                *v = v.tile(n)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::PrevAssigned { inner: v, dims: d } => {
+                *v = v.tile(n)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        }
+        Ok(())
+    }
+
+    /// Calls `tile` on the inner [Tensor].
+    pub fn concat(&self, other: Self) -> Result<Self, TensorError> {
+        let res = match (self, other) {
+            (ValTensor::Value { inner: v1, .. }, ValTensor::Value { inner: v2, .. }) => {
+                ValTensor::from(Tensor::new(Some(&[v1.clone(), v2]), &[2])?.combine()?)
+            }
+            (
+                ValTensor::AssignedValue { inner: v1, .. },
+                ValTensor::AssignedValue { inner: v2, .. },
+            ) => ValTensor::from(Tensor::new(Some(&[v1.clone(), v2]), &[2])?.combine()?),
+            (
+                ValTensor::PrevAssigned { inner: v1, .. },
+                ValTensor::PrevAssigned { inner: v2, .. },
+            ) => ValTensor::from(Tensor::new(Some(&[v1.clone(), v2]), &[2])?.combine()?),
+            _ => {
+                return Err(TensorError::WrongMethod);
+            }
+        };
+        Ok(res)
+    }
+
     /// Returns the `dims` attribute of the [ValTensor].
     pub fn dims(&self) -> &[usize] {
         match self {
@@ -199,6 +264,10 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
             ValTensor::PrevAssigned { inner: v, dims: _ } => {
                 let r: Tensor<i32> = v.into();
                 format!("PrevAssigned {:?}", r)
+            }
+            ValTensor::Value { inner: v, dims: _ } => {
+                let r: Tensor<i32> = v.into();
+                format!("Value {:?}", r)
             }
             _ => "ValTensor not PrevAssigned".into(),
         }
