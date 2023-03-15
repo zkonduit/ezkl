@@ -58,7 +58,7 @@ impl Circuit<Fr> for MyCircuit {
 fn rundot(c: &mut Criterion) {
     let mut group = c.benchmark_group("accum_matmul");
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    for &len in [4, 32].iter() {
+    for &len in [4, 30].iter() {
         unsafe {
             LEN = len;
         };
