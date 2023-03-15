@@ -55,6 +55,10 @@ name = "affine"
 harness = false
 
 [[bench]]
+name = "accum_affine"
+harness = false
+
+[[bench]]
 name = "dot"
 harness = false
 

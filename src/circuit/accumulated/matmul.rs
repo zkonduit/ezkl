@@ -2,25 +2,14 @@ use super::*;
 use crate::circuit::{utils, CircuitError};
 use crate::tensor::{ops::*, ValTensor, VarTensor};
 use crate::tensor::{Tensor, TensorType};
-use halo2_proofs::{
-    arithmetic::FieldExt,
-    circuit::Layouter,
-    plonk::{ConstraintSystem, Constraints, Expression, Selector},
-};
-use std::collections::BTreeMap;
+use halo2_proofs::{arithmetic::FieldExt, circuit::Layouter, plonk::ConstraintSystem};
 use std::error::Error;
-use std::marker::PhantomData;
 
 /// Configuration for an accumulated arg.
 #[derive(Clone, Debug)]
 pub struct Config<F: FieldExt + TensorType> {
     /// the inputs to the operations.
-    pub inputs: Vec<VarTensor>,
-    /// the (currently singular) output of the operations.
-    pub output: VarTensor,
-    /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many base gates.
-    pub selectors: BTreeMap<(BaseOp, usize), Selector>,
-    _marker: PhantomData<F>,
+    pub base_config: BaseConfig<F>,
 }
 
 impl<F: FieldExt + TensorType> Config<F> {
@@ -31,54 +20,14 @@ impl<F: FieldExt + TensorType> Config<F> {
     /// * `op` - The operation being represented
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
-        inputs: &[VarTensor],
+        inputs: &[VarTensor; 2],
         output: &VarTensor,
     ) -> Self {
-        // setup a selector per base op AND across columns
+        // setup a selector per base op
         // TODO: make this more robust as we expand the module
-        let mut selectors = BTreeMap::new();
-        for i in 0..inputs[0].num_cols() {
-            selectors.insert((BaseOp::Dot, i), meta.selector());
-            selectors.insert((BaseOp::InitDot, i), meta.selector());
+        Self {
+            base_config: BaseConfig::configure(meta, inputs, output),
         }
-
-        let config = Self {
-            selectors,
-            inputs: inputs.to_vec(),
-            output: output.clone(),
-            _marker: PhantomData,
-        };
-
-        for ((base_op, i), selector) in config.selectors.iter() {
-            meta.create_gate(base_op.as_str(), |meta| {
-                let selector = meta.query_selector(*selector);
-
-                let qis = config
-                    .inputs
-                    .iter()
-                    .map(|input| {
-                        input
-                            .query_rng(meta, i * input.col_size(), 1)
-                            .expect("accum: input query failed")[0]
-                            .clone()
-                    })
-                    .collect::<Vec<_>>();
-
-                // Get output expressions for each input channel
-                let expected_output: Tensor<Expression<F>> = config
-                    .output
-                    .query_rng(meta, i * config.output.col_size(), 2)
-                    .expect("accum: output query failed");
-
-                let res = base_op.f((qis[0].clone(), qis[1].clone(), expected_output[0].clone()));
-
-                let constraints = vec![expected_output[1].clone() - res];
-
-                Constraints::with_selector(selector, constraints)
-            });
-        }
-
-        config
     }
 
     /// Assigns variables to the regions created when calling `configure`.
@@ -88,7 +37,7 @@ impl<F: FieldExt + TensorType> Config<F> {
     pub fn layout(
         &mut self,
         layouter: &mut impl Layouter<F>,
-        values: &[ValTensor<F>],
+        values: &[ValTensor<F>; 2],
     ) -> Result<ValTensor<F>, Box<dyn Error>> {
         if values.len() != 2 {
             return Err(Box::new(CircuitError::DimMismatch(
@@ -116,9 +65,10 @@ impl<F: FieldExt + TensorType> Config<F> {
 
                 for (i, elem) in vec![a.clone(), b.clone()].iter().enumerate() {
                     let inp = utils::value_muxer(
-                        &self.inputs[i],
+                        &self.base_config.inputs[i],
                         &{
-                            let res = self.inputs[i].assign(&mut region, offset, elem)?;
+                            let res =
+                                self.base_config.inputs[i].assign(&mut region, offset, elem)?;
                             res.map(|e| e.value_field().evaluate())
                         },
                         elem,
@@ -152,31 +102,25 @@ impl<F: FieldExt + TensorType> Config<F> {
                     accumulated::matmul(&vec![inputs[0].clone(), inputs[1].clone()])
                         .expect("accum poly: matmul op failed");
 
-                // remove 0 elements bar the first
-                let cleaned_matmul: Tensor<_> = accumulated_matmul
-                    .iter()
-                    .enumerate()
-                    .filter(|&(i, _)| {
-                        ((i % accumulated_matmul.dims().last().unwrap()) > 0) || i == 0
-                    })
-                    .map(|(_, v)| *v)
-                    .into();
-
-                let output = self
-                    .output
-                    .assign(&mut region, offset, &cleaned_matmul.into())?;
+                let output = self.base_config.output.assign(
+                    &mut region,
+                    offset,
+                    &accumulated_matmul.into(),
+                )?;
 
                 // these selectors map from
                 for i in 0..a.dims().iter().product::<usize>() {
-                    let (x, y) = self.inputs[0].cartesian_coord(i);
-                    if (i) % b_row_len > 0 || i == 0 {
-                        self.selectors
-                            .get(&(BaseOp::Dot, x))
+                    let (_, y) = self.base_config.inputs[0].cartesian_coord(i);
+                    if (i) % b_row_len > 0 {
+                        self.base_config
+                            .selectors
+                            .get(&BaseOp::Dot)
                             .unwrap()
                             .enable(&mut region, y)?;
                     } else {
-                        self.selectors
-                            .get(&(BaseOp::InitDot, x))
+                        self.base_config
+                            .selectors
+                            .get(&BaseOp::InitDot)
                             .unwrap()
                             .enable(&mut region, y)?;
                     }
@@ -190,12 +134,14 @@ impl<F: FieldExt + TensorType> Config<F> {
                 }
                 let script_len = dims.last().unwrap();
                 last_dims.push(script_len - 1..*script_len);
+
+                let mut last_elem = output
+                    .get_slice(&last_dims)
+                    .expect("accum poly: failed to fetch last elem");
+
+                last_elem.reshape(&[values[0].dims()[0], values[1].dims()[1]]);
                 // Now we can assign the matmul op
-                Ok({
-                    output
-                        .get_slice(&last_dims)
-                        .expect("accum poly: failed to fetch last elem")
-                })
+                Ok(last_elem)
             },
         ) {
             Ok(a) => a,

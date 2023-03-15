@@ -35,9 +35,9 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len * len, vec![len, len], true, 100000);
-        let b = VarTensor::new_advice(cs, K, len, vec![len, 1], true, 100000);
-        let output = VarTensor::new_advice(cs, K, len, vec![len, 1], true, 100000);
+        let a = VarTensor::new_advice(cs, K, len * len, vec![len, len], true, 512);
+        let b = VarTensor::new_advice(cs, K, len * len, vec![len, len], true, 512);
+        let output = VarTensor::new_advice(cs, K, len * len, vec![len, len], true, 512);
         let dot_node = Node {
             op: Op::Matmul,
             input_order: vec![InputType::Input(0), InputType::Input(1)],

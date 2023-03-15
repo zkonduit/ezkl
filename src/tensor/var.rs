@@ -188,7 +188,7 @@ impl VarTensor {
     pub fn query_rng<F: FieldExt>(
         &self,
         meta: &mut VirtualCells<'_, F>,
-        offset: usize,
+        offset: i32,
         rng: usize,
     ) -> Result<Tensor<Expression<F>>, halo2_proofs::plonk::Error> {
         match &self {
@@ -197,7 +197,7 @@ impl VarTensor {
                     // this should fail if dims is empty, should be impossible
                     (0..rng).map(|i| {
                         let (x, y) = self.cartesian_coord(i);
-                        meta.query_fixed(fixed[x], Rotation(offset as i32 + y as i32))
+                        meta.query_fixed(fixed[x], Rotation(offset + y as i32))
                     }),
                 );
                 Ok(c)
@@ -208,7 +208,7 @@ impl VarTensor {
                     // this should fail if dims is empty, should be impossible
                     (0..rng).map(|i| {
                         let (x, y) = self.cartesian_coord(i);
-                        meta.query_advice(advices[x], Rotation(offset as i32 + y as i32))
+                        meta.query_advice(advices[x], Rotation(offset + y as i32))
                     }),
                 );
                 Ok(c)

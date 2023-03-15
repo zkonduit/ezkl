@@ -614,6 +614,53 @@ impl<T: Clone + TensorType> Tensor<T> {
         tiled.reshape(&[&[n], self.dims()].concat());
         Ok(tiled)
     }
+
+    /// Adds a row of ones
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 4, 1, 4]), &[2, 2]).unwrap();
+    /// let mut c = a.pad_row_ones().unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 4, 1, 4, 1, 1]), &[3, 2]).unwrap();
+    /// assert_eq!(c, expected);
+    /// ```
+    pub fn pad_row_ones(&self) -> Result<Tensor<T>, TensorError> {
+        let mut result = self.inner.clone();
+        for _ in 0..self.dims[1] {
+            result.push(T::one().unwrap());
+        }
+        let mut dims = self.dims().to_vec();
+        dims[0] += 1;
+        Tensor::new(Some(&result), &dims)
+    }
+
+    /// Extends another tensor to rows
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 4, 1, 4]), &[2, 2]).unwrap();
+    /// let mut b = Tensor::<i32>::new(Some(&[2, 3, 2, 3]), &[2, 2]).unwrap();
+    /// let mut c = a.append_to_row(b).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 4, 2, 3, 1, 4, 2, 3]), &[2, 4]).unwrap();
+    /// assert_eq!(c, expected);
+    /// ```
+    pub fn append_to_row(&self, b: Tensor<T>) -> Result<Tensor<T>, TensorError> {
+        if self.dims()[0] != b.dims()[0] {
+            return Err(TensorError::DimMismatch("add".to_string()));
+        }
+        let mut result = Vec::new();
+        let mut j = 0;
+        for (i, e) in self.inner.iter().enumerate() {
+            result.push(e.clone());
+            if (i + 1) % self.dims[1] == 0 {
+                result.extend(b.get_slice(&[j..j + 1])?);
+                j += 0;
+            }
+        }
+        let mut dims = self.dims().to_vec();
+        let len = dims.len();
+        dims[len - 1] += b.dims()[1];
+        Tensor::new(Some(&result), &dims)
+    }
+
     /// Repeats the rows of a tensor n times
     /// ```
     /// use ezkl_lib::tensor::Tensor;

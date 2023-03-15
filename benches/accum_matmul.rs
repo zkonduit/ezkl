@@ -55,10 +55,10 @@ impl Circuit<Fr> for MyCircuit {
     }
 }
 
-fn rundot(c: &mut Criterion) {
+fn runmatmul(c: &mut Criterion) {
     let mut group = c.benchmark_group("accum_matmul");
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    for &len in [32].iter() {
+    for &len in [4, 32].iter() {
         unsafe {
             LEN = len;
         };
@@ -107,6 +107,6 @@ fn rundot(c: &mut Criterion) {
 criterion_group! {
   name = benches;
   config = Criterion::default().with_plots();
-  targets = rundot
+  targets = runmatmul
 }
 criterion_main!(benches);

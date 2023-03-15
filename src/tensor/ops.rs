@@ -899,8 +899,8 @@ pub mod accumulated {
     ///     &[2],
     /// ).unwrap();
     /// let expected = Tensor::<i128>::new(
-    ///     Some(&[0, 25, 35]),
-    ///     &[3],
+    ///     Some(&[25, 35]),
+    ///     &[2],
     /// ).unwrap();
     /// assert_eq!(dot(&vec![x, y]).unwrap(), expected);
     /// ```
@@ -912,7 +912,6 @@ pub mod accumulated {
         }
         let (a, b): (Tensor<T>, Tensor<T>) = (inputs[0].clone(), inputs[1].clone());
 
-        let res: Tensor<T> = Tensor::new(None, &[1])?;
         let transcript: Tensor<T> = a
             .iter()
             .zip(b)
@@ -922,9 +921,7 @@ pub mod accumulated {
             })
             .collect();
 
-        let combination = Tensor::new(Some(&[res, transcript]), &[2])?;
-
-        combination.combine()
+        Ok(transcript)
     }
 
     /// Matrix multiplies two 2D tensors.
@@ -945,7 +942,7 @@ pub mod accumulated {
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = matmul(&vec![k, x]).unwrap();
-    /// let expected = Tensor::<i128>::new(Some(&[0, 10, 12, 18, 0, 5, 7, 10]), &[2, 1, 4]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[10, 12, 18, 5, 7, 10]), &[2, 1, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(

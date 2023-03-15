@@ -1,26 +1,16 @@
 use super::*;
 use crate::circuit::{utils, CircuitError};
+use crate::tensor::TensorType;
 use crate::tensor::{ops::*, ValTensor, VarTensor};
-use crate::tensor::{Tensor, TensorType};
-use halo2_proofs::{
-    arithmetic::FieldExt,
-    circuit::Layouter,
-    plonk::{ConstraintSystem, Constraints, Expression, Selector},
-};
-use std::collections::BTreeMap;
+use halo2_proofs::{arithmetic::FieldExt, circuit::Layouter, plonk::ConstraintSystem};
+
 use std::error::Error;
-use std::marker::PhantomData;
 
 /// Configuration for an accumulated arg.
 #[derive(Clone, Debug)]
 pub struct Config<F: FieldExt + TensorType> {
     /// the inputs to the fused operations.
-    pub inputs: Vec<VarTensor>,
-    /// the (currently singular) output of the fused operations.
-    pub output: VarTensor,
-    /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many base gates.
-    pub selectors: BTreeMap<(BaseOp, usize), Selector>,
-    _marker: PhantomData<F>,
+    pub base_config: BaseConfig<F>,
 }
 
 impl<F: FieldExt + TensorType> Config<F> {
@@ -30,51 +20,12 @@ impl<F: FieldExt + TensorType> Config<F> {
     /// * `output` - The variable representing the (currently singular) output of the operations.
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
-        inputs: &[VarTensor],
+        inputs: &[VarTensor; 2],
         output: &VarTensor,
     ) -> Self {
-        // setup a selector per base op
-        let mut selectors = BTreeMap::new();
-        for i in 0..inputs[0].num_cols() {
-            selectors.insert((BaseOp::Dot, i), meta.selector());
+        Self {
+            base_config: BaseConfig::configure(meta, inputs, output),
         }
-        let config = Self {
-            selectors,
-            inputs: inputs.to_vec(),
-            output: output.clone(),
-            _marker: PhantomData,
-        };
-
-        for ((base_op, i), selector) in config.selectors.iter() {
-            meta.create_gate("accum dot", |meta| {
-                let selector = meta.query_selector(*selector);
-
-                let qis = config
-                    .inputs
-                    .iter()
-                    .map(|input| {
-                        input
-                            .query_rng(meta, i * input.col_size(), 1)
-                            .expect("accum: input query failed")[0]
-                            .clone()
-                    })
-                    .collect::<Vec<_>>();
-
-                // Get output expressions for each input channel
-                let expected_output: Tensor<Expression<F>> = config
-                    .output
-                    .query_rng(meta, 0, 2)
-                    .expect("poly: output query failed");
-
-                let res = base_op.f((qis[0].clone(), qis[1].clone(), expected_output[0].clone()));
-
-                let constraints = vec![expected_output[1].clone() - res];
-
-                Constraints::with_selector(selector, constraints)
-            });
-        }
-
-        config
     }
 
     /// Assigns variables to the regions created when calling `configure`.
@@ -84,9 +35,9 @@ impl<F: FieldExt + TensorType> Config<F> {
     pub fn layout(
         &mut self,
         layouter: &mut impl Layouter<F>,
-        values: &[ValTensor<F>],
+        values: &[ValTensor<F>; 2],
     ) -> Result<ValTensor<F>, Box<dyn Error>> {
-        if values.len() != self.inputs.len() {
+        if values.len() != self.base_config.inputs.len() {
             return Err(Box::new(CircuitError::DimMismatch(
                 "accum dot layout".to_string(),
             )));
@@ -100,9 +51,10 @@ impl<F: FieldExt + TensorType> Config<F> {
                 let mut inputs = vec![];
                 for (i, input) in values.iter().enumerate() {
                     let inp = utils::value_muxer(
-                        &self.inputs[i],
+                        &self.base_config.inputs[i],
                         &{
-                            let res = self.inputs[i].assign(&mut region, offset, input)?;
+                            let res =
+                                self.base_config.inputs[i].assign(&mut region, offset, input)?;
                             res.map(|e| e.value_field().evaluate())
                         },
                         input,
@@ -114,14 +66,26 @@ impl<F: FieldExt + TensorType> Config<F> {
                 let accumulated_dot = accumulated::dot(&inputs)
                     .expect("accum poly: dot op failed")
                     .into();
-                let output = self.output.assign(&mut region, offset, &accumulated_dot)?;
+                let output =
+                    self.base_config
+                        .output
+                        .assign(&mut region, offset, &accumulated_dot)?;
 
                 for i in 0..inputs[0].len() {
-                    let (x, y) = self.inputs[0].cartesian_coord(i);
-                    self.selectors
-                        .get(&(BaseOp::Dot, x))
-                        .unwrap()
-                        .enable(&mut region, y)?;
+                    let (_, y) = self.base_config.inputs[0].cartesian_coord(i);
+                    if y == 0 {
+                        self.base_config
+                            .selectors
+                            .get(&BaseOp::InitDot)
+                            .unwrap()
+                            .enable(&mut region, y)?;
+                    } else {
+                        self.base_config
+                            .selectors
+                            .get(&BaseOp::Dot)
+                            .unwrap()
+                            .enable(&mut region, y)?;
+                    }
                 }
 
                 // last element is the result
@@ -144,14 +108,14 @@ impl<F: FieldExt + TensorType> Config<F> {
 mod tests {
     use super::*;
     use halo2_proofs::{
-        arithmetic::{Field, FieldExt},
+        arithmetic::FieldExt,
         circuit::{Layouter, SimpleFloorPlanner, Value},
         dev::MockProver,
         plonk::{Circuit, ConstraintSystem, Error},
     };
-    use halo2curves::pasta::pallas;
+    // use halo2curves::pasta::pallas;
     use halo2curves::pasta::Fp as F;
-    use rand::rngs::OsRng;
+    // use rand::rngs::OsRng;
 
     const K: usize = 4;
     const LEN: usize = 4;
@@ -191,9 +155,9 @@ mod tests {
     #[test]
     fn dotcircuit() {
         // parameters
-        let a = Tensor::from((0..LEN).map(|_| Value::known(pallas::Base::random(OsRng))));
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
 
-        let b = Tensor::from((0..LEN).map(|_| Value::known(pallas::Base::random(OsRng))));
+        let b = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
 
         let circuit = MyCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(b)],
