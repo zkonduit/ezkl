@@ -121,6 +121,13 @@ impl VarTensor {
         }
     }
 
+    /// Gets the size of each column
+    pub fn col_size(&self) -> usize {
+        match self {
+            VarTensor::Advice { col_size, .. } | VarTensor::Fixed { col_size, .. } => *col_size,
+        }
+    }
+
     /// Gets the dims of the object the VarTensor represents
     pub fn dims(&self) -> Vec<usize> {
         match self {
@@ -280,6 +287,7 @@ impl VarTensor {
             ValTensor::Value { inner: v, .. } => v.enum_map(|coord, k| match &self {
                 VarTensor::Fixed { inner: fixed, .. } => {
                     let (x, y) = self.cartesian_coord(offset + coord);
+
                     region.assign_fixed(|| "k", fixed[x], y, || k)
                 }
                 VarTensor::Advice { inner: advices, .. } => {

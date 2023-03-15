@@ -44,19 +44,12 @@ pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
         input.reshape(&[input.dims()[0], 1])
     }
 
-    let input_dims = input.dims();
-    let kernel_dims = kernel.dims();
-
     // calculate value of output
-    let mut output: Tensor<T> = Tensor::new(None, &[kernel_dims[0], input_dims[1]]).unwrap();
+    let mut output: Tensor<T> = matmul(&vec![kernel.clone(), input.clone()])?;
 
-    for i in 0..kernel_dims[0] {
-        for j in 0..input_dims[1] {
-            let prod = dot(&vec![
-                &kernel.get_slice(&[i..i + 1])?,
-                &input.get_slice(&[0..input_dims[0], j..j + 1])?,
-            ])?;
-            output.set(&[i, j], prod[0].clone() + bias[i].clone());
+    for i in 0..kernel.dims()[0] {
+        for j in 0..input.dims()[1] {
+            output.set(&[i, j], output.get(&[i, j]) + bias[i].clone());
         }
     }
     // does matrix to vector multiplication
@@ -134,6 +127,7 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     inputs: &Vec<Tensor<T>>,
 ) -> Result<Tensor<T>, TensorError> {
     let (a, b) = (inputs[0].clone(), inputs[1].clone());
+
     if (inputs.len() != 2)
         || (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])
         || (a.dims()[0..a.dims().len() - 2] != b.dims()[0..a.dims().len() - 2])
@@ -931,5 +925,151 @@ pub mod accumulated {
         let combination = Tensor::new(Some(&[res, transcript]), &[2])?;
 
         combination.combine()
+    }
+
+    /// Matrix multiplies two 2D tensors.
+    /// # Arguments
+    ///
+    /// * `inputs` - Vector of tensors of length 2
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::accumulated::matmul;
+    ///
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[5, 2, 3]),
+    ///     &[3, 1],
+    /// ).unwrap();
+    /// let k = Tensor::<i128>::new(
+    ///     Some(&[2, 1, 2, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = matmul(&vec![k, x]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[0, 10, 12, 18, 0, 5, 7, 10]), &[2, 1, 4]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+        inputs: &Vec<Tensor<T>>,
+    ) -> Result<Tensor<T>, TensorError> {
+        let (a, b) = (inputs[0].clone(), inputs[1].clone());
+        if (inputs.len() != 2)
+            || (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])
+            || (a.dims()[0..a.dims().len() - 2] != b.dims()[0..a.dims().len() - 2])
+        {
+            return Err(TensorError::DimMismatch("matmul".to_string()));
+        }
+
+        let mut dims = Vec::from(&a.dims()[0..a.dims().len() - 2]);
+        dims.push(a.dims()[a.dims().len() - 2]);
+        dims.push(b.dims()[a.dims().len() - 1]);
+        // calculate value of output
+
+        let indices = dims.iter().map(|d| 0..*d).collect::<Vec<_>>();
+
+        let mut transcripts = vec![];
+        for coord in indices.iter().cloned().multi_cartesian_product() {
+            let row = coord[0..coord.len() - 1]
+                .iter()
+                .map(|&d| d..(d + 1))
+                .collect::<Vec<_>>();
+            let mut col = coord[0..coord.len()]
+                .iter()
+                .map(|&d| d..(d + 1))
+                .collect::<Vec<_>>();
+            col[coord.len() - 2] = 0..b.dims()[coord.len() - 2];
+            let dot_transcript = dot(&vec![a.get_slice(&row[0..])?, b.get_slice(&col[0..])?])?;
+            transcripts.push(dot_transcript);
+        }
+        let mut output = Tensor::new(Some(&transcripts), &[transcripts.len()])?.combine()?;
+        output.reshape(&[dims.as_slice(), &[transcripts[0].len()]].concat());
+
+        Ok(output)
+    }
+
+    /// Matrix multiplies two 2D tensors (and adds an offset).
+    /// # Arguments
+    ///
+    /// * `inputs` - A vector of tensors holding in order: input data, affine kernel, convolution bias.
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::accumulated::affine;
+    ///
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[5, 2, 3]),
+    ///     &[3, 1],
+    /// ).unwrap();
+    /// let k = Tensor::<i128>::new(
+    ///     Some(&[2, 1, 2, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let b = Tensor::<i128>::new(
+    ///     Some(&[0, 0]),
+    ///     &[2],
+    /// ).unwrap();
+    /// let result = affine(&vec![x, k, b]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[0, 10, 12, 18, 18, 0, 5, 7, 10, 10]), &[2, 5]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+        inputs: &Vec<Tensor<T>>,
+    ) -> Result<Tensor<T>, TensorError> {
+        let (mut input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
+        if (inputs.len() != 3)
+            || (bias.dims()[0] != kernel.dims()[0])
+            || (input.dims()[0] != kernel.dims()[1])
+        {
+            return Err(TensorError::DimMismatch("affine".to_string()));
+        }
+
+        // does matrix to vector multiplication
+        if input.dims().len() == 1 {
+            input.reshape(&[input.dims()[0], 1])
+        }
+
+        let input_dims = input.dims();
+        let kernel_dims = kernel.dims();
+
+        // calculate value of output
+        let mm_script: Tensor<T> = matmul(&vec![kernel.clone(), input.clone()])?;
+
+        let mm_dims = mm_script.dims();
+        let mut last_dims = vec![];
+
+        for d in &mm_dims[0..mm_dims.len() - 1] {
+            last_dims.push(0..*d);
+        }
+        let script_len = mm_dims.last().unwrap();
+        last_dims.push(script_len - 1..*script_len);
+        let last_output = mm_script.get_slice(&last_dims)?;
+
+        let mut output = Tensor::new(
+            None,
+            &[&mm_dims[0..mm_dims.len() - 1], &[script_len + 1]].concat(),
+        )?;
+
+        let indices = mm_dims.iter().map(|d| 0..*d).collect::<Vec<_>>();
+        for coord in indices.iter().cloned().multi_cartesian_product() {
+            output.set(&coord, mm_script.get(&coord));
+        }
+
+        for i in 0..kernel_dims[0] {
+            for j in 0..input_dims[1] {
+                output.set(
+                    &[i, j, *script_len],
+                    last_output.get(&[i, j, 0]) + bias[i].clone(),
+                );
+            }
+        }
+
+        let mut dims = output.dims().to_vec();
+        for i in (0..dims.len()).rev() {
+            if (dims[i] == 1) && (dims.len() > 1) {
+                dims.remove(i);
+            }
+        }
+        output.reshape(&dims);
+
+        Ok(output)
     }
 }

@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl_lib::circuit::accumulated::dot::*;
+use ezkl_lib::circuit::polynomial::*;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::{create_keys, gen_srs};
@@ -35,11 +35,15 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len, vec![len], true, 1024);
-        let b = VarTensor::new_advice(cs, K, len, vec![len], true, 1024);
-        let output = VarTensor::new_advice(cs, K, len, vec![len + 1], true, 1024);
+        let a = VarTensor::new_advice(cs, K, len, vec![len, len], true, 1024);
+        let b = VarTensor::new_advice(cs, K, len, vec![len, 1], true, 1024);
+        let output = VarTensor::new_advice(cs, K, len, vec![len, 1], true, 1024);
+        let dot_node = Node {
+            op: Op::Matmul,
+            input_order: vec![InputType::Input(0), InputType::Input(1)],
+        };
 
-        Self::Config::configure(cs, &[a, b], &output)
+        Self::Config::configure(cs, &[a, b], &output, &[dot_node])
     }
 
     fn synthesize(
@@ -52,18 +56,20 @@ impl Circuit<Fr> for MyCircuit {
     }
 }
 
-fn rundot(c: &mut Criterion) {
-    let mut group = c.benchmark_group("accum_dot");
+fn runmatmul(c: &mut Criterion) {
+    let mut group = c.benchmark_group("matmul");
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    for &len in [16, 512].iter() {
+    for &len in [4, 30].iter() {
         unsafe {
             LEN = len;
         };
 
         // parameters
-        let a = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
+        let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
+        a.reshape(&[len, len]);
 
-        let b = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
+        let mut b = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
+        b.reshape(&[len, 1]);
 
         let circuit = MyCircuit {
             inputs: [ValTensor::from(a), ValTensor::from(b)],
@@ -102,6 +108,6 @@ fn rundot(c: &mut Criterion) {
 criterion_group! {
   name = benches;
   config = Criterion::default().with_plots();
-  targets = rundot
+  targets = runmatmul
 }
 criterion_main!(benches);
