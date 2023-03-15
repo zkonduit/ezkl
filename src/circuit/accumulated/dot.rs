@@ -9,7 +9,7 @@ use std::error::Error;
 /// Configuration for an accumulated arg.
 #[derive(Clone, Debug)]
 pub struct Config<F: FieldExt + TensorType> {
-    /// the inputs to the fused operations.
+    /// base ops config
     pub base_config: BaseConfig<F>,
 }
 

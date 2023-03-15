@@ -25,7 +25,7 @@ pub enum BaseOp {
     Add,
 }
 
-/// Matches a [Op] to an operation in the `tensor::ops` module.
+/// Matches a [BaseOp] to an operation over inputs
 impl BaseOp {
     /// forward func
     pub fn f<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
@@ -76,9 +76,9 @@ impl fmt::Display for BaseOp {
 /// Configuration for an accumulated arg.
 #[derive(Clone, Debug)]
 pub struct BaseConfig<F: FieldExt + TensorType> {
-    /// the inputs to the fused operations.
+    /// the inputs to the accumulated operations.
     pub inputs: Vec<VarTensor>,
-    /// the (currently singular) output of the fused operations.
+    /// the (currently singular) output of the accumulated operations.
     pub output: VarTensor,
     /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many base gates.
     pub selectors: BTreeMap<BaseOp, Selector>,
