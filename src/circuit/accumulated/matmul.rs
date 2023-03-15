@@ -98,10 +98,14 @@ impl<F: FieldExt + TensorType> Config<F> {
 
         let mut a = values[0].clone();
         let mut b = values[1].clone();
-        // b.transpose_2d()?;
+        b.transpose_2d()?;
 
-        a.tile(b.dims()[1])?;
-        b.tile(a.dims()[1])?;
+        let num_a_repeats = b.dims()[0];
+        let num_b_tiles = a.dims()[1];
+        let b_row_len = b.dims()[1];
+
+        a.repeat_rows(num_a_repeats)?;
+        b.tile(num_b_tiles)?;
 
         let t = match layouter.assign_region(
             || "assign inputs",
@@ -122,11 +126,28 @@ impl<F: FieldExt + TensorType> Config<F> {
                     inputs.push(inp);
                 }
 
-                inputs[0] = inputs[0].get_slice(&[0..1]).unwrap();
-                inputs[0].reshape(values[0].dims());
-                inputs[1] = inputs[1].get_slice(&[0..1]).unwrap();
-                inputs[1].reshape(values[1].dims());
+                // remove any repeats from the assignment
+                if num_a_repeats > 1 {
+                    let dims = inputs[0].dims().to_vec();
+                    inputs[0].reshape(&[dims[0], dims[1..].iter().product()]);
+                    let mut rm_dup = vec![];
+                    for i in 0..dims[0] {
+                        rm_dup.push(inputs[0].get_slice(&[i..i + 1, 0..dims[1]]).unwrap());
+                    }
+                    inputs[0] = Tensor::new(Some(&rm_dup), &[rm_dup.len()])
+                        .unwrap()
+                        .combine()
+                        .unwrap();
+                }
 
+                inputs[0].reshape(values[0].dims());
+
+                // transpose it back to its normal shape
+                inputs[1] = inputs[1].get_slice(&[0..1]).unwrap();
+                inputs[1].reshape(&[values[1].dims()[1], values[1].dims()[0]]);
+                inputs[1].transpose_2d().unwrap();
+
+                // now perform matrix multiplication on the processed tensors
                 let accumulated_matmul =
                     accumulated::matmul(&vec![inputs[0].clone(), inputs[1].clone()])
                         .expect("accum poly: matmul op failed");
@@ -148,7 +169,7 @@ impl<F: FieldExt + TensorType> Config<F> {
                 // these selectors map from
                 for i in 0..a.dims().iter().product::<usize>() {
                     let (x, y) = self.inputs[0].cartesian_coord(i);
-                    if (i) % b.dims()[1] > 0 || i == 0 {
+                    if (i) % b_row_len > 0 || i == 0 {
                         self.selectors
                             .get(&(BaseOp::Dot, x))
                             .unwrap()
@@ -191,17 +212,17 @@ impl<F: FieldExt + TensorType> Config<F> {
 mod tests {
     use super::*;
     use halo2_proofs::{
-        arithmetic::{Field, FieldExt},
+        arithmetic::FieldExt,
         circuit::{Layouter, SimpleFloorPlanner, Value},
         dev::MockProver,
         plonk::{Circuit, ConstraintSystem, Error},
     };
-    use halo2curves::pasta::pallas;
+    // use halo2curves::pasta::pallas;
     use halo2curves::pasta::Fp as F;
-    use rand::rngs::OsRng;
+    // use rand::rngs::OsRng;
 
-    const K: usize = 5;
-    const LEN: usize = 8;
+    const K: usize = 9;
+    const LEN: usize = 3;
 
     #[derive(Clone)]
     struct AffineCircuit<F: FieldExt + TensorType> {
@@ -238,10 +259,10 @@ mod tests {
     #[test]
     fn matmulcircuit() {
         // parameters
-        let mut a = Tensor::from((0..LEN * LEN).map(|_| Value::known(pallas::Base::random(OsRng))));
+        let mut a = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
         a.reshape(&[LEN, LEN]);
 
-        let mut w = Tensor::from((0..LEN).map(|_| Value::known(pallas::Base::random(OsRng))));
+        let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
         w.reshape(&[LEN, 1]);
 
         let circuit = AffineCircuit::<F> {

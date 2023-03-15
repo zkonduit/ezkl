@@ -339,7 +339,6 @@ impl<F: FieldExt + TensorType + Clone> From<Tensor<Value<F>>> for Tensor<i32> {
                 output.push(0);
             }
         });
-        println!("{:?} {:?}", output, t);
         Tensor::new(Some(&output), t.dims()).unwrap()
     }
 }
@@ -598,7 +597,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         Ok(())
     }
 
-    /// Tiles a tensor n times
+    /// Repeats the columns of a tensor n times
     /// ```
     /// use ezkl_lib::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
@@ -613,6 +612,32 @@ impl<T: Clone + TensorType> Tensor<T> {
         }
         let mut tiled = Tensor::new(Some(&res), &[n])?.combine()?;
         tiled.reshape(&[&[n], self.dims()].concat());
+        Ok(tiled)
+    }
+    /// Repeats the rows of a tensor n times
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
+    /// let mut c = a.repeat_rows(2).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 2, 1, 2, 3, 4, 3, 4, 5, 6, 5, 6]), &[3, 2, 2]).unwrap();
+    /// assert_eq!(c, expected);
+    /// ```
+    pub fn repeat_rows(&self, n: usize) -> Result<Tensor<T>, TensorError> {
+        let mut rows = vec![];
+        for i in 0..self.dims[0] {
+            let mut row = self.get_slice(&[i..i + 1])?;
+            row.flatten();
+            rows.push(row);
+        }
+        let mut res = vec![];
+        for i in 0..self.dims[0] {
+            for _ in 0..n {
+                res.push(rows[i].clone());
+            }
+        }
+
+        let mut tiled = Tensor::new(Some(&res), &[n * self.dims()[0]])?.combine()?;
+        tiled.reshape(&[self.dims(), &[n]].concat());
         Ok(tiled)
     }
 }

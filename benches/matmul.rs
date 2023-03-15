@@ -35,9 +35,9 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len, vec![len, len], true, 1024);
-        let b = VarTensor::new_advice(cs, K, len, vec![len, 1], true, 1024);
-        let output = VarTensor::new_advice(cs, K, len, vec![len, 1], true, 1024);
+        let a = VarTensor::new_advice(cs, K, len * len, vec![len, len], true, 100000);
+        let b = VarTensor::new_advice(cs, K, len, vec![len, 1], true, 100000);
+        let output = VarTensor::new_advice(cs, K, len, vec![len, 1], true, 100000);
         let dot_node = Node {
             op: Op::Matmul,
             input_order: vec![InputType::Input(0), InputType::Input(1)],
@@ -59,7 +59,7 @@ impl Circuit<Fr> for MyCircuit {
 fn runmatmul(c: &mut Criterion) {
     let mut group = c.benchmark_group("matmul");
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    for &len in [4, 30].iter() {
+    for &len in [4, 32].iter() {
         unsafe {
             LEN = len;
         };
@@ -68,8 +68,8 @@ fn runmatmul(c: &mut Criterion) {
         let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
         a.reshape(&[len, len]);
 
-        let mut b = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
-        b.reshape(&[len, 1]);
+        let mut b = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
+        b.reshape(&[len, len]);
 
         let circuit = MyCircuit {
             inputs: [ValTensor::from(a), ValTensor::from(b)],

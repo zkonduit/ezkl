@@ -512,9 +512,7 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         let m = mstore_pattern.captures(&line);
         if m.is_some() {
             let mstore = m.as_ref().unwrap().get(1).unwrap().as_str();
-            println!("{:?}", m);
             let addr = m.as_ref().unwrap().get(2).unwrap().as_str();
-            println!("{}", addr);
             let addr_as_num = u32::from_str_radix(addr, 16)?;
             let transcript_addr = format!("{:#x}", addr_as_num);
             transcript_addrs.push(addr_as_num);
@@ -546,7 +544,6 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
             let mload = m.as_ref().unwrap().get(1).unwrap().as_str();
             let addr = m.as_ref().unwrap().get(2).unwrap().as_str();
 
-            println!("{}", addr);
             let addr_as_num = u32::from_str_radix(addr.strip_prefix("0x").unwrap(), 16)?;
             let transcript_addr = format!("{:#x}", addr_as_num);
             transcript_addrs.push(addr_as_num);
