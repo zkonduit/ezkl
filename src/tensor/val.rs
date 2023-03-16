@@ -228,6 +228,70 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         Ok(())
     }
 
+    /// Calls `repeat_rows` on the inner [Tensor].
+    pub fn repeat_rows(&mut self, n: usize) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value { inner: v, dims: d } => {
+                *v = v.repeat_rows(n)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::AssignedValue { inner: v, dims: d } => {
+                *v = v.repeat_rows(n)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::PrevAssigned { inner: v, dims: d } => {
+                *v = v.repeat_rows(n)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        }
+        Ok(())
+    }
+
+    /// Calls `pad_row_ones` on the inner [Tensor].
+    pub fn pad_row_ones(&mut self) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value { inner: v, dims: d } => {
+                *v = v.pad_row_ones()?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::AssignedValue { inner: v, dims: d } => {
+                *v = v.pad_row_ones()?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::PrevAssigned { inner: v, dims: d } => {
+                *v = v.pad_row_ones()?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        }
+        Ok(())
+    }
+
+    /// Pads each column
+    pub fn append_to_row(&self, b: ValTensor<F>) -> Result<ValTensor<F>, TensorError> {
+        match (self, b) {
+            (ValTensor::Value { inner: v, .. }, ValTensor::Value { inner: v2, .. }) => {
+                Ok(v.append_to_row(v2)?.into())
+            }
+            (
+                ValTensor::AssignedValue { inner: v, .. },
+                ValTensor::AssignedValue { inner: v2, .. },
+            ) => Ok(v.append_to_row(v2)?.into()),
+            (
+                ValTensor::PrevAssigned { inner: v, .. },
+                ValTensor::PrevAssigned { inner: v2, .. },
+            ) => Ok(v.append_to_row(v2)?.into()),
+            _ => {
+                return Err(TensorError::WrongMethod);
+            }
+        }
+    }
+
     /// Calls `tile` on the inner [Tensor].
     pub fn concat(&self, other: Self) -> Result<Self, TensorError> {
         let res = match (self, other) {

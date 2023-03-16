@@ -35,9 +35,9 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len, vec![len], true, 1024);
-        let b = VarTensor::new_advice(cs, K, len, vec![len], true, 1024);
-        let output = VarTensor::new_advice(cs, K, len, vec![1], true, 1024);
+        let a = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
+        let b = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
+        let output = VarTensor::new_advice(cs, K, len, vec![1], true, 512);
         let dot_node = Node {
             op: Op::Dot,
             input_order: vec![InputType::Input(0), InputType::Input(1)],
@@ -59,7 +59,7 @@ impl Circuit<Fr> for MyCircuit {
 fn rundot(c: &mut Criterion) {
     let mut group = c.benchmark_group("dot");
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    for &len in [16, 512].iter() {
+    for &len in [16].iter() {
         unsafe {
             LEN = len;
         };

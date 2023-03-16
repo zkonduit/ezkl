@@ -1,14 +1,17 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use ezkl_lib::circuit::polynomial::*;
+use ezkl_lib::commands::TranscriptType;
+use ezkl_lib::execute::create_proof_circuit_kzg;
+use ezkl_lib::pfsys::{create_keys, gen_srs};
 use ezkl_lib::tensor::*;
-use halo2_proofs::dev::MockProver;
+use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+use halo2_proofs::poly::kzg::strategy::SingleStrategy;
 use halo2_proofs::{
-    arithmetic::{Field, FieldExt},
+    arithmetic::Field,
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error},
 };
-use halo2curves::pasta::pallas;
-use halo2curves::pasta::Fp as F;
+use halo2curves::bn256::{Bn256, Fr};
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
 
@@ -16,21 +19,20 @@ static mut LEN: usize = 4;
 const K: usize = 16;
 
 #[derive(Clone)]
-struct MyCircuit<F: FieldExt + TensorType> {
-    input: ValTensor<F>,
-    l0_params: [ValTensor<F>; 2],
-    _marker: PhantomData<F>,
+struct MyCircuit {
+    inputs: [ValTensor<Fr>; 3],
+    _marker: PhantomData<Fr>,
 }
 
-impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
-    type Config = Config<F>;
+impl Circuit<Fr> for MyCircuit {
+    type Config = Config<Fr>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
         self.clone()
     }
 
-    fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+    fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
         let input = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
@@ -53,49 +55,61 @@ impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
     fn synthesize(
         &self,
         mut config: Self::Config,
-        mut layouter: impl Layouter<F>,
+        mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        config
-            .layout(
-                &mut layouter,
-                &[
-                    self.input.clone(),
-                    self.l0_params[0].clone(),
-                    self.l0_params[1].clone(),
-                ],
-            )
-            .unwrap();
+        config.layout(&mut layouter, &self.inputs).unwrap();
         Ok(())
     }
 }
 
 fn runaffine(c: &mut Criterion) {
     let mut group = c.benchmark_group("affine");
-    for &len in [4, 8, 16, 32, 64].iter() {
+    let params = gen_srs::<KZGCommitmentScheme<_>>(17);
+    for &len in [4].iter() {
         unsafe {
             LEN = len;
         };
 
         // parameters
-        let mut l0_kernel =
-            Tensor::from((0..len * len).map(|_| Value::known(pallas::Base::random(OsRng))));
-        l0_kernel.reshape(&[len, len]);
+        let mut kernel = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
+        kernel.reshape(&[len, len]);
 
-        let l0_bias = Tensor::from((0..len).map(|_| Value::known(pallas::Base::random(OsRng))));
+        let bias = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
 
-        let input = Tensor::from((0..len).map(|_| Value::known(pallas::Base::random(OsRng))));
+        let input = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
 
-        let circuit = MyCircuit::<F> {
-            input: ValTensor::from(input),
-            l0_params: [ValTensor::from(l0_kernel), ValTensor::from(l0_bias)],
+        let circuit = MyCircuit {
+            inputs: [
+                ValTensor::from(input),
+                ValTensor::from(kernel),
+                ValTensor::from(bias),
+            ],
             _marker: PhantomData,
         };
 
         group.throughput(Throughput::Elements(len as u64));
-        group.bench_with_input(BenchmarkId::from_parameter(len), &len, |b, &_| {
+        group.bench_with_input(BenchmarkId::new("pk", len), &len, |b, &_| {
             b.iter(|| {
-                let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-                prover.assert_satisfied();
+                create_keys::<KZGCommitmentScheme<Bn256>, Fr, MyCircuit>(&circuit, &params)
+                    .unwrap();
+            });
+        });
+
+        let pk =
+            create_keys::<KZGCommitmentScheme<Bn256>, Fr, MyCircuit>(&circuit, &params).unwrap();
+
+        group.throughput(Throughput::Elements(len as u64));
+        group.bench_with_input(BenchmarkId::new("prove", len), &len, |b, &_| {
+            b.iter(|| {
+                let prover = create_proof_circuit_kzg(
+                    circuit.clone(),
+                    &params,
+                    vec![],
+                    &pk,
+                    TranscriptType::Blake,
+                    SingleStrategy::new(&params),
+                );
+                prover.unwrap();
             });
         });
     }

@@ -26,7 +26,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
       - name: Build
@@ -40,7 +40,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -62,11 +62,21 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
-      - name: Bench
-        run: cargo bench --verbose
+      - name: Bench matmul
+        run: cargo bench --verbose --bench matmul
+      - name: Bench accum matmul
+        run: cargo bench --verbose --bench accum_matmul
+      - name: Bench dot
+        run: cargo bench --verbose --bench dot
+      - name: Bench accum dot
+        run: cargo bench --verbose --bench accum_dot
+      - name: Bench affine
+        run: cargo bench --verbose --bench affine
+      - name: Bench accum affine
+        run: cargo bench --verbose --bench accum_affine
 
   docs:
     runs-on: ubuntu-latest
@@ -76,7 +86,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
       - name: Docs
@@ -89,7 +99,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
       - name: Doc tests
@@ -104,7 +114,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
       - name: Install wasm32-wasi
@@ -119,7 +129,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
       - name: Install wasm32-wasi
@@ -134,7 +144,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
       - name: Install wasm32-wasi
@@ -160,7 +170,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -189,7 +199,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
       - name: Install wasm32-wasi
@@ -208,7 +218,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
       - name: Install wasm32-wasi
@@ -225,7 +235,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
       - name: Install wasm32-wasi
@@ -240,7 +250,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
       - name: Install wasm32-wasi
@@ -257,7 +267,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
       - name: Install wasm32-wasi
@@ -274,7 +284,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
       - uses: mwilliamson/setup-wasmtime-action@v2
