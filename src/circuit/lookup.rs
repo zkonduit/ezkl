@@ -417,7 +417,7 @@ mod tests {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
         ) -> Result<(), Error> {
-            let _ = config.layout(&mut layouter, &self.input);
+            let _ = config.layout(&mut layouter, &self.input).unwrap();
 
             Ok(())
         }

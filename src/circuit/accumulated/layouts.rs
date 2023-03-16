@@ -1,3 +1,12 @@
+use std::error::Error;
+
+use halo2_proofs::circuit::Layouter;
+
+use crate::{
+    circuit::{utils, CircuitError},
+    tensor::{ops::accumulated, Tensor, TensorError},
+};
+
 use super::*;
 /// Assigns variables to the regions created when calling `configure`.
 /// # Arguments
@@ -200,10 +209,92 @@ pub fn affine<F: FieldExt + TensorType>(
     values: &[ValTensor<F>; 3],
     offset: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let (kernel, bias, mut input) = (values[0].clone(), values[1].clone(), values[2].clone());
-
+    let (mut input, kernel, bias) = (values[0].clone(), values[1].clone(), values[2].clone());
     input.pad_row_ones()?;
     let params = kernel.append_to_row(bias)?;
 
     matmul(config, layouter, &[params, input], offset)
+}
+
+/// Assigns variables to the regions created when calling `configure`.
+/// # Arguments
+/// * `values` - The explicit values to the operations.
+/// * `layouter` - A Halo2 Layouter.
+pub fn conv<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    layouter: &mut impl Layouter<F>,
+    values: &[ValTensor<F>],
+    padding: (usize, usize),
+    stride: (usize, usize),
+    offset: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    assert!(stride.0 == 1);
+    assert!(stride.1 == 1);
+
+    let has_bias = values.len() == 3;
+    let (image, kernel) = (values[0].clone(), values[1].clone());
+
+    if (image.dims().len() != 3)
+        || (kernel.dims().len() != 4)
+        || (image.dims()[0] != kernel.dims()[1])
+    {
+        return Err(Box::new(TensorError::DimMismatch("conv".to_string())));
+    }
+
+    let image_dims = image.dims();
+    let kernel_dims = kernel.dims();
+
+    let (output_channels, input_channels, kernel_height, kernel_width) = (
+        kernel_dims[0],
+        kernel_dims[1],
+        kernel_dims[2],
+        kernel_dims[3],
+    );
+
+    let (image_height, image_width) = (image_dims[1], image_dims[2]);
+
+    let mut padded_image = image.clone();
+
+    padded_image.pad(padding)?;
+    // we flatten out the newly padded image
+    padded_image.flatten();
+    padded_image.reshape(&[padded_image.dims()[0], 1])?;
+    // for now
+    assert_eq!(input_channels, 1);
+    assert_eq!(output_channels, 1);
+
+    let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
+    let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
+
+    let flattened_output = &[output_channels * vert_slides, horz_slides];
+
+    let mut expanded_kernel = kernel.clone();
+    expanded_kernel.reshape(&[
+        output_channels * input_channels * kernel_height,
+        kernel_width,
+    ])?;
+    expanded_kernel.expand_new_shape(&flattened_output[..])?;
+    expanded_kernel.doubly_blocked_toeplitz(padded_image.dims()[0], padded_image.dims()[1])?;
+
+    let mut res = if has_bias {
+        let mut tiled_bias = values[2].clone();
+        if (tiled_bias.dims().len() != 1) || (tiled_bias.dims()[0] != kernel.dims()[0]) {
+            return Err(Box::new(TensorError::DimMismatch("conv bias".to_string())));
+        }
+        // TODO: don't know if this correct
+        tiled_bias.tile(vert_slides * horz_slides)?;
+        tiled_bias.flatten();
+        tiled_bias.reshape(&[tiled_bias.dims()[0], 1])?;
+
+        affine(
+            config,
+            layouter,
+            &[padded_image, expanded_kernel, tiled_bias],
+            offset,
+        )?
+    } else {
+        matmul(config, layouter, &[expanded_kernel, padded_image], offset)?
+    };
+    res.reshape(&[output_channels, vert_slides, horz_slides])?;
+    Ok(res)
 }

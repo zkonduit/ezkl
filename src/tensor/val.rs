@@ -1,4 +1,4 @@
-use super::*;
+use super::{ops::pad, *};
 use halo2_proofs::plonk::Instance;
 /// A wrapper around a [Tensor] where the inner type is one of Halo2's [`Value<F>`], [`Value<Assigned<F>>`], [`AssignedCell<Assigned<F>, F>`].
 /// This enum is generally used to assign values to variables / advices already configured in a Halo2 circuit (usually represented as a [VarTensor]).
@@ -228,6 +228,28 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         Ok(())
     }
 
+    /// Calls `tile` on the inner [Tensor].
+    pub fn pad(&mut self, padding: (usize, usize)) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value { inner: v, dims: d } => {
+                *v = pad(v, padding)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::AssignedValue { inner: v, dims: d } => {
+                *v = pad(v, padding)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::PrevAssigned { inner: v, dims: d } => {
+                *v = pad(v, padding)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        }
+        Ok(())
+    }
+
     /// Calls `repeat_rows` on the inner [Tensor].
     pub fn repeat_rows(&mut self, n: usize) -> Result<(), TensorError> {
         match self {
@@ -263,6 +285,54 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
             }
             ValTensor::PrevAssigned { inner: v, dims: d } => {
                 *v = v.pad_row_ones()?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        }
+        Ok(())
+    }
+
+    /// Calls `expand_new_shape` on the inner [Tensor].
+    pub fn expand_new_shape(&mut self, shape: &[usize]) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value { inner: v, dims: d } => {
+                *v = v.expand_new_shape(shape)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::AssignedValue { inner: v, dims: d } => {
+                *v = v.expand_new_shape(shape)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::PrevAssigned { inner: v, dims: d } => {
+                *v = v.expand_new_shape(shape)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        }
+        Ok(())
+    }
+
+    /// Calls `expand_new_shape` on the inner [Tensor].
+    pub fn doubly_blocked_toeplitz(
+        &mut self,
+        num_blocks: usize,
+        num_cols: usize,
+    ) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value { inner: v, dims: d } => {
+                *v = v.doubly_blocked_toeplitz(num_blocks, num_cols)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::AssignedValue { inner: v, dims: d } => {
+                *v = v.doubly_blocked_toeplitz(num_blocks, num_cols)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::PrevAssigned { inner: v, dims: d } => {
+                *v = v.doubly_blocked_toeplitz(num_blocks, num_cols)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {

@@ -76,7 +76,7 @@ fn runaffine(c: &mut Criterion) {
         x.reshape(&[len, 1]);
 
         let circuit = MyCircuit {
-            inputs: [ValTensor::from(w), ValTensor::from(b), ValTensor::from(x)],
+            inputs: [ValTensor::from(x), ValTensor::from(w), ValTensor::from(b)],
             _marker: PhantomData,
         };
 
