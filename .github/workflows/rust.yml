@@ -73,6 +73,10 @@ jobs:
         run: cargo bench --verbose --bench dot
       - name: Bench accum dot
         run: cargo bench --verbose --bench accum_dot
+      - name: Bench affine
+        run: cargo bench --verbose --bench affine
+      - name: Bench accum affine
+        run: cargo bench --verbose --bench accum_affine
 
   docs:
     runs-on: ubuntu-latest

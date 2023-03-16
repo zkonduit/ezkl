@@ -59,7 +59,7 @@ impl Circuit<Fr> for MyCircuit {
 fn runmatmul(c: &mut Criterion) {
     let mut group = c.benchmark_group("matmul");
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    for &len in [4, 32].iter() {
+    for &len in [4].iter() {
         unsafe {
             LEN = len;
         };
