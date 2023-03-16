@@ -218,6 +218,50 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         }
     }
 
+    /// Calls `flatten_reversed` on the inner [Tensor].
+    pub fn flatten_reversed(&mut self) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value { inner: v, dims: d } => {
+                v.flatten_reversed()?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::AssignedValue { inner: v, dims: d } => {
+                v.flatten_reversed()?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::PrevAssigned { inner: v, dims: d } => {
+                v.flatten_reversed()?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { dims: d, .. } => {
+                *d = vec![d.iter().product()];
+            }
+        }
+        Ok(())
+    }
+
+    /// Calls `invert_rows` on the inner [Tensor].
+    pub fn invert_rows(&mut self) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value { inner: v, dims: d } => {
+                v.invert_rows()?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::AssignedValue { inner: v, dims: d } => {
+                v.invert_rows()?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::PrevAssigned { inner: v, dims: d } => {
+                v.invert_rows()?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { dims: d, .. } => {
+                *d = vec![d.iter().product()];
+            }
+        }
+        Ok(())
+    }
+
     /// Calls `tile` on the inner [Tensor].
     pub fn tile(&mut self, n: usize) -> Result<(), TensorError> {
         match self {

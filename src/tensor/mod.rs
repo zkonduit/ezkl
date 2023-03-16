@@ -515,6 +515,47 @@ impl<T: Clone + TensorType> Tensor<T> {
         self.dims = Vec::from([self.dims.iter().product::<usize>()]);
     }
 
+    /// Flatten the tensor shape in reversed row order
+    ///
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1,2,3,4]), &[2,2]).unwrap();
+    /// a.flatten_reversed();
+    /// let expected = Tensor::from([3, 4, 1, 2].into_iter());
+    /// assert_eq!(a, expected);
+    /// ```
+    pub fn flatten_reversed(&mut self) -> Result<(), TensorError> {
+        let mut rows = Vec::new();
+        for i in (0..self.dims[0]).rev() {
+            let row = self.get_slice(&[i..i + 1])?;
+            rows.push(row);
+        }
+        *self = Tensor::new(Some(&rows), &[self.dims[0]])?.combine()?;
+        Ok(())
+    }
+
+    ///  Reverses row order
+    ///
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1,2,3,4]), &[2,2]).unwrap();
+    /// a.invert_rows();
+    /// let expected = Tensor::<i32>::new(Some(&[3, 4, 1, 2]), &[2,2]).unwrap();
+    /// assert_eq!(a, expected);
+    /// ```
+    pub fn invert_rows(&mut self) -> Result<(), TensorError> {
+        let mut rows = Vec::new();
+        let dims = self.dims().clone();
+        for i in (0..self.dims[0]).rev() {
+            let row = self.get_slice(&[i..i + 1])?;
+            rows.push(row);
+        }
+        let mut res = Tensor::new(Some(&rows), &[self.dims[0]])?.combine()?;
+        res.reshape(dims);
+        *self = res;
+        Ok(())
+    }
+
     /// Maps a function to tensors
     /// ```
     /// use ezkl_lib::tensor::Tensor;
