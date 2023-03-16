@@ -111,13 +111,13 @@ fn runcnvrl(c: &mut Criterion) {
                 bias: ValTensor::from(bias),
             };
 
-            // group.throughput(Throughput::Elements(*size as u64));
-            // group.bench_with_input(BenchmarkId::new("pk", size), &size, |b, &_| {
-            //     b.iter(|| {
-            //         create_keys::<KZGCommitmentScheme<Bn256>, Fr, MyCircuit>(&circuit, &params)
-            //             .unwrap();
-            //     });
-            // });
+            group.throughput(Throughput::Elements(*size as u64));
+            group.bench_with_input(BenchmarkId::new("pk", size), &size, |b, &_| {
+                b.iter(|| {
+                    create_keys::<KZGCommitmentScheme<Bn256>, Fr, MyCircuit>(&circuit, &params)
+                        .unwrap();
+                });
+            });
 
             let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, MyCircuit>(&circuit, &params)
                 .unwrap();
