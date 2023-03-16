@@ -55,7 +55,7 @@ impl Circuit<Fr> for MyCircuit {
             10000000,
         );
 
-        Self::Config::configure(cs, &[a, b], &output)
+        Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
     }
 
     fn synthesize(

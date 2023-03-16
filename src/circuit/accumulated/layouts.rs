@@ -4,7 +4,13 @@ use halo2_proofs::circuit::Layouter;
 
 use crate::{
     circuit::{utils, CircuitError},
-    tensor::{ops::accumulated, Tensor, TensorError},
+    tensor::{
+        ops::{
+            accumulated, affine as non_accum_affine, convolution as non_accum_conv,
+            dot as non_accum_dot, matmul as non_accum_matmul,
+        },
+        Tensor, TensorError,
+    },
 };
 
 use super::*;
@@ -65,10 +71,21 @@ pub fn dot<F: FieldExt + TensorType>(
                 }
             }
 
-            // last element is the result
-            Ok(output
+            let last_elem = output
                 .get_slice(&[output.len() - 1..output.len()])
-                .expect("accum poly: failed to fetch last elem"))
+                .expect("accum poly: failed to fetch last elem");
+
+            if matches!(config.check_mode, CheckMode::SAFE) {
+                let safe_dot = non_accum_dot(&inputs.iter().map(|x| x).collect())
+                    .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+                assert_eq!(
+                    Into::<Tensor<i32>>::into(last_elem.clone()),
+                    Into::<Tensor<i32>>::into(safe_dot),
+                )
+            }
+            // last element is the result
+            Ok(last_elem)
         },
     ) {
         Ok(a) => a,
@@ -186,6 +203,16 @@ pub fn matmul<F: FieldExt + TensorType>(
                 .expect("accum poly: failed to fetch last elem");
 
             last_elem.reshape(&[values[0].dims()[0], values[1].dims()[1]]);
+
+            if matches!(config.check_mode, CheckMode::SAFE) {
+                let safe_mm =
+                    non_accum_matmul(&inputs).map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+                assert_eq!(
+                    Into::<Tensor<i32>>::into(last_elem.clone()),
+                    Into::<Tensor<i32>>::into(safe_mm),
+                )
+            }
             // Now we can assign the matmul op
             Ok(last_elem)
         },
@@ -213,7 +240,24 @@ pub fn affine<F: FieldExt + TensorType>(
     input.pad_row_ones()?;
     let params = kernel.append_to_row(bias)?;
 
-    matmul(config, layouter, &[params, input], offset)
+    let mut last_elem = matmul(config, layouter, &[params, input], offset)?;
+    last_elem.flatten();
+
+    if matches!(config.check_mode, CheckMode::SAFE) {
+        let safe_affine = non_accum_affine(
+            &values
+                .iter()
+                .map(|x| x.get_inner().unwrap())
+                .collect::<Vec<Tensor<_>>>(),
+        )
+        .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+        assert_eq!(
+            Into::<Tensor<i32>>::into(last_elem.get_inner()?),
+            Into::<Tensor<i32>>::into(safe_affine),
+        )
+    }
+    Ok(last_elem)
 }
 
 /// Assigns variables to the regions created when calling `configure`.
@@ -296,5 +340,22 @@ pub fn conv<F: FieldExt + TensorType>(
         matmul(config, layouter, &[expanded_kernel, padded_image], offset)?
     };
     res.reshape(&[output_channels, vert_slides, horz_slides])?;
+    if matches!(config.check_mode, CheckMode::SAFE) {
+        let safe_conv = non_accum_conv(
+            &values
+                .iter()
+                .map(|x| x.get_inner().unwrap())
+                .collect::<Vec<Tensor<_>>>(),
+            padding,
+            stride,
+        )
+        .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+        assert_eq!(
+            Into::<Tensor<i32>>::into(res.get_inner()?),
+            Into::<Tensor<i32>>::into(safe_conv),
+        )
+    }
+
     Ok(res)
 }

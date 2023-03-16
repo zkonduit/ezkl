@@ -160,6 +160,18 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         Ok(())
     }
 
+    /// Transposes the inner tensor
+    pub fn get_inner(&self) -> Result<Tensor<Value<F>>, TensorError> {
+        Ok(match self {
+            ValTensor::Value { inner: v, .. } => v.clone().into(),
+            ValTensor::AssignedValue { inner: v, .. } => v.map(|x| x.evaluate()).into(),
+            ValTensor::PrevAssigned { inner: v, .. } => {
+                v.map(|x| x.value_field().evaluate()).into()
+            }
+            ValTensor::Instance { .. } => return Err(TensorError::WrongMethod),
+        })
+    }
+
     /// Sets the [ValTensor]'s shape.
     pub fn reshape(&mut self, new_dims: &[usize]) -> Result<(), Box<dyn Error>> {
         match self {

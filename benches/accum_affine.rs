@@ -42,7 +42,7 @@ impl Circuit<Fr> for MyCircuit {
         let output =
             VarTensor::new_advice(cs, K, (len + 2) * len, vec![len, 1, len + 2], true, 100000);
 
-        Self::Config::configure(cs, &[a, b], &output)
+        Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
     }
 
     fn synthesize(

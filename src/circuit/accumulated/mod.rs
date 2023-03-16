@@ -24,6 +24,14 @@ pub enum BaseOp {
     InitDot,
 }
 
+#[allow(missing_docs)]
+/// An enum representing activating the sanity checks we can perform on the accumulated arguments
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum CheckMode {
+    SAFE,
+    UNSAFE,
+}
+
 /// Matches a [BaseOp] to an operation over inputs
 impl BaseOp {
     /// forward func
@@ -89,6 +97,8 @@ pub struct BaseConfig<F: FieldExt + TensorType> {
     pub output: VarTensor,
     /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many base gates.
     pub selectors: BTreeMap<BaseOp, Selector>,
+    /// Activate sanity checks
+    pub check_mode: CheckMode,
     _marker: PhantomData<F>,
 }
 
@@ -101,6 +111,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         meta: &mut ConstraintSystem<F>,
         inputs: &[VarTensor; 2],
         output: &VarTensor,
+        check_mode: CheckMode,
     ) -> Self {
         // setup a selector per base op
         let mut selectors = BTreeMap::new();
@@ -115,6 +126,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             selectors,
             inputs: inputs.to_vec(),
             output: output.clone(),
+            check_mode,
             _marker: PhantomData,
         };
 
@@ -209,7 +221,7 @@ mod matmul_test {
             let a = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true, 512);
             let b = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true, 512);
             let output = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, 1, LEN], true, 512);
-            Self::Config::configure(cs, &[a, b], &output)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
         fn synthesize(
@@ -278,7 +290,7 @@ mod dottest {
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
 
-            Self::Config::configure(cs, &[a, b], &output)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
         fn synthesize(
@@ -348,7 +360,7 @@ mod affinetest {
             let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 512);
             let output =
                 VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true, 512);
-            Self::Config::configure(cs, &[a, b], &output)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
         fn synthesize(
@@ -420,7 +432,7 @@ mod compositiontest {
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
 
-            Self::Config::configure(cs, &[a, b], &output)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
         fn synthesize(
@@ -497,7 +509,7 @@ mod convtest {
             let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 100000);
             let output =
                 VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true, 100000);
-            Self::Config::configure(cs, &[a, b], &output)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
         fn synthesize(

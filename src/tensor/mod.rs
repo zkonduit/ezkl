@@ -339,7 +339,6 @@ impl<F: FieldExt + TensorType + Clone> From<Tensor<Value<F>>> for Tensor<i32> {
                 output.push(0);
             }
         });
-        println!("{:?} {:?}", output, t);
         Tensor::new(Some(&output), t.dims()).unwrap()
     }
 }
