@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl_lib::circuit::accumulated::affine::*;
+use ezkl_lib::circuit::accumulated::*;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::{create_keys, gen_srs};
@@ -25,7 +25,7 @@ struct MyCircuit {
 }
 
 impl Circuit<Fr> for MyCircuit {
-    type Config = Config<Fr>;
+    type Config = BaseConfig<Fr>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -50,7 +50,9 @@ impl Circuit<Fr> for MyCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        config.layout(&mut layouter, &self.inputs).unwrap();
+        config
+            .layout(&mut layouter, &self.inputs, 0, Op::Affine)
+            .unwrap();
         Ok(())
     }
 }
