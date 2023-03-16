@@ -38,6 +38,7 @@ impl BaseOp {
         match &self {
             BaseOp::InitDot => a * b,
             BaseOp::Dot => a * b + m,
+            BaseOp::Add => a + b,
         }
     }
 
