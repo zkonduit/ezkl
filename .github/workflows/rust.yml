@@ -65,8 +65,14 @@ jobs:
           toolchain: nightly
           override: true
           components: rustfmt, clippy
-      - name: Bench
-        run: cargo bench --verbose
+      - name: Bench matmul
+        run: cargo bench --verbose --bench matmul
+      - name: Bench accum matmul
+        run: cargo bench --verbose --bench accum_matmul
+      - name: Bench dot
+        run: cargo bench --verbose --bench dot
+      - name: Bench accum dot
+        run: cargo bench --verbose --bench accum_dot
 
   docs:
     runs-on: ubuntu-latest
