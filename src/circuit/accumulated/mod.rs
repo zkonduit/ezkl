@@ -24,7 +24,6 @@ use super::{utils, CircuitError};
 pub enum BaseOp {
     Dot,
     InitDot,
-    Add,
 }
 
 /// Matches a [BaseOp] to an operation over inputs
@@ -38,7 +37,6 @@ impl BaseOp {
         match &self {
             BaseOp::InitDot => a * b,
             BaseOp::Dot => a * b + m,
-            BaseOp::Add => a + b,
         }
     }
 
@@ -46,21 +44,18 @@ impl BaseOp {
         match self {
             BaseOp::InitDot => "INITDOT",
             BaseOp::Dot => "DOT",
-            BaseOp::Add => "ADD",
         }
     }
     fn query_offset_rng(&self) -> (i32, usize) {
         match self {
             BaseOp::InitDot => (0, 1),
             BaseOp::Dot => (-1, 2),
-            BaseOp::Add => (-1, 2),
         }
     }
     fn constraint_idx(&self) -> usize {
         match self {
             BaseOp::InitDot => 0,
             BaseOp::Dot => 1,
-            BaseOp::Add => 1,
         }
     }
 }
@@ -70,7 +65,6 @@ impl fmt::Display for BaseOp {
         match self {
             BaseOp::InitDot => write!(f, "base accum init dot"),
             BaseOp::Dot => write!(f, "base accum dot"),
-            BaseOp::Add => write!(f, "base accum add"),
         }
     }
 }
