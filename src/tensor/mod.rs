@@ -702,7 +702,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// ```
     /// use ezkl_lib::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 0, 0, 0, 0]), &[1, 1, 2, 4]).unwrap();
-    /// let mut c = a.multi_ch_doubly_blocked_toeplitz(2, 2, 3, 4).unwrap();
+    /// let mut c = a.multi_ch_doubly_blocked_toeplitz(2, 2, 3, 4, 1, 1).unwrap();
     /// let mut expected = Tensor::<i32>::new(
     /// Some(&[1, 2, 3, 4, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0, 0, 0,
     ///     1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0,
@@ -715,6 +715,8 @@ impl<T: Clone + TensorType> Tensor<T> {
         w_blocks: usize,
         num_rows: usize,
         num_cols: usize,
+        h_stride: usize,
+        w_stride: usize,
     ) -> Result<Tensor<T>, TensorError> {
         assert!(self.dims().len() > 2);
         let first_channels = self.dims()[0];
@@ -730,7 +732,9 @@ impl<T: Clone + TensorType> Tensor<T> {
                 let mut r = self.get_slice(&[i..i + 1, j..j + 1])?;
                 let dims = r.dims()[2..].to_vec();
                 r.reshape(&dims);
-                row[j] = r.doubly_blocked_toeplitz(h_blocks, w_blocks, num_rows, num_cols)?;
+                row[j] = r.doubly_blocked_toeplitz(
+                    h_blocks, w_blocks, num_rows, num_cols, h_stride, w_stride,
+                )?;
             }
             let mut concatenated_tensor = row[0].clone();
             for r in row[1..].iter() {
@@ -755,7 +759,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// ```
     /// use ezkl_lib::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 0, 0, 0, 0]), &[2, 4]).unwrap();
-    /// let mut c = a.doubly_blocked_toeplitz(2, 2, 3, 4).unwrap();
+    /// let mut c = a.doubly_blocked_toeplitz(2, 2, 3, 4, 1, 1).unwrap();
     /// let mut expected = Tensor::<i32>::new(
     /// Some(&[1, 2, 3, 4, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0, 0, 0,
     ///     1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0,
@@ -768,6 +772,8 @@ impl<T: Clone + TensorType> Tensor<T> {
         w_blocks: usize,
         num_rows: usize,
         num_cols: usize,
+        h_stride: usize,
+        _w_stride: usize,
     ) -> Result<Tensor<T>, TensorError> {
         let mut t_matrices = vec![];
         for i in 0..self.dims[0] {
@@ -775,7 +781,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         }
 
         let mut doubly_blocked_toeplitz: Vec<Tensor<T>> = vec![];
-        for j in 0..h_blocks {
+        for j in (0..h_stride * h_blocks).step_by(h_stride) {
             let mut row = vec![Tensor::new(None, t_matrices[0].dims())?; w_blocks];
             for i in 0..t_matrices.len() {
                 if i + j < w_blocks {

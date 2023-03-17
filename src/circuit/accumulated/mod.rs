@@ -524,7 +524,7 @@ mod convtest {
                     0,
                     Op::Conv {
                         padding: (1, 1),
-                        stride: (1, 1),
+                        stride: (1, 2),
                     },
                 )
                 .unwrap();
@@ -537,10 +537,10 @@ mod convtest {
         // parameters
         let kernel_height = 2;
         let kernel_width = 2;
-        let image_height = 4;
-        let image_width = 4;
-        let in_channels = 1;
-        let out_channels = 1;
+        let image_height = 5;
+        let image_width = 5;
+        let in_channels = 3;
+        let out_channels = 2;
 
         let mut image = Tensor::from(
             (0..in_channels * image_height * image_width)

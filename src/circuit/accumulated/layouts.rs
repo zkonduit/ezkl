@@ -279,8 +279,8 @@ pub fn conv<F: FieldExt + TensorType>(
     stride: (usize, usize),
     offset: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    assert!(stride.0 == 1);
-    assert!(stride.1 == 1);
+    // assert!(stride.0 == 1);
+    // assert!(stride.1 == 1);
 
     let has_bias = values.len() == 3;
     let (image, kernel) = (values[0].clone(), values[1].clone());
@@ -321,7 +321,15 @@ pub fn conv<F: FieldExt + TensorType>(
         padded_height,
         horz_slides,
         padded_width,
+        stride.0,
+        stride.1,
     )?;
+
+    // expanded_kernel.downsample(0, stride.0)?;
+    // expanded_kernel.downsample(0, stride.1)?;
+
+    // println!("{:?}", expanded_kernel.dims());
+    // println!("{:?}", padded_image.dims());
 
     let mut res = if has_bias {
         let mut tiled_bias = values[2].clone();
@@ -329,7 +337,7 @@ pub fn conv<F: FieldExt + TensorType>(
             return Err(Box::new(TensorError::DimMismatch("conv bias".to_string())));
         }
         // TODO: don't know if this correct
-        tiled_bias.tile(vert_slides * horz_slides)?;
+        tiled_bias.repeat_rows(vert_slides * horz_slides)?;
         tiled_bias.flatten();
         tiled_bias.reshape(&[tiled_bias.dims()[0], 1])?;
 
@@ -348,10 +356,10 @@ pub fn conv<F: FieldExt + TensorType>(
     if matches!(config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = Into::<Tensor<i32>>::into(res.clone().get_inner()?)
+        let _is_assigned = Into::<Tensor<i32>>::into(res.clone().get_inner()?)
             .iter()
             .all(|&x| x == 0);
-        if is_assigned {
+        if true {
             let safe_conv = non_accum_conv(
                 &values
                     .iter()

@@ -313,18 +313,26 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         w_blocks: usize,
         num_rows: usize,
         num_cols: usize,
+        h_stride: usize,
+        w_stride: usize,
     ) -> Result<(), TensorError> {
         match self {
             ValTensor::Value { inner: v, dims: d } => {
-                *v = v.multi_ch_doubly_blocked_toeplitz(h_blocks, w_blocks, num_rows, num_cols)?;
+                *v = v.multi_ch_doubly_blocked_toeplitz(
+                    h_blocks, w_blocks, num_rows, num_cols, h_stride, w_stride,
+                )?;
                 *d = v.dims().to_vec();
             }
             ValTensor::AssignedValue { inner: v, dims: d } => {
-                *v = v.multi_ch_doubly_blocked_toeplitz(h_blocks, w_blocks, num_rows, num_cols)?;
+                *v = v.multi_ch_doubly_blocked_toeplitz(
+                    h_blocks, w_blocks, num_rows, num_cols, h_stride, w_stride,
+                )?;
                 *d = v.dims().to_vec();
             }
             ValTensor::PrevAssigned { inner: v, dims: d } => {
-                *v = v.multi_ch_doubly_blocked_toeplitz(h_blocks, w_blocks, num_rows, num_cols)?;
+                *v = v.multi_ch_doubly_blocked_toeplitz(
+                    h_blocks, w_blocks, num_rows, num_cols, h_stride, w_stride,
+                )?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
