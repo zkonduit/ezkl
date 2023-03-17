@@ -698,6 +698,59 @@ impl<T: Clone + TensorType> Tensor<T> {
         Ok(tiled)
     }
 
+    /// Multi-ch doubly blocked toeplitz matrix
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 0, 0, 0, 0]), &[1, 1, 2, 4]).unwrap();
+    /// let mut c = a.multi_ch_doubly_blocked_toeplitz(2, 2, 3, 4).unwrap();
+    /// let mut expected = Tensor::<i32>::new(
+    /// Some(&[1, 2, 3, 4, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0, 0, 0,
+    ///     1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0,
+    ///      0, 0, 1, 2]), &[6, 8]).unwrap();
+    /// assert_eq!(c, expected);
+    /// ```
+    pub fn multi_ch_doubly_blocked_toeplitz(
+        &self,
+        h_blocks: usize,
+        w_blocks: usize,
+        num_rows: usize,
+        num_cols: usize,
+    ) -> Result<Tensor<T>, TensorError> {
+        assert!(self.dims().len() > 2);
+        let first_channels = self.dims()[0];
+        let second_channels = self.dims()[1];
+
+        let mut toeplitz_tower = vec![];
+        for i in 0..first_channels {
+            let mut row = vec![
+                Tensor::new(None, &[h_blocks * num_rows, w_blocks * num_cols])?;
+                second_channels
+            ];
+            for j in 0..second_channels {
+                let mut r = self.get_slice(&[i..i + 1, j..j + 1])?;
+                let dims = r.dims()[2..].to_vec();
+                r.reshape(&dims);
+                row[j] = r.doubly_blocked_toeplitz(h_blocks, w_blocks, num_rows, num_cols)?;
+            }
+            let mut concatenated_tensor = row[0].clone();
+            for r in row[1..].iter() {
+                concatenated_tensor = concatenated_tensor.append_to_row(r.clone())?;
+            }
+
+            toeplitz_tower.push(concatenated_tensor);
+        }
+
+        let mut toeplitz_tower =
+            Tensor::new(Some(&toeplitz_tower[..]), &[toeplitz_tower.len()])?.combine()?;
+
+        toeplitz_tower.reshape(&[
+            first_channels * h_blocks * num_rows,
+            second_channels * w_blocks * num_cols,
+        ]);
+
+        Ok(toeplitz_tower)
+    }
+
     /// Doubly blocked toeplitz matrix
     /// ```
     /// use ezkl_lib::tensor::Tensor;

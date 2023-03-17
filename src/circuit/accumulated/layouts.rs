@@ -295,7 +295,7 @@ pub fn conv<F: FieldExt + TensorType>(
     let image_dims = image.dims();
     let kernel_dims = kernel.dims();
 
-    let (output_channels, input_channels, kernel_height, kernel_width) = (
+    let (output_channels, _input_channels, kernel_height, kernel_width) = (
         kernel_dims[0],
         kernel_dims[1],
         kernel_dims[2],
@@ -313,17 +313,10 @@ pub fn conv<F: FieldExt + TensorType>(
     padded_image.pad(padding)?;
     padded_image.flatten();
     padded_image.reshape(&[padded_image.dims()[0], 1])?;
-    // for now
-    assert_eq!(input_channels, 1);
-    assert_eq!(output_channels, 1);
 
     let mut expanded_kernel = kernel.clone();
-    expanded_kernel.reshape(&[
-        output_channels * input_channels * kernel_height,
-        kernel_width,
-    ])?;
 
-    expanded_kernel.doubly_blocked_toeplitz(
+    expanded_kernel.multi_ch_blocked_toeplitz(
         vert_slides,
         padded_height,
         horz_slides,

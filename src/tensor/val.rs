@@ -306,8 +306,8 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         Ok(())
     }
 
-    /// Calls `expand_new_shape` on the inner [Tensor].
-    pub fn doubly_blocked_toeplitz(
+    /// Calls `multi_ch_doubly_blocked_toeplitz` on the inner [Tensor].
+    pub fn multi_ch_blocked_toeplitz(
         &mut self,
         h_blocks: usize,
         w_blocks: usize,
@@ -316,15 +316,15 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     ) -> Result<(), TensorError> {
         match self {
             ValTensor::Value { inner: v, dims: d } => {
-                *v = v.doubly_blocked_toeplitz(h_blocks, w_blocks, num_rows, num_cols)?;
+                *v = v.multi_ch_doubly_blocked_toeplitz(h_blocks, w_blocks, num_rows, num_cols)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::AssignedValue { inner: v, dims: d } => {
-                *v = v.doubly_blocked_toeplitz(h_blocks, w_blocks, num_rows, num_cols)?;
+                *v = v.multi_ch_doubly_blocked_toeplitz(h_blocks, w_blocks, num_rows, num_cols)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::PrevAssigned { inner: v, dims: d } => {
-                *v = v.doubly_blocked_toeplitz(h_blocks, w_blocks, num_rows, num_cols)?;
+                *v = v.multi_ch_doubly_blocked_toeplitz(h_blocks, w_blocks, num_rows, num_cols)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
