@@ -375,20 +375,22 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     /// Calls `expand_new_shape` on the inner [Tensor].
     pub fn doubly_blocked_toeplitz(
         &mut self,
-        num_blocks: usize,
+        h_blocks: usize,
+        w_blocks: usize,
+        num_rows: usize,
         num_cols: usize,
     ) -> Result<(), TensorError> {
         match self {
             ValTensor::Value { inner: v, dims: d } => {
-                *v = v.doubly_blocked_toeplitz(num_blocks, num_cols)?;
+                *v = v.doubly_blocked_toeplitz(h_blocks, w_blocks, num_rows, num_cols)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::AssignedValue { inner: v, dims: d } => {
-                *v = v.doubly_blocked_toeplitz(num_blocks, num_cols)?;
+                *v = v.doubly_blocked_toeplitz(h_blocks, w_blocks, num_rows, num_cols)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::PrevAssigned { inner: v, dims: d } => {
-                *v = v.doubly_blocked_toeplitz(num_blocks, num_cols)?;
+                *v = v.doubly_blocked_toeplitz(h_blocks, w_blocks, num_rows, num_cols)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {

@@ -523,7 +523,7 @@ mod convtest {
                     &self.inputs.clone(),
                     0,
                     Op::Conv {
-                        padding: (0, 0),
+                        padding: (1, 1),
                         stride: (1, 1),
                     },
                 )
@@ -576,7 +576,7 @@ mod convtest {
         let kernel_height = 2;
         let kernel_width = 2;
         let image_height = 3;
-        let image_width = 3;
+        let image_width = 4;
         let in_channels = 1;
         let out_channels = 1;
 

@@ -300,17 +300,17 @@ pub fn conv<F: FieldExt + TensorType>(
     let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
     let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
 
-    let flattened_output = &[output_channels * vert_slides, horz_slides];
+    // let flattened_output = &[output_channels * vert_slides, horz_slides];
 
     let mut padded_image = image.clone();
     padded_image.pad(padding)?;
     // we flatten out the newly padded image last row first !
     println!("{}", padded_image.show());
-    padded_image.reshape(&[
-        padded_image.dims()[0] * padded_image.dims()[1],
-        padded_image.dims()[2],
-    ])?;
-    padded_image.flatten_reversed()?;
+    // padded_image.reshape(&[
+    //     padded_image.dims()[0] * padded_image.dims()[1],
+    //     padded_image.dims()[2],
+    // ])?;
+    padded_image.flatten();
     padded_image.reshape(&[padded_image.dims()[0], 1])?;
     // for now
     assert_eq!(input_channels, 1);
@@ -323,13 +323,18 @@ pub fn conv<F: FieldExt + TensorType>(
     ])?;
     println!("{}", padded_image.show());
     println!("");
-    if flattened_output != expanded_kernel.dims() {
-        println!("{:?} {:?}", flattened_output, expanded_kernel.dims());
-        expanded_kernel.expand_new_shape(&flattened_output[..])?;
-    }
+
     println!("{}", expanded_kernel.show());
     println!("");
-    expanded_kernel.doubly_blocked_toeplitz(padded_image.dims()[0], padded_image.dims()[1])?;
+    let padded_height = image_height + 2 * padding.0;
+    let padded_width = image_height + 2 * padding.1;
+
+    expanded_kernel.doubly_blocked_toeplitz(
+        vert_slides,
+        padded_height,
+        horz_slides,
+        padded_width,
+    )?;
 
     println!("{}", expanded_kernel.show());
 
@@ -353,8 +358,8 @@ pub fn conv<F: FieldExt + TensorType>(
         matmul(config, layouter, &[expanded_kernel, padded_image], offset)?
     };
 
-    res.reshape(&[output_channels * vert_slides, horz_slides])?;
-    res.invert_rows()?;
+    // res.reshape(&[output_channels * vert_slides, horz_slides])?;
+    // res.invert_rows()?;
     res.reshape(&[output_channels, vert_slides, horz_slides])?;
 
     if matches!(config.check_mode, CheckMode::SAFE) {
