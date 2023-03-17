@@ -248,8 +248,7 @@ pub fn affine<F: FieldExt + TensorType>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = Into::<Tensor<i32>>::into(last_elem.clone().get_inner()?)
             .iter()
-            .sum::<i32>()
-            > 0;
+            .all(|&x| x == 0);
         if is_assigned {
             let safe_affine = non_accum_affine(
                 &values
@@ -358,8 +357,7 @@ pub fn conv<F: FieldExt + TensorType>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = Into::<Tensor<i32>>::into(res.clone().get_inner()?)
             .iter()
-            .sum::<i32>()
-            > 0;
+            .all(|&x| x == 0);
         if is_assigned {
             let safe_conv = non_accum_conv(
                 &values
