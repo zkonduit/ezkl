@@ -245,6 +245,7 @@ pub fn affine<F: FieldExt + TensorType>(
 
     if matches!(config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = Into::<Tensor<i32>>::into(last_elem.clone().get_inner()?)
             .iter()
             .sum::<i32>()
@@ -354,6 +355,7 @@ pub fn conv<F: FieldExt + TensorType>(
 
     if matches!(config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = Into::<Tensor<i32>>::into(res.clone().get_inner()?)
             .iter()
             .sum::<i32>()
