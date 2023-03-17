@@ -487,7 +487,7 @@ mod convtest {
     use halo2curves::pasta::Fp as F;
     use rand::rngs::OsRng;
 
-    const K: usize = 17;
+    const K: usize = 22;
     const LEN: usize = 100;
 
     #[derive(Clone)]
@@ -524,7 +524,7 @@ mod convtest {
                     0,
                     Op::Conv {
                         padding: (1, 1),
-                        stride: (1, 2),
+                        stride: (2, 2),
                     },
                 )
                 .unwrap();
@@ -536,9 +536,9 @@ mod convtest {
     fn convcircuit() {
         // parameters
         let kernel_height = 2;
-        let kernel_width = 2;
+        let kernel_width = 3;
         let image_height = 5;
-        let image_width = 5;
+        let image_width = 7;
         let in_channels = 3;
         let out_channels = 2;
 
@@ -575,19 +575,18 @@ mod convtest {
         // parameters
         let kernel_height = 2;
         let kernel_width = 2;
-        let image_height = 3;
-        let image_width = 4;
+        let image_height = 4;
+        let image_width = 5;
         let in_channels = 3;
         let out_channels = 2;
 
         let mut image = Tensor::from(
-            (0..in_channels * image_height * image_width)
-                .map(|_| Value::known(pallas::Base::random(OsRng))),
+            (0..in_channels * image_height * image_width).map(|i| Value::known(F::from(i as u64))),
         );
         image.reshape(&[in_channels, image_height, image_width]);
         let mut kernels = Tensor::from(
             (0..{ out_channels * in_channels * kernel_height * kernel_width })
-                .map(|_| Value::known(pallas::Base::random(OsRng))),
+                .map(|i| Value::known(F::from(i as u64))),
         );
         kernels.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
 

@@ -788,6 +788,7 @@ impl<T: Clone + TensorType> Tensor<T> {
                     row[i + j] = t_matrices[i].clone();
                 }
             }
+
             let mut concatenated_tensor = row[0].clone();
             for r in row[1..].iter() {
                 concatenated_tensor = concatenated_tensor.append_to_row(r.clone())?;
@@ -804,7 +805,33 @@ impl<T: Clone + TensorType> Tensor<T> {
 
         doubly_blocked_toeplitz.reshape(&[h_blocks * num_rows, w_blocks * num_cols]);
 
-        Ok(doubly_blocked_toeplitz)
+        if _w_stride > 1 {
+            let mut shifted_rows = vec![];
+            for r in 0..h_blocks * num_rows {
+                let offset = r % num_rows;
+                let row = doubly_blocked_toeplitz.get_slice(&[r..r + 1])?;
+
+                if offset > 0 {
+                    let mut shifted_row = Tensor::new(None, &[row.len()])?;
+                    let local_offset = offset * (_w_stride - 1);
+                    for i in 0..shifted_row.len() - local_offset {
+                        shifted_row.set(&[local_offset + i], row.get(&[0, i]).clone());
+                    }
+                    shifted_rows.push(shifted_row);
+                } else {
+                    shifted_rows.push(row);
+                }
+            }
+
+            let mut doubly_blocked_toeplitz =
+                Tensor::new(Some(&shifted_rows[..]), &[shifted_rows.len()])?.combine()?;
+
+            doubly_blocked_toeplitz.reshape(&[h_blocks * num_rows, w_blocks * num_cols]);
+
+            Ok(doubly_blocked_toeplitz)
+        } else {
+            Ok(doubly_blocked_toeplitz)
+        }
     }
 
     /// Toeplitz matrix of a given row.
