@@ -17,10 +17,10 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use itertools::Itertools;
-use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
 use std::{cmp::max, ops::Add};
+use std::{cmp::min, ops::Deref};
 use std::{error::Error, ops::Mul};
 use std::{fmt::Debug, ops::Sub};
 use std::{iter::Iterator, ops::Div};
@@ -515,47 +515,6 @@ impl<T: Clone + TensorType> Tensor<T> {
         self.dims = Vec::from([self.dims.iter().product::<usize>()]);
     }
 
-    /// Flatten the tensor shape in reversed row order
-    ///
-    /// ```
-    /// use ezkl_lib::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(Some(&[1,2,3,4]), &[2,2]).unwrap();
-    /// a.flatten_reversed();
-    /// let expected = Tensor::from([3, 4, 1, 2].into_iter());
-    /// assert_eq!(a, expected);
-    /// ```
-    pub fn flatten_reversed(&mut self) -> Result<(), TensorError> {
-        let mut rows = Vec::new();
-        for i in (0..self.dims[0]).rev() {
-            let row = self.get_slice(&[i..i + 1])?;
-            rows.push(row);
-        }
-        *self = Tensor::new(Some(&rows), &[self.dims[0]])?.combine()?;
-        Ok(())
-    }
-
-    ///  Reverses row order
-    ///
-    /// ```
-    /// use ezkl_lib::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(Some(&[1,2,3,4]), &[2,2]).unwrap();
-    /// a.invert_rows();
-    /// let expected = Tensor::<i32>::new(Some(&[3, 4, 1, 2]), &[2,2]).unwrap();
-    /// assert_eq!(a, expected);
-    /// ```
-    pub fn invert_rows(&mut self) -> Result<(), TensorError> {
-        let mut rows = Vec::new();
-        let dims = self.dims().clone();
-        for i in (0..self.dims[0]).rev() {
-            let row = self.get_slice(&[i..i + 1])?;
-            rows.push(row);
-        }
-        let mut res = Tensor::new(Some(&rows), &[self.dims[0]])?.combine()?;
-        res.reshape(dims);
-        *self = res;
-        Ok(())
-    }
-
     /// Maps a function to tensors
     /// ```
     /// use ezkl_lib::tensor::Tensor;
@@ -739,32 +698,6 @@ impl<T: Clone + TensorType> Tensor<T> {
         Ok(tiled)
     }
 
-    /// Expands a tensor to a new shape with 0s.
-    /// ```
-    /// use ezkl_lib::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
-    /// let mut c = a.expand_new_shape(&[3, 4]).unwrap();
-    /// let mut expected = Tensor::<i32>::new(Some(&[0,0,0,0,1,2,0,0,3,4,0,0]), &[3, 4]).unwrap();
-    /// assert_eq!(c, expected);
-    /// ```
-    pub fn expand_new_shape(&self, shape: &[usize]) -> Result<Tensor<T>, TensorError> {
-        let mut new_tensor = Tensor::new(None, shape)?;
-
-        self.mc_enum_map(|mc_coord, elem| {
-            let mut new_coord = vec![];
-            for (i, coord) in mc_coord.iter().enumerate() {
-                if i == self.dims().len() - 1 {
-                    new_coord.push(coord.clone());
-                } else {
-                    new_coord.push(coord + shape[i] - self.dims()[i]);
-                }
-            }
-            new_tensor.set(&new_coord, elem)
-        })?;
-
-        Ok(new_tensor)
-    }
-
     /// Doubly blocked toeplitz matrix
     /// ```
     /// use ezkl_lib::tensor::Tensor;
@@ -845,7 +778,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         row.flatten();
         let mut toeplitz = Tensor::new(None, &[num_rows, num_cols])?;
         // initialize the first row
-        for j in 0..row.len() {
+        for j in 0..min(num_cols, row.len()) {
             toeplitz.set(&[0, j], row[j].clone());
         }
         for i in 1..num_rows {

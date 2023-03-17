@@ -244,18 +244,25 @@ pub fn affine<F: FieldExt + TensorType>(
     last_elem.flatten();
 
     if matches!(config.check_mode, CheckMode::SAFE) {
-        let safe_affine = non_accum_affine(
-            &values
-                .iter()
-                .map(|x| x.get_inner().unwrap())
-                .collect::<Vec<Tensor<_>>>(),
-        )
-        .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+        // during key generation this will be 0 so we use this as a flag to check
+        let is_assigned = Into::<Tensor<i32>>::into(last_elem.clone().get_inner()?)
+            .iter()
+            .sum::<i32>()
+            > 0;
+        if is_assigned {
+            let safe_affine = non_accum_affine(
+                &values
+                    .iter()
+                    .map(|x| x.get_inner().unwrap())
+                    .collect::<Vec<Tensor<_>>>(),
+            )
+            .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
 
-        assert_eq!(
-            Into::<Tensor<i32>>::into(last_elem.clone().get_inner()?),
-            Into::<Tensor<i32>>::into(safe_affine),
-        )
+            assert_eq!(
+                Into::<Tensor<i32>>::into(last_elem.clone().get_inner()?),
+                Into::<Tensor<i32>>::into(safe_affine),
+            )
+        }
     }
     Ok(last_elem)
 }
@@ -296,20 +303,14 @@ pub fn conv<F: FieldExt + TensorType>(
     );
 
     let (image_height, image_width) = (image_dims[1], image_dims[2]);
+    let padded_height = image_height + 2 * padding.0;
+    let padded_width = image_width + 2 * padding.1;
 
-    let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
-    let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
-
-    // let flattened_output = &[output_channels * vert_slides, horz_slides];
+    let vert_slides = (padded_height - kernel_height) / stride.0 + 1;
+    let horz_slides = (padded_width - kernel_width) / stride.1 + 1;
 
     let mut padded_image = image.clone();
     padded_image.pad(padding)?;
-    // we flatten out the newly padded image last row first !
-    println!("{}", padded_image.show());
-    // padded_image.reshape(&[
-    //     padded_image.dims()[0] * padded_image.dims()[1],
-    //     padded_image.dims()[2],
-    // ])?;
     padded_image.flatten();
     padded_image.reshape(&[padded_image.dims()[0], 1])?;
     // for now
@@ -321,13 +322,6 @@ pub fn conv<F: FieldExt + TensorType>(
         output_channels * input_channels * kernel_height,
         kernel_width,
     ])?;
-    println!("{}", padded_image.show());
-    println!("");
-
-    println!("{}", expanded_kernel.show());
-    println!("");
-    let padded_height = image_height + 2 * padding.0;
-    let padded_width = image_height + 2 * padding.1;
 
     expanded_kernel.doubly_blocked_toeplitz(
         vert_slides,
@@ -335,8 +329,6 @@ pub fn conv<F: FieldExt + TensorType>(
         horz_slides,
         padded_width,
     )?;
-
-    println!("{}", expanded_kernel.show());
 
     let mut res = if has_bias {
         let mut tiled_bias = values[2].clone();
@@ -358,25 +350,30 @@ pub fn conv<F: FieldExt + TensorType>(
         matmul(config, layouter, &[expanded_kernel, padded_image], offset)?
     };
 
-    // res.reshape(&[output_channels * vert_slides, horz_slides])?;
-    // res.invert_rows()?;
     res.reshape(&[output_channels, vert_slides, horz_slides])?;
 
     if matches!(config.check_mode, CheckMode::SAFE) {
-        let safe_conv = non_accum_conv(
-            &values
-                .iter()
-                .map(|x| x.get_inner().unwrap())
-                .collect::<Vec<Tensor<_>>>(),
-            padding,
-            stride,
-        )
-        .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+        // during key generation this will be 0 so we use this as a flag to check
+        let is_assigned = Into::<Tensor<i32>>::into(res.clone().get_inner()?)
+            .iter()
+            .sum::<i32>()
+            > 0;
+        if is_assigned {
+            let safe_conv = non_accum_conv(
+                &values
+                    .iter()
+                    .map(|x| x.get_inner().unwrap())
+                    .collect::<Vec<Tensor<_>>>(),
+                padding,
+                stride,
+            )
+            .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
 
-        assert_eq!(
-            Into::<Tensor<i32>>::into(res.get_inner()?),
-            Into::<Tensor<i32>>::into(safe_conv),
-        )
+            assert_eq!(
+                Into::<Tensor<i32>>::into(res.get_inner()?),
+                Into::<Tensor<i32>>::into(safe_conv),
+            )
+        }
     }
 
     Ok(res)
