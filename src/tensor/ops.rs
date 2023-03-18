@@ -982,5 +982,4 @@ pub mod accumulated {
 
         Ok(output)
     }
-
 }

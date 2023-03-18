@@ -1,3 +1,18 @@
+use std::error::Error;
+
+use halo2_proofs::circuit::Layouter;
+
+use crate::{
+    circuit::{utils, CircuitError},
+    tensor::{
+        ops::{
+            accumulated, affine as non_accum_affine, convolution as non_accum_conv,
+            dot as non_accum_dot, matmul as non_accum_matmul,
+        },
+        Tensor, TensorError,
+    },
+};
+
 use super::*;
 /// Assigns variables to the regions created when calling `configure`.
 /// # Arguments
@@ -56,10 +71,21 @@ pub fn dot<F: FieldExt + TensorType>(
                 }
             }
 
-            // last element is the result
-            Ok(output
+            let last_elem = output
                 .get_slice(&[output.len() - 1..output.len()])
-                .expect("accum poly: failed to fetch last elem"))
+                .expect("accum poly: failed to fetch last elem");
+
+            if matches!(config.check_mode, CheckMode::SAFE) {
+                let safe_dot = non_accum_dot(&inputs.iter().map(|x| x).collect())
+                    .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+                assert_eq!(
+                    Into::<Tensor<i32>>::into(last_elem.clone()),
+                    Into::<Tensor<i32>>::into(safe_dot),
+                )
+            }
+            // last element is the result
+            Ok(last_elem)
         },
     ) {
         Ok(a) => a,
@@ -177,6 +203,16 @@ pub fn matmul<F: FieldExt + TensorType>(
                 .expect("accum poly: failed to fetch last elem");
 
             last_elem.reshape(&[values[0].dims()[0], values[1].dims()[1]]);
+
+            if matches!(config.check_mode, CheckMode::SAFE) {
+                let safe_mm =
+                    non_accum_matmul(&inputs).map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+                assert_eq!(
+                    Into::<Tensor<i32>>::into(last_elem.clone()),
+                    Into::<Tensor<i32>>::into(safe_mm),
+                )
+            }
             // Now we can assign the matmul op
             Ok(last_elem)
         },
@@ -200,10 +236,146 @@ pub fn affine<F: FieldExt + TensorType>(
     values: &[ValTensor<F>; 3],
     offset: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let (kernel, bias, mut input) = (values[0].clone(), values[1].clone(), values[2].clone());
-
+    let (mut input, kernel, bias) = (values[0].clone(), values[1].clone(), values[2].clone());
     input.pad_row_ones()?;
     let params = kernel.append_to_row(bias)?;
 
-    matmul(config, layouter, &[params, input], offset)
+    let mut last_elem = matmul(config, layouter, &[params, input], offset)?;
+    last_elem.flatten();
+
+    if matches!(config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(last_elem.clone().get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let safe_affine = non_accum_affine(
+                &values
+                    .iter()
+                    .map(|x| x.get_inner().unwrap())
+                    .collect::<Vec<Tensor<_>>>(),
+            )
+            .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+            assert_eq!(
+                Into::<Tensor<i32>>::into(last_elem.clone().get_inner()?),
+                Into::<Tensor<i32>>::into(safe_affine),
+            )
+        }
+    }
+    Ok(last_elem)
+}
+
+/// Assigns variables to the regions created when calling `configure`.
+/// # Arguments
+/// * `values` - The explicit values to the operations.
+/// * `layouter` - A Halo2 Layouter.
+pub fn conv<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    layouter: &mut impl Layouter<F>,
+    values: &[ValTensor<F>],
+    padding: (usize, usize),
+    stride: (usize, usize),
+    offset: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // assert!(stride.0 == 1);
+    // assert!(stride.1 == 1);
+
+    let has_bias = values.len() == 3;
+    let (image, kernel) = (values[0].clone(), values[1].clone());
+
+    if (image.dims().len() != 3)
+        || (kernel.dims().len() != 4)
+        || (image.dims()[0] != kernel.dims()[1])
+    {
+        return Err(Box::new(TensorError::DimMismatch("conv".to_string())));
+    }
+
+    let image_dims = image.dims();
+    let kernel_dims = kernel.dims();
+
+    let (output_channels, _input_channels, kernel_height, kernel_width) = (
+        kernel_dims[0],
+        kernel_dims[1],
+        kernel_dims[2],
+        kernel_dims[3],
+    );
+
+    let (image_height, image_width) = (image_dims[1], image_dims[2]);
+    let padded_height = image_height + 2 * padding.0;
+    let padded_width = image_width + 2 * padding.1;
+
+    let vert_slides = (padded_height - kernel_height) / stride.0 + 1;
+    let horz_slides = (padded_width - kernel_width) / stride.1 + 1;
+
+    let mut padded_image = image.clone();
+    padded_image.pad(padding)?;
+    padded_image.flatten();
+    padded_image.reshape(&[padded_image.dims()[0], 1])?;
+
+    let mut expanded_kernel = kernel.clone();
+
+    expanded_kernel.multi_ch_blocked_toeplitz(
+        vert_slides,
+        padded_height,
+        horz_slides,
+        padded_width,
+        stride.0,
+        stride.1,
+    )?;
+
+    // expanded_kernel.downsample(0, stride.0)?;
+    // expanded_kernel.downsample(0, stride.1)?;
+
+    // println!("{:?}", expanded_kernel.dims());
+    // println!("{:?}", padded_image.dims());
+
+    let mut res = if has_bias {
+        let mut tiled_bias = values[2].clone();
+        if (tiled_bias.dims().len() != 1) || (tiled_bias.dims()[0] != kernel.dims()[0]) {
+            return Err(Box::new(TensorError::DimMismatch("conv bias".to_string())));
+        }
+        // TODO: don't know if this correct
+        tiled_bias.repeat_rows(vert_slides * horz_slides)?;
+        tiled_bias.flatten();
+        tiled_bias.reshape(&[tiled_bias.dims()[0], 1])?;
+
+        affine(
+            config,
+            layouter,
+            &[padded_image, expanded_kernel, tiled_bias],
+            offset,
+        )?
+    } else {
+        matmul(config, layouter, &[expanded_kernel, padded_image], offset)?
+    };
+
+    res.reshape(&[output_channels, vert_slides, horz_slides])?;
+
+    if matches!(config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(res.clone().get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let safe_conv = non_accum_conv(
+                &values
+                    .iter()
+                    .map(|x| x.get_inner().unwrap())
+                    .collect::<Vec<Tensor<_>>>(),
+                padding,
+                stride,
+            )
+            .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+            assert_eq!(
+                Into::<Tensor<i32>>::into(res.get_inner()?),
+                Into::<Tensor<i32>>::into(safe_conv),
+            )
+        }
+    }
+
+    Ok(res)
 }

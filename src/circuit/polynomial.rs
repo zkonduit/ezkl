@@ -384,14 +384,16 @@ mod tests {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config.layout(
-                &mut layouter,
-                &[
-                    self.input.clone(),
-                    self.l0_params[0].clone(),
-                    self.l0_params[1].clone(),
-                ],
-            );
+            let _ = config
+                .layout(
+                    &mut layouter,
+                    &[
+                        self.input.clone(),
+                        self.l0_params[0].clone(),
+                        self.l0_params[1].clone(),
+                    ],
+                )
+                .unwrap();
             Ok(())
         }
     }

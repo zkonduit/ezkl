@@ -74,10 +74,14 @@ harness = false
 name = "accum_matmul"
 harness = false
 
+[[bench]]
+name = "conv"
+harness = false
 
 [[bench]]
-name = "cnvrl"
+name = "accum_conv"
 harness = false
+
 
 [[bench]]
 name = "relu"

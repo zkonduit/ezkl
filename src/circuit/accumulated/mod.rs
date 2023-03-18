@@ -7,7 +7,7 @@ use halo2_proofs::{
 };
 use halo2curves::FieldExt;
 
-use crate::tensor::{ops::accumulated, Tensor, TensorType, ValTensor, VarTensor};
+use crate::tensor::{Tensor, TensorType, ValTensor, VarTensor};
 use std::{
     collections::BTreeMap,
     error::Error,
@@ -16,14 +16,20 @@ use std::{
     ops::{Add, Mul, Sub},
 };
 
-use super::{utils, CircuitError};
-
 #[allow(missing_docs)]
 /// An enum representing the operations that can be used to express more complex operations via accumulation
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum BaseOp {
     Dot,
     InitDot,
+}
+
+#[allow(missing_docs)]
+/// An enum representing activating the sanity checks we can perform on the accumulated arguments
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum CheckMode {
+    SAFE,
+    UNSAFE,
 }
 
 /// Matches a [BaseOp] to an operation over inputs
@@ -76,6 +82,10 @@ pub enum Op {
     Dot,
     Matmul,
     Affine,
+    Conv {
+        padding: (usize, usize),
+        stride: (usize, usize),
+    },
 }
 
 /// Configuration for an accumulated arg.
@@ -87,6 +97,8 @@ pub struct BaseConfig<F: FieldExt + TensorType> {
     pub output: VarTensor,
     /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many base gates.
     pub selectors: BTreeMap<BaseOp, Selector>,
+    /// Activate sanity checks
+    pub check_mode: CheckMode,
     _marker: PhantomData<F>,
 }
 
@@ -99,6 +111,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         meta: &mut ConstraintSystem<F>,
         inputs: &[VarTensor; 2],
         output: &VarTensor,
+        check_mode: CheckMode,
     ) -> Self {
         // setup a selector per base op
         let mut selectors = BTreeMap::new();
@@ -113,6 +126,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             selectors,
             inputs: inputs.to_vec(),
             output: output.clone(),
+            check_mode,
             _marker: PhantomData,
         };
 
@@ -166,6 +180,9 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             Op::Dot => layouts::dot(self, layouter, values.try_into()?, offset),
             Op::Matmul => layouts::matmul(self, layouter, values.try_into()?, offset),
             Op::Affine => layouts::affine(self, layouter, values.try_into()?, offset),
+            Op::Conv { padding, stride } => {
+                layouts::conv(self, layouter, values.try_into()?, padding, stride, offset)
+            }
         }
     }
 }
@@ -204,7 +221,7 @@ mod matmul_test {
             let a = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true, 512);
             let b = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true, 512);
             let output = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, 1, LEN], true, 512);
-            Self::Config::configure(cs, &[a, b], &output)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
         fn synthesize(
@@ -212,7 +229,9 @@ mod matmul_test {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config.layout(&mut layouter, &self.inputs.clone(), 0, Op::Matmul);
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Matmul)
+                .unwrap();
             Ok(())
         }
     }
@@ -271,7 +290,7 @@ mod dottest {
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
 
-            Self::Config::configure(cs, &[a, b], &output)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
         fn synthesize(
@@ -279,7 +298,9 @@ mod dottest {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config.layout(&mut layouter, &self.inputs.clone(), 0, Op::Dot);
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Dot)
+                .unwrap();
             Ok(())
         }
     }
@@ -339,7 +360,7 @@ mod affinetest {
             let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 512);
             let output =
                 VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true, 512);
-            Self::Config::configure(cs, &[a, b], &output)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
         fn synthesize(
@@ -347,7 +368,9 @@ mod affinetest {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config.layout(&mut layouter, &self.inputs.clone(), 0, Op::Affine);
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Affine)
+                .unwrap();
             Ok(())
         }
     }
@@ -365,7 +388,7 @@ mod affinetest {
         x.reshape(&[LEN, 1]);
 
         let circuit = AffineCircuit::<F> {
-            inputs: [ValTensor::from(w), ValTensor::from(b), ValTensor::from(x)],
+            inputs: [ValTensor::from(x), ValTensor::from(w), ValTensor::from(b)],
             _marker: PhantomData,
         };
 
@@ -409,7 +432,7 @@ mod compositiontest {
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
 
-            Self::Config::configure(cs, &[a, b], &output)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
         fn synthesize(
@@ -418,9 +441,15 @@ mod compositiontest {
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             // lots of stacked dot products
-            let _ = config.layout(&mut layouter, &self.inputs.clone(), 0, Op::Dot);
-            let _ = config.layout(&mut layouter, &self.inputs.clone(), LEN, Op::Dot);
-            let _ = config.layout(&mut layouter, &self.inputs.clone(), 2 * LEN, Op::Dot);
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Dot)
+                .unwrap();
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), LEN, Op::Dot)
+                .unwrap();
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 2 * LEN, Op::Dot)
+                .unwrap();
             Ok(())
         }
     }
@@ -434,6 +463,135 @@ mod compositiontest {
 
         let circuit = MyCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod convtest {
+    use std::marker::PhantomData;
+
+    use super::*;
+    use crate::tensor::Tensor;
+    use halo2_proofs::{
+        arithmetic::{Field, FieldExt},
+        circuit::{Layouter, SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::{Circuit, ConstraintSystem, Error},
+    };
+    use halo2curves::pasta::pallas;
+    use halo2curves::pasta::Fp as F;
+    use rand::rngs::OsRng;
+
+    const K: usize = 22;
+    const LEN: usize = 100;
+
+    #[derive(Clone)]
+    struct ConvCircuit<F: FieldExt + TensorType> {
+        inputs: Vec<ValTensor<F>>,
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for ConvCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 100000);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 100000);
+            let output =
+                VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true, 100000);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(
+                    &mut layouter,
+                    &self.inputs.clone(),
+                    0,
+                    Op::Conv {
+                        padding: (1, 1),
+                        stride: (2, 2),
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn convcircuit() {
+        // parameters
+        let kernel_height = 2;
+        let kernel_width = 3;
+        let image_height = 5;
+        let image_width = 7;
+        let in_channels = 3;
+        let out_channels = 2;
+
+        let mut image = Tensor::from(
+            (0..in_channels * image_height * image_width)
+                .map(|_| Value::known(pallas::Base::random(OsRng))),
+        );
+        image.reshape(&[in_channels, image_height, image_width]);
+        let mut kernels = Tensor::from(
+            (0..{ out_channels * in_channels * kernel_height * kernel_width })
+                .map(|_| Value::known(pallas::Base::random(OsRng))),
+        );
+        kernels.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
+
+        let bias =
+            Tensor::from((0..{ out_channels }).map(|_| Value::known(pallas::Base::random(OsRng))));
+
+        let circuit = ConvCircuit::<F> {
+            inputs: [
+                ValTensor::from(image),
+                ValTensor::from(kernels),
+                ValTensor::from(bias),
+            ]
+            .to_vec(),
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+
+    #[test]
+    fn convcircuitnobias() {
+        // parameters
+        let kernel_height = 2;
+        let kernel_width = 2;
+        let image_height = 4;
+        let image_width = 5;
+        let in_channels = 3;
+        let out_channels = 2;
+
+        let mut image = Tensor::from(
+            (0..in_channels * image_height * image_width).map(|i| Value::known(F::from(i as u64))),
+        );
+        image.reshape(&[in_channels, image_height, image_width]);
+        let mut kernels = Tensor::from(
+            (0..{ out_channels * in_channels * kernel_height * kernel_width })
+                .map(|i| Value::known(F::from(i as u64))),
+        );
+        kernels.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
+
+        let circuit = ConvCircuit::<F> {
+            inputs: [ValTensor::from(image), ValTensor::from(kernels)].to_vec(),
             _marker: PhantomData,
         };
 

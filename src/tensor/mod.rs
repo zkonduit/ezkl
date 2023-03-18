@@ -17,10 +17,10 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use itertools::Itertools;
-use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
 use std::{cmp::max, ops::Add};
+use std::{cmp::min, ops::Deref};
 use std::{error::Error, ops::Mul};
 use std::{fmt::Debug, ops::Sub};
 use std::{iter::Iterator, ops::Div};
@@ -597,24 +597,6 @@ impl<T: Clone + TensorType> Tensor<T> {
         Ok(())
     }
 
-    /// Repeats the columns of a tensor n times
-    /// ```
-    /// use ezkl_lib::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
-    /// let mut c = a.tile(2).unwrap();
-    /// let mut expected = Tensor::<i32>::new(Some(&[1, 4, 1, 4]), &[2, 2]).unwrap();
-    /// assert_eq!(c, expected);
-    /// ```
-    pub fn tile(&self, n: usize) -> Result<Tensor<T>, TensorError> {
-        let mut res = vec![];
-        for _ in 0..n {
-            res.push(self.clone());
-        }
-        let mut tiled = Tensor::new(Some(&res), &[n])?.combine()?;
-        tiled.reshape(&[&[n], self.dims()].concat());
-        Ok(tiled)
-    }
-
     /// Adds a row of ones
     /// ```
     /// use ezkl_lib::tensor::Tensor;
@@ -633,32 +615,60 @@ impl<T: Clone + TensorType> Tensor<T> {
         Tensor::new(Some(&result), &dims)
     }
 
+    /// Tiles a tensor n times
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
+    /// let mut c = a.tile(2).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 4, 1, 4]), &[2, 2]).unwrap();
+    /// assert_eq!(c, expected);
+    /// ```
+    pub fn tile(&self, n: usize) -> Result<Tensor<T>, TensorError> {
+        let mut res = vec![];
+        for _ in 0..n {
+            res.push(self.clone());
+        }
+        let mut tiled = Tensor::new(Some(&res), &[n])?.combine()?;
+        tiled.reshape(&[&[n], self.dims()].concat());
+        Ok(tiled)
+    }
+
     /// Extends another tensor to rows
     /// ```
     /// use ezkl_lib::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 4, 1, 4]), &[2, 2]).unwrap();
-    /// let mut b = Tensor::<i32>::new(Some(&[2, 3, 2, 3]), &[2, 2]).unwrap();
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 4, 1, 4, 1, 4]), &[3, 2]).unwrap();
+    /// let mut b = Tensor::<i32>::new(Some(&[2, 3, 2, 3, 2, 3]), &[3, 2]).unwrap();
     /// let mut c = a.append_to_row(b).unwrap();
-    /// let mut expected = Tensor::<i32>::new(Some(&[1, 4, 2, 3, 1, 4, 2, 3]), &[2, 4]).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 4, 2, 3, 1, 4, 2, 3, 1, 4, 2, 3]), &[3, 4]).unwrap();
+    /// assert_eq!(c, expected);
+    ///
+    /// let mut a =Tensor::<i32>::new(Some(&[10, 0, 0, 20, 10, 0, 0, 20, 10, 0, 0, 20]), &[4, 3]).unwrap();
+    /// let mut b = Tensor::<i32>::new(Some(&[30, 0, 0, 40, 30, 0, 0, 40, 30, 0, 0, 40]), &[4, 3]).unwrap();
+    /// let mut c = a.append_to_row(b).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[10, 0, 0, 30, 0, 0, 20, 10, 0, 40, 30, 0, 0, 20, 10, 0, 40, 30, 0, 0, 20, 0, 0, 40]), &[4, 6]).unwrap();
+    /// assert_eq!(c, expected);
+    ///
+    /// let mut a =Tensor::<i32>::new(Some(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), &[4, 3]).unwrap();
+    /// let mut b = Tensor::<i32>::new(Some(&[10, 0, 0, 20, 10, 0, 0, 20, 10, 0, 0, 20]), &[4, 3]).unwrap();
+    /// let mut c = a.append_to_row(b).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[0, 0, 0, 10, 0, 0, 0, 0, 0, 20, 10, 0, 0, 0, 0, 0, 20, 10, 0, 0, 0, 0, 0, 20]), &[4, 6]).unwrap();
     /// assert_eq!(c, expected);
     /// ```
     pub fn append_to_row(&self, b: Tensor<T>) -> Result<Tensor<T>, TensorError> {
         if self.dims()[0] != b.dims()[0] {
-            return Err(TensorError::DimMismatch("add".to_string()));
+            return Err(TensorError::DimMismatch("append to row".to_string()));
         }
-        let mut result = Vec::new();
-        let mut j = 0;
-        for (i, e) in self.inner.iter().enumerate() {
-            result.push(e.clone());
-            if (i + 1) % self.dims[1] == 0 {
-                result.extend(b.get_slice(&[j..j + 1])?);
-                j += 0;
-            }
+        let mut rows = Vec::new();
+        for i in 0..self.dims[0] {
+            let row = vec![self.get_slice(&[i..i + 1])?, b.get_slice(&[i..i + 1])?];
+            rows.push(Tensor::new(Some(&row), &[2])?.combine()?);
         }
+        let mut res = Tensor::new(Some(&rows), &[self.dims[0]])?.combine()?;
         let mut dims = self.dims().to_vec();
         let len = dims.len();
         dims[len - 1] += b.dims()[1];
-        Tensor::new(Some(&result), &dims)
+        res.reshape(&dims);
+        Ok(res)
     }
 
     /// Repeats the rows of a tensor n times
@@ -686,6 +696,185 @@ impl<T: Clone + TensorType> Tensor<T> {
         let mut tiled = Tensor::new(Some(&res), &[n * self.dims()[0]])?.combine()?;
         tiled.reshape(&[self.dims(), &[n]].concat());
         Ok(tiled)
+    }
+
+    /// Multi-ch doubly blocked toeplitz matrix
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 0, 0, 0, 0]), &[1, 1, 2, 4]).unwrap();
+    /// let mut c = a.multi_ch_doubly_blocked_toeplitz(2, 2, 3, 4, 1, 1).unwrap();
+    /// let mut expected = Tensor::<i32>::new(
+    /// Some(&[1, 2, 3, 4, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0, 0, 0,
+    ///     1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0,
+    ///      0, 0, 1, 2]), &[6, 8]).unwrap();
+    /// assert_eq!(c, expected);
+    /// ```
+    pub fn multi_ch_doubly_blocked_toeplitz(
+        &self,
+        h_blocks: usize,
+        w_blocks: usize,
+        num_rows: usize,
+        num_cols: usize,
+        h_stride: usize,
+        w_stride: usize,
+    ) -> Result<Tensor<T>, TensorError> {
+        assert!(self.dims().len() > 2);
+        let first_channels = self.dims()[0];
+        let second_channels = self.dims()[1];
+
+        let mut toeplitz_tower = vec![];
+        for i in 0..first_channels {
+            let mut row = vec![
+                Tensor::new(None, &[h_blocks * num_rows, w_blocks * num_cols])?;
+                second_channels
+            ];
+            for j in 0..second_channels {
+                let mut r = self.get_slice(&[i..i + 1, j..j + 1])?;
+                let dims = r.dims()[2..].to_vec();
+                r.reshape(&dims);
+                row[j] = r.doubly_blocked_toeplitz(
+                    h_blocks, w_blocks, num_rows, num_cols, h_stride, w_stride,
+                )?;
+            }
+            let mut concatenated_tensor = row[0].clone();
+            for r in row[1..].iter() {
+                concatenated_tensor = concatenated_tensor.append_to_row(r.clone())?;
+            }
+
+            toeplitz_tower.push(concatenated_tensor);
+        }
+
+        let mut toeplitz_tower =
+            Tensor::new(Some(&toeplitz_tower[..]), &[toeplitz_tower.len()])?.combine()?;
+
+        toeplitz_tower.reshape(&[
+            first_channels * h_blocks * num_rows,
+            second_channels * w_blocks * num_cols,
+        ]);
+
+        Ok(toeplitz_tower)
+    }
+
+    /// Doubly blocked toeplitz matrix
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 0, 0, 0, 0]), &[2, 4]).unwrap();
+    /// let mut c = a.doubly_blocked_toeplitz(2, 2, 3, 4, 1, 1).unwrap();
+    /// let mut expected = Tensor::<i32>::new(
+    /// Some(&[1, 2, 3, 4, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0, 0, 0,
+    ///     1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0,
+    ///      0, 0, 1, 2]), &[6, 8]).unwrap();
+    /// assert_eq!(c, expected);
+    /// ```
+    pub fn doubly_blocked_toeplitz(
+        &self,
+        h_blocks: usize,
+        w_blocks: usize,
+        num_rows: usize,
+        num_cols: usize,
+        h_stride: usize,
+        _w_stride: usize,
+    ) -> Result<Tensor<T>, TensorError> {
+        let mut t_matrices = vec![];
+        for i in 0..self.dims[0] {
+            t_matrices.push(self.toeplitz(i, num_rows, num_cols)?);
+        }
+
+        let mut doubly_blocked_toeplitz: Vec<Tensor<T>> = vec![];
+        for j in (0..h_stride * h_blocks).step_by(h_stride) {
+            let mut row = vec![Tensor::new(None, t_matrices[0].dims())?; w_blocks];
+            for i in 0..t_matrices.len() {
+                if i + j < w_blocks {
+                    row[i + j] = t_matrices[i].clone();
+                }
+            }
+
+            let mut concatenated_tensor = row[0].clone();
+            for r in row[1..].iter() {
+                concatenated_tensor = concatenated_tensor.append_to_row(r.clone())?;
+            }
+
+            doubly_blocked_toeplitz.push(concatenated_tensor);
+        }
+
+        let mut doubly_blocked_toeplitz = Tensor::new(
+            Some(&doubly_blocked_toeplitz[..]),
+            &[doubly_blocked_toeplitz.len()],
+        )?
+        .combine()?;
+
+        doubly_blocked_toeplitz.reshape(&[h_blocks * num_rows, w_blocks * num_cols]);
+
+        if _w_stride > 1 {
+            let mut shifted_rows = vec![];
+            for r in 0..h_blocks * num_rows {
+                let offset = r % num_rows;
+                let row = doubly_blocked_toeplitz.get_slice(&[r..r + 1])?;
+
+                if offset > 0 {
+                    let mut shifted_row = Tensor::new(None, &[row.len()])?;
+                    let local_offset = offset * (_w_stride - 1);
+                    for i in 0..shifted_row.len() - local_offset {
+                        shifted_row.set(&[local_offset + i], row.get(&[0, i]).clone());
+                    }
+                    shifted_rows.push(shifted_row);
+                } else {
+                    shifted_rows.push(row);
+                }
+            }
+
+            let mut doubly_blocked_toeplitz =
+                Tensor::new(Some(&shifted_rows[..]), &[shifted_rows.len()])?.combine()?;
+
+            doubly_blocked_toeplitz.reshape(&[h_blocks * num_rows, w_blocks * num_cols]);
+
+            Ok(doubly_blocked_toeplitz)
+        } else {
+            Ok(doubly_blocked_toeplitz)
+        }
+    }
+
+    /// Toeplitz matrix of a given row.
+    /// ```
+    /// // these tests were all verified against scipy.linalg.toeplitz
+    /// use ezkl_lib::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[0, 0, 0, 0, 1, 2, 0, 0]), &[2, 4]).unwrap();
+    /// let mut c = a.toeplitz(1, 4, 3).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 2, 0, 0, 1, 2, 0, 0, 1, 0, 0, 0]), &[4, 3]).unwrap();
+    /// assert_eq!(c, expected);
+    ///
+    /// let mut a = Tensor::<i32>::new(Some(&[0, 0, 0, 0, 1, 2, 0, 0]), &[2, 4]).unwrap();
+    /// let mut c = a.toeplitz(1, 2, 3).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 2, 0, 0, 1, 2]), &[2, 3]).unwrap();
+    /// assert_eq!(c, expected);
+    ///
+    /// let mut a = Tensor::<i32>::new(Some(&[0, 0, 0, 0, 1, 2, 0, 0]), &[2, 4]).unwrap();
+    /// let mut c = a.toeplitz(1, 5, 3).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 2, 0, 0, 1, 2, 0, 0, 1, 0, 0, 0, 0, 0, 0]), &[5, 3]).unwrap();
+    /// assert_eq!(c, expected);
+    /// ```
+    pub fn toeplitz(
+        &self,
+        row: usize,
+        num_rows: usize,
+        num_cols: usize,
+    ) -> Result<Tensor<T>, TensorError> {
+        // let n = self.dims()[1..].iter().product::<usize>();
+        let mut row = self.get_slice(&[row..row + 1])?;
+        row.flatten();
+        let mut toeplitz = Tensor::new(None, &[num_rows, num_cols])?;
+        // initialize the first row
+        for j in 0..min(num_cols, row.len()) {
+            toeplitz.set(&[0, j], row[j].clone());
+        }
+        for i in 1..num_rows {
+            if (num_cols as i32 - i as i32) > 0 {
+                for j in 0..(num_cols - i) {
+                    toeplitz.set(&[i, i + j], toeplitz.get(&[0, j]).clone());
+                }
+            }
+        }
+        Ok(toeplitz)
     }
 }
 
