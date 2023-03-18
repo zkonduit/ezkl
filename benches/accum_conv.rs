@@ -83,7 +83,7 @@ fn runcnvrl(c: &mut Criterion) {
 
     let params = gen_srs::<KZGCommitmentScheme<_>>(K as u32);
 
-    for size in [1, 2, 4].iter() {
+    for size in [1, 2].iter() {
         unsafe {
             KERNEL_HEIGHT = size * 2;
             KERNEL_WIDTH = size * 2;
