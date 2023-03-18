@@ -79,7 +79,7 @@ fn runsumpool(c: &mut Criterion) {
 
     let params = gen_srs::<KZGCommitmentScheme<_>>(K as u32);
 
-    for size in [1, 2, 4].iter() {
+    for size in [1, 2].iter() {
         unsafe {
             IMAGE_HEIGHT = size * 4;
             IMAGE_WIDTH = size * 4;
