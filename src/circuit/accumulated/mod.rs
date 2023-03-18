@@ -86,6 +86,11 @@ pub enum Op {
         padding: (usize, usize),
         stride: (usize, usize),
     },
+    SumPool {
+        padding: (usize, usize),
+        stride: (usize, usize),
+        kernel_shape: (usize, usize),
+    },
 }
 
 /// Configuration for an accumulated arg.
@@ -183,6 +188,19 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             Op::Conv { padding, stride } => {
                 layouts::conv(self, layouter, values.try_into()?, padding, stride, offset)
             }
+            Op::SumPool {
+                padding,
+                stride,
+                kernel_shape,
+            } => layouts::sumpool(
+                self,
+                layouter,
+                values.try_into()?,
+                padding,
+                stride,
+                kernel_shape,
+                offset,
+            ),
         }
     }
 }
@@ -592,6 +610,90 @@ mod convtest {
 
         let circuit = ConvCircuit::<F> {
             inputs: [ValTensor::from(image), ValTensor::from(kernels)].to_vec(),
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod sumpooltest {
+    use std::marker::PhantomData;
+
+    use super::*;
+    use crate::tensor::Tensor;
+    use halo2_proofs::{
+        arithmetic::{Field, FieldExt},
+        circuit::{Layouter, SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::{Circuit, ConstraintSystem, Error},
+    };
+    use halo2curves::pasta::pallas;
+    use halo2curves::pasta::Fp as F;
+    use rand::rngs::OsRng;
+
+    const K: usize = 22;
+    const LEN: usize = 100;
+
+    #[derive(Clone)]
+    struct ConvCircuit<F: FieldExt + TensorType> {
+        inputs: Vec<ValTensor<F>>,
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for ConvCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 100000);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 100000);
+            let output =
+                VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true, 100000);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(
+                    &mut layouter,
+                    &self.inputs.clone(),
+                    0,
+                    Op::SumPool {
+                        padding: (1, 1),
+                        stride: (2, 2),
+                        kernel_shape: (3, 3),
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn sumpoolcircuit() {
+        let image_height = 5;
+        let image_width = 7;
+        let in_channels = 3;
+
+        let mut image = Tensor::from(
+            (0..in_channels * image_height * image_width)
+                .map(|_| Value::known(pallas::Base::random(OsRng))),
+        );
+        image.reshape(&[in_channels, image_height, image_width]);
+
+        let circuit = ConvCircuit::<F> {
+            inputs: [ValTensor::from(image)].to_vec(),
             _marker: PhantomData,
         };
 

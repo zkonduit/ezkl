@@ -1,13 +1,13 @@
 use std::error::Error;
 
-use halo2_proofs::circuit::Layouter;
+use halo2_proofs::circuit::{Layouter, Value};
 
 use crate::{
     circuit::{utils, CircuitError},
     tensor::{
         ops::{
             accumulated, affine as non_accum_affine, convolution as non_accum_conv,
-            dot as non_accum_dot, matmul as non_accum_matmul,
+            dot as non_accum_dot, matmul as non_accum_matmul, sumpool as non_accum_sumpool,
         },
         Tensor, TensorError,
     },
@@ -261,6 +261,62 @@ pub fn affine<F: FieldExt + TensorType>(
             assert_eq!(
                 Into::<Tensor<i32>>::into(last_elem.clone().get_inner()?),
                 Into::<Tensor<i32>>::into(safe_affine),
+            )
+        }
+    }
+    Ok(last_elem)
+}
+
+/// Assigns variables to the regions created when calling `configure`.
+/// # Arguments
+/// * `values` - The explicit values to the operations.
+/// * `layouter` - A Halo2 Layouter.
+pub fn sumpool<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    layouter: &mut impl Layouter<F>,
+    values: &[ValTensor<F>],
+    padding: (usize, usize),
+    stride: (usize, usize),
+    kernel_shape: (usize, usize),
+    offset: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let image_channels = values[0].dims()[0];
+
+    let mut kernel = Tensor::from(0..kernel_shape.0 * kernel_shape.1)
+        .map(|_| Value::known(<F as TensorType>::one().unwrap()));
+    kernel.reshape(&[1, 1, kernel_shape.0, kernel_shape.1]);
+
+    let mut res = vec![];
+    for i in 0..image_channels {
+        res.push(conv(
+            config,
+            layouter,
+            &[values[0].get_slice(&[i..i + 1])?, kernel.clone().into()],
+            padding,
+            stride,
+            offset,
+        )?);
+    }
+    let shape = &res[0].dims()[1..];
+    let mut last_elem = res[1..].iter().fold(res[0].clone(), |acc, elem| {
+        acc.concat(elem.clone()).unwrap()
+    });
+    last_elem.reshape(&[&[image_channels], shape].concat())?;
+
+    if matches!(config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(last_elem.clone().get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let safe_sumpool =
+                non_accum_sumpool(&values[0].get_inner()?, padding, stride, kernel_shape)
+                    .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+            assert_eq!(
+                Into::<Tensor<i32>>::into(last_elem.clone().get_inner()?),
+                Into::<Tensor<i32>>::into(safe_sumpool),
             )
         }
     }

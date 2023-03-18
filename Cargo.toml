@@ -84,6 +84,15 @@ harness = false
 
 
 [[bench]]
+name = "sumpool"
+harness = false
+
+[[bench]]
+name = "accum_sumpool"
+harness = false
+
+
+[[bench]]
 name = "relu"
 harness = false
 

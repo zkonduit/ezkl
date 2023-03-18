@@ -362,7 +362,7 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         }
     }
 
-    /// Calls `tile` on the inner [Tensor].
+    /// Calls `concats` on the inner [Tensor].
     pub fn concat(&self, other: Self) -> Result<Self, TensorError> {
         let res = match (self, other) {
             (ValTensor::Value { inner: v1, .. }, ValTensor::Value { inner: v2, .. }) => {
