@@ -16,7 +16,7 @@ use rand::rngs::OsRng;
 
 static mut IMAGE_HEIGHT: usize = 2;
 static mut IMAGE_WIDTH: usize = 2;
-static mut IN_CHANNELS: usize = 1;
+static mut IN_CHANNELS: usize = 3;
 
 const K: usize = 17;
 
@@ -75,7 +75,7 @@ impl Circuit<Fr> for MyCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        let _output = config.layout(&mut layouter, &[self.image.clone()]);
+        let _output = config.layout(&mut layouter, &[self.image.clone()]).unwrap();
         Ok(())
     }
 }
@@ -89,7 +89,6 @@ fn runsumpool(c: &mut Criterion) {
         unsafe {
             IMAGE_HEIGHT = size * 4;
             IMAGE_WIDTH = size * 4;
-            IN_CHANNELS = 1;
 
             let mut image = Tensor::from(
                 (0..IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH)

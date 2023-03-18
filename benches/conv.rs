@@ -94,10 +94,12 @@ impl Circuit<Fr> for MyCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        let _output = config.layout(
-            &mut layouter,
-            &[self.image.clone(), self.kernel.clone(), self.bias.clone()],
-        );
+        let _output = config
+            .layout(
+                &mut layouter,
+                &[self.image.clone(), self.kernel.clone(), self.bias.clone()],
+            )
+            .unwrap();
         Ok(())
     }
 }
