@@ -81,6 +81,10 @@ jobs:
         run: cargo bench --verbose --bench conv
       - name: Bench accum conv
         run: cargo bench --verbose --bench accum_conv
+      - name: Bench sumpool
+        run: cargo bench --verbose --bench sumpool
+      - name: Bench accum sumpool
+        run: cargo bench --verbose --bench accum_sumpool
 
   docs:
     runs-on: ubuntu-latest

@@ -79,7 +79,7 @@ impl Circuit<Fr> for MyCircuit {
 }
 
 fn runcnvrl(c: &mut Criterion) {
-    let mut group = c.benchmark_group("cnvrl");
+    let mut group = c.benchmark_group("accum_conv");
 
     let params = gen_srs::<KZGCommitmentScheme<_>>(K as u32);
 
