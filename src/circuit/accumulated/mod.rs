@@ -22,6 +22,9 @@ use std::{
 pub enum BaseOp {
     Dot,
     InitDot,
+    Add,
+    Mult,
+    Sub,
 }
 
 #[allow(missing_docs)]
@@ -43,6 +46,9 @@ impl BaseOp {
         match &self {
             BaseOp::InitDot => a * b,
             BaseOp::Dot => a * b + m,
+            BaseOp::Add => a + b,
+            BaseOp::Sub => a - b,
+            BaseOp::Mult => a * b,
         }
     }
 
@@ -50,18 +56,27 @@ impl BaseOp {
         match self {
             BaseOp::InitDot => "INITDOT",
             BaseOp::Dot => "DOT",
+            BaseOp::Add => "ADD",
+            BaseOp::Sub => "SUB",
+            BaseOp::Mult => "MULT",
         }
     }
     fn query_offset_rng(&self) -> (i32, usize) {
         match self {
             BaseOp::InitDot => (0, 1),
             BaseOp::Dot => (-1, 2),
+            BaseOp::Add => (0, 1),
+            BaseOp::Sub => (0, 1),
+            BaseOp::Mult => (0, 1),
         }
     }
     fn constraint_idx(&self) -> usize {
         match self {
             BaseOp::InitDot => 0,
             BaseOp::Dot => 1,
+            BaseOp::Add => 0,
+            BaseOp::Sub => 0,
+            BaseOp::Mult => 0,
         }
     }
 }
@@ -71,6 +86,9 @@ impl fmt::Display for BaseOp {
         match self {
             BaseOp::InitDot => write!(f, "base accum init dot"),
             BaseOp::Dot => write!(f, "base accum dot"),
+            BaseOp::Add => write!(f, "pairwise add"),
+            BaseOp::Sub => write!(f, "pairwise sub"),
+            BaseOp::Mult => write!(f, "pairwise mult"),
         }
     }
 }
@@ -91,6 +109,9 @@ pub enum Op {
         stride: (usize, usize),
         kernel_shape: (usize, usize),
     },
+    Add,
+    Sub,
+    Mult,
 }
 
 /// Configuration for an accumulated arg.
@@ -124,7 +145,10 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             // we don't support multiple columns rn
             assert!(input.num_cols() == 1);
         }
+        selectors.insert(BaseOp::Add, meta.selector());
+        selectors.insert(BaseOp::Sub, meta.selector());
         selectors.insert(BaseOp::Dot, meta.selector());
+        selectors.insert(BaseOp::Mult, meta.selector());
         selectors.insert(BaseOp::InitDot, meta.selector());
 
         let config = Self {
@@ -201,6 +225,9 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                 kernel_shape,
                 offset,
             ),
+            Op::Add => layouts::pairwise(self, layouter, values.try_into()?, offset, BaseOp::Add),
+            Op::Sub => layouts::pairwise(self, layouter, values.try_into()?, offset, BaseOp::Sub),
+            Op::Mult => layouts::pairwise(self, layouter, values.try_into()?, offset, BaseOp::Mult),
         }
     }
 }
@@ -694,6 +721,207 @@ mod sumpooltest {
 
         let circuit = ConvCircuit::<F> {
             inputs: [ValTensor::from(image)].to_vec(),
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod addtest {
+    use super::*;
+    use halo2_proofs::{
+        arithmetic::FieldExt,
+        circuit::{Layouter, SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::{Circuit, ConstraintSystem, Error},
+    };
+    // use halo2curves::pasta::pallas;
+    use halo2curves::pasta::Fp as F;
+    // use rand::rngs::OsRng;
+
+    const K: usize = 4;
+    const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Add)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn addcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let b = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod subtest {
+    use super::*;
+    use halo2_proofs::{
+        arithmetic::FieldExt,
+        circuit::{Layouter, SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::{Circuit, ConstraintSystem, Error},
+    };
+    // use halo2curves::pasta::pallas;
+    use halo2curves::pasta::Fp as F;
+    // use rand::rngs::OsRng;
+
+    const K: usize = 4;
+    const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Sub)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn subcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let b = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod multtest {
+    use super::*;
+    use halo2_proofs::{
+        arithmetic::FieldExt,
+        circuit::{Layouter, SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::{Circuit, ConstraintSystem, Error},
+    };
+    // use halo2curves::pasta::pallas;
+    use halo2curves::pasta::Fp as F;
+    // use rand::rngs::OsRng;
+
+    const K: usize = 4;
+    const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Mult)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn multcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let b = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
             _marker: PhantomData,
         };
 

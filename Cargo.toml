@@ -67,6 +67,14 @@ name = "accum_dot"
 harness = false
 
 [[bench]]
+name = "add"
+harness = false
+
+[[bench]]
+name = "pairwise_add"
+harness = false
+
+[[bench]]
 name = "matmul"
 harness = false
 
