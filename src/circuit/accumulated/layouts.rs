@@ -1,3 +1,4 @@
+use core::panic;
 use std::error::Error;
 
 use halo2_proofs::circuit::{Layouter, Value};
@@ -6,14 +7,16 @@ use crate::{
     circuit::{utils, CircuitError},
     tensor::{
         ops::{
-            accumulated, affine as non_accum_affine, convolution as non_accum_conv,
-            dot as non_accum_dot, matmul as non_accum_matmul, sumpool as non_accum_sumpool,
+            accumulated, add, affine as non_accum_affine, convolution as non_accum_conv,
+            dot as non_accum_dot, matmul as non_accum_matmul, mult, sub,
+            sumpool as non_accum_sumpool,
         },
         Tensor, TensorError,
     },
 };
 
 use super::*;
+
 /// Assigns variables to the regions created when calling `configure`.
 /// # Arguments
 /// * `values` - The explicit values to the operations.
@@ -86,6 +89,73 @@ pub fn dot<F: FieldExt + TensorType>(
             }
             // last element is the result
             Ok(last_elem)
+        },
+    ) {
+        Ok(a) => a,
+        Err(e) => {
+            return Err(Box::new(e));
+        }
+    };
+
+    Ok(ValTensor::from(t))
+}
+
+/// Assigns variables to the regions created when calling `configure`.
+/// # Arguments
+/// * `values` - The explicit values to the operations.
+/// * `layouter` - A Halo2 Layouter.
+pub fn pairwise<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    layouter: &mut impl Layouter<F>,
+    values: &[ValTensor<F>; 2],
+    offset: usize,
+    op: BaseOp,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    if values.len() != config.inputs.len() {
+        return Err(Box::new(CircuitError::DimMismatch(
+            "accum dot layout".to_string(),
+        )));
+    }
+
+    let t = match layouter.assign_region(
+        || "assign inputs",
+        |mut region| {
+            let mut inputs = vec![];
+            for (i, input) in values.iter().enumerate() {
+                let inp = utils::value_muxer(
+                    &config.inputs[i],
+                    &{
+                        let res = config.inputs[i].assign(&mut region, offset, input)?;
+                        res.map(|e| e.value_field().evaluate())
+                    },
+                    input,
+                );
+                inputs.push(inp);
+            }
+
+            // Now we can assign the dot product
+            let op_result = match op {
+                BaseOp::Add => add(&inputs),
+                BaseOp::Sub => sub(&inputs),
+                BaseOp::Mult => mult(&inputs),
+                _ => panic!(),
+            }
+            .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+            let output = config
+                .output
+                .assign(&mut region, offset, &op_result.into())?;
+
+            for i in 0..inputs[0].len() {
+                let (_, y) = config.inputs[0].cartesian_coord(i);
+                config
+                    .selectors
+                    .get(&op)
+                    .unwrap()
+                    .enable(&mut region, offset + y)?;
+            }
+
+            Ok(output)
         },
     ) {
         Ok(a) => a,
