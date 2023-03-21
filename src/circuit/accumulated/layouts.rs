@@ -9,7 +9,8 @@ use crate::{
         ops::{
             accumulated, add, affine as non_accum_affine, convolution as non_accum_conv,
             dot as non_accum_dot, matmul as non_accum_matmul, mult,
-            scale_and_shift as ref_scale_and_shift, sub, sumpool as non_accum_sumpool,
+            scale_and_shift as ref_scale_and_shift, sub, sum as non_accum_sum,
+            sumpool as non_accum_sumpool,
         },
         Tensor, TensorError,
     },
@@ -27,12 +28,6 @@ pub fn dot<F: FieldExt + TensorType>(
     values: &[ValTensor<F>; 2],
     offset: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    if values.len() != config.inputs.len() {
-        return Err(Box::new(CircuitError::DimMismatch(
-            "accum dot layout".to_string(),
-        )));
-    }
-
     let t = match layouter.assign_region(
         || "assign inputs",
         |mut region| {
@@ -81,6 +76,79 @@ pub fn dot<F: FieldExt + TensorType>(
             if matches!(config.check_mode, CheckMode::SAFE) {
                 let safe_dot = non_accum_dot(&inputs.iter().map(|x| x).collect())
                     .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+                assert_eq!(
+                    Into::<Tensor<i32>>::into(last_elem.clone()),
+                    Into::<Tensor<i32>>::into(safe_dot),
+                )
+            }
+            // last element is the result
+            Ok(last_elem)
+        },
+    ) {
+        Ok(a) => a,
+        Err(e) => {
+            return Err(Box::new(e));
+        }
+    };
+
+    Ok(ValTensor::from(t))
+}
+
+/// Assigns variables to the regions created when calling `configure`.
+/// # Arguments
+/// * `values` - The explicit values to the operations.
+/// * `layouter` - A Halo2 Layouter.
+pub fn sum<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    layouter: &mut impl Layouter<F>,
+    values: &[ValTensor<F>; 1],
+    offset: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let t = match layouter.assign_region(
+        || "assign inputs",
+        |mut region| {
+            let input = utils::value_muxer(
+                &config.inputs[0],
+                &{
+                    let res = config.inputs[0].assign(&mut region, offset, &values[0])?;
+                    res.map(|e| e.value_field().evaluate())
+                },
+                &values[0],
+            );
+
+            // Now we can assign the dot product
+            let accumulated_sum = accumulated::sum(&input)
+                .expect("accum poly: sum op failed")
+                .into();
+            let output = config
+                .output
+                .assign(&mut region, offset, &accumulated_sum)?;
+
+            for i in 0..input.len() {
+                let (_, y) = config.inputs[0].cartesian_coord(i);
+                if y == 0 {
+                    config
+                        .selectors
+                        .get(&BaseOp::Identity)
+                        .unwrap()
+                        .enable(&mut region, offset + y)?;
+                } else {
+                    config
+                        .selectors
+                        .get(&BaseOp::Sum)
+                        .unwrap()
+                        .enable(&mut region, offset + y)?;
+                }
+            }
+
+            let last_elem = output
+                .get_slice(&[output.len() - 1..output.len()])
+                .expect("accum poly: failed to fetch last elem");
+
+            if matches!(config.check_mode, CheckMode::SAFE) {
+                let safe_dot =
+                    non_accum_sum(&input).map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
 
                 assert_eq!(
                     Into::<Tensor<i32>>::into(last_elem.clone()),

@@ -22,9 +22,11 @@ use std::{
 pub enum BaseOp {
     Dot,
     InitDot,
+    Identity,
     Add,
     Mult,
     Sub,
+    Sum,
 }
 
 #[allow(missing_docs)]
@@ -47,6 +49,8 @@ impl BaseOp {
             BaseOp::InitDot => a * b,
             BaseOp::Dot => a * b + m,
             BaseOp::Add => a + b,
+            BaseOp::Identity => a,
+            BaseOp::Sum => a + m,
             BaseOp::Sub => a - b,
             BaseOp::Mult => a * b,
         }
@@ -55,41 +59,52 @@ impl BaseOp {
     fn as_str(&self) -> &'static str {
         match self {
             BaseOp::InitDot => "INITDOT",
+            BaseOp::Identity => "IDENTITY",
             BaseOp::Dot => "DOT",
             BaseOp::Add => "ADD",
             BaseOp::Sub => "SUB",
             BaseOp::Mult => "MULT",
+            BaseOp::Sum => "SUM",
         }
     }
     fn query_offset_rng(&self) -> (i32, usize) {
         match self {
             BaseOp::InitDot => (0, 1),
+            BaseOp::Identity => (0, 1),
             BaseOp::Dot => (-1, 2),
             BaseOp::Add => (0, 1),
             BaseOp::Sub => (0, 1),
             BaseOp::Mult => (0, 1),
+            BaseOp::Sum => (-1, 2),
+        }
+    }
+    fn num_inputs(&self) -> usize {
+        match self {
+            BaseOp::InitDot => 2,
+            BaseOp::Identity => 1,
+            BaseOp::Dot => 2,
+            BaseOp::Add => 2,
+            BaseOp::Sub => 2,
+            BaseOp::Mult => 2,
+            BaseOp::Sum => 1,
         }
     }
     fn constraint_idx(&self) -> usize {
         match self {
             BaseOp::InitDot => 0,
+            BaseOp::Identity => 0,
             BaseOp::Dot => 1,
             BaseOp::Add => 0,
             BaseOp::Sub => 0,
             BaseOp::Mult => 0,
+            BaseOp::Sum => 1,
         }
     }
 }
 
 impl fmt::Display for BaseOp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            BaseOp::InitDot => write!(f, "base accum init dot"),
-            BaseOp::Dot => write!(f, "base accum dot"),
-            BaseOp::Add => write!(f, "pairwise add"),
-            BaseOp::Sub => write!(f, "pairwise sub"),
-            BaseOp::Mult => write!(f, "pairwise mult"),
-        }
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -118,6 +133,7 @@ pub enum Op {
     BatchNorm,
     ScaleAndShift,
     Pad(usize, usize),
+    Sum,
 }
 
 /// Configuration for an accumulated arg.
@@ -154,8 +170,10 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         selectors.insert(BaseOp::Add, meta.selector());
         selectors.insert(BaseOp::Sub, meta.selector());
         selectors.insert(BaseOp::Dot, meta.selector());
+        selectors.insert(BaseOp::Sum, meta.selector());
         selectors.insert(BaseOp::Mult, meta.selector());
         selectors.insert(BaseOp::InitDot, meta.selector());
+        selectors.insert(BaseOp::Identity, meta.selector());
 
         let config = Self {
             selectors,
@@ -169,16 +187,13 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             meta.create_gate(base_op.as_str(), |meta| {
                 let selector = meta.query_selector(*selector);
 
-                let qis = config
-                    .inputs
-                    .iter()
-                    .map(|input| {
-                        input
-                            .query_rng(meta, 0, 1)
-                            .expect("accum: input query failed")[0]
-                            .clone()
-                    })
-                    .collect::<Vec<_>>();
+                let mut qis = vec![Expression::<F>::zero().unwrap(); 2];
+                for i in 0..base_op.num_inputs() {
+                    qis[i] = config.inputs[i]
+                        .query_rng(meta, 0, 1)
+                        .expect("accum: input query failed")[0]
+                        .clone()
+                }
 
                 // Get output expressions for each input channel
                 let (offset, rng) = base_op.query_offset_rng();
@@ -213,6 +228,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
     ) -> Result<ValTensor<F>, Box<dyn Error>> {
         match op {
             Op::Dot => layouts::dot(self, layouter, values.try_into()?, offset),
+            Op::Sum => layouts::sum(self, layouter, values.try_into()?, offset),
             Op::Matmul => layouts::matmul(self, layouter, values.try_into()?, offset),
             Op::Affine => layouts::affine(self, layouter, values.try_into()?, offset),
             Op::Conv { padding, stride } => {
@@ -379,6 +395,71 @@ mod dottest {
 
         let circuit = MyCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod sumtest {
+    use super::*;
+    use halo2_proofs::{
+        arithmetic::FieldExt,
+        circuit::{Layouter, SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::{Circuit, ConstraintSystem, Error},
+    };
+    // use halo2curves::pasta::pallas;
+    use halo2curves::pasta::Fp as F;
+    // use rand::rngs::OsRng;
+
+    const K: usize = 4;
+    const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 1],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Sum)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn sumcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a)],
             _marker: PhantomData,
         };
 
