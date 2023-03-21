@@ -7,7 +7,7 @@ use halo2_proofs::{
 };
 use halo2curves::FieldExt;
 
-use crate::tensor::{Tensor, TensorType, ValTensor, VarTensor};
+use crate::tensor::{Tensor, TensorError, TensorType, ValTensor, VarTensor};
 use std::{
     collections::BTreeMap,
     error::Error,
@@ -117,6 +117,7 @@ pub enum Op {
     Flatten(Vec<usize>),
     BatchNorm,
     ScaleAndShift,
+    Pad(usize, usize),
 }
 
 /// Configuration for an accumulated arg.
@@ -238,6 +239,14 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             Op::BatchNorm => layouts::scale_and_shift(self, layouter, values.try_into()?, offset),
             Op::ScaleAndShift => {
                 layouts::scale_and_shift(self, layouter, values.try_into()?, offset)
+            }
+            Op::Pad(p1, p2) => {
+                if values.len() != 1 {
+                    return Err(Box::new(TensorError::DimError));
+                }
+                let mut input = values[0].clone();
+                input.pad((p1, p2))?;
+                Ok(input)
             }
         }
     }
