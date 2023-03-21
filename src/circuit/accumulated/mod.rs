@@ -112,6 +112,11 @@ pub enum Op {
     Add,
     Sub,
     Mult,
+    Identity,
+    Reshape(Vec<usize>),
+    Flatten(Vec<usize>),
+    BatchNorm,
+    ScaleAndShift,
 }
 
 /// Configuration for an accumulated arg.
@@ -228,6 +233,12 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             Op::Add => layouts::pairwise(self, layouter, values.try_into()?, offset, BaseOp::Add),
             Op::Sub => layouts::pairwise(self, layouter, values.try_into()?, offset, BaseOp::Sub),
             Op::Mult => layouts::pairwise(self, layouter, values.try_into()?, offset, BaseOp::Mult),
+            Op::Identity => layouts::identity(values.try_into()?),
+            Op::Reshape(d) | Op::Flatten(d) => layouts::reshape(values.try_into()?, &d),
+            Op::BatchNorm => layouts::scale_and_shift(self, layouter, values.try_into()?, offset),
+            Op::ScaleAndShift => {
+                layouts::scale_and_shift(self, layouter, values.try_into()?, offset)
+            }
         }
     }
 }
@@ -359,6 +370,80 @@ mod dottest {
 
         let circuit = MyCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod batchnormtest {
+    use std::marker::PhantomData;
+
+    use super::*;
+    use crate::tensor::Tensor;
+    use halo2_proofs::{
+        arithmetic::FieldExt,
+        circuit::{Layouter, SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::{Circuit, ConstraintSystem, Error},
+    };
+    // use halo2curves::pasta::pallas;
+    use halo2curves::pasta::Fp as F;
+    // use rand::rngs::OsRng;
+
+    const K: usize = 9;
+    const LEN: usize = 3;
+
+    #[derive(Clone)]
+    struct AffineCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 3],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for AffineCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::BatchNorm)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn batchnormcircuit() {
+        // parameters
+        let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        w.reshape(&[LEN]);
+
+        let mut b = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        b.reshape(&[LEN]);
+
+        let mut x = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        x.reshape(&[LEN]);
+
+        let circuit = AffineCircuit::<F> {
+            inputs: [ValTensor::from(x), ValTensor::from(w), ValTensor::from(b)],
             _marker: PhantomData,
         };
 
