@@ -8,8 +8,8 @@ use crate::{
     tensor::{
         ops::{
             accumulated, add, affine as non_accum_affine, convolution as non_accum_conv,
-            dot as non_accum_dot, matmul as non_accum_matmul, mult, sub,
-            sumpool as non_accum_sumpool,
+            dot as non_accum_dot, matmul as non_accum_matmul, mult,
+            scale_and_shift as ref_scale_and_shift, sub, sumpool as non_accum_sumpool,
         },
         Tensor, TensorError,
     },
@@ -503,5 +503,66 @@ pub fn conv<F: FieldExt + TensorType>(
         }
     }
 
+    Ok(res)
+}
+
+/// Assigns variables to the regions created when calling `configure`.
+/// # Arguments
+/// * `values` - The explicit values to the operations.
+/// * `layouter` - A Halo2 Layouter.
+pub fn reshape<F: FieldExt + TensorType>(
+    values: &[ValTensor<F>; 1],
+    new_dims: &[usize],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let mut t = values[0].clone();
+    t.reshape(new_dims)?;
+    Ok(t)
+}
+
+/// Assigns variables to the regions created when calling `configure`.
+/// # Arguments
+/// * `values` - The explicit values to the operations.
+/// * `layouter` - A Halo2 Layouter.
+pub fn identity<F: FieldExt + TensorType>(
+    values: &[ValTensor<F>; 1],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    Ok(values[0].clone())
+}
+
+/// Assigns variables to the regions created when calling `configure`.
+/// # Arguments
+/// * `values` - The explicit values to the operations.
+/// * `layouter` - A Halo2 Layouter.
+pub fn scale_and_shift<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    layouter: &mut impl Layouter<F>,
+    values: &[ValTensor<F>; 3],
+    offset: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let (input, kernel, bias) = (values[0].clone(), values[1].clone(), values[2].clone());
+    let prod = pairwise(config, layouter, &[input, kernel], offset, BaseOp::Mult)?;
+    let res = pairwise(config, layouter, &[prod, bias], offset, BaseOp::Add)?;
+
+    if matches!(config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(res.clone().get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let ref_scale_and_shift = ref_scale_and_shift(
+                &values
+                    .iter()
+                    .map(|x| x.get_inner().unwrap())
+                    .collect::<Vec<Tensor<_>>>(),
+            )
+            .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+            assert_eq!(
+                Into::<Tensor<i32>>::into(res.get_inner()?),
+                Into::<Tensor<i32>>::into(ref_scale_and_shift),
+            )
+        }
+    };
     Ok(res)
 }
