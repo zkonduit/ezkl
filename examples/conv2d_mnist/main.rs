@@ -1,7 +1,7 @@
-use ezkl_lib::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
-use ezkl_lib::circuit::polynomial::{
+use ezkl_lib::circuit::fused::{
     Config as PolyConfig, InputType as PolyInputType, Node as PolyNode, Op as PolyOp,
 };
+use ezkl_lib::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
 use ezkl_lib::fieldutils;
 use ezkl_lib::fieldutils::i32_to_felt;
 use ezkl_lib::tensor::*;
