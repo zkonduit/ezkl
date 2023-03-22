@@ -1,5 +1,8 @@
 from torch import nn
-from ezkl import export
+import importlib.util as imputil
+spec = imputil.spec_from_file_location("exporter", "/Users/siddharthaalluri/Desktop/0xPARC/ezkl/examples/onnx/exporter.py")   
+exp = imputil.module_from_spec(spec)       
+spec.loader.exec_module(exp)
 
 class Circuit(nn.Module):
     def __init__(self, inplace=False):
@@ -8,9 +11,8 @@ class Circuit(nn.Module):
     def forward(self, x):
         return x/ 10
 
-
 circuit = Circuit()
-export(circuit, input_shape = [1])
+exp.export(circuit, input_shape = [1])
 
 
     

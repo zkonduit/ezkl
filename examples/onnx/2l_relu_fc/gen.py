@@ -1,6 +1,9 @@
 from torch import nn
 import torch.nn.init as init
-from ezkl import export
+import importlib.util as imputil
+spec = imputil.spec_from_file_location("exporter", "/Users/siddharthaalluri/Desktop/0xPARC/ezkl/examples/onnx/exporter.py")   
+exp = imputil.module_from_spec(spec)       
+spec.loader.exec_module(exp)
 
 class Model(nn.Module):
     def __init__(self, inplace=False):
@@ -20,4 +23,4 @@ class Model(nn.Module):
         init.orthogonal_(self.aff1.weight)
 
 circuit = Model()
-export(circuit, input_shape = [3])
+exp.export(circuit, input_shape = [3])

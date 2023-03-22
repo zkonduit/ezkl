@@ -1,5 +1,6 @@
 target
 data
+*__pycache__
 *.ipynb_checkpoints
 *.ipynb
 *.sol

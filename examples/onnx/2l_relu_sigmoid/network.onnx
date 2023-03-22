@@ -1,19 +1,17 @@
-pytorch1.12.1:¹
-&
-inputonnx::Sigmoid_5Relu_0"Relu
--
-onnx::Sigmoid_5output	Sigmoid_1"Sigmoid	torch_jitZ)
-input 
-
+pytorch2.0.0:Ñ
+6
+input/rellayer/Relu_output_0/rellayer/Relu"Relu
+=
+/rellayer/Relu_output_0output/siglayer/Sigmoid"Sigmoid	torch_jitZ%
+input
+
 
 batch_size
-
 
-b*
-output 
-
+b&
+output
+
 
 batch_size
-
 
-B
+B
