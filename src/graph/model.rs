@@ -1,15 +1,13 @@
 use super::node::*;
 use super::vars::*;
 use super::GraphError;
+use crate::circuit::fused::Config as PolyConfig;
+use crate::circuit::fused::InputType as PolyInputType;
+use crate::circuit::fused::Node as PolyNode;
+use crate::circuit::fused::Op as PolyOp;
 use crate::circuit::lookup::Config as LookupConfig;
 use crate::circuit::lookup::Op as LookupOp;
 use crate::circuit::lookup::Table as LookupTable;
-use crate::circuit::polynomial::Config as PolyConfig;
-use crate::circuit::polynomial::InputType as PolyInputType;
-use crate::circuit::polynomial::Node as PolyNode;
-use crate::circuit::polynomial::Op as PolyOp;
-
-// use crate::circuit::polynomial::InputType as PolyInputType;
 
 use crate::circuit::range::*;
 use crate::commands::RunArgs;

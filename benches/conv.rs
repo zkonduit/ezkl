@@ -3,7 +3,7 @@ use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::gen_srs;
 use ezkl_lib::tensor::*;
-use ezkl_lib::{circuit::polynomial::*, pfsys::create_keys};
+use ezkl_lib::{circuit::fused::*, pfsys::create_keys};
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2_proofs::poly::kzg::strategy::SingleStrategy;
 use halo2_proofs::{

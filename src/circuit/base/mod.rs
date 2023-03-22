@@ -11,7 +11,7 @@ use halo2_proofs::{
 };
 use halo2curves::FieldExt;
 
-use crate::tensor::{Tensor, TensorError, TensorType, ValTensor, VarTensor};
+use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor, VarTensor};
 use std::{
     collections::BTreeMap,
     error::Error,
@@ -140,6 +140,87 @@ pub enum Op {
     Sum,
     Pow(u32),
     Pack(u32, u32),
+    Rescaled {
+        inner: Box<Op>,
+        scale: Vec<(usize, usize)>,
+    },
+}
+
+impl Op {
+    /// Matches a [Op] to an operation in the `tensor::ops` module.
+    pub fn f<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
+        &self,
+        mut inputs: Vec<Tensor<T>>,
+    ) -> Result<Tensor<T>, TensorError> {
+        match &self {
+            Op::Identity => Ok(inputs[0].clone()),
+            Op::Reshape(new_dims) => {
+                let mut t = inputs[0].clone();
+                t.reshape(new_dims);
+                Ok(t)
+            }
+            Op::Flatten(new_dims) => {
+                let mut t = inputs[0].clone();
+                t.reshape(new_dims);
+                Ok(t)
+            }
+            Op::Pad(dim1, dim2) => {
+                if 1 != inputs.len() {
+                    return Err(TensorError::DimMismatch("pad inputs".to_string()));
+                }
+                tensor::ops::pad(&inputs[0], (*dim1, *dim2))
+            }
+            Op::Add => tensor::ops::add(&inputs),
+            Op::Sub => tensor::ops::sub(&inputs),
+            Op::Mult => tensor::ops::mult(&inputs),
+            Op::Affine => tensor::ops::affine(&inputs),
+            Op::BatchNorm => tensor::ops::scale_and_shift(&inputs),
+            Op::ScaleAndShift => tensor::ops::scale_and_shift(&inputs),
+            Op::Matmul => tensor::ops::matmul(&inputs),
+            Op::Dot => tensor::ops::dot(&inputs.iter().map(|x| x).collect()),
+            Op::Conv { padding, stride } => tensor::ops::convolution(&inputs, *padding, *stride),
+            Op::SumPool {
+                padding,
+                stride,
+                kernel_shape,
+            } => tensor::ops::sumpool(&inputs[0], *padding, *stride, *kernel_shape),
+            Op::Pack(base, scale) => {
+                if 1 != inputs.len() {
+                    return Err(TensorError::DimMismatch("pack inputs".to_string()));
+                }
+                // these unwraps should never ever fail if the Tensortypes are correctly implemented
+                // if anything we want these to hard fail if not implemented
+                let mut base_t = T::zero().unwrap();
+                for _ in 0..*base {
+                    base_t = base_t + T::one().unwrap();
+                }
+                tensor::ops::pack(&inputs[0], base_t, *scale)
+            }
+            Op::Pow(u) => {
+                if 1 != inputs.len() {
+                    return Err(TensorError::DimMismatch("pow inputs".to_string()));
+                }
+                inputs[0].pow(*u)
+            }
+            Op::Sum => {
+                if 1 != inputs.len() {
+                    return Err(TensorError::DimMismatch("sum inputs".to_string()));
+                }
+                tensor::ops::sum(&inputs[0])
+            }
+            Op::Rescaled { inner, scale } => {
+                if scale.len() != inputs.len() {
+                    return Err(TensorError::DimMismatch("rescaled inputs".to_string()));
+                }
+
+                let mut rescaled_inputs = vec![];
+                for (i, ri) in inputs.iter_mut().enumerate() {
+                    rescaled_inputs.push(tensor::ops::rescale(ri, scale[i].1)?);
+                }
+                Ok(inner.f(rescaled_inputs)?)
+            }
+        }
+    }
 }
 
 /// Configuration for an accumulated arg.
@@ -273,6 +354,17 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             Op::Pow(exp) => layouts::pow(self, layouter, values.try_into()?, exp, offset),
             Op::Pack(base, scale) => {
                 layouts::pack(self, layouter, values.try_into()?, base, scale, offset)
+            }
+            Op::Rescaled { inner, scale } => {
+                if scale.len() != values.len() {
+                    return Err(Box::new(TensorError::DimMismatch(
+                        "rescaled inputs".to_string(),
+                    )));
+                }
+
+                let res =
+                    &layouts::rescale(self, layouter, values.try_into()?, &scale, offset)?[..];
+                self.layout(layouter, res, offset, *inner)
             }
         }
     }

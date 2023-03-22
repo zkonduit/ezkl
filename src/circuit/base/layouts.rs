@@ -9,8 +9,8 @@ use crate::{
         ops::{
             accumulated, add, affine as non_accum_affine, convolution as non_accum_conv,
             dot as non_accum_dot, matmul as non_accum_matmul, mult, pack as non_accum_pack,
-            scale_and_shift as ref_scale_and_shift, sub, sum as non_accum_sum,
-            sumpool as non_accum_sumpool,
+            rescale as ref_rescaled, scale_and_shift as ref_scale_and_shift, sub,
+            sum as non_accum_sum, sumpool as non_accum_sumpool,
         },
         Tensor, TensorError,
     },
@@ -608,6 +608,51 @@ pub fn pow<F: FieldExt + TensorType>(
     }
 
     Ok(t)
+}
+
+/// Assigns variables to the regions created when calling `configure`.
+/// # Arguments
+/// * `values` - The explicit values to the operations.
+/// * `layouter` - A Halo2 Layouter.
+pub fn rescale<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    layouter: &mut impl Layouter<F>,
+    values: &[ValTensor<F>; 1],
+    scales: &[(usize, usize)],
+    offset: usize,
+) -> Result<Vec<ValTensor<F>>, Box<dyn Error>> {
+    let mut rescaled_inputs = vec![];
+    for (i, ri) in values.iter().enumerate() {
+        let num_elems = ri.dims().iter().product::<usize>();
+        let mult = Value::known(F::from(scales[i].1 as u64));
+        let mult_tensor = Tensor::new(Some(&vec![mult; num_elems]), ri.dims())?;
+        let scaled_input = pairwise(
+            config,
+            layouter,
+            &[ri.clone(), mult_tensor.into()],
+            offset,
+            BaseOp::Mult,
+        )?;
+        if matches!(config.check_mode, CheckMode::SAFE) {
+            // during key generation this will be 0 so we use this as a flag to check
+            // TODO: this isn't very safe and would be better to get the phase directly
+            let is_assigned = !Into::<Tensor<i32>>::into(scaled_input.clone().get_inner()?)
+                .iter()
+                .all(|&x| x == 0);
+            if is_assigned {
+                let safe_rescale = ref_rescaled(&ri.get_inner().unwrap(), scales[i].1)
+                    .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+                assert_eq!(
+                    Into::<Tensor<i32>>::into(scaled_input.get_inner()?),
+                    Into::<Tensor<i32>>::into(safe_rescale),
+                )
+            }
+        }
+        rescaled_inputs.push(scaled_input);
+    }
+
+    Ok(rescaled_inputs)
 }
 
 /// Assigns variables to the regions created when calling `configure`.

@@ -1,4 +1,4 @@
-use crate::circuit::accumulated::*;
+use crate::circuit::base::*;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -844,6 +844,71 @@ mod pack {
     fn packcircuit() {
         // parameters
         let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod rescaled {
+    use super::*;
+
+    const K: usize = 8;
+    const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 1],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(
+                    &mut layouter,
+                    &self.inputs.clone(),
+                    0,
+                    Op::Rescaled {
+                        inner: Box::new(Op::Sum),
+                        scale: vec![(0, 5)],
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn rescaledcircuit() {
+        // parameters
+        let mut a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+        a.reshape(&[LEN, 1]);
 
         let circuit = MyCircuit::<F> {
             inputs: [ValTensor::from(a)],

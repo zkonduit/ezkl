@@ -1,8 +1,8 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
+use crate::circuit::fused::Config as PolyConfig;
+use crate::circuit::fused::Op as PolyOp;
 use crate::circuit::lookup::Config as LookupConfig;
 use crate::circuit::lookup::Op as LookupOp;
-use crate::circuit::polynomial::Config as PolyConfig;
-use crate::circuit::polynomial::Op as PolyOp;
 use crate::graph::GraphError;
 use crate::tensor::Tensor;
 use crate::tensor::TensorType;
