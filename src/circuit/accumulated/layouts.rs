@@ -8,7 +8,7 @@ use crate::{
     tensor::{
         ops::{
             accumulated, add, affine as non_accum_affine, convolution as non_accum_conv,
-            dot as non_accum_dot, matmul as non_accum_matmul, mult,
+            dot as non_accum_dot, matmul as non_accum_matmul, mult, pack as non_accum_pack,
             scale_and_shift as ref_scale_and_shift, sub, sum as non_accum_sum,
             sumpool as non_accum_sumpool,
         },
@@ -473,9 +473,6 @@ pub fn conv<F: FieldExt + TensorType>(
     stride: (usize, usize),
     offset: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    // assert!(stride.0 == 1);
-    // assert!(stride.1 == 1);
-
     let has_bias = values.len() == 3;
     let (image, kernel) = (values[0].clone(), values[1].clone());
 
@@ -519,18 +516,11 @@ pub fn conv<F: FieldExt + TensorType>(
         stride.1,
     )?;
 
-    // expanded_kernel.downsample(0, stride.0)?;
-    // expanded_kernel.downsample(0, stride.1)?;
-
-    // println!("{:?}", expanded_kernel.dims());
-    // println!("{:?}", padded_image.dims());
-
     let mut res = if has_bias {
         let mut tiled_bias = values[2].clone();
         if (tiled_bias.dims().len() != 1) || (tiled_bias.dims()[0] != kernel.dims()[0]) {
             return Err(Box::new(TensorError::DimMismatch("conv bias".to_string())));
         }
-        // TODO: don't know if this correct
         tiled_bias.repeat_rows(vert_slides * horz_slides)?;
         tiled_bias.flatten();
         tiled_bias.reshape(&[tiled_bias.dims()[0], 1])?;
@@ -618,6 +608,64 @@ pub fn pow<F: FieldExt + TensorType>(
     }
 
     Ok(t)
+}
+
+/// Assigns variables to the regions created when calling `configure`.
+/// # Arguments
+/// * `values` - The explicit values to the operations.
+/// * `layouter` - A Halo2 Layouter.
+pub fn pack<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    layouter: &mut impl Layouter<F>,
+    values: &[ValTensor<F>; 1],
+    base: u32,
+    scale: u32,
+    offset: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let t = values[0].clone();
+
+    // these unwraps should never ever fail if the Tensortypes are correctly implemented
+    // if anything we want these to hard fail if not implemented
+    let mut base_t = <F as TensorType>::zero().unwrap();
+    for _ in 0..base {
+        base_t = base_t + <F as TensorType>::one().unwrap();
+    }
+    let mut accum_base = vec![];
+    let base_tensor = Tensor::new(Some(&vec![base_t]), &[1])?;
+    for i in 0..t.dims().iter().product::<usize>() {
+        accum_base.push(Value::known(base_tensor.pow((i as u32) * (scale + 1))?[0]));
+    }
+
+    let base_tensor = Tensor::new(Some(&accum_base), &[accum_base.len()])?;
+
+    let base_prod = pairwise(
+        config,
+        layouter,
+        &[t, base_tensor.into()],
+        offset,
+        BaseOp::Mult,
+    )?;
+
+    let res = sum(config, layouter, &[base_prod], offset)?;
+
+    if matches!(config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(res.clone().get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let safe_pow = non_accum_pack(&values[0].get_inner()?, Value::known(base_t), scale)
+                .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+            assert_eq!(
+                Into::<Tensor<i32>>::into(res.get_inner()?),
+                Into::<Tensor<i32>>::into(safe_pow),
+            )
+        }
+    }
+
+    Ok(res)
 }
 
 /// Assigns variables to the regions created when calling `configure`.

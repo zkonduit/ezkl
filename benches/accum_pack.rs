@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl_lib::circuit::polynomial::*;
+use ezkl_lib::circuit::accumulated::*;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::{create_keys, gen_srs};
@@ -25,7 +25,7 @@ struct MyCircuit {
 }
 
 impl Circuit<Fr> for MyCircuit {
-    type Config = Config<Fr>;
+    type Config = BaseConfig<Fr>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -35,14 +35,11 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
-        let output = VarTensor::new_advice(cs, K, len, vec![1], true, 512);
-        let sum_node = Node {
-            op: Op::Sum,
-            input_order: vec![InputType::Input(0)],
-        };
+        let a = VarTensor::new_advice(cs, K, len, vec![len], true, 1024);
+        let b = VarTensor::new_advice(cs, K, len, vec![len], true, 1024);
+        let output = VarTensor::new_advice(cs, K, len, vec![len + 1], true, 1024);
 
-        Self::Config::configure(cs, &[a], &output, &[sum_node])
+        Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
     }
 
     fn synthesize(
@@ -50,15 +47,17 @@ impl Circuit<Fr> for MyCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        config.layout(&mut layouter, &self.inputs).unwrap();
+        config
+            .layout(&mut layouter, &self.inputs, 0, Op::Pack(2, 1))
+            .unwrap();
         Ok(())
     }
 }
 
-fn runsum(c: &mut Criterion) {
-    let mut group = c.benchmark_group("sum");
+fn runpack(c: &mut Criterion) {
+    let mut group = c.benchmark_group("accum_pack");
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    for &len in [16].iter() {
+    for &len in [16, 512].iter() {
         unsafe {
             LEN = len;
         };
@@ -103,6 +102,6 @@ fn runsum(c: &mut Criterion) {
 criterion_group! {
   name = benches;
   config = Criterion::default().with_plots();
-  targets = runsum
+  targets = runpack
 }
 criterion_main!(benches);

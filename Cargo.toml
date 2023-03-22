@@ -91,6 +91,14 @@ name = "pairwise_pow"
 harness = false
 
 [[bench]]
+name = "pack"
+harness = false
+
+[[bench]]
+name = "accum_pack"
+harness = false
+
+[[bench]]
 name = "matmul"
 harness = false
 

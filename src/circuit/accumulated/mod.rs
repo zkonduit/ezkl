@@ -139,6 +139,7 @@ pub enum Op {
     Pad(usize, usize),
     Sum,
     Pow(u32),
+    Pack(u32, u32),
 }
 
 /// Configuration for an accumulated arg.
@@ -270,6 +271,9 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                 Ok(input)
             }
             Op::Pow(exp) => layouts::pow(self, layouter, values.try_into()?, exp, offset),
+            Op::Pack(base, scale) => {
+                layouts::pack(self, layouter, values.try_into()?, base, scale, offset)
+            }
         }
     }
 }

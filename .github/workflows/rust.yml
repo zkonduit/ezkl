@@ -93,6 +93,14 @@ jobs:
         run: cargo bench --verbose --bench sum
       - name: Bench accum sum
         run: cargo bench --verbose --bench accum_sum
+      - name: Bench pow
+        run: cargo bench --verbose --bench pow
+      - name: Bench pairwise pow
+        run: cargo bench --verbose --bench pairwise_pow
+      - name: Bench pack
+        run: cargo bench --verbose --bench pack
+      - name: Bench accum pack
+        run: cargo bench --verbose --bench accum_pack
 
   docs:
     runs-on: ubuntu-latest

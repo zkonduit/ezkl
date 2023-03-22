@@ -36,13 +36,13 @@ impl Circuit<Fr> for MyCircuit {
         let len = unsafe { LEN };
 
         let a = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
-        let output = VarTensor::new_advice(cs, K, len, vec![1], true, 512);
-        let sum_node = Node {
-            op: Op::Sum,
+        let output = VarTensor::new_advice(cs, K, 1, vec![1], true, 512);
+        let pack_node = Node {
+            op: Op::Pack(2, 1),
             input_order: vec![InputType::Input(0)],
         };
 
-        Self::Config::configure(cs, &[a], &output, &[sum_node])
+        Self::Config::configure(cs, &[a], &output, &[pack_node])
     }
 
     fn synthesize(
@@ -55,8 +55,8 @@ impl Circuit<Fr> for MyCircuit {
     }
 }
 
-fn runsum(c: &mut Criterion) {
-    let mut group = c.benchmark_group("sum");
+fn runpack(c: &mut Criterion) {
+    let mut group = c.benchmark_group("pack");
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
     for &len in [16].iter() {
         unsafe {
@@ -103,6 +103,6 @@ fn runsum(c: &mut Criterion) {
 criterion_group! {
   name = benches;
   config = Criterion::default().with_plots();
-  targets = runsum
+  targets = runpack
 }
 criterion_main!(benches);
