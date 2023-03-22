@@ -83,6 +83,14 @@ name = "pairwise_add"
 harness = false
 
 [[bench]]
+name = "pow"
+harness = false
+
+[[bench]]
+name = "pairwise_pow"
+harness = false
+
+[[bench]]
 name = "matmul"
 harness = false
 

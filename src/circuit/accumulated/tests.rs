@@ -1,0 +1,800 @@
+use crate::circuit::accumulated::*;
+use halo2_proofs::{
+    arithmetic::FieldExt,
+    circuit::{Layouter, SimpleFloorPlanner, Value},
+    dev::MockProver,
+    plonk::{Circuit, ConstraintSystem, Error},
+};
+use halo2curves::pasta::pallas;
+use halo2curves::pasta::Fp as F;
+use rand::rngs::OsRng;
+use std::marker::PhantomData;
+
+#[cfg(test)]
+mod matmul {
+    use super::*;
+
+    const K: usize = 9;
+    const LEN: usize = 3;
+
+    #[derive(Clone)]
+    struct AffineCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for AffineCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true, 512);
+            let b = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true, 512);
+            let output = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, 1, LEN], true, 512);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Matmul)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn matmulcircuit() {
+        // parameters
+        let mut a = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        a.reshape(&[LEN, LEN]);
+
+        let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        w.reshape(&[LEN, 1]);
+
+        let circuit = AffineCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(w)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod dot {
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Dot)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn dotcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let b = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod sum {
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 1],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Sum)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn sumcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod batchnorm {
+
+    use super::*;
+
+    const K: usize = 9;
+    const LEN: usize = 3;
+
+    #[derive(Clone)]
+    struct AffineCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 3],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for AffineCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::BatchNorm)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn batchnormcircuit() {
+        // parameters
+        let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        w.reshape(&[LEN]);
+
+        let mut b = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        b.reshape(&[LEN]);
+
+        let mut x = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        x.reshape(&[LEN]);
+
+        let circuit = AffineCircuit::<F> {
+            inputs: [ValTensor::from(x), ValTensor::from(w), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod affine {
+    use std::marker::PhantomData;
+
+    use super::*;
+
+    const K: usize = 9;
+    const LEN: usize = 3;
+
+    #[derive(Clone)]
+    struct AffineCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 3],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for AffineCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 512);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 512);
+            let output =
+                VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true, 512);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Affine)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn affinecircuit() {
+        // parameters
+        let mut w = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        w.reshape(&[LEN, LEN]);
+
+        let mut b = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        b.reshape(&[LEN, 1]);
+
+        let mut x = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        x.reshape(&[LEN, 1]);
+
+        let circuit = AffineCircuit::<F> {
+            inputs: [ValTensor::from(x), ValTensor::from(w), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod composition {
+    use super::*;
+
+    const K: usize = 9;
+    const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            // lots of stacked dot products
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Dot)
+                .unwrap();
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), LEN, Op::Dot)
+                .unwrap();
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 2 * LEN, Op::Dot)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn dotcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let b = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod conv {
+    use halo2_proofs::arithmetic::Field;
+
+    use super::*;
+
+    const K: usize = 22;
+    const LEN: usize = 100;
+
+    #[derive(Clone)]
+    struct ConvCircuit<F: FieldExt + TensorType> {
+        inputs: Vec<ValTensor<F>>,
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for ConvCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 100000);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 100000);
+            let output =
+                VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true, 100000);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(
+                    &mut layouter,
+                    &self.inputs.clone(),
+                    0,
+                    Op::Conv {
+                        padding: (1, 1),
+                        stride: (2, 2),
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn convcircuit() {
+        // parameters
+        let kernel_height = 2;
+        let kernel_width = 3;
+        let image_height = 5;
+        let image_width = 7;
+        let in_channels = 3;
+        let out_channels = 2;
+
+        let mut image = Tensor::from(
+            (0..in_channels * image_height * image_width)
+                .map(|_| Value::known(pallas::Base::random(OsRng))),
+        );
+        image.reshape(&[in_channels, image_height, image_width]);
+        let mut kernels = Tensor::from(
+            (0..{ out_channels * in_channels * kernel_height * kernel_width })
+                .map(|_| Value::known(pallas::Base::random(OsRng))),
+        );
+        kernels.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
+
+        let bias =
+            Tensor::from((0..{ out_channels }).map(|_| Value::known(pallas::Base::random(OsRng))));
+
+        let circuit = ConvCircuit::<F> {
+            inputs: [
+                ValTensor::from(image),
+                ValTensor::from(kernels),
+                ValTensor::from(bias),
+            ]
+            .to_vec(),
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+
+    #[test]
+    fn convcircuitnobias() {
+        // parameters
+        let kernel_height = 2;
+        let kernel_width = 2;
+        let image_height = 4;
+        let image_width = 5;
+        let in_channels = 3;
+        let out_channels = 2;
+
+        let mut image = Tensor::from(
+            (0..in_channels * image_height * image_width).map(|i| Value::known(F::from(i as u64))),
+        );
+        image.reshape(&[in_channels, image_height, image_width]);
+        let mut kernels = Tensor::from(
+            (0..{ out_channels * in_channels * kernel_height * kernel_width })
+                .map(|i| Value::known(F::from(i as u64))),
+        );
+        kernels.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
+
+        let circuit = ConvCircuit::<F> {
+            inputs: [ValTensor::from(image), ValTensor::from(kernels)].to_vec(),
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod sumpool {
+    use halo2_proofs::arithmetic::Field;
+
+    use super::*;
+
+    const K: usize = 22;
+    const LEN: usize = 100;
+
+    #[derive(Clone)]
+    struct ConvCircuit<F: FieldExt + TensorType> {
+        inputs: Vec<ValTensor<F>>,
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for ConvCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 100000);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 100000);
+            let output =
+                VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true, 100000);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(
+                    &mut layouter,
+                    &self.inputs.clone(),
+                    0,
+                    Op::SumPool {
+                        padding: (1, 1),
+                        stride: (2, 2),
+                        kernel_shape: (3, 3),
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn sumpoolcircuit() {
+        let image_height = 5;
+        let image_width = 7;
+        let in_channels = 3;
+
+        let mut image = Tensor::from(
+            (0..in_channels * image_height * image_width)
+                .map(|_| Value::known(pallas::Base::random(OsRng))),
+        );
+        image.reshape(&[in_channels, image_height, image_width]);
+
+        let circuit = ConvCircuit::<F> {
+            inputs: [ValTensor::from(image)].to_vec(),
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod add {
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Add)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn addcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let b = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod sub {
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Sub)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn subcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let b = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod mult {
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Mult)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn multcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let b = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod pow {
+    use super::*;
+
+    const K: usize = 8;
+    const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 1],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Pow(5))
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn powcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}

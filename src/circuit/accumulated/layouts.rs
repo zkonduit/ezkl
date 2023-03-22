@@ -578,6 +578,52 @@ pub fn conv<F: FieldExt + TensorType>(
 /// # Arguments
 /// * `values` - The explicit values to the operations.
 /// * `layouter` - A Halo2 Layouter.
+pub fn pow<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    layouter: &mut impl Layouter<F>,
+    values: &[ValTensor<F>; 1],
+    exponent: u32,
+    offset: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let mut t = values[0].clone();
+
+    for _ in 1..exponent {
+        t = pairwise(
+            config,
+            layouter,
+            &[t, values[0].clone()],
+            offset,
+            BaseOp::Mult,
+        )?;
+    }
+
+    if matches!(config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(t.clone().get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let safe_pow = values[0]
+                .get_inner()
+                .unwrap()
+                .pow(exponent)
+                .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+            assert_eq!(
+                Into::<Tensor<i32>>::into(t.get_inner()?),
+                Into::<Tensor<i32>>::into(safe_pow),
+            )
+        }
+    }
+
+    Ok(t)
+}
+
+/// Assigns variables to the regions created when calling `configure`.
+/// # Arguments
+/// * `values` - The explicit values to the operations.
+/// * `layouter` - A Halo2 Layouter.
 pub fn reshape<F: FieldExt + TensorType>(
     values: &[ValTensor<F>; 1],
     new_dims: &[usize],
