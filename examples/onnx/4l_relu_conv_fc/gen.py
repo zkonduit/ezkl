@@ -1,5 +1,8 @@
 from torch import nn
-from ezkl import export
+import importlib.util as imputil
+spec = imputil.spec_from_file_location("exporter", "/Users/siddharthaalluri/Desktop/0xPARC/ezkl/examples/onnx/exporter.py")   
+exp = imputil.module_from_spec(spec)       
+spec.loader.exec_module(exp)
 
 class MyModel(nn.Module):
     def __init__(self):
@@ -9,7 +12,7 @@ class MyModel(nn.Module):
         self.conv2 = nn.Conv2d(in_channels=2, out_channels=3, kernel_size=5, stride=2)
         
         self.relu = nn.ReLU()
-
+        self.flat = nn.Flatten(0)
         self.d1 = nn.Linear(48, 48)
         self.d2 = nn.Linear(48, 10)
 
@@ -21,7 +24,7 @@ class MyModel(nn.Module):
         x = self.relu(x)
 
         # flatten => 32 x (32*26*26)
-        x = x.flatten(start_dim = 1)
+        x = self.flat(x)
     #    x = x.flatten()
 
         # 32 x (32*26*26) => 32x128
@@ -34,7 +37,7 @@ class MyModel(nn.Module):
         return logits
 
 circuit = MyModel()
-export(circuit, input_shape = [1,28,28])
+exp.export(circuit, input_shape = [1,28,28])
 
 
     

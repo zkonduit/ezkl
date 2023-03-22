@@ -1,13 +1,11 @@
-pytorch1.13.1:p
+pytorch2.0.0:h
 
-inputoutput/Sqrt"Sqrt	torch_jitZ!
-input
-
+inputoutput/Sqrt"Sqrt	torch_jitZ
+input
+
 
-batch_size
-b"
-output
-
+batch_sizeb
+output
+
 
-batch_size
-B
+batch_sizeB

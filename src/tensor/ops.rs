@@ -708,6 +708,7 @@ where
 
 /// Activation functions
 pub mod nonlinearities {
+
     use super::*;
     /// Elementwise applies sigmoid to a tensor of integers.
     /// # Arguments
@@ -740,7 +741,7 @@ pub mod nonlinearities {
         output
     }
 
-    /// Elementwise applies sigmoid to a tensor of integers.
+    /// Elementwise applies square root to a tensor of integers.
     /// # Arguments
     ///
     /// * `a` - Tensor
@@ -768,6 +769,40 @@ pub mod nonlinearities {
             let rounded = fout.round();
             output[i] = rounded as i128;
         }
+        output
+    }
+
+    /// Elementwise applies tanh activation to a tensor of integers.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::sqrt;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[4, 25, 8, 1, 1, 0]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = tanh(&x, 1, 1);
+    /// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 0, 0, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+
+    pub fn tanh(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        let mut output = a.clone();
+        
+        for i in 0..a.len(){
+            let z = a[i].clone() as f32 / (scale_input as f32);
+            let numerator = z.exp() - (1.0/z.exp());
+            let denominator = z.exp() + (1.0/z.exp());
+            let tanhz = (scale_output as f32) * (numerator/denominator);
+            output[i] = tanhz as i128;
+            
+        }
+
         output
     }
 

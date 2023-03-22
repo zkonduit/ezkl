@@ -1,14 +1,12 @@
-pytorch1.12.1:Œ
-8
-inputoutputLeakyRelu_0"	LeakyRelu*
-alphaÍÌL= 	torch_jitZ!
-input
-
+pytorch2.0.0:‰
+=
+inputoutput/layer/LeakyRelu"	LeakyRelu*
+alphaÍÌL= 	torch_jitZ
+input
+
 
-batch_size
-b"
-output
-
+batch_sizeb
+output
+
 
-batch_size
-B
+batch_sizeB
