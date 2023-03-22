@@ -67,6 +67,14 @@ name = "accum_dot"
 harness = false
 
 [[bench]]
+name = "sum"
+harness = false
+
+[[bench]]
+name = "accum_sum"
+harness = false
+
+[[bench]]
 name = "add"
 harness = false
 
