@@ -959,6 +959,39 @@ pub mod accumulated {
         Ok(transcript)
     }
 
+    /// Sums a tensor.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::accumulated::sum;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[2, 15, 2, 1, 1, 0]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = sum(&x).unwrap();
+    /// let expected = Tensor::<i128>::new(
+    ///     Some(&[2, 17, 19, 20, 21, 21]),
+    ///     &[6],
+    /// ).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn sum<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+        a: &Tensor<T>,
+    ) -> Result<Tensor<T>, TensorError> {
+        let transcript: Tensor<T> = a
+            .iter()
+            .scan(T::zero().unwrap(), |acc, k| {
+                *acc = acc.clone() + k.clone();
+                Some(acc.clone())
+            })
+            .collect();
+
+        Ok(transcript)
+    }
+
     /// Matrix multiplies two 2D tensors.
     /// # Arguments
     ///

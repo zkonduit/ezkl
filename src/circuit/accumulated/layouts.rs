@@ -8,7 +8,8 @@ use crate::{
     tensor::{
         ops::{
             accumulated, add, affine as non_accum_affine, convolution as non_accum_conv,
-            dot as non_accum_dot, matmul as non_accum_matmul, mult, sub,
+            dot as non_accum_dot, matmul as non_accum_matmul, mult,
+            scale_and_shift as ref_scale_and_shift, sub, sum as non_accum_sum,
             sumpool as non_accum_sumpool,
         },
         Tensor, TensorError,
@@ -27,12 +28,6 @@ pub fn dot<F: FieldExt + TensorType>(
     values: &[ValTensor<F>; 2],
     offset: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    if values.len() != config.inputs.len() {
-        return Err(Box::new(CircuitError::DimMismatch(
-            "accum dot layout".to_string(),
-        )));
-    }
-
     let t = match layouter.assign_region(
         || "assign inputs",
         |mut region| {
@@ -81,6 +76,79 @@ pub fn dot<F: FieldExt + TensorType>(
             if matches!(config.check_mode, CheckMode::SAFE) {
                 let safe_dot = non_accum_dot(&inputs.iter().map(|x| x).collect())
                     .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+                assert_eq!(
+                    Into::<Tensor<i32>>::into(last_elem.clone()),
+                    Into::<Tensor<i32>>::into(safe_dot),
+                )
+            }
+            // last element is the result
+            Ok(last_elem)
+        },
+    ) {
+        Ok(a) => a,
+        Err(e) => {
+            return Err(Box::new(e));
+        }
+    };
+
+    Ok(ValTensor::from(t))
+}
+
+/// Assigns variables to the regions created when calling `configure`.
+/// # Arguments
+/// * `values` - The explicit values to the operations.
+/// * `layouter` - A Halo2 Layouter.
+pub fn sum<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    layouter: &mut impl Layouter<F>,
+    values: &[ValTensor<F>; 1],
+    offset: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let t = match layouter.assign_region(
+        || "assign inputs",
+        |mut region| {
+            let input = utils::value_muxer(
+                &config.inputs[0],
+                &{
+                    let res = config.inputs[0].assign(&mut region, offset, &values[0])?;
+                    res.map(|e| e.value_field().evaluate())
+                },
+                &values[0],
+            );
+
+            // Now we can assign the dot product
+            let accumulated_sum = accumulated::sum(&input)
+                .expect("accum poly: sum op failed")
+                .into();
+            let output = config
+                .output
+                .assign(&mut region, offset, &accumulated_sum)?;
+
+            for i in 0..input.len() {
+                let (_, y) = config.inputs[0].cartesian_coord(i);
+                if y == 0 {
+                    config
+                        .selectors
+                        .get(&BaseOp::Identity)
+                        .unwrap()
+                        .enable(&mut region, offset + y)?;
+                } else {
+                    config
+                        .selectors
+                        .get(&BaseOp::Sum)
+                        .unwrap()
+                        .enable(&mut region, offset + y)?;
+                }
+            }
+
+            let last_elem = output
+                .get_slice(&[output.len() - 1..output.len()])
+                .expect("accum poly: failed to fetch last elem");
+
+            if matches!(config.check_mode, CheckMode::SAFE) {
+                let safe_dot =
+                    non_accum_sum(&input).map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
 
                 assert_eq!(
                     Into::<Tensor<i32>>::into(last_elem.clone()),
@@ -503,5 +571,66 @@ pub fn conv<F: FieldExt + TensorType>(
         }
     }
 
+    Ok(res)
+}
+
+/// Assigns variables to the regions created when calling `configure`.
+/// # Arguments
+/// * `values` - The explicit values to the operations.
+/// * `layouter` - A Halo2 Layouter.
+pub fn reshape<F: FieldExt + TensorType>(
+    values: &[ValTensor<F>; 1],
+    new_dims: &[usize],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let mut t = values[0].clone();
+    t.reshape(new_dims)?;
+    Ok(t)
+}
+
+/// Assigns variables to the regions created when calling `configure`.
+/// # Arguments
+/// * `values` - The explicit values to the operations.
+/// * `layouter` - A Halo2 Layouter.
+pub fn identity<F: FieldExt + TensorType>(
+    values: &[ValTensor<F>; 1],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    Ok(values[0].clone())
+}
+
+/// Assigns variables to the regions created when calling `configure`.
+/// # Arguments
+/// * `values` - The explicit values to the operations.
+/// * `layouter` - A Halo2 Layouter.
+pub fn scale_and_shift<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    layouter: &mut impl Layouter<F>,
+    values: &[ValTensor<F>; 3],
+    offset: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let (input, kernel, bias) = (values[0].clone(), values[1].clone(), values[2].clone());
+    let prod = pairwise(config, layouter, &[input, kernel], offset, BaseOp::Mult)?;
+    let res = pairwise(config, layouter, &[prod, bias], offset, BaseOp::Add)?;
+
+    if matches!(config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(res.clone().get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let ref_scale_and_shift = ref_scale_and_shift(
+                &values
+                    .iter()
+                    .map(|x| x.get_inner().unwrap())
+                    .collect::<Vec<Tensor<_>>>(),
+            )
+            .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+
+            assert_eq!(
+                Into::<Tensor<i32>>::into(res.get_inner()?),
+                Into::<Tensor<i32>>::into(ref_scale_and_shift),
+            )
+        }
+    };
     Ok(res)
 }
