@@ -28,7 +28,7 @@ fn init() {
     assert!(status.success());
 }
 
-const TESTS: [&str; 19] = [
+const TESTS: [&str; 20] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -51,7 +51,7 @@ const TESTS: [&str; 19] = [
     "4l_relu_conv_fc",
 ];
 
-const PACKING_TESTS: [&str; 11] = [
+const PACKING_TESTS: [&str; 12] = [
     "1l_mlp",
     "1l_average",
     "1l_div",
@@ -66,7 +66,7 @@ const PACKING_TESTS: [&str; 11] = [
     "2l_relu_small",
 ];
 
-const TESTS_AGGR: [&str; 14] = [
+const TESTS_AGGR: [&str; 15] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -89,7 +89,7 @@ const NEG_TESTS: [(&str, &str); 2] = [
     ("2l_relu_small", "2l_relu_sigmoid_small"),
 ];
 
-const TESTS_EVM: [&str; 12] = [
+const TESTS_EVM: [&str; 13] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
