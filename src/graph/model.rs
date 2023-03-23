@@ -1,10 +1,9 @@
 use super::node::*;
 use super::vars::*;
 use super::GraphError;
-use crate::circuit::fused::Config as PolyConfig;
-use crate::circuit::fused::InputType as PolyInputType;
-use crate::circuit::fused::Node as PolyNode;
-use crate::circuit::fused::Op as PolyOp;
+use crate::circuit::base::BaseConfig as PolyConfig;
+use crate::circuit::base::CheckMode;
+use crate::circuit::base::Op as PolyOp;
 use crate::circuit::lookup::Config as LookupConfig;
 use crate::circuit::lookup::Op as LookupOp;
 use crate::circuit::lookup::Table as LookupTable;
@@ -15,8 +14,9 @@ use crate::commands::{Cli, Commands};
 use crate::graph::scale_to_multiplier;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
+use anyhow::Context;
 //use clap::Parser;
-use anyhow::{Context, Error as AnyError};
+use anyhow::Error as AnyError;
 use core::panic;
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -28,7 +28,7 @@ use log::{debug, info, trace};
 use std::cell::RefCell;
 use std::cmp::max;
 use std::cmp::min;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
 use std::rc::Rc;
@@ -107,12 +107,12 @@ impl Model {
         let om = Model {
             model: model.clone(),
             run_args,
-            nodes: Self::assign_execution_buckets(nodes)?,
+            nodes,
             mode,
             visibility,
         };
 
-        debug!("{}", Table::new(om.nodes.flatten()).to_string());
+        debug!("{}", Table::new(om.nodes.iter()).to_string());
 
         Ok(om)
     }
@@ -237,52 +237,52 @@ impl Model {
         let mut results = BTreeMap::new();
         let mut tables = BTreeMap::new();
 
-        for (bucket, bucket_nodes) in self.nodes.0.iter() {
-            trace!("configuring bucket: {:?}", bucket);
-            let non_op_nodes: BTreeMap<&usize, &Node> = bucket_nodes
-                .iter()
-                .filter(|(_, n)| n.opkind.is_const() || n.opkind.is_input())
-                .collect();
-            if !non_op_nodes.is_empty() {
-                for (i, node) in non_op_nodes {
-                    let config = self.conf_non_op_node(node)?;
-                    results.insert(*i, config);
-                }
+        let non_op_nodes: BTreeMap<&usize, &Node> = self
+            .nodes
+            .iter()
+            .filter(|(_, n)| n.opkind.is_const() || n.opkind.is_input())
+            .collect();
+        if !non_op_nodes.is_empty() {
+            for (i, node) in non_op_nodes {
+                let config = self.conf_non_op_node(node)?;
+                results.insert(*i, config);
             }
+        }
 
-            let lookup_ops: BTreeMap<&usize, &Node> = bucket_nodes
-                .iter()
-                .filter(|(_, n)| n.opkind.is_lookup())
-                .collect();
+        let lookup_ops: BTreeMap<&usize, &Node> = self
+            .nodes
+            .iter()
+            .filter(|(_, n)| n.opkind.is_lookup())
+            .collect();
 
-            if !lookup_ops.is_empty() {
-                for (i, node) in lookup_ops {
-                    let config = if !self.run_args.single_lookup {
-                        // assume a single input
-                        let input_len = node.in_dims[0].iter().product();
-                        self.conf_lookup(node, input_len, meta, vars, &mut tables)?
-                    } else {
-                        self.reuse_lookup_conf(*i, node, &results, meta, vars, &mut tables)?
-                    };
-                    results.insert(*i, config);
-                }
+        if !lookup_ops.is_empty() {
+            for (i, node) in lookup_ops {
+                let config = if !self.run_args.single_lookup {
+                    // assume a single input
+                    let input_len = node.in_dims[0].iter().product();
+                    self.conf_lookup(node, input_len, meta, vars, &mut tables)?
+                } else {
+                    self.reuse_lookup_conf(*i, node, &results, meta, vars, &mut tables)?
+                };
+                results.insert(*i, config);
             }
+        }
 
-            // preserves ordering
-            let poly_ops: BTreeMap<&usize, &Node> = bucket_nodes
-                .iter()
-                .filter(|(_, n)| n.opkind.is_poly())
-                .collect();
-            // preserves ordering
-            if !poly_ops.is_empty() {
-                let config = self.conf_poly_ops(&poly_ops, meta, vars)?;
-                results.insert(**poly_ops.keys().max().unwrap(), config);
+        // preserves ordering
+        let poly_ops: BTreeMap<&usize, &Node> = self
+            .nodes
+            .iter()
+            .filter(|(_, n)| n.opkind.is_poly())
+            .collect();
+        // preserves ordering
+        if !poly_ops.is_empty() {
+            for (i, node) in poly_ops {
+                let config = self.conf_poly_ops(&node, meta, vars)?;
+                results.insert(*i, config);
 
                 let mut display: String = "Poly nodes: ".to_string();
-                for idx in poly_ops.keys().map(|k| **k).sorted() {
-                    let node = &self.nodes.filter(idx);
-                    display.push_str(&format!("| {} ({:?}) | ", idx, node.opkind));
-                }
+                display.push_str(&format!("| {} ({:?}) | ", i, node.opkind));
+
                 trace!("{}", display);
             }
         }
@@ -292,7 +292,7 @@ impl Model {
         if self.visibility.output.is_public() {
             if self.run_args.pack_base > 1 {
                 info!("packing outputs...");
-                packed_outputs = self.pack_outputs(meta, vars, self.output_shapes());
+                packed_outputs = self.pack_outputs(meta, vars);
                 range_checks = self.range_check_outputs(
                     meta,
                     vars,
@@ -317,24 +317,18 @@ impl Model {
         &self,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-        output_shapes: Vec<Vec<usize>>,
     ) -> Vec<PolyConfig<F>> {
         let mut configs = vec![];
 
-        for s in &output_shapes {
-            let input = vars.advices[0].reshape(s);
-            let output = vars.advices[1].reshape(&[1]);
+        let config = PolyConfig::<F>::configure(
+            meta,
+            &[vars.advices[0].clone(), vars.advices[1].clone()],
+            &vars.advices[2],
+            CheckMode::SAFE,
+        );
 
-            // tells the config layer to add a pack op to the circuit gate
-            let pack_node = PolyNode {
-                op: PolyOp::Pack(self.run_args.pack_base, self.run_args.scale),
-                input_order: vec![PolyInputType::Input(0)],
-            };
+        configs.push(config);
 
-            let config = PolyConfig::<F>::configure(meta, &[input.clone()], &output, &[pack_node]);
-
-            configs.push(config);
-        }
         configs
     }
 
@@ -436,98 +430,51 @@ impl Model {
     /// * `vars` - [ModelVars] for the model.
     fn conf_poly_ops<F: FieldExt + TensorType>(
         &self,
-        nodes: &BTreeMap<&usize, &Node>,
+        node: &Node,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
     ) -> Result<NodeConfig<F>, Box<dyn Error>> {
-        let mut input_nodes: BTreeMap<(&usize, &PolyOp), Vec<Node>> = BTreeMap::new();
-
-        for (i, e) in nodes.iter() {
-            let key = (
-                *i,
-                match &e.opkind {
-                    OpKind::Poly(f) => f,
-                    _ => {
-                        return Err(Box::new(GraphError::WrongMethod(e.idx, e.opkind.clone())));
-                    }
-                },
-            );
-            let value = e
-                .inputs
-                .iter()
-                .map(|i| self.nodes.filter(i.node))
-                .collect_vec();
-            input_nodes.insert(key, value);
-        }
-
-        // This works because retain only keeps items for which the predicate returns true, and
-        // insert only returns true if the item was not previously present in the set.
-        // Since the vector is traversed in order, we end up keeping just the first occurrence of each item.
-        let mut seen = HashSet::new();
-        let mut advice_idx = 0;
-        let mut fixed_idx = 0;
-        // impose an execution order here
-        let inputs_to_layer: Vec<(usize, VarTensor)> = input_nodes
+        let input_nodes = node
+            .inputs
             .iter()
-            .flat_map(|x| {
-                x.1.iter()
-                    .filter(|i| !nodes.contains_key(&i.idx) && seen.insert(i.idx))
-                    .map(|f| {
-                        let s = f.out_dims.clone();
-                        if f.opkind.is_const() && self.visibility.params.is_public() {
-                            let vars = (f.idx, vars.fixed[fixed_idx].reshape(&s));
-                            fixed_idx += 1;
-                            vars
-                        } else {
-                            let vars = (f.idx, vars.advices[advice_idx].reshape(&s));
-                            advice_idx += 1;
-                            vars
-                        }
-                    })
-                    .collect_vec()
-            })
+            .map(|i| self.nodes.get(&i.node).unwrap())
             .collect_vec();
-
-        let output_shape = self.nodes.filter(**nodes.keys().max().unwrap()).out_dims;
-        // output node
-        let output = &vars.advices[advice_idx].reshape(&output_shape);
-
-        let mut inter_counter = 0;
-        let fused_nodes: Vec<PolyNode> = input_nodes
+        // impose an execution order here
+        let mut inputs_to_layer: [VarTensor; 2] =
+            [vars.advices[0].clone(), vars.advices[1].clone()];
+        let input_idx = input_nodes
             .iter()
-            .map(|(op, e)| {
-                let order = e
-                    .iter()
-                    .map(|n| {
-                        if !nodes.contains_key(&n.idx) {
-                            PolyInputType::Input(
-                                inputs_to_layer.iter().position(|r| r.0 == n.idx).unwrap(),
-                            )
-                        } else {
-                            inter_counter += 1;
-                            PolyInputType::Inter(inter_counter - 1)
-                        }
-                    })
-                    .collect_vec();
-                PolyNode {
-                    op: op.1.clone(),
-                    input_order: order,
+            .map(|f| {
+                if f.opkind.is_const() && self.visibility.params.is_public() {
+                    inputs_to_layer[0] = vars.fixed[0].clone();
+                    f.idx
+                } else {
+                    f.idx
                 }
             })
             .collect_vec();
 
-        let inputs = inputs_to_layer.iter();
+        let output_shape = &node.out_dims;
+        // output node
+        let output = &vars.advices[2].reshape(output_shape);
 
-        let config = NodeConfig::Poly {
-            config: PolyConfig::configure(
-                meta,
-                &inputs.clone().map(|x| x.1.clone()).collect_vec(),
-                output,
-                &fused_nodes,
-            ),
-            inputs: inputs.map(|x| x.0).collect_vec(),
-        };
-        Ok(config)
+        let inputs = inputs_to_layer[..min(2, inputs_to_layer.len())].iter();
+
+        if let OpKind::Poly(op) = &node.opkind {
+            let config = NodeConfig::Poly {
+                config: PolyConfig::configure(
+                    meta,
+                    inputs.clone().map(|x| x.clone()).collect_vec()[..].try_into()?,
+                    output,
+                    CheckMode::SAFE,
+                ),
+                inputs: input_idx,
+                op: op.clone(),
+            };
+            Ok(config)
+        } else {
+            panic!()
+        }
     }
 
     /// Configures a lookup table based operation. These correspond to operations that are represented in
@@ -622,7 +569,12 @@ impl Model {
         // pack outputs if need be
         for (i, packed_output) in config.packed_outputs.iter_mut().enumerate() {
             info!("packing outputs...");
-            outputs[i] = packed_output.layout(layouter, &outputs[i..i + 1])?;
+            outputs[i] = packed_output.layout(
+                layouter,
+                &outputs[i..i + 1],
+                0,
+                PolyOp::Pack(self.run_args.pack_base, self.run_args.scale),
+            )?;
             // only use with mock prover
             if matches!(self.mode, Mode::Mock) {
                 trace!("------------ packed output {:?}", outputs[i].show());
@@ -667,11 +619,12 @@ impl Model {
             NodeConfig::Poly {
                 mut config,
                 inputs: idx,
+                op,
             } => {
                 let values: Vec<ValTensor<F>> = idx
                     .iter()
                     .map(|i| {
-                        let node = &self.nodes.filter(*i);
+                        let node = &self.nodes.get(i).unwrap();
                         match node.opkind {
                             OpKind::Const => {
                                 let val = node
@@ -686,7 +639,7 @@ impl Model {
                     })
                     .collect_vec();
 
-                Some(config.layout(layouter, &values)?)
+                Some(config.layout(layouter, &values, 0, op)?)
             }
             NodeConfig::Lookup {
                 config,
@@ -709,53 +662,6 @@ impl Model {
             }
         };
         Ok(res)
-    }
-
-    /// Iterates over Nodes and assigns execution buckets to them.  Each bucket holds either:
-    /// a) independent lookup operations (i.e operations that don't feed into one another so can be processed in parallel).
-    /// b) operations that can be fused together, i.e the output of one op might feed into another.
-    /// The logic for bucket assignment is thus: we assign all data intake nodes to the 0 bucket.
-    /// We iterate over each node in turn. If the node is a polynomial op, assign to it the maximum bucket of it's inputs.
-    /// If the node is a lookup table, assign to it the maximum bucket of it's inputs incremented by 1.
-    /// # Arguments
-    ///
-    /// * `nodes` - [BTreeMap] of (node index, [Node]) pairs.
-    pub fn assign_execution_buckets(
-        mut nodes: BTreeMap<usize, Node>,
-    ) -> Result<NodeGraph, GraphError> {
-        info!("assigning configuration buckets to operations");
-
-        let mut bucketed_nodes = NodeGraph(BTreeMap::<Option<usize>, BTreeMap<usize, Node>>::new());
-
-        for (_, node) in nodes.iter_mut() {
-            let mut prev_buckets = vec![];
-            for n in node
-                .inputs
-                .iter()
-                .filter(|n| !bucketed_nodes.filter(n.node).opkind.is_const())
-            {
-                match bucketed_nodes.filter(n.node).bucket {
-                    Some(b) => prev_buckets.push(b),
-                    None => {
-                        return Err(GraphError::MissingNode(n.node));
-                    }
-                }
-            }
-            let prev_bucket: Option<&usize> = prev_buckets.iter().max();
-
-            match &node.opkind {
-                OpKind::Input => node.bucket = Some(0),
-                OpKind::Const => node.bucket = None,
-                OpKind::Poly(_) => node.bucket = Some(*prev_bucket.unwrap()),
-                OpKind::Lookup(_) => node.bucket = Some(prev_bucket.unwrap() + 1),
-                op => {
-                    return Err(GraphError::WrongMethod(node.idx, op.clone()));
-                }
-            }
-            bucketed_nodes.insert(node.bucket, node.idx, node.clone());
-        }
-
-        Ok(bucketed_nodes)
     }
 
     /// Get a linear extension of the model (an evaluation order), for example to feed to circuit construction.
@@ -792,7 +698,7 @@ impl Model {
         self.model
             .inputs
             .iter()
-            .map(|o| self.nodes.filter(o.node).out_dims)
+            .map(|o| self.nodes.get(&o.node).unwrap().out_dims.clone())
             .collect_vec()
     }
 
@@ -807,7 +713,7 @@ impl Model {
         self.model
             .outputs
             .iter()
-            .map(|o| self.nodes.filter(o.node).out_dims)
+            .map(|o| self.nodes.get(&o.node).unwrap().out_dims.clone())
             .collect_vec()
     }
 
@@ -815,145 +721,15 @@ impl Model {
     pub fn get_output_scales(&self) -> Vec<u32> {
         let output_nodes = self.model.outputs.iter();
         output_nodes
-            .map(|o| self.nodes.filter(o.node).out_scale)
+            .map(|o| self.nodes.get(&o.node).unwrap().out_scale)
             .collect_vec()
-    }
-
-    /// Max parameter sizes (i.e trainable weights) across the computational graph
-    pub fn max_params_poly(&self) -> Vec<usize> {
-        let mut maximum_sizes = vec![];
-        for (_, bucket_nodes) in self.nodes.0.iter() {
-            let fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
-                .iter()
-                .filter(|(_, n)| n.opkind.is_poly())
-                .collect();
-
-            let params = fused_ops
-                .iter()
-                .flat_map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
-                // here we remove intermediary calculation / nodes within the layer
-                .filter(|id| {
-                    !fused_ops.contains_key(id) && self.nodes.filter(*id).opkind.is_const()
-                })
-                .unique()
-                .collect_vec();
-
-            for (i, id) in params.iter().enumerate() {
-                let param_size = self.nodes.filter(*id).out_dims.iter().product();
-                if i >= maximum_sizes.len() {
-                    // we've already ascertained this is a param node so out_dims = parameter shape
-                    maximum_sizes.push(param_size)
-                } else {
-                    maximum_sizes[i] = max(maximum_sizes[i], param_size);
-                }
-            }
-        }
-        maximum_sizes
-    }
-
-    /// Maximum number of input variables in fused layers
-    pub fn max_vars_and_params_poly(&self) -> Vec<usize> {
-        let mut maximum_sizes = vec![];
-        for (_, bucket_nodes) in self.nodes.0.iter() {
-            let poly_ops: BTreeMap<&usize, &Node> = bucket_nodes
-                .iter()
-                .filter(|(_, n)| n.opkind.is_poly())
-                .collect();
-
-            let inputs = poly_ops
-                .iter()
-                .flat_map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
-                // here we remove intermediary calculation / nodes within the layer
-                .filter(|id| !poly_ops.contains_key(id))
-                .unique()
-                .collect_vec();
-
-            for (i, id) in inputs.iter().enumerate() {
-                let input_size = self.nodes.filter(*id).out_dims.iter().product();
-                if i >= maximum_sizes.len() {
-                    // we've already ascertained this is the input node so out_dims = input shape
-                    maximum_sizes.push(input_size)
-                } else {
-                    maximum_sizes[i] = max(maximum_sizes[i], input_size);
-                }
-            }
-
-            // handle output variables
-            let max_id = poly_ops.keys().max();
-            // is None if the bucket is empty
-            if let Some(m) = max_id {
-                let output_size = self.nodes.filter(**m).out_dims.iter().product();
-                if inputs.len() == maximum_sizes.len() {
-                    maximum_sizes.push(output_size)
-                } else {
-                    let output_idx = inputs.len();
-                    // set last entry to be the output column
-                    maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
-                }
-            };
-        }
-        // add 1 for layer output
-        maximum_sizes
-    }
-
-    /// Maximum of non params variable sizes in fused layers
-    pub fn max_vars_poly(&self) -> Vec<usize> {
-        let mut maximum_sizes = vec![];
-        for (_, bucket_nodes) in self.nodes.0.iter() {
-            let fused_ops: BTreeMap<&usize, &Node> = bucket_nodes
-                .iter()
-                .filter(|(_, n)| n.opkind.is_poly())
-                .collect();
-
-            let inputs = fused_ops
-                .iter()
-                .flat_map(|(_, n)| n.inputs.iter().map(|o| o.node).collect_vec())
-                // here we remove intermediary calculation / nodes within the layer
-                .filter(|id| {
-                    !fused_ops.contains_key(id) && !self.nodes.filter(*id).opkind.is_const()
-                })
-                .unique()
-                .collect_vec();
-
-            for (i, id) in inputs.iter().enumerate() {
-                let input_size = self.nodes.filter(*id).out_dims.iter().product();
-                if i >= maximum_sizes.len() {
-                    // we've already ascertained this is the input node so out_dims = input shape
-                    maximum_sizes.push(input_size)
-                } else {
-                    maximum_sizes[i] = max(maximum_sizes[i], input_size);
-                }
-            }
-
-            // handle output variables
-            let max_id = fused_ops.keys().max();
-            // None if the bucket is empty
-            if let Some(m) = max_id {
-                let output_size = self.nodes.filter(**m).out_dims.iter().product();
-                if inputs.len() == maximum_sizes.len() {
-                    maximum_sizes.push(output_size)
-                } else {
-                    let output_idx = inputs.len();
-                    // set last entry to be the output column
-                    maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
-                }
-            };
-        }
-
-        // add 1 for layer output
-        maximum_sizes
     }
 
     /// Total number of variables in lookup layers
     pub fn num_vars_lookup_op(&self, lookup_op: &LookupOp) -> Vec<usize> {
         let mut count = BTreeMap::<LookupOp, (usize, usize)>::new();
-        for (_, bucket_nodes) in self.nodes.0.iter() {
-            let lookup_ops: BTreeMap<&usize, &Node> = bucket_nodes
-                .iter()
-                .filter(|(_, n)| (n.opkind == OpKind::Lookup(lookup_op.clone())))
-                .collect();
-
-            for (_, n) in lookup_ops {
+        for (_, n) in self.nodes.iter() {
+            if n.opkind == OpKind::Lookup(lookup_op.clone()) {
                 match &n.opkind {
                     OpKind::Lookup(op) => {
                         let elem = count.get_mut(&op);
@@ -982,79 +758,6 @@ impl Model {
             num_outputs = max(num_outputs, v.1);
         }
         vec![num_inputs, num_outputs]
-    }
-
-    /// Total number of variables in lookup layers
-    pub fn num_vars_lookup(&self) -> Vec<usize> {
-        let mut count = BTreeMap::<LookupOp, (usize, usize)>::new();
-        for (_, bucket_nodes) in self.nodes.0.iter() {
-            let lookup_ops: BTreeMap<&usize, &Node> = bucket_nodes
-                .iter()
-                .filter(|(_, n)| n.opkind.is_lookup())
-                .collect();
-
-            for (_, n) in lookup_ops {
-                match &n.opkind {
-                    OpKind::Lookup(op) => {
-                        let elem = count.get_mut(&op);
-                        // handle output variables
-                        let output_size: usize = n.out_dims.iter().product();
-                        let input_size = output_size;
-                        match elem {
-                            None => {
-                                count.insert(op.clone(), (input_size, output_size));
-                            }
-                            Some(m) => {
-                                m.0 += input_size;
-                                m.1 += output_size;
-                            }
-                        }
-                    }
-                    // should never reach here
-                    _ => panic!(),
-                }
-            }
-        }
-        // now get the max across all ops
-        let (mut num_inputs, mut num_outputs) = (0, 0);
-        for (_, v) in count.iter() {
-            num_inputs = max(num_inputs, v.0);
-            num_outputs = max(num_outputs, v.1);
-        }
-        vec![num_inputs, num_outputs]
-    }
-
-    /// Maximum variable sizes in lookup layers
-    pub fn max_vars_lookup(&self) -> Vec<usize> {
-        let mut maximum_sizes = vec![];
-        for (_, bucket_nodes) in self.nodes.0.iter() {
-            let lookup_ops: BTreeMap<&usize, &Node> = bucket_nodes
-                .iter()
-                .filter(|(_, n)| n.opkind.is_lookup())
-                .collect();
-
-            for (_, n) in lookup_ops {
-                // lookups currently only accept a single input var
-                for (j, dims) in n.in_dims.iter().enumerate() {
-                    let input_size = dims.iter().product();
-                    if j >= maximum_sizes.len() {
-                        maximum_sizes.push(input_size)
-                    } else {
-                        maximum_sizes[j] = max(maximum_sizes[j], input_size);
-                    }
-                }
-                // handle output variables
-                let output_size = n.out_dims.iter().product();
-                if (n.in_dims.len()) == maximum_sizes.len() {
-                    maximum_sizes.push(output_size)
-                } else {
-                    let output_idx = n.in_dims.len();
-                    // set last entry to be the output column
-                    maximum_sizes[output_idx] = max(maximum_sizes[output_idx], output_size);
-                }
-            }
-        }
-        maximum_sizes
     }
 
     /// Number of instances used by the circuit
@@ -1068,42 +771,5 @@ impl Model {
             instance_shapes.extend(self.output_shapes());
         }
         instance_shapes
-    }
-
-    /// Number of advice used by the circuit
-    pub fn advice_shapes(&self) -> Vec<usize> {
-        // max sizes in lookup
-        let max_lookup_sizes = if self.run_args.single_lookup {
-            self.num_vars_lookup()
-        } else {
-            self.max_vars_lookup()
-        };
-        let max_poly_sizes = if self.visibility.params.is_public() {
-            // max sizes for poly inputs
-            self.max_vars_poly()
-        } else {
-            // max sizes for poly inputs + params
-            self.max_vars_and_params_poly()
-        };
-
-        let mut advice_shapes = if max_poly_sizes.len() >= max_lookup_sizes.len() {
-            max_poly_sizes.clone()
-        } else {
-            max_lookup_sizes.clone()
-        };
-
-        for i in 0..min(max_poly_sizes.len(), max_lookup_sizes.len()) {
-            advice_shapes[i] = max(max_poly_sizes[i], max_lookup_sizes[i]);
-        }
-        advice_shapes
-    }
-
-    /// Maximum sizes of fixed columns (and their sizes) used by the circuit
-    pub fn fixed_shapes(&self) -> Vec<usize> {
-        let mut fixed_shapes = vec![];
-        if self.visibility.params.is_public() {
-            fixed_shapes = self.max_params_poly();
-        }
-        fixed_shapes
     }
 }

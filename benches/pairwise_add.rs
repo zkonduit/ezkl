@@ -35,9 +35,9 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len, vec![len], true, 1024);
-        let b = VarTensor::new_advice(cs, K, len, vec![len], true, 1024);
-        let output = VarTensor::new_advice(cs, K, len, vec![len + 1], true, 1024);
+        let a = VarTensor::new_advice(cs, K, len, vec![len], true);
+        let b = VarTensor::new_advice(cs, K, len, vec![len], true);
+        let output = VarTensor::new_advice(cs, K, len, vec![len + 1], true);
 
         Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
     }
@@ -93,6 +93,7 @@ fn runadd(c: &mut Criterion) {
                     &pk,
                     TranscriptType::Blake,
                     SingleStrategy::new(&params),
+                    CheckMode::SAFE,
                 );
                 prover.unwrap();
             });

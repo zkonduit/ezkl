@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use ezkl_lib::circuit::base::CheckMode;
 use ezkl_lib::circuit::fused::*;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
@@ -35,10 +36,10 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let input = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
-        let kernel = VarTensor::new_advice(cs, K, len * len, vec![len, len], true, 512);
-        let bias = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
-        let output = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
+        let input = VarTensor::new_advice(cs, K, len, vec![len], true);
+        let kernel = VarTensor::new_advice(cs, K, len * len, vec![len, len], true);
+        let bias = VarTensor::new_advice(cs, K, len, vec![len], true);
+        let output = VarTensor::new_advice(cs, K, len, vec![len], true);
         // tells the config layer to add an affine op to a circuit gate
         let affine_node = Node {
             op: Op::Affine,
@@ -108,6 +109,7 @@ fn runaffine(c: &mut Criterion) {
                     &pk,
                     TranscriptType::Blake,
                     SingleStrategy::new(&params),
+                    CheckMode::UNSAFE,
                 );
                 prover.unwrap();
             });

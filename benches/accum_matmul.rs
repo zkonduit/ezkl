@@ -35,14 +35,13 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len * len, vec![len, len], true, 100000);
+        let a = VarTensor::new_advice(cs, K, len * len, vec![len, len], true);
 
-        let b = VarTensor::new_advice(cs, K, len * len, vec![len, len], true, 100000);
+        let b = VarTensor::new_advice(cs, K, len * len, vec![len, len], true);
 
-        let output =
-            VarTensor::new_advice(cs, K, (len + 1) * len, vec![len, 1, len + 1], true, 100000);
+        let output = VarTensor::new_advice(cs, K, (len + 1) * len, vec![len, 1, len + 1], true);
 
-        Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        Self::Config::configure(cs, &[a, b], &output, CheckMode::UNSAFE)
     }
 
     fn synthesize(
@@ -98,6 +97,7 @@ fn runmatmul(c: &mut Criterion) {
                     &pk,
                     TranscriptType::Blake,
                     SingleStrategy::new(&params),
+                    CheckMode::UNSAFE,
                 );
                 prover.unwrap();
             });

@@ -135,7 +135,7 @@ mod tests {
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
             let advices = (0..2)
-                .map(|_| VarTensor::new_advice(cs, 4, 1, vec![1], true, 512))
+                .map(|_| VarTensor::new_advice(cs, 4, 1, vec![1], true))
                 .collect_vec();
             let input = &advices[0];
             let expected = &advices[1];
@@ -147,15 +147,11 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            config
-                .layout(
-                    layouter.namespace(|| "assign value"),
-                    self.input.clone(),
-                    self.output.clone(),
-                )
-                .unwrap();
-
-            Ok(())
+            config.layout(
+                layouter.namespace(|| "assign value"),
+                self.input.clone(),
+                self.output.clone(),
+            )
         }
     }
 

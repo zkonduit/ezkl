@@ -404,7 +404,7 @@ mod tests {
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
             let advices = (0..2)
-                .map(|_| VarTensor::new_advice(cs, 4, 1, vec![1], true, 512))
+                .map(|_| VarTensor::new_advice(cs, 4, 1, vec![1], true))
                 .collect::<Vec<_>>();
 
             let nl = Op::ReLU { scale: 1 };

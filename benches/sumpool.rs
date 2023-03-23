@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use ezkl_lib::circuit::base::CheckMode;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::gen_srs;
@@ -44,7 +45,6 @@ impl Circuit<Fr> for MyCircuit {
                 IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH,
                 vec![IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
                 true,
-                512,
             );
 
             let output = VarTensor::new_advice(
@@ -53,7 +53,6 @@ impl Circuit<Fr> for MyCircuit {
                 3 * output_height * output_width,
                 vec![3, output_height, output_width],
                 true,
-                512,
             );
 
             // tells the config layer to add a conv op to a circuit gate
@@ -121,6 +120,7 @@ fn runsumpool(c: &mut Criterion) {
                         &pk,
                         TranscriptType::Blake,
                         SingleStrategy::new(&params),
+                        CheckMode::UNSAFE,
                     );
                     prover.unwrap();
                 });

@@ -1,5 +1,81 @@
 use super::{ops::pad, *};
-use halo2_proofs::plonk::Instance;
+use halo2_proofs::{arithmetic::Field, plonk::Instance};
+use log::warn;
+
+#[derive(Debug, Clone)]
+///
+pub enum ValType<F: FieldExt + TensorType> {
+    /// value
+    Value(Value<F>),
+    /// assigned  value
+    AssignedValue(Value<Assigned<F>>),
+    /// previously assigned value
+    PrevAssigned(AssignedCell<F, F>),
+}
+
+impl<F: FieldExt + TensorType> Into<i32> for ValType<F> {
+    fn into(self) -> i32 {
+        match self {
+            ValType::Value(v) => {
+                let mut output = 0_i32;
+                let mut i = 0;
+                v.map(|y| {
+                    let e = felt_to_i32(y);
+                    output = e;
+                    i += 1;
+                });
+                output
+            }
+            ValType::AssignedValue(v) => {
+                let mut output = 0_i32;
+                let mut i = 0;
+                v.evaluate().map(|y| {
+                    let e = felt_to_i32(y);
+                    output = e;
+                    i += 1;
+                });
+                output
+            }
+            ValType::PrevAssigned(v) => {
+                let mut output = 0_i32;
+                let mut i = 0;
+                v.value().map(|y| {
+                    let e = felt_to_i32(*y);
+                    output = e;
+                    i += 1;
+                });
+                output
+            }
+        }
+    }
+}
+
+impl<F: FieldExt + TensorType> From<Value<F>> for ValType<F> {
+    fn from(t: Value<F>) -> ValType<F> {
+        ValType::Value(t)
+    }
+}
+
+impl<F: FieldExt + TensorType> From<Value<Assigned<F>>> for ValType<F> {
+    fn from(t: Value<Assigned<F>>) -> ValType<F> {
+        ValType::AssignedValue(t)
+    }
+}
+
+impl<F: FieldExt + TensorType> From<AssignedCell<F, F>> for ValType<F> {
+    fn from(t: AssignedCell<F, F>) -> ValType<F> {
+        ValType::PrevAssigned(t)
+    }
+}
+
+impl<F: FieldExt + TensorType> TensorType for ValType<F> {
+    fn zero() -> Option<Self> {
+        Some(ValType::Value(Value::known(<F as Field>::zero())))
+    }
+    fn one() -> Option<Self> {
+        Some(ValType::Value(Value::known(<F as Field>::one())))
+    }
+}
 /// A wrapper around a [Tensor] where the inner type is one of Halo2's [`Value<F>`], [`Value<Assigned<F>>`], [`AssignedCell<Assigned<F>, F>`].
 /// This enum is generally used to assign values to variables / advices already configured in a Halo2 circuit (usually represented as a [VarTensor]).
 /// For instance can represent pre-trained neural network weights; or a known input to a network.
@@ -8,22 +84,8 @@ pub enum ValTensor<F: FieldExt + TensorType> {
     /// A tensor of [Value], each containing a field element
     Value {
         /// Underlying [Tensor].
-        inner: Tensor<Value<F>>,
+        inner: Tensor<ValType<F>>,
         /// Vector of dimensions of the tensor.
-        dims: Vec<usize>,
-    },
-    /// A tensor of [Value], each containing a ratio of field elements, which may be evaluated to produce plain field elements.
-    AssignedValue {
-        /// Underlying [Tensor].
-        inner: Tensor<Value<Assigned<F>>>,
-        /// Vector of dimensions of the [Tensor].
-        dims: Vec<usize>,
-    },
-    /// A tensor of AssignedCells, with data both a value and the matrix cell to which it is assigned.
-    PrevAssigned {
-        /// Underlying [Tensor].
-        inner: Tensor<AssignedCell<F, F>>,
-        /// Vector of dimensions of the [Tensor].
         dims: Vec<usize>,
     },
     /// A tensor backed by an [Instance] column
@@ -35,10 +97,19 @@ pub enum ValTensor<F: FieldExt + TensorType> {
     },
 }
 
+impl<F: FieldExt + TensorType> From<Tensor<ValType<F>>> for ValTensor<F> {
+    fn from(t: Tensor<ValType<F>>) -> ValTensor<F> {
+        ValTensor::Value {
+            inner: t.map(|x| x.into()),
+            dims: t.dims().to_vec(),
+        }
+    }
+}
+
 impl<F: FieldExt + TensorType> From<Tensor<Value<F>>> for ValTensor<F> {
     fn from(t: Tensor<Value<F>>) -> ValTensor<F> {
         ValTensor::Value {
-            inner: t.clone(),
+            inner: t.map(|x| x.into()),
             dims: t.dims().to_vec(),
         }
     }
@@ -46,8 +117,8 @@ impl<F: FieldExt + TensorType> From<Tensor<Value<F>>> for ValTensor<F> {
 
 impl<F: FieldExt + TensorType> From<Tensor<Value<Assigned<F>>>> for ValTensor<F> {
     fn from(t: Tensor<Value<Assigned<F>>>) -> ValTensor<F> {
-        ValTensor::AssignedValue {
-            inner: t.clone(),
+        ValTensor::Value {
+            inner: t.map(|x| x.into()),
             dims: t.dims().to_vec(),
         }
     }
@@ -55,8 +126,8 @@ impl<F: FieldExt + TensorType> From<Tensor<Value<Assigned<F>>>> for ValTensor<F>
 
 impl<F: FieldExt + TensorType> From<Tensor<AssignedCell<F, F>>> for ValTensor<F> {
     fn from(t: Tensor<AssignedCell<F, F>>) -> ValTensor<F> {
-        ValTensor::PrevAssigned {
-            inner: t.clone(),
+        ValTensor::Value {
+            inner: t.map(|x| x.into()),
             dims: t.dims().to_vec(),
         }
     }
@@ -78,30 +149,17 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         let mut integer_evals: Vec<i128> = vec![];
         match self {
             ValTensor::Value { inner: v, dims: _ } => {
-                let _ = v.map(|vaf| {
-                    // we have to push to an externally created vector or else vaf.map() returns an evaluation wrapped in Value<> (which we don't want)
-                    vaf.map(|f| {
+                // we have to push to an externally created vector or else vaf.map() returns an evaluation wrapped in Value<> (which we don't want)
+                let _ = v.map(|vaf| match vaf {
+                    ValType::Value(v) => v.map(|f| {
                         integer_evals.push(crate::fieldutils::felt_to_i128(f));
-                    })
-                });
-            }
-            ValTensor::AssignedValue { inner: v, dims: _ } => {
-                let _ = v.map(|vaf| {
-                    // we have to push to an externally created vector or else vaf.map() returns an evaluation wrapped in Value<> (which we don't want)
-                    vaf.map(|f| {
+                    }),
+                    ValType::AssignedValue(v) => v.map(|f| {
                         integer_evals.push(crate::fieldutils::felt_to_i128(f.evaluate()));
-                    })
-                });
-            }
-            ValTensor::PrevAssigned { inner: v, dims: _ } => {
-                // convert assigned cells to Value<Assigned<F>> so we can extract the inner field element
-                let w_vaf: Tensor<Value<Assigned<F>>> = v.map(|acaf| (acaf).value_field());
-
-                let _ = w_vaf.map(|vaf| {
-                    // we have to push to an externally created vector or else vaf.map() returns an evaluation wrapped in Value<> (which we don't want)
-                    vaf.map(|f| {
+                    }),
+                    ValType::PrevAssigned(v) => v.value_field().map(|f| {
                         integer_evals.push(crate::fieldutils::felt_to_i128(f.evaluate()));
-                    })
+                    }),
                 });
             }
             _ => return Err(Box::new(TensorError::WrongMethod)),
@@ -119,20 +177,6 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                     dims: slice.dims().to_vec(),
                 }
             }
-            ValTensor::AssignedValue { inner: v, dims: _ } => {
-                let slice = v.get_slice(indices)?;
-                ValTensor::AssignedValue {
-                    inner: slice.clone(),
-                    dims: slice.dims().to_vec(),
-                }
-            }
-            ValTensor::PrevAssigned { inner: v, dims: _ } => {
-                let slice = v.get_slice(indices)?;
-                ValTensor::PrevAssigned {
-                    inner: slice.clone(),
-                    dims: slice.dims().to_vec(),
-                }
-            }
             _ => return Err(Box::new(TensorError::WrongMethod)),
         };
         Ok(slice)
@@ -145,14 +189,6 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                 v.transpose_2d()?;
                 *d = v.dims().to_vec();
             }
-            ValTensor::AssignedValue { inner: v, dims: d } => {
-                v.transpose_2d()?;
-                *d = v.dims().to_vec();
-            }
-            ValTensor::PrevAssigned { inner: v, dims: d } => {
-                v.transpose_2d()?;
-                *d = v.dims().to_vec();
-            }
             ValTensor::Instance { dims: d, .. } => {
                 *d = vec![d.iter().product()];
             }
@@ -160,14 +196,17 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         Ok(())
     }
 
-    /// Transposes the inner tensor
+    /// Fetches the inner tensor as a [Tensor<Value<F>>]
     pub fn get_inner(&self) -> Result<Tensor<Value<F>>, TensorError> {
+        warn!("using 'get_inner' in constraints can create soundness issues.");
         Ok(match self {
-            ValTensor::Value { inner: v, .. } => v.clone().into(),
-            ValTensor::AssignedValue { inner: v, .. } => v.map(|x| x.evaluate()).into(),
-            ValTensor::PrevAssigned { inner: v, .. } => {
-                v.map(|x| x.value_field().evaluate()).into()
-            }
+            ValTensor::Value { inner: v, .. } => v
+                .map(|x| match x {
+                    ValType::Value(v) => v.clone(),
+                    ValType::AssignedValue(v) => v.evaluate(),
+                    ValType::PrevAssigned(v) => v.value_field().evaluate(),
+                })
+                .into(),
             ValTensor::Instance { .. } => return Err(TensorError::WrongMethod),
         })
     }
@@ -176,14 +215,6 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     pub fn reshape(&mut self, new_dims: &[usize]) -> Result<(), Box<dyn Error>> {
         match self {
             ValTensor::Value { inner: v, dims: d } => {
-                v.reshape(new_dims);
-                *d = v.dims().to_vec();
-            }
-            ValTensor::AssignedValue { inner: v, dims: d } => {
-                v.reshape(new_dims);
-                *d = v.dims().to_vec();
-            }
-            ValTensor::PrevAssigned { inner: v, dims: d } => {
                 v.reshape(new_dims);
                 *d = v.dims().to_vec();
             }
@@ -204,14 +235,6 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                 v.flatten();
                 *d = v.dims().to_vec();
             }
-            ValTensor::AssignedValue { inner: v, dims: d } => {
-                v.flatten();
-                *d = v.dims().to_vec();
-            }
-            ValTensor::PrevAssigned { inner: v, dims: d } => {
-                v.flatten();
-                *d = v.dims().to_vec();
-            }
             ValTensor::Instance { dims: d, .. } => {
                 *d = vec![d.iter().product()];
             }
@@ -222,14 +245,6 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     pub fn tile(&mut self, n: usize) -> Result<(), TensorError> {
         match self {
             ValTensor::Value { inner: v, dims: d } => {
-                *v = v.tile(n)?;
-                *d = v.dims().to_vec();
-            }
-            ValTensor::AssignedValue { inner: v, dims: d } => {
-                *v = v.tile(n)?;
-                *d = v.dims().to_vec();
-            }
-            ValTensor::PrevAssigned { inner: v, dims: d } => {
                 *v = v.tile(n)?;
                 *d = v.dims().to_vec();
             }
@@ -247,14 +262,6 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                 *v = pad(v, padding)?;
                 *d = v.dims().to_vec();
             }
-            ValTensor::AssignedValue { inner: v, dims: d } => {
-                *v = pad(v, padding)?;
-                *d = v.dims().to_vec();
-            }
-            ValTensor::PrevAssigned { inner: v, dims: d } => {
-                *v = pad(v, padding)?;
-                *d = v.dims().to_vec();
-            }
             ValTensor::Instance { .. } => {
                 return Err(TensorError::WrongMethod);
             }
@@ -269,14 +276,6 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                 *v = v.repeat_rows(n)?;
                 *d = v.dims().to_vec();
             }
-            ValTensor::AssignedValue { inner: v, dims: d } => {
-                *v = v.repeat_rows(n)?;
-                *d = v.dims().to_vec();
-            }
-            ValTensor::PrevAssigned { inner: v, dims: d } => {
-                *v = v.repeat_rows(n)?;
-                *d = v.dims().to_vec();
-            }
             ValTensor::Instance { .. } => {
                 return Err(TensorError::WrongMethod);
             }
@@ -284,18 +283,19 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         Ok(())
     }
 
+    /// Calls `len` on the inner [Tensor].
+    pub fn len(&self) -> usize {
+        match self {
+            ValTensor::Value { dims, .. } | ValTensor::Instance { dims, .. } => {
+                dims.iter().product::<usize>()
+            }
+        }
+    }
+
     /// Calls `pad_row_ones` on the inner [Tensor].
     pub fn pad_row_ones(&mut self) -> Result<(), TensorError> {
         match self {
             ValTensor::Value { inner: v, dims: d } => {
-                *v = v.pad_row_ones()?;
-                *d = v.dims().to_vec();
-            }
-            ValTensor::AssignedValue { inner: v, dims: d } => {
-                *v = v.pad_row_ones()?;
-                *d = v.dims().to_vec();
-            }
-            ValTensor::PrevAssigned { inner: v, dims: d } => {
                 *v = v.pad_row_ones()?;
                 *d = v.dims().to_vec();
             }
@@ -323,18 +323,6 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                 )?;
                 *d = v.dims().to_vec();
             }
-            ValTensor::AssignedValue { inner: v, dims: d } => {
-                *v = v.multi_ch_doubly_blocked_toeplitz(
-                    h_blocks, w_blocks, num_rows, num_cols, h_stride, w_stride,
-                )?;
-                *d = v.dims().to_vec();
-            }
-            ValTensor::PrevAssigned { inner: v, dims: d } => {
-                *v = v.multi_ch_doubly_blocked_toeplitz(
-                    h_blocks, w_blocks, num_rows, num_cols, h_stride, w_stride,
-                )?;
-                *d = v.dims().to_vec();
-            }
             ValTensor::Instance { .. } => {
                 return Err(TensorError::WrongMethod);
             }
@@ -348,14 +336,6 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
             (ValTensor::Value { inner: v, .. }, ValTensor::Value { inner: v2, .. }) => {
                 Ok(v.append_to_row(v2)?.into())
             }
-            (
-                ValTensor::AssignedValue { inner: v, .. },
-                ValTensor::AssignedValue { inner: v2, .. },
-            ) => Ok(v.append_to_row(v2)?.into()),
-            (
-                ValTensor::PrevAssigned { inner: v, .. },
-                ValTensor::PrevAssigned { inner: v2, .. },
-            ) => Ok(v.append_to_row(v2)?.into()),
             _ => {
                 return Err(TensorError::WrongMethod);
             }
@@ -368,14 +348,6 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
             (ValTensor::Value { inner: v1, .. }, ValTensor::Value { inner: v2, .. }) => {
                 ValTensor::from(Tensor::new(Some(&[v1.clone(), v2]), &[2])?.combine()?)
             }
-            (
-                ValTensor::AssignedValue { inner: v1, .. },
-                ValTensor::AssignedValue { inner: v2, .. },
-            ) => ValTensor::from(Tensor::new(Some(&[v1.clone(), v2]), &[2])?.combine()?),
-            (
-                ValTensor::PrevAssigned { inner: v1, .. },
-                ValTensor::PrevAssigned { inner: v2, .. },
-            ) => ValTensor::from(Tensor::new(Some(&[v1.clone(), v2]), &[2])?.combine()?),
             _ => {
                 return Err(TensorError::WrongMethod);
             }
@@ -386,21 +358,14 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     /// Returns the `dims` attribute of the [ValTensor].
     pub fn dims(&self) -> &[usize] {
         match self {
-            ValTensor::Value { dims: d, .. }
-            | ValTensor::AssignedValue { dims: d, .. }
-            | ValTensor::PrevAssigned { dims: d, .. }
-            | ValTensor::Instance { dims: d, .. } => d,
+            ValTensor::Value { dims: d, .. } | ValTensor::Instance { dims: d, .. } => d,
         }
     }
     /// A [String] representation of the [ValTensor] for display, for example in showing intermediate values in a computational graph.
     pub fn show(&self) -> String {
         match self.clone() {
-            ValTensor::PrevAssigned { inner: v, dims: _ } => {
-                let r: Tensor<i32> = v.into();
-                format!("PrevAssigned {:?}", r)
-            }
             ValTensor::Value { inner: v, dims: _ } => {
-                let r: Tensor<i32> = v.into();
+                let r: Tensor<i32> = v.map(|x| x.into());
                 format!("Value {:?}", r)
             }
             _ => "ValTensor not PrevAssigned".into(),

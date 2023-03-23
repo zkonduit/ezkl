@@ -98,36 +98,13 @@ impl<F: FieldExt + TensorType> ModelVars<F> {
     pub fn new(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
-        max_rotations: usize,
-        // len is max number of advice, and each elem is the max advice size at that index
-        advice_dims: Vec<usize>,
-        // len is max number of fixed, and each elem is the max fixed size at that index
-        fixed_dims: Vec<usize>,
         instance_dims: Vec<Vec<usize>>,
     ) -> Self {
-        let advices = (0..advice_dims.len())
-            .map(|i| {
-                VarTensor::new_advice(
-                    cs,
-                    logrows,
-                    advice_dims[i],
-                    vec![advice_dims[i]],
-                    true,
-                    max_rotations,
-                )
-            })
+        let advices = (0..3)
+            .map(|_| VarTensor::new_advice(cs, logrows, 1, vec![1], true))
             .collect_vec();
-        let fixed = (0..fixed_dims.len())
-            .map(|i| {
-                VarTensor::new_fixed(
-                    cs,
-                    logrows,
-                    fixed_dims[i],
-                    vec![fixed_dims[i]],
-                    true,
-                    max_rotations,
-                )
-            })
+        let fixed = (0..1)
+            .map(|_| VarTensor::new_fixed(cs, logrows, 1, vec![1], true))
             .collect_vec();
         let instances = (0..instance_dims.len())
             .map(|i| ValTensor::new_instance(cs, instance_dims[i].clone(), true))

@@ -10,6 +10,8 @@ use halo2_proofs::{
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
 };
 use halo2curves::FieldExt;
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 
 use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor, VarTensor};
 use std::{
@@ -35,10 +37,20 @@ pub enum BaseOp {
 
 #[allow(missing_docs)]
 /// An enum representing activating the sanity checks we can perform on the accumulated arguments
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum CheckMode {
     SAFE,
     UNSAFE,
+}
+
+impl From<String> for CheckMode {
+    fn from(value: String) -> Self {
+        match value.to_lowercase().as_str() {
+            "safe" => CheckMode::SAFE,
+            "unsafe" => CheckMode::UNSAFE,
+            _ => panic!("not a valid checkmode"),
+        }
+    }
 }
 
 /// Matches a [BaseOp] to an operation over inputs
@@ -53,8 +65,8 @@ impl BaseOp {
             BaseOp::InitDot => a * b,
             BaseOp::Dot => a * b + m,
             BaseOp::Add => a + b,
-            BaseOp::Identity => a,
-            BaseOp::Sum => a + m,
+            BaseOp::Identity => b,
+            BaseOp::Sum => b + m,
             BaseOp::Sub => a - b,
             BaseOp::Mult => a * b,
         }
@@ -140,6 +152,7 @@ pub enum Op {
     Sum,
     Pow(u32),
     Pack(u32, u32),
+    GlobalSumPool,
     Rescaled {
         inner: Box<Op>,
         scale: Vec<(usize, usize)>,
@@ -219,6 +232,52 @@ impl Op {
                 }
                 Ok(inner.f(rescaled_inputs)?)
             }
+            Op::GlobalSumPool => unreachable!(),
+        }
+    }
+}
+
+impl fmt::Display for Op {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Op::Identity => write!(f, "identity"),
+            Op::Reshape(new_dims) => write!(f, "reshape to {:?}", new_dims),
+            Op::Flatten(new_dims) => write!(f, "flatten to {:?}", new_dims),
+            Op::Pad(dim1, dim2) => write!(f, "padding: ({:?}, {:?})", dim1, dim2),
+            Op::Add => write!(f, "add"),
+            Op::Sub => write!(f, "sub"),
+            Op::Sum => write!(f, "sum"),
+            Op::Mult => write!(f, "mult"),
+            Op::Matmul => write!(f, "matmul"),
+            Op::Dot => write!(f, "dot"),
+            Op::Pack(base, _) => write!(f, "pack with base {:?}", base),
+            Op::Affine => write!(f, "affine"),
+            Op::BatchNorm => write!(f, "batchnorm"),
+            Op::ScaleAndShift => write!(f, "scale & shift"),
+            Op::Conv { padding, stride } => {
+                write!(f, "conv w/ padding: {:?}, stride: {:?}", padding, stride)
+            }
+            Op::SumPool {
+                padding,
+                stride,
+                kernel_shape,
+            } => {
+                write!(
+                    f,
+                    "avg pl w/ padding: {:?}, stride: {:?}, kernel shape: {:?}",
+                    padding, stride, kernel_shape,
+                )
+            }
+            Op::GlobalSumPool => write!(f, "globalsumpool"),
+            Op::Pow(s) => write!(f, "pow {}", s),
+            Op::Rescaled { inner, scale } => {
+                write!(
+                    f,
+                    "{} w/ scalings: {:?}",
+                    **inner,
+                    scale.iter().map(|e| e.1).collect_vec()
+                )
+            }
         }
     }
 }
@@ -275,7 +334,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                 let selector = meta.query_selector(*selector);
 
                 let mut qis = vec![Expression::<F>::zero().unwrap(); 2];
-                for i in 0..base_op.num_inputs() {
+                for i in 2 - base_op.num_inputs()..2 {
                     qis[i] = config.inputs[i]
                         .query_rng(meta, 0, 1)
                         .expect("accum: input query failed")[0]
@@ -313,14 +372,27 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         offset: usize,
         op: Op,
     ) -> Result<ValTensor<F>, Box<dyn Error>> {
-        match op {
-            Op::Dot => layouts::dot(self, layouter, values.try_into()?, offset),
-            Op::Sum => layouts::sum(self, layouter, values.try_into()?, offset),
-            Op::Matmul => layouts::matmul(self, layouter, values.try_into()?, offset),
-            Op::Affine => layouts::affine(self, layouter, values.try_into()?, offset),
-            Op::Conv { padding, stride } => {
-                layouts::conv(self, layouter, values.try_into()?, padding, stride, offset)
+        let mut cp_values = vec![];
+        for v in values.iter() {
+            if let ValTensor::Instance { .. } = v {
+                cp_values.push(layouts::identity(self, layouter, &[v.clone()], offset)?);
+            } else {
+                cp_values.push(v.clone());
             }
+        }
+        match op {
+            Op::Dot => layouts::dot(self, layouter, cp_values[..].try_into()?, offset),
+            Op::Sum => layouts::sum(self, layouter, cp_values[..].try_into()?, offset),
+            Op::Matmul => layouts::matmul(self, layouter, cp_values[..].try_into()?, offset),
+            Op::Affine => layouts::affine(self, layouter, cp_values[..].try_into()?, offset),
+            Op::Conv { padding, stride } => layouts::conv(
+                self,
+                layouter,
+                cp_values[..].try_into()?,
+                padding,
+                stride,
+                offset,
+            ),
             Op::SumPool {
                 padding,
                 stride,
@@ -328,20 +400,40 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             } => layouts::sumpool(
                 self,
                 layouter,
-                values.try_into()?,
+                cp_values[..].try_into()?,
                 padding,
                 stride,
                 kernel_shape,
                 offset,
             ),
-            Op::Add => layouts::pairwise(self, layouter, values.try_into()?, offset, BaseOp::Add),
-            Op::Sub => layouts::pairwise(self, layouter, values.try_into()?, offset, BaseOp::Sub),
-            Op::Mult => layouts::pairwise(self, layouter, values.try_into()?, offset, BaseOp::Mult),
-            Op::Identity => layouts::identity(values.try_into()?),
-            Op::Reshape(d) | Op::Flatten(d) => layouts::reshape(values.try_into()?, &d),
-            Op::BatchNorm => layouts::scale_and_shift(self, layouter, values.try_into()?, offset),
+            Op::Add => layouts::pairwise(
+                self,
+                layouter,
+                cp_values[..].try_into()?,
+                offset,
+                BaseOp::Add,
+            ),
+            Op::Sub => layouts::pairwise(
+                self,
+                layouter,
+                cp_values[..].try_into()?,
+                offset,
+                BaseOp::Sub,
+            ),
+            Op::Mult => layouts::pairwise(
+                self,
+                layouter,
+                cp_values[..].try_into()?,
+                offset,
+                BaseOp::Mult,
+            ),
+            Op::Identity => layouts::identity(self, layouter, cp_values[..].try_into()?, offset),
+            Op::Reshape(d) | Op::Flatten(d) => layouts::reshape(cp_values[..].try_into()?, &d),
+            Op::BatchNorm => {
+                layouts::scale_and_shift(self, layouter, cp_values[..].try_into()?, offset)
+            }
             Op::ScaleAndShift => {
-                layouts::scale_and_shift(self, layouter, values.try_into()?, offset)
+                layouts::scale_and_shift(self, layouter, cp_values[..].try_into()?, offset)
             }
             Op::Pad(p1, p2) => {
                 if values.len() != 1 {
@@ -351,10 +443,15 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                 input.pad((p1, p2))?;
                 Ok(input)
             }
-            Op::Pow(exp) => layouts::pow(self, layouter, values.try_into()?, exp, offset),
-            Op::Pack(base, scale) => {
-                layouts::pack(self, layouter, values.try_into()?, base, scale, offset)
-            }
+            Op::Pow(exp) => layouts::pow(self, layouter, cp_values[..].try_into()?, exp, offset),
+            Op::Pack(base, scale) => layouts::pack(
+                self,
+                layouter,
+                cp_values[..].try_into()?,
+                base,
+                scale,
+                offset,
+            ),
             Op::Rescaled { inner, scale } => {
                 if scale.len() != values.len() {
                     return Err(Box::new(TensorError::DimMismatch(
@@ -362,10 +459,16 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                     )));
                 }
 
-                let res =
-                    &layouts::rescale(self, layouter, values.try_into()?, &scale, offset)?[..];
+                let res = &layouts::rescale(
+                    self,
+                    layouter,
+                    cp_values[..].try_into()?,
+                    &scale,
+                    offset,
+                )?[..];
                 self.layout(layouter, res, offset, *inner)
             }
+            Op::GlobalSumPool => unreachable!(),
         }
     }
 }

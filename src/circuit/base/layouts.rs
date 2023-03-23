@@ -109,9 +109,9 @@ pub fn sum<F: FieldExt + TensorType>(
         || "assign inputs",
         |mut region| {
             let input = utils::value_muxer(
-                &config.inputs[0],
+                &config.inputs[1],
                 &{
-                    let res = config.inputs[0].assign(&mut region, offset, &values[0])?;
+                    let res = config.inputs[1].assign(&mut region, offset, &values[0])?;
                     res.map(|e| e.value_field().evaluate())
                 },
                 &values[0],
@@ -374,7 +374,13 @@ pub fn affine<F: FieldExt + TensorType>(
     values: &[ValTensor<F>; 3],
     offset: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let (mut input, kernel, bias) = (values[0].clone(), values[1].clone(), values[2].clone());
+    let (mut input, kernel, mut bias) = (values[0].clone(), values[1].clone(), values[2].clone());
+    if input.dims().len() == 1 {
+        input.reshape(&[input.len(), 1])?;
+    }
+    if bias.dims().len() == 1 {
+        bias.reshape(&[bias.len(), 1])?;
+    }
     input.pad_row_ones()?;
     let params = kernel.append_to_row(bias)?;
 
@@ -440,6 +446,10 @@ pub fn sumpool<F: FieldExt + TensorType>(
         acc.concat(elem.clone()).unwrap()
     });
     last_elem.reshape(&[&[image_channels], shape].concat())?;
+
+    // if values.len() == 1 {
+    //     panic!()
+    // }
 
     if matches!(config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
@@ -667,7 +677,8 @@ pub fn pack<F: FieldExt + TensorType>(
     scale: u32,
     offset: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let t = values[0].clone();
+    let mut t = values[0].clone();
+    t.flatten();
 
     // these unwraps should never ever fail if the Tensortypes are correctly implemented
     // if anything we want these to hard fail if not implemented
@@ -731,9 +742,47 @@ pub fn reshape<F: FieldExt + TensorType>(
 /// * `values` - The explicit values to the operations.
 /// * `layouter` - A Halo2 Layouter.
 pub fn identity<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    layouter: &mut impl Layouter<F>,
     values: &[ValTensor<F>; 1],
+    offset: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    Ok(values[0].clone())
+    let t = match layouter.assign_region(
+        || "identity",
+        |mut region| {
+            let inp = utils::value_muxer(
+                &config.inputs[0],
+                &{
+                    // always an advice
+                    let res = config.inputs[1].assign(&mut region, offset, &values[0])?;
+                    res.map(|e| e.value_field().evaluate())
+                },
+                &values[0],
+            );
+
+            let output = config
+                .output
+                .assign(&mut region, offset, &inp.clone().into())?;
+
+            for i in 0..inp.len() {
+                let (_, y) = config.inputs[0].cartesian_coord(i);
+                config
+                    .selectors
+                    .get(&BaseOp::Identity)
+                    .unwrap()
+                    .enable(&mut region, offset + y)?;
+            }
+
+            Ok(output)
+        },
+    ) {
+        Ok(a) => a,
+        Err(e) => {
+            return Err(Box::new(e));
+        }
+    };
+
+    Ok(ValTensor::from(t))
 }
 
 /// Assigns variables to the regions created when calling `configure`.

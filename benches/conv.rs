@@ -1,8 +1,10 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use ezkl_lib::circuit::base::CheckMode;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::gen_srs;
 use ezkl_lib::tensor::*;
+#[allow(deprecated)]
 use ezkl_lib::{circuit::fused::*, pfsys::create_keys};
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2_proofs::poly::kzg::strategy::SingleStrategy;
@@ -51,7 +53,6 @@ impl Circuit<Fr> for MyCircuit {
                 IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH,
                 vec![IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
                 true,
-                512,
             );
             let kernel = VarTensor::new_advice(
                 cs,
@@ -59,17 +60,15 @@ impl Circuit<Fr> for MyCircuit {
                 OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH,
                 vec![OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
                 true,
-                512,
             );
 
-            let bias = VarTensor::new_advice(cs, K, OUT_CHANNELS, vec![OUT_CHANNELS], true, 512);
+            let bias = VarTensor::new_advice(cs, K, OUT_CHANNELS, vec![OUT_CHANNELS], true);
             let output = VarTensor::new_advice(
                 cs,
                 K,
                 OUT_CHANNELS * output_height * output_width,
                 vec![OUT_CHANNELS, output_height, output_width],
                 true,
-                512,
             );
 
             // tells the config layer to add a conv op to a circuit gate
@@ -158,6 +157,7 @@ fn runcnvrl(c: &mut Criterion) {
                         &pk,
                         TranscriptType::Blake,
                         SingleStrategy::new(&params),
+                        CheckMode::UNSAFE,
                     );
                     prover.unwrap();
                 });

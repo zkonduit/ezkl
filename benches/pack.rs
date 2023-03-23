@@ -1,4 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use ezkl_lib::circuit::base::CheckMode;
+#[allow(deprecated)]
 use ezkl_lib::circuit::fused::*;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
@@ -35,8 +37,8 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
-        let output = VarTensor::new_advice(cs, K, 1, vec![1], true, 512);
+        let a = VarTensor::new_advice(cs, K, len, vec![len], true);
+        let output = VarTensor::new_advice(cs, K, 1, vec![1], true);
         let pack_node = Node {
             op: Op::Pack(2, 1),
             input_order: vec![InputType::Input(0)],
@@ -92,6 +94,7 @@ fn runpack(c: &mut Criterion) {
                     &pk,
                     TranscriptType::Blake,
                     SingleStrategy::new(&params),
+                    CheckMode::SAFE,
                 );
                 prover.unwrap();
             });

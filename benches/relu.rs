@@ -30,7 +30,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for NLCircuit<F> {
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         unsafe {
             let advices = (0..2)
-                .map(|_| VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512))
+                .map(|_| VarTensor::new_advice(cs, K, LEN, vec![LEN], true))
                 .collect::<Vec<_>>();
 
             let nl = Op::ReLU { scale: 128 };
