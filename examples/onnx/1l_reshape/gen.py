@@ -4,16 +4,14 @@ spec = imputil.spec_from_file_location("exporter", "/Users/siddharthaalluri/Desk
 exp = imputil.module_from_spec(spec)       
 spec.loader.exec_module(exp)
 
-class MyModel(nn.Module):
-    def __init__(self):
-        super(MyModel, self).__init__()
-        self.layer = nn.Sigmoid()
+class Model(nn.Module):
+    # def __init__(self):
+    #     super(Model, self).__init__()
+    #     self.layer = nn.Flatten()
 
     def forward(self, x):
-        return self.layer(x)
+        return x.view(6)
 
-circuit = MyModel()
-exp.export(circuit, input_shape = [3])
+circuit = Model()
 
-
-    
+exp.export(circuit, input_shape = [3,2])

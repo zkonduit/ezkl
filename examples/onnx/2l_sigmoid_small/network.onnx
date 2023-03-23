@@ -1,15 +1,13 @@
-pytorch1.13.1:Ó
+pytorch2.0.0:Ë
 =
 input/sigmoid/Sigmoid_output_0/sigmoid/Sigmoid"Sigmoid
 @
-/sigmoid/Sigmoid_output_0output/sigmoid_1/Sigmoid"Sigmoid	torch_jitZ!
-input
-
+/sigmoid/Sigmoid_output_0output/sigmoid_1/Sigmoid"Sigmoid	torch_jitZ
+input
+
 
-batch_size
-b"
-output
-
+batch_sizeb
+output
+
 
-batch_size
-B
+batch_sizeB

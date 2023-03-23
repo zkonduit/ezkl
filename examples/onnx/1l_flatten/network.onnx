@@ -1,16 +1,15 @@
-pytorch1.12.1:å
-0
-inputoutput	Flatten_0"Flatten*
-axis†	torch_jitZ)
-input 
-
+pytorch2.0.0:è
+7
+inputoutput/flatten/Flatten"Flatten*
+axis†	torch_jitZ%
+input
+
 
 batch_size
-
 
 b"
 output
 
 
 batch_size
-B
+B

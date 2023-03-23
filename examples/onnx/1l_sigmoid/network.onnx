@@ -1,13 +1,11 @@
-pytorch1.12.1:w
-#
-inputoutput	Sigmoid_0"Sigmoid	torch_jitZ!
-input
-
+pytorch2.0.0:t
+(
+inputoutput/layer/Sigmoid"Sigmoid	torch_jitZ
+input
+
 
-batch_size
-b"
-output
-
+batch_sizeb
+output
+
 
-batch_size
-B
+batch_sizeB
