@@ -67,9 +67,6 @@ pub struct RunArgs {
     /// Flags whether params are public
     #[arg(long, default_value = "false")]
     pub public_params: bool,
-    /// Flags to set maximum rotations
-    #[arg(short = 'M', long, default_value = "1048576")]
-    pub max_rotations: usize,
     /// Base used to pack the public-inputs to the circuit. (value > 1) to pack instances as a single int.
     /// Useful when verifying on the EVM. Note that this will often break for very long inputs. Use with caution, still experimental.
     #[arg(long, default_value = "1")]
