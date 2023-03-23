@@ -1,5 +1,7 @@
 target
 data
+*.ipynb_checkpoints
+*.ipynb
 *.sol
 *.pf
 *.vk
