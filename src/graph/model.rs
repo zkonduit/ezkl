@@ -27,7 +27,6 @@ use itertools::Itertools;
 use log::{debug, info, trace};
 use std::cell::RefCell;
 use std::cmp::max;
-use std::cmp::min;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
@@ -60,7 +59,7 @@ pub struct ModelConfig<F: FieldExt + TensorType> {
     /// (optional) range checked outputs of the model graph
     pub range_checks: Vec<RangeCheckConfig<F>>,
     /// (optional) packed outputs of the model graph
-    pub packed_outputs: Vec<PolyConfig<F>>,
+    pub packed_outputs: Vec<Rc<RefCell<PolyConfig<F>>>>,
     /// A wrapper for holding all columns that will be assigned to by the model
     pub vars: ModelVars<F>,
 }
@@ -236,6 +235,7 @@ impl Model {
         info!("configuring model");
         let mut results = BTreeMap::new();
         let mut tables = BTreeMap::new();
+        let mut base_gates = BTreeMap::new();
 
         let non_op_nodes: BTreeMap<&usize, &Node> = self
             .nodes
@@ -277,7 +277,7 @@ impl Model {
         // preserves ordering
         if !poly_ops.is_empty() {
             for (i, node) in poly_ops {
-                let config = self.conf_poly_ops(&node, meta, vars)?;
+                let config = self.conf_poly_ops(&node, meta, vars, &mut base_gates)?;
                 results.insert(*i, config);
 
                 let mut display: String = "Poly nodes: ".to_string();
@@ -292,7 +292,7 @@ impl Model {
         if self.visibility.output.is_public() {
             if self.run_args.pack_base > 1 {
                 info!("packing outputs...");
-                packed_outputs = self.pack_outputs(meta, vars);
+                packed_outputs = self.pack_outputs(meta, vars, &mut base_gates);
                 range_checks = self.range_check_outputs(
                     meta,
                     vars,
@@ -317,17 +317,26 @@ impl Model {
         &self,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-    ) -> Vec<PolyConfig<F>> {
+        base_gates: &mut BTreeMap<bool, Rc<RefCell<PolyConfig<F>>>>,
+    ) -> Vec<Rc<RefCell<PolyConfig<F>>>> {
         let mut configs = vec![];
 
-        let config = PolyConfig::<F>::configure(
-            meta,
-            &[vars.advices[0].clone(), vars.advices[1].clone()],
-            &vars.advices[2],
-            CheckMode::SAFE,
-        );
-
-        configs.push(config);
+        for _ in self.output_shapes() {
+            let config = match base_gates.get(&false) {
+                Some(config) => config.clone(),
+                None => {
+                    let config = Rc::new(RefCell::new(PolyConfig::<F>::configure(
+                        meta,
+                        &[vars.advices[0].clone(), vars.advices[1].clone()],
+                        &vars.advices[2],
+                        CheckMode::SAFE,
+                    )));
+                    base_gates.insert(false, config.clone());
+                    config
+                }
+            };
+            configs.push(config);
+        }
 
         configs
     }
@@ -433,41 +442,51 @@ impl Model {
         node: &Node,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
+        base_gates: &mut BTreeMap<bool, Rc<RefCell<PolyConfig<F>>>>,
     ) -> Result<NodeConfig<F>, Box<dyn Error>> {
         let input_nodes = node
             .inputs
             .iter()
             .map(|i| self.nodes.get(&i.node).unwrap())
             .collect_vec();
-        // impose an execution order here
-        let mut inputs_to_layer: [VarTensor; 2] =
-            [vars.advices[0].clone(), vars.advices[1].clone()];
-        let input_idx = input_nodes
+
+        let input_idx = input_nodes.iter().map(|f| f.idx).collect_vec();
+
+        let fixed_flag = input_nodes
             .iter()
-            .map(|f| {
-                if f.opkind.is_const() && self.visibility.params.is_public() {
-                    inputs_to_layer[0] = vars.fixed[0].clone();
-                    f.idx
+            .filter(|f| f.opkind.is_const() && self.visibility.params.is_public())
+            .collect_vec()
+            .len()
+            > 0;
+
+        let config = match base_gates.get(&fixed_flag) {
+            Some(config) => {
+                trace!("reusing base gate config");
+                config.clone()
+            }
+            None => {
+                let inputs: [VarTensor; 2] = if fixed_flag {
+                    [vars.fixed[0].clone(), vars.advices[1].clone()]
                 } else {
-                    f.idx
-                }
-            })
-            .collect_vec();
-
-        let output_shape = &node.out_dims;
-        // output node
-        let output = &vars.advices[2].reshape(output_shape);
-
-        let inputs = inputs_to_layer[..min(2, inputs_to_layer.len())].iter();
+                    [vars.advices[0].clone(), vars.advices[1].clone()]
+                };
+                // output node
+                let output_shape = &node.out_dims;
+                let output = &vars.advices[2].reshape(output_shape);
+                let config = Rc::new(RefCell::new(PolyConfig::configure(
+                    meta,
+                    inputs.into_iter().collect_vec()[..].try_into()?,
+                    output,
+                    CheckMode::SAFE,
+                )));
+                base_gates.insert(fixed_flag, config.clone());
+                config
+            }
+        };
 
         if let OpKind::Poly(op) = &node.opkind {
             let config = NodeConfig::Poly {
-                config: PolyConfig::configure(
-                    meta,
-                    inputs.clone().map(|x| x.clone()).collect_vec()[..].try_into()?,
-                    output,
-                    CheckMode::SAFE,
-                ),
+                config,
                 inputs: input_idx,
                 op: op.clone(),
             };
@@ -569,7 +588,7 @@ impl Model {
         // pack outputs if need be
         for (i, packed_output) in config.packed_outputs.iter_mut().enumerate() {
             info!("packing outputs...");
-            outputs[i] = packed_output.layout(
+            outputs[i] = packed_output.borrow_mut().layout(
                 layouter,
                 &outputs[i..i + 1],
                 0,
@@ -617,7 +636,7 @@ impl Model {
         // The node kind and the config should be the same.
         let res = match config.clone() {
             NodeConfig::Poly {
-                mut config,
+                config,
                 inputs: idx,
                 op,
             } => {
@@ -639,7 +658,7 @@ impl Model {
                     })
                     .collect_vec();
 
-                Some(config.layout(layouter, &values, 0, op)?)
+                Some(config.borrow_mut().layout(layouter, &values, 0, op)?)
             }
             NodeConfig::Lookup {
                 config,

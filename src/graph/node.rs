@@ -149,7 +149,7 @@ pub enum NodeConfig<F: FieldExt + TensorType> {
         inputs: Vec<usize>,
     },
     Poly {
-        config: PolyConfig<F>,
+        config: Rc<RefCell<PolyConfig<F>>>,
         inputs: Vec<usize>,
         op: PolyOp,
     },

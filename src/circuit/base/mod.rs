@@ -11,6 +11,7 @@ use halo2_proofs::{
 };
 use halo2curves::FieldExt;
 use itertools::Itertools;
+use log::trace;
 use serde::{Deserialize, Serialize};
 
 use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor, VarTensor};
@@ -380,6 +381,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                 cp_values.push(v.clone());
             }
         }
+        trace!("laying out {}", op);
         match op {
             Op::Dot => layouts::dot(self, layouter, cp_values[..].try_into()?, offset),
             Op::Sum => layouts::sum(self, layouter, cp_values[..].try_into()?, offset),
@@ -439,7 +441,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                 if values.len() != 1 {
                     return Err(Box::new(TensorError::DimError));
                 }
-                let mut input = values[0].clone();
+                let mut input = cp_values[0].clone();
                 input.pad((p1, p2))?;
                 Ok(input)
             }
