@@ -54,7 +54,7 @@ pub fn dot<F: FieldExt + TensorType>(
                 if y == 0 {
                     config
                         .selectors
-                        .get(&BaseOp::InitDot)
+                        .get(&BaseOp::Mult)
                         .unwrap()
                         .enable(&mut region, offset + y)?;
                 } else {
@@ -308,7 +308,7 @@ pub fn matmul<F: FieldExt + TensorType>(
                 } else {
                     config
                         .selectors
-                        .get(&BaseOp::InitDot)
+                        .get(&BaseOp::Mult)
                         .unwrap()
                         .enable(&mut region, offset + y)?;
                 }

@@ -28,7 +28,6 @@ use std::{
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum BaseOp {
     Dot,
-    InitDot,
     Identity,
     Add,
     Mult,
@@ -63,7 +62,6 @@ impl BaseOp {
     ) -> T {
         let (a, b, m) = inputs;
         match &self {
-            BaseOp::InitDot => a * b,
             BaseOp::Dot => a * b + m,
             BaseOp::Add => a + b,
             BaseOp::Identity => b,
@@ -75,7 +73,6 @@ impl BaseOp {
 
     fn as_str(&self) -> &'static str {
         match self {
-            BaseOp::InitDot => "INITDOT",
             BaseOp::Identity => "IDENTITY",
             BaseOp::Dot => "DOT",
             BaseOp::Add => "ADD",
@@ -86,7 +83,6 @@ impl BaseOp {
     }
     fn query_offset_rng(&self) -> (i32, usize) {
         match self {
-            BaseOp::InitDot => (0, 1),
             BaseOp::Identity => (0, 1),
             BaseOp::Dot => (-1, 2),
             BaseOp::Add => (0, 1),
@@ -97,7 +93,6 @@ impl BaseOp {
     }
     fn num_inputs(&self) -> usize {
         match self {
-            BaseOp::InitDot => 2,
             BaseOp::Identity => 1,
             BaseOp::Dot => 2,
             BaseOp::Add => 2,
@@ -108,7 +103,6 @@ impl BaseOp {
     }
     fn constraint_idx(&self) -> usize {
         match self {
-            BaseOp::InitDot => 0,
             BaseOp::Identity => 0,
             BaseOp::Dot => 1,
             BaseOp::Add => 0,
@@ -320,7 +314,6 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         selectors.insert(BaseOp::Dot, meta.selector());
         selectors.insert(BaseOp::Sum, meta.selector());
         selectors.insert(BaseOp::Mult, meta.selector());
-        selectors.insert(BaseOp::InitDot, meta.selector());
         selectors.insert(BaseOp::Identity, meta.selector());
 
         let config = Self {
