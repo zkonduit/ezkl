@@ -44,11 +44,13 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
             //          v       |         1
 
             let q = cs.query_selector(config.selector);
-            let witnessed = input.query(cs, 0).expect("range: failed to query input");
+            let witnessed = input
+                .query_rng(cs, 0, 1)
+                .expect("range: failed to query input");
 
             // Get output expressions for each input channel
             let expected = expected
-                .query(cs, 0)
+                .query_rng(cs, 0, 1)
                 .expect("range: failed to query expected value");
 
             // Given a range R and a value v, returns the expression
@@ -85,13 +87,15 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
             |mut region| {
                 let offset = 0;
 
-                // Enable q_range_check
-                self.selector.enable(&mut region, offset)?;
-
                 // assigns the instance to the advice.
                 self.input.assign(&mut region, offset, &input)?;
 
                 self.expected.assign(&mut region, offset, &output)?;
+
+                for _ in 0..input.len() {
+                    // Enable q_range_check
+                    self.selector.enable(&mut region, offset)?;
+                }
 
                 Ok(())
             },

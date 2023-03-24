@@ -90,7 +90,12 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
         // for now the number of instances corresponds to the number of graph / model outputs
         let instance_shapes = model.instance_shapes();
 
-        let mut vars = ModelVars::new(cs, model.run_args.logrows as usize, instance_shapes.clone());
+        let mut vars = ModelVars::new(
+            cs,
+            model.run_args.logrows as usize,
+            instance_shapes.clone(),
+            model.visibility.clone(),
+        );
         info!(
             "number of advices used: {:?}",
             vars.advices.iter().map(|a| a.num_cols()).sum::<usize>()
