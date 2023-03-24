@@ -92,9 +92,9 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
 
                 self.expected.assign(&mut region, offset, &output)?;
 
-                for _ in 0..input.len() {
+                for i in 0..input.len() {
                     // Enable q_range_check
-                    self.selector.enable(&mut region, offset)?;
+                    self.selector.enable(&mut region, offset + i)?;
                 }
 
                 Ok(())
