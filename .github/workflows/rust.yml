@@ -209,7 +209,7 @@ jobs:
         run: rustup target add wasm32-wasi
       - name: Mock proving tests (WASI) (public outputs)
         run: cargo test --release --verbose tests_wasi::mock_public_outputs_ -- --test-threads 32
-      - name: Mock proving tests (WASI) (public outputs and single lookup)
+      - name: Mock proving tests (WASI) (public outputs and no single lookup)
         run: cargo test --release --verbose tests_wasi::mock_non_single_lookup_ -- --test-threads 32
       - name: Mock proving tests (WASI) (public and packed outputs)
         run: cargo test --release --verbose packed_tests_wasi::mock_packed_outputs_ -- --test-threads 32
@@ -253,7 +253,7 @@ jobs:
         run: rustup target add wasm32-wasi
       - name: KZG prove and verify tests
         run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 8
-      - name: KZG prove and verify tests (single lookup)
+      - name: KZG prove and verify tests (no single lookup)
         run: cargo test --release --verbose tests::kzg_prove_and_verify_non_single_lookup_ -- --test-threads 8
 
   prove-and-verify-aggr-tests:
