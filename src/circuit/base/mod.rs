@@ -298,10 +298,11 @@ pub struct BaseConfig<F: FieldExt + TensorType> {
 }
 
 impl<F: FieldExt + TensorType> BaseConfig<F> {
-    /// Configures the sequence of operations into a circuit gate.
+    /// Configures [BaseOp]s for a given [ConstraintSystem].
     /// # Arguments
     /// * `inputs` - The explicit inputs to the operations.
     /// * `output` - The variable representing the (currently singular) output of the operations.
+    /// * `check_mode` - The variable representing the (currently singular) output of the operations.
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         inputs: &[VarTensor; 2],
@@ -371,6 +372,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
     /// * `values` - The explicit values to the operations.
     /// * `layouter` - A Halo2 Layouter.
     /// * `offset` - Offset to assign.
+    /// * `op` - The operation being represented.
     pub fn layout(
         &mut self,
         layouter: &mut impl Layouter<F>,

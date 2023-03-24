@@ -18,10 +18,7 @@ use crate::{
 
 use super::*;
 
-/// Assigns variables to the regions created when calling `configure`.
-/// # Arguments
-/// * `values` - The explicit values to the operations.
-/// * `layouter` - A Halo2 Layouter.
+/// Dot product accumulated layout
 pub fn dot<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     layouter: &mut impl Layouter<F>,
@@ -95,10 +92,7 @@ pub fn dot<F: FieldExt + TensorType>(
     Ok(ValTensor::from(t))
 }
 
-/// Assigns variables to the regions created when calling `configure`.
-/// # Arguments
-/// * `values` - The explicit values to the operations.
-/// * `layouter` - A Halo2 Layouter.
+/// Sum accumulated layout
 pub fn sum<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     layouter: &mut impl Layouter<F>,
@@ -168,10 +162,7 @@ pub fn sum<F: FieldExt + TensorType>(
     Ok(ValTensor::from(t))
 }
 
-/// Assigns variables to the regions created when calling `configure`.
-/// # Arguments
-/// * `values` - The explicit values to the operations.
-/// * `layouter` - A Halo2 Layouter.
+/// Pairwise (elementwise) op layout
 pub fn pairwise<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     layouter: &mut impl Layouter<F>,
@@ -235,10 +226,7 @@ pub fn pairwise<F: FieldExt + TensorType>(
     Ok(ValTensor::from(t))
 }
 
-/// Assigns variables to the regions created when calling `configure`.
-/// # Arguments
-/// * `values` - The explicit values to the operations.
-/// * `layouter` - A Halo2 Layouter.
+/// Matrix multiplication accumulated layout
 pub fn matmul<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     layouter: &mut impl Layouter<F>,
@@ -363,10 +351,7 @@ pub fn matmul<F: FieldExt + TensorType>(
     Ok(ValTensor::from(t))
 }
 
-/// Assigns variables to the regions created when calling `configure`.
-/// # Arguments
-/// * `values` - The explicit values to the operations.
-/// * `layouter` - A Halo2 Layouter.
+/// Affine operation accumulated layout
 pub fn affine<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     layouter: &mut impl Layouter<F>,
@@ -410,10 +395,7 @@ pub fn affine<F: FieldExt + TensorType>(
     Ok(last_elem)
 }
 
-/// Assigns variables to the regions created when calling `configure`.
-/// # Arguments
-/// * `values` - The explicit values to the operations.
-/// * `layouter` - A Halo2 Layouter.
+/// Sumpool accumulated layout
 pub fn sumpool<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     layouter: &mut impl Layouter<F>,
@@ -470,10 +452,7 @@ pub fn sumpool<F: FieldExt + TensorType>(
     Ok(last_elem)
 }
 
-/// Assigns variables to the regions created when calling `configure`.
-/// # Arguments
-/// * `values` - The explicit values to the operations.
-/// * `layouter` - A Halo2 Layouter.
+/// Convolution accumulated layout
 pub fn conv<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     layouter: &mut impl Layouter<F>,
@@ -572,11 +551,7 @@ pub fn conv<F: FieldExt + TensorType>(
 
     Ok(res)
 }
-
-/// Assigns variables to the regions created when calling `configure`.
-/// # Arguments
-/// * `values` - The explicit values to the operations.
-/// * `layouter` - A Halo2 Layouter.
+/// Power accumulated layout
 pub fn pow<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     layouter: &mut impl Layouter<F>,
@@ -619,10 +594,7 @@ pub fn pow<F: FieldExt + TensorType>(
     Ok(t)
 }
 
-/// Assigns variables to the regions created when calling `configure`.
-/// # Arguments
-/// * `values` - The explicit values to the operations.
-/// * `layouter` - A Halo2 Layouter.
+/// Rescaled op accumulated layout
 pub fn rescale<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     layouter: &mut impl Layouter<F>,
@@ -664,10 +636,7 @@ pub fn rescale<F: FieldExt + TensorType>(
     Ok(rescaled_inputs)
 }
 
-/// Assigns variables to the regions created when calling `configure`.
-/// # Arguments
-/// * `values` - The explicit values to the operations.
-/// * `layouter` - A Halo2 Layouter.
+/// Pack accumulated layout
 pub fn pack<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     layouter: &mut impl Layouter<F>,
@@ -723,10 +692,7 @@ pub fn pack<F: FieldExt + TensorType>(
     Ok(res)
 }
 
-/// Assigns variables to the regions created when calling `configure`.
-/// # Arguments
-/// * `values` - The explicit values to the operations.
-/// * `layouter` - A Halo2 Layouter.
+/// Dummy (no contraints) reshape layout
 pub fn reshape<F: FieldExt + TensorType>(
     values: &[ValTensor<F>; 1],
     new_dims: &[usize],
@@ -736,10 +702,7 @@ pub fn reshape<F: FieldExt + TensorType>(
     Ok(t)
 }
 
-/// Assigns variables to the regions created when calling `configure`.
-/// # Arguments
-/// * `values` - The explicit values to the operations.
-/// * `layouter` - A Halo2 Layouter.
+/// Identity constraint. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
 pub fn identity<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     layouter: &mut impl Layouter<F>,
@@ -784,10 +747,7 @@ pub fn identity<F: FieldExt + TensorType>(
     Ok(ValTensor::from(t))
 }
 
-/// Assigns variables to the regions created when calling `configure`.
-/// # Arguments
-/// * `values` - The explicit values to the operations.
-/// * `layouter` - A Halo2 Layouter.
+/// Scale and shift accumulated layout
 pub fn scale_and_shift<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     layouter: &mut impl Layouter<F>,

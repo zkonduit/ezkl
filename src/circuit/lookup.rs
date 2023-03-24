@@ -66,6 +66,17 @@ impl Op {
         }
     }
 
+    fn as_str(&self) -> &'static str {
+        match self {
+            Op::Div { .. } => "DIV",
+            Op::ReLU { .. } => "RELU",
+            Op::LeakyReLU { .. } => "LEAKY_RELU",
+            Op::PReLU { .. } => "PRELU",
+            Op::Sigmoid { .. } => "SIGMOID",
+            Op::Sqrt { .. } => "SQRT",
+        }
+    }
+
     /// a value which is always in the table
     pub fn default_pair<F: FieldExt>(&self) -> (F, F) {
         let x = vec![0_i128].into_iter().into();
@@ -203,7 +214,7 @@ impl<F: FieldExt + TensorType> Config<F> {
     ) -> Self {
         let qlookup = cs.complex_selector();
 
-        let _ = cs.lookup("lk", |cs| {
+        let _ = cs.lookup(table.borrow().nonlinearities[0].as_str(), |cs| {
             let qlookup = cs.query_selector(qlookup);
             let not_qlookup = Expression::Constant(<F as Field>::one()) - qlookup.clone();
             let default_x = <F as Field>::zero();
