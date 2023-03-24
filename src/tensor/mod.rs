@@ -687,9 +687,9 @@ impl<T: Clone + TensorType> Tensor<T> {
             rows.push(row);
         }
         let mut res = vec![];
-        for i in 0..self.dims[0] {
+        for row in rows.iter().take(self.dims[0]) {
             for _ in 0..n {
-                res.push(rows[i].clone());
+                res.push(row.clone());
             }
         }
 
@@ -728,11 +728,11 @@ impl<T: Clone + TensorType> Tensor<T> {
                 Tensor::new(None, &[h_blocks * num_rows, w_blocks * num_cols])?;
                 second_channels
             ];
-            for j in 0..second_channels {
+            for (j, row_block) in row.iter_mut().enumerate().take(second_channels) {
                 let mut r = self.get_slice(&[i..i + 1, j..j + 1])?;
                 let dims = r.dims()[2..].to_vec();
                 r.reshape(&dims);
-                row[j] = r.doubly_blocked_toeplitz(
+                *row_block = r.doubly_blocked_toeplitz(
                     h_blocks, w_blocks, num_rows, num_cols, h_stride, w_stride,
                 )?;
             }

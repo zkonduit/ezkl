@@ -66,7 +66,8 @@ impl Circuit<Fr> for MyCircuit {
 fn runaffine(c: &mut Criterion) {
     let mut group = c.benchmark_group("affine");
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    for &len in [4].iter() {
+    {
+        let &len = &4;
         unsafe {
             LEN = len;
         };

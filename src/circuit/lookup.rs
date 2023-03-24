@@ -352,13 +352,13 @@ impl<F: FieldExt + TensorType> Config<F> {
                     }
                 };
 
-                self.input_buffer.push(w.clone());
+                self.input_buffer.push(w);
 
                 // constrain the calculated output to a column
                 Ok(ValTensor::from(self.output.assign(
                     &mut region,
                     0,
-                    &ValTensor::from(output.clone()),
+                    &ValTensor::from(output),
                 )?))
             },
         ) {

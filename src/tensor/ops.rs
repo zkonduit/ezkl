@@ -691,12 +691,12 @@ where
 {
     // base ^ (scale + tensor)
     let mut output = T::zero().unwrap();
-    let base_tensor = Tensor::new(Some(&vec![base]), &[1])?;
+    let base_tensor = Tensor::new(Some(&[base]), &[1])?;
     for (i, a_i) in a.iter().enumerate() {
         let pow_value = &base_tensor.pow((i as u32) * (scale + 1))?[0];
         output = output + pow_value.clone() * a_i.clone();
     }
-    Ok(Tensor::new(Some(&vec![output]), &[1])?)
+    Tensor::new(Some(&[output]), &[1])
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -905,9 +905,9 @@ pub mod accumulated {
     /// assert_eq!(dot(&vec![x, y]).unwrap(), expected);
     /// ```
     pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-        inputs: &Vec<Tensor<T>>,
+        inputs: &[Tensor<T>; 2],
     ) -> Result<Tensor<T>, TensorError> {
-        if (inputs.len() != 2) || (inputs[0].clone().len() != inputs[1].clone().len()) {
+        if inputs[0].clone().len() != inputs[1].clone().len() {
             return Err(TensorError::DimMismatch("dot".to_string()));
         }
         let (a, b): (Tensor<T>, Tensor<T>) = (inputs[0].clone(), inputs[1].clone());
@@ -979,11 +979,10 @@ pub mod accumulated {
     /// assert_eq!(result, expected);
     /// ```
     pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-        inputs: &Vec<Tensor<T>>,
+        inputs: &[Tensor<T>; 2],
     ) -> Result<Tensor<T>, TensorError> {
         let (a, b) = (inputs[0].clone(), inputs[1].clone());
-        if (inputs.len() != 2)
-            || (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])
+        if (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])
             || (a.dims()[0..a.dims().len() - 2] != b.dims()[0..a.dims().len() - 2])
         {
             return Err(TensorError::DimMismatch("matmul".to_string()));
@@ -1007,7 +1006,7 @@ pub mod accumulated {
                 .map(|&d| d..(d + 1))
                 .collect::<Vec<_>>();
             col[coord.len() - 2] = 0..b.dims()[coord.len() - 2];
-            let dot_transcript = dot(&vec![a.get_slice(&row[0..])?, b.get_slice(&col[0..])?])?;
+            let dot_transcript = dot(&[a.get_slice(&row[0..])?, b.get_slice(&col[0..])?])?;
             transcripts.push(dot_transcript);
         }
         let mut output = Tensor::new(Some(&transcripts), &[transcripts.len()])?.combine()?;

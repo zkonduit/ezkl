@@ -57,7 +57,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
 
         let layer_config = PolyConfig::<F>::configure(
             cs,
-            &[input.clone(), params.clone()],
+            &[input.clone(), params],
             &output,
             CheckMode::SAFE,
         );

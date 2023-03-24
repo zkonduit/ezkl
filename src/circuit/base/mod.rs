@@ -191,7 +191,7 @@ impl Op {
             Op::BatchNorm => tensor::ops::scale_and_shift(&inputs),
             Op::ScaleAndShift => tensor::ops::scale_and_shift(&inputs),
             Op::Matmul => tensor::ops::matmul(&inputs),
-            Op::Dot => tensor::ops::dot(&inputs.iter().map(|x| x).collect()),
+            Op::Dot => tensor::ops::dot(&inputs.iter().collect()),
             Op::Conv { padding, stride } => tensor::ops::convolution(&inputs, *padding, *stride),
             Op::SumPool {
                 padding,
@@ -335,8 +335,13 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                 let selector = meta.query_selector(*selector);
 
                 let mut qis = vec![Expression::<F>::zero().unwrap(); 2];
-                for i in 2 - base_op.num_inputs()..2 {
-                    qis[i] = config.inputs[i]
+                for (i, q_i) in qis
+                    .iter_mut()
+                    .enumerate()
+                    .take(2)
+                    .skip(2 - base_op.num_inputs())
+                {
+                    *q_i = config.inputs[i]
                         .query_rng(meta, 0, 1)
                         .expect("accum: input query failed")[0]
                         .clone()

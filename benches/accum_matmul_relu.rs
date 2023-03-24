@@ -67,7 +67,7 @@ impl Circuit<Fr> for MyCircuit {
             .base_config
             .layout(&mut layouter, &self.inputs, 0, Op::Matmul)
             .unwrap();
-        let output = config.l1.layout(&mut layouter, &output).unwrap();
+        let _output = config.l1.layout(&mut layouter, &output).unwrap();
         Ok(())
     }
 }

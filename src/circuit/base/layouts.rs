@@ -45,7 +45,7 @@ pub fn dot<F: FieldExt + TensorType>(
             }
 
             // Now we can assign the dot product
-            let accumulated_dot = accumulated::dot(&inputs)
+            let accumulated_dot = accumulated::dot(&[inputs[0].clone(), inputs[1].clone()])
                 .expect("accum poly: dot op failed")
                 .into();
             let output = config
@@ -74,7 +74,7 @@ pub fn dot<F: FieldExt + TensorType>(
                 .expect("accum poly: failed to fetch last elem");
 
             if matches!(config.check_mode, CheckMode::SAFE) {
-                let safe_dot = non_accum_dot(&inputs.iter().map(|x| x).collect())
+                let safe_dot = non_accum_dot(&inputs.iter().collect())
                     .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
 
                 assert_eq!(
@@ -301,9 +301,8 @@ pub fn matmul<F: FieldExt + TensorType>(
             inputs[1].transpose_2d().unwrap();
 
             // now perform matrix multiplication on the processed tensors
-            let accumulated_matmul =
-                accumulated::matmul(&vec![inputs[0].clone(), inputs[1].clone()])
-                    .expect("accum poly: matmul op failed");
+            let accumulated_matmul = accumulated::matmul(&[inputs[0].clone(), inputs[1].clone()])
+                .expect("accum poly: matmul op failed");
 
             let output = config
                 .output
@@ -600,7 +599,7 @@ pub fn pow<F: FieldExt + TensorType>(
     if matches!(config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(t.clone().get_inner()?)
+        let is_assigned = !Into::<Tensor<i32>>::into(t.get_inner()?)
             .iter()
             .all(|&x| x == 0);
         if is_assigned {
@@ -684,10 +683,10 @@ pub fn pack<F: FieldExt + TensorType>(
     // if anything we want these to hard fail if not implemented
     let mut base_t = <F as TensorType>::zero().unwrap();
     for _ in 0..base {
-        base_t = base_t + <F as TensorType>::one().unwrap();
+        base_t += <F as TensorType>::one().unwrap();
     }
     let mut accum_base = vec![];
-    let base_tensor = Tensor::new(Some(&vec![base_t]), &[1])?;
+    let base_tensor = Tensor::new(Some(&[base_t]), &[1])?;
     for i in 0..t.dims().iter().product::<usize>() {
         accum_base.push(Value::known(base_tensor.pow((i as u32) * (scale + 1))?[0]));
     }
@@ -707,7 +706,7 @@ pub fn pack<F: FieldExt + TensorType>(
     if matches!(config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(res.clone().get_inner()?)
+        let is_assigned = !Into::<Tensor<i32>>::into(res.get_inner()?)
             .iter()
             .all(|&x| x == 0);
         if is_assigned {
@@ -802,7 +801,7 @@ pub fn scale_and_shift<F: FieldExt + TensorType>(
     if matches!(config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(res.clone().get_inner()?)
+        let is_assigned = !Into::<Tensor<i32>>::into(res.get_inner()?)
             .iter()
             .all(|&x| x == 0);
         if is_assigned {

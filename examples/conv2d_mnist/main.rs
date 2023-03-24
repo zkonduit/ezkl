@@ -147,7 +147,7 @@ where
 
         let layer_config = PolyConfig::configure(
             cs,
-            &[input.clone(), params.clone()],
+            &[input.clone(), params],
             &output,
             CheckMode::SAFE,
         );
@@ -274,7 +274,7 @@ pub fn runconv() {
             .flatten()
             .flatten()
             .map(|fl| {
-                let dx = (fl as f32) * 32_f32;
+                let dx = fl * 32_f32;
                 let rounded = dx.round();
                 let integral: i32 = unsafe { rounded.to_int_unchecked() };
                 let felt = fieldutils::i32_to_felt(integral);

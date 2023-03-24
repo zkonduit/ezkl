@@ -60,7 +60,8 @@ impl Circuit<Fr> for MyCircuit {
 fn runpack(c: &mut Criterion) {
     let mut group = c.benchmark_group("pack");
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    for &len in [16].iter() {
+    {
+        let &len = &16;
         unsafe {
             LEN = len;
         };

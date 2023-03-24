@@ -277,7 +277,7 @@ impl Model {
         // preserves ordering
         if !poly_ops.is_empty() {
             for (i, node) in poly_ops {
-                let config = self.conf_poly_ops(&node, meta, vars, &mut base_gates)?;
+                let config = self.conf_poly_ops(node, meta, vars, &mut base_gates)?;
                 results.insert(*i, config);
 
                 let mut display: String = "Poly nodes: ".to_string();
@@ -355,19 +355,16 @@ impl Model {
                 let mut conf = None;
                 // iterate in reverse order so we get the last relevant op
                 for (_, prev_config) in prev_configs.iter().rev() {
-                    match prev_config {
-                        NodeConfig::Lookup { config, .. } => {
-                            // check if there's a config for the same op
-                            if config.borrow().table.borrow().nonlinearities == vec![op.clone()] {
-                                conf = Some(NodeConfig::Lookup {
-                                    config: config.clone(),
-                                    inputs: node.inputs.iter().map(|e| e.node).collect(),
-                                });
+                    if let NodeConfig::Lookup { config, .. } = prev_config {
+                        // check if there's a config for the same op
+                        if config.borrow().table.borrow().nonlinearities == vec![op.clone()] {
+                            conf = Some(NodeConfig::Lookup {
+                                config: config.clone(),
+                                inputs: node.inputs.iter().map(|e| e.node).collect(),
+                            });
 
-                                break;
-                            }
+                            break;
                         }
-                        _ => {}
                     }
                 }
                 let conf = match conf {
@@ -452,12 +449,11 @@ impl Model {
 
         let input_idx = input_nodes.iter().map(|f| f.idx).collect_vec();
 
-        let fixed_flag = input_nodes
+        let fixed_flag = !input_nodes
             .iter()
             .filter(|f| f.opkind.is_const() && self.visibility.params.is_public())
             .collect_vec()
-            .len()
-            > 0;
+            .is_empty();
 
         let config = match base_gates.get(&fixed_flag) {
             Some(config) => {
@@ -751,7 +747,7 @@ impl Model {
             if n.opkind == OpKind::Lookup(lookup_op.clone()) {
                 match &n.opkind {
                     OpKind::Lookup(op) => {
-                        let elem = count.get_mut(&op);
+                        let elem = count.get_mut(op);
                         // handle output variables
                         let output_size: usize = n.out_dims.iter().product();
                         let input_size = output_size;

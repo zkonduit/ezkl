@@ -13,9 +13,9 @@ pub enum ValType<F: FieldExt + TensorType> {
     PrevAssigned(AssignedCell<F, F>),
 }
 
-impl<F: FieldExt + TensorType> Into<i32> for ValType<F> {
-    fn into(self) -> i32 {
-        match self {
+impl<F: FieldExt + TensorType> From<ValType<F>> for i32 {
+    fn from(val: ValType<F>) -> Self {
+        match val {
             ValType::Value(v) => {
                 let mut output = 0_i32;
                 let mut i = 0;
@@ -100,7 +100,7 @@ pub enum ValTensor<F: FieldExt + TensorType> {
 impl<F: FieldExt + TensorType> From<Tensor<ValType<F>>> for ValTensor<F> {
     fn from(t: Tensor<ValType<F>>) -> ValTensor<F> {
         ValTensor::Value {
-            inner: t.map(|x| x.into()),
+            inner: t.map(|x| x),
             dims: t.dims().to_vec(),
         }
     }
@@ -202,11 +202,10 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         Ok(match self {
             ValTensor::Value { inner: v, .. } => v
                 .map(|x| match x {
-                    ValType::Value(v) => v.clone(),
+                    ValType::Value(v) => v,
                     ValType::AssignedValue(v) => v.evaluate(),
                     ValType::PrevAssigned(v) => v.value_field().evaluate(),
-                })
-                .into(),
+                }),
             ValTensor::Instance { .. } => return Err(TensorError::WrongMethod),
         })
     }
@@ -337,7 +336,7 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                 Ok(v.append_to_row(v2)?.into())
             }
             _ => {
-                return Err(TensorError::WrongMethod);
+                Err(TensorError::WrongMethod)
             }
         }
     }

@@ -122,7 +122,7 @@ impl Op {
             Op::BatchNorm => scale_and_shift(&inputs),
             Op::ScaleAndShift => scale_and_shift(&inputs),
             Op::Matmul => matmul(&inputs),
-            Op::Dot => dot(&inputs.iter().map(|x| x).collect()),
+            Op::Dot => dot(&inputs.iter().collect()),
             Op::Conv { padding, stride } => convolution(&inputs, *padding, *stride),
             Op::SumPool {
                 padding,

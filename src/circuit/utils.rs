@@ -16,7 +16,7 @@ pub fn value_muxer<F: FieldExt + TensorType>(
                 inner: val,
                 dims: _,
             } => val.map(|x| match x {
-                ValType::Value(x) => x.clone(),
+                ValType::Value(x) => x,
                 _ => unimplemented!(),
             }),
             _ => unimplemented!(),
