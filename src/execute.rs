@@ -246,6 +246,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             let num_instance = public_inputs.iter().map(|x| x.len()).collect();
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
+            info!("downsizing params to {} logrows", cli.args.logrows);
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
@@ -299,6 +300,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             let (circuit, public_inputs) = prepare_model_circuit_and_public_input(&data, &cli)?;
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
+            info!("downsizing params to {} logrows", cli.args.logrows);
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
@@ -354,6 +356,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             // the K used for the aggregation circuit
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
+            info!("downsizing params to {} logrows", cli.args.logrows);
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
@@ -361,6 +364,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             let mut snarks = vec![];
             // the K used when generating the application snark proof. we assume K is homogenous across snarks to aggregate
             let mut params_app = params.clone();
+            info!("downsizing app params to {} logrows", app_logrows);
             if app_logrows < params.k() {
                 params_app.downsize(app_logrows);
             }
@@ -408,6 +412,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => {
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
+            info!("downsizing params to {} logrows", cli.args.logrows);
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
@@ -434,6 +439,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => {
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
+            info!("downsizing params to {} logrows", cli.args.logrows);
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
