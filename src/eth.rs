@@ -404,9 +404,9 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         }
 
         let m = mstoren_pattern.captures(&line);
-        if m.is_some() {
-            let mstore = m.as_ref().unwrap().get(1).unwrap().as_str();
-            let addr = m.unwrap().get(2).unwrap().as_str();
+        if let Some(m) = m {
+            let mstore = m.get(1).unwrap().as_str();
+            let addr = m.get(2).unwrap().as_str();
             let addr_as_num = u32::from_str_radix(addr, 10)?;
             let transcript_addr = format!("{:#x}", addr_as_num);
             transcript_addrs.push(addr_as_num);
@@ -417,10 +417,10 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         }
 
         let m = modexp_pattern.captures(&line);
-        if m.is_some() {
-            let modexp = m.as_ref().unwrap().get(1).unwrap().as_str();
-            let start_addr = m.as_ref().unwrap().get(2).unwrap().as_str();
-            let result_addr = m.unwrap().get(3).unwrap().as_str();
+        if let Some(m) = m {
+            let modexp = m.get(1).unwrap().as_str();
+            let start_addr = m.get(2).unwrap().as_str();
+            let result_addr = m.get(3).unwrap().as_str();
             let start_addr_as_num =
                 u32::from_str_radix(start_addr.strip_prefix("0x").unwrap(), 16)?;
             let result_addr_as_num =
