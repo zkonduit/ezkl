@@ -32,12 +32,11 @@ snark-verifier = { git = "https://github.com/privacy-scaling-explorations/snark-
 # evm related deps
 ethers = { version = "2.0.1", features = ["ledger"] }
 ethers-solc = "2.0.1"
-tokio = { version = "1.22.0", features = ["macros"] }
 regex = "1"
 colored = { version = "2.0.0", optional = true}
 env_logger = { version = "0.10.0", optional = true}
 colored_json =  { version = "3.0.1", optional = true}
-tokio = { version = "1.26.0", features = ["full"] }
+tokio = { version = "1.26.0", features = ["full", "macros"] }
 
 
 
