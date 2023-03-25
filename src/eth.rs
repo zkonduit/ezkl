@@ -16,12 +16,13 @@ use ethers::providers::{Http, Provider};
 use ethers::signers::coins_bip39::English;
 use ethers::signers::MnemonicBuilder;
 use ethers::signers::Signer;
+use ethers::signers::WalletError;
 use ethers::types::transaction::eip2718::TypedTransaction;
 use ethers::types::TransactionRequest;
 use ethers::types::U256;
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::{
-    prelude::{LocalWallet, Wallet},
+    prelude::{HDPath::LedgerLive, Ledger, LocalWallet, Wallet},
     utils::{Anvil, AnvilInstance},
 };
 use ethers_solc::Solc;
@@ -31,7 +32,6 @@ use log::{debug, info};
 use snark_verifier::loader::evm::encode_calldata;
 use std::error::Error;
 use std::fmt::Write;
-use std::fs::read_to_string;
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
@@ -118,7 +118,7 @@ fn parse_private_key(private_key: U256) -> Result<SigningKey, Bytes> {
     }
     let mut bytes: [u8; 32] = [0; 32];
     private_key.to_big_endian(&mut bytes);
-    SigningKey::from_bytes(&bytes).map_err(|err| err.to_string().encode())
+    SigningKey::from_bytes((&bytes).into()).map_err(|err| err.to_string().encode())
 }
 
 /// Parses a private key into a [Wallet]  
@@ -132,8 +132,35 @@ fn get_signing_wallet(
     Ok(wallet.with_chain_id(chain_id))
 }
 
-/// Derives a key from a mnemonic phrase
-fn derive_key(mnemonic: &str, path: &str, index: u32) -> Result<U256, Bytes> {
+/// Obtains a Ledger hardware wallet backed [SignerMiddleWare] from an provider and a chain id.
+/// This middleware can be used for locally signing and broadcasting transactions while the hardware
+/// wallet is connected to the machine.
+pub async fn get_ledger_signing_provider(
+    provider: Provider<Http>,
+    chain_id: u64,
+) -> Result<SignerMiddleware<Arc<Provider<Http>>, Ledger>, Box<dyn Error>> {
+    let ledger = Ledger::new(LedgerLive(0), chain_id).await?;
+    let provider = Arc::new(provider);
+
+    Ok(SignerMiddleware::new(provider, ledger))
+}
+/// Obtains a [SignerMiddleWare] from an RPC url and a mnemonic string.
+/// The middleware can be used for locally signing and broadcasting transactions.
+pub async fn get_wallet_signing_provider(
+    provider: Provider<Http>,
+    mnemonic: &str,
+) -> Result<SignerMiddleware<Arc<Provider<Http>>, Wallet<SigningKey>>, Box<dyn Error>> {
+    let chain_id = provider.get_chainid().await?;
+    let private_key = derive_key(mnemonic, DEFAULT_DERIVATION_PATH_PREFIX, 0)?;
+    let signing_wallet = get_signing_wallet(private_key, chain_id.as_u64())?;
+
+    let provider = Arc::new(provider);
+
+    Ok(SignerMiddleware::new(provider, signing_wallet))
+}
+
+/// Derive a [U256] private key from a mnemonic string.
+fn derive_key(mnemonic: &str, path: &str, index: u32) -> Result<U256, WalletError> {
     let derivation_path = if path.ends_with('/') {
         format!("{path}{index}")
     } else {
@@ -142,10 +169,8 @@ fn derive_key(mnemonic: &str, path: &str, index: u32) -> Result<U256, Bytes> {
 
     let wallet = MnemonicBuilder::<English>::default()
         .phrase(mnemonic)
-        .derivation_path(&derivation_path)
-        .map_err(|err| err.to_string().encode())?
-        .build()
-        .map_err(|err| err.to_string().encode())?;
+        .derivation_path(&derivation_path)?
+        .build()?;
 
     info!("wallet address: {:#?}", wallet.address());
 
@@ -154,35 +179,13 @@ fn derive_key(mnemonic: &str, path: &str, index: u32) -> Result<U256, Bytes> {
     Ok(private_key)
 }
 
-/// From a mnemonic and an rpc url returns a provider that can sign transaction via HTTP
-pub async fn get_signing_provider(
-    mnemonic: &str,
-    rpc_url: &str,
-) -> SignerMiddleware<Arc<Provider<Http>>, Wallet<SigningKey>> {
-    let provider =
-        Provider::<Http>::try_from(rpc_url).expect("could not instantiate HTTP Provider");
-    debug!("{:#?}", provider);
-    let chain_id = provider.get_chainid().await.unwrap();
-    let private_key = derive_key(mnemonic, DEFAULT_DERIVATION_PATH_PREFIX, 0).unwrap();
-    let signing_wallet = get_signing_wallet(private_key, chain_id.as_u64()).unwrap();
-
-    let provider = Arc::new(provider);
-
-    SignerMiddleware::new(provider, signing_wallet)
-}
-
 /// Deploys a verifier contract  
-pub async fn deploy_verifier(
-    secret: PathBuf,
-    rpc_url: String,
+pub async fn deploy_verifier<M: 'static + Middleware>(
+    client: Arc<M>,
     deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     // comment the following two lines if want to deploy to anvil
-    let mnemonic = read_to_string(secret)?;
-    let client = Arc::new(get_signing_provider(&mnemonic, &rpc_url).await);
-    // uncomment if want to test on local anvil
-    // let (anvil, client) = setup_eth_backend().await;
 
     let gas = client.provider().get_gas_price().await?;
     info!("gas price: {:#?}", gas);
@@ -227,25 +230,26 @@ pub async fn deploy_verifier(
     info!("contract address: {}", contract.address());
 
     // uncomment if want to test on local anvil
-    // drop(anvil);
 
     Ok(())
 }
 
+/// get_provider returns a JSON RPC HTTP Provider
+pub fn get_provider(rpc_url: &str) -> Result<Provider<Http>, Box<dyn Error>> {
+    let provider = Provider::<Http>::try_from(rpc_url)?;
+    debug!("{:#?}", provider);
+    Ok(provider)
+}
+
 /// Sends a proof to an already deployed verifier contract
-pub async fn send_proof(
-    secret: PathBuf,
-    rpc_url: String,
+pub async fn send_proof<M: 'static + Middleware>(
+    client: Arc<M>,
     addr: Address,
+    signer_address: Address,
     snark: Snark<Fr, G1Affine>,
     has_abi: bool,
 ) -> Result<(), Box<dyn Error>> {
     info!("contract address: {}", addr);
-    // comment the following two lines if want to deploy to anvil
-    let mnemonic = read_to_string(secret)?;
-    let client = Arc::new(get_signing_provider(&mnemonic, &rpc_url).await);
-    // uncomment if want to test on local anvil
-    // let (anvil, client) = setup_eth_backend().await;
 
     let gas = client.provider().get_gas_price().await?;
     info!("gas price: {:#?}", gas);
@@ -273,7 +277,7 @@ pub async fn send_proof(
         let calldata = encode_calldata(&snark.instances, &snark.proof);
         TransactionRequest::default()
             .to(addr)
-            .from(client.address())
+            .from(signer_address)
             .data(calldata)
             .into()
     };

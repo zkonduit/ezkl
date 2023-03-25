@@ -30,8 +30,8 @@ ethereum_types = { package = "ethereum-types", version = "0.14.1", default-featu
 halo2_wrong_ecc = { git = "https://github.com/privacy-scaling-explorations/halo2wrong", package = "ecc", tag = "v2023_02_02"}
 snark-verifier = { git = "https://github.com/privacy-scaling-explorations/snark-verifier", tag = "v2023_02_02"}
 # evm related deps
-ethers = "1.0.2"
-ethers-solc = "1.0.2"
+ethers = { version = "2.0.1", features = ["ledger"] }
+ethers-solc = "2.0.1"
 tokio = { version = "1.22.0", features = ["macros"] }
 regex = "1"
 colored = { version = "2.0.0", optional = true}

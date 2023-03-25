@@ -315,9 +315,9 @@ pub enum Commands {
     /// Deploys an EVM verifier
     #[command(name = "deploy-verifier-evm", arg_required_else_help = true)]
     DeployVerifierEVM {
-        /// The path to the wallet mnemonic
+        /// The path to the wallet mnemonic if not set will attempt to connect to ledger
         #[arg(short = 'S', long)]
-        secret: PathBuf,
+        secret: Option<PathBuf>,
         /// RPC Url
         #[arg(short = 'U', long)]
         rpc_url: String,
@@ -334,9 +334,9 @@ pub enum Commands {
     /// Send a proof to be verified to an already deployed verifier
     #[command(name = "send-proof-evm", arg_required_else_help = true)]
     SendProofEVM {
-        /// The path to the wallet mnemonic
+        /// The path to the wallet mnemonic if not set will attempt to connect to ledger
         #[arg(short = 'S', long)]
-        secret: PathBuf,
+        secret: Option<PathBuf>,
         /// RPC Url
         #[arg(short = 'U', long)]
         rpc_url: String,
