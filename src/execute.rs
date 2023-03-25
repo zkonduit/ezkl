@@ -41,6 +41,7 @@ use plotters::prelude::*;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
+#[cfg(not(target_arch = "wasm32"))]
 use std::fs::read_to_string;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
