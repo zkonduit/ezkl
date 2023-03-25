@@ -18,6 +18,7 @@ use crate::pfsys::{
     create_proof_circuit, gen_srs, prepare_data, prepare_model_circuit_and_public_input, save_vk,
     verify_proof_circuit,
 };
+#[cfg(not(target_arch = "wasm32"))]
 use ethers::providers::Middleware;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::plonk::{Circuit, ProvingKey, VerifyingKey};
@@ -32,7 +33,9 @@ use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
-use log::{info, trace, warn};
+use log::{info, trace};
+#[cfg(not(target_arch = "wasm32"))]
+use log::warn; 
 #[cfg(feature = "render")]
 use plotters::prelude::*;
 use snark_verifier::loader::native::NativeLoader;
@@ -42,6 +45,7 @@ use std::fs::read_to_string;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 use std::time::Instant;
 use tabled::Table;
