@@ -41,6 +41,8 @@ ethers = { version = "2.0.1", features = ["ledger"] }
 ethers-solc = "2.0.1"
 ethereum_types = { package = "ethereum-types", version = "0.14.1", default-features = false, features = ["std"]}
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2.8", features = ["js"] }
 
 
 [dev-dependencies]
