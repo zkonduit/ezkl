@@ -1,36 +1,40 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl_lib::circuit::lookup::{Config, Op};
+use ezkl_lib::circuit::base::CheckMode;
+use ezkl_lib::circuit::lookup::*;
+use ezkl_lib::commands::TranscriptType;
+use ezkl_lib::execute::create_proof_circuit_kzg;
+use ezkl_lib::pfsys::{create_keys, gen_srs};
 use ezkl_lib::tensor::*;
-use halo2_proofs::dev::MockProver;
+use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+use halo2_proofs::poly::kzg::strategy::SingleStrategy;
 use halo2_proofs::{
-    arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error},
 };
-use halo2curves::pasta::Fp as F;
+use halo2curves::bn256::{Bn256, Fr};
 use rand::Rng;
 
 const BITS: usize = 8;
 static mut LEN: usize = 4;
-const K: usize = 10;
+const K: usize = 16;
 
 #[derive(Clone)]
-struct NLCircuit<F: FieldExt + TensorType> {
-    pub input: ValTensor<F>,
+struct NLCircuit {
+    pub input: ValTensor<Fr>,
 }
 
-impl<F: FieldExt + TensorType> Circuit<F> for NLCircuit<F> {
-    type Config = Config<F>;
+impl Circuit<Fr> for NLCircuit {
+    type Config = Config<Fr>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
         self.clone()
     }
 
-    fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+    fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         unsafe {
             let advices = (0..2)
-                .map(|_| VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512))
+                .map(|_| VarTensor::new_advice(cs, K, LEN, vec![LEN], true))
                 .collect::<Vec<_>>();
 
             let nl = Op::ReLU { scale: 128 };
@@ -42,7 +46,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for NLCircuit<F> {
     fn synthesize(
         &self,
         mut config: Self::Config,
-        mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
+        mut layouter: impl Layouter<Fr>, // layouter is our 'write buffer' for the circuit
     ) -> Result<(), Error> {
         config.layout(&mut layouter, &self.input).unwrap();
 
@@ -54,24 +58,43 @@ fn runrelu(c: &mut Criterion) {
     let mut group = c.benchmark_group("relu");
 
     let mut rng = rand::thread_rng();
-
+    let params = gen_srs::<KZGCommitmentScheme<_>>(17);
     for &len in [4, 8, 16, 32, 64].iter() {
         unsafe {
             LEN = len;
         };
 
-        let input: Tensor<Value<F>> =
+        let input: Tensor<Value<Fr>> =
             Tensor::<i32>::from((0..len).map(|_| rng.gen_range(0..10))).into();
 
-        let circuit = NLCircuit::<F> {
+        let circuit = NLCircuit {
             input: ValTensor::from(input.clone()),
         };
 
         group.throughput(Throughput::Elements(len as u64));
-        group.bench_with_input(BenchmarkId::from_parameter(len), &len, |b, &_| {
+        group.bench_with_input(BenchmarkId::new("pk", len), &len, |b, &_| {
             b.iter(|| {
-                let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-                prover.assert_satisfied();
+                create_keys::<KZGCommitmentScheme<Bn256>, Fr, NLCircuit>(&circuit, &params)
+                    .unwrap();
+            });
+        });
+
+        let pk =
+            create_keys::<KZGCommitmentScheme<Bn256>, Fr, NLCircuit>(&circuit, &params).unwrap();
+
+        group.throughput(Throughput::Elements(len as u64));
+        group.bench_with_input(BenchmarkId::new("prove", len), &len, |b, &_| {
+            b.iter(|| {
+                let prover = create_proof_circuit_kzg(
+                    circuit.clone(),
+                    &params,
+                    vec![],
+                    &pk,
+                    TranscriptType::Blake,
+                    SingleStrategy::new(&params),
+                    CheckMode::SAFE,
+                );
+                prover.unwrap();
             });
         });
     }

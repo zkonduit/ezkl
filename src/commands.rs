@@ -10,6 +10,8 @@ use std::fs::File;
 use std::io::{stdin, stdout, Read, Write};
 use std::path::PathBuf;
 
+use crate::circuit::base::CheckMode;
+
 #[allow(missing_docs)]
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub enum TranscriptType {
@@ -65,16 +67,16 @@ pub struct RunArgs {
     /// Flags whether params are public
     #[arg(long, default_value = "false")]
     pub public_params: bool,
-    /// Flags to set maximum rotations
-    #[arg(short = 'M', long, default_value = "512")]
-    pub max_rotations: usize,
     /// Base used to pack the public-inputs to the circuit. (value > 1) to pack instances as a single int.
     /// Useful when verifying on the EVM. Note that this will often break for very long inputs. Use with caution, still experimental.
     #[arg(long, default_value = "1")]
     pub pack_base: u32,
     /// use a single argument for all lookups
-    #[arg(long, default_value = "false")]
+    #[arg(long, default_value = "true", action = clap::ArgAction::Set)]
     pub single_lookup: bool,
+    /// use a single argument for all lookups
+    #[arg(long, default_value = "safe")]
+    pub check_mode: CheckMode,
 }
 
 const EZKLCONF: &str = "EZKLCONF";

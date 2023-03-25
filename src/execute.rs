@@ -1,3 +1,4 @@
+use crate::circuit::base::CheckMode;
 use crate::commands::{Cli, Commands, StrategyType, TranscriptType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{deploy_verifier, fix_verifier_sol, send_proof, verify_proof_via_solidity};
@@ -99,6 +100,7 @@ pub fn create_proof_circuit_kzg<
     pk: &ProvingKey<G1Affine>,
     transcript: TranscriptType,
     strategy: Strategy,
+    check_mode: CheckMode,
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
     match transcript {
         TranscriptType::EVM => create_proof_circuit::<
@@ -111,20 +113,22 @@ pub fn create_proof_circuit_kzg<
             _,
             EvmTranscript<G1Affine, _, _, _>,
             EvmTranscript<G1Affine, _, _, _>,
-        >(circuit, public_inputs, params, pk, strategy)
+        >(circuit, public_inputs, params, pk, strategy, check_mode)
         .map_err(Box::<dyn Error>::from),
-        TranscriptType::Poseidon => create_proof_circuit::<
-            KZGCommitmentScheme<_>,
-            Fr,
-            _,
-            ProverGWC<_>,
-            VerifierGWC<_>,
-            _,
-            _,
-            PoseidonTranscript<NativeLoader, _>,
-            PoseidonTranscript<NativeLoader, _>,
-        >(circuit, public_inputs, params, pk, strategy)
-        .map_err(Box::<dyn Error>::from),
+        TranscriptType::Poseidon => {
+            create_proof_circuit::<
+                KZGCommitmentScheme<_>,
+                Fr,
+                _,
+                ProverGWC<_>,
+                VerifierGWC<_>,
+                _,
+                _,
+                PoseidonTranscript<NativeLoader, _>,
+                PoseidonTranscript<NativeLoader, _>,
+            >(circuit, public_inputs, params, pk, strategy, check_mode)
+            .map_err(Box::<dyn Error>::from)
+        }
         TranscriptType::Blake => create_proof_circuit::<
             KZGCommitmentScheme<_>,
             Fr,
@@ -135,7 +139,7 @@ pub fn create_proof_circuit_kzg<
             Challenge255<_>,
             Blake2bWrite<_, _, _>,
             Blake2bRead<_, _, _>,
-        >(circuit, public_inputs, params, pk, strategy)
+        >(circuit, public_inputs, params, pk, strategy, check_mode)
         .map_err(Box::<dyn Error>::from),
     }
 }
@@ -169,7 +173,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         }
         Commands::Table { model: _ } => {
             let om = Model::from_ezkl_conf(cli)?;
-            info!("{}", Table::new(om.nodes.flatten()));
+            info!("{}", Table::new(om.nodes.iter()));
         }
         #[cfg(feature = "render")]
         Commands::RenderCircuit {
@@ -242,6 +246,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             let num_instance = public_inputs.iter().map(|x| x.len()).collect();
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
+            info!("downsizing params to {} logrows", cli.args.logrows);
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
@@ -295,6 +300,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             let (circuit, public_inputs) = prepare_model_circuit_and_public_input(&data, &cli)?;
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
+            info!("downsizing params to {} logrows", cli.args.logrows);
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
@@ -315,6 +321,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                         &pk,
                         transcript,
                         strategy,
+                        cli.args.check_mode,
                     )?
                 }
                 StrategyType::Accum => {
@@ -326,6 +333,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                         &pk,
                         transcript,
                         strategy,
+                        cli.args.check_mode,
                     )?
                 }
             };
@@ -348,6 +356,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             // the K used for the aggregation circuit
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
+            info!("downsizing params to {} logrows", cli.args.logrows);
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
@@ -355,6 +364,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             let mut snarks = vec![];
             // the K used when generating the application snark proof. we assume K is homogenous across snarks to aggregate
             let mut params_app = params.clone();
+            info!("downsizing app params to {} logrows", app_logrows);
             if app_logrows < params.k() {
                 params_app.downsize(app_logrows);
             }
@@ -385,6 +395,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                     &agg_pk,
                     transcript,
                     AccumulatorStrategy::new(&params),
+                    cli.args.check_mode,
                 )?;
 
                 info!("Aggregation proof took {}", now.elapsed().as_secs());
@@ -401,6 +412,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => {
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
+            info!("downsizing params to {} logrows", cli.args.logrows);
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
@@ -427,6 +439,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => {
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
+            info!("downsizing params to {} logrows", cli.args.logrows);
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }

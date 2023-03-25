@@ -24,12 +24,12 @@ pub use std::ops::{Add, Div, Mul, Sub};
 ///     Some(&[0, 0]),
 ///     &[2],
 /// ).unwrap();
-/// let result = affine(&vec![x, k, b]).unwrap();
+/// let result = affine(&[x, k, b]).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[26, 7, 11, 3, 15, 3, 7, 2]), &[2, 4]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-    inputs: &Vec<Tensor<T>>,
+    inputs: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
     let (mut input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
     if (inputs.len() != 3)
@@ -81,12 +81,12 @@ pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = scale_and_shift(&vec![x, k, b]).unwrap();
+/// let result = scale_and_shift(&[x, k, b]).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[6, 2, 6, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn scale_and_shift<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-    inputs: &Vec<Tensor<T>>,
+    inputs: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
     if (inputs.len() != 3)
         || (inputs[1].dims() != inputs[2].dims())
@@ -124,7 +124,7 @@ pub fn scale_and_shift<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// assert_eq!(result, expected);
 /// ```
 pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-    inputs: &Vec<Tensor<T>>,
+    inputs: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
     let (a, b) = (inputs[0].clone(), inputs[1].clone());
 
@@ -176,7 +176,7 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = add(&vec![x, k]).unwrap();
+/// let result = add(&[x, k]).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[4, 4, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -188,11 +188,11 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// let k = Tensor::<i128>::new(
 ///     Some(&[2]),
 ///     &[1]).unwrap();
-/// let result = add(&vec![x, k]).unwrap();
+/// let result = add(&[x, k]).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[4, 3, 4, 3, 3, 3]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn add<T: TensorType + Add<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor<T>, TensorError> {
+pub fn add<T: TensorType + Add<Output = T>>(t: &[Tensor<T>]) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut output: Tensor<T> = t[0].clone();
 
@@ -220,7 +220,7 @@ pub fn add<T: TensorType + Add<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = sub(&vec![x, k]).unwrap();
+/// let result = sub(&[x, k]).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[0, -2, 0, 0, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -233,11 +233,11 @@ pub fn add<T: TensorType + Add<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor
 ///     Some(&[2]),
 ///     &[1],
 /// ).unwrap();
-/// let result = sub(&vec![x, k]).unwrap();
+/// let result = sub(&[x, k]).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[0, -1, 0, -1, -1, -1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor<T>, TensorError> {
+pub fn sub<T: TensorType + Sub<Output = T>>(t: &[Tensor<T>]) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut output: Tensor<T> = t[0].clone();
 
@@ -265,7 +265,7 @@ pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let result = mult(&vec![x, k]).unwrap();
+/// let result = mult(&[x, k]).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[4, 3, 4, 1, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -277,11 +277,11 @@ pub fn sub<T: TensorType + Sub<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor
 /// let k = Tensor::<i128>::new(
 ///     Some(&[2]),
 ///     &[1]).unwrap();
-/// let result = mult(&vec![x, k]).unwrap();
+/// let result = mult(&[x, k]).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn mult<T: TensorType + Mul<Output = T>>(t: &Vec<Tensor<T>>) -> Result<Tensor<T>, TensorError> {
+pub fn mult<T: TensorType + Mul<Output = T>>(t: &[Tensor<T>]) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut output: Tensor<T> = t[0].clone();
 
@@ -371,12 +371,12 @@ pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, 
 ///     Some(&[0]),
 ///     &[1],
 /// ).unwrap();
-/// let result = convolution::<i128>(&vec![x, k, b], (0, 0), (1, 1)).unwrap();
+/// let result = convolution::<i128>(&[x, k, b], (0, 0), (1, 1)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[31, 16, 8, 26]), &[1, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-    inputs: &Vec<Tensor<T>>,
+    inputs: &[Tensor<T>],
     padding: (usize, usize),
     stride: (usize, usize),
 ) -> Result<Tensor<T>, TensorError> {
@@ -691,12 +691,12 @@ where
 {
     // base ^ (scale + tensor)
     let mut output = T::zero().unwrap();
-    let base_tensor = Tensor::new(Some(&vec![base]), &[1])?;
+    let base_tensor = Tensor::new(Some(&[base]), &[1])?;
     for (i, a_i) in a.iter().enumerate() {
         let pow_value = &base_tensor.pow((i as u32) * (scale + 1))?[0];
         output = output + pow_value.clone() * a_i.clone();
     }
-    Ok(Tensor::new(Some(&vec![output]), &[1])?)
+    Tensor::new(Some(&[output]), &[1])
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -902,12 +902,12 @@ pub mod accumulated {
     ///     Some(&[25, 35]),
     ///     &[2],
     /// ).unwrap();
-    /// assert_eq!(dot(&vec![x, y]).unwrap(), expected);
+    /// assert_eq!(dot(&[x, y]).unwrap(), expected);
     /// ```
     pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-        inputs: &Vec<Tensor<T>>,
+        inputs: &[Tensor<T>; 2],
     ) -> Result<Tensor<T>, TensorError> {
-        if (inputs.len() != 2) || (inputs[0].clone().len() != inputs[1].clone().len()) {
+        if inputs[0].clone().len() != inputs[1].clone().len() {
             return Err(TensorError::DimMismatch("dot".to_string()));
         }
         let (a, b): (Tensor<T>, Tensor<T>) = (inputs[0].clone(), inputs[1].clone());
@@ -974,16 +974,15 @@ pub mod accumulated {
     ///     Some(&[2, 1, 2, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let result = matmul(&vec![k, x]).unwrap();
+    /// let result = matmul(&[k, x]).unwrap();
     /// let expected = Tensor::<i128>::new(Some(&[10, 12, 18, 5, 7, 10]), &[2, 1, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-        inputs: &Vec<Tensor<T>>,
+        inputs: &[Tensor<T>; 2],
     ) -> Result<Tensor<T>, TensorError> {
         let (a, b) = (inputs[0].clone(), inputs[1].clone());
-        if (inputs.len() != 2)
-            || (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])
+        if (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])
             || (a.dims()[0..a.dims().len() - 2] != b.dims()[0..a.dims().len() - 2])
         {
             return Err(TensorError::DimMismatch("matmul".to_string()));
@@ -1007,7 +1006,7 @@ pub mod accumulated {
                 .map(|&d| d..(d + 1))
                 .collect::<Vec<_>>();
             col[coord.len() - 2] = 0..b.dims()[coord.len() - 2];
-            let dot_transcript = dot(&vec![a.get_slice(&row[0..])?, b.get_slice(&col[0..])?])?;
+            let dot_transcript = dot(&[a.get_slice(&row[0..])?, b.get_slice(&col[0..])?])?;
             transcripts.push(dot_transcript);
         }
         let mut output = Tensor::new(Some(&transcripts), &[transcripts.len()])?.combine()?;

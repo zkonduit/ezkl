@@ -261,7 +261,6 @@ Options:
       --public-inputs                  Flags whether inputs are public
       --public-outputs                 Flags whether outputs are public
       --public-params                  Flags whether params are public
-  -M, --max-rotations <MAX_ROTATIONS>  Flags to set maximum rotations [default: 512]
       --pack-base <PACK_BASE>              Base used to pack the public-inputs to the circuit. set ( > 1) to pack instances as a single int. Useful when verifying on the EVM. Note that this will often break for very long inputs. Use with caution, still experimental.  [default: 1]
       --single-lookup                  Use a single argument for all lookups
   -h, --help                           Print help
@@ -309,7 +308,6 @@ For an example of such a file see `examples/default_run_args.json`:
     "public_inputs": false,
     "public_outputs": true,
     "public_params": false,
-    "max_rotations": 512
 }
 ```
 

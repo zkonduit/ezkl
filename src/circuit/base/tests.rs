@@ -1,296 +1,29 @@
-/// Layouts for specific functions (composed of base ops)
-pub mod layouts;
-
+use crate::circuit::base::*;
 use halo2_proofs::{
-    circuit::Layouter,
-    plonk::{ConstraintSystem, Constraints, Expression, Selector},
+    arithmetic::FieldExt,
+    circuit::{Layouter, SimpleFloorPlanner, Value},
+    dev::MockProver,
+    plonk::{Circuit, ConstraintSystem, Error},
 };
-use halo2curves::FieldExt;
-
-use crate::tensor::{Tensor, TensorError, TensorType, ValTensor, VarTensor};
-use std::{
-    collections::BTreeMap,
-    error::Error,
-    fmt,
-    marker::PhantomData,
-    ops::{Add, Mul, Sub},
-};
-
-#[allow(missing_docs)]
-/// An enum representing the operations that can be used to express more complex operations via accumulation
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum BaseOp {
-    Dot,
-    InitDot,
-    Identity,
-    Add,
-    Mult,
-    Sub,
-    Sum,
-}
-
-#[allow(missing_docs)]
-/// An enum representing activating the sanity checks we can perform on the accumulated arguments
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum CheckMode {
-    SAFE,
-    UNSAFE,
-}
-
-/// Matches a [BaseOp] to an operation over inputs
-impl BaseOp {
-    /// forward func
-    pub fn f<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
-        &self,
-        inputs: (T, T, T),
-    ) -> T {
-        let (a, b, m) = inputs;
-        match &self {
-            BaseOp::InitDot => a * b,
-            BaseOp::Dot => a * b + m,
-            BaseOp::Add => a + b,
-            BaseOp::Identity => a,
-            BaseOp::Sum => a + m,
-            BaseOp::Sub => a - b,
-            BaseOp::Mult => a * b,
-        }
-    }
-
-    fn as_str(&self) -> &'static str {
-        match self {
-            BaseOp::InitDot => "INITDOT",
-            BaseOp::Identity => "IDENTITY",
-            BaseOp::Dot => "DOT",
-            BaseOp::Add => "ADD",
-            BaseOp::Sub => "SUB",
-            BaseOp::Mult => "MULT",
-            BaseOp::Sum => "SUM",
-        }
-    }
-    fn query_offset_rng(&self) -> (i32, usize) {
-        match self {
-            BaseOp::InitDot => (0, 1),
-            BaseOp::Identity => (0, 1),
-            BaseOp::Dot => (-1, 2),
-            BaseOp::Add => (0, 1),
-            BaseOp::Sub => (0, 1),
-            BaseOp::Mult => (0, 1),
-            BaseOp::Sum => (-1, 2),
-        }
-    }
-    fn num_inputs(&self) -> usize {
-        match self {
-            BaseOp::InitDot => 2,
-            BaseOp::Identity => 1,
-            BaseOp::Dot => 2,
-            BaseOp::Add => 2,
-            BaseOp::Sub => 2,
-            BaseOp::Mult => 2,
-            BaseOp::Sum => 1,
-        }
-    }
-    fn constraint_idx(&self) -> usize {
-        match self {
-            BaseOp::InitDot => 0,
-            BaseOp::Identity => 0,
-            BaseOp::Dot => 1,
-            BaseOp::Add => 0,
-            BaseOp::Sub => 0,
-            BaseOp::Mult => 0,
-            BaseOp::Sum => 1,
-        }
-    }
-}
-
-impl fmt::Display for BaseOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.as_str())
-    }
-}
-
-#[allow(missing_docs)]
-/// An enum representing the operations that can be used to express more complex operations via accumulation
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Op {
-    Dot,
-    Matmul,
-    Affine,
-    Conv {
-        padding: (usize, usize),
-        stride: (usize, usize),
-    },
-    SumPool {
-        padding: (usize, usize),
-        stride: (usize, usize),
-        kernel_shape: (usize, usize),
-    },
-    Add,
-    Sub,
-    Mult,
-    Identity,
-    Reshape(Vec<usize>),
-    Flatten(Vec<usize>),
-    BatchNorm,
-    ScaleAndShift,
-    Pad(usize, usize),
-    Sum,
-}
-
-/// Configuration for an accumulated arg.
-#[derive(Clone, Debug)]
-pub struct BaseConfig<F: FieldExt + TensorType> {
-    /// the inputs to the accumulated operations.
-    pub inputs: Vec<VarTensor>,
-    /// the (currently singular) output of the accumulated operations.
-    pub output: VarTensor,
-    /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many base gates.
-    pub selectors: BTreeMap<BaseOp, Selector>,
-    /// Activate sanity checks
-    pub check_mode: CheckMode,
-    _marker: PhantomData<F>,
-}
-
-impl<F: FieldExt + TensorType> BaseConfig<F> {
-    /// Configures the sequence of operations into a circuit gate.
-    /// # Arguments
-    /// * `inputs` - The explicit inputs to the operations.
-    /// * `output` - The variable representing the (currently singular) output of the operations.
-    pub fn configure(
-        meta: &mut ConstraintSystem<F>,
-        inputs: &[VarTensor; 2],
-        output: &VarTensor,
-        check_mode: CheckMode,
-    ) -> Self {
-        // setup a selector per base op
-        let mut selectors = BTreeMap::new();
-        for input in inputs {
-            // we don't support multiple columns rn
-            assert!(input.num_cols() == 1);
-        }
-        selectors.insert(BaseOp::Add, meta.selector());
-        selectors.insert(BaseOp::Sub, meta.selector());
-        selectors.insert(BaseOp::Dot, meta.selector());
-        selectors.insert(BaseOp::Sum, meta.selector());
-        selectors.insert(BaseOp::Mult, meta.selector());
-        selectors.insert(BaseOp::InitDot, meta.selector());
-        selectors.insert(BaseOp::Identity, meta.selector());
-
-        let config = Self {
-            selectors,
-            inputs: inputs.to_vec(),
-            output: output.clone(),
-            check_mode,
-            _marker: PhantomData,
-        };
-
-        for (base_op, selector) in config.selectors.iter() {
-            meta.create_gate(base_op.as_str(), |meta| {
-                let selector = meta.query_selector(*selector);
-
-                let mut qis = vec![Expression::<F>::zero().unwrap(); 2];
-                for i in 0..base_op.num_inputs() {
-                    qis[i] = config.inputs[i]
-                        .query_rng(meta, 0, 1)
-                        .expect("accum: input query failed")[0]
-                        .clone()
-                }
-
-                // Get output expressions for each input channel
-                let (offset, rng) = base_op.query_offset_rng();
-
-                let expected_output: Tensor<Expression<F>> = config
-                    .output
-                    .query_rng(meta, offset, rng)
-                    .expect("poly: output query failed");
-
-                let res = base_op.f((qis[0].clone(), qis[1].clone(), expected_output[0].clone()));
-
-                let constraints = vec![expected_output[base_op.constraint_idx()].clone() - res];
-
-                Constraints::with_selector(selector, constraints)
-            });
-        }
-
-        config
-    }
-
-    /// Assigns variables to the regions created when calling `configure`.
-    /// # Arguments
-    /// * `values` - The explicit values to the operations.
-    /// * `layouter` - A Halo2 Layouter.
-    /// * `offset` - Offset to assign.
-    pub fn layout(
-        &mut self,
-        layouter: &mut impl Layouter<F>,
-        values: &[ValTensor<F>],
-        offset: usize,
-        op: Op,
-    ) -> Result<ValTensor<F>, Box<dyn Error>> {
-        match op {
-            Op::Dot => layouts::dot(self, layouter, values.try_into()?, offset),
-            Op::Sum => layouts::sum(self, layouter, values.try_into()?, offset),
-            Op::Matmul => layouts::matmul(self, layouter, values.try_into()?, offset),
-            Op::Affine => layouts::affine(self, layouter, values.try_into()?, offset),
-            Op::Conv { padding, stride } => {
-                layouts::conv(self, layouter, values.try_into()?, padding, stride, offset)
-            }
-            Op::SumPool {
-                padding,
-                stride,
-                kernel_shape,
-            } => layouts::sumpool(
-                self,
-                layouter,
-                values.try_into()?,
-                padding,
-                stride,
-                kernel_shape,
-                offset,
-            ),
-            Op::Add => layouts::pairwise(self, layouter, values.try_into()?, offset, BaseOp::Add),
-            Op::Sub => layouts::pairwise(self, layouter, values.try_into()?, offset, BaseOp::Sub),
-            Op::Mult => layouts::pairwise(self, layouter, values.try_into()?, offset, BaseOp::Mult),
-            Op::Identity => layouts::identity(values.try_into()?),
-            Op::Reshape(d) | Op::Flatten(d) => layouts::reshape(values.try_into()?, &d),
-            Op::BatchNorm => layouts::scale_and_shift(self, layouter, values.try_into()?, offset),
-            Op::ScaleAndShift => {
-                layouts::scale_and_shift(self, layouter, values.try_into()?, offset)
-            }
-            Op::Pad(p1, p2) => {
-                if values.len() != 1 {
-                    return Err(Box::new(TensorError::DimError));
-                }
-                let mut input = values[0].clone();
-                input.pad((p1, p2))?;
-                Ok(input)
-            }
-        }
-    }
-}
+use halo2curves::pasta::pallas;
+use halo2curves::pasta::Fp as F;
+use rand::rngs::OsRng;
+use std::marker::PhantomData;
 
 #[cfg(test)]
-mod matmul_test {
+mod matmul {
     use super::*;
-    use halo2_proofs::{
-        arithmetic::FieldExt,
-        circuit::{Layouter, SimpleFloorPlanner, Value},
-        dev::MockProver,
-        plonk::{Circuit, ConstraintSystem, Error},
-    };
-    // use halo2curves::pasta::pallas;
-    use halo2curves::pasta::Fp as F;
-    // use rand::rngs::OsRng;
 
     const K: usize = 9;
     const LEN: usize = 3;
 
     #[derive(Clone)]
-    struct AffineCircuit<F: FieldExt + TensorType> {
+    struct MatmulCircuit<F: FieldExt + TensorType> {
         inputs: [ValTensor<F>; 2],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for AffineCircuit<F> {
+    impl<F: FieldExt + TensorType> Circuit<F> for MatmulCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -299,9 +32,9 @@ mod matmul_test {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true, 512);
-            let b = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true, 512);
-            let output = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, 1, LEN], true, 512);
+            let a = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true);
+            let b = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, 1, LEN], true);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
@@ -326,7 +59,7 @@ mod matmul_test {
         let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
         w.reshape(&[LEN, 1]);
 
-        let circuit = AffineCircuit::<F> {
+        let circuit = MatmulCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(w)],
             _marker: PhantomData,
         };
@@ -337,17 +70,8 @@ mod matmul_test {
 }
 
 #[cfg(test)]
-mod dottest {
+mod dot {
     use super::*;
-    use halo2_proofs::{
-        arithmetic::FieldExt,
-        circuit::{Layouter, SimpleFloorPlanner, Value},
-        dev::MockProver,
-        plonk::{Circuit, ConstraintSystem, Error},
-    };
-    // use halo2curves::pasta::pallas;
-    use halo2curves::pasta::Fp as F;
-    // use rand::rngs::OsRng;
 
     const K: usize = 4;
     const LEN: usize = 4;
@@ -367,9 +91,9 @@ mod dottest {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -404,17 +128,8 @@ mod dottest {
 }
 
 #[cfg(test)]
-mod sumtest {
+mod sum {
     use super::*;
-    use halo2_proofs::{
-        arithmetic::FieldExt,
-        circuit::{Layouter, SimpleFloorPlanner, Value},
-        dev::MockProver,
-        plonk::{Circuit, ConstraintSystem, Error},
-    };
-    // use halo2curves::pasta::pallas;
-    use halo2curves::pasta::Fp as F;
-    // use rand::rngs::OsRng;
 
     const K: usize = 4;
     const LEN: usize = 4;
@@ -434,9 +149,9 @@ mod sumtest {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -469,31 +184,20 @@ mod sumtest {
 }
 
 #[cfg(test)]
-mod batchnormtest {
-    use std::marker::PhantomData;
+mod batchnorm {
 
     use super::*;
-    use crate::tensor::Tensor;
-    use halo2_proofs::{
-        arithmetic::FieldExt,
-        circuit::{Layouter, SimpleFloorPlanner, Value},
-        dev::MockProver,
-        plonk::{Circuit, ConstraintSystem, Error},
-    };
-    // use halo2curves::pasta::pallas;
-    use halo2curves::pasta::Fp as F;
-    // use rand::rngs::OsRng;
 
     const K: usize = 9;
     const LEN: usize = 3;
 
     #[derive(Clone)]
-    struct AffineCircuit<F: FieldExt + TensorType> {
+    struct BNCircuit<F: FieldExt + TensorType> {
         inputs: [ValTensor<F>; 3],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for AffineCircuit<F> {
+    impl<F: FieldExt + TensorType> Circuit<F> for BNCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -502,9 +206,9 @@ mod batchnormtest {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
@@ -532,7 +236,7 @@ mod batchnormtest {
         let mut x = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
         x.reshape(&[LEN]);
 
-        let circuit = AffineCircuit::<F> {
+        let circuit = BNCircuit::<F> {
             inputs: [ValTensor::from(x), ValTensor::from(w), ValTensor::from(b)],
             _marker: PhantomData,
         };
@@ -543,20 +247,10 @@ mod batchnormtest {
 }
 
 #[cfg(test)]
-mod affinetest {
+mod affine {
     use std::marker::PhantomData;
 
     use super::*;
-    use crate::tensor::Tensor;
-    use halo2_proofs::{
-        arithmetic::FieldExt,
-        circuit::{Layouter, SimpleFloorPlanner, Value},
-        dev::MockProver,
-        plonk::{Circuit, ConstraintSystem, Error},
-    };
-    // use halo2curves::pasta::pallas;
-    use halo2curves::pasta::Fp as F;
-    // use rand::rngs::OsRng;
 
     const K: usize = 9;
     const LEN: usize = 3;
@@ -576,10 +270,9 @@ mod affinetest {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 512);
-            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 512);
-            let output =
-                VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true, 512);
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
+            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
@@ -618,17 +311,8 @@ mod affinetest {
 }
 
 #[cfg(test)]
-mod compositiontest {
+mod composition {
     use super::*;
-    use halo2_proofs::{
-        arithmetic::FieldExt,
-        circuit::{Layouter, SimpleFloorPlanner, Value},
-        dev::MockProver,
-        plonk::{Circuit, ConstraintSystem, Error},
-    };
-    // use halo2curves::pasta::pallas;
-    use halo2curves::pasta::Fp as F;
-    // use rand::rngs::OsRng;
 
     const K: usize = 9;
     const LEN: usize = 4;
@@ -648,9 +332,9 @@ mod compositiontest {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -692,20 +376,10 @@ mod compositiontest {
 }
 
 #[cfg(test)]
-mod convtest {
-    use std::marker::PhantomData;
+mod conv {
+    use halo2_proofs::arithmetic::Field;
 
     use super::*;
-    use crate::tensor::Tensor;
-    use halo2_proofs::{
-        arithmetic::{Field, FieldExt},
-        circuit::{Layouter, SimpleFloorPlanner, Value},
-        dev::MockProver,
-        plonk::{Circuit, ConstraintSystem, Error},
-    };
-    use halo2curves::pasta::pallas;
-    use halo2curves::pasta::Fp as F;
-    use rand::rngs::OsRng;
 
     const K: usize = 22;
     const LEN: usize = 100;
@@ -725,10 +399,9 @@ mod convtest {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 100000);
-            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 100000);
-            let output =
-                VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true, 100000);
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
+            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
@@ -821,22 +494,12 @@ mod convtest {
 }
 
 #[cfg(test)]
-mod sumpooltest {
-    use std::marker::PhantomData;
+mod sumpool {
+    use halo2_proofs::arithmetic::Field;
 
     use super::*;
-    use crate::tensor::Tensor;
-    use halo2_proofs::{
-        arithmetic::{Field, FieldExt},
-        circuit::{Layouter, SimpleFloorPlanner, Value},
-        dev::MockProver,
-        plonk::{Circuit, ConstraintSystem, Error},
-    };
-    use halo2curves::pasta::pallas;
-    use halo2curves::pasta::Fp as F;
-    use rand::rngs::OsRng;
 
-    const K: usize = 22;
+    const K: usize = 20;
     const LEN: usize = 100;
 
     #[derive(Clone)]
@@ -854,10 +517,9 @@ mod sumpooltest {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 100000);
-            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true, 100000);
-            let output =
-                VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true, 100000);
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
+            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
@@ -872,8 +534,8 @@ mod sumpooltest {
                     &self.inputs.clone(),
                     0,
                     Op::SumPool {
-                        padding: (1, 1),
-                        stride: (2, 2),
+                        padding: (0, 0),
+                        stride: (1, 1),
                         kernel_shape: (3, 3),
                     },
                 )
@@ -885,8 +547,8 @@ mod sumpooltest {
     #[test]
     fn sumpoolcircuit() {
         let image_height = 5;
-        let image_width = 7;
-        let in_channels = 3;
+        let image_width = 5;
+        let in_channels = 1;
 
         let mut image = Tensor::from(
             (0..in_channels * image_height * image_width)
@@ -905,17 +567,8 @@ mod sumpooltest {
 }
 
 #[cfg(test)]
-mod addtest {
+mod add {
     use super::*;
-    use halo2_proofs::{
-        arithmetic::FieldExt,
-        circuit::{Layouter, SimpleFloorPlanner, Value},
-        dev::MockProver,
-        plonk::{Circuit, ConstraintSystem, Error},
-    };
-    // use halo2curves::pasta::pallas;
-    use halo2curves::pasta::Fp as F;
-    // use rand::rngs::OsRng;
 
     const K: usize = 4;
     const LEN: usize = 4;
@@ -935,9 +588,9 @@ mod addtest {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -972,17 +625,8 @@ mod addtest {
 }
 
 #[cfg(test)]
-mod subtest {
+mod sub {
     use super::*;
-    use halo2_proofs::{
-        arithmetic::FieldExt,
-        circuit::{Layouter, SimpleFloorPlanner, Value},
-        dev::MockProver,
-        plonk::{Circuit, ConstraintSystem, Error},
-    };
-    // use halo2curves::pasta::pallas;
-    use halo2curves::pasta::Fp as F;
-    // use rand::rngs::OsRng;
 
     const K: usize = 4;
     const LEN: usize = 4;
@@ -1002,9 +646,9 @@ mod subtest {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -1039,17 +683,8 @@ mod subtest {
 }
 
 #[cfg(test)]
-mod multtest {
+mod mult {
     use super::*;
-    use halo2_proofs::{
-        arithmetic::FieldExt,
-        circuit::{Layouter, SimpleFloorPlanner, Value},
-        dev::MockProver,
-        plonk::{Circuit, ConstraintSystem, Error},
-    };
-    // use halo2curves::pasta::pallas;
-    use halo2curves::pasta::Fp as F;
-    // use rand::rngs::OsRng;
 
     const K: usize = 4;
     const LEN: usize = 4;
@@ -1069,9 +704,9 @@ mod multtest {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -1097,6 +732,183 @@ mod multtest {
 
         let circuit = MyCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod pow {
+    use super::*;
+
+    const K: usize = 8;
+    const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 1],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Pow(5))
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn powcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod pack {
+    use super::*;
+
+    const K: usize = 8;
+    const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 1],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Pack(2, 1))
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn packcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod rescaled {
+    use super::*;
+
+    const K: usize = 8;
+    const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 1],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(
+                    &mut layouter,
+                    &self.inputs.clone(),
+                    0,
+                    Op::Rescaled {
+                        inner: Box::new(Op::Sum),
+                        scale: vec![(0, 5)],
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn rescaledcircuit() {
+        // parameters
+        let mut a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+        a.reshape(&[LEN, 1]);
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a)],
             _marker: PhantomData,
         };
 

@@ -1,5 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl_lib::circuit::polynomial::*;
+use ezkl_lib::circuit::base::CheckMode;
+use ezkl_lib::circuit::fused::*;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::{create_keys, gen_srs};
@@ -20,7 +21,7 @@ const K: usize = 16;
 
 #[derive(Clone)]
 struct MyCircuit {
-    inputs: [ValTensor<Fr>; 2],
+    inputs: [ValTensor<Fr>; 1],
     _marker: PhantomData<Fr>,
 }
 
@@ -35,15 +36,14 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
-        let b = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
-        let output = VarTensor::new_advice(cs, K, len, vec![1], true, 512);
+        let a = VarTensor::new_advice(cs, K, len, vec![len], true);
+        let output = VarTensor::new_advice(cs, K, len, vec![1], true);
         let sum_node = Node {
             op: Op::Sum,
             input_order: vec![InputType::Input(0)],
         };
 
-        Self::Config::configure(cs, &[a, b], &output, &[sum_node])
+        Self::Config::configure(cs, &[a], &output, &[sum_node])
     }
 
     fn synthesize(
@@ -59,7 +59,8 @@ impl Circuit<Fr> for MyCircuit {
 fn runsum(c: &mut Criterion) {
     let mut group = c.benchmark_group("sum");
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    for &len in [16].iter() {
+    {
+        let &len = &16;
         unsafe {
             LEN = len;
         };
@@ -67,10 +68,8 @@ fn runsum(c: &mut Criterion) {
         // parameters
         let a = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
 
-        let b = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
-
         let circuit = MyCircuit {
-            inputs: [ValTensor::from(a), ValTensor::from(b)],
+            inputs: [ValTensor::from(a)],
             _marker: PhantomData,
         };
 
@@ -95,6 +94,7 @@ fn runsum(c: &mut Criterion) {
                     &pk,
                     TranscriptType::Blake,
                     SingleStrategy::new(&params),
+                    CheckMode::UNSAFE,
                 );
                 prover.unwrap();
             });

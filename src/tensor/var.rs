@@ -1,5 +1,4 @@
 use super::*;
-use std::cmp::min;
 /// A wrapper around Halo2's `Column<Fixed>` or `Column<Advice>`.
 /// The wrapper allows for `VarTensor`'s dimensions to differ from that of the inner (wrapped) columns.
 /// The inner vector might, for instance, contain 3 Advice Columns. Each of those columns in turn
@@ -50,15 +49,14 @@ impl VarTensor {
         capacity: usize,
         dims: Vec<usize>,
         equality: bool,
-        max_rot: usize,
     ) -> Self {
         let base = 2u32;
-        let max_rows = min(
-            max_rot,
-            base.pow(k as u32) as usize - cs.blinding_factors() - 1,
-        );
+        let max_rows = base.pow(k as u32) as usize - cs.blinding_factors() - 1;
         let modulo = (capacity / max_rows) + 1;
         let mut advices = vec![];
+        if modulo > 1 {
+            unimplemented!("we'll be implementing multi-column variables in a future release but for now, increase K.")
+        }
         for _ in 0..modulo {
             let col = cs.advice_column();
             if equality {
@@ -88,13 +86,9 @@ impl VarTensor {
         capacity: usize,
         dims: Vec<usize>,
         equality: bool,
-        max_rot: usize,
     ) -> Self {
         let base = 2u32;
-        let max_rows = min(
-            max_rot,
-            base.pow(k as u32) as usize - cs.blinding_factors() - 1,
-        );
+        let max_rows = base.pow(k as u32) as usize - cs.blinding_factors() - 1;
         let modulo = (capacity / max_rows) + 1;
         let mut fixed = vec![];
         for _ in 0..modulo {
@@ -284,36 +278,34 @@ impl VarTensor {
                 }
                 _ => Err(halo2_proofs::plonk::Error::Synthesis),
             },
-            ValTensor::Value { inner: v, .. } => v.enum_map(|coord, k| match &self {
-                VarTensor::Fixed { inner: fixed, .. } => {
-                    let (x, y) = self.cartesian_coord(offset + coord);
-
-                    region.assign_fixed(|| "k", fixed[x], y, || k)
+            ValTensor::Value { inner: v, .. } => v.enum_map(|coord, k| {
+                let (x, y) = self.cartesian_coord(offset + coord);
+                if x > 0 {
+                    unimplemented!("we'll be implementing multi-column variables in a future release but for now, increase K.")
                 }
-                VarTensor::Advice { inner: advices, .. } => {
-                    let (x, y) = self.cartesian_coord(offset + coord);
-                    region.assign_advice(|| "k", advices[x], y, || k)
-                }
-            }),
-            ValTensor::PrevAssigned { inner: v, .. } => v.enum_map(|coord, xcell| match &self {
-                VarTensor::Advice { inner: advices, .. } => {
-                    let (x, y) = self.cartesian_coord(offset + coord);
-                    xcell.copy_advice(|| "k", region, advices[x], y)
-                }
-                _ => Err(halo2_proofs::plonk::Error::Synthesis),
-            }),
-            ValTensor::AssignedValue { inner: v, .. } => v.enum_map(|coord, k| match &self {
-                VarTensor::Fixed { inner: fixed, .. } => {
-                    let (x, y) = self.cartesian_coord(offset + coord);
-                    region
-                        .assign_fixed(|| "k", fixed[x], y, || k)
-                        .map(|a| a.evaluate())
-                }
-                VarTensor::Advice { inner: advices, .. } => {
-                    let (x, y) = self.cartesian_coord(offset + coord);
-                    region
-                        .assign_advice(|| "k", advices[x], y, || k)
-                        .map(|a| a.evaluate())
+                match k {
+                    ValType::Value(v) => match &self {
+                        VarTensor::Fixed { inner: fixed, .. } => {
+                            region.assign_fixed(|| "k", fixed[x], y, || v)
+                        }
+                        VarTensor::Advice { inner: advices, .. } => {
+                            region.assign_advice(|| "k", advices[x], y, || v)
+                        }
+                    },
+                    ValType::PrevAssigned(v) => match &self {
+                        VarTensor::Advice { inner: advices, .. } => {
+                            v.copy_advice(|| "k", region, advices[x], y)
+                        }
+                        _ => Err(halo2_proofs::plonk::Error::Synthesis),
+                    },
+                    ValType::AssignedValue(v) => match &self {
+                        VarTensor::Fixed { inner: fixed, .. } => region
+                            .assign_fixed(|| "k", fixed[x], y, || v)
+                            .map(|a| a.evaluate()),
+                        VarTensor::Advice { inner: advices, .. } => region
+                            .assign_advice(|| "k", advices[x], y, || v)
+                            .map(|a| a.evaluate()),
+                    },
                 }
             }),
         }

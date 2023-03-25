@@ -1,5 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use ezkl_lib::circuit::base::CheckMode;
+#[allow(deprecated)]
 use ezkl_lib::circuit::fused::*;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
@@ -21,7 +22,7 @@ const K: usize = 16;
 
 #[derive(Clone)]
 struct MyCircuit {
-    inputs: [ValTensor<Fr>; 3],
+    inputs: [ValTensor<Fr>; 1],
     _marker: PhantomData<Fr>,
 }
 
@@ -36,21 +37,14 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let input = VarTensor::new_advice(cs, K, len, vec![len], true);
-        let kernel = VarTensor::new_advice(cs, K, len * len, vec![len, len], true);
-        let bias = VarTensor::new_advice(cs, K, len, vec![len], true);
-        let output = VarTensor::new_advice(cs, K, len, vec![len], true);
-        // tells the config layer to add an affine op to a circuit gate
-        let affine_node = Node {
-            op: Op::Affine,
-            input_order: vec![
-                InputType::Input(0),
-                InputType::Input(1),
-                InputType::Input(2),
-            ],
+        let a = VarTensor::new_advice(cs, K, len, vec![len], true);
+        let output = VarTensor::new_advice(cs, K, 1, vec![1], true);
+        let pack_node = Node {
+            op: Op::Pack(2, 1),
+            input_order: vec![InputType::Input(0)],
         };
 
-        Self::Config::configure(cs, &[input, kernel, bias], &output, &[affine_node])
+        Self::Config::configure(cs, &[a], &output, &[pack_node])
     }
 
     fn synthesize(
@@ -63,29 +57,20 @@ impl Circuit<Fr> for MyCircuit {
     }
 }
 
-fn runaffine(c: &mut Criterion) {
-    let mut group = c.benchmark_group("affine");
+fn runpack(c: &mut Criterion) {
+    let mut group = c.benchmark_group("pack");
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
     {
-        let &len = &4;
+        let &len = &16;
         unsafe {
             LEN = len;
         };
 
         // parameters
-        let mut kernel = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
-        kernel.reshape(&[len, len]);
-
-        let bias = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
-
-        let input = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
+        let a = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
 
         let circuit = MyCircuit {
-            inputs: [
-                ValTensor::from(input),
-                ValTensor::from(kernel),
-                ValTensor::from(bias),
-            ],
+            inputs: [ValTensor::from(a)],
             _marker: PhantomData,
         };
 
@@ -110,7 +95,7 @@ fn runaffine(c: &mut Criterion) {
                     &pk,
                     TranscriptType::Blake,
                     SingleStrategy::new(&params),
-                    CheckMode::UNSAFE,
+                    CheckMode::SAFE,
                 );
                 prover.unwrap();
             });
@@ -122,6 +107,6 @@ fn runaffine(c: &mut Criterion) {
 criterion_group! {
   name = benches;
   config = Criterion::default().with_plots();
-  targets = runaffine
+  targets = runpack
 }
 criterion_main!(benches);

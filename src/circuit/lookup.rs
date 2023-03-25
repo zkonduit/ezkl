@@ -66,6 +66,17 @@ impl Op {
         }
     }
 
+    fn as_str(&self) -> &'static str {
+        match self {
+            Op::Div { .. } => "DIV",
+            Op::ReLU { .. } => "RELU",
+            Op::LeakyReLU { .. } => "LEAKY_RELU",
+            Op::PReLU { .. } => "PRELU",
+            Op::Sigmoid { .. } => "SIGMOID",
+            Op::Sqrt { .. } => "SQRT",
+        }
+    }
+
     /// a value which is always in the table
     pub fn default_pair<F: FieldExt>(&self) -> (F, F) {
         let x = vec![0_i128].into_iter().into();
@@ -203,50 +214,45 @@ impl<F: FieldExt + TensorType> Config<F> {
     ) -> Self {
         let qlookup = cs.complex_selector();
 
-        let _ = (0..input.dims().iter().product::<usize>())
-            .map(|i| {
-                let _ = cs.lookup("lk", |cs| {
-                    let qlookup = cs.query_selector(qlookup);
-                    let not_qlookup = Expression::Constant(<F as Field>::one()) - qlookup.clone();
-                    let default_x = <F as Field>::zero();
-                    let mut default_y = vec![0_i128].into_iter().into();
-                    for nl in table.borrow().nonlinearities.clone() {
-                        default_y = nl.f(default_y)
-                    }
-                    let default_y: F = i128_to_felt(default_y[0]);
-                    let (x, y) = input.cartesian_coord(i);
-                    vec![
-                        (
-                            match &input {
-                                VarTensor::Advice { inner: advices, .. } => {
-                                    qlookup.clone()
-                                        * cs.query_advice(advices[x], Rotation(y as i32))
-                                        + not_qlookup.clone() * default_x
-                                }
-                                VarTensor::Fixed { inner: fixed, .. } => {
-                                    qlookup.clone() * cs.query_fixed(fixed[x], Rotation(y as i32))
-                                        + not_qlookup.clone() * default_x
-                                }
-                            },
-                            table.borrow().table_input,
-                        ),
-                        (
-                            match &output {
-                                VarTensor::Advice { inner: advices, .. } => {
-                                    qlookup * cs.query_advice(advices[x], Rotation(y as i32))
-                                        + not_qlookup * default_y
-                                }
-                                VarTensor::Fixed { inner: fixed, .. } => {
-                                    qlookup * cs.query_fixed(fixed[x], Rotation(y as i32))
-                                        + not_qlookup * default_y
-                                }
-                            },
-                            table.borrow().table_output,
-                        ),
-                    ]
-                });
-            })
-            .collect::<Vec<_>>();
+        let _ = cs.lookup(table.borrow().nonlinearities[0].as_str(), |cs| {
+            let qlookup = cs.query_selector(qlookup);
+            let not_qlookup = Expression::Constant(<F as Field>::one()) - qlookup.clone();
+            let default_x = <F as Field>::zero();
+            let mut default_y = vec![0_i128].into_iter().into();
+            for nl in table.borrow().nonlinearities.clone() {
+                default_y = nl.f(default_y)
+            }
+            let default_y: F = i128_to_felt(default_y[0]);
+            let (x, y) = input.cartesian_coord(0);
+            vec![
+                (
+                    match &input {
+                        VarTensor::Advice { inner: advices, .. } => {
+                            qlookup.clone() * cs.query_advice(advices[x], Rotation(y as i32))
+                                + not_qlookup.clone() * default_x
+                        }
+                        VarTensor::Fixed { inner: fixed, .. } => {
+                            qlookup.clone() * cs.query_fixed(fixed[x], Rotation(y as i32))
+                                + not_qlookup.clone() * default_x
+                        }
+                    },
+                    table.borrow().table_input,
+                ),
+                (
+                    match &output {
+                        VarTensor::Advice { inner: advices, .. } => {
+                            qlookup * cs.query_advice(advices[x], Rotation(y as i32))
+                                + not_qlookup * default_y
+                        }
+                        VarTensor::Fixed { inner: fixed, .. } => {
+                            qlookup * cs.query_fixed(fixed[x], Rotation(y as i32))
+                                + not_qlookup * default_y
+                        }
+                    },
+                    table.borrow().table_output,
+                ),
+            ]
+        });
 
         Self {
             input: input.clone(),
@@ -337,7 +343,6 @@ impl<F: FieldExt + TensorType> Config<F> {
                 };
 
                 if (currently_filled_buffer + values_len) == buffer_capacity {
-                    self.qlookup.enable(&mut region, 0)?;
                     //  can now safely unwrap
                     let mut region_offset = values_len;
                     for (input, output) in self.input_buffer.iter().zip(&self.output_buffer) {
@@ -353,15 +358,18 @@ impl<F: FieldExt + TensorType> Config<F> {
                             self.input.assign(&mut region, 0, values)?;
                         }
                     };
+                    for i in 0..buffer_capacity {
+                        self.qlookup.enable(&mut region, i)?;
+                    }
                 };
 
-                self.input_buffer.push(w.clone());
+                self.input_buffer.push(w);
 
                 // constrain the calculated output to a column
                 Ok(ValTensor::from(self.output.assign(
                     &mut region,
                     0,
-                    &ValTensor::from(output.clone()),
+                    &ValTensor::from(output),
                 )?))
             },
         ) {
@@ -404,7 +412,7 @@ mod tests {
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
             let advices = (0..2)
-                .map(|_| VarTensor::new_advice(cs, 4, 1, vec![1], true, 512))
+                .map(|_| VarTensor::new_advice(cs, 4, 1, vec![1], true))
                 .collect::<Vec<_>>();
 
             let nl = Op::ReLU { scale: 1 };

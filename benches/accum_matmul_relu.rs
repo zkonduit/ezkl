@@ -1,6 +1,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl_lib::circuit::base::CheckMode;
-use ezkl_lib::circuit::fused::*;
+use ezkl_lib::circuit::base::*;
+use ezkl_lib::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
+
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::{create_keys, gen_srs};
@@ -16,17 +17,25 @@ use halo2curves::bn256::{Bn256, Fr};
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
 
+const BITS: usize = 8;
 static mut LEN: usize = 4;
 const K: usize = 16;
 
 #[derive(Clone)]
 struct MyCircuit {
-    inputs: [ValTensor<Fr>; 3],
+    inputs: [ValTensor<Fr>; 2],
     _marker: PhantomData<Fr>,
 }
 
+// A columnar ReLu MLP
+#[derive(Clone)]
+struct MyConfig {
+    base_config: BaseConfig<Fr>,
+    l1: LookupConfig<Fr>,
+}
+
 impl Circuit<Fr> for MyCircuit {
-    type Config = Config<Fr>;
+    type Config = MyConfig;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -36,21 +45,17 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let input = VarTensor::new_advice(cs, K, len, vec![len], true);
-        let kernel = VarTensor::new_advice(cs, K, len * len, vec![len, len], true);
-        let bias = VarTensor::new_advice(cs, K, len, vec![len], true);
-        let output = VarTensor::new_advice(cs, K, len, vec![len], true);
-        // tells the config layer to add an affine op to a circuit gate
-        let affine_node = Node {
-            op: Op::Affine,
-            input_order: vec![
-                InputType::Input(0),
-                InputType::Input(1),
-                InputType::Input(2),
-            ],
-        };
+        let a = VarTensor::new_advice(cs, K, len * len, vec![len, len], true);
 
-        Self::Config::configure(cs, &[input, kernel, bias], &output, &[affine_node])
+        let b = VarTensor::new_advice(cs, K, len * len, vec![len, len], true);
+
+        let output = VarTensor::new_advice(cs, K, (len + 1) * len, vec![len, 1, len + 1], true);
+
+        // sets up a new Divide by table
+        let l1 = LookupConfig::configure(cs, &a, &output, BITS, &[LookupOp::ReLU { scale: 1 }]);
+
+        let base_config = BaseConfig::configure(cs, &[a, b], &output, CheckMode::UNSAFE);
+        MyConfig { base_config, l1 }
     }
 
     fn synthesize(
@@ -58,34 +63,32 @@ impl Circuit<Fr> for MyCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        config.layout(&mut layouter, &self.inputs).unwrap();
+        let output = config
+            .base_config
+            .layout(&mut layouter, &self.inputs, 0, Op::Matmul)
+            .unwrap();
+        let _output = config.l1.layout(&mut layouter, &output).unwrap();
         Ok(())
     }
 }
 
-fn runaffine(c: &mut Criterion) {
-    let mut group = c.benchmark_group("affine");
+fn runmatmul(c: &mut Criterion) {
+    let mut group = c.benchmark_group("accum_matmul");
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    {
-        let &len = &4;
+    for &len in [4, 32].iter() {
         unsafe {
             LEN = len;
         };
 
+        let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
+        a.reshape(&[len, len]);
+
         // parameters
-        let mut kernel = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
-        kernel.reshape(&[len, len]);
-
-        let bias = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
-
-        let input = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
+        let mut b = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
+        b.reshape(&[len, 1]);
 
         let circuit = MyCircuit {
-            inputs: [
-                ValTensor::from(input),
-                ValTensor::from(kernel),
-                ValTensor::from(bias),
-            ],
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
             _marker: PhantomData,
         };
 
@@ -122,6 +125,6 @@ fn runaffine(c: &mut Criterion) {
 criterion_group! {
   name = benches;
   config = Criterion::default().with_plots();
-  targets = runaffine
+  targets = runmatmul
 }
 criterion_main!(benches);

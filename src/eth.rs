@@ -336,24 +336,22 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
     // Count the number of pub inputs
     let mut start = None;
     let mut end = None;
-    let mut i = 0;
-    for line in reader.lines() {
+    for (i, line) in reader.lines().enumerate() {
         let line = line?;
         if line.trim().starts_with("mstore(0x20") {
-            start = Some(i);
+            start = Some(i as u32);
         }
 
         if line.trim().starts_with("mstore(0x0") {
-            end = Some(i);
+            end = Some(i as u32);
             break;
         }
-        i += 1;
     }
 
-    let num_pubinputs = if start.is_none() {
-        0
+    let num_pubinputs = if let Some(s) = start {
+        end.unwrap() - s
     } else {
-        end.unwrap() - start.unwrap()
+        0
     };
 
     let mut max_pubinputs_addr = 0;
@@ -372,9 +370,9 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         }
 
         let m = calldata_pattern.captures(&line);
-        if m.is_some() {
-            let calldata_and_addr = m.as_ref().unwrap().get(1).unwrap().as_str();
-            let addr = m.unwrap().get(2).unwrap().as_str();
+        if let Some(m) = m {
+            let calldata_and_addr = m.get(1).unwrap().as_str();
+            let addr = m.get(2).unwrap().as_str();
             let addr_as_num = u32::from_str_radix(addr.strip_prefix("0x").unwrap(), 16)?;
 
             if addr_as_num <= max_pubinputs_addr {
@@ -393,9 +391,9 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         }
 
         let m = mstore8_pattern.captures(&line);
-        if m.is_some() {
-            let mstore = m.as_ref().unwrap().get(1).unwrap().as_str();
-            let addr = m.unwrap().get(2).unwrap().as_str();
+        if let Some(m) = m {
+            let mstore = m.get(1).unwrap().as_str();
+            let addr = m.get(2).unwrap().as_str();
             let addr_as_num = u32::from_str_radix(addr, 10)?;
             let transcript_addr = format!("{:#x}", addr_as_num);
             transcript_addrs.push(addr_as_num);
@@ -406,9 +404,9 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         }
 
         let m = mstoren_pattern.captures(&line);
-        if m.is_some() {
-            let mstore = m.as_ref().unwrap().get(1).unwrap().as_str();
-            let addr = m.unwrap().get(2).unwrap().as_str();
+        if let Some(m) = m {
+            let mstore = m.get(1).unwrap().as_str();
+            let addr = m.get(2).unwrap().as_str();
             let addr_as_num = u32::from_str_radix(addr, 10)?;
             let transcript_addr = format!("{:#x}", addr_as_num);
             transcript_addrs.push(addr_as_num);
@@ -419,10 +417,10 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         }
 
         let m = modexp_pattern.captures(&line);
-        if m.is_some() {
-            let modexp = m.as_ref().unwrap().get(1).unwrap().as_str();
-            let start_addr = m.as_ref().unwrap().get(2).unwrap().as_str();
-            let result_addr = m.unwrap().get(3).unwrap().as_str();
+        if let Some(m) = m {
+            let modexp = m.get(1).unwrap().as_str();
+            let start_addr = m.get(2).unwrap().as_str();
+            let result_addr = m.get(3).unwrap().as_str();
             let start_addr_as_num =
                 u32::from_str_radix(start_addr.strip_prefix("0x").unwrap(), 16)?;
             let result_addr_as_num =
@@ -441,10 +439,10 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         }
 
         let m = ecmul_pattern.captures(&line);
-        if m.is_some() {
-            let ecmul = m.as_ref().unwrap().get(1).unwrap().as_str();
-            let start_addr = m.as_ref().as_ref().unwrap().get(2).unwrap().as_str();
-            let result_addr = m.unwrap().get(3).unwrap().as_str();
+        if let Some(m) = m {
+            let ecmul = m.get(1).unwrap().as_str();
+            let start_addr = m.get(2).unwrap().as_str();
+            let result_addr = m.get(3).unwrap().as_str();
             let start_addr_as_num =
                 u32::from_str_radix(start_addr.strip_prefix("0x").unwrap(), 16)?;
             let result_addr_as_num =
@@ -464,10 +462,10 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         }
 
         let m = ecadd_pattern.captures(&line);
-        if m.is_some() {
-            let ecadd = m.as_ref().unwrap().get(1).unwrap().as_str();
-            let start_addr = m.as_ref().unwrap().get(2).unwrap().as_str();
-            let result_addr = m.unwrap().get(3).unwrap().as_str();
+        if let Some(m) = m {
+            let ecadd = m.get(1).unwrap().as_str();
+            let start_addr = m.get(2).unwrap().as_str();
+            let result_addr = m.get(3).unwrap().as_str();
             let start_addr_as_num =
                 u32::from_str_radix(start_addr.strip_prefix("0x").unwrap(), 16)?;
             let result_addr_as_num =
@@ -487,10 +485,10 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         }
 
         let m = ecpairing_pattern.captures(&line);
-        if m.is_some() {
-            let ecpairing = m.as_ref().unwrap().get(1).unwrap().as_str();
-            let start_addr = m.as_ref().unwrap().get(2).unwrap().as_str();
-            let result_addr = m.unwrap().get(3).unwrap().as_str();
+        if let Some(m) = m {
+            let ecpairing = m.get(1).unwrap().as_str();
+            let start_addr = m.get(2).unwrap().as_str();
+            let result_addr = m.get(3).unwrap().as_str();
             let start_addr_as_num =
                 u32::from_str_radix(start_addr.strip_prefix("0x").unwrap(), 16)?;
             let result_addr_as_num =
@@ -510,9 +508,9 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         }
 
         let m = mstore_pattern.captures(&line);
-        if m.is_some() {
-            let mstore = m.as_ref().unwrap().get(1).unwrap().as_str();
-            let addr = m.as_ref().unwrap().get(2).unwrap().as_str();
+        if let Some(m) = m {
+            let mstore = m.get(1).unwrap().as_str();
+            let addr = m.get(2).unwrap().as_str();
             let addr_as_num = u32::from_str_radix(addr, 16)?;
             let transcript_addr = format!("{:#x}", addr_as_num);
             transcript_addrs.push(addr_as_num);
@@ -523,9 +521,9 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         }
 
         let m = keccak_pattern.captures(&line);
-        if m.is_some() {
-            let keccak = m.as_ref().unwrap().get(1).unwrap().as_str();
-            let addr = m.as_ref().unwrap().get(2).unwrap().as_str();
+        if let Some(m) = m {
+            let keccak = m.get(1).unwrap().as_str();
+            let addr = m.get(2).unwrap().as_str();
             let addr_as_num = u32::from_str_radix(addr.strip_prefix("0x").unwrap(), 16)?;
             let transcript_addr = format!("{:#x}", addr_as_num);
             transcript_addrs.push(addr_as_num);
@@ -584,5 +582,5 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         write!(write, "{}", line).unwrap();
     }
     writeln!(write, "}} return success; }} }}")?;
-    return Ok(contract);
+    Ok(contract)
 }
