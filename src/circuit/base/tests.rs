@@ -53,6 +53,66 @@ mod matmul {
     #[test]
     fn matmulcircuit() {
         // parameters
+        let mut a =
+            Tensor::from((0..(LEN + 1) * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        a.reshape(&[LEN, LEN + 1]);
+
+        let mut w = Tensor::from((0..LEN + 1).map(|i| Value::known(F::from((i + 1) as u64))));
+        w.reshape(&[LEN + 1, 1]);
+
+        let circuit = MatmulCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(w)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod matmul_col_overflow {
+    use super::*;
+
+    const K: usize = 5;
+    const LEN: usize = 6;
+
+    #[derive(Clone)]
+    struct MatmulCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MatmulCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN * LEN * LEN, vec![LEN, LEN, LEN], true);
+            let b = VarTensor::new_advice(cs, K, LEN * LEN * LEN, vec![LEN, LEN, LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN * LEN * LEN, vec![LEN, LEN, LEN], true);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Matmul)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn matmulcircuit() {
+        // parameters
         let mut a = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
         a.reshape(&[LEN, LEN]);
 
@@ -75,6 +135,64 @@ mod dot {
 
     const K: usize = 4;
     const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Dot)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn dotcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let b = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod dot_col_overflow {
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 16;
 
     #[derive(Clone)]
     struct MyCircuit<F: FieldExt + TensorType> {
@@ -253,6 +371,70 @@ mod affine {
     use super::*;
 
     const K: usize = 9;
+    const LEN: usize = 3;
+
+    #[derive(Clone)]
+    struct AffineCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 3],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for AffineCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
+            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Affine)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn affinecircuit() {
+        // parameters
+        let mut w = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        w.reshape(&[LEN, LEN]);
+
+        let mut b = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        b.reshape(&[LEN, 1]);
+
+        let mut x = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        x.reshape(&[LEN, 1]);
+
+        let circuit = AffineCircuit::<F> {
+            inputs: [ValTensor::from(x), ValTensor::from(w), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod affine_col_overflow {
+    use std::marker::PhantomData;
+
+    use super::*;
+
+    const K: usize = 4;
     const LEN: usize = 3;
 
     #[derive(Clone)]

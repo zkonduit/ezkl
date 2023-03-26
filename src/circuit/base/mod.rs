@@ -285,7 +285,7 @@ pub struct BaseConfig<F: FieldExt + TensorType> {
     /// the (currently singular) output of the accumulated operations.
     pub output: VarTensor,
     /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many base gates.
-    pub selectors: BTreeMap<BaseOp, Selector>,
+    pub selectors: BTreeMap<(BaseOp, usize), Selector>,
     /// Activate sanity checks
     pub check_mode: CheckMode,
     _marker: PhantomData<F>,
@@ -305,16 +305,18 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
     ) -> Self {
         // setup a selector per base op
         let mut selectors = BTreeMap::new();
-        for input in inputs {
-            // we don't support multiple columns rn
-            assert!(input.num_cols() == 1);
+
+        assert!(inputs[0].num_cols() == inputs[1].num_cols());
+        assert!(inputs[0].num_cols() == output.num_cols());
+
+        for i in 0..output.num_cols() {
+            // selectors.insert((BaseOp::Add, i), meta.selector());
+            // selectors.insert((BaseOp::Sub, i), meta.selector());
+            selectors.insert((BaseOp::Dot, i), meta.selector());
+            // selectors.insert((BaseOp::Sum, i), meta.selector());
+            selectors.insert((BaseOp::Mult, i), meta.selector());
+            // selectors.insert((BaseOp::Identity, i), meta.selector());
         }
-        selectors.insert(BaseOp::Add, meta.selector());
-        selectors.insert(BaseOp::Sub, meta.selector());
-        selectors.insert(BaseOp::Dot, meta.selector());
-        selectors.insert(BaseOp::Sum, meta.selector());
-        selectors.insert(BaseOp::Mult, meta.selector());
-        selectors.insert(BaseOp::Identity, meta.selector());
 
         let config = Self {
             selectors,
@@ -324,7 +326,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             _marker: PhantomData,
         };
 
-        for (base_op, selector) in config.selectors.iter() {
+        for ((base_op, col_idx), selector) in config.selectors.iter() {
             meta.create_gate(base_op.as_str(), |meta| {
                 let selector = meta.query_selector(*selector);
 
@@ -336,7 +338,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                     .skip(2 - base_op.num_inputs())
                 {
                     *q_i = config.inputs[i]
-                        .query_rng(meta, 0, 1)
+                        .query_rng(meta, (col_idx * output.num_cols()) as i32, 1)
                         .expect("accum: input query failed")[0]
                         .clone()
                 }
@@ -346,7 +348,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
 
                 let expected_output: Tensor<Expression<F>> = config
                     .output
-                    .query_rng(meta, offset, rng)
+                    .query_rng(meta, offset + (col_idx * output.num_cols()) as i32, rng)
                     .expect("poly: output query failed");
 
                 let res = base_op.f((qis[0].clone(), qis[1].clone(), expected_output[0].clone()));

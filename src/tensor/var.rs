@@ -54,9 +54,6 @@ impl VarTensor {
         let max_rows = base.pow(k as u32) as usize - cs.blinding_factors() - 1;
         let modulo = (capacity / max_rows) + 1;
         let mut advices = vec![];
-        if modulo > 1 {
-            unimplemented!("we'll be implementing multi-column variables in a future release but for now, increase K.")
-        }
         for _ in 0..modulo {
             let col = cs.advice_column();
             if equality {
@@ -268,7 +265,7 @@ impl VarTensor {
                     t.enum_map(|coord, _| {
                         let (x, y) = self.cartesian_coord(offset + coord);
                         if x > 0 {
-                            unimplemented!("we'll be implementing multi-column instance variables in a future release but for now, increase K.")
+                            unimplemented!("multi-column instance variables will arrive in a future release but for now, increase K.")
                         }
                         region.assign_advice_from_instance(
                             || "pub input anchor",
@@ -321,12 +318,11 @@ impl VarTensor {
     ) -> Result<(Tensor<AssignedCell<F, F>>, usize), halo2_proofs::plonk::Error> {
         match values {
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
-            ValTensor::Value { inner: v, .. } => {
+            ValTensor::Value { inner: v, dims } => {
                 // duplicates every nth element to adjust for column overflow
                 let v = v.duplicate_every_n(self.col_size()).unwrap();
                 let res = v.enum_map(|coord, k| {
                     let (x, y) = self.cartesian_coord(offset + coord);
-
                     match k {
                         ValType::Value(v) => match &self {
                             VarTensor::Fixed { inner: fixed, .. } => {
@@ -352,7 +348,10 @@ impl VarTensor {
                         },
                     }
                 })?;
-                Ok((res.remove_every_n(self.col_size() + 1).unwrap(), res.len()))
+                let mut non_duplicated_res = res.remove_every_n(self.col_size() + 1).unwrap();
+                
+                non_duplicated_res.reshape(dims);
+                Ok((non_duplicated_res, res.len()))
             }
         }
     }

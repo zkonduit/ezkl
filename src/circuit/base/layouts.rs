@@ -29,11 +29,14 @@ pub fn dot<F: FieldExt + TensorType>(
         || "assign inputs",
         |mut region| {
             let mut inputs = vec![];
+            let mut assigned_len = 0;
             for (i, input) in values.iter().enumerate() {
                 let inp = utils::value_muxer(
                     &config.inputs[i],
                     &{
-                        let res = config.inputs[i].assign(&mut region, offset, input)?;
+                        let (res, len) =
+                            config.inputs[i].assign_with_duplication(&mut region, offset, input)?;
+                        assigned_len = len;
                         res.map(|e| e.value_field().evaluate())
                     },
                     input,
@@ -43,24 +46,32 @@ pub fn dot<F: FieldExt + TensorType>(
 
             // Now we can assign the dot product
             let accumulated_dot = accumulated::dot(&[inputs[0].clone(), inputs[1].clone()])
-                .expect("accum poly: dot op failed")
-                .into();
-            let output = config
-                .output
-                .assign(&mut region, offset, &accumulated_dot)?;
+                .expect("accum poly: dot op failed");
+            let (output, output_assigned_len) = config.output.assign_with_duplication(
+                &mut region,
+                offset,
+                &accumulated_dot.into(),
+            )?;
 
-            for i in 0..inputs[0].len() {
-                let (_, y) = config.inputs[0].cartesian_coord(i);
-                if y == 0 {
+            assert_eq!(assigned_len, output_assigned_len);
+
+            for i in 0..assigned_len {
+                let (x, mut y) = config.inputs[0].cartesian_coord(i);
+                println!("x {} y {}", x, y);
+                // offset due to column overflow and duplication
+                if x > 0 {
+                    y += 1;
+                }
+                if x == 0 && y == 0 {
                     config
                         .selectors
-                        .get(&BaseOp::Mult)
+                        .get(&(BaseOp::Mult, x))
                         .unwrap()
                         .enable(&mut region, offset + y)?;
                 } else {
                     config
                         .selectors
-                        .get(&BaseOp::Dot)
+                        .get(&(BaseOp::Dot, x))
                         .unwrap()
                         .enable(&mut region, offset + y)?;
                 }
@@ -70,6 +81,8 @@ pub fn dot<F: FieldExt + TensorType>(
                 .get_slice(&[output.len() - 1..output.len()])
                 .expect("accum poly: failed to fetch last elem");
 
+            println!("last_elem {:?}", last_elem);
+
             if matches!(config.check_mode, CheckMode::SAFE) {
                 let safe_dot = non_accum_dot(&inputs.iter().collect())
                     .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
@@ -77,7 +90,9 @@ pub fn dot<F: FieldExt + TensorType>(
                 assert_eq!(
                     Into::<Tensor<i32>>::into(last_elem.clone()),
                     Into::<Tensor<i32>>::into(safe_dot),
-                )
+                );
+
+                println!("matched");
             }
             // last element is the result
             Ok(last_elem)
@@ -85,9 +100,12 @@ pub fn dot<F: FieldExt + TensorType>(
     ) {
         Ok(a) => a,
         Err(e) => {
+            println!("error {e}", e = e);
             return Err(Box::new(e));
         }
     };
+
+    println!("done");
 
     Ok(ValTensor::from(t))
 }
@@ -102,35 +120,48 @@ pub fn sum<F: FieldExt + TensorType>(
     let t = match layouter.assign_region(
         || "assign inputs",
         |mut region| {
+            let assigned_len: usize;
             let input = utils::value_muxer(
                 &config.inputs[1],
                 &{
-                    let res = config.inputs[1].assign(&mut region, offset, &values[0])?;
+                    let (res, len) = config.inputs[1].assign_with_duplication(
+                        &mut region,
+                        offset,
+                        &values[0],
+                    )?;
+                    assigned_len = len;
                     res.map(|e| e.value_field().evaluate())
                 },
                 &values[0],
             );
 
             // Now we can assign the dot product
-            let accumulated_sum = accumulated::sum(&input)
-                .expect("accum poly: sum op failed")
-                .into();
-            let output = config
-                .output
-                .assign(&mut region, offset, &accumulated_sum)?;
+            let accumulated_sum = accumulated::sum(&input).expect("accum poly: sum op failed");
 
-            for i in 0..input.len() {
-                let (_, y) = config.inputs[0].cartesian_coord(i);
+            let (output, output_assigned_len) = config.output.assign_with_duplication(
+                &mut region,
+                offset,
+                &accumulated_sum.into(),
+            )?;
+
+            assert_eq!(assigned_len, output_assigned_len);
+
+            for i in 0..assigned_len {
+                let (x, mut y) = config.inputs[0].cartesian_coord(i);
+                // offset due to column overflow and duplication
+                if x > 0 {
+                    y += 1;
+                }
                 if y == 0 {
                     config
                         .selectors
-                        .get(&BaseOp::Identity)
+                        .get(&(BaseOp::Identity, x))
                         .unwrap()
                         .enable(&mut region, offset + y)?;
                 } else {
                     config
                         .selectors
-                        .get(&BaseOp::Sum)
+                        .get(&(BaseOp::Sum, x))
                         .unwrap()
                         .enable(&mut region, offset + y)?;
                 }
@@ -206,10 +237,10 @@ pub fn pairwise<F: FieldExt + TensorType>(
                 .assign(&mut region, offset, &op_result.into())?;
 
             for i in 0..inputs[0].len() {
-                let (_, y) = config.inputs[0].cartesian_coord(i);
+                let (x, y) = config.inputs[0].cartesian_coord(i);
                 config
                     .selectors
-                    .get(&op)
+                    .get(&(op.clone(), x))
                     .unwrap()
                     .enable(&mut region, offset + y)?;
             }
@@ -238,13 +269,17 @@ pub fn matmul<F: FieldExt + TensorType>(
             "accum matmul layout".to_string(),
         )));
     };
-
+    // [m,n]
     let mut a = values[0].clone();
+    // [n,k]
     let mut b = values[1].clone();
+    // [k,n]
     b.transpose_2d()?;
 
+    // [k]
     let num_a_repeats = b.dims()[0];
-    let num_b_tiles = a.dims()[1];
+    // [m]
+    let num_b_tiles = a.dims()[0];
     let b_row_len = b.dims()[1];
 
     a.repeat_rows(num_a_repeats)?;
@@ -254,12 +289,14 @@ pub fn matmul<F: FieldExt + TensorType>(
         || "assign inputs",
         |mut region| {
             let mut inputs = vec![];
-
+            let mut assigned_len = 0;
             for (i, elem) in vec![a.clone(), b.clone()].iter().enumerate() {
                 let inp = utils::value_muxer(
                     &config.inputs[i],
                     &{
-                        let res = config.inputs[i].assign(&mut region, offset, elem)?;
+                        let (res, len) =
+                            config.inputs[i].assign_with_duplication(&mut region, offset, elem)?;
+                        assigned_len = len;
                         res.map(|e| e.value_field().evaluate())
                     },
                     elem,
@@ -292,23 +329,32 @@ pub fn matmul<F: FieldExt + TensorType>(
             let accumulated_matmul = accumulated::matmul(&[inputs[0].clone(), inputs[1].clone()])
                 .expect("accum poly: matmul op failed");
 
-            let output = config
-                .output
-                .assign(&mut region, offset, &accumulated_matmul.into())?;
+            let (output, output_assigned_len) = config.output.assign_with_duplication(
+                &mut region,
+                offset,
+                &accumulated_matmul.into(),
+            )?;
+
+            assert_eq!(assigned_len, output_assigned_len);
 
             // these selectors map from
-            for i in 0..a.dims().iter().product::<usize>() {
-                let (_, y) = config.inputs[0].cartesian_coord(i);
-                if (i) % b_row_len > 0 {
+            for i in 0..assigned_len {
+                let (x, mut y) = config.inputs[0].cartesian_coord(i);
+                // offset by x due to row duplication when overflowing columns
+                if x > 0 {
+                    y += 1;
+                }
+                // offset by x due to row duplication when overflowing columns
+                if (i - x) % b_row_len > 0 {
                     config
                         .selectors
-                        .get(&BaseOp::Dot)
+                        .get(&(BaseOp::Dot, x))
                         .unwrap()
                         .enable(&mut region, offset + y)?;
                 } else {
                     config
                         .selectors
-                        .get(&BaseOp::Mult)
+                        .get(&(BaseOp::Mult, x))
                         .unwrap()
                         .enable(&mut region, offset + y)?;
                 }
@@ -427,10 +473,6 @@ pub fn sumpool<F: FieldExt + TensorType>(
         acc.concat(elem.clone()).unwrap()
     });
     last_elem.reshape(&[&[image_channels], shape].concat())?;
-
-    // if values.len() == 1 {
-    //     panic!()
-    // }
 
     if matches!(config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
@@ -727,10 +769,10 @@ pub fn identity<F: FieldExt + TensorType>(
                 .assign(&mut region, offset, &inp.clone().into())?;
 
             for i in 0..inp.len() {
-                let (_, y) = config.inputs[0].cartesian_coord(i);
+                let (x, y) = config.inputs[0].cartesian_coord(i);
                 config
                     .selectors
-                    .get(&BaseOp::Identity)
+                    .get(&(BaseOp::Identity, x))
                     .unwrap()
                     .enable(&mut region, offset + y)?;
             }

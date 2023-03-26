@@ -518,7 +518,8 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///
     /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 3, 4, 5, 6]), &[7]).unwrap();
     /// assert_eq!(a.remove_every_n(4).unwrap(), expected);
-    /// ```
+    /// assert_eq!(a.remove_every_n(9).unwrap(), a);
+    ///
     pub fn remove_every_n(&self, n: usize) -> Result<Tensor<T>, TensorError> {
         let mut inner: Vec<T> = vec![];
         for (i, elem) in self.inner.clone().into_iter().enumerate() {
