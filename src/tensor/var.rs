@@ -323,10 +323,8 @@ impl VarTensor {
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
             ValTensor::Value { inner: v, dims } => {
                 // duplicates every nth element to adjust for column overflow
-                println!("col_size: {:?}", self.col_size());
-                println!("before: {:?}", ValTensor::from(v.clone()).get_int_evals());
+               
                 let v = v.duplicate_every_n(self.col_size()).unwrap();
-                println!("after: {:?}", ValTensor::from(v.clone()).get_int_evals());
                 let res = v.enum_map(|coord, k| {
                     let (x, y) = self.cartesian_coord(offset + coord);
                     match k {

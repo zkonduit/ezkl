@@ -819,7 +819,6 @@ impl Model {
             .iter()
             .map(|a| max(*a, input_size))
             .collect_vec();
-        println!("max input var len: {:?}", maximum_sizes);
         maximum_sizes
     }
 

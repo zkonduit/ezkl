@@ -218,12 +218,12 @@ impl Op {
             Op::Affine => {
                 let s = input_shapes.clone();
                 // add 1 cause of bias
-                let output_len = s[0][0] * (s[0][1] + 1) * s[1][1];
+                let output_len = s[1][0] * (s[1][1] + 1);
                 vec![output_len; 3]
             }
             Op::Matmul => {
                 let s = input_shapes.clone();
-                let output_len = s[0].iter().product::<usize>() * s[1][1];
+                let output_len = s[1].iter().product::<usize>() * s[0][1];
                 vec![output_len; 3]
             }
             Op::Rescaled { inner, .. } => inner.circuit_shapes(input_shapes),
