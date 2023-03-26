@@ -789,7 +789,11 @@ impl Model {
             .iter()
             .map(|(_, n)| match &n.opkind {
                 OpKind::Poly(p) => {
-                    let layout_shape = p.circuit_shapes(n.in_dims.clone());
+                    let in_dims = n
+                        .inputs
+                        .iter()
+                        .map(|i| self.nodes.get(&i.node).unwrap().out_dims.clone());
+                    let layout_shape = p.circuit_shapes(in_dims.collect_vec());
                     maximum_sizes = maximum_sizes
                         .iter()
                         .zip(layout_shape)
