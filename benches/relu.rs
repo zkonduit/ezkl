@@ -59,7 +59,7 @@ fn runrelu(c: &mut Criterion) {
 
     let mut rng = rand::thread_rng();
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    for &len in [4, 8, 16, 32, 64].iter() {
+    for &len in [4, 8].iter() {
         unsafe {
             LEN = len;
         };
