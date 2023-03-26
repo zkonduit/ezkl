@@ -155,6 +155,80 @@ pub enum Op {
 }
 
 impl Op {
+    /// circuit shape
+    pub fn circuit_shapes(&self, input_shapes: Vec<Vec<usize>>) -> Vec<usize> {
+        let mut shapes = match &self {
+            Op::Identity => vec![0, input_shapes[0].iter().product()],
+            Op::Reshape(_) => vec![],
+            Op::Flatten(_) => vec![],
+            Op::Pad(_, _) => vec![],
+            Op::Add => input_shapes.iter().map(|x| x.iter().product()).collect(),
+            Op::Mult => input_shapes.iter().map(|x| x.iter().product()).collect(),
+            Op::Sub => input_shapes.iter().map(|x| x.iter().product()).collect(),
+            Op::Sum => vec![0, input_shapes[0].iter().product()],
+            Op::Dot => input_shapes.iter().map(|x| x.iter().product()).collect(),
+            Op::Pow(_) => input_shapes.iter().map(|x| x.iter().product()).collect(),
+            Op::Pack(_, _) => input_shapes.iter().map(|x| x.iter().product()).collect(),
+            Op::GlobalSumPool => unreachable!("should be handled by sumpool"),
+            Op::ScaleAndShift => input_shapes.iter().map(|x| x.iter().product()).collect(),
+            Op::BatchNorm => input_shapes.iter().map(|x| x.iter().product()).collect(),
+            Op::Conv { padding, stride } => {
+                let image_dims = &input_shapes[0];
+                let kernel_dims = &input_shapes[1];
+
+                let (output_channels, _input_channels, kernel_height, kernel_width) = (
+                    kernel_dims[0],
+                    kernel_dims[1],
+                    kernel_dims[2],
+                    kernel_dims[3],
+                );
+
+                let (image_height, image_width) = (image_dims[1], image_dims[2]);
+
+                let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
+                let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
+
+                let output_len = output_channels
+                    * vert_slides
+                    * horz_slides
+                    * image_dims.iter().product::<usize>();
+
+                vec![output_len; 2]
+            }
+            Op::SumPool {
+                padding,
+                stride,
+                kernel_shape,
+            } => {
+                let image_dims = &input_shapes[0];
+
+                let (image_height, image_width) = (image_dims[1], image_dims[2]);
+
+                let vert_slides = (image_height + 2 * padding.0 - kernel_shape.0) / stride.0 + 1;
+                let horz_slides = (image_width + 2 * padding.1 - kernel_shape.1) / stride.1 + 1;
+
+                let output_len = image_dims[0]
+                    * vert_slides
+                    * horz_slides
+                    * image_dims.iter().product::<usize>();
+
+                vec![output_len; 2]
+            }
+            Op::Affine | Op::Matmul => {
+                let s = input_shapes.clone();
+                let output_len = s[0].iter().product::<usize>() * s[1][1];
+                vec![output_len; 3]
+            }
+            Op::Rescaled { inner, .. } => inner.circuit_shapes(input_shapes),
+        };
+        match shapes.last() {
+            // add output
+            Some(s) => shapes.push(s.clone()),
+            _ => {}
+        };
+        shapes
+    }
+
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     pub fn f<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
         &self,

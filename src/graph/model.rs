@@ -775,6 +775,51 @@ impl Model {
         vec![num_inputs, num_outputs]
     }
 
+    /// Maximum number of input variables
+    pub fn max_input_var_len(&self) -> Vec<usize> {
+        let mut maximum_sizes = vec![0; 3];
+
+        let poly_ops: BTreeMap<&usize, &Node> = self
+            .nodes
+            .iter()
+            .filter(|(_, n)| n.opkind.is_poly())
+            .collect();
+
+        let _: Vec<_> = poly_ops
+            .iter()
+            .map(|(_, n)| match &n.opkind {
+                OpKind::Poly(p) => {
+                    let layout_shape = p.circuit_shapes(n.in_dims.clone());
+                    maximum_sizes = maximum_sizes
+                        .iter()
+                        .zip(layout_shape)
+                        .map(|(a, b)| max(*a, b))
+                        .collect_vec();
+                }
+                _ => panic!(),
+            })
+            .collect();
+
+        let lookup_ops: BTreeMap<&usize, &Node> = self
+            .nodes
+            .iter()
+            .filter(|(_, n)| n.opkind.is_lookup())
+            .collect();
+
+        let _: Vec<_> = lookup_ops
+            .iter()
+            .map(|(_, n)| {
+                let input_size = (*n.in_dims[0]).into_iter().product::<usize>();
+                maximum_sizes = maximum_sizes
+                    .iter()
+                    .map(|a| max(*a, input_size))
+                    .collect_vec();
+            })
+            .collect();
+
+        maximum_sizes
+    }
+
     /// Number of instances used by the circuit
     pub fn instance_shapes(&self) -> Vec<Vec<usize>> {
         // for now the number of instances corresponds to the number of graph / model outputs
