@@ -863,6 +863,64 @@ mod add {
 }
 
 #[cfg(test)]
+mod add_with_overflow {
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 50;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Add)
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn addcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let b = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
 mod sub {
     use super::*;
 
