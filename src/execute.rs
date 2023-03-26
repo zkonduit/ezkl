@@ -33,9 +33,9 @@ use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
-use log::{info, trace};
 #[cfg(not(target_arch = "wasm32"))]
-use log::warn; 
+use log::warn;
+use log::{info, trace};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
 use snark_verifier::loader::native::NativeLoader;
