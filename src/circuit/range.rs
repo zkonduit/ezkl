@@ -45,12 +45,12 @@ impl<F: FieldExt + TensorType> RangeCheckConfig<F> {
 
             let q = cs.query_selector(config.selector);
             let witnessed = input
-                .query_rng(cs, 0, 1)
+                .query_rng(cs, 0, 0, 1)
                 .expect("range: failed to query input");
 
             // Get output expressions for each input channel
             let expected = expected
-                .query_rng(cs, 0, 1)
+                .query_rng(cs, 0, 0, 1)
                 .expect("range: failed to query expected value");
 
             // Given a range R and a value v, returns the expression

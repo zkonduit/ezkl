@@ -179,7 +179,8 @@ impl VarTensor {
     pub fn query_rng<F: FieldExt>(
         &self,
         meta: &mut VirtualCells<'_, F>,
-        offset: i32,
+        rotation_offset: i32,
+        idx_offset: usize,
         rng: usize,
     ) -> Result<Tensor<Expression<F>>, halo2_proofs::plonk::Error> {
         match &self {
@@ -187,8 +188,8 @@ impl VarTensor {
                 let c = Tensor::from(
                     // this should fail if dims is empty, should be impossible
                     (0..rng).map(|i| {
-                        let (x, y) = self.cartesian_coord(i);
-                        meta.query_fixed(fixed[x], Rotation(offset + y as i32))
+                        let (x, y) = self.cartesian_coord(idx_offset + i);
+                        meta.query_fixed(fixed[x], Rotation(rotation_offset + y as i32))
                     }),
                 );
                 Ok(c)
@@ -198,8 +199,8 @@ impl VarTensor {
                 let c = Tensor::from(
                     // this should fail if dims is empty, should be impossible
                     (0..rng).map(|i| {
-                        let (x, y) = self.cartesian_coord(i);
-                        meta.query_advice(advices[x], Rotation(offset + y as i32))
+                        let (x, y) = self.cartesian_coord(idx_offset + i);
+                        meta.query_advice(advices[x], Rotation(rotation_offset + y as i32))
                     }),
                 );
                 Ok(c)
@@ -316,11 +317,16 @@ impl VarTensor {
         offset: usize,
         values: &ValTensor<F>,
     ) -> Result<(Tensor<AssignedCell<F, F>>, usize), halo2_proofs::plonk::Error> {
+       
         match values {
+        
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
             ValTensor::Value { inner: v, dims } => {
                 // duplicates every nth element to adjust for column overflow
+                println!("col_size: {:?}", self.col_size());
+                println!("before: {:?}", ValTensor::from(v.clone()).get_int_evals());
                 let v = v.duplicate_every_n(self.col_size()).unwrap();
+                println!("after: {:?}", ValTensor::from(v.clone()).get_int_evals());
                 let res = v.enum_map(|coord, k| {
                     let (x, y) = self.cartesian_coord(offset + coord);
                     match k {
@@ -348,7 +354,7 @@ impl VarTensor {
                         },
                     }
                 })?;
-                let mut non_duplicated_res = res.remove_every_n(self.col_size() + 1).unwrap();
+                let mut non_duplicated_res = res.remove_every_n(self.col_size()).unwrap();
                 
                 non_duplicated_res.reshape(dims);
                 Ok((non_duplicated_res, res.len()))

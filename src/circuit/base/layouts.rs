@@ -1,5 +1,5 @@
 use core::panic;
-use std::error::Error;
+use std::{cmp::min, error::Error};
 
 use halo2_proofs::circuit::{Layouter, Value};
 
@@ -55,33 +55,37 @@ pub fn dot<F: FieldExt + TensorType>(
 
             assert_eq!(assigned_len, output_assigned_len);
 
-            for i in 0..assigned_len {
-                let (x, mut y) = config.inputs[0].cartesian_coord(i);
-                println!("x {} y {}", x, y);
-                // offset due to column overflow and duplication
-                if x > 0 {
-                    y += 1;
-                }
-                if x == 0 && y == 0 {
-                    config
-                        .selectors
-                        .get(&(BaseOp::Mult, x))
-                        .unwrap()
-                        .enable(&mut region, offset + y)?;
+            let num_cols = assigned_len / config.output.col_size() + 1;
+            for x in 0..num_cols {
+                let current_col_size = min(
+                    assigned_len - x * config.output.col_size(),
+                    config.output.col_size(),
+                );
+                let row_rng = if x == 0 {
+                    0..current_col_size
                 } else {
-                    config
-                        .selectors
-                        .get(&(BaseOp::Dot, x))
-                        .unwrap()
-                        .enable(&mut region, offset + y)?;
+                    1..current_col_size
+                };
+                for y in row_rng {
+                    if y == 0 {
+                        config
+                            .selectors
+                            .get(&(BaseOp::Mult, x))
+                            .unwrap()
+                            .enable(&mut region, offset + y)?;
+                    } else {
+                        config
+                            .selectors
+                            .get(&(BaseOp::Dot, x))
+                            .unwrap()
+                            .enable(&mut region, offset + y)?;
+                    }
                 }
             }
 
             let last_elem = output
                 .get_slice(&[output.len() - 1..output.len()])
                 .expect("accum poly: failed to fetch last elem");
-
-            println!("last_elem {:?}", last_elem);
 
             if matches!(config.check_mode, CheckMode::SAFE) {
                 let safe_dot = non_accum_dot(&inputs.iter().collect())
@@ -91,8 +95,6 @@ pub fn dot<F: FieldExt + TensorType>(
                     Into::<Tensor<i32>>::into(last_elem.clone()),
                     Into::<Tensor<i32>>::into(safe_dot),
                 );
-
-                println!("matched");
             }
             // last element is the result
             Ok(last_elem)
@@ -100,12 +102,9 @@ pub fn dot<F: FieldExt + TensorType>(
     ) {
         Ok(a) => a,
         Err(e) => {
-            println!("error {e}", e = e);
             return Err(Box::new(e));
         }
     };
-
-    println!("done");
 
     Ok(ValTensor::from(t))
 }
@@ -146,24 +145,31 @@ pub fn sum<F: FieldExt + TensorType>(
 
             assert_eq!(assigned_len, output_assigned_len);
 
-            for i in 0..assigned_len {
-                let (x, mut y) = config.inputs[0].cartesian_coord(i);
-                // offset due to column overflow and duplication
-                if x > 0 {
-                    y += 1;
-                }
-                if y == 0 {
-                    config
-                        .selectors
-                        .get(&(BaseOp::Identity, x))
-                        .unwrap()
-                        .enable(&mut region, offset + y)?;
+            let num_cols = assigned_len / config.output.col_size() + 1;
+            for x in 0..num_cols {
+                let current_col_size = min(
+                    assigned_len - x * config.output.col_size(),
+                    config.output.col_size(),
+                );
+                let row_rng = if x == 0 {
+                    0..current_col_size
                 } else {
-                    config
-                        .selectors
-                        .get(&(BaseOp::Sum, x))
-                        .unwrap()
-                        .enable(&mut region, offset + y)?;
+                    1..current_col_size
+                };
+                for y in row_rng {
+                    if y == 0 {
+                        config
+                            .selectors
+                            .get(&(BaseOp::Identity, x))
+                            .unwrap()
+                            .enable(&mut region, offset + y)?;
+                    } else {
+                        config
+                            .selectors
+                            .get(&(BaseOp::Sum, x))
+                            .unwrap()
+                            .enable(&mut region, offset + y)?;
+                    }
                 }
             }
 
@@ -337,26 +343,33 @@ pub fn matmul<F: FieldExt + TensorType>(
 
             assert_eq!(assigned_len, output_assigned_len);
 
-            // these selectors map from
-            for i in 0..assigned_len {
-                let (x, mut y) = config.inputs[0].cartesian_coord(i);
-                // offset by x due to row duplication when overflowing columns
-                if x > 0 {
-                    y += 1;
-                }
-                // offset by x due to row duplication when overflowing columns
-                if (i - x) % b_row_len > 0 {
-                    config
-                        .selectors
-                        .get(&(BaseOp::Dot, x))
-                        .unwrap()
-                        .enable(&mut region, offset + y)?;
+            let num_cols = assigned_len / config.output.col_size() + 1;
+            let mut i = 0;
+            for x in 0..num_cols {
+                let current_col_size = min(
+                    assigned_len - x * config.output.col_size(),
+                    config.output.col_size(),
+                );
+                let row_rng = if x == 0 {
+                    0..current_col_size
                 } else {
-                    config
-                        .selectors
-                        .get(&(BaseOp::Mult, x))
-                        .unwrap()
-                        .enable(&mut region, offset + y)?;
+                    1..current_col_size
+                };
+                for y in row_rng {
+                    if i % b_row_len > 0 {
+                        config
+                            .selectors
+                            .get(&(BaseOp::Dot, x))
+                            .unwrap()
+                            .enable(&mut region, offset + y)?;
+                    } else {
+                        config
+                            .selectors
+                            .get(&(BaseOp::Mult, x))
+                            .unwrap()
+                            .enable(&mut region, offset + y)?;
+                    }
+                    i += 1;
                 }
             }
 

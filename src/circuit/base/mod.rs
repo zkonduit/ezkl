@@ -310,12 +310,12 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         assert!(inputs[0].num_cols() == output.num_cols());
 
         for i in 0..output.num_cols() {
-            // selectors.insert((BaseOp::Add, i), meta.selector());
-            // selectors.insert((BaseOp::Sub, i), meta.selector());
+            selectors.insert((BaseOp::Add, i), meta.selector());
+            selectors.insert((BaseOp::Sub, i), meta.selector());
             selectors.insert((BaseOp::Dot, i), meta.selector());
-            // selectors.insert((BaseOp::Sum, i), meta.selector());
+            selectors.insert((BaseOp::Sum, i), meta.selector());
             selectors.insert((BaseOp::Mult, i), meta.selector());
-            // selectors.insert((BaseOp::Identity, i), meta.selector());
+            selectors.insert((BaseOp::Identity, i), meta.selector());
         }
 
         let config = Self {
@@ -329,7 +329,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         for ((base_op, col_idx), selector) in config.selectors.iter() {
             meta.create_gate(base_op.as_str(), |meta| {
                 let selector = meta.query_selector(*selector);
-
+                let idx_offset = col_idx * output.col_size();
                 let mut qis = vec![Expression::<F>::zero().unwrap(); 2];
                 for (i, q_i) in qis
                     .iter_mut()
@@ -338,17 +338,17 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                     .skip(2 - base_op.num_inputs())
                 {
                     *q_i = config.inputs[i]
-                        .query_rng(meta, (col_idx * output.num_cols()) as i32, 1)
+                        .query_rng(meta, 0, idx_offset, 1)
                         .expect("accum: input query failed")[0]
                         .clone()
                 }
 
                 // Get output expressions for each input channel
-                let (offset, rng) = base_op.query_offset_rng();
+                let (rotation_offset, rng) = base_op.query_offset_rng();
 
                 let expected_output: Tensor<Expression<F>> = config
                     .output
-                    .query_rng(meta, offset + (col_idx * output.num_cols()) as i32, rng)
+                    .query_rng(meta, rotation_offset, idx_offset, rng)
                     .expect("poly: output query failed");
 
                 let res = base_op.f((qis[0].clone(), qis[1].clone(), expected_output[0].clone()));
