@@ -159,9 +159,9 @@ impl Op {
     pub fn circuit_shapes(&self, input_shapes: Vec<Vec<usize>>) -> Vec<usize> {
         let mut shapes = match &self {
             Op::Identity => vec![0, input_shapes[0].iter().product()],
-            Op::Reshape(_) => vec![],
-            Op::Flatten(_) => vec![],
-            Op::Pad(_, _) => vec![],
+            Op::Reshape(_) => vec![0; 2],
+            Op::Flatten(_) => vec![0; 2],
+            Op::Pad(_, _) => vec![0; 2],
             Op::Add => input_shapes.iter().map(|x| x.iter().product()).collect(),
             Op::Mult => input_shapes.iter().map(|x| x.iter().product()).collect(),
             Op::Sub => input_shapes.iter().map(|x| x.iter().product()).collect(),

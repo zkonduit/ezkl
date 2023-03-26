@@ -806,17 +806,16 @@ impl Model {
             .filter(|(_, n)| n.opkind.is_lookup())
             .collect();
 
-        let _: Vec<_> = lookup_ops
+        // single lookup
+        let input_size: usize = lookup_ops
             .iter()
-            .map(|(_, n)| {
-                let input_size = (*n.in_dims[0]).into_iter().product::<usize>();
-                maximum_sizes = maximum_sizes
-                    .iter()
-                    .map(|a| max(*a, input_size))
-                    .collect_vec();
-            })
-            .collect();
-
+            .map(|(_, n)| (*n.in_dims[0]).into_iter().product::<usize>())
+            .sum();
+        maximum_sizes = maximum_sizes
+            .iter()
+            .map(|a| max(*a, input_size))
+            .collect_vec();
+        println!("max input var len: {:?}", maximum_sizes);
         maximum_sizes
     }
 
