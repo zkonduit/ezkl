@@ -487,6 +487,49 @@ impl<T: Clone + TensorType> Tensor<T> {
         index
     }
 
+    /// Duplicates every nth element
+    ///
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 3, 4, 5, 6, 6]), &[8]).unwrap();
+    /// assert_eq!(a.duplicate_every_n(3).unwrap(), expected);
+    /// assert_eq!(a.duplicate_every_n(7).unwrap(), a);
+    /// ```
+    pub fn duplicate_every_n(&self, n: usize) -> Result<Tensor<T>, TensorError> {
+        let mut inner: Vec<T> = vec![];
+        for (i, elem) in self.inner.clone().into_iter().enumerate() {
+            if (i + 1) % n == 0 {
+                inner.extend(vec![elem; 2].into_iter());
+            } else {
+                inner.push(elem.clone());
+            }
+        }
+        Tensor::new(Some(&inner), &[inner.len()])
+    }
+
+    /// Duplicates every nth element
+    ///
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 3, 4, 5, 6, 6]), &[8]).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
+    /// assert_eq!(a.remove_every_n(4).unwrap(), expected);
+    ///
+    /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 3, 4, 5, 6]), &[7]).unwrap();
+    /// assert_eq!(a.remove_every_n(4).unwrap(), expected);
+    /// ```
+    pub fn remove_every_n(&self, n: usize) -> Result<Tensor<T>, TensorError> {
+        let mut inner: Vec<T> = vec![];
+        for (i, elem) in self.inner.clone().into_iter().enumerate() {
+            if (i + 1) % n == 0 {
+            } else {
+                inner.push(elem.clone());
+            }
+        }
+        Tensor::new(Some(&inner), &[inner.len()])
+    }
+
     /// Returns the tensor's dimensions.
     pub fn dims(&self) -> &[usize] {
         &self.dims

@@ -200,12 +200,11 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     pub fn get_inner(&self) -> Result<Tensor<Value<F>>, TensorError> {
         warn!("using 'get_inner' in constraints can create soundness issues.");
         Ok(match self {
-            ValTensor::Value { inner: v, .. } => v
-                .map(|x| match x {
-                    ValType::Value(v) => v,
-                    ValType::AssignedValue(v) => v.evaluate(),
-                    ValType::PrevAssigned(v) => v.value_field().evaluate(),
-                }),
+            ValTensor::Value { inner: v, .. } => v.map(|x| match x {
+                ValType::Value(v) => v,
+                ValType::AssignedValue(v) => v.evaluate(),
+                ValType::PrevAssigned(v) => v.value_field().evaluate(),
+            }),
             ValTensor::Instance { .. } => return Err(TensorError::WrongMethod),
         })
     }
@@ -245,6 +244,34 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         match self {
             ValTensor::Value { inner: v, dims: d } => {
                 *v = v.tile(n)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        }
+        Ok(())
+    }
+
+    /// Calls `duplicate_every_n` on the inner [Tensor].
+    pub fn duplicate_every_n(&mut self, n: usize) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value { inner: v, dims: d } => {
+                *v = v.duplicate_every_n(n)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        }
+        Ok(())
+    }
+
+    /// Calls `duplicate_every_n` on the inner [Tensor].
+    pub fn remove_every_n(&mut self, n: usize) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value { inner: v, dims: d } => {
+                *v = v.remove_every_n(n)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
@@ -335,9 +362,7 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
             (ValTensor::Value { inner: v, .. }, ValTensor::Value { inner: v2, .. }) => {
                 Ok(v.append_to_row(v2)?.into())
             }
-            _ => {
-                Err(TensorError::WrongMethod)
-            }
+            _ => Err(TensorError::WrongMethod),
         }
     }
 

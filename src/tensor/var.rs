@@ -267,6 +267,9 @@ impl VarTensor {
                     let t: Tensor<i32> = Tensor::new(None, dims).unwrap();
                     t.enum_map(|coord, _| {
                         let (x, y) = self.cartesian_coord(offset + coord);
+                        if x > 0 {
+                            unimplemented!("we'll be implementing multi-column instance variables in a future release but for now, increase K.")
+                        }
                         region.assign_advice_from_instance(
                             || "pub input anchor",
                             *instance,
@@ -280,9 +283,7 @@ impl VarTensor {
             },
             ValTensor::Value { inner: v, .. } => v.enum_map(|coord, k| {
                 let (x, y) = self.cartesian_coord(offset + coord);
-                if x > 0 {
-                    unimplemented!("we'll be implementing multi-column variables in a future release but for now, increase K.")
-                }
+
                 match k {
                     ValType::Value(v) => match &self {
                         VarTensor::Fixed { inner: fixed, .. } => {
@@ -308,6 +309,51 @@ impl VarTensor {
                     },
                 }
             }),
+        }
+    }
+
+    /// Assigns specific values (`ValTensor`) to the columns of the inner tensor.
+    pub fn assign_with_duplication<F: FieldExt + TensorType>(
+        &self,
+        region: &mut Region<'_, F>,
+        offset: usize,
+        values: &ValTensor<F>,
+    ) -> Result<(Tensor<AssignedCell<F, F>>, usize), halo2_proofs::plonk::Error> {
+        match values {
+            ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
+            ValTensor::Value { inner: v, .. } => {
+                // duplicates every nth element to adjust for column overflow
+                let v = v.duplicate_every_n(self.col_size()).unwrap();
+                let res = v.enum_map(|coord, k| {
+                    let (x, y) = self.cartesian_coord(offset + coord);
+
+                    match k {
+                        ValType::Value(v) => match &self {
+                            VarTensor::Fixed { inner: fixed, .. } => {
+                                region.assign_fixed(|| "k", fixed[x], y, || v)
+                            }
+                            VarTensor::Advice { inner: advices, .. } => {
+                                region.assign_advice(|| "k", advices[x], y, || v)
+                            }
+                        },
+                        ValType::PrevAssigned(v) => match &self {
+                            VarTensor::Advice { inner: advices, .. } => {
+                                v.copy_advice(|| "k", region, advices[x], y)
+                            }
+                            _ => Err(halo2_proofs::plonk::Error::Synthesis),
+                        },
+                        ValType::AssignedValue(v) => match &self {
+                            VarTensor::Fixed { inner: fixed, .. } => region
+                                .assign_fixed(|| "k", fixed[x], y, || v)
+                                .map(|a| a.evaluate()),
+                            VarTensor::Advice { inner: advices, .. } => region
+                                .assign_advice(|| "k", advices[x], y, || v)
+                                .map(|a| a.evaluate()),
+                        },
+                    }
+                })?;
+                Ok((res.remove_every_n(self.col_size() + 1).unwrap(), res.len()))
+            }
         }
     }
 }
