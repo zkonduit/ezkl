@@ -210,11 +210,18 @@ impl Op {
                 let output_len = image_dims[0]
                     * vert_slides
                     * horz_slides
-                    * image_dims.iter().product::<usize>();
+                    // add 1 cause of bias
+                    * (image_dims.iter().product::<usize>() + 1);
 
                 vec![output_len; 2]
             }
-            Op::Affine | Op::Matmul => {
+            Op::Affine => {
+                let s = input_shapes.clone();
+                // add 1 cause of bias
+                let output_len = s[0][0] * (s[0][1] + 1) * s[1][1];
+                vec![output_len; 3]
+            }
+            Op::Matmul => {
                 let s = input_shapes.clone();
                 let output_len = s[0].iter().product::<usize>() * s[1][1];
                 vec![output_len; 3]
