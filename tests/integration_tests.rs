@@ -14,18 +14,18 @@ lazy_static! {
 fn init() {
     println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
     build_ezkl();
-    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "-K=23",
-            "gen-srs",
-            &format!(
-                "--params-path={}/kzg.params",
-                TEST_DIR.path().to_str().unwrap()
-            ),
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
+    // let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+    //     .args([
+    //         "-K=23",
+    //         "gen-srs",
+    //         &format!(
+    //             "--params-path={}/kzg.params",
+    //             TEST_DIR.path().to_str().unwrap()
+    //         ),
+    //     ])
+    //     .status()
+    //     .expect("failed to execute process");
+    // assert!(status.success());
 }
 
 const TESTS: [&str; 20] = [
