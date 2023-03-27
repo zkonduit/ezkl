@@ -10,7 +10,7 @@ lazy_static! {
 }
 
 #[cfg(test)]
-#[ctor::ctor]
+// #[ctor::ctor]
 fn init() {
     println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
     build_ezkl();

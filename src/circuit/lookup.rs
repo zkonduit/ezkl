@@ -79,6 +79,7 @@ impl Op {
             Op::PReLU { .. } => "PRELU",
             Op::Sigmoid { .. } => "SIGMOID",
             Op::Sqrt { .. } => "SQRT",
+            Op::Tanh { .. } => "TANH"
         }
     }
 
