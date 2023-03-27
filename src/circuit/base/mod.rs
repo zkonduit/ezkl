@@ -14,7 +14,10 @@ use itertools::Itertools;
 use log::trace;
 use serde::{Deserialize, Serialize};
 
-use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor, VarTensor};
+use crate::{
+    fieldutils::i32_to_felt,
+    tensor::{self, Tensor, TensorError, TensorType, ValTensor, VarTensor},
+};
 use std::{
     collections::BTreeMap,
     error::Error,
@@ -33,6 +36,7 @@ pub enum BaseOp {
     Mult,
     Sub,
     Sum,
+    Range { tol: i32 },
 }
 
 #[allow(missing_docs)]
@@ -68,6 +72,7 @@ impl BaseOp {
             BaseOp::Sum => b + m,
             BaseOp::Sub => a - b,
             BaseOp::Mult => a * b,
+            BaseOp::Range { .. } => b,
         }
     }
 
@@ -79,6 +84,7 @@ impl BaseOp {
             BaseOp::Sub => "SUB",
             BaseOp::Mult => "MULT",
             BaseOp::Sum => "SUM",
+            BaseOp::Range { .. } => "RANGE",
         }
     }
     fn query_offset_rng(&self) -> (i32, usize) {
@@ -89,6 +95,7 @@ impl BaseOp {
             BaseOp::Sub => (0, 1),
             BaseOp::Mult => (0, 1),
             BaseOp::Sum => (-1, 2),
+            BaseOp::Range { .. } => (0, 1),
         }
     }
     fn num_inputs(&self) -> usize {
@@ -99,6 +106,7 @@ impl BaseOp {
             BaseOp::Sub => 2,
             BaseOp::Mult => 2,
             BaseOp::Sum => 1,
+            BaseOp::Range { .. } => 1,
         }
     }
     fn constraint_idx(&self) -> usize {
@@ -108,6 +116,7 @@ impl BaseOp {
             BaseOp::Add => 0,
             BaseOp::Sub => 0,
             BaseOp::Mult => 0,
+            BaseOp::Range { .. } => 0,
             BaseOp::Sum => 1,
         }
     }
@@ -152,6 +161,7 @@ pub enum Op {
         inner: Box<Op>,
         scale: Vec<(usize, usize)>,
     },
+    RangeCheck(i32),
 }
 
 impl Op {
@@ -227,6 +237,7 @@ impl Op {
                 vec![output_len; 3]
             }
             Op::Rescaled { inner, .. } => inner.circuit_shapes(input_shapes),
+            Op::RangeCheck(..) => input_shapes.iter().map(|x| x.iter().product()).collect(),
         };
         match shapes.last() {
             // add output
@@ -309,6 +320,7 @@ impl Op {
                 Ok(inner.f(rescaled_inputs)?)
             }
             Op::GlobalSumPool => unreachable!(),
+            Op::RangeCheck(..) => Ok(inputs[0].clone()),
         }
     }
 }
@@ -354,6 +366,7 @@ impl fmt::Display for Op {
                     scale.iter().map(|e| e.1).collect_vec()
                 )
             }
+            Op::RangeCheck(tol) => write!(f, "range check w/ tol {}", tol),
         }
     }
 }
@@ -383,6 +396,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         inputs: &[VarTensor; 2],
         output: &VarTensor,
         check_mode: CheckMode,
+        tol: i32,
     ) -> Self {
         // setup a selector per base op
         let mut selectors = BTreeMap::new();
@@ -397,17 +411,18 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             selectors.insert((BaseOp::Sum, i), meta.selector());
             selectors.insert((BaseOp::Mult, i), meta.selector());
             selectors.insert((BaseOp::Identity, i), meta.selector());
+            selectors.insert((BaseOp::Range { tol }, i), meta.selector());
         }
 
-        let config = Self {
-            selectors,
-            inputs: inputs.to_vec(),
-            output: output.clone(),
-            check_mode,
-            _marker: PhantomData,
+        // Given a range R and a value v, returns the expression
+        // (v) * (1 - v) * (2 - v) * ... * (R - 1 - v)
+        let range_check = |tol: i32, value: Expression<F>| {
+            (-tol..tol).fold(value.clone(), |expr, i| {
+                expr * (Expression::Constant(i32_to_felt(i)) - value.clone())
+            })
         };
 
-        for ((base_op, col_idx), selector) in config.selectors.iter() {
+        for ((base_op, col_idx), selector) in selectors.iter() {
             meta.create_gate(base_op.as_str(), |meta| {
                 let selector = meta.query_selector(*selector);
                 let idx_offset = col_idx * output.col_size();
@@ -418,7 +433,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                     .take(2)
                     .skip(2 - base_op.num_inputs())
                 {
-                    *q_i = config.inputs[i]
+                    *q_i = inputs[i]
                         .query_rng(meta, 0, idx_offset, 1)
                         .expect("accum: input query failed")[0]
                         .clone()
@@ -427,18 +442,33 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                 // Get output expressions for each input channel
                 let (rotation_offset, rng) = base_op.query_offset_rng();
 
-                let expected_output: Tensor<Expression<F>> = config
-                    .output
+                let expected_output: Tensor<Expression<F>> = output
                     .query_rng(meta, rotation_offset, idx_offset, rng)
                     .expect("poly: output query failed");
 
                 let res = base_op.f((qis[0].clone(), qis[1].clone(), expected_output[0].clone()));
 
-                let constraints = vec![expected_output[base_op.constraint_idx()].clone() - res];
+                let constraints = match base_op {
+                    BaseOp::Range { tol } => {
+                        vec![range_check(
+                            *tol,
+                            res - expected_output[base_op.constraint_idx()].clone(),
+                        )]
+                    }
+                    _ => vec![expected_output[base_op.constraint_idx()].clone() - res],
+                };
 
                 Constraints::with_selector(selector, constraints)
             });
         }
+
+        let config = Self {
+            selectors,
+            inputs: inputs.to_vec(),
+            output: output.clone(),
+            check_mode,
+            _marker: PhantomData,
+        };
 
         config
     }
@@ -552,6 +582,9 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                     offset,
                 )?[..];
                 self.layout(layouter, res, offset, *inner)
+            }
+            Op::RangeCheck(tol) => {
+                layouts::range_check(self, layouter, cp_values[..].try_into()?, offset, tol)
             }
             Op::GlobalSumPool => unreachable!(),
         }

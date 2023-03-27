@@ -45,11 +45,14 @@ impl VarTensor {
     /// * `max_rot` - maximum number of rotations that we allow for this VarTensor. Rotations affect performance.
     pub fn new_advice<F: FieldExt>(
         cs: &mut ConstraintSystem<F>,
-        max_rows: usize,
+        logrows: usize,
         capacity: usize,
         dims: Vec<usize>,
         equality: bool,
     ) -> Self {
+        let base = 2u32;
+        let max_rows = base.pow(logrows as u32) as usize - cs.blinding_factors() - 1;
+
         let modulo = (capacity / max_rows) + 1;
         let mut advices = vec![];
         for _ in 0..modulo {
@@ -77,13 +80,13 @@ impl VarTensor {
     /// `max_rot` is the maximum number of rotations that we allow for this VarTensor. Rotations affect performance.
     pub fn new_fixed<F: FieldExt>(
         cs: &mut ConstraintSystem<F>,
-        k: usize,
+        logrows: usize,
         capacity: usize,
         dims: Vec<usize>,
         equality: bool,
     ) -> Self {
         let base = 2u32;
-        let max_rows = base.pow(k as u32) as usize - cs.blinding_factors() - 1;
+        let max_rows = base.pow(logrows as u32) as usize - cs.blinding_factors() - 1;
         let modulo = (capacity / max_rows) + 1;
         let mut fixed = vec![];
         for _ in 0..modulo {

@@ -310,6 +310,8 @@ pub fn matmul<F: FieldExt + TensorType>(
                 inputs.push(inp);
             }
 
+            println!("assigned_len len {}", assigned_len);
+
             // remove any repeats from the assignment
             if num_a_repeats > 1 {
                 let dims = inputs[0].dims().to_vec();
@@ -767,28 +769,9 @@ pub fn identity<F: FieldExt + TensorType>(
     let t = match layouter.assign_region(
         || "identity",
         |mut region| {
-            let inp = utils::value_muxer(
-                &config.inputs[0],
-                &{
-                    // always an advice
-                    let res = config.inputs[1].assign(&mut region, offset, &values[0])?;
-                    res.map(|e| e.value_field().evaluate())
-                },
-                &values[0],
-            );
-
             let output = config
                 .output
-                .assign(&mut region, offset, &inp.clone().into())?;
-
-            for i in 0..inp.len() {
-                let (x, y) = config.inputs[0].cartesian_coord(i);
-                config
-                    .selectors
-                    .get(&(BaseOp::Identity, x))
-                    .unwrap()
-                    .enable(&mut region, offset + y)?;
-            }
+                .assign(&mut region, offset, &values[0].clone().into())?;
 
             Ok(output)
         },
@@ -835,4 +818,37 @@ pub fn scale_and_shift<F: FieldExt + TensorType>(
         }
     };
     Ok(res)
+}
+
+/// Layout for range check.
+pub fn range_check<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    layouter: &mut impl Layouter<F>,
+    values: &[ValTensor<F>; 2],
+    offset: usize,
+    tol: i32,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    match layouter.assign_region(
+        || "range check layout",
+        |mut region| {
+            // assigns the instance to the advice.
+            config.inputs[1].assign(&mut region, offset, &values[0])?;
+
+            let output = config.output.assign(&mut region, offset, &values[1])?;
+
+            for i in 0..values[0].len() {
+                let (x, y) = config.inputs[1].cartesian_coord(i);
+                config
+                    .selectors
+                    .get(&(BaseOp::Range { tol }, x))
+                    .unwrap()
+                    .enable(&mut region, offset + y)?;
+            }
+
+            Ok(output)
+        },
+    ) {
+        Ok(a) => Ok(a.into()),
+        Err(e) => Err(Box::new(e)),
+    }
 }

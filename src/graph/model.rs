@@ -7,8 +7,6 @@ use crate::circuit::base::Op as PolyOp;
 use crate::circuit::lookup::Config as LookupConfig;
 use crate::circuit::lookup::Op as LookupOp;
 use crate::circuit::lookup::Table as LookupTable;
-
-use crate::circuit::range::*;
 use crate::commands::RunArgs;
 use crate::commands::{Cli, Commands};
 use crate::graph::scale_to_multiplier;
@@ -57,7 +55,7 @@ pub struct ModelConfig<F: FieldExt + TensorType> {
     /// The model struct
     pub model: Model,
     /// (optional) range checked outputs of the model graph
-    pub range_checks: Vec<RangeCheckConfig<F>>,
+    pub range_checks: Vec<Rc<RefCell<PolyConfig<F>>>>,
     /// (optional) packed outputs of the model graph
     pub packed_outputs: Vec<Rc<RefCell<PolyConfig<F>>>>,
     /// A wrapper for holding all columns that will be assigned to by the model
@@ -289,19 +287,12 @@ impl Model {
 
         let mut range_checks = vec![];
         let mut packed_outputs = vec![];
+        if self.run_args.pack_base > 1 {
+            info!("packing outputs...");
+            packed_outputs = self.output_ops(meta, vars, &mut base_gates);
+        }
         if self.visibility.output.is_public() {
-            if self.run_args.pack_base > 1 {
-                info!("packing outputs...");
-                packed_outputs = self.pack_outputs(meta, vars, &mut base_gates);
-                range_checks = self.range_check_outputs(
-                    meta,
-                    vars,
-                    // outputs are now 1D
-                    self.output_shapes().iter().map(|_| vec![1]).collect(),
-                );
-            } else {
-                range_checks = self.range_check_outputs(meta, vars, self.output_shapes());
-            }
+            range_checks = self.output_ops(meta, vars, &mut base_gates);
         };
 
         Ok(ModelConfig {
@@ -313,7 +304,7 @@ impl Model {
         })
     }
 
-    fn pack_outputs<F: FieldExt + TensorType>(
+    fn output_ops<F: FieldExt + TensorType>(
         &self,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
@@ -330,6 +321,7 @@ impl Model {
                         &[vars.advices[0].clone(), vars.advices[1].clone()],
                         &vars.advices[2],
                         CheckMode::SAFE,
+                        self.run_args.tolerance.try_into().unwrap(),
                     )));
                     base_gates.insert(false, config.clone());
                     config
@@ -381,28 +373,6 @@ impl Model {
         }
     }
 
-    fn range_check_outputs<F: FieldExt + TensorType>(
-        &self,
-        meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars<F>,
-        output_shapes: Vec<Vec<usize>>,
-    ) -> Vec<RangeCheckConfig<F>> {
-        let mut configs = vec![];
-        info!("output_shapes {:?}", output_shapes);
-
-        for s in &output_shapes {
-            let input = vars.advices[0].reshape(s);
-            let output = vars.advices[1].reshape(s);
-
-            configs.push(RangeCheckConfig::configure(
-                meta,
-                &input,
-                &output,
-                self.run_args.tolerance,
-            ));
-        }
-        configs
-    }
     /// Configures non op related nodes (eg. representing an input or const value)
     pub fn conf_non_op_node<F: FieldExt + TensorType>(
         &self,
@@ -474,6 +444,7 @@ impl Model {
                     inputs.into_iter().collect_vec()[..].try_into()?,
                     output,
                     CheckMode::SAFE,
+                    self.run_args.tolerance.try_into().unwrap(),
                 )));
                 base_gates.insert(fixed_flag, config.clone());
                 config
@@ -589,7 +560,7 @@ impl Model {
         for (i, packed_output) in config.packed_outputs.iter_mut().enumerate() {
             info!("packing outputs...");
             outputs[i] = packed_output.borrow_mut().layout(
-                layouter,
+                &mut layouter.namespace(|| "pack outputs"),
                 &outputs[i..i + 1],
                 0,
                 PolyOp::Pack(self.run_args.pack_base, self.run_args.scale),
@@ -610,10 +581,15 @@ impl Model {
                 if self.visibility.input.is_public() {
                     offset += inputs.len();
                 };
-                range_check.layout(
-                    layouter.namespace(|| "range check outputs"),
-                    output,
-                    vars.instances[offset + i].clone(),
+                range_check.borrow_mut().layout(
+                    &mut layouter.namespace(|| "range check outputs"),
+                    &[
+                        output,
+                        vars.instances[offset + i].clone(),
+                        vars.instances[offset + i].clone(),
+                    ],
+                    0,
+                    PolyOp::RangeCheck(self.run_args.tolerance as i32),
                 )
             })
             .collect_vec();
@@ -658,7 +634,12 @@ impl Model {
                     })
                     .collect_vec();
 
-                Some(config.borrow_mut().layout(layouter, &values, 0, op)?)
+                Some(config.borrow_mut().layout(
+                    &mut layouter.namespace(|| "net"),
+                    &values,
+                    0,
+                    op,
+                )?)
             }
             NodeConfig::Lookup {
                 config,
@@ -668,11 +649,10 @@ impl Model {
                     return Err(Box::new(GraphError::InvalidLookupInputs));
                 }
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
-                Some(
-                    config
-                        .borrow_mut()
-                        .layout(layouter, inputs.get(&idx[0]).unwrap())?,
-                )
+                Some(config.borrow_mut().layout(
+                    &mut layouter.namespace(|| "net"),
+                    inputs.get(&idx[0]).unwrap(),
+                )?)
             }
             NodeConfig::Input => None,
             NodeConfig::Const => None,

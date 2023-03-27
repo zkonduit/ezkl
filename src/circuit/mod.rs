@@ -1,13 +1,8 @@
 use crate::tensor::*;
 /// Structs and methods for configuring and assigning "accumulated" polynomial constraints to a gate within a Halo2 circuit.
 pub mod base;
-/// Structs and methods for configuring and assigning polynomial constraints to a gate within a Halo2 circuit.
-#[deprecated(note = "please use `base` module instead")]
-pub mod fused;
 /// Element-wise operations using lookup tables.
 pub mod lookup;
-/// A layer for range checks using polynomials.
-pub mod range;
 /// Utility functions for building gates.
 pub mod utils;
 

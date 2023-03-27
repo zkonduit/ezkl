@@ -54,7 +54,7 @@ impl Circuit<Fr> for MyCircuit {
         // sets up a new Divide by table
         let l1 = LookupConfig::configure(cs, &a, &output, BITS, &[LookupOp::ReLU { scale: 1 }]);
 
-        let base_config = BaseConfig::configure(cs, &[a, b], &output, CheckMode::UNSAFE);
+        let base_config = BaseConfig::configure(cs, &[a, b], &output, CheckMode::UNSAFE, 0);
         MyConfig { base_config, l1 }
     }
 

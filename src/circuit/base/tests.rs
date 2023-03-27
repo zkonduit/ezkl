@@ -35,7 +35,7 @@ mod matmul {
             let a = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true);
             let b = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true);
             let output = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, 1, LEN], true);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -95,7 +95,7 @@ mod matmul_col_overflow {
             let a = VarTensor::new_advice(cs, K, LEN * LEN * LEN, vec![LEN, LEN, LEN], true);
             let b = VarTensor::new_advice(cs, K, LEN * LEN * LEN, vec![LEN, LEN, LEN], true);
             let output = VarTensor::new_advice(cs, K, LEN * LEN * LEN, vec![LEN, LEN, LEN], true);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -155,7 +155,7 @@ mod dot {
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -213,7 +213,7 @@ mod dot_col_overflow {
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -271,7 +271,7 @@ mod sum {
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -327,7 +327,7 @@ mod sum_col_overflow {
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -383,7 +383,7 @@ mod batchnorm {
             let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -447,7 +447,7 @@ mod affine {
             let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
             let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
             let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -511,7 +511,7 @@ mod affine_col_overflow {
             let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
             let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
             let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -574,7 +574,7 @@ mod composition {
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -640,7 +640,7 @@ mod conv {
             let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
             let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
             let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -758,7 +758,7 @@ mod sumpool {
             let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
             let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
             let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -830,7 +830,7 @@ mod add {
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -888,7 +888,7 @@ mod add_with_overflow {
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -946,7 +946,7 @@ mod sub {
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -1004,7 +1004,7 @@ mod mult {
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -1062,7 +1062,7 @@ mod pow {
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -1118,7 +1118,7 @@ mod pack {
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -1174,7 +1174,7 @@ mod rescaled {
             let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
             let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -1210,5 +1210,99 @@ mod rescaled {
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod rangecheck {
+
+    use crate::tensor::Tensor;
+    use halo2_proofs::{
+        arithmetic::FieldExt,
+        circuit::{Layouter, SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::{Circuit, ConstraintSystem, Error},
+    };
+    use halo2curves::pasta::Fp;
+
+    const RANGE: usize = 8; // 3-bit value
+    const K: usize = 8;
+    const LEN: usize = 4;
+
+    use super::*;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        input: ValTensor<F>,
+        output: ValTensor<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, RANGE as i32)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            let _ = config
+                .layout(
+                    &mut layouter,
+                    &[self.input.clone(), self.output.clone()],
+                    0,
+                    Op::RangeCheck(RANGE as i32),
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn test_range_check() {
+        let k = 4;
+
+        // Successful cases
+        for i in 0..RANGE {
+            let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(i as u64))]), &[1]).unwrap();
+            let out =
+                Tensor::new(Some(&[Value::<Fp>::known(Fp::from(i as u64 + 1))]), &[1]).unwrap();
+            let circuit = MyCircuit::<Fp> {
+                input: ValTensor::from(inp),
+                output: ValTensor::from(out),
+            };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            prover.assert_satisfied();
+        }
+        {
+            let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(22_u64))]), &[1]).unwrap();
+            let out = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(0_u64))]), &[1]).unwrap();
+            let circuit = MyCircuit::<Fp> {
+                input: ValTensor::from(inp),
+                output: ValTensor::from(out),
+            };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            match prover.verify() {
+                Ok(_) => {
+                    assert!(false)
+                }
+                Err(_) => {
+                    assert!(true)
+                }
+            }
+        }
     }
 }

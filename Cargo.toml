@@ -55,74 +55,45 @@ test-case = "2.2.2"
 ctor = "0.1.26"
 tempdir = "0.3.7"
 
-[[bench]]
-name = "affine"
-harness = false
 
 [[bench]]
 name = "accum_affine"
 harness = false
 
-[[bench]]
-name = "dot"
-harness = false
 
 [[bench]]
 name = "accum_dot"
 harness = false
 
-[[bench]]
-name = "sum"
-harness = false
 
 [[bench]]
 name = "accum_sum"
 harness = false
 
 [[bench]]
-name = "add"
-harness = false
-
-[[bench]]
 name = "pairwise_add"
 harness = false
 
-[[bench]]
-name = "pow"
-harness = false
 
 [[bench]]
 name = "pairwise_pow"
 harness = false
 
-[[bench]]
-name = "pack"
-harness = false
 
 [[bench]]
 name = "accum_pack"
 harness = false
 
-[[bench]]
-name = "matmul"
-harness = false
 
 [[bench]]
 name = "accum_matmul"
 harness = false
 
-[[bench]]
-name = "conv"
-harness = false
 
 [[bench]]
 name = "accum_conv"
 harness = false
 
-
-[[bench]]
-name = "sumpool"
-harness = false
 
 [[bench]]
 name = "accum_sumpool"
@@ -135,10 +106,6 @@ harness = false
 
 [[bench]]
 name = "accum_matmul_relu"
-harness = false
-
-[[bench]]
-name = "range"
 harness = false
 
 [[bin]]
