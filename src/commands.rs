@@ -72,9 +72,6 @@ pub struct RunArgs {
     #[arg(long, default_value = "1")]
     pub pack_base: u32,
     /// use a single argument for all lookups
-    #[arg(long, default_value = "true", action = clap::ArgAction::Set)]
-    pub single_lookup: bool,
-    /// use a single argument for all lookups
     #[arg(long, default_value = "safe")]
     pub check_mode: CheckMode,
 }

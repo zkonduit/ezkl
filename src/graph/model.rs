@@ -257,13 +257,9 @@ impl Model {
 
         if !lookup_ops.is_empty() {
             for (i, node) in lookup_ops {
-                let config = if !self.run_args.single_lookup {
-                    // assume a single input
-                    let input_len = node.in_dims[0].iter().product();
-                    self.conf_lookup(node, input_len, meta, vars, &mut tables)?
-                } else {
-                    self.reuse_lookup_conf(*i, node, &results, meta, vars, &mut tables)?
-                };
+                let input_len = node.in_dims[0].iter().product();
+                let config = self.conf_lookup(node, input_len, meta, vars, &mut tables)?;
+
                 results.insert(*i, config);
             }
         }
@@ -333,46 +329,6 @@ impl Model {
         }
 
         configs
-    }
-
-    fn reuse_lookup_conf<F: FieldExt + TensorType>(
-        &self,
-        i: usize,
-        node: &Node,
-        prev_configs: &BTreeMap<usize, NodeConfig<F>>,
-        meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars<F>,
-        tables: &mut BTreeMap<Vec<LookupOp>, Rc<RefCell<LookupTable<F>>>>,
-    ) -> Result<NodeConfig<F>, Box<dyn Error>> {
-        match &node.opkind {
-            OpKind::Lookup(op) => {
-                let mut conf = None;
-                // iterate in reverse order so we get the last relevant op
-                for (_, prev_config) in prev_configs.iter().rev() {
-                    if let NodeConfig::Lookup { config, .. } = prev_config {
-                        // check if there's a config for the same op
-                        if config.borrow().table.borrow().nonlinearities == vec![op.clone()] {
-                            conf = Some(NodeConfig::Lookup {
-                                config: config.clone(),
-                                inputs: node.inputs.iter().map(|e| e.node).collect(),
-                            });
-
-                            break;
-                        }
-                    }
-                }
-                let conf = match conf {
-                    None => {
-                        let input_len = self.num_vars_lookup_op(op)[0];
-                        self.conf_lookup(node, input_len, meta, vars, tables)?
-                    }
-                    Some(c) => c,
-                };
-                Ok(conf)
-            }
-            // should never reach here
-            _ => Err(Box::new(GraphError::OpMismatch(i, node.opkind.clone()))),
-        }
     }
 
     /// Configures non op related nodes (eg. representing an input or const value)
