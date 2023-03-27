@@ -1,5 +1,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl_lib::circuit::polynomial::*;
+use ezkl_lib::circuit::base::CheckMode;
+#[allow(deprecated)]
+use ezkl_lib::circuit::fused::*;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::{create_keys, gen_srs};
@@ -35,9 +37,9 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
-        let b = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
-        let output = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
+        let a = VarTensor::new_advice(cs, K, len, vec![len], true);
+        let b = VarTensor::new_advice(cs, K, len, vec![len], true);
+        let output = VarTensor::new_advice(cs, K, len, vec![len], true);
         let add_node = Node {
             op: Op::Add,
             input_order: vec![InputType::Input(0), InputType::Input(1)],
@@ -59,7 +61,8 @@ impl Circuit<Fr> for MyCircuit {
 fn runadd(c: &mut Criterion) {
     let mut group = c.benchmark_group("add");
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    for &len in [16].iter() {
+    {
+        let &len = &16;
         unsafe {
             LEN = len;
         };
@@ -95,6 +98,7 @@ fn runadd(c: &mut Criterion) {
                     &pk,
                     TranscriptType::Blake,
                     SingleStrategy::new(&params),
+                    CheckMode::UNSAFE,
                 );
                 prover.unwrap();
             });

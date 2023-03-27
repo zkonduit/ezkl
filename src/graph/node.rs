@@ -1,8 +1,8 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
+use crate::circuit::base::BaseConfig as PolyConfig;
+use crate::circuit::base::Op as PolyOp;
 use crate::circuit::lookup::Config as LookupConfig;
 use crate::circuit::lookup::Op as LookupOp;
-use crate::circuit::polynomial::Config as PolyConfig;
-use crate::circuit::polynomial::Op as PolyOp;
 use crate::graph::GraphError;
 use crate::tensor::Tensor;
 use crate::tensor::TensorType;
@@ -12,7 +12,7 @@ use halo2_proofs::arithmetic::FieldExt;
 use itertools::Itertools;
 use log::{info, trace, warn};
 use std::cell::RefCell;
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
 use std::ops::Deref;
@@ -150,8 +150,9 @@ pub enum NodeConfig<F: FieldExt + TensorType> {
         inputs: Vec<usize>,
     },
     Poly {
-        config: PolyConfig<F>,
+        config: Rc<RefCell<PolyConfig<F>>>,
         inputs: Vec<usize>,
+        op: PolyOp,
     },
     Const,
     Input,
@@ -160,58 +161,7 @@ pub enum NodeConfig<F: FieldExt + TensorType> {
 }
 
 /// Representation of an execution graph divided into execution 'buckets'.
-#[derive(Clone, Default, Debug)]
-pub struct NodeGraph(pub BTreeMap<Option<usize>, BTreeMap<usize, Node>>);
-
-impl NodeGraph {
-    /// Create an empty NodeGraph
-    pub fn new() -> Self {
-        NodeGraph(BTreeMap::new())
-    }
-
-    /// Insert the node with given tract `node_idx` and config at `idx`  
-    pub fn insert(&mut self, idx: Option<usize>, node_idx: usize, config: Node) {
-        match self.0.entry(idx) {
-            Entry::Vacant(e) => {
-                e.insert(BTreeMap::from([(node_idx, config)]));
-            }
-            Entry::Occupied(mut e) => {
-                e.get_mut().insert(node_idx, config);
-            }
-        }
-    }
-
-    /// Flattens the inner [BTreeMap] into a [Vec] of [Node]s.
-    pub fn flatten(&self) -> Vec<Node> {
-        let a = self
-            .0
-            .clone()
-            .into_values()
-            .map(|d| d.into_values().collect())
-            .collect::<Vec<Vec<Node>>>();
-        let mut c: Vec<Node> = a
-            .iter()
-            .flatten()
-            .collect::<Vec<&Node>>()
-            .iter()
-            .map(|e| (*e).clone())
-            .collect();
-
-        c.sort_by_key(|v| v.idx);
-        c
-    }
-
-    /// Retrieves a node, as specified by idx, from the Graph of bucketed nodes.
-    pub fn filter(&self, idx: usize) -> Node {
-        let a = self.flatten();
-        let c = &a
-            .iter()
-            .filter(|i| i.idx == idx)
-            .cloned()
-            .collect::<Vec<Node>>()[0];
-        c.clone()
-    }
-}
+pub type NodeGraph = BTreeMap<usize, Node>;
 
 fn display_option<T: fmt::Debug>(o: &Option<T>) -> String {
     match o {
@@ -1130,7 +1080,7 @@ impl Node {
                         Node {
                             idx,
                             opkind: OpKind::Poly(PolyOp::Reshape(new_dims.clone())),
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs[0..1].to_vec(),
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: new_dims,
                             in_scale: input_node.out_scale,

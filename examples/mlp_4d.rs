@@ -1,8 +1,6 @@
 use eq_float::F32;
+use ezkl_lib::circuit::base::{BaseConfig as PolyConfig, CheckMode, Op as PolyOp};
 use ezkl_lib::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
-use ezkl_lib::circuit::polynomial::{
-    Config as PolyConfig, InputType as PolyInputType, Node as PolyNode, Op as PolyOp,
-};
 use ezkl_lib::fieldutils::i32_to_felt;
 use ezkl_lib::tensor::*;
 use halo2_proofs::dev::MockProver;
@@ -18,9 +16,8 @@ const K: usize = 15;
 // A columnar ReLu MLP
 #[derive(Clone)]
 struct MyConfig<F: FieldExt + TensorType> {
-    l0: PolyConfig<F>,
+    layer_config: PolyConfig<F>,
     l1: LookupConfig<F>,
-    l2: PolyConfig<F>,
     l3: LookupConfig<F>,
     l4: LookupConfig<F>,
     public_output: Column<Instance>,
@@ -53,29 +50,17 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let input = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-        let kernel = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true, 512);
-        let bias = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-        let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+        let input = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+        let params = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true);
+        let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
         // tells the config layer to add an affine op to the circuit gate
-        let affine_node = PolyNode {
-            op: PolyOp::Affine,
-            input_order: vec![
-                PolyInputType::Input(0),
-                PolyInputType::Input(1),
-                PolyInputType::Input(2),
-            ],
-        };
 
-        let l0 = PolyConfig::<F>::configure(
+        let layer_config = PolyConfig::<F>::configure(
             cs,
-            &[input.clone(), kernel.clone(), bias.clone()],
+            &[input.clone(), params],
             &output,
-            &[affine_node.clone()],
+            CheckMode::SAFE,
         );
-
-        let l2 =
-            PolyConfig::<F>::configure(cs, &[input.clone(), kernel, bias], &output, &[affine_node]);
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
         let [l1, l3]: [LookupConfig<F>; 2] = LookupConfig::configure_multiple(
@@ -102,9 +87,8 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         cs.enable_equality(public_output);
 
         MyConfig {
-            l0,
+            layer_config,
             l1,
-            l2,
             l3,
             l4,
             public_output,
@@ -117,7 +101,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         let x = config
-            .l0
+            .layer_config
             .layout(
                 &mut layouter,
                 &[
@@ -125,21 +109,31 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     self.l0_params[0].clone(),
                     self.l0_params[1].clone(),
                 ],
+                0,
+                PolyOp::Affine,
             )
             .unwrap();
-        let x = config.l1.layout(&mut layouter, &x).unwrap();
+        let mut x = config.l1.layout(&mut layouter, &x).unwrap();
+        x.reshape(&[x.dims()[0], 1]).unwrap();
         let x = config
-            .l2
+            .layer_config
             .layout(
                 &mut layouter,
                 &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
+                0,
+                PolyOp::Affine,
             )
             .unwrap();
         let x = config.l3.layout(&mut layouter, &x).unwrap();
         let x = config.l4.layout(&mut layouter, &x).unwrap();
         match x {
-            ValTensor::PrevAssigned { inner: v, dims: _ } => v
-                .enum_map(|i, x| layouter.constrain_instance(x.cell(), config.public_output, i))
+            ValTensor::Value { inner: v, dims: _ } => v
+                .enum_map(|i, x| match x {
+                    ValType::PrevAssigned(v) => {
+                        layouter.constrain_instance(v.cell(), config.public_output, i)
+                    }
+                    _ => panic!(),
+                })
                 .unwrap(),
             _ => panic!("Should be assigned"),
         };
@@ -155,7 +149,7 @@ pub fn runmlp() {
     )
     .unwrap()
     .into();
-    let l0_bias: Tensor<Value<F>> = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[4])
+    let l0_bias: Tensor<Value<F>> = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[4, 1])
         .unwrap()
         .into();
 
@@ -166,10 +160,10 @@ pub fn runmlp() {
     .unwrap()
     .into();
     // input data, with 1 padding to allow for bias
-    let input: Tensor<Value<F>> = Tensor::<i32>::new(Some(&[-30, -21, 11, 40]), &[4])
+    let input: Tensor<Value<F>> = Tensor::<i32>::new(Some(&[-30, -21, 11, 40]), &[4, 1])
         .unwrap()
         .into();
-    let l2_bias: Tensor<Value<F>> = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[4])
+    let l2_bias: Tensor<Value<F>> = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[4, 1])
         .unwrap()
         .into();
 

@@ -1,6 +1,7 @@
 /// EVM related proving and verification
 pub mod evm;
 
+use crate::circuit::base::CheckMode;
 use crate::commands::{data_path, Cli, RunArgs};
 use crate::execute::ExecutionError;
 use crate::fieldutils::i128_to_felt;
@@ -313,6 +314,7 @@ pub fn create_proof_circuit<
     params: &'params Scheme::ParamsProver,
     pk: &ProvingKey<Scheme::Curve>,
     strategy: Strategy,
+    check_mode: CheckMode,
 ) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, Box<dyn Error>>
 where
     C: Circuit<Scheme::Scalar>,
@@ -320,7 +322,7 @@ where
     Scheme::Scalar: SerdeObject,
 {
     // quickly mock prove as a sanity check
-    {
+    if check_mode == CheckMode::SAFE {
         debug!("running mock prover");
         let prover = MockProver::run(params.k(), &circuit, instances.clone())
             .map_err(Box::<dyn Error>::from)?;
@@ -361,7 +363,7 @@ where
     let checkable_pf = Snark::new(protocol, instances, proof);
 
     // sanity check that the generated proof is valid
-    {
+    if check_mode == CheckMode::SAFE {
         debug!("verifying generated proof");
         let verifier_params = params.verifier_params();
         verify_proof_circuit::<F, V, Scheme, Strategy, E, TR>(

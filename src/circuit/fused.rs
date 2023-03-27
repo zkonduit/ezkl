@@ -122,7 +122,7 @@ impl Op {
             Op::BatchNorm => scale_and_shift(&inputs),
             Op::ScaleAndShift => scale_and_shift(&inputs),
             Op::Matmul => matmul(&inputs),
-            Op::Dot => dot(&inputs.iter().map(|x| x).collect()),
+            Op::Dot => dot(&inputs.iter().collect()),
             Op::Conv { padding, stride } => convolution(&inputs, *padding, *stride),
             Op::SumPool {
                 padding,
@@ -362,10 +362,10 @@ mod tests {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let input = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let kernel = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true, 512);
-            let bias = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true, 512);
+            let input = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let kernel = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true);
+            let bias = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
             // tells the config layer to add an affine op to a circuit gate
             let affine_node = Node {
                 op: Op::Affine,

@@ -1,6 +1,10 @@
+use crate::circuit::base::CheckMode;
 use crate::commands::{Cli, Commands, StrategyType, TranscriptType};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::eth::{deploy_verifier, fix_verifier_sol, send_proof, verify_proof_via_solidity};
+use crate::eth::{
+    deploy_verifier, fix_verifier_sol, get_ledger_signing_provider, get_provider,
+    get_wallet_signing_provider, send_proof, verify_proof_via_solidity,
+};
 use crate::graph::{vector_to_quantized, Model, ModelCircuit};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
@@ -14,6 +18,8 @@ use crate::pfsys::{
     create_proof_circuit, gen_srs, prepare_data, prepare_model_circuit_and_public_input, save_vk,
     verify_proof_circuit,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use ethers::providers::Middleware;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::plonk::{Circuit, ProvingKey, VerifyingKey};
 use halo2_proofs::poly::commitment::Params;
@@ -27,15 +33,21 @@ use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
+#[cfg(not(target_arch = "wasm32"))]
+use log::warn;
 use log::{info, trace};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
+#[cfg(not(target_arch = "wasm32"))]
+use std::fs::read_to_string;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::Arc;
 use std::time::Instant;
 use tabled::Table;
 use thiserror::Error;
@@ -99,6 +111,7 @@ pub fn create_proof_circuit_kzg<
     pk: &ProvingKey<G1Affine>,
     transcript: TranscriptType,
     strategy: Strategy,
+    check_mode: CheckMode,
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
     match transcript {
         TranscriptType::EVM => create_proof_circuit::<
@@ -111,20 +124,22 @@ pub fn create_proof_circuit_kzg<
             _,
             EvmTranscript<G1Affine, _, _, _>,
             EvmTranscript<G1Affine, _, _, _>,
-        >(circuit, public_inputs, params, pk, strategy)
+        >(circuit, public_inputs, params, pk, strategy, check_mode)
         .map_err(Box::<dyn Error>::from),
-        TranscriptType::Poseidon => create_proof_circuit::<
-            KZGCommitmentScheme<_>,
-            Fr,
-            _,
-            ProverGWC<_>,
-            VerifierGWC<_>,
-            _,
-            _,
-            PoseidonTranscript<NativeLoader, _>,
-            PoseidonTranscript<NativeLoader, _>,
-        >(circuit, public_inputs, params, pk, strategy)
-        .map_err(Box::<dyn Error>::from),
+        TranscriptType::Poseidon => {
+            create_proof_circuit::<
+                KZGCommitmentScheme<_>,
+                Fr,
+                _,
+                ProverGWC<_>,
+                VerifierGWC<_>,
+                _,
+                _,
+                PoseidonTranscript<NativeLoader, _>,
+                PoseidonTranscript<NativeLoader, _>,
+            >(circuit, public_inputs, params, pk, strategy, check_mode)
+            .map_err(Box::<dyn Error>::from)
+        }
         TranscriptType::Blake => create_proof_circuit::<
             KZGCommitmentScheme<_>,
             Fr,
@@ -135,7 +150,7 @@ pub fn create_proof_circuit_kzg<
             Challenge255<_>,
             Blake2bWrite<_, _, _>,
             Blake2bRead<_, _, _>,
-        >(circuit, public_inputs, params, pk, strategy)
+        >(circuit, public_inputs, params, pk, strategy, check_mode)
         .map_err(Box::<dyn Error>::from),
     }
 }
@@ -151,8 +166,20 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             proof_path,
             has_abi,
         } => {
+            let provider = get_provider(&rpc_url)?;
+            let chain_id = provider.get_chainid().await?;
+            info!("using chain {}", chain_id);
             let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
-            send_proof(secret, rpc_url, addr, proof, has_abi).await?;
+            if let Some(secret) = secret {
+                let mnemonic = read_to_string(secret)?;
+                let client = Arc::new(get_wallet_signing_provider(provider, &mnemonic).await?);
+                send_proof(client.clone(), addr, client.address(), proof, has_abi).await?;
+            } else {
+                warn!("connect your Ledger and open the Ethereum app");
+                let client =
+                    Arc::new(get_ledger_signing_provider(provider, chain_id.as_u64()).await?);
+                send_proof(client.clone(), addr, client.address(), proof, has_abi).await?;
+            };
         }
         #[cfg(not(target_arch = "wasm32"))]
         Commands::DeployVerifierEVM {
@@ -161,7 +188,19 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             deployment_code_path,
             sol_code_path,
         } => {
-            deploy_verifier(secret, rpc_url, deployment_code_path, sol_code_path).await?;
+            let provider = get_provider(&rpc_url)?;
+            let chain_id = provider.get_chainid().await?;
+            info!("using chain {}", chain_id);
+            if let Some(secret) = secret {
+                let mnemonic = read_to_string(secret)?;
+                let client = Arc::new(get_wallet_signing_provider(provider, &mnemonic).await?);
+                deploy_verifier(client, deployment_code_path, sol_code_path).await?;
+            } else {
+                warn!("connect your Ledger and open the Ethereum app");
+                let client =
+                    Arc::new(get_ledger_signing_provider(provider, chain_id.as_u64()).await?);
+                deploy_verifier(client, deployment_code_path, sol_code_path).await?;
+            };
         }
         Commands::GenSrs { params_path } => {
             let params = gen_srs::<KZGCommitmentScheme<Bn256>>(cli.args.logrows);
@@ -169,7 +208,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         }
         Commands::Table { model: _ } => {
             let om = Model::from_ezkl_conf(cli)?;
-            info!("{}", Table::new(om.nodes.flatten()));
+            info!("{}", Table::new(om.nodes.iter()));
         }
         #[cfg(feature = "render")]
         Commands::RenderCircuit {
@@ -242,6 +281,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             let num_instance = public_inputs.iter().map(|x| x.len()).collect();
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
+            info!("downsizing params to {} logrows", cli.args.logrows);
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
@@ -295,6 +335,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             let (circuit, public_inputs) = prepare_model_circuit_and_public_input(&data, &cli)?;
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
+            info!("downsizing params to {} logrows", cli.args.logrows);
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
@@ -315,6 +356,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                         &pk,
                         transcript,
                         strategy,
+                        cli.args.check_mode,
                     )?
                 }
                 StrategyType::Accum => {
@@ -326,6 +368,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                         &pk,
                         transcript,
                         strategy,
+                        cli.args.check_mode,
                     )?
                 }
             };
@@ -348,6 +391,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             // the K used for the aggregation circuit
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
+            info!("downsizing params to {} logrows", cli.args.logrows);
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
@@ -355,6 +399,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             let mut snarks = vec![];
             // the K used when generating the application snark proof. we assume K is homogenous across snarks to aggregate
             let mut params_app = params.clone();
+            info!("downsizing app params to {} logrows", app_logrows);
             if app_logrows < params.k() {
                 params_app.downsize(app_logrows);
             }
@@ -385,6 +430,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                     &agg_pk,
                     transcript,
                     AccumulatorStrategy::new(&params),
+                    cli.args.check_mode,
                 )?;
 
                 info!("Aggregation proof took {}", now.elapsed().as_secs());
@@ -401,6 +447,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => {
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
+            info!("downsizing params to {} logrows", cli.args.logrows);
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }
@@ -427,6 +474,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => {
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
+            info!("downsizing params to {} logrows", cli.args.logrows);
             if cli.args.logrows < params.k() {
                 params.downsize(cli.args.logrows);
             }

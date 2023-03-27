@@ -1,10 +1,9 @@
+use ezkl_lib::circuit::base::{BaseConfig as PolyConfig, CheckMode, Op as PolyOp};
 use ezkl_lib::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
-use ezkl_lib::circuit::polynomial::{
-    Config as PolyConfig, InputType as PolyInputType, Node as PolyNode, Op as PolyOp,
-};
 use ezkl_lib::fieldutils;
 use ezkl_lib::fieldutils::i32_to_felt;
 use ezkl_lib::tensor::*;
+use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -29,12 +28,11 @@ use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp as F;
 use mnist::*;
 use rand::rngs::OsRng;
-use std::cmp::max;
 use std::time::Instant;
 
 mod params;
 
-const K: usize = 17;
+const K: usize = 20;
 
 #[derive(Clone)]
 struct Config<
@@ -55,10 +53,9 @@ struct Config<
     Value<F>: TensorType,
 {
     // this will be a conv layer
-    l0: PolyConfig<F>,
-    l1: LookupConfig<F>,
+    layer_config: PolyConfig<F>,
+    relu: LookupConfig<F>,
     // this will be an affine layer
-    l2: PolyConfig<F>,
     public_output: Column<Instance>,
 }
 
@@ -142,94 +139,31 @@ where
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let output_height = (IMAGE_HEIGHT + 2 * PADDING - KERNEL_HEIGHT) / STRIDE + 1;
-        let output_width = (IMAGE_WIDTH + 2 * PADDING - KERNEL_WIDTH) / STRIDE + 1;
+        let input = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+        let params = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+        let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
 
-        let input = VarTensor::new_advice(
-            cs,
-            K,
-            max(IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH, LEN),
-            vec![IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH],
-            true,
-            512,
-        );
-        let kernel = VarTensor::new_advice(
-            cs,
-            K,
-            max(
-                OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH,
-                CLASSES * LEN,
-            ),
-            vec![OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH],
-            true,
-            512,
-        );
+        println!("INPUT COL {:#?}", input);
 
-        let bias = VarTensor::new_advice(
+        let layer_config = PolyConfig::configure(
             cs,
-            K,
-            max(OUT_CHANNELS, CLASSES),
-            vec![OUT_CHANNELS],
-            true,
-            512,
-        );
-        let output = VarTensor::new_advice(
-            cs,
-            K,
-            max(OUT_CHANNELS * output_height * output_width, LEN),
-            vec![OUT_CHANNELS, output_height, output_width],
-            true,
-            512,
-        );
-
-        // tells the config layer to add a conv op to a circuit gate
-        let conv_node = PolyNode {
-            op: PolyOp::Conv {
-                padding: (PADDING, PADDING),
-                stride: (STRIDE, STRIDE),
-            },
-            input_order: vec![
-                PolyInputType::Input(0),
-                PolyInputType::Input(1),
-                PolyInputType::Input(2),
-            ],
-        };
-
-        let l0 = PolyConfig::configure(
-            cs,
-            &[input.clone(), kernel.clone(), bias.clone()],
+            &[input.clone(), params],
             &output,
-            &[conv_node],
+            CheckMode::SAFE,
         );
 
         let input = input.reshape(&[LEN]);
         let output = output.reshape(&[LEN]);
 
-        let l1 =
+        let relu =
             LookupConfig::configure(cs, &input, &output, BITS, &[LookupOp::ReLU { scale: 32 }]);
 
-        // tells the config layer to add an affine op to the circuit gate
-        let affine_node = PolyNode {
-            op: PolyOp::Affine,
-            input_order: vec![
-                PolyInputType::Input(0),
-                PolyInputType::Input(1),
-                PolyInputType::Input(2),
-            ],
-        };
-
-        let kernel = kernel.reshape(&[CLASSES, LEN]);
-        let bias = bias.reshape(&[CLASSES]);
-        let output = output.reshape(&[CLASSES]);
-
-        let l2 = PolyConfig::configure(cs, &[input, kernel, bias], &output, &[affine_node]);
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
 
         Config {
-            l0,
-            l1,
-            l2,
+            layer_config,
+            relu,
             public_output,
         }
     }
@@ -240,7 +174,7 @@ where
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         let x = config
-            .l0
+            .layer_config
             .layout(
                 &mut layouter,
                 &[
@@ -248,21 +182,33 @@ where
                     self.l0_params[0].clone(),
                     self.l0_params[1].clone(),
                 ],
+                0,
+                PolyOp::Conv {
+                    padding: (PADDING, PADDING),
+                    stride: (STRIDE, STRIDE),
+                },
             )
             .unwrap();
-        let mut x = config.l1.layout(&mut layouter, &x).unwrap();
+        let mut x = config.relu.layout(&mut layouter, &x).unwrap();
         x.flatten();
         let l2out = config
-            .l2
+            .layer_config
             .layout(
                 &mut layouter,
                 &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
+                0,
+                PolyOp::Affine,
             )
             .unwrap();
 
         match l2out {
-            ValTensor::PrevAssigned { inner: v, dims: _ } => v
-                .enum_map(|i, x| layouter.constrain_instance(x.cell(), config.public_output, i))
+            ValTensor::Value { inner: v, dims: _ } => v
+                .enum_map(|i, x| match x {
+                    ValType::PrevAssigned(v) => {
+                        layouter.constrain_instance(v.cell(), config.public_output, i)
+                    }
+                    _ => panic!(),
+                })
                 .unwrap(),
             _ => panic!("Should be assigned"),
         };
@@ -328,7 +274,7 @@ pub fn runconv() {
             .flatten()
             .flatten()
             .map(|fl| {
-                let dx = (fl as f32) * 32_f32;
+                let dx = fl * 32_f32;
                 let rounded = dx.round();
                 let integral: i32 = unsafe { rounded.to_int_unchecked() };
                 let felt = fieldutils::i32_to_felt(integral);
@@ -346,14 +292,17 @@ pub fn runconv() {
     )
     .into();
 
-    let l2_biases: ValTensor<F> = Tensor::<Value<F>>::from(myparams.biases.into_iter().map(|fl| {
-        let dx = fl * 32_f32;
-        let rounded = dx.round();
-        let integral: i32 = unsafe { rounded.to_int_unchecked() };
-        let felt = fieldutils::i32_to_felt(integral);
-        Value::known(felt)
-    }))
-    .into();
+    let mut l2_biases: ValTensor<F> =
+        Tensor::<Value<F>>::from(myparams.biases.into_iter().map(|fl| {
+            let dx = fl * 32_f32;
+            let rounded = dx.round();
+            let integral: i32 = unsafe { rounded.to_int_unchecked() };
+            let felt = fieldutils::i32_to_felt(integral);
+            Value::known(felt)
+        }))
+        .into();
+
+    l2_biases.reshape(&[l2_biases.len(), 1]).unwrap();
 
     let mut l2_weights: ValTensor<F> =
         Tensor::<Value<F>>::from(myparams.weights.into_iter().flatten().map(|fl| {
@@ -410,18 +359,36 @@ pub fn runconv() {
     .into();
 
     let pi_inner: Tensor<F> = public_input.map(i32_to_felt::<F>);
+
+    println!("MOCK PROVING");
+    let now = Instant::now();
+    let prover = MockProver::run(
+        K as u32,
+        &circuit,
+        vec![pi_inner.clone().into_iter().collect()],
+    )
+    .unwrap();
+    prover.assert_satisfied();
+    println!("MOCK PROVING took {}", now.elapsed().as_secs());
+
     let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner]];
 
     //	Real proof
+    println!("SRS GENERATION");
+    let now = Instant::now();
     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(K as u32);
+    println!("SRS GENERATION took {}", now.elapsed().as_secs());
     let empty_circuit = circuit.without_witnesses();
     // Initialize the proving key
+    println!("VK GENERATION");
     let now = Instant::now();
     let vk = keygen_vk(&params, &empty_circuit).expect("keygen_vk should not fail");
-    println!("VK took {}", now.elapsed().as_secs());
+    println!("VK GENERATION took {}", now.elapsed().as_secs());
+    println!("PK GENERATION");
     let now = Instant::now();
     let pk = keygen_pk(&params, vk, &empty_circuit).expect("keygen_pk should not fail");
-    println!("PK took {}", now.elapsed().as_secs());
+    println!("PK GENERATION took {}", now.elapsed().as_secs());
+    println!("PROOF GENERATION");
     let now = Instant::now();
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
     let mut rng = OsRng;
@@ -436,7 +403,7 @@ pub fn runconv() {
     .expect("proof generation should not fail");
     let proof = transcript.finalize();
     //println!("{:?}", proof);
-    println!("Proof took {}", now.elapsed().as_secs());
+    println!("PROOF GENERATION took {}", now.elapsed().as_secs());
     let now = Instant::now();
     let strategy = SingleStrategy::new(&params);
     let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);

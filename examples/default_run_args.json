@@ -6,6 +6,5 @@
     "public_inputs": false,
     "public_outputs": true,
     "public_params": false,
-    "max_rotations": 512,
     "single_lookup": false
 }

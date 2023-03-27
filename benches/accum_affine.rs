@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl_lib::circuit::accumulated::*;
+use ezkl_lib::circuit::base::*;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::{create_keys, gen_srs};
@@ -35,14 +35,13 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, (len + 1) * len, vec![len, len], true, 100000);
+        let a = VarTensor::new_advice(cs, K, (len + 1) * len, vec![len, len], true);
 
-        let b = VarTensor::new_advice(cs, K, (len + 1) * len, vec![len + 1, len], true, 100000);
+        let b = VarTensor::new_advice(cs, K, (len + 1) * len, vec![len + 1, len], true);
 
-        let output =
-            VarTensor::new_advice(cs, K, (len + 2) * len, vec![len, 1, len + 2], true, 100000);
+        let output = VarTensor::new_advice(cs, K, (len + 2) * len, vec![len, 1, len + 2], true);
 
-        Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        Self::Config::configure(cs, &[a, b], &output, CheckMode::UNSAFE)
     }
 
     fn synthesize(
@@ -101,6 +100,7 @@ fn runaffine(c: &mut Criterion) {
                     &pk,
                     TranscriptType::Blake,
                     SingleStrategy::new(&params),
+                    CheckMode::UNSAFE,
                 );
                 prover.unwrap();
             });
