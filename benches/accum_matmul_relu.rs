@@ -63,6 +63,7 @@ impl Circuit<Fr> for MyCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
+        config.l1.layout_table(&mut layouter).unwrap();
         layouter.assign_region(
             || "",
             |mut region| {

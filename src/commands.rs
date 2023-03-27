@@ -71,7 +71,7 @@ pub struct RunArgs {
     /// Useful when verifying on the EVM. Note that this will often break for very long inputs. Use with caution, still experimental.
     #[arg(long, default_value = "1")]
     pub pack_base: u32,
-    /// use a single argument for all lookups
+    /// run sanity checks during calculations (safe or unsafe)
     #[arg(long, default_value = "safe")]
     pub check_mode: CheckMode,
 }
