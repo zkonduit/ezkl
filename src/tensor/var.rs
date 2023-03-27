@@ -45,13 +45,11 @@ impl VarTensor {
     /// * `max_rot` - maximum number of rotations that we allow for this VarTensor. Rotations affect performance.
     pub fn new_advice<F: FieldExt>(
         cs: &mut ConstraintSystem<F>,
-        k: usize,
+        max_rows: usize,
         capacity: usize,
         dims: Vec<usize>,
         equality: bool,
     ) -> Self {
-        let base = 2u32;
-        let max_rows = base.pow(k as u32) as usize - cs.blinding_factors() - 1;
         let modulo = (capacity / max_rows) + 1;
         let mut advices = vec![];
         for _ in 0..modulo {
@@ -281,7 +279,7 @@ impl VarTensor {
             },
             ValTensor::Value { inner: v, .. } => v.enum_map(|coord, k| {
                 let (x, y) = self.cartesian_coord(offset + coord);
-
+                
                 match k {
                     ValType::Value(v) => match &self {
                         VarTensor::Fixed { inner: fixed, .. } => {
@@ -322,8 +320,7 @@ impl VarTensor {
         
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
             ValTensor::Value { inner: v, dims } => {
-                // duplicates every nth element to adjust for column overflow
-               
+                // duplicates every nth element to adjust for column overflow               
                 let v = v.duplicate_every_n(self.col_size()).unwrap();
                 let res = v.enum_map(|coord, k| {
                     let (x, y) = self.cartesian_coord(offset + coord);

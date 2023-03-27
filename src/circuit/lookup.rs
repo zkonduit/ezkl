@@ -7,9 +7,10 @@ use halo2_proofs::{
     plonk::{ConstraintSystem, Expression, Selector, TableColumn},
     poly::Rotation,
 };
-use std::error::Error;
+use log::trace;
 use std::fmt;
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
+use std::{collections::BTreeMap, error::Error};
 
 #[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -167,7 +168,7 @@ pub struct Config<F: FieldExt + TensorType> {
     /// the (currently singular) output of the fused operations.
     pub output: VarTensor,
     /// [Selector] generated when configuring the layer.
-    pub qlookup: Selector,
+    pub selectors: BTreeMap<usize, Selector>,
     ///  table used to represent the non-linearity
     pub table: Rc<RefCell<Table<F>>>,
     _marker: PhantomData<F>,
@@ -212,53 +213,55 @@ impl<F: FieldExt + TensorType> Config<F> {
         output: &VarTensor,
         table: Rc<RefCell<Table<F>>>,
     ) -> Self {
-        let qlookup = cs.complex_selector();
-
-        let _ = cs.lookup(table.borrow().nonlinearities[0].as_str(), |cs| {
-            let qlookup = cs.query_selector(qlookup);
-            let not_qlookup = Expression::Constant(<F as Field>::one()) - qlookup.clone();
-            let default_x = <F as Field>::zero();
-            let mut default_y = vec![0_i128].into_iter().into();
-            for nl in table.borrow().nonlinearities.clone() {
-                default_y = nl.f(default_y)
-            }
-            let default_y: F = i128_to_felt(default_y[0]);
-            let (x, y) = input.cartesian_coord(0);
-            vec![
-                (
-                    match &input {
-                        VarTensor::Advice { inner: advices, .. } => {
-                            qlookup.clone() * cs.query_advice(advices[x], Rotation(y as i32))
-                                + not_qlookup.clone() * default_x
-                        }
-                        VarTensor::Fixed { inner: fixed, .. } => {
-                            qlookup.clone() * cs.query_fixed(fixed[x], Rotation(y as i32))
-                                + not_qlookup.clone() * default_x
-                        }
-                    },
-                    table.borrow().table_input,
-                ),
-                (
-                    match &output {
-                        VarTensor::Advice { inner: advices, .. } => {
-                            qlookup * cs.query_advice(advices[x], Rotation(y as i32))
-                                + not_qlookup * default_y
-                        }
-                        VarTensor::Fixed { inner: fixed, .. } => {
-                            qlookup * cs.query_fixed(fixed[x], Rotation(y as i32))
-                                + not_qlookup * default_y
-                        }
-                    },
-                    table.borrow().table_output,
-                ),
-            ]
-        });
+        let mut selectors = BTreeMap::new();
+        for x in 0..input.num_cols() {
+            let qlookup = cs.complex_selector();
+            selectors.insert(x, qlookup);
+            let _ = cs.lookup(table.borrow().nonlinearities[0].as_str(), |cs| {
+                let qlookup = cs.query_selector(qlookup);
+                let not_qlookup = Expression::Constant(<F as Field>::one()) - qlookup.clone();
+                let default_x = <F as Field>::zero();
+                let mut default_y = vec![0_i128].into_iter().into();
+                for nl in table.borrow().nonlinearities.clone() {
+                    default_y = nl.f(default_y)
+                }
+                let default_y: F = i128_to_felt(default_y[0]);
+                vec![
+                    (
+                        match &input {
+                            VarTensor::Advice { inner: advices, .. } => {
+                                qlookup.clone() * cs.query_advice(advices[x], Rotation(0))
+                                    + not_qlookup.clone() * default_x
+                            }
+                            VarTensor::Fixed { inner: fixed, .. } => {
+                                qlookup.clone() * cs.query_fixed(fixed[x], Rotation(0))
+                                    + not_qlookup.clone() * default_x
+                            }
+                        },
+                        table.borrow().table_input,
+                    ),
+                    (
+                        match &output {
+                            VarTensor::Advice { inner: advices, .. } => {
+                                qlookup * cs.query_advice(advices[x], Rotation(0))
+                                    + not_qlookup * default_y
+                            }
+                            VarTensor::Fixed { inner: fixed, .. } => {
+                                qlookup * cs.query_fixed(fixed[x], Rotation(0))
+                                    + not_qlookup * default_y
+                            }
+                        },
+                        table.borrow().table_output,
+                    ),
+                ]
+            });
+        }
 
         Self {
             input: input.clone(),
             output: output.clone(),
             table,
-            qlookup,
+            selectors,
             _marker: PhantomData,
             input_buffer: vec![],
             output_buffer: vec![],
@@ -310,6 +313,8 @@ impl<F: FieldExt + TensorType> Config<F> {
                 self.table.borrow().nonlinearities[0]
             )
         };
+
+        trace!("laying out {}", region_name);
         let mut t = match layouter.assign_region(
             || &region_name, // the name of the region
             |mut region| {
@@ -359,7 +364,8 @@ impl<F: FieldExt + TensorType> Config<F> {
                         }
                     };
                     for i in 0..buffer_capacity {
-                        self.qlookup.enable(&mut region, i)?;
+                        let (x, y) = self.input.cartesian_coord(i);
+                        self.selectors.get(&x).unwrap().enable(&mut region, y)?;
                     }
                 };
 

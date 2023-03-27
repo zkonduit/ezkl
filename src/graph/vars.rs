@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::error::Error;
 
 use crate::commands::RunArgs;
@@ -102,14 +103,20 @@ impl<F: FieldExt + TensorType> ModelVars<F> {
         instance_dims: Vec<Vec<usize>>,
         visibility: VarVisibility,
     ) -> Self {
+        let base = 2u32;
+        let max_rows = min(
+            50000,
+            base.pow(logrows as u32) as usize - cs.blinding_factors() - 1,
+        );
+
         let advices = var_len
             .iter()
-            .map(|len| VarTensor::new_advice(cs, logrows, *len, vec![*len], true))
+            .map(|len| VarTensor::new_advice(cs, max_rows, *len, vec![*len], true))
             .collect_vec();
         let mut fixed = vec![];
         if visibility.params == Visibility::Public {
             fixed = (0..1)
-                .map(|_| VarTensor::new_fixed(cs, logrows, var_len[0], vec![var_len[0]], true))
+                .map(|_| VarTensor::new_fixed(cs, max_rows, var_len[0], vec![var_len[0]], true))
                 .collect_vec();
         }
         // will be empty if instances dims has len 0

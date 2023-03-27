@@ -567,7 +567,11 @@ impl Model {
                 results.insert(*idx, vt);
                 //only use with mock prover
                 if matches!(self.mode, Mode::Mock) {
-                    trace!("------------ output {:?}", results.get(idx).unwrap().show());
+                    trace!(
+                        "------------ output node {:?}: {:?}",
+                        idx,
+                        results.get(idx).unwrap().show()
+                    );
                 }
             }
         }
