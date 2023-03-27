@@ -242,7 +242,7 @@ impl Op {
             }
             Op::Matmul => {
                 let s = input_shapes.clone();
-                let output_len = s[0].iter().product::<usize>() * s[0][1];
+                let output_len = s[0].iter().product::<usize>() * s[1][1];
                 vec![output_len; 2]
             }
             Op::Rescaled { inner, .. } => inner.circuit_shapes(input_shapes),

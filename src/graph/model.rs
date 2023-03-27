@@ -833,6 +833,28 @@ impl Model {
             .sum();
         maximum_var_len += input_size;
 
+        let output_lens: usize = self
+            .output_shapes()
+            .iter()
+            .map(|s| s.iter().product::<usize>())
+            .sum::<usize>();
+
+        let input_lens: usize = self
+            .input_shapes()
+            .iter()
+            .map(|s| s.iter().product::<usize>())
+            .sum::<usize>();
+
+        if self.run_args.pack_base > 1 {
+            maximum_var_len += output_lens;
+        }
+        if matches!(self.visibility.output, Visibility::Public) {
+            maximum_var_len += output_lens;
+        }
+        if matches!(self.visibility.output, Visibility::Public) {
+            maximum_var_len += input_lens;
+        }
+
         maximum_var_len
     }
 

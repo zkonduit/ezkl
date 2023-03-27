@@ -1,3 +1,5 @@
+use crate::circuit::base::CheckMode;
+
 use super::*;
 /// A wrapper around Halo2's `Column<Fixed>` or `Column<Advice>`.
 /// The wrapper allows for `VarTensor`'s dimensions to differ from that of the inner (wrapped) columns.
@@ -53,7 +55,9 @@ impl VarTensor {
         let base = 2u32;
         let max_rows = base.pow(logrows as u32) as usize - cs.blinding_factors() - 1;
 
-        let modulo = (capacity / max_rows) + 1;
+        let mut modulo = (capacity / max_rows) + 1;
+        // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
+        modulo += ((capacity + modulo) / max_rows) + 1;
         let mut advices = vec![];
         for _ in 0..modulo {
             let col = cs.advice_column();
@@ -266,9 +270,6 @@ impl VarTensor {
                     let t: Tensor<i32> = Tensor::new(None, dims).unwrap();
                     t.enum_map(|coord, _| {
                         let (x, y) = self.cartesian_coord(offset + coord);
-                        if x > 0 {
-                            unimplemented!("multi-column instance variables will arrive in a future release but for now, increase K.")
-                        }
                         region.assign_advice_from_instance(
                             || "pub input anchor",
                             *instance,
@@ -317,6 +318,7 @@ impl VarTensor {
         region: &mut Region<'_, F>,
         offset: usize,
         values: &ValTensor<F>,
+        check_mode: &CheckMode
     ) -> Result<(Tensor<AssignedCell<F, F>>, usize), halo2_proofs::plonk::Error> {
         
         match values {
@@ -327,6 +329,12 @@ impl VarTensor {
                 let v = v.duplicate_every_n(self.col_size(), offset).unwrap();
                 let res = v.enum_map(|coord, k| {
                     let (x, y) = self.cartesian_coord(offset + coord);
+                    if matches!(check_mode, CheckMode::SAFE) { 
+                        if x > 0 && y == 0 {
+                            // assert that duplication occurred correctly
+                            assert_eq!(Into::<i32>::into(k.clone()), Into::<i32>::into(v[coord - 1].clone()));
+                        }
+                    };
                     match k {
                         ValType::Value(v) => match &self {
                             VarTensor::Fixed { inner: fixed, .. } => {
@@ -355,6 +363,21 @@ impl VarTensor {
                 let mut non_duplicated_res = res.remove_every_n(self.col_size(), offset).unwrap();
                 
                 non_duplicated_res.reshape(dims);
+
+                if matches!(check_mode, CheckMode::SAFE) {     
+                     // during key generation this will be 0 so we use this as a flag to check
+                     // TODO: this isn't very safe and would be better to get the phase directly
+                    let is_assigned = !Into::<Tensor<i32>>::into(ValTensor::from(non_duplicated_res.clone()).get_inner().unwrap())
+                    .iter()
+                    .all(|&x| x == 0);
+                    if is_assigned {       
+                        assert_eq!(
+                            Into::<Tensor<i32>>::into(values.get_inner().unwrap()),
+                            Into::<Tensor<i32>>::into(non_duplicated_res.clone())
+                    )};
+                }
+
+                
                 Ok((non_duplicated_res, res.len()))
             }
         }

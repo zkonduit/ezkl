@@ -1,5 +1,5 @@
 use core::panic;
-use std::{cmp::min, error::Error};
+use std::error::Error;
 
 use halo2_proofs::circuit::{Region, Value};
 use log::error;
@@ -32,8 +32,12 @@ pub fn dot<F: FieldExt + TensorType>(
         let inp = utils::value_muxer(
             &config.inputs[i],
             &{
-                let (res, len) =
-                    config.inputs[i].assign_with_duplication(region, *offset, input)?;
+                let (res, len) = config.inputs[i].assign_with_duplication(
+                    region,
+                    *offset,
+                    input,
+                    &config.check_mode,
+                )?;
                 assigned_len = len;
                 res.map(|e| e.value_field().evaluate())
             },
@@ -45,44 +49,33 @@ pub fn dot<F: FieldExt + TensorType>(
     // Now we can assign the dot product
     let accumulated_dot = accumulated::dot(&[inputs[0].clone(), inputs[1].clone()])
         .expect("accum poly: dot op failed");
-    let (output, output_assigned_len) =
-        config
-            .output
-            .assign_with_duplication(region, *offset, &accumulated_dot.into())?;
+    let (output, output_assigned_len) = config.output.assign_with_duplication(
+        region,
+        *offset,
+        &accumulated_dot.into(),
+        &config.check_mode,
+    )?;
 
     assert_eq!(assigned_len, output_assigned_len);
 
-    let (col_offset, row_offset) = config.output.cartesian_coord(*offset);
-    let num_cols = assigned_len / config.output.col_size() + 1;
-    for x in col_offset..(col_offset + num_cols) {
-        let current_col_size = if x == 0 {
-            min(assigned_len, config.output.col_size())
+    for i in 0..assigned_len {
+        let (x, y) = config.output.cartesian_coord(*offset + i);
+        // hop over duplicates at start of column
+        if y == 0 && i > 0 {
+            continue;
+        }
+        if i == 0 {
+            config
+                .selectors
+                .get(&(BaseOp::Mult, x))
+                .unwrap()
+                .enable(region, y)?;
         } else {
-            min(
-                assigned_len - x * config.output.col_size() + row_offset,
-                config.output.col_size(),
-            )
-        };
-
-        let row_rng = if x == 0 {
-            row_offset..current_col_size
-        } else {
-            1..current_col_size
-        };
-        for y in row_rng {
-            if y == 0 {
-                config
-                    .selectors
-                    .get(&(BaseOp::Mult, x))
-                    .unwrap()
-                    .enable(region, y)?;
-            } else {
-                config
-                    .selectors
-                    .get(&(BaseOp::Dot, x))
-                    .unwrap()
-                    .enable(region, y)?;
-            }
+            config
+                .selectors
+                .get(&(BaseOp::Dot, x))
+                .unwrap()
+                .enable(region, y)?;
         }
     }
 
@@ -90,7 +83,7 @@ pub fn dot<F: FieldExt + TensorType>(
         .get_slice(&[output.len() - 1..output.len()])
         .expect("accum poly: failed to fetch last elem");
 
-    if matches!(config.check_mode, CheckMode::SAFE) {
+    if matches!(&config.check_mode, CheckMode::SAFE) {
         let safe_dot = non_accum_dot(&inputs.iter().collect()).map_err(|e| {
             error!("{}", e);
             halo2_proofs::plonk::Error::Synthesis
@@ -101,6 +94,7 @@ pub fn dot<F: FieldExt + TensorType>(
             Into::<Tensor<i32>>::into(safe_dot),
         );
     }
+    *offset += assigned_len;
     // last element is the result
     Ok(ValTensor::from(last_elem))
 }
@@ -116,8 +110,12 @@ pub fn sum<F: FieldExt + TensorType>(
     let input = utils::value_muxer(
         &config.inputs[1],
         &{
-            let (res, len) =
-                config.inputs[1].assign_with_duplication(region, *offset, &values[0])?;
+            let (res, len) = config.inputs[1].assign_with_duplication(
+                region,
+                *offset,
+                &values[0],
+                &config.check_mode,
+            )?;
             assigned_len = len;
             res.map(|e| e.value_field().evaluate())
         },
@@ -127,45 +125,33 @@ pub fn sum<F: FieldExt + TensorType>(
     // Now we can assign the dot product
     let accumulated_sum = accumulated::sum(&input).expect("accum poly: sum op failed");
 
-    let (output, output_assigned_len) =
-        config
-            .output
-            .assign_with_duplication(region, *offset, &accumulated_sum.into())?;
+    let (output, output_assigned_len) = config.output.assign_with_duplication(
+        region,
+        *offset,
+        &accumulated_sum.into(),
+        &config.check_mode,
+    )?;
 
     assert_eq!(assigned_len, output_assigned_len);
 
-    let (col_offset, row_offset) = config.output.cartesian_coord(*offset);
-
-    let num_cols = assigned_len / config.output.col_size() + 1;
-    for x in col_offset..(col_offset + num_cols) {
-        let current_col_size = if x == 0 {
-            min(assigned_len, config.output.col_size())
+    for i in 0..assigned_len {
+        let (x, y) = config.output.cartesian_coord(*offset + i);
+        // skip over duplicates at start of column
+        if y == 0 && i > 0 {
+            continue;
+        }
+        if i == 0 {
+            config
+                .selectors
+                .get(&(BaseOp::Identity, x))
+                .unwrap()
+                .enable(region, y)?;
         } else {
-            min(
-                assigned_len - x * config.output.col_size() + row_offset,
-                config.output.col_size(),
-            )
-        };
-
-        let row_rng = if x == 0 {
-            row_offset..current_col_size
-        } else {
-            1..current_col_size
-        };
-        for y in row_rng {
-            if y == 0 {
-                config
-                    .selectors
-                    .get(&(BaseOp::Identity, x))
-                    .unwrap()
-                    .enable(region, y)?;
-            } else {
-                config
-                    .selectors
-                    .get(&(BaseOp::Sum, x))
-                    .unwrap()
-                    .enable(region, y)?;
-            }
+            config
+                .selectors
+                .get(&(BaseOp::Sum, x))
+                .unwrap()
+                .enable(region, y)?;
         }
     }
 
@@ -173,7 +159,7 @@ pub fn sum<F: FieldExt + TensorType>(
         .get_slice(&[output.len() - 1..output.len()])
         .expect("accum poly: failed to fetch last elem");
 
-    if matches!(config.check_mode, CheckMode::SAFE) {
+    if matches!(&config.check_mode, CheckMode::SAFE) {
         let safe_dot = non_accum_sum(&input).map_err(|e| {
             error!("{}", e);
             halo2_proofs::plonk::Error::Synthesis
@@ -185,7 +171,7 @@ pub fn sum<F: FieldExt + TensorType>(
         )
     }
 
-    *offset += input.len();
+    *offset += assigned_len;
     // last element is the result
     Ok(ValTensor::from(last_elem))
 }
@@ -240,7 +226,7 @@ pub fn pairwise<F: FieldExt + TensorType>(
             .enable(region, y)?;
     }
 
-    *offset += inputs[0].len();
+    *offset += output.len();
 
     Ok(ValTensor::from(output))
 }
@@ -279,7 +265,12 @@ pub fn matmul<F: FieldExt + TensorType>(
         let inp = utils::value_muxer(
             &config.inputs[i],
             &{
-                let (res, len) = config.inputs[i].assign_with_duplication(region, *offset, elem)?;
+                let (res, len) = config.inputs[i].assign_with_duplication(
+                    region,
+                    *offset,
+                    elem,
+                    &config.check_mode,
+                )?;
                 assigned_len = len;
                 res.map(|e| e.value_field().evaluate())
             },
@@ -287,8 +278,6 @@ pub fn matmul<F: FieldExt + TensorType>(
         );
         inputs.push(inp);
     }
-
-    let offset_from_matmul = inputs[0].len();
 
     // remove any repeats from the assignment
     if num_a_repeats > 1 {
@@ -315,47 +304,36 @@ pub fn matmul<F: FieldExt + TensorType>(
     let accumulated_matmul = accumulated::matmul(&[inputs[0].clone(), inputs[1].clone()])
         .expect("accum poly: matmul op failed");
 
-    let (output, output_assigned_len) =
-        config
-            .output
-            .assign_with_duplication(region, *offset, &accumulated_matmul.into())?;
+    let (output, output_assigned_len) = config.output.assign_with_duplication(
+        region,
+        *offset,
+        &accumulated_matmul.into(),
+        &config.check_mode,
+    )?;
 
     assert_eq!(assigned_len, output_assigned_len);
 
-    let (col_offset, row_offset) = config.output.cartesian_coord(*offset);
-    let num_cols = assigned_len / config.output.col_size() + 1;
-    let mut i = 0;
-    for x in col_offset..(col_offset + num_cols) {
-        let current_col_size = if x == 0 {
-            min(assigned_len, config.output.col_size())
-        } else {
-            min(
-                assigned_len - x * config.output.col_size() + row_offset,
-                config.output.col_size(),
-            )
-        };
-
-        let row_rng = if x == 0 {
-            row_offset..current_col_size
-        } else {
-            1..current_col_size
-        };
-        for y in row_rng {
-            if i % b_row_len > 0 {
-                config
-                    .selectors
-                    .get(&(BaseOp::Dot, x))
-                    .unwrap()
-                    .enable(region, y)?;
-            } else {
-                config
-                    .selectors
-                    .get(&(BaseOp::Mult, x))
-                    .unwrap()
-                    .enable(region, y)?;
-            }
-            i += 1;
+    let mut idx_wo_duplicates = 0;
+    for i in 0..assigned_len {
+        let (x, y) = config.output.cartesian_coord(*offset + i);
+        // skip over duplicates at start of column
+        if y == 0 && i > 0 {
+            continue;
         }
+        if idx_wo_duplicates % b_row_len > 0 {
+            config
+                .selectors
+                .get(&(BaseOp::Dot, x))
+                .unwrap()
+                .enable(region, y)?;
+        } else {
+            config
+                .selectors
+                .get(&(BaseOp::Mult, x))
+                .unwrap()
+                .enable(region, y)?;
+        }
+        idx_wo_duplicates += 1;
     }
 
     let dims = output.dims();
@@ -373,7 +351,7 @@ pub fn matmul<F: FieldExt + TensorType>(
 
     last_elem.reshape(&[values[0].dims()[0], values[1].dims()[1]]);
 
-    if matches!(config.check_mode, CheckMode::SAFE) {
+    if matches!(&config.check_mode, CheckMode::SAFE) {
         let safe_mm = non_accum_matmul(&inputs).map_err(|e| {
             error!("{}", e);
             halo2_proofs::plonk::Error::Synthesis
@@ -385,7 +363,7 @@ pub fn matmul<F: FieldExt + TensorType>(
         )
     }
 
-    *offset += offset_from_matmul;
+    *offset += assigned_len;
     // Now we can assign the matmul op
     Ok(ValTensor::from(last_elem))
 }
@@ -410,7 +388,7 @@ pub fn affine<F: FieldExt + TensorType>(
     let mut last_elem = matmul(config, region, &[params, input], offset)?;
     last_elem.flatten();
 
-    if matches!(config.check_mode, CheckMode::SAFE) {
+    if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !Into::<Tensor<i32>>::into(last_elem.clone().get_inner()?)
@@ -470,7 +448,7 @@ pub fn sumpool<F: FieldExt + TensorType>(
     });
     last_elem.reshape(&[&[image_channels], shape].concat())?;
 
-    if matches!(config.check_mode, CheckMode::SAFE) {
+    if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !Into::<Tensor<i32>>::into(last_elem.clone().get_inner()?)
@@ -567,7 +545,7 @@ pub fn conv<F: FieldExt + TensorType>(
 
     res.reshape(&[output_channels, vert_slides, horz_slides])?;
 
-    if matches!(config.check_mode, CheckMode::SAFE) {
+    if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !Into::<Tensor<i32>>::into(res.clone().get_inner()?)
@@ -616,7 +594,7 @@ pub fn pow<F: FieldExt + TensorType>(
         )?;
     }
 
-    if matches!(config.check_mode, CheckMode::SAFE) {
+    if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !Into::<Tensor<i32>>::into(t.get_inner()?)
@@ -658,7 +636,7 @@ pub fn rescale<F: FieldExt + TensorType>(
             offset,
             BaseOp::Mult,
         )?;
-        if matches!(config.check_mode, CheckMode::SAFE) {
+        if matches!(&config.check_mode, CheckMode::SAFE) {
             // during key generation this will be 0 so we use this as a flag to check
             // TODO: this isn't very safe and would be better to get the phase directly
             let is_assigned = !Into::<Tensor<i32>>::into(scaled_input.clone().get_inner()?)
@@ -718,7 +696,7 @@ pub fn pack<F: FieldExt + TensorType>(
 
     let res = sum(config, region, &[base_prod], offset)?;
 
-    if matches!(config.check_mode, CheckMode::SAFE) {
+    if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !Into::<Tensor<i32>>::into(res.get_inner()?)
@@ -762,7 +740,7 @@ pub fn identity<F: FieldExt + TensorType>(
         .output
         .assign(region, *offset, &values[0].clone().into())?;
 
-    *offset += values[0].len();
+    *offset += output.len();
 
     Ok(output.into())
 }
@@ -778,7 +756,7 @@ pub fn scale_and_shift<F: FieldExt + TensorType>(
     let prod = pairwise(config, region, &[input, kernel], offset, BaseOp::Mult)?;
     let res = pairwise(config, region, &[prod, bias], offset, BaseOp::Add)?;
 
-    if matches!(config.check_mode, CheckMode::SAFE) {
+    if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !Into::<Tensor<i32>>::into(res.get_inner()?)
@@ -827,7 +805,7 @@ pub fn range_check<F: FieldExt + TensorType>(
             .enable(region, y)?;
     }
 
-    *offset += values[0].len();
+    *offset += output.len();
 
     Ok(output.into())
 }
