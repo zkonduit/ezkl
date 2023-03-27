@@ -65,44 +65,26 @@ jobs:
           toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
-      - name: Bench matmul
-        run: cargo bench --verbose --bench matmul
       - name: Bench accum matmul
         run: cargo bench --verbose --bench accum_matmul
       - name: Bench accum matmul relu
         run: cargo bench --verbose --bench accum_matmul_relu
       - name: Bench relu
         run: cargo bench --verbose --bench relu
-      - name: Bench dot
-        run: cargo bench --verbose --bench dot
       - name: Bench accum dot
         run: cargo bench --verbose --bench accum_dot
-      - name: Bench affine
-        run: cargo bench --verbose --bench affine
       - name: Bench accum affine
         run: cargo bench --verbose --bench accum_affine
-      - name: Bench conv
-        run: cargo bench --verbose --bench conv
       - name: Bench accum conv
         run: cargo bench --verbose --bench accum_conv
-      - name: Bench sumpool
-        run: cargo bench --verbose --bench sumpool
       - name: Bench accum sumpool
         run: cargo bench --verbose --bench accum_sumpool
-      - name: Bench add
-        run: cargo bench --verbose --bench add
       - name: Bench pairwise add
         run: cargo bench --verbose --bench pairwise_add
-      - name: Bench sum
-        run: cargo bench --verbose --bench sum
       - name: Bench accum sum
         run: cargo bench --verbose --bench accum_sum
-      - name: Bench pow
-        run: cargo bench --verbose --bench pow
       - name: Bench pairwise pow
         run: cargo bench --verbose --bench pairwise_pow
-      - name: Bench pack
-        run: cargo bench --verbose --bench pack
       - name: Bench accum pack
         run: cargo bench --verbose --bench accum_pack
 
