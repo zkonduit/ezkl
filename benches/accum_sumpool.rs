@@ -51,18 +51,24 @@ impl Circuit<Fr> for MyCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        config
-            .layout(
-                &mut layouter,
-                &[self.image.clone()],
-                0,
-                Op::SumPool {
-                    padding: (0, 0),
-                    stride: (1, 1),
-                    kernel_shape: (2, 2),
-                },
-            )
-            .unwrap();
+        layouter.assign_region(
+            || "",
+            |mut region| {
+                config
+                    .layout(
+                        &mut region,
+                        &[self.image.clone()],
+                        &mut 0,
+                        Op::SumPool {
+                            padding: (0, 0),
+                            stride: (1, 1),
+                            kernel_shape: (2, 2),
+                        },
+                    )
+                    .unwrap();
+                Ok(())
+            },
+        )?;
         Ok(())
     }
 }

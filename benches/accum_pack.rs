@@ -47,9 +47,15 @@ impl Circuit<Fr> for MyCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        config
-            .layout(&mut layouter, &self.inputs, 0, Op::Pack(2, 1))
-            .unwrap();
+        layouter.assign_region(
+            || "",
+            |mut region| {
+                config
+                    .layout(&mut region, &self.inputs, &mut 0, Op::Pack(2, 1))
+                    .unwrap();
+                Ok(())
+            },
+        )?;
         Ok(())
     }
 }

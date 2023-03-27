@@ -318,13 +318,13 @@ impl VarTensor {
         offset: usize,
         values: &ValTensor<F>,
     ) -> Result<(Tensor<AssignedCell<F, F>>, usize), halo2_proofs::plonk::Error> {
-       
+        
         match values {
         
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
             ValTensor::Value { inner: v, dims } => {
                 // duplicates every nth element to adjust for column overflow               
-                let v = v.duplicate_every_n(self.col_size()).unwrap();
+                let v = v.duplicate_every_n(self.col_size(), offset).unwrap();
                 let res = v.enum_map(|coord, k| {
                     let (x, y) = self.cartesian_coord(offset + coord);
                     match k {
@@ -352,7 +352,7 @@ impl VarTensor {
                         },
                     }
                 })?;
-                let mut non_duplicated_res = res.remove_every_n(self.col_size()).unwrap();
+                let mut non_duplicated_res = res.remove_every_n(self.col_size(), offset).unwrap();
                 
                 non_duplicated_res.reshape(dims);
                 Ok((non_duplicated_res, res.len()))

@@ -43,9 +43,17 @@ mod matmul {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Matmul)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut &mut 0, Op::Matmul)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
+
             Ok(())
         }
     }
@@ -103,8 +111,15 @@ mod matmul_col_overflow {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Matmul)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Matmul)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -163,8 +178,15 @@ mod dot {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Dot)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Dot)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -221,8 +243,15 @@ mod dot_col_overflow {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Dot)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Dot)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -279,8 +308,15 @@ mod sum {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Sum)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Sum)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -335,8 +371,15 @@ mod sum_col_overflow {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Sum)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Sum)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -391,8 +434,15 @@ mod batchnorm {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::BatchNorm)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::BatchNorm)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -455,8 +505,15 @@ mod affine {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Affine)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Affine)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -519,8 +576,15 @@ mod affine_col_overflow {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Affine)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Affine)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -583,14 +647,22 @@ mod composition {
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             // lots of stacked dot products
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Dot)
-                .unwrap();
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), LEN, Op::Dot)
-                .unwrap();
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 2 * LEN, Op::Dot)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        let mut offset = 0;
+                        let _ = config
+                            .layout(&mut region, &self.inputs.clone(), &mut offset, Op::Dot)
+                            .unwrap();
+                        let _ = config
+                            .layout(&mut region, &self.inputs.clone(), &mut offset, Op::Dot)
+                            .unwrap();
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut offset, Op::Dot)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -648,14 +720,21 @@ mod conv {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(
-                    &mut layouter,
-                    &self.inputs.clone(),
-                    0,
-                    Op::Conv {
-                        padding: (1, 1),
-                        stride: (2, 2),
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Op::Conv {
+                                    padding: (1, 1),
+                                    stride: (2, 2),
+                                },
+                            )
+                            .map_err(|_| Error::Synthesis)
                     },
                 )
                 .unwrap();
@@ -766,15 +845,22 @@ mod sumpool {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(
-                    &mut layouter,
-                    &self.inputs.clone(),
-                    0,
-                    Op::SumPool {
-                        padding: (0, 0),
-                        stride: (1, 1),
-                        kernel_shape: (3, 3),
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Op::SumPool {
+                                    padding: (0, 0),
+                                    stride: (1, 1),
+                                    kernel_shape: (3, 3),
+                                },
+                            )
+                            .map_err(|_| Error::Synthesis)
                     },
                 )
                 .unwrap();
@@ -838,8 +924,15 @@ mod add {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Add)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Add)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -896,8 +989,15 @@ mod add_with_overflow {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Add)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Add)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -954,8 +1054,15 @@ mod sub {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Sub)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Sub)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -1012,8 +1119,15 @@ mod mult {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Mult)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Mult)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -1070,8 +1184,15 @@ mod pow {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Pow(5))
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Pow(5))
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -1126,8 +1247,15 @@ mod pack {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Pack(2, 1))
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Pack(2, 1))
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -1182,14 +1310,21 @@ mod rescaled {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(
-                    &mut layouter,
-                    &self.inputs.clone(),
-                    0,
-                    Op::Rescaled {
-                        inner: Box::new(Op::Sum),
-                        scale: vec![(0, 5)],
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Op::Rescaled {
+                                    inner: Box::new(Op::Sum),
+                                    scale: vec![(0, 5)],
+                                },
+                            )
+                            .map_err(|_| Error::Synthesis)
                     },
                 )
                 .unwrap();
@@ -1258,12 +1393,19 @@ mod rangecheck {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(
-                    &mut layouter,
-                    &[self.input.clone(), self.output.clone()],
-                    0,
-                    Op::RangeCheck(RANGE as i32),
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(
+                                &mut region,
+                                &[self.input.clone(), self.output.clone()],
+                                &mut 0,
+                                Op::RangeCheck(RANGE as i32),
+                            )
+                            .map_err(|_| Error::Synthesis)
+                    },
                 )
                 .unwrap();
             Ok(())

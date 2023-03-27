@@ -16,12 +16,14 @@ use anyhow::Context;
 //use clap::Parser;
 use anyhow::Error as AnyError;
 use core::panic;
+use halo2_proofs::circuit::Region;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
     plonk::ConstraintSystem,
 };
 use itertools::Itertools;
+use log::error;
 use log::{debug, info, trace};
 use std::cell::RefCell;
 use std::cmp::max;
@@ -532,67 +534,98 @@ impl Model {
                 results.insert(i, input_value.clone());
             }
         }
-        for (idx, config) in config.configs.iter() {
-            if let Some(vt) = self.layout_config(layouter, &mut results, config)? {
-                // we get the max as for fused nodes this corresponds to the node output
-                results.insert(*idx, vt);
-                //only use with mock prover
-                if matches!(self.mode, Mode::Mock) {
-                    trace!(
-                        "------------ output node {:?}: {:?}",
-                        idx,
-                        results.get(idx).unwrap().show()
-                    );
-                }
-            }
-        }
 
-        let output_nodes = self.model.outputs.iter();
-        info!(
-            "model outputs are nodes: {:?}",
-            output_nodes.clone().map(|o| o.node).collect_vec()
-        );
-        let mut outputs = output_nodes
-            .map(|o| results.get(&o.node).unwrap().clone())
-            .collect_vec();
+        let mut offset: usize = 0;
 
-        // pack outputs if need be
-        for (i, packed_output) in config.packed_outputs.iter_mut().enumerate() {
-            info!("packing outputs...");
-            outputs[i] = packed_output.borrow_mut().layout(
-                &mut layouter.namespace(|| "pack outputs"),
-                &outputs[i..i + 1],
-                0,
-                PolyOp::Pack(self.run_args.pack_base, self.run_args.scale),
-            )?;
-            // only use with mock prover
-            if matches!(self.mode, Mode::Mock) {
-                trace!("------------ packed output {:?}", outputs[i].show());
-            }
-        }
-
-        let _ = config
-            .range_checks
+        // layout any lookup tables
+        let _: Vec<()> = config
+            .configs
             .iter()
-            .zip(outputs)
-            .enumerate()
-            .map(|(i, (range_check, output))| {
-                let mut offset = 0;
-                if self.visibility.input.is_public() {
-                    offset += inputs.len();
-                };
-                range_check.borrow_mut().layout(
-                    &mut layouter.namespace(|| "range check outputs"),
-                    &[
-                        output,
-                        vars.instances[offset + i].clone(),
-                        vars.instances[offset + i].clone(),
-                    ],
-                    0,
-                    PolyOp::RangeCheck(self.run_args.tolerance as i32),
-                )
+            .map(|(_, c)| match c {
+                NodeConfig::Lookup { config, .. } => config.borrow_mut().layout_table(layouter),
+                _ => Ok(()),
             })
-            .collect_vec();
+            .collect::<Result<Vec<()>, _>>()?;
+
+        layouter.assign_region(
+            || "model",
+            |mut region| {
+                for (idx, config) in config.configs.iter() {
+                    if let Some(vt) = self
+                        .layout_config(&mut region, &mut results, config, &mut offset)
+                        .map_err(|e| {
+                            error!("{}", e);
+                            halo2_proofs::plonk::Error::Synthesis
+                        })?
+                    {
+                        // we get the max as for fused nodes this corresponds to the node output
+                        results.insert(*idx, vt);
+                        //only use with mock prover
+                        if matches!(self.mode, Mode::Mock) {
+                            trace!(
+                                "------------ output node {:?}: {:?}",
+                                idx,
+                                results.get(idx).unwrap().show()
+                            );
+                        }
+                    }
+                }
+
+                let output_nodes = self.model.outputs.iter();
+                info!(
+                    "model outputs are nodes: {:?}",
+                    output_nodes.clone().map(|o| o.node).collect_vec()
+                );
+                let mut outputs = output_nodes
+                    .map(|o| results.get(&o.node).unwrap().clone())
+                    .collect_vec();
+
+                // pack outputs if need be
+                for (i, packed_output) in config.packed_outputs.iter_mut().enumerate() {
+                    info!("packing outputs...");
+                    outputs[i] = packed_output
+                        .borrow_mut()
+                        .layout(
+                            &mut region,
+                            &outputs[i..i + 1],
+                            &mut offset,
+                            PolyOp::Pack(self.run_args.pack_base, self.run_args.scale),
+                        )
+                        .map_err(|e| {
+                            error!("{}", e);
+                            halo2_proofs::plonk::Error::Synthesis
+                        })?;
+                    // only use with mock prover
+                    if matches!(self.mode, Mode::Mock) {
+                        trace!("------------ packed output {:?}", outputs[i].show());
+                    }
+                }
+
+                let _ = config
+                    .range_checks
+                    .iter()
+                    .zip(outputs)
+                    .enumerate()
+                    .map(|(i, (range_check, output))| {
+                        let mut offset = 0;
+                        if self.visibility.input.is_public() {
+                            offset += inputs.len();
+                        };
+                        range_check.borrow_mut().layout(
+                            &mut region,
+                            &[
+                                output,
+                                vars.instances[offset + i].clone(),
+                                vars.instances[offset + i].clone(),
+                            ],
+                            &mut offset,
+                            PolyOp::RangeCheck(self.run_args.tolerance as i32),
+                        )
+                    })
+                    .collect_vec();
+                Ok(())
+            },
+        )?;
         info!("computing...");
         Ok(())
     }
@@ -605,9 +638,10 @@ impl Model {
     /// * `inputs` - [BTreeMap] of values to feed into the [NodeConfig], can also include previous intermediate results, i.e the output of other nodes.
     fn layout_config<F: FieldExt + TensorType>(
         &self,
-        layouter: &mut impl Layouter<F>,
+        region: &mut Region<F>,
         inputs: &mut BTreeMap<usize, ValTensor<F>>,
         config: &NodeConfig<F>,
+        offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         // The node kind and the config should be the same.
         let res = match config.clone() {
@@ -634,12 +668,11 @@ impl Model {
                     })
                     .collect_vec();
 
-                Some(config.borrow_mut().layout(
-                    &mut layouter.namespace(|| "net"),
-                    &values,
-                    0,
-                    op,
-                )?)
+                let res = config
+                    .borrow_mut()
+                    .layout(region, &values, offset, op.clone())?;
+
+                Some(res)
             }
             NodeConfig::Lookup {
                 config,
@@ -648,11 +681,14 @@ impl Model {
                 if idx.len() != 1 {
                     return Err(Box::new(GraphError::InvalidLookupInputs));
                 }
+
+                let res =
+                    config
+                        .borrow_mut()
+                        .layout(region, inputs.get(&idx[0]).unwrap(), offset)?;
+
                 // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
-                Some(config.borrow_mut().layout(
-                    &mut layouter.namespace(|| "net"),
-                    inputs.get(&idx[0]).unwrap(),
-                )?)
+                Some(res)
             }
             NodeConfig::Input => None,
             NodeConfig::Const => None,
@@ -760,8 +796,8 @@ impl Model {
     }
 
     /// Maximum number of input variables
-    pub fn max_input_var_len(&self) -> Vec<usize> {
-        let mut maximum_sizes = vec![0; 3];
+    pub fn max_input_var_len(&self) -> usize {
+        let mut maximum_var_len = 0;
 
         let poly_ops: BTreeMap<&usize, &Node> = self
             .nodes
@@ -778,11 +814,7 @@ impl Model {
                         .iter()
                         .map(|i| self.nodes.get(&i.node).unwrap().out_dims.clone());
                     let layout_shape = p.circuit_shapes(in_dims.collect_vec());
-                    maximum_sizes = maximum_sizes
-                        .iter()
-                        .zip(layout_shape)
-                        .map(|(a, b)| max(*a, b))
-                        .collect_vec();
+                    maximum_var_len += layout_shape.last().unwrap();
                 }
                 _ => panic!(),
             })
@@ -799,11 +831,9 @@ impl Model {
             .iter()
             .map(|(_, n)| (*n.in_dims[0]).into_iter().product::<usize>())
             .sum();
-        maximum_sizes = maximum_sizes
-            .iter()
-            .map(|a| max(*a, input_size))
-            .collect_vec();
-        maximum_sizes
+        maximum_var_len += input_size;
+
+        maximum_var_len
     }
 
     /// Number of instances used by the circuit

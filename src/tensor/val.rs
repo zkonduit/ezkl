@@ -254,10 +254,14 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     }
 
     /// Calls `duplicate_every_n` on the inner [Tensor].
-    pub fn duplicate_every_n(&mut self, n: usize) -> Result<(), TensorError> {
+    pub fn duplicate_every_n(
+        &mut self,
+        n: usize,
+        initial_offset: usize,
+    ) -> Result<(), TensorError> {
         match self {
             ValTensor::Value { inner: v, dims: d } => {
-                *v = v.duplicate_every_n(n)?;
+                *v = v.duplicate_every_n(n, initial_offset)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
@@ -268,10 +272,10 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     }
 
     /// Calls `duplicate_every_n` on the inner [Tensor].
-    pub fn remove_every_n(&mut self, n: usize) -> Result<(), TensorError> {
+    pub fn remove_every_n(&mut self, n: usize, initial_offset: usize) -> Result<(), TensorError> {
         match self {
             ValTensor::Value { inner: v, dims: d } => {
-                *v = v.remove_every_n(n)?;
+                *v = v.remove_every_n(n, initial_offset)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {

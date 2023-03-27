@@ -493,12 +493,20 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// use ezkl_lib::tensor::Tensor;
     /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
     /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 3, 4, 5, 5, 6]), &[8]).unwrap();
-    /// assert_eq!(a.duplicate_every_n(3).unwrap(), expected);
-    /// assert_eq!(a.duplicate_every_n(7).unwrap(), a);
+    /// assert_eq!(a.duplicate_every_n(3, 0).unwrap(), expected);
+    /// assert_eq!(a.duplicate_every_n(7, 0).unwrap(), a);
+    ///
+    /// let expected = Tensor::<i32>::new(Some(&[1, 1, 2, 3, 3, 4, 5, 5, 6]), &[9]).unwrap();
+    /// assert_eq!(a.duplicate_every_n(3, 2).unwrap(), expected);
+    ///
     /// ```
-    pub fn duplicate_every_n(&self, n: usize) -> Result<Tensor<T>, TensorError> {
+    pub fn duplicate_every_n(
+        &self,
+        n: usize,
+        initial_offset: usize,
+    ) -> Result<Tensor<T>, TensorError> {
         let mut inner: Vec<T> = vec![];
-        let mut offset = 0;
+        let mut offset = initial_offset;
         for (i, elem) in self.inner.clone().into_iter().enumerate() {
             if (i + offset + 1) % n == 0 {
                 inner.extend(vec![elem; 2].into_iter());
@@ -516,16 +524,23 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// use ezkl_lib::tensor::Tensor;
     /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 3, 4, 5, 6, 6]), &[8]).unwrap();
     /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
-    /// assert_eq!(a.remove_every_n(4).unwrap(), expected);
+    /// assert_eq!(a.remove_every_n(4, 0).unwrap(), expected);
     ///
     /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 3, 4, 5, 6]), &[7]).unwrap();
-    /// assert_eq!(a.remove_every_n(4).unwrap(), expected);
-    /// assert_eq!(a.remove_every_n(9).unwrap(), a);
+    /// assert_eq!(a.remove_every_n(4, 0).unwrap(), expected);
+    /// assert_eq!(a.remove_every_n(9, 0).unwrap(), a);
     ///
-    pub fn remove_every_n(&self, n: usize) -> Result<Tensor<T>, TensorError> {
+    /// let a = Tensor::<i32>::new(Some(&[1, 1, 2, 3, 3, 4, 5, 5, 6]), &[9]).unwrap();
+    /// assert_eq!(a.remove_every_n(3, 2).unwrap(), expected);
+    ///
+    pub fn remove_every_n(
+        &self,
+        n: usize,
+        initial_offset: usize,
+    ) -> Result<Tensor<T>, TensorError> {
         let mut inner: Vec<T> = vec![];
         for (i, elem) in self.inner.clone().into_iter().enumerate() {
-            if (i + 1) % n == 0 {
+            if (i + initial_offset + 1) % n == 0 {
             } else {
                 inner.push(elem.clone());
             }

@@ -6,7 +6,7 @@ pub mod layouts;
 mod tests;
 
 use halo2_proofs::{
-    circuit::Layouter,
+    circuit::Region,
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
 };
 use halo2curves::FieldExt;
@@ -198,12 +198,17 @@ impl Op {
                 let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
                 let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
 
-                let output_len = output_channels
-                    * vert_slides
-                    * horz_slides
-                    * image_dims.iter().product::<usize>();
+                let input_shapes = vec![
+                    vec![
+                        output_channels * vert_slides * horz_slides,
+                        (image_dims.iter().product::<usize>() + 1),
+                    ],
+                    vec![(image_dims.iter().product::<usize>() + 1), 1],
+                ];
+                let op = Op::Matmul;
+                let output_len = op.circuit_shapes(input_shapes);
 
-                vec![output_len; 2]
+                vec![*output_len.last().unwrap(); 2]
             }
             Op::SumPool {
                 padding,
@@ -217,24 +222,28 @@ impl Op {
                 let vert_slides = (image_height + 2 * padding.0 - kernel_shape.0) / stride.0 + 1;
                 let horz_slides = (image_width + 2 * padding.1 - kernel_shape.1) / stride.1 + 1;
 
-                let output_len = image_dims[0]
-                    * vert_slides
-                    * horz_slides
-                    // add 1 cause of bias
-                    * (image_dims.iter().product::<usize>() + 1);
+                let input_shapes = vec![
+                    vec![
+                        image_dims[0] * vert_slides * horz_slides,
+                        (image_dims.iter().product::<usize>() + 1),
+                    ],
+                    vec![(image_dims.iter().product::<usize>() + 1), 1],
+                ];
+                let op = Op::Matmul;
+                let output_len = op.circuit_shapes(input_shapes);
 
-                vec![output_len; 2]
+                vec![*output_len.last().unwrap(); 2]
             }
             Op::Affine => {
                 let s = input_shapes.clone();
                 // add 1 cause of bias
                 let output_len = s[1][0] * (s[1][1] + 1);
-                vec![output_len; 3]
+                vec![output_len; 2]
             }
             Op::Matmul => {
                 let s = input_shapes.clone();
-                let output_len = s[1].iter().product::<usize>() * s[0][1];
-                vec![output_len; 3]
+                let output_len = s[0].iter().product::<usize>() * s[0][1];
+                vec![output_len; 2]
             }
             Op::Rescaled { inner, .. } => inner.circuit_shapes(input_shapes),
             Op::RangeCheck(..) => input_shapes.iter().map(|x| x.iter().product()).collect(),
@@ -481,28 +490,28 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
     /// * `op` - The operation being represented.
     pub fn layout(
         &mut self,
-        layouter: &mut impl Layouter<F>,
+        region: &mut Region<F>,
         values: &[ValTensor<F>],
-        offset: usize,
+        offset: &mut usize,
         op: Op,
     ) -> Result<ValTensor<F>, Box<dyn Error>> {
         let mut cp_values = vec![];
         for v in values.iter() {
             if let ValTensor::Instance { .. } = v {
-                cp_values.push(layouts::identity(self, layouter, &[v.clone()], offset)?);
+                cp_values.push(layouts::identity(self, region, &[v.clone()], offset)?);
             } else {
                 cp_values.push(v.clone());
             }
         }
         trace!("laying out {}", op);
         match op {
-            Op::Dot => layouts::dot(self, layouter, cp_values[..].try_into()?, offset),
-            Op::Sum => layouts::sum(self, layouter, cp_values[..].try_into()?, offset),
-            Op::Matmul => layouts::matmul(self, layouter, cp_values[..].try_into()?, offset),
-            Op::Affine => layouts::affine(self, layouter, cp_values[..].try_into()?, offset),
+            Op::Dot => layouts::dot(self, region, cp_values[..].try_into()?, offset),
+            Op::Sum => layouts::sum(self, region, cp_values[..].try_into()?, offset),
+            Op::Matmul => layouts::matmul(self, region, cp_values[..].try_into()?, offset),
+            Op::Affine => layouts::affine(self, region, cp_values[..].try_into()?, offset),
             Op::Conv { padding, stride } => layouts::conv(
                 self,
-                layouter,
+                region,
                 cp_values[..].try_into()?,
                 padding,
                 stride,
@@ -514,41 +523,33 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                 kernel_shape,
             } => layouts::sumpool(
                 self,
-                layouter,
+                region,
                 cp_values[..].try_into()?,
                 padding,
                 stride,
                 kernel_shape,
                 offset,
             ),
-            Op::Add => layouts::pairwise(
-                self,
-                layouter,
-                cp_values[..].try_into()?,
-                offset,
-                BaseOp::Add,
-            ),
-            Op::Sub => layouts::pairwise(
-                self,
-                layouter,
-                cp_values[..].try_into()?,
-                offset,
-                BaseOp::Sub,
-            ),
+            Op::Add => {
+                layouts::pairwise(self, region, cp_values[..].try_into()?, offset, BaseOp::Add)
+            }
+            Op::Sub => {
+                layouts::pairwise(self, region, cp_values[..].try_into()?, offset, BaseOp::Sub)
+            }
             Op::Mult => layouts::pairwise(
                 self,
-                layouter,
+                region,
                 cp_values[..].try_into()?,
                 offset,
                 BaseOp::Mult,
             ),
-            Op::Identity => layouts::identity(self, layouter, cp_values[..].try_into()?, offset),
+            Op::Identity => layouts::identity(self, region, cp_values[..].try_into()?, offset),
             Op::Reshape(d) | Op::Flatten(d) => layouts::reshape(cp_values[..].try_into()?, &d),
             Op::BatchNorm => {
-                layouts::scale_and_shift(self, layouter, cp_values[..].try_into()?, offset)
+                layouts::scale_and_shift(self, region, cp_values[..].try_into()?, offset)
             }
             Op::ScaleAndShift => {
-                layouts::scale_and_shift(self, layouter, cp_values[..].try_into()?, offset)
+                layouts::scale_and_shift(self, region, cp_values[..].try_into()?, offset)
             }
             Op::Pad(p1, p2) => {
                 if values.len() != 1 {
@@ -558,15 +559,10 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                 input.pad((p1, p2))?;
                 Ok(input)
             }
-            Op::Pow(exp) => layouts::pow(self, layouter, cp_values[..].try_into()?, exp, offset),
-            Op::Pack(base, scale) => layouts::pack(
-                self,
-                layouter,
-                cp_values[..].try_into()?,
-                base,
-                scale,
-                offset,
-            ),
+            Op::Pow(exp) => layouts::pow(self, region, cp_values[..].try_into()?, exp, offset),
+            Op::Pack(base, scale) => {
+                layouts::pack(self, region, cp_values[..].try_into()?, base, scale, offset)
+            }
             Op::Rescaled { inner, scale } => {
                 if scale.len() != values.len() {
                     return Err(Box::new(TensorError::DimMismatch(
@@ -574,17 +570,12 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                     )));
                 }
 
-                let res = &layouts::rescale(
-                    self,
-                    layouter,
-                    cp_values[..].try_into()?,
-                    &scale,
-                    offset,
-                )?[..];
-                self.layout(layouter, res, offset, *inner)
+                let res =
+                    &layouts::rescale(self, region, cp_values[..].try_into()?, &scale, offset)?[..];
+                self.layout(region, res, offset, *inner)
             }
             Op::RangeCheck(tol) => {
-                layouts::range_check(self, layouter, cp_values[..].try_into()?, offset, tol)
+                layouts::range_check(self, region, cp_values[..].try_into()?, offset, tol)
             }
             Op::GlobalSumPool => unreachable!(),
         }

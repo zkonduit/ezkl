@@ -63,11 +63,20 @@ impl Circuit<Fr> for MyCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        let output = config
-            .base_config
-            .layout(&mut layouter, &self.inputs, 0, Op::Matmul)
-            .unwrap();
-        let _output = config.l1.layout(&mut layouter, &output).unwrap();
+        layouter.assign_region(
+            || "",
+            |mut region| {
+                let op = Op::Matmul;
+                let mut offset = 0;
+                let output = config
+                    .base_config
+                    .layout(&mut region, &self.inputs, &mut offset, op.clone())
+                    .unwrap();
+                let _output = config.l1.layout(&mut region, &output, &mut offset).unwrap();
+                Ok(())
+            },
+        )?;
+
         Ok(())
     }
 }

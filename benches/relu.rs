@@ -48,8 +48,13 @@ impl Circuit<Fr> for NLCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>, // layouter is our 'write buffer' for the circuit
     ) -> Result<(), Error> {
-        config.layout(&mut layouter, &self.input).unwrap();
-
+        layouter.assign_region(
+            || "",
+            |mut region| {
+                config.layout(&mut region, &self.input, &mut 0).unwrap();
+                Ok(())
+            },
+        )?;
         Ok(())
     }
 }
