@@ -9,12 +9,10 @@ use ezkl_lib::tensor::*;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2_proofs::poly::kzg::strategy::SingleStrategy;
 use halo2_proofs::{
-    arithmetic::Field,
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error},
 };
 use halo2curves::bn256::{Bn256, Fr};
-use rand::rngs::OsRng;
 use std::marker::PhantomData;
 
 const BITS: usize = 8;
@@ -45,14 +43,12 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len * len, true);
-
-        let b = VarTensor::new_advice(cs, K, len * len, true);
-
-        let output = VarTensor::new_advice(cs, K, (len + 1) * len, true);
+        let a = VarTensor::new_advice(cs, K, len, true);
+        let b = VarTensor::new_advice(cs, K, len, true);
+        let output = VarTensor::new_advice(cs, K, len, true);
 
         // sets up a new relu table
-        let l1 = LookupConfig::configure(cs, &a, &output, BITS, &[LookupOp::ReLU { scale: 1 }]);
+        let l1 = LookupConfig::configure(cs, &b, &output, BITS, &[LookupOp::ReLU { scale: 1 }]);
 
         let base_config = BaseConfig::configure(cs, &[a, b], &output, CheckMode::UNSAFE, 0);
         MyConfig { base_config, l1 }
@@ -91,11 +87,11 @@ fn runmatmul(c: &mut Criterion) {
             LEN = len;
         };
 
-        let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
+        let mut a = Tensor::from((0..len * len).map(|i| Value::known(Fr::from(i as u64))));
         a.reshape(&[len, len]);
 
         // parameters
-        let mut b = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
+        let mut b = Tensor::from((0..len).map(|i| Value::known(Fr::from(i as u64))));
         b.reshape(&[len, 1]);
 
         let circuit = MyCircuit {

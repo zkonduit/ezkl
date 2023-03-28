@@ -1349,6 +1349,93 @@ mod rescaled {
 }
 
 #[cfg(test)]
+mod matmul_relu {
+    use super::*;
+
+    const K: usize = 16;
+    const LEN: usize = 4;
+    use crate::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    // A columnar ReLu MLP
+    #[derive(Clone)]
+    struct MyConfig<F: FieldExt + TensorType> {
+        base_config: BaseConfig<F>,
+        l1: LookupConfig<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = MyConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
+
+            // sets up a new relu table
+            let l1 = LookupConfig::configure(cs, &b, &output, 8, &[LookupOp::ReLU { scale: 1 }]);
+
+            let base_config = BaseConfig::configure(cs, &[a, b], &output, CheckMode::SAFE, 0);
+
+            MyConfig { base_config, l1 }
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            config.l1.layout_table(&mut layouter).unwrap();
+            layouter.assign_region(
+                || "",
+                |mut region| {
+                    let op = Op::Matmul;
+                    let mut offset = 0;
+                    let output = config
+                        .base_config
+                        .layout(&mut region, &self.inputs, &mut offset, op.clone())
+                        .unwrap();
+                    println!("offset: {}", offset);
+                    let _output = config.l1.layout(&mut region, &output, &mut offset).unwrap();
+                    Ok(())
+                },
+            )?;
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn matmulrelucircuit() {
+        // parameters
+        let mut a = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from(i as u64))));
+        a.reshape(&[LEN, LEN]);
+
+        // parameters
+        let mut b = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64))));
+        b.reshape(&[LEN, 1]);
+
+        let circuit = MyCircuit {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
 mod rangecheck {
 
     use crate::tensor::Tensor;
