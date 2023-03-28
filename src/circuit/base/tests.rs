@@ -1352,8 +1352,8 @@ mod rescaled {
 mod matmul_relu {
     use super::*;
 
-    const K: usize = 16;
-    const LEN: usize = 4;
+    const K: usize = 18;
+    const LEN: usize = 32;
     use crate::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
 
     #[derive(Clone)]
@@ -1383,7 +1383,7 @@ mod matmul_relu {
             let output = VarTensor::new_advice(cs, K, LEN, true);
 
             // sets up a new relu table
-            let l1 = LookupConfig::configure(cs, &b, &output, 8, &[LookupOp::ReLU { scale: 1 }]);
+            let l1 = LookupConfig::configure(cs, &b, &output, 16, &[LookupOp::ReLU { scale: 1 }]);
 
             let base_config = BaseConfig::configure(cs, &[a, b], &output, CheckMode::SAFE, 0);
 
@@ -1405,7 +1405,6 @@ mod matmul_relu {
                         .base_config
                         .layout(&mut region, &self.inputs, &mut offset, op.clone())
                         .unwrap();
-                    println!("offset: {}", offset);
                     let _output = config.l1.layout(&mut region, &output, &mut offset).unwrap();
                     Ok(())
                 },
@@ -1418,11 +1417,11 @@ mod matmul_relu {
     #[test]
     fn matmulrelucircuit() {
         // parameters
-        let mut a = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from(i as u64))));
+        let mut a = Tensor::from((0..LEN * LEN).map(|_| Value::known(F::from(1))));
         a.reshape(&[LEN, LEN]);
 
         // parameters
-        let mut b = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64))));
+        let mut b = Tensor::from((0..LEN).map(|_| Value::known(F::from(1))));
         b.reshape(&[LEN, 1]);
 
         let circuit = MyCircuit {

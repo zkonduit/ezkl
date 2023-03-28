@@ -69,7 +69,6 @@ impl Circuit<Fr> for MyCircuit {
                     .base_config
                     .layout(&mut region, &self.inputs, &mut offset, op.clone())
                     .unwrap();
-                println!("offset: {}", offset);
                 let _output = config.l1.layout(&mut region, &output, &mut offset).unwrap();
                 Ok(())
             },
@@ -87,11 +86,11 @@ fn runmatmul(c: &mut Criterion) {
             LEN = len;
         };
 
-        let mut a = Tensor::from((0..len * len).map(|i| Value::known(Fr::from(i as u64))));
+        let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::from(1))));
         a.reshape(&[len, len]);
 
         // parameters
-        let mut b = Tensor::from((0..len).map(|i| Value::known(Fr::from(i as u64))));
+        let mut b = Tensor::from((0..len).map(|_| Value::known(Fr::from(1))));
         b.reshape(&[len, 1]);
 
         let circuit = MyCircuit {
@@ -122,7 +121,6 @@ fn runmatmul(c: &mut Criterion) {
                     SingleStrategy::new(&params),
                     CheckMode::SAFE,
                 );
-                println!("Prover: {:?}", prover);
                 prover.unwrap();
             });
         });
