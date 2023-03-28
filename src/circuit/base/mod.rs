@@ -195,15 +195,18 @@ impl Op {
 
                 let (image_height, image_width) = (image_dims[1], image_dims[2]);
 
-                let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
-                let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
+                let padded_height = image_height + 2 * padding.0;
+                let padded_width = image_width + 2 * padding.1;
+
+                let vert_slides = (padded_height - kernel_height) / stride.0 + 1;
+                let horz_slides = (padded_width - kernel_width) / stride.1 + 1;
 
                 let input_shapes = vec![
                     vec![
                         output_channels * vert_slides * horz_slides,
-                        (image_dims.iter().product::<usize>() + 1),
+                        (padded_height * padded_width * image_dims[0] + 1),
                     ],
-                    vec![(image_dims.iter().product::<usize>() + 1), 1],
+                    vec![(padded_height * padded_width * image_dims[0] + 1), 1],
                 ];
                 let op = Op::Matmul;
                 let output_len = op.circuit_shapes(input_shapes);
@@ -219,15 +222,18 @@ impl Op {
 
                 let (image_height, image_width) = (image_dims[1], image_dims[2]);
 
-                let vert_slides = (image_height + 2 * padding.0 - kernel_shape.0) / stride.0 + 1;
-                let horz_slides = (image_width + 2 * padding.1 - kernel_shape.1) / stride.1 + 1;
+                let padded_height = image_height + 2 * padding.0;
+                let padded_width = image_width + 2 * padding.1;
+
+                let vert_slides = (padded_height - kernel_shape.0) / stride.0 + 1;
+                let horz_slides = (padded_width - kernel_shape.1) / stride.1 + 1;
 
                 let input_shapes = vec![
                     vec![
                         image_dims[0] * vert_slides * horz_slides,
-                        (image_dims.iter().product::<usize>() + 1),
+                        (padded_height * padded_width * image_dims[0] + 1),
                     ],
-                    vec![(image_dims.iter().product::<usize>() + 1), 1],
+                    vec![(padded_height * padded_width * image_dims[0] + 1), 1],
                 ];
                 let op = Op::Matmul;
                 let output_len = op.circuit_shapes(input_shapes);
@@ -241,8 +247,8 @@ impl Op {
                 vec![output_len; 2]
             }
             Op::Matmul => {
-                let s = input_shapes.clone();
-                let output_len = s[0].iter().product::<usize>() * s[1][1];
+                let output_len = input_shapes[0].iter().product::<usize>() * input_shapes[1][1];
+
                 vec![output_len; 2]
             }
             Op::Rescaled { inner, .. } => inner.circuit_shapes(input_shapes),

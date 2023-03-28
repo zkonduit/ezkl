@@ -488,8 +488,6 @@ impl Model {
             }
         }
 
-        let mut offset: usize = 0;
-
         // layout any lookup tables
         let _: Vec<()> = config
             .configs
@@ -503,7 +501,9 @@ impl Model {
         layouter.assign_region(
             || "model",
             |mut region| {
+                let mut offset: usize = 0;
                 for (idx, config) in config.configs.iter() {
+                    trace!("laying out offset {}", offset);
                     if let Some(vt) = self
                         .layout_config(&mut region, &mut results, config, &mut offset)
                         .map_err(|e| {
@@ -745,7 +745,7 @@ impl Model {
     }
 
     /// Maximum number of input variables
-    pub fn max_input_var_len(&self) -> usize {
+    pub fn total_var_len(&self) -> usize {
         let mut maximum_var_len = 0;
 
         let poly_ops: BTreeMap<&usize, &Node> = self
@@ -775,12 +775,10 @@ impl Model {
             .filter(|(_, n)| n.opkind.is_lookup())
             .collect();
 
-        // single lookup
-        let input_size: usize = lookup_ops
-            .iter()
-            .map(|(_, n)| (*n.in_dims[0]).into_iter().product::<usize>())
-            .sum();
-        maximum_var_len += input_size;
+        for op in lookup_ops {
+            let len = (*op.1.out_dims).into_iter().product::<usize>();
+            maximum_var_len += len;
+        }
 
         let output_lens: usize = self
             .output_shapes()
