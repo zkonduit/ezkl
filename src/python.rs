@@ -5,6 +5,7 @@ use pyo3_log;
 use tabled::Table;
 use crate::graph::{Model, Visibility, VarVisibility, Mode};
 use crate::commands::RunArgs;
+use crate::circuit::base::CheckMode;
 
 // use crate::commands::{Cli, Commands, StrategyType, TranscriptType};
 // #[cfg(not(target_arch = "wasm32"))]
@@ -73,21 +74,20 @@ fn table(
     model: String,
 ) -> Result<String, PyErr> {
     // use default values to initialize model
-    let run_args: RunArgs = RunArgs {
-        tolerance: 5,
+    let run_args = RunArgs {
+        tolerance: 0,
         scale: 7,
         bits: 16,
         logrows: 17,
         public_inputs: true,
         public_outputs: true,
         public_params: false,
-        max_rotations: 512,
         pack_base: 1,
-        single_lookup: false,
+        check_mode: CheckMode::SAFE,
     };
 
     // use default values to initialize model
-    let visibility: VarVisibility = VarVisibility {
+    let visibility = VarVisibility {
         input: Visibility::Public,
         params: Visibility::Private,
         output: Visibility::Public,
@@ -102,7 +102,7 @@ fn table(
 
     match result {
         Ok(m) => {
-            Ok(Table::new(m.nodes.flatten()).to_string())
+            Ok(Table::new(m.nodes.iter()).to_string())
         },
         Err(_) => {
             Err(PyIOError::new_err("Failed to import model"))

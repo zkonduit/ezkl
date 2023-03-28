@@ -870,11 +870,7 @@ dependencies = [
  "autocfg",
  "cfg-if",
  "crossbeam-utils",
-<<<<<<< HEAD
- "memoffset 0.7.1",
-=======
  "memoffset 0.8.0",
->>>>>>> 122378456ad1d52dc66ff59d96af691c2cc51efb
  "scopeguard",
 ]
 
@@ -3768,7 +3764,7 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset 0.8.0",
- "parking_lot 0.12.1",
+ "parking_lot",
  "pyo3-build-config",
  "pyo3-ffi",
  "pyo3-macros",
@@ -3815,7 +3811,7 @@ dependencies = [
  "proc-macro2",
  "pyo3-macros-backend",
  "quote",
- "syn",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -3826,7 +3822,7 @@ checksum = "8e0e1128f85ce3fca66e435e08aa2089a2689c1c48ce97803e13f63124058462"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 1.0.109",
 ]
 
 [[package]]

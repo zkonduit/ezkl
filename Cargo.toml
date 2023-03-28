@@ -36,11 +36,9 @@ regex = "1"
 colored = { version = "2.0.0", optional = true}
 env_logger = { version = "0.10.0", optional = true}
 colored_json =  { version = "3.0.1", optional = true}
-<<<<<<< HEAD
 # python binding related deps
 pyo3 = { version = "0.18.1", features = ["extension-module"] }
 pyo3-log = "0.8.1"
-=======
 tokio = { version = "1.26.0", features = ["macros", "rt"] }
 
 # evm related deps
@@ -51,7 +49,6 @@ ethers-solc = "2.0.1"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2.8", features = ["js"] }
 
->>>>>>> 122378456ad1d52dc66ff59d96af691c2cc51efb
 
 [dev-dependencies]
 criterion = {version = "0.3",  features = ["html_reports"]}
