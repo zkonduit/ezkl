@@ -560,17 +560,13 @@ impl Model {
                     .zip(outputs)
                     .enumerate()
                     .map(|(i, (range_check, output))| {
-                        let mut offset = 0;
+                        let mut instance_offset = 0;
                         if self.visibility.input.is_public() {
-                            offset += inputs.len();
+                            instance_offset += inputs.len();
                         };
                         range_check.borrow_mut().layout(
                             &mut region,
-                            &[
-                                output,
-                                vars.instances[offset + i].clone(),
-                                vars.instances[offset + i].clone(),
-                            ],
+                            &[output, vars.instances[instance_offset + i].clone()],
                             &mut offset,
                             PolyOp::RangeCheck(self.run_args.tolerance as i32),
                         )
