@@ -34,7 +34,7 @@ impl Circuit<Fr> for NLCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         unsafe {
             let advices = (0..2)
-                .map(|_| VarTensor::new_advice(cs, K, LEN, vec![LEN], true))
+                .map(|_| VarTensor::new_advice(cs, K, LEN, true))
                 .collect::<Vec<_>>();
 
             let nl = Op::ReLU { scale: 128 };
@@ -48,8 +48,14 @@ impl Circuit<Fr> for NLCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>, // layouter is our 'write buffer' for the circuit
     ) -> Result<(), Error> {
-        config.layout(&mut layouter, &self.input).unwrap();
-
+        config.layout_table(&mut layouter).unwrap();
+        layouter.assign_region(
+            || "",
+            |mut region| {
+                config.layout(&mut region, &self.input, &mut 0).unwrap();
+                Ok(())
+            },
+        )?;
         Ok(())
     }
 }

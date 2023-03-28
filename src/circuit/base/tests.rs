@@ -32,10 +32,10 @@ mod matmul {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true);
-            let b = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true);
-            let output = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, 1, LEN], true);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            let a = VarTensor::new_advice(cs, K, LEN * LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN * LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN * LEN, true);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -43,8 +43,83 @@ mod matmul {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Matmul)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut &mut 0, Op::Matmul)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn matmulcircuit() {
+        // parameters
+        let mut a =
+            Tensor::from((0..(LEN + 1) * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        a.reshape(&[LEN, LEN + 1]);
+
+        let mut w = Tensor::from((0..LEN + 1).map(|i| Value::known(F::from((i + 1) as u64))));
+        w.reshape(&[LEN + 1, 1]);
+
+        let circuit = MatmulCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(w)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod matmul_col_overflow {
+    use super::*;
+
+    const K: usize = 5;
+    const LEN: usize = 6;
+
+    #[derive(Clone)]
+    struct MatmulCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MatmulCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN * LEN * LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN * LEN * LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN * LEN * LEN, true);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Matmul)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -91,11 +166,11 @@ mod dot {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -103,8 +178,80 @@ mod dot {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Dot)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Dot)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn dotcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let b = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod dot_col_overflow {
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 50;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Dot)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -149,11 +296,11 @@ mod sum {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -161,8 +308,78 @@ mod sum {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Sum)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Sum)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn sumcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod sum_col_overflow {
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 20;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 1],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Sum)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -206,10 +423,10 @@ mod batchnorm {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -217,8 +434,15 @@ mod batchnorm {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::BatchNorm)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::BatchNorm)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -270,10 +494,10 @@ mod affine {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
-            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
-            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
+            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -281,8 +505,86 @@ mod affine {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Affine)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Affine)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn affinecircuit() {
+        // parameters
+        let mut w = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        w.reshape(&[LEN, LEN]);
+
+        let mut b = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        b.reshape(&[LEN, 1]);
+
+        let mut x = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        x.reshape(&[LEN, 1]);
+
+        let circuit = AffineCircuit::<F> {
+            inputs: [ValTensor::from(x), ValTensor::from(w), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod affine_col_overflow {
+    use std::marker::PhantomData;
+
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 3;
+
+    #[derive(Clone)]
+    struct AffineCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 3],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for AffineCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
+            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Affine)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -332,11 +634,11 @@ mod composition {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -345,14 +647,22 @@ mod composition {
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             // lots of stacked dot products
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Dot)
-                .unwrap();
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), LEN, Op::Dot)
-                .unwrap();
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 2 * LEN, Op::Dot)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        let mut offset = 0;
+                        let _ = config
+                            .layout(&mut region, &self.inputs.clone(), &mut offset, Op::Dot)
+                            .unwrap();
+                        let _ = config
+                            .layout(&mut region, &self.inputs.clone(), &mut offset, Op::Dot)
+                            .unwrap();
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut offset, Op::Dot)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -399,10 +709,10 @@ mod conv {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
-            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
-            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
+            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -410,14 +720,21 @@ mod conv {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(
-                    &mut layouter,
-                    &self.inputs.clone(),
-                    0,
-                    Op::Conv {
-                        padding: (1, 1),
-                        stride: (2, 2),
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Op::Conv {
+                                    padding: (1, 1),
+                                    stride: (2, 2),
+                                },
+                            )
+                            .map_err(|_| Error::Synthesis)
                     },
                 )
                 .unwrap();
@@ -517,10 +834,10 @@ mod sumpool {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
-            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, LEN], true);
-            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, vec![LEN + 1, 1, LEN], true);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
+            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -528,15 +845,22 @@ mod sumpool {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(
-                    &mut layouter,
-                    &self.inputs.clone(),
-                    0,
-                    Op::SumPool {
-                        padding: (0, 0),
-                        stride: (1, 1),
-                        kernel_shape: (3, 3),
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Op::SumPool {
+                                    padding: (0, 0),
+                                    stride: (1, 1),
+                                    kernel_shape: (3, 3),
+                                },
+                            )
+                            .map_err(|_| Error::Synthesis)
                     },
                 )
                 .unwrap();
@@ -588,11 +912,11 @@ mod add {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -600,8 +924,80 @@ mod add {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Add)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Add)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn addcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let b = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod add_with_overflow {
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 50;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Add)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -646,11 +1042,11 @@ mod sub {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -658,8 +1054,15 @@ mod sub {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Sub)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Sub)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -704,11 +1107,11 @@ mod mult {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -716,8 +1119,15 @@ mod mult {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Mult)
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Mult)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -762,11 +1172,11 @@ mod pow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -774,8 +1184,15 @@ mod pow {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Pow(5))
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Pow(5))
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -818,11 +1235,11 @@ mod pack {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -830,8 +1247,15 @@ mod pack {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(&mut layouter, &self.inputs.clone(), 0, Op::Pack(2, 1))
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Pack(2, 1))
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
                 .unwrap();
             Ok(())
         }
@@ -874,11 +1298,11 @@ mod rescaled {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let b = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-            let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -886,14 +1310,21 @@ mod rescaled {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            let _ = config
-                .layout(
-                    &mut layouter,
-                    &self.inputs.clone(),
-                    0,
-                    Op::Rescaled {
-                        inner: Box::new(Op::Sum),
-                        scale: vec![(0, 5)],
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Op::Rescaled {
+                                    inner: Box::new(Op::Sum),
+                                    scale: vec![(0, 5)],
+                                },
+                            )
+                            .map_err(|_| Error::Synthesis)
                     },
                 )
                 .unwrap();
@@ -914,5 +1345,192 @@ mod rescaled {
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod matmul_relu {
+    use super::*;
+
+    const K: usize = 18;
+    const LEN: usize = 32;
+    use crate::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    // A columnar ReLu MLP
+    #[derive(Clone)]
+    struct MyConfig<F: FieldExt + TensorType> {
+        base_config: BaseConfig<F>,
+        l1: LookupConfig<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = MyConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
+
+            // sets up a new relu table
+            let l1 = LookupConfig::configure(cs, &b, &output, 16, &[LookupOp::ReLU { scale: 1 }]);
+
+            let base_config = BaseConfig::configure(cs, &[a, b], &output, CheckMode::SAFE, 0);
+
+            MyConfig { base_config, l1 }
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            config.l1.layout_table(&mut layouter).unwrap();
+            layouter.assign_region(
+                || "",
+                |mut region| {
+                    let op = Op::Matmul;
+                    let mut offset = 0;
+                    let output = config
+                        .base_config
+                        .layout(&mut region, &self.inputs, &mut offset, op.clone())
+                        .unwrap();
+                    let _output = config.l1.layout(&mut region, &output, &mut offset).unwrap();
+                    Ok(())
+                },
+            )?;
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn matmulrelucircuit() {
+        // parameters
+        let mut a = Tensor::from((0..LEN * LEN).map(|_| Value::known(F::from(1))));
+        a.reshape(&[LEN, LEN]);
+
+        // parameters
+        let mut b = Tensor::from((0..LEN).map(|_| Value::known(F::from(1))));
+        b.reshape(&[LEN, 1]);
+
+        let circuit = MyCircuit {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod rangecheck {
+
+    use crate::tensor::Tensor;
+    use halo2_proofs::{
+        arithmetic::FieldExt,
+        circuit::{Layouter, SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::{Circuit, ConstraintSystem, Error},
+    };
+    use halo2curves::pasta::Fp;
+
+    const RANGE: usize = 8; // 3-bit value
+    const K: usize = 8;
+    const LEN: usize = 4;
+
+    use super::*;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        input: ValTensor<F>,
+        output: ValTensor<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, RANGE as i32)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(
+                                &mut region,
+                                &[self.input.clone(), self.output.clone()],
+                                &mut 0,
+                                Op::RangeCheck(RANGE as i32),
+                            )
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn test_range_check() {
+        let k = 4;
+
+        // Successful cases
+        for i in 0..RANGE {
+            let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(i as u64))]), &[1]).unwrap();
+            let out =
+                Tensor::new(Some(&[Value::<Fp>::known(Fp::from(i as u64 + 1))]), &[1]).unwrap();
+            let circuit = MyCircuit::<Fp> {
+                input: ValTensor::from(inp),
+                output: ValTensor::from(out),
+            };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            prover.assert_satisfied();
+        }
+        {
+            let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(22_u64))]), &[1]).unwrap();
+            let out = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(0_u64))]), &[1]).unwrap();
+            let circuit = MyCircuit::<Fp> {
+                input: ValTensor::from(inp),
+                output: ValTensor::from(out),
+            };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            match prover.verify() {
+                Ok(_) => {
+                    assert!(false)
+                }
+                Err(_) => {
+                    assert!(true)
+                }
+            }
+        }
     }
 }

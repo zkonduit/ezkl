@@ -9,12 +9,10 @@ use ezkl_lib::tensor::*;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2_proofs::poly::kzg::strategy::SingleStrategy;
 use halo2_proofs::{
-    arithmetic::Field,
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error},
 };
 use halo2curves::bn256::{Bn256, Fr};
-use rand::rngs::OsRng;
 use std::marker::PhantomData;
 
 const BITS: usize = 8;
@@ -45,16 +43,14 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len * len, vec![len, len], true);
+        let a = VarTensor::new_advice(cs, K, len, true);
+        let b = VarTensor::new_advice(cs, K, len, true);
+        let output = VarTensor::new_advice(cs, K, len, true);
 
-        let b = VarTensor::new_advice(cs, K, len * len, vec![len, len], true);
+        // sets up a new relu table
+        let l1 = LookupConfig::configure(cs, &b, &output, BITS, &[LookupOp::ReLU { scale: 1 }]);
 
-        let output = VarTensor::new_advice(cs, K, (len + 1) * len, vec![len, 1, len + 1], true);
-
-        // sets up a new Divide by table
-        let l1 = LookupConfig::configure(cs, &a, &output, BITS, &[LookupOp::ReLU { scale: 1 }]);
-
-        let base_config = BaseConfig::configure(cs, &[a, b], &output, CheckMode::UNSAFE);
+        let base_config = BaseConfig::configure(cs, &[a, b], &output, CheckMode::UNSAFE, 0);
         MyConfig { base_config, l1 }
     }
 
@@ -63,11 +59,21 @@ impl Circuit<Fr> for MyCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        let output = config
-            .base_config
-            .layout(&mut layouter, &self.inputs, 0, Op::Matmul)
-            .unwrap();
-        let _output = config.l1.layout(&mut layouter, &output).unwrap();
+        config.l1.layout_table(&mut layouter).unwrap();
+        layouter.assign_region(
+            || "",
+            |mut region| {
+                let op = Op::Matmul;
+                let mut offset = 0;
+                let output = config
+                    .base_config
+                    .layout(&mut region, &self.inputs, &mut offset, op.clone())
+                    .unwrap();
+                let _output = config.l1.layout(&mut region, &output, &mut offset).unwrap();
+                Ok(())
+            },
+        )?;
+
         Ok(())
     }
 }
@@ -80,11 +86,11 @@ fn runmatmul(c: &mut Criterion) {
             LEN = len;
         };
 
-        let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
+        let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::from(1))));
         a.reshape(&[len, len]);
 
         // parameters
-        let mut b = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
+        let mut b = Tensor::from((0..len).map(|_| Value::known(Fr::from(1))));
         b.reshape(&[len, 1]);
 
         let circuit = MyCircuit {
@@ -113,7 +119,7 @@ fn runmatmul(c: &mut Criterion) {
                     &pk,
                     TranscriptType::Blake,
                     SingleStrategy::new(&params),
-                    CheckMode::UNSAFE,
+                    CheckMode::SAFE,
                 );
                 prover.unwrap();
             });

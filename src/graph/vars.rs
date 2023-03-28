@@ -98,16 +98,17 @@ impl<F: FieldExt + TensorType> ModelVars<F> {
     pub fn new(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
+        var_len: usize,
         instance_dims: Vec<Vec<usize>>,
         visibility: VarVisibility,
     ) -> Self {
         let advices = (0..3)
-            .map(|_| VarTensor::new_advice(cs, logrows, 1, vec![1], true))
+            .map(|_| VarTensor::new_advice(cs, logrows, var_len, true))
             .collect_vec();
         let mut fixed = vec![];
         if visibility.params == Visibility::Public {
             fixed = (0..1)
-                .map(|_| VarTensor::new_fixed(cs, logrows, 1, vec![1], true))
+                .map(|_| VarTensor::new_fixed(cs, logrows, var_len, true))
                 .collect_vec();
         }
         // will be empty if instances dims has len 0

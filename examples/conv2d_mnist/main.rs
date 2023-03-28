@@ -139,21 +139,14 @@ where
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let input = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-        let params = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-        let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+        let input = VarTensor::new_advice(cs, K, LEN, true);
+        let params = VarTensor::new_advice(cs, K, LEN, true);
+        let output = VarTensor::new_advice(cs, K, LEN, true);
 
         println!("INPUT COL {:#?}", input);
 
-        let layer_config = PolyConfig::configure(
-            cs,
-            &[input.clone(), params],
-            &output,
-            CheckMode::SAFE,
-        );
-
-        let input = input.reshape(&[LEN]);
-        let output = output.reshape(&[LEN]);
+        let layer_config =
+            PolyConfig::configure(cs, &[input.clone(), params], &output, CheckMode::SAFE, 0);
 
         let relu =
             LookupConfig::configure(cs, &input, &output, BITS, &[LookupOp::ReLU { scale: 32 }]);
@@ -173,35 +166,48 @@ where
         mut config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let x = config
-            .layer_config
-            .layout(
-                &mut layouter,
-                &[
-                    self.input.clone(),
-                    self.l0_params[0].clone(),
-                    self.l0_params[1].clone(),
-                ],
-                0,
-                PolyOp::Conv {
-                    padding: (PADDING, PADDING),
-                    stride: (STRIDE, STRIDE),
+        config.relu.layout_table(&mut layouter).unwrap();
+
+        let x = layouter
+            .assign_region(
+                || "mlp_4d",
+                |mut region| {
+                    let mut offset = 0;
+                    let op = PolyOp::Conv {
+                        padding: (PADDING, PADDING),
+                        stride: (STRIDE, STRIDE),
+                    };
+                    let x = config
+                        .layer_config
+                        .layout(
+                            &mut region,
+                            &[
+                                self.input.clone(),
+                                self.l0_params[0].clone(),
+                                self.l0_params[1].clone(),
+                            ],
+                            &mut offset,
+                            op.clone(),
+                        )
+                        .unwrap();
+
+                    let mut x = config.relu.layout(&mut region, &x, &mut offset).unwrap();
+                    x.flatten();
+                    let l2out = config
+                        .layer_config
+                        .layout(
+                            &mut region,
+                            &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
+                            &mut offset,
+                            PolyOp::Affine,
+                        )
+                        .unwrap();
+                    Ok(l2out)
                 },
             )
             .unwrap();
-        let mut x = config.relu.layout(&mut layouter, &x).unwrap();
-        x.flatten();
-        let l2out = config
-            .layer_config
-            .layout(
-                &mut layouter,
-                &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
-                0,
-                PolyOp::Affine,
-            )
-            .unwrap();
 
-        match l2out {
+        match x {
             ValTensor::Value { inner: v, dims: _ } => v
                 .enum_map(|i, x| match x {
                     ValType::PrevAssigned(v) => {

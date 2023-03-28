@@ -96,7 +96,6 @@ macro_rules! wasi_test_func {
             use crate::mock_public_inputs;
             use crate::mock_public_params;
             use crate::forward_pass;
-            use crate::mock_non_single_lookup;
 
             seq!(N in 0..=18 {
 
@@ -104,11 +103,6 @@ macro_rules! wasi_test_func {
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
                 mock(test.to_string());
-            }
-
-            #(#[test_case(TESTS[N])])*
-            fn mock_non_single_lookup_(test: &str) {
-                mock_non_single_lookup(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
@@ -141,17 +135,12 @@ macro_rules! wasi_test_neg_examples {
             use crate::NEG_TESTS;
             use test_case::test_case;
             use crate::neg_mock as run;
-            use crate::neg_mock_non_single_lookup as run_non_single_lookup;
             seq!(N in 0..=1 {
             #(#[test_case(NEG_TESTS[N])])*
             fn neg_examples_(test: (&str, &str)) {
                 run(test.0.to_string(), test.1.to_string());
             }
 
-            #(#[test_case(NEG_TESTS[N])])*
-            fn neg_examples_non_single_lookup_(test: (&str, &str)) {
-                run_non_single_lookup(test.0.to_string(), test.1.to_string());
-            }
             });
     }
     };
@@ -170,28 +159,6 @@ fn neg_mock(example_name: String, counter_example: String) {
             ".",
             "--",
             "--bits=16",
-            "-K=20",
-            "mock",
-            "-D",
-            format!("./examples/onnx/{}/input.json", counter_example).as_str(),
-            "-M",
-            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(!status.success());
-}
-
-// Mock prove (fast, but does not cover some potential issues)
-fn neg_mock_non_single_lookup(example_name: String, counter_example: String) {
-    let status = Command::new("wasmtime")
-        .args([
-            &format!("{}/wasm32-wasi/release/ezkl.wasm", *CARGO_TARGET_DIR),
-            "--dir",
-            ".",
-            "--",
-            "--bits=16",
-            "--single-lookup=false",
             "-K=20",
             "mock",
             "-D",
@@ -302,28 +269,6 @@ fn mock_everything(example_name: String) {
             "-K=20",
             "--public-inputs",
             "--pack-base=2",
-            "mock",
-            "-D",
-            format!("./examples/onnx/{}/input.json", example_name).as_str(),
-            "-M",
-            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
-}
-
-// Mock prove (fast, but does not cover some potential issues)
-fn mock_non_single_lookup(example_name: String) {
-    let status = Command::new("wasmtime")
-        .args([
-            &format!("{}/wasm32-wasi/release/ezkl.wasm", *CARGO_TARGET_DIR),
-            "--dir",
-            ".",
-            "--",
-            "--bits=16",
-            "-K=20",
-            "--single-lookup=false",
             "mock",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),

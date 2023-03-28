@@ -35,11 +35,11 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len, vec![len], true);
-        let b = VarTensor::new_advice(cs, K, len, vec![len], true);
-        let output = VarTensor::new_advice(cs, K, len, vec![len + 1], true);
+        let a = VarTensor::new_advice(cs, K, len, true);
+        let b = VarTensor::new_advice(cs, K, len, true);
+        let output = VarTensor::new_advice(cs, K, len, true);
 
-        Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
     }
 
     fn synthesize(
@@ -47,9 +47,15 @@ impl Circuit<Fr> for MyCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        config
-            .layout(&mut layouter, &self.inputs, 0, Op::Pow(4))
-            .unwrap();
+        layouter.assign_region(
+            || "",
+            |mut region| {
+                config
+                    .layout(&mut region, &self.inputs, &mut 0, Op::Pow(4))
+                    .unwrap();
+                Ok(())
+            },
+        )?;
         Ok(())
     }
 }
