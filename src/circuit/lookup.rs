@@ -383,6 +383,7 @@ mod tests {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
         ) -> Result<(), Error> {
+            config.layout_table(&mut layouter).unwrap();
             layouter
                 .assign_region(
                     || "",

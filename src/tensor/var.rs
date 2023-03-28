@@ -57,7 +57,7 @@ impl VarTensor {
 
         let mut modulo = (capacity / max_rows) + 1;
         // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
-        modulo += ((capacity + modulo) / max_rows) + 1;
+        modulo += modulo / max_rows;
         let mut advices = vec![];
         for _ in 0..modulo {
             let col = cs.advice_column();
@@ -91,7 +91,10 @@ impl VarTensor {
     ) -> Self {
         let base = 2u32;
         let max_rows = base.pow(logrows as u32) as usize - cs.blinding_factors() - 1;
-        let modulo = (capacity / max_rows) + 1;
+        let mut modulo = (capacity / max_rows) + 1;
+         // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
+        modulo += modulo / max_rows;
+
         let mut fixed = vec![];
         for _ in 0..modulo {
             let col = cs.fixed_column();
