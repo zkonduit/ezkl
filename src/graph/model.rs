@@ -7,8 +7,6 @@ use crate::circuit::base::Op as PolyOp;
 use crate::circuit::lookup::Config as LookupConfig;
 use crate::circuit::lookup::Op as LookupOp;
 use crate::circuit::lookup::Table as LookupTable;
-
-use crate::circuit::range::*;
 use crate::commands::RunArgs;
 use crate::commands::{Cli, Commands};
 use crate::graph::scale_to_multiplier;
@@ -18,12 +16,14 @@ use anyhow::Context;
 //use clap::Parser;
 use anyhow::Error as AnyError;
 use core::panic;
+use halo2_proofs::circuit::Region;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
     plonk::ConstraintSystem,
 };
 use itertools::Itertools;
+use log::error;
 use log::{debug, info, trace};
 use std::cell::RefCell;
 use std::cmp::max;
@@ -57,7 +57,7 @@ pub struct ModelConfig<F: FieldExt + TensorType> {
     /// The model struct
     pub model: Model,
     /// (optional) range checked outputs of the model graph
-    pub range_checks: Vec<RangeCheckConfig<F>>,
+    pub range_checks: Vec<Rc<RefCell<PolyConfig<F>>>>,
     /// (optional) packed outputs of the model graph
     pub packed_outputs: Vec<Rc<RefCell<PolyConfig<F>>>>,
     /// A wrapper for holding all columns that will be assigned to by the model
@@ -257,13 +257,8 @@ impl Model {
 
         if !lookup_ops.is_empty() {
             for (i, node) in lookup_ops {
-                let config = if !self.run_args.single_lookup {
-                    // assume a single input
-                    let input_len = node.in_dims[0].iter().product();
-                    self.conf_lookup(node, input_len, meta, vars, &mut tables)?
-                } else {
-                    self.reuse_lookup_conf(*i, node, &results, meta, vars, &mut tables)?
-                };
+                let config = self.conf_lookup(node, meta, vars, &mut tables)?;
+
                 results.insert(*i, config);
             }
         }
@@ -289,19 +284,12 @@ impl Model {
 
         let mut range_checks = vec![];
         let mut packed_outputs = vec![];
+        if self.run_args.pack_base > 1 {
+            info!("packing outputs...");
+            packed_outputs = self.output_ops(meta, vars, &mut base_gates);
+        }
         if self.visibility.output.is_public() {
-            if self.run_args.pack_base > 1 {
-                info!("packing outputs...");
-                packed_outputs = self.pack_outputs(meta, vars, &mut base_gates);
-                range_checks = self.range_check_outputs(
-                    meta,
-                    vars,
-                    // outputs are now 1D
-                    self.output_shapes().iter().map(|_| vec![1]).collect(),
-                );
-            } else {
-                range_checks = self.range_check_outputs(meta, vars, self.output_shapes());
-            }
+            range_checks = self.output_ops(meta, vars, &mut base_gates);
         };
 
         Ok(ModelConfig {
@@ -313,7 +301,7 @@ impl Model {
         })
     }
 
-    fn pack_outputs<F: FieldExt + TensorType>(
+    fn output_ops<F: FieldExt + TensorType>(
         &self,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
@@ -330,6 +318,7 @@ impl Model {
                         &[vars.advices[0].clone(), vars.advices[1].clone()],
                         &vars.advices[2],
                         CheckMode::SAFE,
+                        self.run_args.tolerance.try_into().unwrap(),
                     )));
                     base_gates.insert(false, config.clone());
                     config
@@ -341,68 +330,6 @@ impl Model {
         configs
     }
 
-    fn reuse_lookup_conf<F: FieldExt + TensorType>(
-        &self,
-        i: usize,
-        node: &Node,
-        prev_configs: &BTreeMap<usize, NodeConfig<F>>,
-        meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars<F>,
-        tables: &mut BTreeMap<Vec<LookupOp>, Rc<RefCell<LookupTable<F>>>>,
-    ) -> Result<NodeConfig<F>, Box<dyn Error>> {
-        match &node.opkind {
-            OpKind::Lookup(op) => {
-                let mut conf = None;
-                // iterate in reverse order so we get the last relevant op
-                for (_, prev_config) in prev_configs.iter().rev() {
-                    if let NodeConfig::Lookup { config, .. } = prev_config {
-                        // check if there's a config for the same op
-                        if config.borrow().table.borrow().nonlinearities == vec![op.clone()] {
-                            conf = Some(NodeConfig::Lookup {
-                                config: config.clone(),
-                                inputs: node.inputs.iter().map(|e| e.node).collect(),
-                            });
-
-                            break;
-                        }
-                    }
-                }
-                let conf = match conf {
-                    None => {
-                        let input_len = self.num_vars_lookup_op(op)[0];
-                        self.conf_lookup(node, input_len, meta, vars, tables)?
-                    }
-                    Some(c) => c,
-                };
-                Ok(conf)
-            }
-            // should never reach here
-            _ => Err(Box::new(GraphError::OpMismatch(i, node.opkind.clone()))),
-        }
-    }
-
-    fn range_check_outputs<F: FieldExt + TensorType>(
-        &self,
-        meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars<F>,
-        output_shapes: Vec<Vec<usize>>,
-    ) -> Vec<RangeCheckConfig<F>> {
-        let mut configs = vec![];
-        info!("output_shapes {:?}", output_shapes);
-
-        for s in &output_shapes {
-            let input = vars.advices[0].reshape(s);
-            let output = vars.advices[1].reshape(s);
-
-            configs.push(RangeCheckConfig::configure(
-                meta,
-                &input,
-                &output,
-                self.run_args.tolerance,
-            ));
-        }
-        configs
-    }
     /// Configures non op related nodes (eg. representing an input or const value)
     pub fn conf_non_op_node<F: FieldExt + TensorType>(
         &self,
@@ -467,13 +394,13 @@ impl Model {
                     [vars.advices[0].clone(), vars.advices[1].clone()]
                 };
                 // output node
-                let output_shape = &node.out_dims;
-                let output = &vars.advices[2].reshape(output_shape);
+                let output = &vars.advices[2];
                 let config = Rc::new(RefCell::new(PolyConfig::configure(
                     meta,
                     inputs.into_iter().collect_vec()[..].try_into()?,
                     output,
                     CheckMode::SAFE,
+                    self.run_args.tolerance.try_into().unwrap(),
                 )));
                 base_gates.insert(fixed_flag, config.clone());
                 config
@@ -502,13 +429,12 @@ impl Model {
     fn conf_lookup<F: FieldExt + TensorType>(
         &self,
         node: &Node,
-        input_len: usize,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
         tables: &mut BTreeMap<Vec<LookupOp>, Rc<RefCell<LookupTable<F>>>>,
     ) -> Result<NodeConfig<F>, Box<dyn Error>> {
-        let input = &vars.advices[0].reshape(&[input_len]);
-        let output = &vars.advices[1].reshape(&[input_len]);
+        let input = &vars.advices[0];
+        let output = &vars.advices[1];
         let node_inputs = node.inputs.iter().map(|e| e.node).collect();
 
         let op = match &node.opkind {
@@ -561,58 +487,94 @@ impl Model {
                 results.insert(i, input_value.clone());
             }
         }
-        for (idx, config) in config.configs.iter() {
-            if let Some(vt) = self.layout_config(layouter, &mut results, config)? {
-                // we get the max as for fused nodes this corresponds to the node output
-                results.insert(*idx, vt);
-                //only use with mock prover
-                if matches!(self.mode, Mode::Mock) {
-                    trace!("------------ output {:?}", results.get(idx).unwrap().show());
-                }
-            }
-        }
 
-        let output_nodes = self.model.outputs.iter();
-        info!(
-            "model outputs are nodes: {:?}",
-            output_nodes.clone().map(|o| o.node).collect_vec()
-        );
-        let mut outputs = output_nodes
-            .map(|o| results.get(&o.node).unwrap().clone())
-            .collect_vec();
-
-        // pack outputs if need be
-        for (i, packed_output) in config.packed_outputs.iter_mut().enumerate() {
-            info!("packing outputs...");
-            outputs[i] = packed_output.borrow_mut().layout(
-                layouter,
-                &outputs[i..i + 1],
-                0,
-                PolyOp::Pack(self.run_args.pack_base, self.run_args.scale),
-            )?;
-            // only use with mock prover
-            if matches!(self.mode, Mode::Mock) {
-                trace!("------------ packed output {:?}", outputs[i].show());
-            }
-        }
-
-        let _ = config
-            .range_checks
+        // layout any lookup tables
+        let _: Vec<()> = config
+            .configs
             .iter()
-            .zip(outputs)
-            .enumerate()
-            .map(|(i, (range_check, output))| {
-                let mut offset = 0;
-                if self.visibility.input.is_public() {
-                    offset += inputs.len();
-                };
-                range_check.layout(
-                    layouter.namespace(|| "range check outputs"),
-                    output,
-                    vars.instances[offset + i].clone(),
-                )
+            .map(|(_, c)| match c {
+                NodeConfig::Lookup { config, .. } => config.borrow_mut().layout_table(layouter),
+                _ => Ok(()),
             })
-            .collect_vec();
+            .collect::<Result<Vec<()>, _>>()?;
+
+        layouter.assign_region(
+            || "model",
+            |mut region| {
+                let mut offset: usize = 0;
+                for (idx, config) in config.configs.iter() {
+                    trace!("laying out offset {}", offset);
+                    if let Some(vt) = self
+                        .layout_config(&mut region, &mut results, config, &mut offset)
+                        .map_err(|e| {
+                            error!("{}", e);
+                            halo2_proofs::plonk::Error::Synthesis
+                        })?
+                    {
+                        // we get the max as for fused nodes this corresponds to the node output
+                        results.insert(*idx, vt);
+                        //only use with mock prover
+                        if matches!(self.mode, Mode::Mock) {
+                            trace!(
+                                "------------ output node {:?}: {:?}",
+                                idx,
+                                results.get(idx).unwrap().show()
+                            );
+                        }
+                    }
+                }
+
+                let output_nodes = self.model.outputs.iter();
+                info!(
+                    "model outputs are nodes: {:?}",
+                    output_nodes.clone().map(|o| o.node).collect_vec()
+                );
+                let mut outputs = output_nodes
+                    .map(|o| results.get(&o.node).unwrap().clone())
+                    .collect_vec();
+
+                // pack outputs if need be
+                for (i, packed_output) in config.packed_outputs.iter_mut().enumerate() {
+                    info!("packing outputs...");
+                    outputs[i] = packed_output
+                        .borrow_mut()
+                        .layout(
+                            &mut region,
+                            &outputs[i..i + 1],
+                            &mut offset,
+                            PolyOp::Pack(self.run_args.pack_base, self.run_args.scale),
+                        )
+                        .map_err(|e| {
+                            error!("{}", e);
+                            halo2_proofs::plonk::Error::Synthesis
+                        })?;
+                    // only use with mock prover
+                    if matches!(self.mode, Mode::Mock) {
+                        trace!("------------ packed output {:?}", outputs[i].show());
+                    }
+                }
+
+                let _ = config
+                    .range_checks
+                    .iter()
+                    .zip(outputs)
+                    .enumerate()
+                    .map(|(i, (range_check, output))| {
+                        let mut instance_offset = 0;
+                        if self.visibility.input.is_public() {
+                            instance_offset += inputs.len();
+                        };
+                        range_check.borrow_mut().layout(
+                            &mut region,
+                            &[output, vars.instances[instance_offset + i].clone()],
+                            &mut offset,
+                            PolyOp::RangeCheck(self.run_args.tolerance as i32),
+                        )
+                    })
+                    .collect_vec();
+                Ok(())
+            },
+        )?;
         info!("computing...");
         Ok(())
     }
@@ -625,9 +587,10 @@ impl Model {
     /// * `inputs` - [BTreeMap] of values to feed into the [NodeConfig], can also include previous intermediate results, i.e the output of other nodes.
     fn layout_config<F: FieldExt + TensorType>(
         &self,
-        layouter: &mut impl Layouter<F>,
+        region: &mut Region<F>,
         inputs: &mut BTreeMap<usize, ValTensor<F>>,
         config: &NodeConfig<F>,
+        offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         // The node kind and the config should be the same.
         let res = match config.clone() {
@@ -654,7 +617,11 @@ impl Model {
                     })
                     .collect_vec();
 
-                Some(config.borrow_mut().layout(layouter, &values, 0, op)?)
+                let res = config
+                    .borrow_mut()
+                    .layout(region, &values, offset, op.clone())?;
+
+                Some(res)
             }
             NodeConfig::Lookup {
                 config,
@@ -663,12 +630,14 @@ impl Model {
                 if idx.len() != 1 {
                     return Err(Box::new(GraphError::InvalidLookupInputs));
                 }
-                // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
-                Some(
+
+                let res =
                     config
                         .borrow_mut()
-                        .layout(layouter, inputs.get(&idx[0]).unwrap())?,
-                )
+                        .layout(region, inputs.get(&idx[0]).unwrap(), offset)?;
+
+                // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
+                Some(res)
             }
             NodeConfig::Input => None,
             NodeConfig::Const => None,
@@ -773,6 +742,67 @@ impl Model {
             num_outputs = max(num_outputs, v.1);
         }
         vec![num_inputs, num_outputs]
+    }
+
+    /// Maximum number of input variables
+    pub fn total_var_len(&self) -> usize {
+        let mut maximum_var_len = 0;
+
+        let poly_ops: BTreeMap<&usize, &Node> = self
+            .nodes
+            .iter()
+            .filter(|(_, n)| n.opkind.is_poly())
+            .collect();
+
+        let _: Vec<_> = poly_ops
+            .iter()
+            .map(|(_, n)| match &n.opkind {
+                OpKind::Poly(p) => {
+                    let in_dims = n
+                        .inputs
+                        .iter()
+                        .map(|i| self.nodes.get(&i.node).unwrap().out_dims.clone());
+                    let layout_shape = p.circuit_shapes(in_dims.collect_vec());
+                    maximum_var_len += layout_shape.last().unwrap();
+                }
+                _ => panic!(),
+            })
+            .collect();
+
+        let lookup_ops: BTreeMap<&usize, &Node> = self
+            .nodes
+            .iter()
+            .filter(|(_, n)| n.opkind.is_lookup())
+            .collect();
+
+        for op in lookup_ops {
+            let len = (*op.1.out_dims).into_iter().product::<usize>();
+            maximum_var_len += len;
+        }
+
+        let output_lens: usize = self
+            .output_shapes()
+            .iter()
+            .map(|s| s.iter().product::<usize>())
+            .sum::<usize>();
+
+        let input_lens: usize = self
+            .input_shapes()
+            .iter()
+            .map(|s| s.iter().product::<usize>())
+            .sum::<usize>();
+
+        if self.run_args.pack_base > 1 {
+            maximum_var_len += output_lens;
+        }
+        if matches!(self.visibility.output, Visibility::Public) {
+            maximum_var_len += output_lens;
+        }
+        if matches!(self.visibility.output, Visibility::Public) {
+            maximum_var_len += input_lens;
+        }
+
+        maximum_var_len
     }
 
     /// Number of instances used by the circuit

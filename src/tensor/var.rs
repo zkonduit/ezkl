@@ -1,3 +1,5 @@
+use crate::circuit::base::CheckMode;
+
 use super::*;
 /// A wrapper around Halo2's `Column<Fixed>` or `Column<Advice>`.
 /// The wrapper allows for `VarTensor`'s dimensions to differ from that of the inner (wrapped) columns.
@@ -17,8 +19,6 @@ pub enum VarTensor {
         col_size: usize,
         /// Total capacity (number of advice cells), usually inner.len()*col_size
         capacity: usize,
-        /// Vector of dimensions of the tensor we are representing using this storage. Note that the shape of the storage and this shape can differ.
-        dims: Vec<usize>,
     },
     /// A VarTensor for holding Fixed values, which are assigned at circuit definition time.
     Fixed {
@@ -28,8 +28,6 @@ pub enum VarTensor {
         col_size: usize,
         /// Total capacity (number of advice cells), usually inner.len()*col_size
         capacity: usize,
-        /// Vector of dimensions of the tensor we are representing using this storage. Note that the shape of the storage and this shape can differ.
-        dims: Vec<usize>,
     },
 }
 
@@ -45,18 +43,17 @@ impl VarTensor {
     /// * `max_rot` - maximum number of rotations that we allow for this VarTensor. Rotations affect performance.
     pub fn new_advice<F: FieldExt>(
         cs: &mut ConstraintSystem<F>,
-        k: usize,
+        logrows: usize,
         capacity: usize,
-        dims: Vec<usize>,
         equality: bool,
     ) -> Self {
         let base = 2u32;
-        let max_rows = base.pow(k as u32) as usize - cs.blinding_factors() - 1;
-        let modulo = (capacity / max_rows) + 1;
+        let max_rows = base.pow(logrows as u32) as usize - cs.blinding_factors() - 1;
+
+        let mut modulo = (capacity / max_rows) + 1;
+        // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
+        modulo = ((capacity + modulo)/ max_rows) + 1;
         let mut advices = vec![];
-        if modulo > 1 {
-            unimplemented!("we'll be implementing multi-column variables in a future release but for now, increase K.")
-        }
         for _ in 0..modulo {
             let col = cs.advice_column();
             if equality {
@@ -69,7 +66,6 @@ impl VarTensor {
             inner: advices,
             col_size: max_rows,
             capacity,
-            dims,
         }
     }
 
@@ -82,14 +78,16 @@ impl VarTensor {
     /// `max_rot` is the maximum number of rotations that we allow for this VarTensor. Rotations affect performance.
     pub fn new_fixed<F: FieldExt>(
         cs: &mut ConstraintSystem<F>,
-        k: usize,
+        logrows: usize,
         capacity: usize,
-        dims: Vec<usize>,
         equality: bool,
     ) -> Self {
         let base = 2u32;
-        let max_rows = base.pow(k as u32) as usize - cs.blinding_factors() - 1;
-        let modulo = (capacity / max_rows) + 1;
+        let max_rows = base.pow(logrows as u32) as usize - cs.blinding_factors() - 1;
+        let mut modulo = (capacity / max_rows) + 1;
+         // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
+        modulo = ((capacity + modulo)/ max_rows) + 1;
+
         let mut fixed = vec![];
         for _ in 0..modulo {
             let col = cs.fixed_column();
@@ -103,7 +101,6 @@ impl VarTensor {
             inner: fixed,
             col_size: max_rows,
             capacity,
-            dims,
         }
     }
 
@@ -119,41 +116,6 @@ impl VarTensor {
     pub fn col_size(&self) -> usize {
         match self {
             VarTensor::Advice { col_size, .. } | VarTensor::Fixed { col_size, .. } => *col_size,
-        }
-    }
-
-    /// Gets the dims of the object the VarTensor represents
-    pub fn dims(&self) -> Vec<usize> {
-        match self {
-            VarTensor::Advice { dims: d, .. } | VarTensor::Fixed { dims: d, .. } => d.to_vec(),
-        }
-    }
-
-    /// Sets the dims of the object the VarTensor represents
-    pub fn reshape(&self, new_dims: &[usize]) -> Self {
-        match self {
-            VarTensor::Advice {
-                inner,
-                col_size,
-                capacity,
-                ..
-            } => VarTensor::Advice {
-                inner: inner.clone(),
-                col_size: *col_size,
-                capacity: *capacity,
-                dims: new_dims.to_vec(),
-            },
-            VarTensor::Fixed {
-                inner,
-                col_size,
-                capacity,
-                ..
-            } => VarTensor::Fixed {
-                inner: inner.clone(),
-                col_size: *col_size,
-                capacity: *capacity,
-                dims: new_dims.to_vec(),
-            },
         }
     }
 
@@ -182,7 +144,8 @@ impl VarTensor {
     pub fn query_rng<F: FieldExt>(
         &self,
         meta: &mut VirtualCells<'_, F>,
-        offset: i32,
+        rotation_offset: i32,
+        idx_offset: usize,
         rng: usize,
     ) -> Result<Tensor<Expression<F>>, halo2_proofs::plonk::Error> {
         match &self {
@@ -190,8 +153,8 @@ impl VarTensor {
                 let c = Tensor::from(
                     // this should fail if dims is empty, should be impossible
                     (0..rng).map(|i| {
-                        let (x, y) = self.cartesian_coord(i);
-                        meta.query_fixed(fixed[x], Rotation(offset + y as i32))
+                        let (x, y) = self.cartesian_coord(idx_offset + i);
+                        meta.query_fixed(fixed[x], Rotation(rotation_offset + y as i32))
                     }),
                 );
                 Ok(c)
@@ -201,8 +164,8 @@ impl VarTensor {
                 let c = Tensor::from(
                     // this should fail if dims is empty, should be impossible
                     (0..rng).map(|i| {
-                        let (x, y) = self.cartesian_coord(i);
-                        meta.query_advice(advices[x], Rotation(offset + y as i32))
+                        let (x, y) = self.cartesian_coord(idx_offset + i);
+                        meta.query_advice(advices[x], Rotation(rotation_offset + y as i32))
                     }),
                 );
                 Ok(c)
@@ -210,46 +173,7 @@ impl VarTensor {
         }
     }
 
-    /// Retrieve the values represented within the columns of the `VarTensor` (recall that `VarTensor`
-    /// is a Tensor of Halo2 columns).
-    pub fn query<F: FieldExt>(
-        &self,
-        meta: &mut VirtualCells<'_, F>,
-        offset: usize,
-    ) -> Result<Tensor<Expression<F>>, halo2_proofs::plonk::Error> {
-        match &self {
-            VarTensor::Fixed {
-                inner: fixed, dims, ..
-            } => {
-                let mut c = Tensor::from(
-                    // this should fail if dims is empty, should be impossible
-                    (0..dims.iter().product::<usize>()).map(|i| {
-                        let (x, y) = self.cartesian_coord(i);
-                        meta.query_fixed(fixed[x], Rotation(offset as i32 + y as i32))
-                    }),
-                );
-                c.reshape(dims);
-                Ok(c)
-            }
-            // when advice we have 1 col per row
-            VarTensor::Advice {
-                inner: advices,
-                dims,
-                ..
-            } => {
-                let mut c = Tensor::from(
-                    // this should fail if dims is empty, should be impossible
-                    (0..dims.iter().product::<usize>()).map(|i| {
-                        let (x, y) = self.cartesian_coord(i);
-                        meta.query_advice(advices[x], Rotation(offset as i32 + y as i32))
-                    }),
-                );
-                c.reshape(dims);
-                Ok(c)
-            }
-        }
-    }
-
+   
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor.
     pub fn assign<F: FieldExt + TensorType>(
         &self,
@@ -280,9 +204,7 @@ impl VarTensor {
             },
             ValTensor::Value { inner: v, .. } => v.enum_map(|coord, k| {
                 let (x, y) = self.cartesian_coord(offset + coord);
-                if x > 0 {
-                    unimplemented!("we'll be implementing multi-column variables in a future release but for now, increase K.")
-                }
+                
                 match k {
                     ValType::Value(v) => match &self {
                         VarTensor::Fixed { inner: fixed, .. } => {
@@ -308,6 +230,77 @@ impl VarTensor {
                     },
                 }
             }),
+        }
+    }
+
+    /// Assigns specific values (`ValTensor`) to the columns of the inner tensor.
+    pub fn assign_with_duplication<F: FieldExt + TensorType>(
+        &self,
+        region: &mut Region<'_, F>,
+        offset: usize,
+        values: &ValTensor<F>,
+        check_mode: &CheckMode
+    ) -> Result<(Tensor<AssignedCell<F, F>>, usize), halo2_proofs::plonk::Error> {
+        
+        match values {
+        
+            ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
+            ValTensor::Value { inner: v, dims } => {
+                // duplicates every nth element to adjust for column overflow               
+                let v = v.duplicate_every_n(self.col_size(), offset).unwrap();
+                let res = v.enum_map(|coord, k| {
+                    let (x, y) = self.cartesian_coord(offset + coord);
+                    if matches!(check_mode, CheckMode::SAFE) { 
+                        if x > 0 && y == 0 {
+                            // assert that duplication occurred correctly
+                            assert_eq!(Into::<i32>::into(k.clone()), Into::<i32>::into(v[coord - 1].clone()));
+                        }
+                    };
+                    match k {
+                        ValType::Value(v) => match &self {
+                            VarTensor::Fixed { inner: fixed, .. } => {
+                                region.assign_fixed(|| "k", fixed[x], y, || v)
+                            }
+                            VarTensor::Advice { inner: advices, .. } => {
+                                region.assign_advice(|| "k", advices[x], y, || v)
+                            }
+                        },
+                        ValType::PrevAssigned(v) => match &self {
+                            VarTensor::Advice { inner: advices, .. } => {
+                                v.copy_advice(|| "k", region, advices[x], y)
+                            }
+                            _ => Err(halo2_proofs::plonk::Error::Synthesis),
+                        },
+                        ValType::AssignedValue(v) => match &self {
+                            VarTensor::Fixed { inner: fixed, .. } => region
+                                .assign_fixed(|| "k", fixed[x], y, || v)
+                                .map(|a| a.evaluate()),
+                            VarTensor::Advice { inner: advices, .. } => region
+                                .assign_advice(|| "k", advices[x], y, || v)
+                                .map(|a| a.evaluate()),
+                        },
+                    }
+                })?;
+                let mut non_duplicated_res = res.remove_every_n(self.col_size(), offset).unwrap();
+                
+                non_duplicated_res.reshape(dims);
+
+                if matches!(check_mode, CheckMode::SAFE) {     
+                     // during key generation this will be 0 so we use this as a flag to check
+                     // TODO: this isn't very safe and would be better to get the phase directly
+                    let is_assigned = !Into::<Tensor<i32>>::into(ValTensor::from(non_duplicated_res.clone()).get_inner().unwrap())
+                    .iter()
+                    .all(|&x| x == 0);
+                    if is_assigned {       
+                        assert_eq!(
+                            Into::<Tensor<i32>>::into(values.get_inner().unwrap()),
+                            Into::<Tensor<i32>>::into(non_duplicated_res.clone())
+                    )};
+                }
+
+                
+                Ok((non_duplicated_res, res.len()))
+            }
         }
     }
 }

@@ -50,17 +50,13 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let input = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-        let params = VarTensor::new_advice(cs, K, LEN * LEN, vec![LEN, LEN], true);
-        let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+        let input = VarTensor::new_advice(cs, K, LEN, true);
+        let params = VarTensor::new_advice(cs, K, LEN * LEN, true);
+        let output = VarTensor::new_advice(cs, K, LEN, true);
         // tells the config layer to add an affine op to the circuit gate
 
-        let layer_config = PolyConfig::<F>::configure(
-            cs,
-            &[input.clone(), params],
-            &output,
-            CheckMode::SAFE,
-        );
+        let layer_config =
+            PolyConfig::<F>::configure(cs, &[input.clone(), params], &output, CheckMode::SAFE, 0);
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
         let [l1, l3]: [LookupConfig<F>; 2] = LookupConfig::configure_multiple(
@@ -100,32 +96,49 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         mut config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let x = config
-            .layer_config
-            .layout(
-                &mut layouter,
-                &[
-                    self.input.clone(),
-                    self.l0_params[0].clone(),
-                    self.l0_params[1].clone(),
-                ],
-                0,
-                PolyOp::Affine,
+        config.l1.layout_table(&mut layouter).unwrap();
+        config.l3.layout_table(&mut layouter).unwrap();
+        config.l4.layout_table(&mut layouter).unwrap();
+
+        let x = layouter
+            .assign_region(
+                || "mlp_4d",
+                |mut region| {
+                    let mut offset = 0;
+                    let x = config
+                        .layer_config
+                        .layout(
+                            &mut region,
+                            &[
+                                self.input.clone(),
+                                self.l0_params[0].clone(),
+                                self.l0_params[1].clone(),
+                            ],
+                            &mut offset,
+                            PolyOp::Affine,
+                        )
+                        .unwrap();
+
+                    println!("offset: {}", offset);
+                    let mut x = config.l1.layout(&mut region, &x, &mut offset).unwrap();
+                    println!("offset: {}", offset);
+                    x.reshape(&[x.dims()[0], 1]).unwrap();
+                    let x = config
+                        .layer_config
+                        .layout(
+                            &mut region,
+                            &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
+                            &mut offset,
+                            PolyOp::Affine,
+                        )
+                        .unwrap();
+                    println!("offset: {}", offset);
+                    let x = config.l3.layout(&mut region, &x, &mut offset).unwrap();
+                    println!("offset: {}", offset);
+                    Ok(config.l4.layout(&mut region, &x, &mut offset).unwrap())
+                },
             )
             .unwrap();
-        let mut x = config.l1.layout(&mut layouter, &x).unwrap();
-        x.reshape(&[x.dims()[0], 1]).unwrap();
-        let x = config
-            .layer_config
-            .layout(
-                &mut layouter,
-                &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
-                0,
-                PolyOp::Affine,
-            )
-            .unwrap();
-        let x = config.l3.layout(&mut layouter, &x).unwrap();
-        let x = config.l4.layout(&mut layouter, &x).unwrap();
         match x {
             ValTensor::Value { inner: v, dims: _ } => v
                 .enum_map(|i, x| match x {

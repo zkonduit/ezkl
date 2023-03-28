@@ -16,10 +16,10 @@ fn init() {
     build_ezkl();
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
-            "-K=20",
+            "-K=17",
             "gen-srs",
             &format!(
-                "--params-path={}/kzg20.params",
+                "--params-path={}/kzg17.params",
                 TEST_DIR.path().to_str().unwrap()
             ),
         ])
@@ -180,8 +180,7 @@ macro_rules! test_func {
             use crate::forward_pass;
             use crate::kzg_prove_and_verify;
             use crate::render_circuit;
-            use crate::mock_non_single_lookup;
-            use crate::kzg_prove_and_verify_non_single_lookup;
+
 
             seq!(N in 0..=19 {
 
@@ -193,11 +192,6 @@ macro_rules! test_func {
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
                 mock(test.to_string());
-            }
-
-            #(#[test_case(TESTS[N])])*
-            fn mock_non_single_lookup_(test: &str) {
-                mock_non_single_lookup(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
@@ -218,11 +212,6 @@ macro_rules! test_func {
             #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_(test: &str) {
                 kzg_prove_and_verify(test.to_string());
-            }
-
-            #(#[test_case(TESTS[N])])*
-            fn kzg_prove_and_verify_non_single_lookup_(test: &str) {
-                kzg_prove_and_verify_non_single_lookup(test.to_string());
             }
 
             });
@@ -297,17 +286,12 @@ macro_rules! test_neg_examples {
             use crate::NEG_TESTS;
             use test_case::test_case;
             use crate::neg_mock as run;
-            use crate::neg_mock_non_single_lookup as run_non_single_lookup;
             seq!(N in 0..=1 {
             #(#[test_case(NEG_TESTS[N])])*
             fn neg_examples_(test: (&str, &str)) {
                 run(test.0.to_string(), test.1.to_string());
             }
 
-            #(#[test_case(NEG_TESTS[N])])*
-            fn neg_examples_non_single_lookup_(test: (&str, &str)) {
-                run_non_single_lookup(test.0.to_string(), test.1.to_string());
-            }
             });
     }
     };
@@ -325,25 +309,7 @@ fn neg_mock(example_name: String, counter_example: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=20",
-            "mock",
-            "-D",
-            format!("./examples/onnx/{}/input.json", counter_example).as_str(),
-            "-M",
-            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(!status.success());
-}
-
-// Mock prove (fast, but does not cover some potential issues)
-fn neg_mock_non_single_lookup(example_name: String, counter_example: String) {
-    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "--bits=16",
-            "--single-lookup=false",
-            "-K=20",
+            "-K=17",
             "mock",
             "-D",
             format!("./examples/onnx/{}/input.json", counter_example).as_str(),
@@ -369,7 +335,7 @@ fn forward_pass(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=20",
+            "-K=17",
             "forward",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -392,7 +358,7 @@ fn forward_pass(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=20",
+            "-K=17",
             "mock",
             "-D",
             format!(
@@ -414,7 +380,7 @@ fn render_circuit(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=20",
+            "-K=17",
             "render-circuit",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -438,7 +404,7 @@ fn mock(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=20",
+            "-K=17",
             "mock",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -455,7 +421,7 @@ fn mock_packed_outputs(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=20",
+            "-K=17",
             "--pack-base=2",
             "mock",
             "-D",
@@ -473,27 +439,9 @@ fn mock_everything(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=20",
+            "-K=17",
             "--public-inputs",
             "--pack-base=2",
-            "mock",
-            "-D",
-            format!("./examples/onnx/{}/input.json", example_name).as_str(),
-            "-M",
-            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
-}
-
-// Mock prove (fast, but does not cover some potential issues)
-fn mock_non_single_lookup(example_name: String) {
-    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "--bits=16",
-            "-K=20",
-            "--single-lookup=false",
             "mock",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -512,7 +460,7 @@ fn mock_public_inputs(example_name: String) {
             "--public-inputs",
             "--public-outputs=false",
             "--bits=16",
-            "-K=20",
+            "-K=17",
             "mock",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -531,7 +479,7 @@ fn mock_public_params(example_name: String) {
             "--public-params",
             "--public-outputs=false",
             "--bits=16",
-            "-K=20",
+            "-K=17",
             "mock",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -548,7 +496,7 @@ fn kzg_aggr_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=20",
+            "-K=17",
             "prove",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -573,7 +521,7 @@ fn kzg_aggr_prove_and_verify(example_name: String) {
             "--bits=16",
             "-K=23",
             "aggregate",
-            "--app-logrows=20",
+            "--app-logrows=17",
             "-M",
             format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
             "--aggregation-snarks",
@@ -604,7 +552,7 @@ fn kzg_aggr_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=20",
+            "-K=17",
             "verify-aggr",
             "--proof-path",
             &format!(
@@ -634,7 +582,7 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=20",
+            "-K=17",
             "prove",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -667,7 +615,7 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
             "--bits=16",
             "-K=23",
             "aggregate",
-            "--app-logrows=20",
+            "--app-logrows=17",
             "-M",
             format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
             "--aggregation-snarks",
@@ -706,7 +654,7 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=20",
+            "-K=17",
             "create-evm-verifier-aggr",
             "--deployment-code-path",
             &format!(
@@ -731,7 +679,7 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=20",
+            "-K=17",
             "verify-evm",
             "--proof-path",
             &format!(
@@ -752,60 +700,11 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
 }
 
 // prove-serialize-verify, the usual full path
-fn kzg_prove_and_verify_non_single_lookup(example_name: String) {
-    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "--bits=16",
-            "--single-lookup=false",
-            "-K=20",
-            "prove",
-            "-D",
-            format!("./examples/onnx/{}/input.json", example_name).as_str(),
-            "-M",
-            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-            "--proof-path",
-            &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
-            "--vk-path",
-            &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
-            &format!(
-                "--params-path={}/kzg20.params",
-                TEST_DIR.path().to_str().unwrap()
-            ),
-            "--transcript=blake",
-            "--strategy=single",
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
-    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "--bits=16",
-            "--single-lookup=false",
-            "-K=20",
-            "verify",
-            "-M",
-            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-            "--proof-path",
-            &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
-            "--vk-path",
-            &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
-            &format!(
-                "--params-path={}/kzg20.params",
-                TEST_DIR.path().to_str().unwrap()
-            ),
-            "--transcript=blake",
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
-}
-
-// prove-serialize-verify, the usual full path
 fn kzg_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=20",
+            "-K=17",
             "prove",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -816,7 +715,7 @@ fn kzg_prove_and_verify(example_name: String) {
             "--vk-path",
             &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
             &format!(
-                "--params-path={}/kzg20.params",
+                "--params-path={}/kzg17.params",
                 TEST_DIR.path().to_str().unwrap()
             ),
             "--transcript=blake",
@@ -828,7 +727,7 @@ fn kzg_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=20",
+            "-K=17",
             "verify",
             "-M",
             format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
@@ -837,7 +736,7 @@ fn kzg_prove_and_verify(example_name: String) {
             "--vk-path",
             &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
             &format!(
-                "--params-path={}/kzg20.params",
+                "--params-path={}/kzg17.params",
                 TEST_DIR.path().to_str().unwrap()
             ),
             "--transcript=blake",
@@ -852,7 +751,7 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=20",
+            "-K=17",
             "prove",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -863,7 +762,7 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
             "--vk-path",
             &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
             &format!(
-                "--params-path={}/kzg20.params",
+                "--params-path={}/kzg17.params",
                 TEST_DIR.path().to_str().unwrap()
             ),
             "--transcript=evm",
@@ -882,13 +781,13 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
     );
     let vk_arg = format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name);
     let param_arg = format!(
-        "--params-path={}/kzg20.params",
+        "--params-path={}/kzg17.params",
         TEST_DIR.path().to_str().unwrap()
     );
 
     let mut args = vec![
         "--bits=16",
-        "-K=20",
+        "-K=17",
         "create-evm-verifier",
         "-D",
         input_arg.as_str(),
@@ -917,7 +816,7 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
 
     let mut args = vec![
         "--bits=16",
-        "-K=20",
+        "-K=17",
         "verify-evm",
         "--proof-path",
         pf_arg.as_str(),

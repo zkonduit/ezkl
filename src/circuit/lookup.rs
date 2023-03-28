@@ -3,13 +3,14 @@ use crate::fieldutils::i128_to_felt;
 use crate::tensor::ops::nonlinearities::*;
 use halo2_proofs::{
     arithmetic::{Field, FieldExt},
-    circuit::{Layouter, Value},
+    circuit::{Layouter, Region, Value},
     plonk::{ConstraintSystem, Expression, Selector, TableColumn},
     poly::Rotation,
 };
-use std::error::Error;
+use log::{error, trace};
 use std::fmt;
 use std::{cell::RefCell, marker::PhantomData, rc::Rc};
+use std::{collections::BTreeMap, error::Error};
 
 #[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -173,14 +174,10 @@ pub struct Config<F: FieldExt + TensorType> {
     /// the (currently singular) output of the fused operations.
     pub output: VarTensor,
     /// [Selector] generated when configuring the layer.
-    pub qlookup: Selector,
+    pub selectors: BTreeMap<usize, Selector>,
     ///  table used to represent the non-linearity
     pub table: Rc<RefCell<Table<F>>>,
     _marker: PhantomData<F>,
-    /// the inputs to the lookup operations.
-    pub input_buffer: Vec<ValTensor<F>>,
-    /// the outputs to the lookup operations.
-    pub output_buffer: Vec<ValTensor<F>>,
 }
 
 impl<F: FieldExt + TensorType> Config<F> {
@@ -218,56 +215,56 @@ impl<F: FieldExt + TensorType> Config<F> {
         output: &VarTensor,
         table: Rc<RefCell<Table<F>>>,
     ) -> Self {
-        let qlookup = cs.complex_selector();
-
-        let _ = cs.lookup(table.borrow().nonlinearities[0].as_str(), |cs| {
-            let qlookup = cs.query_selector(qlookup);
-            let not_qlookup = Expression::Constant(<F as Field>::one()) - qlookup.clone();
-            let default_x = <F as Field>::zero();
-            let mut default_y = vec![0_i128].into_iter().into();
-            for nl in table.borrow().nonlinearities.clone() {
-                default_y = nl.f(default_y)
-            }
-            let default_y: F = i128_to_felt(default_y[0]);
-            let (x, y) = input.cartesian_coord(0);
-            vec![
-                (
-                    match &input {
-                        VarTensor::Advice { inner: advices, .. } => {
-                            qlookup.clone() * cs.query_advice(advices[x], Rotation(y as i32))
-                                + not_qlookup.clone() * default_x
-                        }
-                        VarTensor::Fixed { inner: fixed, .. } => {
-                            qlookup.clone() * cs.query_fixed(fixed[x], Rotation(y as i32))
-                                + not_qlookup.clone() * default_x
-                        }
-                    },
-                    table.borrow().table_input,
-                ),
-                (
-                    match &output {
-                        VarTensor::Advice { inner: advices, .. } => {
-                            qlookup * cs.query_advice(advices[x], Rotation(y as i32))
-                                + not_qlookup * default_y
-                        }
-                        VarTensor::Fixed { inner: fixed, .. } => {
-                            qlookup * cs.query_fixed(fixed[x], Rotation(y as i32))
-                                + not_qlookup * default_y
-                        }
-                    },
-                    table.borrow().table_output,
-                ),
-            ]
-        });
+        let mut selectors = BTreeMap::new();
+        for x in 0..input.num_cols() {
+            let qlookup = cs.complex_selector();
+            selectors.insert(x, qlookup);
+            let _ = cs.lookup(table.borrow().nonlinearities[0].as_str(), |cs| {
+                let qlookup = cs.query_selector(qlookup);
+                let not_qlookup = Expression::Constant(<F as Field>::one()) - qlookup.clone();
+                let default_x = <F as Field>::zero();
+                let mut default_y = vec![0_i128].into_iter().into();
+                for nl in table.borrow().nonlinearities.clone() {
+                    default_y = nl.f(default_y)
+                }
+                let default_y: F = i128_to_felt(default_y[0]);
+                vec![
+                    (
+                        match &input {
+                            VarTensor::Advice { inner: advices, .. } => {
+                                qlookup.clone() * cs.query_advice(advices[x], Rotation(0))
+                                    + not_qlookup.clone() * default_x
+                            }
+                            VarTensor::Fixed { inner: fixed, .. } => {
+                                qlookup.clone() * cs.query_fixed(fixed[x], Rotation(0))
+                                    + not_qlookup.clone() * default_x
+                            }
+                        },
+                        table.borrow().table_input,
+                    ),
+                    (
+                        match &output {
+                            VarTensor::Advice { inner: advices, .. } => {
+                                qlookup * cs.query_advice(advices[x], Rotation(0))
+                                    + not_qlookup * default_y
+                            }
+                            VarTensor::Fixed { inner: fixed, .. } => {
+                                qlookup * cs.query_fixed(fixed[x], Rotation(0))
+                                    + not_qlookup * default_y
+                            }
+                        },
+                        table.borrow().table_output,
+                    ),
+                ]
+            });
+        }
 
         Self {
             input: input.clone(),
             output: output.clone(),
             table,
-            qlookup,
+            selectors,
             _marker: PhantomData,
-            input_buffer: vec![],
-            output_buffer: vec![],
         }
     }
 }
@@ -290,105 +287,66 @@ impl<F: FieldExt + TensorType> Config<F> {
         Self::configure_with_table(cs, input, output, table)
     }
 
+    /// layout_table must be called before layout.
+    pub fn layout_table(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), Box<dyn Error>> {
+        if !self.table.borrow().is_assigned {
+            self.table.borrow_mut().layout(layouter)?;
+        }
+        Ok(())
+    }
+
     /// Assigns values to the variables created when calling `configure`.
     /// Values are supplied as a 1-element array of `[input]` VarTensors.
     pub fn layout(
         &mut self,
-        layouter: &mut impl Layouter<F>,
+        region: &mut Region<F>,
         values: &ValTensor<F>,
+        offset: &mut usize,
     ) -> Result<ValTensor<F>, Box<dyn Error>> {
         if !self.table.borrow().is_assigned {
-            self.table.borrow_mut().layout(layouter)?
+            panic!();
         }
 
-        let values_len = values.dims().iter().product::<usize>();
-        let mut currently_filled_buffer = 0;
-        for l in self.input_buffer.iter() {
-            currently_filled_buffer += l.dims().iter().product::<usize>();
-        }
-        let buffer_capacity = self.input.dims().iter().product::<usize>();
+        let region_name = format!("Lookup for {:#?}", self.table.borrow().nonlinearities[0]);
 
-        let region_name = if (currently_filled_buffer + values_len) == buffer_capacity {
-            format!("Lookup for {:#?}", self.table.borrow().nonlinearities[0])
-        } else {
-            format!(
-                "Lookup buffering for {:#?}",
-                self.table.borrow().nonlinearities[0]
-            )
-        };
-        let mut t = match layouter.assign_region(
-            || &region_name, // the name of the region
-            |mut region| {
-                let w = match values {
-                    // if an instance we need to constrain to an advice to access values
-                    ValTensor::Instance { .. } => {
-                        ValTensor::from(self.input.assign(&mut region, 0, values)?)
-                    }
-                    // if not, we can just pull in the passed in values
-                    _ => values.clone(),
-                };
-                // extract integer_valuations
-                let integer_evals = w
-                    .get_int_evals()
-                    .map_err(|_| halo2_proofs::plonk::Error::Synthesis)?;
+        trace!("laying out {}", region_name);
 
-                // for key generation integer_evals will be empty and we need to return a set of unassigned values
-                let output: Tensor<Value<F>> = match integer_evals.len() {
-                    // if empty return an unknown val
-                    0 => Tensor::from(
-                        (0..values.dims().iter().product::<usize>()).map(|_| Value::unknown()),
-                    ),
-                    // if not empty apply the nonlinearity !
-                    _ => {
-                        let mut x = integer_evals.into_iter().into();
-                        for nl in self.table.borrow().nonlinearities.clone() {
-                            x = nl.f(x);
-                        }
-                        x.map(|elem| Value::known(i128_to_felt(elem)))
-                    }
-                };
+        let w = ValTensor::from(self.input.assign(region, *offset, values)?);
+        // extract integer_valuations
+        let integer_evals = w.get_int_evals().map_err(|e| {
+            error!("{}", e);
+            halo2_proofs::plonk::Error::Synthesis
+        })?;
 
-                if (currently_filled_buffer + values_len) == buffer_capacity {
-                    //  can now safely unwrap
-                    let mut region_offset = values_len;
-                    for (input, output) in self.input_buffer.iter().zip(&self.output_buffer) {
-                        self.input.assign(&mut region, region_offset, input)?;
-                        self.output.assign(&mut region, region_offset, output)?;
-                        // input and output should be the same size
-                        region_offset += input.dims().iter().product::<usize>();
-                    }
-                    // if an instance we have already assigned above
-                    match values {
-                        ValTensor::Instance { .. } => {}
-                        _ => {
-                            self.input.assign(&mut region, 0, values)?;
-                        }
-                    };
-                    for i in 0..buffer_capacity {
-                        self.qlookup.enable(&mut region, i)?;
-                    }
-                };
-
-                self.input_buffer.push(w);
-
-                // constrain the calculated output to a column
-                Ok(ValTensor::from(self.output.assign(
-                    &mut region,
-                    0,
-                    &ValTensor::from(output),
-                )?))
-            },
-        ) {
-            Ok(a) => a,
-            Err(e) => {
-                return Err(Box::new(e));
+        // for key generation integer_evals will be empty and we need to return a set of unassigned values
+        let output: Tensor<Value<F>> = match integer_evals.len() {
+            // if empty return an unknown val
+            0 => {
+                Tensor::from((0..values.dims().iter().product::<usize>()).map(|_| Value::unknown()))
+            }
+            // if not empty apply the nonlinearity !
+            _ => {
+                let mut x = integer_evals.into_iter().into();
+                for nl in self.table.borrow().nonlinearities.clone() {
+                    x = nl.f(x);
+                }
+                x.map(|elem| Value::known(i128_to_felt(elem)))
             }
         };
 
-        t.reshape(values.dims())?;
-        self.output_buffer.push(t.clone());
+        let mut output = self.output.assign(region, *offset, &output.into())?;
 
-        Ok(t)
+        for i in 0..values.len() {
+            let (x, y) = self.input.cartesian_coord(*offset + i);
+            self.selectors.get(&x).unwrap().enable(region, y)?;
+        }
+
+        output.reshape(values.dims());
+
+        *offset += values.len();
+
+        // constrain the calculated output to a column
+        Ok(ValTensor::from(output))
     }
 }
 
@@ -418,7 +376,7 @@ mod tests {
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
             let advices = (0..2)
-                .map(|_| VarTensor::new_advice(cs, 4, 1, vec![1], true))
+                .map(|_| VarTensor::new_advice(cs, 4, 1, true))
                 .collect::<Vec<_>>();
 
             let nl = Op::ReLU { scale: 1 };
@@ -431,7 +389,17 @@ mod tests {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
         ) -> Result<(), Error> {
-            let _ = config.layout(&mut layouter, &self.input).unwrap();
+            config.layout_table(&mut layouter).unwrap();
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.input, &mut 0)
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
 
             Ok(())
         }

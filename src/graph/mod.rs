@@ -89,10 +89,14 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
 
         // for now the number of instances corresponds to the number of graph / model outputs
         let instance_shapes = model.instance_shapes();
+        let var_len = model.total_var_len();
+
+        info!("total var len: {:?}", var_len);
 
         let mut vars = ModelVars::new(
             cs,
             model.run_args.logrows as usize,
+            var_len,
             instance_shapes.clone(),
             model.visibility.clone(),
         );

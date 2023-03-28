@@ -1089,6 +1089,7 @@ impl Node {
                             ..Default::default()
                         }
                     }
+                    _ => unreachable!(""),
                 }
             }
             OpKind::Const => {

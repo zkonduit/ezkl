@@ -6,7 +6,7 @@ pub mod layouts;
 mod tests;
 
 use halo2_proofs::{
-    circuit::Layouter,
+    circuit::Region,
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
 };
 use halo2curves::FieldExt;
@@ -14,7 +14,10 @@ use itertools::Itertools;
 use log::trace;
 use serde::{Deserialize, Serialize};
 
-use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor, VarTensor};
+use crate::{
+    fieldutils::i32_to_felt,
+    tensor::{self, Tensor, TensorError, TensorType, ValTensor, VarTensor},
+};
 use std::{
     collections::BTreeMap,
     error::Error,
@@ -33,6 +36,7 @@ pub enum BaseOp {
     Mult,
     Sub,
     Sum,
+    Range { tol: i32 },
 }
 
 #[allow(missing_docs)]
@@ -68,6 +72,7 @@ impl BaseOp {
             BaseOp::Sum => b + m,
             BaseOp::Sub => a - b,
             BaseOp::Mult => a * b,
+            BaseOp::Range { .. } => b,
         }
     }
 
@@ -79,6 +84,7 @@ impl BaseOp {
             BaseOp::Sub => "SUB",
             BaseOp::Mult => "MULT",
             BaseOp::Sum => "SUM",
+            BaseOp::Range { .. } => "RANGE",
         }
     }
     fn query_offset_rng(&self) -> (i32, usize) {
@@ -89,6 +95,7 @@ impl BaseOp {
             BaseOp::Sub => (0, 1),
             BaseOp::Mult => (0, 1),
             BaseOp::Sum => (-1, 2),
+            BaseOp::Range { .. } => (0, 1),
         }
     }
     fn num_inputs(&self) -> usize {
@@ -99,6 +106,7 @@ impl BaseOp {
             BaseOp::Sub => 2,
             BaseOp::Mult => 2,
             BaseOp::Sum => 1,
+            BaseOp::Range { .. } => 1,
         }
     }
     fn constraint_idx(&self) -> usize {
@@ -108,6 +116,7 @@ impl BaseOp {
             BaseOp::Add => 0,
             BaseOp::Sub => 0,
             BaseOp::Mult => 0,
+            BaseOp::Range { .. } => 0,
             BaseOp::Sum => 1,
         }
     }
@@ -152,9 +161,107 @@ pub enum Op {
         inner: Box<Op>,
         scale: Vec<(usize, usize)>,
     },
+    RangeCheck(i32),
 }
 
 impl Op {
+    /// circuit shape
+    pub fn circuit_shapes(&self, input_shapes: Vec<Vec<usize>>) -> Vec<usize> {
+        let mut shapes = match &self {
+            Op::Identity => vec![0, input_shapes[0].iter().product()],
+            Op::Reshape(_) => vec![0; 2],
+            Op::Flatten(_) => vec![0; 2],
+            Op::Pad(_, _) => vec![0; 2],
+            Op::Add => input_shapes.iter().map(|x| x.iter().product()).collect(),
+            Op::Mult => input_shapes.iter().map(|x| x.iter().product()).collect(),
+            Op::Sub => input_shapes.iter().map(|x| x.iter().product()).collect(),
+            Op::Sum => vec![0, input_shapes[0].iter().product()],
+            Op::Dot => input_shapes.iter().map(|x| x.iter().product()).collect(),
+            Op::Pow(_) => input_shapes.iter().map(|x| x.iter().product()).collect(),
+            Op::Pack(_, _) => input_shapes.iter().map(|x| x.iter().product()).collect(),
+            Op::GlobalSumPool => unreachable!("should be handled by sumpool"),
+            Op::ScaleAndShift => input_shapes.iter().map(|x| x.iter().product()).collect(),
+            Op::BatchNorm => input_shapes.iter().map(|x| x.iter().product()).collect(),
+            Op::Conv { padding, stride } => {
+                let image_dims = &input_shapes[0];
+                let kernel_dims = &input_shapes[1];
+
+                let (output_channels, _input_channels, kernel_height, kernel_width) = (
+                    kernel_dims[0],
+                    kernel_dims[1],
+                    kernel_dims[2],
+                    kernel_dims[3],
+                );
+
+                let (image_height, image_width) = (image_dims[1], image_dims[2]);
+
+                let padded_height = image_height + 2 * padding.0;
+                let padded_width = image_width + 2 * padding.1;
+
+                let vert_slides = (padded_height - kernel_height) / stride.0 + 1;
+                let horz_slides = (padded_width - kernel_width) / stride.1 + 1;
+
+                let input_shapes = vec![
+                    vec![
+                        output_channels * vert_slides * horz_slides,
+                        (padded_height * padded_width * image_dims[0] + 1),
+                    ],
+                    vec![(padded_height * padded_width * image_dims[0] + 1), 1],
+                ];
+                let op = Op::Matmul;
+                let output_len = op.circuit_shapes(input_shapes);
+
+                vec![*output_len.last().unwrap(); 2]
+            }
+            Op::SumPool {
+                padding,
+                stride,
+                kernel_shape,
+            } => {
+                let image_dims = &input_shapes[0];
+
+                let (image_height, image_width) = (image_dims[1], image_dims[2]);
+
+                let padded_height = image_height + 2 * padding.0;
+                let padded_width = image_width + 2 * padding.1;
+
+                let vert_slides = (padded_height - kernel_shape.0) / stride.0 + 1;
+                let horz_slides = (padded_width - kernel_shape.1) / stride.1 + 1;
+
+                let input_shapes = vec![
+                    vec![
+                        image_dims[0] * vert_slides * horz_slides,
+                        (padded_height * padded_width * image_dims[0] + 1),
+                    ],
+                    vec![(padded_height * padded_width * image_dims[0] + 1), 1],
+                ];
+                let op = Op::Matmul;
+                let output_len = op.circuit_shapes(input_shapes);
+
+                vec![*output_len.last().unwrap(); 2]
+            }
+            Op::Affine => {
+                let s = input_shapes.clone();
+                // add 1 cause of bias
+                let output_len = s[1][0] * (s[1][1] + 1);
+                vec![output_len; 2]
+            }
+            Op::Matmul => {
+                let output_len = input_shapes[0].iter().product::<usize>() * input_shapes[1][1];
+
+                vec![output_len; 2]
+            }
+            Op::Rescaled { inner, .. } => inner.circuit_shapes(input_shapes),
+            Op::RangeCheck(..) => input_shapes.iter().map(|x| x.iter().product()).collect(),
+        };
+        match shapes.last() {
+            // add output
+            Some(s) => shapes.push(s.clone()),
+            _ => {}
+        };
+        shapes
+    }
+
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     pub fn f<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
         &self,
@@ -228,6 +335,7 @@ impl Op {
                 Ok(inner.f(rescaled_inputs)?)
             }
             Op::GlobalSumPool => unreachable!(),
+            Op::RangeCheck(..) => Ok(inputs[0].clone()),
         }
     }
 }
@@ -273,6 +381,7 @@ impl fmt::Display for Op {
                     scale.iter().map(|e| e.1).collect_vec()
                 )
             }
+            Op::RangeCheck(tol) => write!(f, "range check w/ tol {}", tol),
         }
     }
 }
@@ -285,7 +394,7 @@ pub struct BaseConfig<F: FieldExt + TensorType> {
     /// the (currently singular) output of the accumulated operations.
     pub output: VarTensor,
     /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many base gates.
-    pub selectors: BTreeMap<BaseOp, Selector>,
+    pub selectors: BTreeMap<(BaseOp, usize), Selector>,
     /// Activate sanity checks
     pub check_mode: CheckMode,
     _marker: PhantomData<F>,
@@ -302,19 +411,71 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         inputs: &[VarTensor; 2],
         output: &VarTensor,
         check_mode: CheckMode,
+        tol: i32,
     ) -> Self {
         // setup a selector per base op
         let mut selectors = BTreeMap::new();
-        for input in inputs {
-            // we don't support multiple columns rn
-            assert!(input.num_cols() == 1);
+
+        assert!(inputs[0].num_cols() == inputs[1].num_cols());
+        assert!(inputs[0].num_cols() == output.num_cols());
+
+        for i in 0..output.num_cols() {
+            selectors.insert((BaseOp::Add, i), meta.selector());
+            selectors.insert((BaseOp::Sub, i), meta.selector());
+            selectors.insert((BaseOp::Dot, i), meta.selector());
+            selectors.insert((BaseOp::Sum, i), meta.selector());
+            selectors.insert((BaseOp::Mult, i), meta.selector());
+            selectors.insert((BaseOp::Identity, i), meta.selector());
+            selectors.insert((BaseOp::Range { tol }, i), meta.selector());
         }
-        selectors.insert(BaseOp::Add, meta.selector());
-        selectors.insert(BaseOp::Sub, meta.selector());
-        selectors.insert(BaseOp::Dot, meta.selector());
-        selectors.insert(BaseOp::Sum, meta.selector());
-        selectors.insert(BaseOp::Mult, meta.selector());
-        selectors.insert(BaseOp::Identity, meta.selector());
+
+        // Given a range R and a value v, returns the expression
+        // (v) * (1 - v) * (2 - v) * ... * (R - 1 - v)
+        let range_check = |tol: i32, value: Expression<F>| {
+            (-tol..tol).fold(value.clone(), |expr, i| {
+                expr * (Expression::Constant(i32_to_felt(i)) - value.clone())
+            })
+        };
+
+        for ((base_op, col_idx), selector) in selectors.iter() {
+            meta.create_gate(base_op.as_str(), |meta| {
+                let selector = meta.query_selector(*selector);
+                let idx_offset = col_idx * output.col_size();
+                let mut qis = vec![Expression::<F>::zero().unwrap(); 2];
+                for (i, q_i) in qis
+                    .iter_mut()
+                    .enumerate()
+                    .take(2)
+                    .skip(2 - base_op.num_inputs())
+                {
+                    *q_i = inputs[i]
+                        .query_rng(meta, 0, idx_offset, 1)
+                        .expect("accum: input query failed")[0]
+                        .clone()
+                }
+
+                // Get output expressions for each input channel
+                let (rotation_offset, rng) = base_op.query_offset_rng();
+
+                let expected_output: Tensor<Expression<F>> = output
+                    .query_rng(meta, rotation_offset, idx_offset, rng)
+                    .expect("poly: output query failed");
+
+                let res = base_op.f((qis[0].clone(), qis[1].clone(), expected_output[0].clone()));
+
+                let constraints = match base_op {
+                    BaseOp::Range { tol } => {
+                        vec![range_check(
+                            *tol,
+                            res - expected_output[base_op.constraint_idx()].clone(),
+                        )]
+                    }
+                    _ => vec![expected_output[base_op.constraint_idx()].clone() - res],
+                };
+
+                Constraints::with_selector(selector, constraints)
+            });
+        }
 
         let config = Self {
             selectors,
@@ -323,39 +484,6 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             check_mode,
             _marker: PhantomData,
         };
-
-        for (base_op, selector) in config.selectors.iter() {
-            meta.create_gate(base_op.as_str(), |meta| {
-                let selector = meta.query_selector(*selector);
-
-                let mut qis = vec![Expression::<F>::zero().unwrap(); 2];
-                for (i, q_i) in qis
-                    .iter_mut()
-                    .enumerate()
-                    .take(2)
-                    .skip(2 - base_op.num_inputs())
-                {
-                    *q_i = config.inputs[i]
-                        .query_rng(meta, 0, 1)
-                        .expect("accum: input query failed")[0]
-                        .clone()
-                }
-
-                // Get output expressions for each input channel
-                let (offset, rng) = base_op.query_offset_rng();
-
-                let expected_output: Tensor<Expression<F>> = config
-                    .output
-                    .query_rng(meta, offset, rng)
-                    .expect("poly: output query failed");
-
-                let res = base_op.f((qis[0].clone(), qis[1].clone(), expected_output[0].clone()));
-
-                let constraints = vec![expected_output[base_op.constraint_idx()].clone() - res];
-
-                Constraints::with_selector(selector, constraints)
-            });
-        }
 
         config
     }
@@ -368,28 +496,28 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
     /// * `op` - The operation being represented.
     pub fn layout(
         &mut self,
-        layouter: &mut impl Layouter<F>,
+        region: &mut Region<F>,
         values: &[ValTensor<F>],
-        offset: usize,
+        offset: &mut usize,
         op: Op,
     ) -> Result<ValTensor<F>, Box<dyn Error>> {
         let mut cp_values = vec![];
         for v in values.iter() {
             if let ValTensor::Instance { .. } = v {
-                cp_values.push(layouts::identity(self, layouter, &[v.clone()], offset)?);
+                cp_values.push(layouts::identity(self, region, &[v.clone()], offset)?);
             } else {
                 cp_values.push(v.clone());
             }
         }
         trace!("laying out {}", op);
         match op {
-            Op::Dot => layouts::dot(self, layouter, cp_values[..].try_into()?, offset),
-            Op::Sum => layouts::sum(self, layouter, cp_values[..].try_into()?, offset),
-            Op::Matmul => layouts::matmul(self, layouter, cp_values[..].try_into()?, offset),
-            Op::Affine => layouts::affine(self, layouter, cp_values[..].try_into()?, offset),
+            Op::Dot => layouts::dot(self, region, cp_values[..].try_into()?, offset),
+            Op::Sum => layouts::sum(self, region, cp_values[..].try_into()?, offset),
+            Op::Matmul => layouts::matmul(self, region, cp_values[..].try_into()?, offset),
+            Op::Affine => layouts::affine(self, region, cp_values[..].try_into()?, offset),
             Op::Conv { padding, stride } => layouts::conv(
                 self,
-                layouter,
+                region,
                 cp_values[..].try_into()?,
                 padding,
                 stride,
@@ -401,41 +529,33 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                 kernel_shape,
             } => layouts::sumpool(
                 self,
-                layouter,
+                region,
                 cp_values[..].try_into()?,
                 padding,
                 stride,
                 kernel_shape,
                 offset,
             ),
-            Op::Add => layouts::pairwise(
-                self,
-                layouter,
-                cp_values[..].try_into()?,
-                offset,
-                BaseOp::Add,
-            ),
-            Op::Sub => layouts::pairwise(
-                self,
-                layouter,
-                cp_values[..].try_into()?,
-                offset,
-                BaseOp::Sub,
-            ),
+            Op::Add => {
+                layouts::pairwise(self, region, cp_values[..].try_into()?, offset, BaseOp::Add)
+            }
+            Op::Sub => {
+                layouts::pairwise(self, region, cp_values[..].try_into()?, offset, BaseOp::Sub)
+            }
             Op::Mult => layouts::pairwise(
                 self,
-                layouter,
+                region,
                 cp_values[..].try_into()?,
                 offset,
                 BaseOp::Mult,
             ),
-            Op::Identity => layouts::identity(self, layouter, cp_values[..].try_into()?, offset),
+            Op::Identity => layouts::identity(self, region, cp_values[..].try_into()?, offset),
             Op::Reshape(d) | Op::Flatten(d) => layouts::reshape(cp_values[..].try_into()?, &d),
             Op::BatchNorm => {
-                layouts::scale_and_shift(self, layouter, cp_values[..].try_into()?, offset)
+                layouts::scale_and_shift(self, region, cp_values[..].try_into()?, offset)
             }
             Op::ScaleAndShift => {
-                layouts::scale_and_shift(self, layouter, cp_values[..].try_into()?, offset)
+                layouts::scale_and_shift(self, region, cp_values[..].try_into()?, offset)
             }
             Op::Pad(p1, p2) => {
                 if values.len() != 1 {
@@ -445,15 +565,10 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                 input.pad((p1, p2))?;
                 Ok(input)
             }
-            Op::Pow(exp) => layouts::pow(self, layouter, cp_values[..].try_into()?, exp, offset),
-            Op::Pack(base, scale) => layouts::pack(
-                self,
-                layouter,
-                cp_values[..].try_into()?,
-                base,
-                scale,
-                offset,
-            ),
+            Op::Pow(exp) => layouts::pow(self, region, cp_values[..].try_into()?, exp, offset),
+            Op::Pack(base, scale) => {
+                layouts::pack(self, region, cp_values[..].try_into()?, base, scale, offset)
+            }
             Op::Rescaled { inner, scale } => {
                 if scale.len() != values.len() {
                     return Err(Box::new(TensorError::DimMismatch(
@@ -461,14 +576,12 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                     )));
                 }
 
-                let res = &layouts::rescale(
-                    self,
-                    layouter,
-                    cp_values[..].try_into()?,
-                    &scale,
-                    offset,
-                )?[..];
-                self.layout(layouter, res, offset, *inner)
+                let res =
+                    &layouts::rescale(self, region, cp_values[..].try_into()?, &scale, offset)?[..];
+                self.layout(region, res, offset, *inner)
+            }
+            Op::RangeCheck(tol) => {
+                layouts::range_check(self, region, cp_values[..].try_into()?, offset, tol)
             }
             Op::GlobalSumPool => unreachable!(),
         }
