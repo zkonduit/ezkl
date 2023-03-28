@@ -45,13 +45,13 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len * len, vec![len, len], true);
+        let a = VarTensor::new_advice(cs, K, len * len, true);
 
-        let b = VarTensor::new_advice(cs, K, len * len, vec![len, len], true);
+        let b = VarTensor::new_advice(cs, K, len * len, true);
 
-        let output = VarTensor::new_advice(cs, K, (len + 1) * len, vec![len, 1, len + 1], true);
+        let output = VarTensor::new_advice(cs, K, (len + 1) * len, true);
 
-        // sets up a new Divide by table
+        // sets up a new relu table
         let l1 = LookupConfig::configure(cs, &a, &output, BITS, &[LookupOp::ReLU { scale: 1 }]);
 
         let base_config = BaseConfig::configure(cs, &[a, b], &output, CheckMode::UNSAFE, 0);
@@ -73,6 +73,7 @@ impl Circuit<Fr> for MyCircuit {
                     .base_config
                     .layout(&mut region, &self.inputs, &mut offset, op.clone())
                     .unwrap();
+                println!("offset: {}", offset);
                 let _output = config.l1.layout(&mut region, &output, &mut offset).unwrap();
                 Ok(())
             },
@@ -102,13 +103,13 @@ fn runmatmul(c: &mut Criterion) {
             _marker: PhantomData,
         };
 
-        group.throughput(Throughput::Elements(len as u64));
-        group.bench_with_input(BenchmarkId::new("pk", len), &len, |b, &_| {
-            b.iter(|| {
-                create_keys::<KZGCommitmentScheme<Bn256>, Fr, MyCircuit>(&circuit, &params)
-                    .unwrap();
-            });
-        });
+        // group.throughput(Throughput::Elements(len as u64));
+        // group.bench_with_input(BenchmarkId::new("pk", len), &len, |b, &_| {
+        //     b.iter(|| {
+        //         create_keys::<KZGCommitmentScheme<Bn256>, Fr, MyCircuit>(&circuit, &params)
+        //             .unwrap();
+        //     });
+        // });
 
         let pk =
             create_keys::<KZGCommitmentScheme<Bn256>, Fr, MyCircuit>(&circuit, &params).unwrap();
@@ -123,8 +124,9 @@ fn runmatmul(c: &mut Criterion) {
                     &pk,
                     TranscriptType::Blake,
                     SingleStrategy::new(&params),
-                    CheckMode::UNSAFE,
+                    CheckMode::SAFE,
                 );
+                println!("Prover: {:?}", prover);
                 prover.unwrap();
             });
         });

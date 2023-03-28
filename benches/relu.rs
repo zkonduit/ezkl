@@ -34,7 +34,7 @@ impl Circuit<Fr> for NLCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         unsafe {
             let advices = (0..2)
-                .map(|_| VarTensor::new_advice(cs, K, LEN, vec![LEN], true))
+                .map(|_| VarTensor::new_advice(cs, K, LEN, true))
                 .collect::<Vec<_>>();
 
             let nl = Op::ReLU { scale: 128 };

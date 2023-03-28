@@ -19,8 +19,6 @@ pub enum VarTensor {
         col_size: usize,
         /// Total capacity (number of advice cells), usually inner.len()*col_size
         capacity: usize,
-        /// Vector of dimensions of the tensor we are representing using this storage. Note that the shape of the storage and this shape can differ.
-        dims: Vec<usize>,
     },
     /// A VarTensor for holding Fixed values, which are assigned at circuit definition time.
     Fixed {
@@ -30,8 +28,6 @@ pub enum VarTensor {
         col_size: usize,
         /// Total capacity (number of advice cells), usually inner.len()*col_size
         capacity: usize,
-        /// Vector of dimensions of the tensor we are representing using this storage. Note that the shape of the storage and this shape can differ.
-        dims: Vec<usize>,
     },
 }
 
@@ -49,7 +45,6 @@ impl VarTensor {
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         capacity: usize,
-        dims: Vec<usize>,
         equality: bool,
     ) -> Self {
         let base = 2u32;
@@ -71,7 +66,6 @@ impl VarTensor {
             inner: advices,
             col_size: max_rows,
             capacity,
-            dims,
         }
     }
 
@@ -86,7 +80,6 @@ impl VarTensor {
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         capacity: usize,
-        dims: Vec<usize>,
         equality: bool,
     ) -> Self {
         let base = 2u32;
@@ -108,7 +101,6 @@ impl VarTensor {
             inner: fixed,
             col_size: max_rows,
             capacity,
-            dims,
         }
     }
 
@@ -124,41 +116,6 @@ impl VarTensor {
     pub fn col_size(&self) -> usize {
         match self {
             VarTensor::Advice { col_size, .. } | VarTensor::Fixed { col_size, .. } => *col_size,
-        }
-    }
-
-    /// Gets the dims of the object the VarTensor represents
-    pub fn dims(&self) -> Vec<usize> {
-        match self {
-            VarTensor::Advice { dims: d, .. } | VarTensor::Fixed { dims: d, .. } => d.to_vec(),
-        }
-    }
-
-    /// Sets the dims of the object the VarTensor represents
-    pub fn reshape(&self, new_dims: &[usize]) -> Self {
-        match self {
-            VarTensor::Advice {
-                inner,
-                col_size,
-                capacity,
-                ..
-            } => VarTensor::Advice {
-                inner: inner.clone(),
-                col_size: *col_size,
-                capacity: *capacity,
-                dims: new_dims.to_vec(),
-            },
-            VarTensor::Fixed {
-                inner,
-                col_size,
-                capacity,
-                ..
-            } => VarTensor::Fixed {
-                inner: inner.clone(),
-                col_size: *col_size,
-                capacity: *capacity,
-                dims: new_dims.to_vec(),
-            },
         }
     }
 
@@ -216,46 +173,7 @@ impl VarTensor {
         }
     }
 
-    /// Retrieve the values represented within the columns of the `VarTensor` (recall that `VarTensor`
-    /// is a Tensor of Halo2 columns).
-    pub fn query<F: FieldExt>(
-        &self,
-        meta: &mut VirtualCells<'_, F>,
-        offset: usize,
-    ) -> Result<Tensor<Expression<F>>, halo2_proofs::plonk::Error> {
-        match &self {
-            VarTensor::Fixed {
-                inner: fixed, dims, ..
-            } => {
-                let mut c = Tensor::from(
-                    // this should fail if dims is empty, should be impossible
-                    (0..dims.iter().product::<usize>()).map(|i| {
-                        let (x, y) = self.cartesian_coord(i);
-                        meta.query_fixed(fixed[x], Rotation(offset as i32 + y as i32))
-                    }),
-                );
-                c.reshape(dims);
-                Ok(c)
-            }
-            // when advice we have 1 col per row
-            VarTensor::Advice {
-                inner: advices,
-                dims,
-                ..
-            } => {
-                let mut c = Tensor::from(
-                    // this should fail if dims is empty, should be impossible
-                    (0..dims.iter().product::<usize>()).map(|i| {
-                        let (x, y) = self.cartesian_coord(i);
-                        meta.query_advice(advices[x], Rotation(offset as i32 + y as i32))
-                    }),
-                );
-                c.reshape(dims);
-                Ok(c)
-            }
-        }
-    }
-
+   
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor.
     pub fn assign<F: FieldExt + TensorType>(
         &self,

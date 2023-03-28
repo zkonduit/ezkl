@@ -257,8 +257,7 @@ impl Model {
 
         if !lookup_ops.is_empty() {
             for (i, node) in lookup_ops {
-                let input_len = node.in_dims[0].iter().product();
-                let config = self.conf_lookup(node, input_len, meta, vars, &mut tables)?;
+                let config = self.conf_lookup(node, meta, vars, &mut tables)?;
 
                 results.insert(*i, config);
             }
@@ -395,8 +394,7 @@ impl Model {
                     [vars.advices[0].clone(), vars.advices[1].clone()]
                 };
                 // output node
-                let output_shape = &node.out_dims;
-                let output = &vars.advices[2].reshape(output_shape);
+                let output = &vars.advices[2];
                 let config = Rc::new(RefCell::new(PolyConfig::configure(
                     meta,
                     inputs.into_iter().collect_vec()[..].try_into()?,
@@ -431,13 +429,12 @@ impl Model {
     fn conf_lookup<F: FieldExt + TensorType>(
         &self,
         node: &Node,
-        input_len: usize,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
         tables: &mut BTreeMap<Vec<LookupOp>, Rc<RefCell<LookupTable<F>>>>,
     ) -> Result<NodeConfig<F>, Box<dyn Error>> {
-        let input = &vars.advices[0].reshape(&[input_len]);
-        let output = &vars.advices[1].reshape(&[input_len]);
+        let input = &vars.advices[0];
+        let output = &vars.advices[1];
         let node_inputs = node.inputs.iter().map(|e| e.node).collect();
 
         let op = match &node.opkind {

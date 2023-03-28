@@ -139,17 +139,14 @@ where
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let input = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-        let params = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
-        let output = VarTensor::new_advice(cs, K, LEN, vec![LEN], true);
+        let input = VarTensor::new_advice(cs, K, LEN, true);
+        let params = VarTensor::new_advice(cs, K, LEN, true);
+        let output = VarTensor::new_advice(cs, K, LEN, true);
 
         println!("INPUT COL {:#?}", input);
 
         let layer_config =
             PolyConfig::configure(cs, &[input.clone(), params], &output, CheckMode::SAFE, 0);
-
-        let input = input.reshape(&[LEN]);
-        let output = output.reshape(&[LEN]);
 
         let relu =
             LookupConfig::configure(cs, &input, &output, BITS, &[LookupOp::ReLU { scale: 32 }]);

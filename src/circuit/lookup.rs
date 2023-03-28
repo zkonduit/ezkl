@@ -306,11 +306,14 @@ impl<F: FieldExt + TensorType> Config<F> {
         trace!("laying out {}", region_name);
 
         let w = ValTensor::from(self.input.assign(region, *offset, values)?);
+        println!("w: {:?}", w);
         // extract integer_valuations
         let integer_evals = w.get_int_evals().map_err(|e| {
             error!("{}", e);
             halo2_proofs::plonk::Error::Synthesis
         })?;
+
+        println!("integer_evals: {:?}", integer_evals);
 
         // for key generation integer_evals will be empty and we need to return a set of unassigned values
         let output: Tensor<Value<F>> = match integer_evals.len() {
@@ -327,6 +330,8 @@ impl<F: FieldExt + TensorType> Config<F> {
                 x.map(|elem| Value::known(i128_to_felt(elem)))
             }
         };
+
+        println!("output: {:?}", output);
 
         let mut output = self.output.assign(region, *offset, &output.into())?;
 
@@ -370,7 +375,7 @@ mod tests {
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
             let advices = (0..2)
-                .map(|_| VarTensor::new_advice(cs, 4, 1, vec![1], true))
+                .map(|_| VarTensor::new_advice(cs, 4, 1, true))
                 .collect::<Vec<_>>();
 
             let nl = Op::ReLU { scale: 1 };

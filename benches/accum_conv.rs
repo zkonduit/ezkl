@@ -42,11 +42,11 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = 10;
 
-        let a = VarTensor::new_advice(cs, K, len * len, vec![len, len], true);
+        let a = VarTensor::new_advice(cs, K, len * len, true);
 
-        let b = VarTensor::new_advice(cs, K, len * len, vec![len, len], true);
+        let b = VarTensor::new_advice(cs, K, len * len, true);
 
-        let output = VarTensor::new_advice(cs, K, (len + 1) * len, vec![len, 1, len + 1], true);
+        let output = VarTensor::new_advice(cs, K, (len + 1) * len, true);
 
         Self::Config::configure(cs, &[a, b], &output, CheckMode::UNSAFE, 0)
     }
