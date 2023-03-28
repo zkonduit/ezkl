@@ -32,17 +32,26 @@ hex = "0.4.3"
 ethereum_types = { package = "ethereum-types", version = "0.14.1", default-features = false, features = ["std"]}
 halo2_wrong_ecc = { git = "https://github.com/privacy-scaling-explorations/halo2wrong", package = "ecc", tag = "v2023_02_02"}
 snark-verifier = { git = "https://github.com/privacy-scaling-explorations/snark-verifier", tag = "v2023_02_02"}
-# evm related deps
-ethers = "1.0.2"
-ethers-solc = "1.0.2"
-tokio = { version = "1.22.0", features = ["macros"] }
 regex = "1"
 colored = { version = "2.0.0", optional = true}
 env_logger = { version = "0.10.0", optional = true}
 colored_json =  { version = "3.0.1", optional = true}
+<<<<<<< HEAD
 # python binding related deps
 pyo3 = { version = "0.18.1", features = ["extension-module"] }
 pyo3-log = "0.8.1"
+=======
+tokio = { version = "1.26.0", features = ["macros", "rt"] }
+
+# evm related deps
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ethers = { version = "2.0.1", features = ["ledger"] }
+ethers-solc = "2.0.1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2.8", features = ["js"] }
+
+>>>>>>> 122378456ad1d52dc66ff59d96af691c2cc51efb
 
 [dev-dependencies]
 criterion = {version = "0.3",  features = ["html_reports"]}
@@ -55,58 +64,45 @@ test-case = "2.2.2"
 ctor = "0.1.26"
 tempdir = "0.3.7"
 
-[[bench]]
-name = "affine"
-harness = false
 
 [[bench]]
 name = "accum_affine"
 harness = false
 
-[[bench]]
-name = "dot"
-harness = false
 
 [[bench]]
 name = "accum_dot"
 harness = false
 
-[[bench]]
-name = "sum"
-harness = false
 
 [[bench]]
 name = "accum_sum"
 harness = false
 
 [[bench]]
-name = "add"
-harness = false
-
-[[bench]]
 name = "pairwise_add"
 harness = false
 
+
 [[bench]]
-name = "matmul"
+name = "pairwise_pow"
 harness = false
+
+
+[[bench]]
+name = "accum_pack"
+harness = false
+
 
 [[bench]]
 name = "accum_matmul"
 harness = false
 
-[[bench]]
-name = "conv"
-harness = false
 
 [[bench]]
 name = "accum_conv"
 harness = false
 
-
-[[bench]]
-name = "sumpool"
-harness = false
 
 [[bench]]
 name = "accum_sumpool"
@@ -118,7 +114,7 @@ name = "relu"
 harness = false
 
 [[bench]]
-name = "range"
+name = "accum_matmul_relu"
 harness = false
 
 [[bin]]

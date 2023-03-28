@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl_lib::circuit::accumulated::*;
+use ezkl_lib::circuit::base::*;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::create_keys;
@@ -42,20 +42,13 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = 10;
 
-        let a = VarTensor::new_advice(cs, K, len * len, vec![len, len], true, 1000000);
+        let a = VarTensor::new_advice(cs, K, len * len, true);
 
-        let b = VarTensor::new_advice(cs, K, len * len, vec![len, len], true, 1000000);
+        let b = VarTensor::new_advice(cs, K, len * len, true);
 
-        let output = VarTensor::new_advice(
-            cs,
-            K,
-            (len + 1) * len,
-            vec![len, 1, len + 1],
-            true,
-            10000000,
-        );
+        let output = VarTensor::new_advice(cs, K, (len + 1) * len, true);
 
-        Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        Self::Config::configure(cs, &[a, b], &output, CheckMode::UNSAFE, 0)
     }
 
     fn synthesize(
@@ -63,17 +56,23 @@ impl Circuit<Fr> for MyCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        config
-            .layout(
-                &mut layouter,
-                &[self.image.clone(), self.kernel.clone(), self.bias.clone()],
-                0,
-                Op::Conv {
-                    padding: (0, 0),
-                    stride: (1, 1),
-                },
-            )
-            .unwrap();
+        layouter.assign_region(
+            || "",
+            |mut region| {
+                config
+                    .layout(
+                        &mut region,
+                        &[self.image.clone(), self.kernel.clone(), self.bias.clone()],
+                        &mut 0,
+                        Op::Conv {
+                            padding: (0, 0),
+                            stride: (1, 1),
+                        },
+                    )
+                    .unwrap();
+                Ok(())
+            },
+        )?;
         Ok(())
     }
 }
@@ -132,6 +131,7 @@ fn runcnvrl(c: &mut Criterion) {
                         &pk,
                         TranscriptType::Blake,
                         SingleStrategy::new(&params),
+                        CheckMode::UNSAFE,
                     );
                     prover.unwrap();
                 });

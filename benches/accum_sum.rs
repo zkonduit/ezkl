@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl_lib::circuit::accumulated::*;
+use ezkl_lib::circuit::base::*;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::{create_keys, gen_srs};
@@ -35,11 +35,11 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len, vec![len], true, 1024);
-        let b = VarTensor::new_advice(cs, K, len, vec![len], true, 1024);
-        let output = VarTensor::new_advice(cs, K, len, vec![len + 1], true, 1024);
+        let a = VarTensor::new_advice(cs, K, len, true);
+        let b = VarTensor::new_advice(cs, K, len, true);
+        let output = VarTensor::new_advice(cs, K, len, true);
 
-        Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        Self::Config::configure(cs, &[a, b], &output, CheckMode::UNSAFE, 0)
     }
 
     fn synthesize(
@@ -47,9 +47,15 @@ impl Circuit<Fr> for MyCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        config
-            .layout(&mut layouter, &self.inputs, 0, Op::Sum)
-            .unwrap();
+        layouter.assign_region(
+            || "",
+            |mut region| {
+                config
+                    .layout(&mut region, &self.inputs, &mut 0, Op::Sum)
+                    .unwrap();
+                Ok(())
+            },
+        )?;
         Ok(())
     }
 }
@@ -91,6 +97,7 @@ fn runsum(c: &mut Criterion) {
                     &pk,
                     TranscriptType::Blake,
                     SingleStrategy::new(&params),
+                    CheckMode::UNSAFE,
                 );
                 prover.unwrap();
             });

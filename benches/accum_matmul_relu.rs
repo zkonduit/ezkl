@@ -1,5 +1,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl_lib::circuit::polynomial::*;
+use ezkl_lib::circuit::base::*;
+use ezkl_lib::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
+
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::{create_keys, gen_srs};
@@ -7,14 +9,13 @@ use ezkl_lib::tensor::*;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2_proofs::poly::kzg::strategy::SingleStrategy;
 use halo2_proofs::{
-    arithmetic::Field,
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error},
 };
 use halo2curves::bn256::{Bn256, Fr};
-use rand::rngs::OsRng;
 use std::marker::PhantomData;
 
+const BITS: usize = 8;
 static mut LEN: usize = 4;
 const K: usize = 16;
 
@@ -24,8 +25,15 @@ struct MyCircuit {
     _marker: PhantomData<Fr>,
 }
 
+// A columnar ReLu MLP
+#[derive(Clone)]
+struct MyConfig {
+    base_config: BaseConfig<Fr>,
+    l1: LookupConfig<Fr>,
+}
+
 impl Circuit<Fr> for MyCircuit {
-    type Config = Config<Fr>;
+    type Config = MyConfig;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -35,15 +43,15 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
-        let b = VarTensor::new_advice(cs, K, len, vec![len], true, 512);
-        let output = VarTensor::new_advice(cs, K, len, vec![1], true, 512);
-        let dot_node = Node {
-            op: Op::Dot,
-            input_order: vec![InputType::Input(0), InputType::Input(1)],
-        };
+        let a = VarTensor::new_advice(cs, K, len, true);
+        let b = VarTensor::new_advice(cs, K, len, true);
+        let output = VarTensor::new_advice(cs, K, len, true);
 
-        Self::Config::configure(cs, &[a, b], &output, &[dot_node])
+        // sets up a new relu table
+        let l1 = LookupConfig::configure(cs, &b, &output, BITS, &[LookupOp::ReLU { scale: 1 }]);
+
+        let base_config = BaseConfig::configure(cs, &[a, b], &output, CheckMode::UNSAFE, 0);
+        MyConfig { base_config, l1 }
     }
 
     fn synthesize(
@@ -51,23 +59,39 @@ impl Circuit<Fr> for MyCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        config.layout(&mut layouter, &self.inputs).unwrap();
+        config.l1.layout_table(&mut layouter).unwrap();
+        layouter.assign_region(
+            || "",
+            |mut region| {
+                let op = Op::Matmul;
+                let mut offset = 0;
+                let output = config
+                    .base_config
+                    .layout(&mut region, &self.inputs, &mut offset, op.clone())
+                    .unwrap();
+                let _output = config.l1.layout(&mut region, &output, &mut offset).unwrap();
+                Ok(())
+            },
+        )?;
+
         Ok(())
     }
 }
 
-fn rundot(c: &mut Criterion) {
-    let mut group = c.benchmark_group("dot");
+fn runmatmul(c: &mut Criterion) {
+    let mut group = c.benchmark_group("accum_matmul");
     let params = gen_srs::<KZGCommitmentScheme<_>>(17);
-    for &len in [16].iter() {
+    for &len in [4, 32].iter() {
         unsafe {
             LEN = len;
         };
 
-        // parameters
-        let a = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
+        let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::from(1))));
+        a.reshape(&[len, len]);
 
-        let b = Tensor::from((0..len).map(|_| Value::known(Fr::random(OsRng))));
+        // parameters
+        let mut b = Tensor::from((0..len).map(|_| Value::known(Fr::from(1))));
+        b.reshape(&[len, 1]);
 
         let circuit = MyCircuit {
             inputs: [ValTensor::from(a), ValTensor::from(b)],
@@ -95,6 +119,7 @@ fn rundot(c: &mut Criterion) {
                     &pk,
                     TranscriptType::Blake,
                     SingleStrategy::new(&params),
+                    CheckMode::SAFE,
                 );
                 prover.unwrap();
             });
@@ -106,6 +131,6 @@ fn rundot(c: &mut Criterion) {
 criterion_group! {
   name = benches;
   config = Criterion::default().with_plots();
-  targets = rundot
+  targets = runmatmul
 }
 criterion_main!(benches);

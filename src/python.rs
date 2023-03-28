@@ -72,7 +72,7 @@ use crate::commands::RunArgs;
 fn table(
     model: String,
 ) -> Result<String, PyErr> {
-    // pass in default values
+    // use default values to initialize model
     let run_args: RunArgs = RunArgs {
         tolerance: 5,
         scale: 7,
@@ -86,6 +86,7 @@ fn table(
         single_lookup: false,
     };
 
+    // use default values to initialize model
     let visibility: VarVisibility = VarVisibility {
         input: Visibility::Public,
         params: Visibility::Private,

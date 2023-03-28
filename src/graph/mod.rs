@@ -87,19 +87,18 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
         let model = Model::from_arg().expect("model should load from args");
 
-        let advice_shapes = model.advice_shapes();
-        let fixed_shapes = model.fixed_shapes();
-
         // for now the number of instances corresponds to the number of graph / model outputs
         let instance_shapes = model.instance_shapes();
+        let var_len = model.total_var_len();
+
+        info!("total var len: {:?}", var_len);
 
         let mut vars = ModelVars::new(
             cs,
             model.run_args.logrows as usize,
-            model.run_args.max_rotations,
-            advice_shapes,
-            fixed_shapes,
+            var_len,
             instance_shapes.clone(),
+            model.visibility.clone(),
         );
         info!(
             "number of advices used: {:?}",
