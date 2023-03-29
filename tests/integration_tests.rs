@@ -40,7 +40,7 @@ fn init() {
     assert!(status.success());
 }
 
-const TESTS: [&str; 19] = [
+const TESTS: [&str; 20] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -51,6 +51,7 @@ const TESTS: [&str; 19] = [
     "1l_sqrt",
     "1l_leakyrelu",
     "1l_relu",
+    "1l_tanh",
     "2l_relu_sigmoid_small",
     "2l_relu_fc",
     "2l_relu_small",
@@ -62,7 +63,7 @@ const TESTS: [&str; 19] = [
     "4l_relu_conv_fc",
 ];
 
-const PACKING_TESTS: [&str; 11] = [
+const PACKING_TESTS: [&str; 12] = [
     "1l_mlp",
     "1l_average",
     "1l_div",
@@ -71,12 +72,13 @@ const PACKING_TESTS: [&str; 11] = [
     "1l_sqrt",
     "1l_leakyrelu",
     "1l_relu",
+    "1l_tanh",
     "2l_relu_sigmoid_small",
     "2l_relu_fc",
     "2l_relu_small",
 ];
 
-const TESTS_AGGR: [&str; 14] = [
+const TESTS_AGGR: [&str; 15] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -87,6 +89,7 @@ const TESTS_AGGR: [&str; 14] = [
     "1l_sqrt",
     "1l_leakyrelu",
     "1l_relu",
+    "1l_tanh",
     "2l_relu_fc",
     "2l_relu_sigmoid_small",
     "2l_relu_small",
@@ -98,7 +101,7 @@ const NEG_TESTS: [(&str, &str); 2] = [
     ("2l_relu_small", "2l_relu_sigmoid_small"),
 ];
 
-const TESTS_EVM: [&str; 12] = [
+const TESTS_EVM: [&str; 13] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -108,6 +111,7 @@ const TESTS_EVM: [&str; 12] = [
     "1l_sqrt",
     "1l_leakyrelu",
     "1l_relu",
+    "1l_tanh",
     "2l_relu_sigmoid_small",
     "2l_relu_small",
     "2l_relu_fc",
@@ -123,7 +127,7 @@ macro_rules! test_func_aggr {
             use crate::TESTS_AGGR;
             use test_case::test_case;
             use crate::kzg_aggr_prove_and_verify;
-            seq!(N in 0..=13 {
+            seq!(N in 0..=14 {
 
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_prove_and_verify_(test: &str) {
@@ -145,7 +149,7 @@ macro_rules! test_packed_func {
             use crate::mock_packed_outputs;
             use crate::mock_everything;
 
-            seq!(N in 0..=10 {
+            seq!(N in 0..=11 {
 
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_packed_outputs_(test: &str) {
@@ -178,7 +182,7 @@ macro_rules! test_func {
             use crate::render_circuit;
 
 
-            seq!(N in 0..=18 {
+            seq!(N in 0..=19 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
@@ -238,7 +242,7 @@ macro_rules! test_func_evm {
                 "2l_relu_fc"
             ];
 
-            seq!(N in 0..=11 {
+            seq!(N in 0..=12 {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {

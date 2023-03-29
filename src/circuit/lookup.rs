@@ -35,6 +35,9 @@ pub enum Op {
     Sigmoid {
         scales: (usize, usize),
     },
+    Tanh{
+        scales: (usize, usize),
+    },
 }
 
 impl fmt::Display for Op {
@@ -50,6 +53,7 @@ impl fmt::Display for Op {
             }
             Op::Sigmoid { scales } => write!(f, "sigmoid  w/ scale: {}", scales.0),
             Op::Sqrt { scales } => write!(f, "sqrt  w/ scale: {}", scales.0),
+            Op::Tanh { scales } => write!(f, "tanh  w/ scale: {}", scales.0),
         }
     }
 }
@@ -64,6 +68,7 @@ impl Op {
             Op::PReLU { scale, slopes } => leakyrelu(&x, *scale, slopes[0].0),
             Op::Sigmoid { scales } => sigmoid(&x, scales.0, scales.1),
             Op::Sqrt { scales } => sqrt(&x, scales.0, scales.1),
+            Op::Tanh { scales } => tanh(&x, scales.0, scales.1),
         }
     }
 
@@ -75,6 +80,7 @@ impl Op {
             Op::PReLU { .. } => "PRELU",
             Op::Sigmoid { .. } => "SIGMOID",
             Op::Sqrt { .. } => "SQRT",
+            Op::Tanh { .. } => "TANH"
         }
     }
 
