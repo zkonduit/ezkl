@@ -245,7 +245,7 @@ jobs:
       - name: Install wasm32-wasi
         run: rustup target add wasm32-wasi
       - name: KZG prove and verify aggr tests
-        run: cargo test --release --verbose tests_aggr::kzg_aggr_prove_and_verify_
+        run: cargo test --release --verbose tests_aggr::kzg_aggr_prove_and_verify_ -- --test-threads 8
 
   prove-and-verify-aggr-evm-tests:
     runs-on: self-hosted
