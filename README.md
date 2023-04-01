@@ -414,18 +414,22 @@ Once python is installed setup a virtual environment and install `maturin`
 ```bash
 python -m venv .env
 source .env/bin/activate
-pip install maturin
+pip install -r requirements.txt
 ```
 
-You can now initialize bindings and build the package for development.
+You can now build the package for development.
 ```bash
-maturin init --bindings pyo3
 maturin develop
 ```
 
 Once done you will be able to access `ezkl_lib` as a python import as follows.
 ```python
 import ezkl_lib
+```
+
+You may test if the existing build is working properly.
+```
+pytest
 ```
 
 The list of python functions that can be accessed are found within `src/python.rs`

@@ -6,6 +6,11 @@ use tabled::Table;
 use crate::graph::{Model, Visibility, VarVisibility, Mode};
 use crate::commands::RunArgs;
 use crate::circuit::base::CheckMode;
+use crate::pfsys::{gen_srs as ezkl_gen_srs, save_params};
+use std::path::PathBuf;
+use halo2curves::bn256::Bn256;
+use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+
 
 // use crate::commands::{Cli, Commands, StrategyType, TranscriptType};
 // #[cfg(not(target_arch = "wasm32"))]
@@ -40,8 +45,7 @@ use crate::circuit::base::CheckMode;
 // #[cfg(feature = "render")]
 // use plotters::prelude::*;
 // use snark_verifier::loader::native::NativeLoader;
-// use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
-// use std::error::Error;
+// use snark_verifier::system::halo2::transcript::evm::EvmTranscript; // use std::error::Error;
 // use std::fs::File;
 // #[cfg(not(target_arch = "wasm32"))]
 // use std::io::Write;
@@ -108,12 +112,30 @@ fn table(
             Err(PyIOError::new_err("Failed to import model"))
         },
     }
+}
 
-
+#[pyfunction]
+fn gen_srs(
+    params_path: PathBuf,
+    logrows: u32,
+) -> PyResult<()> {
+    let run_args = RunArgs {
+        tolerance: 0,
+        scale: 7,
+        bits: 16,
+        logrows: logrows,
+        public_inputs: true,
+        public_outputs: true,
+        public_params: false,
+        pack_base: 1,
+        check_mode: CheckMode::SAFE,
+    };
+    let params = ezkl_gen_srs::<KZGCommitmentScheme<Bn256>>(run_args.logrows);
+    save_params::<KZGCommitmentScheme<Bn256>>(&params_path, &params)?;
+    Ok(())
 }
 
 // TODO: Forward
-// TODO: GenSrs
 // TODO: Mock
 // TODO: Aggregate
 // TODO: Prove
@@ -131,5 +153,6 @@ fn table(
 fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     pyo3_log::init();
     m.add_function(wrap_pyfunction!(table, m)?)?;
+    m.add_function(wrap_pyfunction!(gen_srs, m)?)?;
     Ok(())
 }
