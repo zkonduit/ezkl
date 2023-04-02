@@ -9,6 +9,8 @@ folder_path = os.path.abspath(
     )
 )
 
+params_path = os.path.join(folder_path, 'kzg_test.params')
+
 def test_table_1l_average():
     """
     Test for table() with 1l_average.onnx
@@ -44,5 +46,5 @@ def test_gen_srs():
     Test for gen_srs() with 17 logrows.
     You may want to comment this test as it takes a long time to run
     """
-    ezkl_lib.gen_srs(os.path.join(folder_path, 'kzg_test.params'), 17)
-    assert os.path.isfile(os.path.join(folder_path, 'kzg_test.params'))
+    ezkl_lib.gen_srs(params_path, 17)
+    assert os.path.isfile(params_path)

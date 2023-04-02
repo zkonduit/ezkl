@@ -12,48 +12,6 @@ use halo2curves::bn256::Bn256;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 
 
-// use crate::commands::{Cli, Commands, StrategyType, TranscriptType};
-// #[cfg(not(target_arch = "wasm32"))]
-// use crate::eth::{deploy_verifier, fix_verifier_sol, send_proof, verify_proof_via_solidity};
-// use crate::graph::{vector_to_quantized, Model, ModelCircuit};
-// use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
-// #[cfg(not(target_arch = "wasm32"))]
-// use crate::pfsys::evm::{aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier};
-// #[cfg(not(target_arch = "wasm32"))]
-// use crate::pfsys::evm::{evm_verify, DeploymentCode};
-// #[cfg(feature = "render")]
-// use crate::pfsys::prepare_model_circuit;
-// use crate::pfsys::{create_keys, load_params, load_vk, save_params, Snark};
-// use crate::pfsys::{
-//     create_proof_circuit, gen_srs, prepare_data, prepare_model_circuit_and_public_input, save_vk,
-//     verify_proof_circuit,
-// };
-// use halo2_proofs::dev::VerifyFailure;
-// use halo2_proofs::plonk::{Circuit, ProvingKey, VerifyingKey};
-// use halo2_proofs::poly::commitment::Params;
-// use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-// use halo2_proofs::poly::kzg::multiopen::ProverGWC;
-// use halo2_proofs::poly::kzg::strategy::AccumulatorStrategy;
-// use halo2_proofs::poly::kzg::{
-//     commitment::ParamsKZG, multiopen::VerifierGWC, strategy::SingleStrategy as KZGSingleStrategy,
-// };
-// use halo2_proofs::poly::VerificationStrategy;
-// use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
-// use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
-// use halo2curves::bn256::{Bn256, Fr, G1Affine};
-// use log::{info, trace};
-// #[cfg(feature = "render")]
-// use plotters::prelude::*;
-// use snark_verifier::loader::native::NativeLoader;
-// use snark_verifier::system::halo2::transcript::evm::EvmTranscript; // use std::error::Error;
-// use std::fs::File;
-// #[cfg(not(target_arch = "wasm32"))]
-// use std::io::Write;
-// use std::time::Instant;
-// use tabled::Table;
-// use thiserror::Error;
-
-
 // See commands.rs and execute.rs
 // RenderCircuit
 // #[pyfunction]
@@ -135,7 +93,44 @@ fn gen_srs(
     Ok(())
 }
 
-// TODO: Forward
+#[pyfunction(run_args="**")]
+fn forward(
+    data: String,
+    model: String,
+    output: String,
+    run_args: Option<&PyDict>
+) -> PyResult<&PyDict> {
+    let mut data = prepare_data(data)?;
+
+    let run_args = RunArgs {
+        tolerance: 0,
+        scale: 7,
+        bits: 16,
+        logrows: 17,
+        public_inputs: true,
+        public_outputs: true,
+        public_params: false,
+        pack_base: 1,
+        check_mode: CheckMode::SAFE,
+    };
+
+    // quantize the supplied data using the provided scale.
+    let mut model_inputs = vec![];
+    for v in data.input_data.iter() {
+        let t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, cli.args.scale)?;
+        model_inputs.push(t);
+    }
+
+    let res = Model::forward(model, &model_inputs, cli.args)?;
+
+    let float_res: Vec<Vec<f32>> = res.iter().map(|t| t.to_vec()).collect();
+    trace!("forward pass output: {:?}", float_res);
+    data.output_data = float_res;
+
+    serde_json::to_writer(&File::create(output)?, &data)?;
+    Ok(())
+}
+
 // TODO: Mock
 // TODO: Aggregate
 // TODO: Prove
