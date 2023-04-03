@@ -1,12 +1,11 @@
 use super::node::*;
 use super::vars::*;
 use super::GraphError;
-use crate::circuit::base::BaseConfig as PolyConfig;
-use crate::circuit::base::CheckMode;
-use crate::circuit::base::Op as PolyOp;
-use crate::circuit::lookup::Config as LookupConfig;
-use crate::circuit::lookup::Op as LookupOp;
-use crate::circuit::lookup::Table as LookupTable;
+use crate::circuit::BaseConfig as PolyConfig;
+use crate::circuit::CheckMode;
+use crate::circuit::LookupOp;
+use crate::circuit::Op as PolyOp;
+use crate::circuit::OpKind;
 use crate::commands::RunArgs;
 use crate::commands::{Cli, Commands};
 use crate::graph::scale_to_multiplier;
@@ -151,7 +150,7 @@ impl Model {
             match &n.opkind {
                 OpKind::Lookup(op) => {
                     assert_eq!(inputs.len(), 1);
-                    results.insert(i, op.f(inputs[0].clone()));
+                    results.insert(i, op.f(inputs[0].clone())?);
                 }
                 OpKind::Poly(op) => {
                     results.insert(i, op.f(inputs)?);
@@ -234,8 +233,8 @@ impl Model {
     ) -> Result<ModelConfig<F>, Box<dyn Error>> {
         info!("configuring model");
         let mut results = BTreeMap::new();
-        let mut tables = BTreeMap::new();
         let mut base_gates = BTreeMap::new();
+        base_gates.insert(true, Rc::new(RefCell::new(PolyConfig::default())));
 
         let non_op_nodes: BTreeMap<&usize, &Node> = self
             .nodes
@@ -245,20 +244,6 @@ impl Model {
         if !non_op_nodes.is_empty() {
             for (i, node) in non_op_nodes {
                 let config = self.conf_non_op_node(node)?;
-                results.insert(*i, config);
-            }
-        }
-
-        let lookup_ops: BTreeMap<&usize, &Node> = self
-            .nodes
-            .iter()
-            .filter(|(_, n)| n.opkind.is_lookup())
-            .collect();
-
-        if !lookup_ops.is_empty() {
-            for (i, node) in lookup_ops {
-                let config = self.conf_lookup(node, meta, vars, &mut tables)?;
-
                 results.insert(*i, config);
             }
         }
@@ -279,6 +264,20 @@ impl Model {
                 display.push_str(&format!("| {} ({:?}) | ", i, node.opkind));
 
                 trace!("{}", display);
+            }
+        }
+
+        let lookup_ops: BTreeMap<&usize, &Node> = self
+            .nodes
+            .iter()
+            .filter(|(_, n)| n.opkind.is_lookup())
+            .collect();
+
+        if !lookup_ops.is_empty() {
+            for (i, node) in lookup_ops {
+                let base_config = base_gates.get(&true).unwrap();
+                let config = self.conf_lookup(base_config.clone(), node, meta, vars)?;
+                results.insert(*i, config);
             }
         }
 
@@ -407,16 +406,12 @@ impl Model {
             }
         };
 
-        if let OpKind::Poly(op) = &node.opkind {
-            let config = NodeConfig::Poly {
-                config,
-                inputs: input_idx,
-                op: op.clone(),
-            };
-            Ok(config)
-        } else {
-            panic!()
-        }
+        let config = NodeConfig::Op {
+            config,
+            inputs: input_idx,
+            op: node.opkind.clone(),
+        };
+        Ok(config)
     }
 
     /// Configures a lookup table based operation. These correspond to operations that are represented in
@@ -428,14 +423,20 @@ impl Model {
     /// * `vars` - [ModelVars] for the model.
     fn conf_lookup<F: FieldExt + TensorType>(
         &self,
+        config: Rc<RefCell<PolyConfig<F>>>,
         node: &Node,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-        tables: &mut BTreeMap<Vec<LookupOp>, Rc<RefCell<LookupTable<F>>>>,
     ) -> Result<NodeConfig<F>, Box<dyn Error>> {
         let input = &vars.advices[0];
         let output = &vars.advices[1];
-        let node_inputs = node.inputs.iter().map(|e| e.node).collect();
+        let input_nodes = node
+            .inputs
+            .iter()
+            .map(|i| self.nodes.get(&i.node).unwrap())
+            .collect_vec();
+
+        let input_idx = input_nodes.iter().map(|f| f.idx).collect_vec();
 
         let op = match &node.opkind {
             OpKind::Lookup(l) => l,
@@ -444,24 +445,15 @@ impl Model {
             }
         };
 
-        let config =
-            if let std::collections::btree_map::Entry::Vacant(e) = tables.entry(vec![op.clone()]) {
-                let config: LookupConfig<F> =
-                    LookupConfig::configure(meta, input, output, self.run_args.bits, &[op.clone()]);
-                e.insert(config.table.clone());
-                NodeConfig::Lookup {
-                    config: Rc::new(RefCell::new(config)),
-                    inputs: node_inputs,
-                }
-            } else {
-                let table = tables.get(&vec![op.clone()]).unwrap();
-                let config: LookupConfig<F> =
-                    LookupConfig::configure_with_table(meta, input, output, table.clone());
-                NodeConfig::Lookup {
-                    config: Rc::new(RefCell::new(config)),
-                    inputs: node_inputs,
-                }
-            };
+        config
+            .borrow_mut()
+            .configure_lookup(meta, input, output, self.run_args.bits, op)?;
+
+        let config = NodeConfig::Op {
+            config,
+            inputs: input_idx,
+            op: node.opkind.clone(),
+        };
         Ok(config)
     }
 
@@ -493,7 +485,8 @@ impl Model {
             .configs
             .iter()
             .map(|(_, c)| match c {
-                NodeConfig::Lookup { config, .. } => config.borrow_mut().layout_table(layouter),
+                // only lays out tables if they exist so this can be called safely
+                NodeConfig::Op { config, .. } => config.borrow_mut().layout_tables(layouter),
                 _ => Ok(()),
             })
             .collect::<Result<Vec<()>, _>>()?;
@@ -542,12 +535,13 @@ impl Model {
                             &mut region,
                             &outputs[i..i + 1],
                             &mut offset,
-                            PolyOp::Pack(self.run_args.pack_base, self.run_args.scale),
+                            PolyOp::Pack(self.run_args.pack_base, self.run_args.scale).into(),
                         )
                         .map_err(|e| {
                             error!("{}", e);
                             halo2_proofs::plonk::Error::Synthesis
-                        })?;
+                        })?
+                        .unwrap();
                     // only use with mock prover
                     if matches!(self.mode, Mode::Mock) {
                         trace!("------------ packed output {:?}", outputs[i].show());
@@ -568,7 +562,7 @@ impl Model {
                             &mut region,
                             &[output, vars.instances[instance_offset + i].clone()],
                             &mut offset,
-                            PolyOp::RangeCheck(self.run_args.tolerance as i32),
+                            PolyOp::RangeCheck(self.run_args.tolerance as i32).into(),
                         )
                     })
                     .collect_vec();
@@ -594,7 +588,7 @@ impl Model {
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         // The node kind and the config should be the same.
         let res = match config.clone() {
-            NodeConfig::Poly {
+            NodeConfig::Op {
                 config,
                 inputs: idx,
                 op,
@@ -621,23 +615,7 @@ impl Model {
                     .borrow_mut()
                     .layout(region, &values, offset, op.clone())?;
 
-                Some(res)
-            }
-            NodeConfig::Lookup {
-                config,
-                inputs: idx,
-            } => {
-                if idx.len() != 1 {
-                    return Err(Box::new(GraphError::InvalidLookupInputs));
-                }
-
-                let res =
-                    config
-                        .borrow_mut()
-                        .layout(region, inputs.get(&idx[0]).unwrap(), offset)?;
-
-                // For activations and elementwise operations, the dimensions are sometimes only in one or the other of input and output.
-                Some(res)
+                res
             }
             NodeConfig::Input => None,
             NodeConfig::Const => None,

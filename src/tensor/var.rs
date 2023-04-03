@@ -1,4 +1,4 @@
-use crate::circuit::base::CheckMode;
+use crate::circuit::CheckMode;
 
 use super::*;
 /// A wrapper around Halo2's `Column<Fixed>` or `Column<Advice>`.
@@ -9,7 +9,7 @@ use super::*;
 /// about the column layout. This enum is generally used to configure and layout circuit variables / advices.
 /// For instance can be used to represent neural network parameters within a circuit that we later assign to
 /// using the `assign` method called on a [ValTensor].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum VarTensor {
     /// A VarTensor for holding Advice values, which are assigned at proving time.
     Advice {
@@ -29,6 +29,9 @@ pub enum VarTensor {
         /// Total capacity (number of advice cells), usually inner.len()*col_size
         capacity: usize,
     },
+    #[default]
+    /// Dummy / empty var
+    None
 }
 
 impl VarTensor {
@@ -109,6 +112,7 @@ impl VarTensor {
         match self {
             VarTensor::Advice { inner, .. } => inner.len(),
             VarTensor::Fixed { inner, .. } => inner.len(),
+            _ => 0
         }
     }
 
@@ -116,6 +120,7 @@ impl VarTensor {
     pub fn col_size(&self) -> usize {
         match self {
             VarTensor::Advice { col_size, .. } | VarTensor::Fixed { col_size, .. } => *col_size,
+            _ => 0
         }
     }
 
@@ -127,6 +132,7 @@ impl VarTensor {
                 let y = linear_coord % col_size;
                 (x, y)
             }
+            _ => (0,0)
         }
     }
 
@@ -134,6 +140,7 @@ impl VarTensor {
     pub fn capacity(&self) -> usize {
         match self {
             VarTensor::Advice { capacity, .. } | VarTensor::Fixed { capacity, .. } => *capacity,
+            _ => 0
         }
     }
 }
@@ -170,6 +177,7 @@ impl VarTensor {
                 );
                 Ok(c)
             }
+            _ => Err(halo2_proofs::plonk::Error::Synthesis)
         }
     }
 
@@ -213,6 +221,7 @@ impl VarTensor {
                         VarTensor::Advice { inner: advices, .. } => {
                             region.assign_advice(|| "k", advices[x], y, || v)
                         }
+                        _ => unimplemented!(),
                     },
                     ValType::PrevAssigned(v) => match &self {
                         VarTensor::Advice { inner: advices, .. } => {
@@ -227,6 +236,7 @@ impl VarTensor {
                         VarTensor::Advice { inner: advices, .. } => region
                             .assign_advice(|| "k", advices[x], y, || v)
                             .map(|a| a.evaluate()),
+                        _ => unimplemented!(),
                     },
                 }
             }),
@@ -263,7 +273,8 @@ impl VarTensor {
                             }
                             VarTensor::Advice { inner: advices, .. } => {
                                 region.assign_advice(|| "k", advices[x], y, || v)
-                            }
+                            }, 
+                            _ => unimplemented!(),
                         },
                         ValType::PrevAssigned(v) => match &self {
                             VarTensor::Advice { inner: advices, .. } => {
@@ -278,6 +289,7 @@ impl VarTensor {
                             VarTensor::Advice { inner: advices, .. } => region
                                 .assign_advice(|| "k", advices[x], y, || v)
                                 .map(|a| a.evaluate()),
+                            _ => unimplemented!(),
                         },
                     }
                 })?;

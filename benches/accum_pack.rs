@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl_lib::circuit::base::*;
+use ezkl_lib::circuit::*;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::{create_keys, gen_srs};
@@ -51,7 +51,7 @@ impl Circuit<Fr> for MyCircuit {
             || "",
             |mut region| {
                 config
-                    .layout(&mut region, &self.inputs, &mut 0, Op::Pack(2, 1))
+                    .layout(&mut region, &self.inputs, &mut 0, Op::Pack(2, 1).into())
                     .unwrap();
                 Ok(())
             },

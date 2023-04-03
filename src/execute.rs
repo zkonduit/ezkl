@@ -1,4 +1,4 @@
-use crate::circuit::base::CheckMode;
+use crate::circuit::CheckMode;
 use crate::commands::{Cli, Commands, StrategyType, TranscriptType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{

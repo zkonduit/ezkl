@@ -6,6 +6,7 @@ use log::error;
 
 use crate::{
     circuit::{utils, CircuitError},
+    fieldutils::i128_to_felt,
     tensor::{
         ops::{
             accumulated, add, affine as non_accum_affine, convolution as non_accum_conv,
@@ -190,8 +191,21 @@ pub fn pairwise<F: FieldExt + TensorType>(
         )));
     }
 
+    let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
+
+    // casts a 1D addition
+    if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
+        rhs.tile(lhs.dims().iter().product::<usize>())?;
+        rhs.reshape(lhs.dims())?;
+    }
+    // make 1D casting commutative
+    else if lhs.dims().len() == 1 && lhs.dims()[0] == 1 {
+        lhs.tile(rhs.dims().iter().product::<usize>())?;
+        lhs.reshape(rhs.dims())?;
+    }
+
     let mut inputs = vec![];
-    for (i, input) in values.iter().enumerate() {
+    for (i, input) in [lhs, rhs].iter().enumerate() {
         let inp = utils::value_muxer(
             &config.inputs[i],
             &{
@@ -808,4 +822,59 @@ pub fn range_check<F: FieldExt + TensorType>(
     *offset += output.len();
 
     Ok(output.into())
+}
+
+///
+pub fn nonlinearity<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    region: &mut Region<F>,
+    values: &[ValTensor<F>; 1],
+    nl: LookupOp,
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let region_name = format!("Lookup for {:#?}", nl);
+
+    let x = &values[0];
+
+    trace!("laying out {}", region_name);
+
+    let w = ValTensor::from(config.lookup_input.assign(region, *offset, &x)?);
+    // extract integer_valuations
+    let integer_evals: Tensor<i128> = w
+        .get_int_evals()
+        .map_err(|e| {
+            error!("{}", e);
+            halo2_proofs::plonk::Error::Synthesis
+        })?
+        .into_iter()
+        .into();
+
+    // for key generation integer_evals will be empty and we need to return a set of unassigned values
+    let output: Tensor<Value<F>> = match integer_evals.len() {
+        // if empty return an unknown val
+        0 => Tensor::from((0..x.dims().iter().product::<usize>()).map(|_| Value::unknown())),
+        // if not empty apply the nonlinearity !
+        _ => {
+            let x = nl.f(integer_evals)?;
+            x.map(|elem| Value::known(i128_to_felt(elem)))
+        }
+    };
+
+    let mut output = config.output.assign(region, *offset, &output.into())?;
+
+    for i in 0..x.len() {
+        let (x, y) = config.lookup_input.cartesian_coord(*offset + i);
+        config
+            .lookup_selectors
+            .get(&(nl.clone(), x))
+            .unwrap()
+            .enable(region, y)?;
+    }
+
+    output.reshape(x.dims());
+
+    *offset += x.len();
+
+    // constrain the calculated output to a column
+    Ok(ValTensor::from(output))
 }

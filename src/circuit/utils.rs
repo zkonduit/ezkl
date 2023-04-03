@@ -1,5 +1,5 @@
 use super::*;
-use crate::tensor::TensorType;
+use crate::tensor::{TensorType, ValType};
 use halo2_proofs::{arithmetic::FieldExt, circuit::Value};
 
 /// Used to deal with unknown values at proof time arising from `Fixed` variables.
@@ -21,5 +21,6 @@ pub fn value_muxer<F: FieldExt + TensorType>(
             }),
             _ => unimplemented!(),
         },
+        _ => unimplemented!(),
     }
 }
