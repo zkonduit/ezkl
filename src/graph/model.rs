@@ -482,9 +482,7 @@ impl Model {
 
         // layout any lookup tables
         let _: Vec<()> = config
-            .configs
-            .iter()
-            .map(|(_, c)| match c {
+            .configs.values().map(|c| match c {
                 // only lays out tables if they exist so this can be called safely
                 NodeConfig::Op { config, .. } => config.borrow_mut().layout_tables(layouter),
                 _ => Ok(()),
@@ -613,7 +611,7 @@ impl Model {
 
                 let res = config
                     .borrow_mut()
-                    .layout(region, &values, offset, op.clone())?;
+                    .layout(region, &values, offset, op)?;
 
                 res
             }
@@ -732,9 +730,7 @@ impl Model {
             .filter(|(_, n)| n.opkind.is_poly())
             .collect();
 
-        let _: Vec<_> = poly_ops
-            .iter()
-            .map(|(_, n)| match &n.opkind {
+        let _: Vec<_> = poly_ops.values().map(|n| match &n.opkind {
                 OpKind::Poly(p) => {
                     let in_dims = n
                         .inputs
@@ -754,7 +750,7 @@ impl Model {
             .collect();
 
         for op in lookup_ops {
-            let len = (*op.1.out_dims).into_iter().product::<usize>();
+            let len = (*op.1.out_dims).iter().product::<usize>();
             maximum_var_len += len;
         }
 

@@ -260,11 +260,9 @@ impl VarTensor {
                 let v = v.duplicate_every_n(self.col_size(), offset).unwrap();
                 let res = v.enum_map(|coord, k| {
                     let (x, y) = self.cartesian_coord(offset + coord);
-                    if matches!(check_mode, CheckMode::SAFE) { 
-                        if x > 0 && y == 0 {
-                            // assert that duplication occurred correctly
-                            assert_eq!(Into::<i32>::into(k.clone()), Into::<i32>::into(v[coord - 1].clone()));
-                        }
+                    if matches!(check_mode, CheckMode::SAFE) && x > 0 && y == 0 {
+                        // assert that duplication occurred correctly
+                        assert_eq!(Into::<i32>::into(k.clone()), Into::<i32>::into(v[coord - 1].clone()));
                     };
                     match k {
                         ValType::Value(v) => match &self {

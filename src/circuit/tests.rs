@@ -51,7 +51,7 @@ mod matmul {
                             .layout(
                                 &mut region,
                                 &self.inputs.clone(),
-                                &mut &mut 0,
+                                &mut 0,
                                 Op::Matmul.into(),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -1502,7 +1502,7 @@ mod matmul_relu {
                     let mut offset = 0;
                     let output = config
                         .base_config
-                        .layout(&mut region, &self.inputs, &mut offset, op.clone().into())
+                        .layout(&mut region, &self.inputs, &mut offset, op.into())
                         .unwrap();
                     let _output = config
                         .base_config

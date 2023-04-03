@@ -352,7 +352,7 @@ impl Op {
                 vec![*output_len.last().unwrap(); 2]
             }
             Op::Affine => {
-                let s = input_shapes.clone();
+                let s = input_shapes;
                 // add 1 cause of bias
                 let output_len = s[1][0] * (s[1][1] + 1);
                 vec![output_len; 2]
@@ -367,7 +367,7 @@ impl Op {
         };
         match shapes.last() {
             // add output
-            Some(s) => shapes.push(s.clone()),
+            Some(s) => shapes.push(*s),
             _ => {}
         };
         shapes
@@ -708,7 +708,9 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             });
         }
 
-        let config = Self {
+        
+
+        Self {
             selectors,
             lookup_selectors: BTreeMap::new(),
             inputs: inputs.to_vec(),
@@ -717,9 +719,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             output: output.clone(),
             check_mode,
             _marker: PhantomData,
-        };
-
-        config
+        }
     }
 
     /// Configures and creates lookup selectors

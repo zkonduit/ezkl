@@ -752,7 +752,7 @@ pub fn identity<F: FieldExt + TensorType>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let output = config
         .output
-        .assign(region, *offset, &values[0].clone().into())?;
+        .assign(region, *offset, &values[0].clone())?;
 
     *offset += output.len();
 
@@ -838,7 +838,7 @@ pub fn nonlinearity<F: FieldExt + TensorType>(
 
     trace!("laying out {}", region_name);
 
-    let w = ValTensor::from(config.lookup_input.assign(region, *offset, &x)?);
+    let w = ValTensor::from(config.lookup_input.assign(region, *offset, x)?);
     // extract integer_valuations
     let integer_evals: Tensor<i128> = w
         .get_int_evals()
