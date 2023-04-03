@@ -479,7 +479,7 @@ impl fmt::Display for Op {
             Op::Rescaled { inner, scale } => {
                 write!(
                     f,
-                    "{} w/ scalings: {:?}",
+                    "rescaled {} w/ scalings: {:?}",
                     **inner,
                     scale.iter().map(|e| e.1).collect_vec()
                 )
