@@ -620,6 +620,9 @@ pub struct BaseConfig<F: FieldExt + TensorType> {
     pub lookup_input: VarTensor,
     /// the (currently singular) output of the accumulated operations.
     pub output: VarTensor,
+    ///  the VarTensor reserved for lookup operations (could be an element of inputs or the same as output)
+    /// Note that you should be careful to ensure that the lookup_output is not simultaneously assigned to by other non-lookup operations eg. in the case of composite ops.
+    pub lookup_output: VarTensor,
     /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many base gates.
     pub selectors: BTreeMap<(BaseOp, usize), Selector>,
     /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many base gates.
@@ -708,13 +711,12 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             });
         }
 
-        
-
         Self {
             selectors,
             lookup_selectors: BTreeMap::new(),
             inputs: inputs.to_vec(),
             lookup_input: VarTensor::None,
+            lookup_output: VarTensor::None,
             tables: BTreeMap::new(),
             output: output.clone(),
             check_mode,
@@ -782,11 +784,11 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         self.lookup_selectors.extend(selectors);
         // if we haven't previously initialized the input/output, do so now
         if let VarTensor::None = self.lookup_input {
-            warn!("lookup input not contained in inputs, pushing to inputs");
+            warn!("assiging lookup input");
             self.lookup_input = input.clone();
         }
-        if let VarTensor::None = self.output {
-            self.output = output.clone();
+        if let VarTensor::None = self.lookup_output {
+            self.lookup_output = output.clone();
         }
         Ok(())
     }

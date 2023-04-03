@@ -750,9 +750,7 @@ pub fn identity<F: FieldExt + TensorType>(
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let output = config
-        .output
-        .assign(region, *offset, &values[0].clone())?;
+    let output = config.output.assign(region, *offset, &values[0].clone())?;
 
     *offset += output.len();
 
@@ -860,7 +858,9 @@ pub fn nonlinearity<F: FieldExt + TensorType>(
         }
     };
 
-    let mut output = config.output.assign(region, *offset, &output.into())?;
+    let mut output = config
+        .lookup_output
+        .assign(region, *offset, &output.into())?;
 
     for i in 0..x.len() {
         let (x, y) = config.lookup_input.cartesian_coord(*offset + i);

@@ -262,6 +262,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
 
             let prover = MockProver::run(cli.args.logrows, &circuit, public_inputs)
                 .map_err(Box::<dyn Error>::from)?;
+            prover.assert_satisfied();
             prover
                 .verify()
                 .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;

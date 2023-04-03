@@ -234,7 +234,6 @@ impl Model {
         info!("configuring model");
         let mut results = BTreeMap::new();
         let mut base_gates = BTreeMap::new();
-        base_gates.insert(true, Rc::new(RefCell::new(PolyConfig::default())));
 
         let non_op_nodes: BTreeMap<&usize, &Node> = self
             .nodes
@@ -275,7 +274,16 @@ impl Model {
 
         if !lookup_ops.is_empty() {
             for (i, node) in lookup_ops {
-                let base_config = base_gates.get(&true).unwrap();
+                let base_config = match base_gates.get(&false) {
+                    Some(c) => c.clone(),
+                    // Note: this is a hack to get around the borrow checker. We need to insert a default config into the base_gates map
+                    // For the composite ops update we'll need to make this more sophisticated. Eg. is it a comp op which involved fixed params ? or does it only involve advices ?
+                    None => {
+                        base_gates.insert(false, Rc::new(RefCell::new(PolyConfig::default())));
+                        // safe
+                        base_gates.get(&false).unwrap().clone()
+                    }
+                };
                 let config = self.conf_lookup(base_config.clone(), node, meta, vars)?;
                 results.insert(*i, config);
             }
@@ -482,7 +490,9 @@ impl Model {
 
         // layout any lookup tables
         let _: Vec<()> = config
-            .configs.values().map(|c| match c {
+            .configs
+            .values()
+            .map(|c| match c {
                 // only lays out tables if they exist so this can be called safely
                 NodeConfig::Op { config, .. } => config.borrow_mut().layout_tables(layouter),
                 _ => Ok(()),
@@ -609,9 +619,7 @@ impl Model {
                     })
                     .collect_vec();
 
-                let res = config
-                    .borrow_mut()
-                    .layout(region, &values, offset, op)?;
+                let res = config.borrow_mut().layout(region, &values, offset, op)?;
 
                 res
             }
@@ -730,7 +738,9 @@ impl Model {
             .filter(|(_, n)| n.opkind.is_poly())
             .collect();
 
-        let _: Vec<_> = poly_ops.values().map(|n| match &n.opkind {
+        let _: Vec<_> = poly_ops
+            .values()
+            .map(|n| match &n.opkind {
                 OpKind::Poly(p) => {
                     let in_dims = n
                         .inputs
