@@ -8,6 +8,7 @@ pub mod node;
 /// Representations of a computational graph's variables.
 pub mod vars;
 
+use crate::circuit::OpKind;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor};
 use anyhow::Result;

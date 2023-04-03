@@ -1,7 +1,7 @@
 /// EVM related proving and verification
 pub mod evm;
 
-use crate::circuit::base::CheckMode;
+use crate::circuit::CheckMode;
 use crate::commands::{data_path, Cli, RunArgs};
 use crate::execute::ExecutionError;
 use crate::fieldutils::i128_to_felt;

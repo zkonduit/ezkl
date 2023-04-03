@@ -1,6 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl_lib::circuit::base::CheckMode;
-use ezkl_lib::circuit::lookup::*;
+use ezkl_lib::circuit::{BaseConfig as Config, CheckMode, LookupOp};
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::{create_keys, gen_srs};
@@ -37,9 +36,15 @@ impl Circuit<Fr> for NLCircuit {
                 .map(|_| VarTensor::new_advice(cs, K, LEN, true))
                 .collect::<Vec<_>>();
 
-            let nl = Op::ReLU { scale: 128 };
+            let nl = LookupOp::ReLU { scale: 128 };
 
-            Self::Config::configure(cs, &advices[0], &advices[1], BITS, &[nl])
+            let mut config = Config::default();
+
+            config
+                .configure_lookup(cs, &advices[0], &advices[1], BITS, &nl)
+                .unwrap();
+
+            config
         }
     }
 
@@ -48,11 +53,18 @@ impl Circuit<Fr> for NLCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>, // layouter is our 'write buffer' for the circuit
     ) -> Result<(), Error> {
-        config.layout_table(&mut layouter).unwrap();
+        config.layout_tables(&mut layouter).unwrap();
         layouter.assign_region(
             || "",
             |mut region| {
-                config.layout(&mut region, &self.input, &mut 0).unwrap();
+                config
+                    .layout(
+                        &mut region,
+                        &[self.input.clone()],
+                        &mut 0,
+                        LookupOp::ReLU { scale: 128 }.into(),
+                    )
+                    .unwrap();
                 Ok(())
             },
         )?;

@@ -1,4 +1,4 @@
-use crate::circuit::base::*;
+use crate::circuit::*;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -48,7 +48,12 @@ mod matmul {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut &mut 0, Op::Matmul)
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Op::Matmul.into(),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -116,7 +121,7 @@ mod matmul_col_overflow {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Matmul)
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Matmul.into())
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -183,7 +188,7 @@ mod dot {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Dot)
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Dot.into())
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -248,7 +253,7 @@ mod dot_col_overflow {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Dot)
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Dot.into())
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -313,7 +318,7 @@ mod sum {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Sum)
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Sum.into())
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -376,7 +381,7 @@ mod sum_col_overflow {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Sum)
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Sum.into())
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -439,7 +444,12 @@ mod batchnorm {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::BatchNorm)
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Op::BatchNorm.into(),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -510,7 +520,7 @@ mod affine {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Affine)
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Affine.into())
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -581,7 +591,7 @@ mod affine_col_overflow {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Affine)
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Affine.into())
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -653,13 +663,28 @@ mod composition {
                     |mut region| {
                         let mut offset = 0;
                         let _ = config
-                            .layout(&mut region, &self.inputs.clone(), &mut offset, Op::Dot)
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut offset,
+                                Op::Dot.into(),
+                            )
                             .unwrap();
                         let _ = config
-                            .layout(&mut region, &self.inputs.clone(), &mut offset, Op::Dot)
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut offset,
+                                Op::Dot.into(),
+                            )
                             .unwrap();
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut offset, Op::Dot)
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut offset,
+                                Op::Dot.into(),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -732,7 +757,8 @@ mod conv {
                                 Op::Conv {
                                     padding: (1, 1),
                                     stride: (2, 2),
-                                },
+                                }
+                                .into(),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -858,7 +884,8 @@ mod sumpool {
                                     padding: (0, 0),
                                     stride: (1, 1),
                                     kernel_shape: (3, 3),
-                                },
+                                }
+                                .into(),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -882,6 +909,71 @@ mod sumpool {
 
         let circuit = ConvCircuit::<F> {
             inputs: [ValTensor::from(image)].to_vec(),
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod add_w_shape_casting {
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 4;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: FieldExt + TensorType> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN, true);
+            let b = VarTensor::new_advice(cs, K, LEN, true);
+            let output = VarTensor::new_advice(cs, K, LEN, true);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Add.into())
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn addcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let b = Tensor::from((0..1).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
             _marker: PhantomData,
         };
 
@@ -929,7 +1021,7 @@ mod add {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Add)
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Add.into())
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -994,7 +1086,7 @@ mod add_with_overflow {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Add)
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Add.into())
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -1059,7 +1151,7 @@ mod sub {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Sub)
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Sub.into())
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -1124,7 +1216,7 @@ mod mult {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Mult)
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Mult.into())
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -1189,7 +1281,7 @@ mod pow {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Pow(5))
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Pow(5).into())
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -1252,7 +1344,12 @@ mod pack {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Pack(2, 1))
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Op::Pack(2, 1).into(),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -1322,7 +1419,8 @@ mod rescaled {
                                 Op::Rescaled {
                                     inner: Box::new(Op::Sum),
                                     scale: vec![(0, 5)],
-                                },
+                                }
+                                .into(),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1354,7 +1452,7 @@ mod matmul_relu {
 
     const K: usize = 18;
     const LEN: usize = 32;
-    use crate::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
+    use crate::circuit::LookupOp;
 
     #[derive(Clone)]
     struct MyCircuit<F: FieldExt + TensorType> {
@@ -1366,7 +1464,6 @@ mod matmul_relu {
     #[derive(Clone)]
     struct MyConfig<F: FieldExt + TensorType> {
         base_config: BaseConfig<F>,
-        l1: LookupConfig<F>,
     }
 
     impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
@@ -1382,12 +1479,14 @@ mod matmul_relu {
             let b = VarTensor::new_advice(cs, K, LEN, true);
             let output = VarTensor::new_advice(cs, K, LEN, true);
 
+            let mut base_config =
+                BaseConfig::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE, 0);
             // sets up a new relu table
-            let l1 = LookupConfig::configure(cs, &b, &output, 16, &[LookupOp::ReLU { scale: 1 }]);
+            base_config
+                .configure_lookup(cs, &b, &output, 16, &LookupOp::ReLU { scale: 1 })
+                .unwrap();
 
-            let base_config = BaseConfig::configure(cs, &[a, b], &output, CheckMode::SAFE, 0);
-
-            MyConfig { base_config, l1 }
+            MyConfig { base_config }
         }
 
         fn synthesize(
@@ -1395,7 +1494,7 @@ mod matmul_relu {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            config.l1.layout_table(&mut layouter).unwrap();
+            config.base_config.layout_tables(&mut layouter).unwrap();
             layouter.assign_region(
                 || "",
                 |mut region| {
@@ -1403,9 +1502,17 @@ mod matmul_relu {
                     let mut offset = 0;
                     let output = config
                         .base_config
-                        .layout(&mut region, &self.inputs, &mut offset, op.clone())
+                        .layout(&mut region, &self.inputs, &mut offset, op.into())
                         .unwrap();
-                    let _output = config.l1.layout(&mut region, &output, &mut offset).unwrap();
+                    let _output = config
+                        .base_config
+                        .layout(
+                            &mut region,
+                            &[output.unwrap()],
+                            &mut offset,
+                            LookupOp::ReLU { scale: 1 }.into(),
+                        )
+                        .unwrap();
                     Ok(())
                 },
             )?;
@@ -1488,7 +1595,7 @@ mod rangecheck {
                                 &mut region,
                                 &[self.input.clone(), self.output.clone()],
                                 &mut 0,
-                                Op::RangeCheck(RANGE as i32),
+                                Op::RangeCheck(RANGE as i32).into(),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1532,5 +1639,84 @@ mod rangecheck {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod relu {
+    use super::*;
+    use halo2_proofs::{
+        arithmetic::FieldExt,
+        circuit::{Layouter, SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::{Circuit, ConstraintSystem, Error},
+    };
+    use halo2curves::pasta::Fp as F;
+
+    #[derive(Clone)]
+    struct ReLUCircuit<F: FieldExt + TensorType> {
+        pub input: ValTensor<F>,
+    }
+
+    impl<F: FieldExt + TensorType> Circuit<F> for ReLUCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let advices = (0..2)
+                .map(|_| VarTensor::new_advice(cs, 4, 3, true))
+                .collect::<Vec<_>>();
+
+            let nl = LookupOp::ReLU { scale: 1 };
+
+            let mut config = BaseConfig::default();
+
+            config
+                .configure_lookup(cs, &advices[0], &advices[1], 2, &nl)
+                .unwrap();
+            config
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
+        ) -> Result<(), Error> {
+            config.layout_tables(&mut layouter).unwrap();
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(
+                                &mut region,
+                                &[self.input.clone()],
+                                &mut 0,
+                                LookupOp::ReLU { scale: 1 }.into(),
+                            )
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn relucircuit() {
+        let input: Tensor<Value<F>> =
+            Tensor::new(Some(&[Value::<F>::known(F::from(1_u64)); 4]), &[4]).unwrap();
+
+        let circuit = ReLUCircuit::<F> {
+            input: ValTensor::from(input),
+        };
+
+        let prover = MockProver::run(4_u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
     }
 }
