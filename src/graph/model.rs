@@ -279,7 +279,14 @@ impl Model {
                     // Note: this is a hack to get around the borrow checker. We need to insert a default config into the base_gates map
                     // For the composite ops update we'll need to make this more sophisticated. Eg. is it a comp op which involved fixed params ? or does it only involve advices ?
                     None => {
-                        base_gates.insert(false, Rc::new(RefCell::new(PolyConfig::default())));
+                        let config = PolyConfig::configure(
+                            meta,
+                            vars.advices[0..2].try_into()?,
+                            &vars.advices[2],
+                            self.run_args.check_mode,
+                            self.run_args.tolerance as i32,
+                        );
+                        base_gates.insert(false, Rc::new(RefCell::new(config)));
                         // safe
                         base_gates.get(&false).unwrap().clone()
                     }

@@ -72,7 +72,9 @@ pub enum BaseOp {
 
 #[allow(missing_docs)]
 /// An enum representing activating the sanity checks we can perform on the accumulated arguments
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default, Copy,
+)]
 pub enum CheckMode {
     #[default]
     SAFE,
@@ -635,6 +637,12 @@ pub struct BaseConfig<F: FieldExt + TensorType> {
 }
 
 impl<F: FieldExt + TensorType> BaseConfig<F> {
+    /// Instantiates the [BaseConfig] with VarTensors -- without creating selectors.
+    pub fn init_vars(&mut self, inputs: &[VarTensor; 2], output: &VarTensor) {
+        self.inputs = inputs.to_vec();
+        self.output = output.clone();
+    }
+
     /// Configures [BaseOp]s for a given [ConstraintSystem].
     /// # Arguments
     /// * `inputs` - The explicit inputs to the operations.

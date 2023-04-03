@@ -186,9 +186,10 @@ pub fn pairwise<F: FieldExt + TensorType>(
     op: BaseOp,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     if values.len() != config.inputs.len() {
-        return Err(Box::new(CircuitError::DimMismatch(
-            "accum dot layout".to_string(),
-        )));
+        return Err(Box::new(CircuitError::DimMismatch(format!(
+            "pairwise {} layout",
+            op.as_str()
+        ))));
     }
 
     let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
