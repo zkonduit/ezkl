@@ -634,7 +634,7 @@ pub fn pow<F: FieldExt + TensorType>(
 pub fn rescale<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     region: &mut Region<F>,
-    values: &[ValTensor<F>; 1],
+    values: &[ValTensor<F>],
     scales: &[(usize, usize)],
     offset: &mut usize,
 ) -> Result<Vec<ValTensor<F>>, Box<dyn Error>> {
