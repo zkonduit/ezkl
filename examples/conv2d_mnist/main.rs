@@ -185,7 +185,7 @@ where
                                 self.l0_params[1].clone(),
                             ],
                             &mut offset,
-                            op.clone().into(),
+                            op.into(),
                         )
                         .unwrap();
 
