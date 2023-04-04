@@ -2,6 +2,8 @@ use super::TensorError;
 use crate::tensor::{Tensor, TensorType};
 use itertools::Itertools;
 pub use std::ops::{Add, Div, Mul, Sub};
+use puruspe::erf;
+
 
 /// Matrix multiplies two 2D tensors (and adds an offset).
 /// # Arguments
@@ -801,8 +803,36 @@ pub mod nonlinearities {
             output[i] = tanhz as i128;
         }
 
+        /// Applies error function (erf) on a tensor of integers.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::erffunc;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[4, 25, 8, 1, 1, 0]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = erffunc(&x, 1, 1);
+    /// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 0, 0, 0]), &[2, 3]).unwrap(); // TODO
+    /// assert_eq!(result, expected);
+    /// ```
+
+    pub fn erffunc(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        let mut output = a.clone();
+
+        for i in 0..a.len(){
+            let mut z = a[i].clone() as f32 / (scale_input as f32);
+            z = (scale_output as f32) * (erf(z as f64) as f32);
+            output[i] = z as i128;   
+        }
         output
     }
+
 
     /// Elementwise applies leaky relu to a tensor of integers.
     /// # Arguments

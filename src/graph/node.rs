@@ -247,6 +247,33 @@ impl Node {
                         }
                     }
 
+                    LookupOp::Erf { .. } => {
+                        let input_node = &inputs[0];
+                        let scale_diff = input_node.out_scale;
+                        if scale_diff > 0 {
+                            let mult = scale_to_multiplier(scale_diff);
+                            opkind = OpKind::Lookup(LookupOp::Erf {
+                                scales: (mult as usize, scale_to_multiplier(scale) as usize),
+                            });
+                        } else {
+                            opkind = OpKind::Lookup(LookupOp::Erf {
+                                scales: (1, scale_to_multiplier(scale) as usize),
+                            });
+                        }
+
+                        Node {
+                            idx,
+                            opkind,
+                            inputs: node.inputs.clone(),
+                            in_dims: vec![input_node.out_dims.clone()],
+                            out_dims: input_node.out_dims.clone(),
+                            in_scale: input_node.out_scale,
+                            out_scale: scale,
+                            output_max: scale_to_multiplier(scale),
+                            ..Default::default()
+                        }
+                    }
+
                     LookupOp::ReLU { .. } => {
                         let input_node = &inputs[0];
                         let scale_diff = input_node.out_scale - scale;

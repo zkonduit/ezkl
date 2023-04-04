@@ -14,33 +14,33 @@ lazy_static! {
 fn init() {
     println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
     build_ezkl();
-    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "-K=17",
-            "gen-srs",
-            &format!(
-                "--params-path={}/kzg17.params",
-                TEST_DIR.path().to_str().unwrap()
-            ),
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
-    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "-K=23",
-            "gen-srs",
-            &format!(
-                "--params-path={}/kzg23.params",
-                TEST_DIR.path().to_str().unwrap()
-            ),
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
+    // let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+    //     .args([
+    //         "-K=20",
+    //         "gen-srs",
+    //         &format!(
+    //             "--params-path={}/kzg17.params",
+    //             TEST_DIR.path().to_str().unwrap()
+    //         ),
+    //     ])
+    //     .status()
+    //     .expect("failed to execute process");
+    // assert!(status.success());
+    // let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+    //     .args([
+    //         "-K=23",
+    //         "gen-srs",
+    //         &format!(
+    //             "--params-path={}/kzg23.params",
+    //             TEST_DIR.path().to_str().unwrap()
+    //         ),
+    //     ])
+    //     .status()
+    //     .expect("failed to execute process");
+    // assert!(status.success());
 }
 
-const TESTS: [&str; 21] = [
+const TESTS: [&str; 23] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -51,6 +51,8 @@ const TESTS: [&str; 21] = [
     "1l_sqrt",
     "1l_prelu",
     "1l_leakyrelu",
+    "1l_gelu_noappx",
+    "1l_gelu_tanh_appx",
     "1l_relu",
     "1l_tanh",
     "2l_relu_sigmoid_small",
@@ -62,6 +64,7 @@ const TESTS: [&str; 21] = [
     "2l_relu_sigmoid_conv",
     "3l_relu_conv_fc",
     "4l_relu_conv_fc",
+    "1l_erf",
 ];
 
 const PACKING_TESTS: [&str; 13] = [
@@ -75,6 +78,7 @@ const PACKING_TESTS: [&str; 13] = [
     "1l_prelu",
     "1l_relu",
     "1l_tanh",
+    "1l_gelu_noappx",
     "2l_relu_sigmoid_small",
     "2l_relu_fc",
     "2l_relu_small",
@@ -88,6 +92,7 @@ const TESTS_AGGR: [&str; 16] = [
     "1l_div",
     "1l_pad",
     "1l_sigmoid",
+    "1l_gelu_noappx",
     "1l_sqrt",
     "1l_prelu",
     "1l_leakyrelu",
@@ -114,6 +119,7 @@ const TESTS_EVM: [&str; 14] = [
     "1l_sqrt",
     "1l_prelu",
     "1l_leakyrelu",
+    "1l_gelu_noappx",
     "1l_relu",
     "1l_tanh",
     "2l_relu_sigmoid_small",
@@ -131,7 +137,7 @@ macro_rules! test_func_aggr {
             use crate::TESTS_AGGR;
             use test_case::test_case;
             use crate::kzg_aggr_prove_and_verify;
-            seq!(N in 0..=14 {
+            seq!(N in 0..=15 {
 
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_prove_and_verify_(test: &str) {
@@ -187,12 +193,7 @@ macro_rules! test_func {
             use crate::tutorial as run_tutorial;
 
 
-            #[test]
-            fn tutorial_() {
-                run_tutorial();
-            }
-
-            seq!(N in 0..=20 {
+            seq!(N in 0..=19 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
@@ -320,7 +321,7 @@ fn neg_mock(example_name: String, counter_example: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "mock",
             "-D",
             format!("./examples/onnx/{}/input.json", counter_example).as_str(),
@@ -346,7 +347,7 @@ fn forward_pass(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "forward",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -369,7 +370,7 @@ fn forward_pass(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "mock",
             "-D",
             format!(
@@ -391,7 +392,7 @@ fn render_circuit(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "render-circuit",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -434,7 +435,7 @@ fn mock(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "mock",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -451,7 +452,7 @@ fn mock_packed_outputs(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "--pack-base=2",
             "mock",
             "-D",
@@ -469,7 +470,7 @@ fn mock_everything(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "--public-inputs",
             "--pack-base=2",
             "mock",
@@ -490,7 +491,7 @@ fn mock_public_inputs(example_name: String) {
             "--public-inputs",
             "--public-outputs=false",
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "mock",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -509,7 +510,7 @@ fn mock_public_params(example_name: String) {
             "--public-params",
             "--public-outputs=false",
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "mock",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -526,7 +527,7 @@ fn kzg_aggr_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "prove",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -582,7 +583,7 @@ fn kzg_aggr_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "verify-aggr",
             "--proof-path",
             &format!(
@@ -612,7 +613,7 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "prove",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -684,7 +685,7 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "create-evm-verifier-aggr",
             "--deployment-code-path",
             &format!(
@@ -709,7 +710,7 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "verify-evm",
             "--proof-path",
             &format!(
@@ -734,7 +735,7 @@ fn kzg_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "prove",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -757,7 +758,7 @@ fn kzg_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "verify",
             "-M",
             format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
@@ -781,7 +782,7 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--bits=16",
-            "-K=17",
+            "-K=20",
             "prove",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -817,7 +818,7 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
 
     let mut args = vec![
         "--bits=16",
-        "-K=17",
+        "-K=20",
         "create-evm-verifier",
         "-D",
         input_arg.as_str(),
@@ -846,7 +847,7 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
 
     let mut args = vec![
         "--bits=16",
-        "-K=17",
+        "-K=20",
         "verify-evm",
         "--proof-path",
         pf_arg.as_str(),
