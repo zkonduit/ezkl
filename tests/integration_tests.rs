@@ -40,7 +40,7 @@ fn init() {
     assert!(status.success());
 }
 
-const TESTS: [&str; 20] = [
+const TESTS: [&str; 21] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -49,6 +49,7 @@ const TESTS: [&str; 20] = [
     "1l_reshape",
     "1l_sigmoid",
     "1l_sqrt",
+    "1l_prelu",
     "1l_leakyrelu",
     "1l_relu",
     "1l_tanh",
@@ -63,7 +64,7 @@ const TESTS: [&str; 20] = [
     "4l_relu_conv_fc",
 ];
 
-const PACKING_TESTS: [&str; 12] = [
+const PACKING_TESTS: [&str; 13] = [
     "1l_mlp",
     "1l_average",
     "1l_div",
@@ -71,6 +72,7 @@ const PACKING_TESTS: [&str; 12] = [
     "1l_sigmoid",
     "1l_sqrt",
     "1l_leakyrelu",
+    "1l_prelu",
     "1l_relu",
     "1l_tanh",
     "2l_relu_sigmoid_small",
@@ -78,7 +80,7 @@ const PACKING_TESTS: [&str; 12] = [
     "2l_relu_small",
 ];
 
-const TESTS_AGGR: [&str; 15] = [
+const TESTS_AGGR: [&str; 16] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -87,6 +89,7 @@ const TESTS_AGGR: [&str; 15] = [
     "1l_pad",
     "1l_sigmoid",
     "1l_sqrt",
+    "1l_prelu",
     "1l_leakyrelu",
     "1l_relu",
     "1l_tanh",
@@ -101,7 +104,7 @@ const NEG_TESTS: [(&str, &str); 2] = [
     ("2l_relu_small", "2l_relu_sigmoid_small"),
 ];
 
-const TESTS_EVM: [&str; 13] = [
+const TESTS_EVM: [&str; 14] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -109,6 +112,7 @@ const TESTS_EVM: [&str; 13] = [
     "1l_sigmoid",
     "1l_div",
     "1l_sqrt",
+    "1l_prelu",
     "1l_leakyrelu",
     "1l_relu",
     "1l_tanh",
@@ -149,7 +153,7 @@ macro_rules! test_packed_func {
             use crate::mock_packed_outputs;
             use crate::mock_everything;
 
-            seq!(N in 0..=11 {
+            seq!(N in 0..=12 {
 
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_packed_outputs_(test: &str) {
@@ -182,7 +186,7 @@ macro_rules! test_func {
             use crate::render_circuit;
 
 
-            seq!(N in 0..=19 {
+            seq!(N in 0..=20 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
@@ -232,17 +236,18 @@ macro_rules! test_func_evm {
 
             /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
             /// specify a few that will
-            const TESTS_SOLIDITY: [&str; 7] = [
+            const TESTS_SOLIDITY: [&str; 8] = [
                 "1l_relu",
                 "1l_div",
                 "1l_leakyrelu",
                 "1l_sqrt",
+                "1l_prelu",
                 "1l_sigmoid",
                 "1l_reshape",
                 "2l_relu_fc"
             ];
 
-            seq!(N in 0..=12 {
+            seq!(N in 0..=13 {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
