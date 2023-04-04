@@ -331,7 +331,7 @@ impl Node {
                             .iter()
                             .map(|value| F32(*value))
                             .collect_vec();
-                        node.inputs.pop();
+                        // node.inputs.pop();
 
                         let scale_diff = input_node.out_scale - scale;
                         // We can also consider adjusting the scale of all inputs and the output in a more custom way.

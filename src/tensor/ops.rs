@@ -792,14 +792,13 @@ pub mod nonlinearities {
 
     pub fn tanh(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
         let mut output = a.clone();
-        
-        for i in 0..a.len(){
+
+        for i in 0..a.len() {
             let z = a[i] as f32 / (scale_input as f32);
-            let numerator = z.exp() - (1.0/z.exp());
-            let denominator = z.exp() + (1.0/z.exp());
-            let tanhz = (scale_output as f32) * (numerator/denominator);
+            let numerator = z.exp() - (1.0 / z.exp());
+            let denominator = z.exp() + (1.0 / z.exp());
+            let tanhz = (scale_output as f32) * (numerator / denominator);
             output[i] = tanhz as i128;
-            
         }
 
         output

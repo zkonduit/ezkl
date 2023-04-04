@@ -91,6 +91,18 @@ pub async fn verify_proof_via_solidity(
         public_inputs.push(u);
     }
 
+    let tx = contract
+        .verify(
+            public_inputs.clone(),
+            ethers::types::Bytes::from(proof.proof.to_vec()),
+        )
+        .tx;
+
+    info!(
+        "estimated verify gas cost: {:#?}",
+        client.estimate_gas(&tx, None).await?
+    );
+
     let result = contract
         .verify(
             public_inputs,
