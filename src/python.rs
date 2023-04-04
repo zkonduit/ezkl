@@ -1,13 +1,15 @@
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
-use pyo3::exceptions::PyIOError;
+use pyo3::exceptions::{PyIOError, PyRuntimeError, PyValueError};
 use pyo3_log;
 use tabled::Table;
-use crate::graph::{Model, Visibility, VarVisibility, Mode};
+use crate::graph::{Model, Visibility, VarVisibility, Mode, vector_to_quantized};
 use crate::commands::RunArgs;
 use crate::circuit::base::CheckMode;
-use crate::pfsys::{gen_srs as ezkl_gen_srs, save_params};
+use crate::pfsys::{gen_srs as ezkl_gen_srs, save_params, prepare_data};
 use std::path::PathBuf;
+use std::fs::File;
+use log::trace;
 use halo2curves::bn256::Bn256;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 
@@ -93,42 +95,100 @@ fn gen_srs(
     Ok(())
 }
 
-#[pyfunction(run_args="**")]
+#[pyfunction(signature = (
+    data,
+    model,
+    output,
+    tolerance=0,
+    scale=7,
+    bits=16,
+    logrows=17,
+    public_inputs=true,
+    public_outputs=true,
+    public_params=false,
+    pack_base=1,
+    check_mode="safe"
+))]
 fn forward(
     data: String,
     model: String,
     output: String,
-    run_args: Option<&PyDict>
-) -> PyResult<&PyDict> {
-    let mut data = prepare_data(data)?;
+    tolerance: usize,
+    scale: u32,
+    bits: usize,
+    logrows: u32,
+    public_inputs: bool,
+    public_outputs: bool,
+    public_params: bool,
+    pack_base: u32,
+    check_mode: &str
+) -> Result<Py<PyAny>, PyErr> {
+    let data = prepare_data(data);
 
-    let run_args = RunArgs {
-        tolerance: 0,
-        scale: 7,
-        bits: 16,
-        logrows: 17,
-        public_inputs: true,
-        public_outputs: true,
-        public_params: false,
-        pack_base: 1,
-        check_mode: CheckMode::SAFE,
-    };
+    match data {
+        Ok(m) => {
+            let run_args = RunArgs {
+                tolerance: tolerance,
+                scale: scale,
+                bits: bits,
+                logrows: logrows,
+                public_inputs: public_inputs,
+                public_outputs: public_outputs,
+                public_params: public_params,
+                pack_base: pack_base,
+                check_mode: CheckMode::from(check_mode.to_string()),
+            };
+            let mut new_data = m;
+            let mut model_inputs = vec![];
+            // quantize the supplied data using the provided scale.
+            for v in new_data.input_data.iter() {
+                match vector_to_quantized(
+                    v,
+                    &Vec::from([v.len()]),
+                    0.0,
+                    run_args.scale
+                ) {
+                    Ok(t) => model_inputs.push(t),
+                    Err(_) => {
+                        return Err(PyValueError::new_err("Failed to quantize vector"))
+                    }
+                }
+            }
+            let res = Model::forward(
+                model,
+                &model_inputs,
+                run_args
+            );
 
-    // quantize the supplied data using the provided scale.
-    let mut model_inputs = vec![];
-    for v in data.input_data.iter() {
-        let t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, cli.args.scale)?;
-        model_inputs.push(t);
+            match res {
+                Ok(r) => {
+                    let float_res: Vec<Vec<f32>> = r.iter().map(|t| t.to_vec()).collect();
+                    trace!("forward pass output: {:?}", float_res);
+                    new_data.output_data = float_res;
+
+                    match serde_json::to_writer(&File::create(output)?, &new_data) {
+                        Ok(_) => {
+                            // obtain gil
+                            // TODO: Convert to Python::with_gil() when it stabilizes
+                            let gil = Python::acquire_gil();
+                            // obtain python instance
+                            let py = gil.python();
+                            return Ok(new_data.to_object(py))
+                        },
+                        Err(_) => {
+                            return Err(PyIOError::new_err("Failed to create output file"))
+                        }
+                    };
+                }
+                Err(_) => {
+                    Err(PyRuntimeError::new_err("Failed to compute forward pass"))
+                }
+            }
+        },
+        Err(_) => {
+            Err(PyIOError::new_err("Failed to import files"))
+        },
     }
-
-    let res = Model::forward(model, &model_inputs, cli.args)?;
-
-    let float_res: Vec<Vec<f32>> = res.iter().map(|t| t.to_vec()).collect();
-    trace!("forward pass output: {:?}", float_res);
-    data.output_data = float_res;
-
-    serde_json::to_writer(&File::create(output)?, &data)?;
-    Ok(())
 }
 
 // TODO: Mock
@@ -149,5 +209,6 @@ fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     pyo3_log::init();
     m.add_function(wrap_pyfunction!(table, m)?)?;
     m.add_function(wrap_pyfunction!(gen_srs, m)?)?;
+    m.add_function(wrap_pyfunction!(forward, m)?)?;
     Ok(())
 }

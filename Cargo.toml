@@ -36,10 +36,13 @@ regex = "1"
 colored = { version = "2.0.0", optional = true}
 env_logger = { version = "0.10.0", optional = true}
 colored_json =  { version = "3.0.1", optional = true}
-# python binding related deps
-pyo3 = { version = "0.18.1", features = ["extension-module"] }
-pyo3-log = "0.8.1"
 tokio = { version = "1.26.0", features = ["macros", "rt"] }
+
+# python binding related deps
+pyo3 = { version = "0.18.2", features = ["extension-module"] }
+pyo3-log = "0.8.1"
+# To swap python dictionaries to ndarray should values get large enough
+# ndarray = "0.15.6"
 
 # evm related deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
