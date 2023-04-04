@@ -33,8 +33,12 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::time::Instant;
 use thiserror::Error as thisError;
+
+#[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
+#[cfg(feature = "python-bindings")]
 use pyo3::types::PyDict;
+#[cfg(feature = "python-bindings")]
 use pyo3::ToPyObject;
 
 
@@ -59,6 +63,7 @@ pub struct ModelInput {
 }
 
 /// Truncates nested vector due to omit junk floating point values in python
+#[cfg(feature = "python-bindings")]
 fn truncate_nested_vector(input: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {
     let mut input_mut = input.clone();
     for inner_vec in input_mut.iter_mut() {
@@ -70,6 +75,7 @@ fn truncate_nested_vector(input: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {
     input_mut
 }
 
+#[cfg(feature = "python-bindings")]
 impl ToPyObject for ModelInput {
     fn to_object(&self, py: Python) -> PyObject {
         // Create a Python dictionary

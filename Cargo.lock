@@ -1741,6 +1741,7 @@ dependencies = [
  "lazy_static",
  "log",
  "mnist",
+ "ndarray",
  "plotters",
  "pyo3",
  "pyo3-log",

@@ -47,4 +47,5 @@ pub mod pfsys;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
 /// Python bindings
+#[cfg(feature = "python-bindings")]
 pub mod python;
