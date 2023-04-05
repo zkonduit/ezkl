@@ -10,9 +10,10 @@ use crate::{
     tensor::{
         ops::{
             accumulated, add, affine as non_accum_affine, convolution as non_accum_conv,
-            dot as non_accum_dot, matmul as non_accum_matmul, mult, pack as non_accum_pack,
-            rescale as ref_rescaled, scale_and_shift as ref_scale_and_shift, sub,
-            sum as non_accum_sum, sumpool as non_accum_sumpool,
+            dot as non_accum_dot, matmul as non_accum_matmul, mult,
+            nonlinearities::prelu as ref_prelu, pack as non_accum_pack, rescale as ref_rescaled,
+            scale_and_shift as ref_scale_and_shift, sub, sum as non_accum_sum,
+            sumpool as non_accum_sumpool,
         },
         Tensor, TensorError,
     },
@@ -230,7 +231,7 @@ pub fn pairwise<F: FieldExt + TensorType>(
         halo2_proofs::plonk::Error::Synthesis
     })?;
 
-    let output = config.output.assign(region, *offset, &op_result.into())?;
+    let mut output = config.output.assign(region, *offset, &op_result.into())?;
 
     for i in 0..inputs[0].len() {
         let (x, y) = config.inputs[0].cartesian_coord(*offset + i);
@@ -242,6 +243,8 @@ pub fn pairwise<F: FieldExt + TensorType>(
     }
 
     *offset += output.len();
+
+    output.reshape(values[0].dims());
 
     Ok(ValTensor::from(output))
 }
@@ -428,6 +431,31 @@ pub fn affine<F: FieldExt + TensorType>(
         }
     }
     Ok(last_elem)
+}
+
+/// Negation operation accumulated layout
+pub fn neg<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    region: &mut Region<F>,
+    values: &[ValTensor<F>; 1],
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let input = utils::value_muxer(
+        &config.inputs[1],
+        &{
+            let res = config.inputs[1].assign(region, *offset, &values[0])?;
+            res.map(|e| e.value_field().evaluate())
+        },
+        &values[0],
+    );
+
+    let neg = input.map(|e| -e);
+
+    let output = config.output.assign(region, *offset, &neg.into())?;
+
+    *offset += output.len();
+
+    Ok(output.into())
 }
 
 /// Sumpool accumulated layout
@@ -878,4 +906,80 @@ pub fn nonlinearity<F: FieldExt + TensorType>(
 
     // constrain the calculated output to a column
     Ok(ValTensor::from(output))
+}
+
+/// PrElu layout
+pub fn prelu<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    region: &mut Region<F>,
+    values: &[ValTensor<F>; 2],
+    scale: usize,
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let mut slopes = values[1].clone();
+    if slopes.len() != 1 && slopes.len() != values[0].dims()[0] {
+        return Err(
+            "slope must be a scalar or a vector of length equal to the number of channels".into(),
+        );
+    }
+
+    let diff = (values[0].len()) / slopes.len();
+    println!("diff: {}", diff);
+    println!("slopes: {:?}", slopes);
+    slopes.repeat_rows(diff)?;
+    slopes.reshape(values[0].dims())?;
+    println!("slopes: {:?}", slopes);
+
+    // relu(x)
+    let relu = nonlinearity(
+        config,
+        region,
+        &[values[0].clone()],
+        LookupOp::ReLU { scale },
+        offset,
+    )?;
+    // -x
+    let neg_x = neg(config, region, &[values[0].clone()], offset)?;
+    // relu(-x)
+    let relu_neg_x = nonlinearity(config, region, &[neg_x], LookupOp::ReLU { scale }, offset)?;
+    // relu(-x) * slope
+
+    let scaled_relu_neg_x = pairwise(config, region, &[relu_neg_x, slopes], offset, BaseOp::Mult)?;
+
+    let prelu = pairwise(
+        config,
+        region,
+        &[relu, scaled_relu_neg_x],
+        offset,
+        BaseOp::Sub,
+    )?;
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(prelu.get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let mut int_input: Tensor<i128> = values[0].get_int_evals()?.into_iter().into();
+            int_input.reshape(values[0].dims());
+            let ref_prelu = ref_prelu(
+                &int_input,
+                scale,
+                &values[1]
+                    .get_int_evals()?
+                    .into_iter()
+                    .map(|e| e as f32)
+                    .collect_vec(),
+            )
+            .map(|e| e as i32);
+
+            assert_eq!(
+                Into::<Tensor<i32>>::into(prelu.get_inner()?),
+                Into::<Tensor<i32>>::into(ref_prelu),
+            )
+        }
+    };
+
+    Ok(prelu)
 }

@@ -34,7 +34,7 @@ use std::{
     error::Error,
     fmt,
     marker::PhantomData,
-    ops::{Add, Mul, Sub},
+    ops::{Add, Mul, Neg, Sub},
     rc::Rc,
 };
 
@@ -67,6 +67,7 @@ pub enum BaseOp {
     Mult,
     Sub,
     Sum,
+    Neg,
     Range { tol: i32 },
 }
 
@@ -94,7 +95,9 @@ impl From<String> for CheckMode {
 /// Matches a [BaseOp] to an operation over inputs
 impl BaseOp {
     /// forward func
-    pub fn f<T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T>>(
+    pub fn f<
+        T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Neg<Output = T>,
+    >(
         &self,
         inputs: (T, T, T),
     ) -> T {
@@ -104,6 +107,7 @@ impl BaseOp {
             BaseOp::Add => a + b,
             BaseOp::Identity => b,
             BaseOp::Sum => b + m,
+            BaseOp::Neg => -b,
             BaseOp::Sub => a - b,
             BaseOp::Mult => a * b,
             BaseOp::Range { .. } => b,
@@ -115,6 +119,7 @@ impl BaseOp {
             BaseOp::Identity => "IDENTITY",
             BaseOp::Dot => "DOT",
             BaseOp::Add => "ADD",
+            BaseOp::Neg => "NEG",
             BaseOp::Sub => "SUB",
             BaseOp::Mult => "MULT",
             BaseOp::Sum => "SUM",
@@ -124,6 +129,7 @@ impl BaseOp {
     fn query_offset_rng(&self) -> (i32, usize) {
         match self {
             BaseOp::Identity => (0, 1),
+            BaseOp::Neg => (0, 1),
             BaseOp::Dot => (-1, 2),
             BaseOp::Add => (0, 1),
             BaseOp::Sub => (0, 1),
@@ -135,6 +141,7 @@ impl BaseOp {
     fn num_inputs(&self) -> usize {
         match self {
             BaseOp::Identity => 1,
+            BaseOp::Neg => 1,
             BaseOp::Dot => 2,
             BaseOp::Add => 2,
             BaseOp::Sub => 2,
@@ -146,6 +153,7 @@ impl BaseOp {
     fn constraint_idx(&self) -> usize {
         match self {
             BaseOp::Identity => 0,
+            BaseOp::Neg => 0,
             BaseOp::Dot => 1,
             BaseOp::Add => 0,
             BaseOp::Sub => 0,
@@ -205,10 +213,10 @@ impl LookupOp {
             LookupOp::LeakyReLU { scale, slope } => {
                 Ok(tensor::ops::nonlinearities::leakyrelu(&x, *scale, slope.0))
             }
-            LookupOp::PReLU { scale, slopes } => Ok(tensor::ops::nonlinearities::leakyrelu(
+            LookupOp::PReLU { scale, slopes } => Ok(tensor::ops::nonlinearities::prelu(
                 &x,
                 *scale,
-                slopes[0].0,
+                &slopes.iter().map(|e| e.0).collect_vec(),
             )),
             LookupOp::Sigmoid { scales } => {
                 Ok(tensor::ops::nonlinearities::sigmoid(&x, scales.0, scales.1))
@@ -627,7 +635,7 @@ pub struct BaseConfig<F: FieldExt + TensorType> {
     pub lookup_output: VarTensor,
     /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many base gates.
     pub selectors: BTreeMap<(BaseOp, usize), Selector>,
-    /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many base gates.
+    /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many lookup ops.
     pub lookup_selectors: BTreeMap<(LookupOp, usize), Selector>,
     /// [Table]
     pub tables: BTreeMap<LookupOp, Rc<RefCell<Table<F>>>>,
@@ -637,12 +645,6 @@ pub struct BaseConfig<F: FieldExt + TensorType> {
 }
 
 impl<F: FieldExt + TensorType> BaseConfig<F> {
-    /// Instantiates the [BaseConfig] with VarTensors -- without creating selectors.
-    pub fn init_vars(&mut self, inputs: &[VarTensor; 2], output: &VarTensor) {
-        self.inputs = inputs.to_vec();
-        self.output = output.clone();
-    }
-
     /// Configures [BaseOp]s for a given [ConstraintSystem].
     /// # Arguments
     /// * `inputs` - The explicit inputs to the operations.
@@ -911,13 +913,22 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                 }
                 Op::GlobalSumPool => unreachable!(),
             }),
-            OpKind::Lookup(nl) => Some(layouts::nonlinearity(
-                self,
-                region,
-                cp_values[..].try_into()?,
-                nl,
-                offset,
-            )?),
+            OpKind::Lookup(nl) => match nl {
+                LookupOp::PReLU { scale, .. } => Some(layouts::prelu(
+                    self,
+                    region,
+                    cp_values[..].try_into()?,
+                    scale,
+                    offset,
+                )?),
+                _ => Some(layouts::nonlinearity(
+                    self,
+                    region,
+                    cp_values[..].try_into()?,
+                    nl,
+                    offset,
+                )?),
+            },
             OpKind::Const => None,
             OpKind::Input => None,
             _ => {

@@ -149,7 +149,7 @@ impl Model {
             }
             match &n.opkind {
                 OpKind::Lookup(op) => {
-                    assert_eq!(inputs.len(), 1);
+                    // assert_eq!(inputs.len(), 1);
                     results.insert(i, op.f(inputs[0].clone())?);
                 }
                 OpKind::Poly(op) => {
@@ -453,16 +453,23 @@ impl Model {
 
         let input_idx = input_nodes.iter().map(|f| f.idx).collect_vec();
 
-        let op = match &node.opkind {
-            OpKind::Lookup(l) => l,
+        let mut op = match &node.opkind {
+            OpKind::Lookup(l) => l.clone(),
             c => {
                 return Err(Box::new(GraphError::WrongMethod(node.idx, c.clone())));
             }
         };
 
+        match op {
+            LookupOp::PReLU { scale, .. } => {
+                op = LookupOp::ReLU { scale };
+            }
+            _ => {}
+        }
+
         config
             .borrow_mut()
-            .configure_lookup(meta, input, output, self.run_args.bits, op)?;
+            .configure_lookup(meta, input, output, self.run_args.bits, &op)?;
 
         let config = NodeConfig::Op {
             config,
