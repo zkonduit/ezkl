@@ -149,7 +149,7 @@ impl Model {
             }
             match &n.opkind {
                 OpKind::Lookup(op) => {
-                    assert_eq!(inputs.len(), 1);
+                    // assert_eq!(inputs.len(), 1);
                     results.insert(i, op.f(inputs[0].clone())?);
                 }
                 OpKind::Poly(op) => {

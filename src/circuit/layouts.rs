@@ -961,8 +961,10 @@ pub fn prelu<F: FieldExt + TensorType>(
             .iter()
             .all(|&x| x == 0);
         if is_assigned {
+            let mut int_input: Tensor<i128> = values[0].get_int_evals()?.into_iter().into();
+            int_input.reshape(values[0].dims());
             let ref_prelu = ref_prelu(
-                &values[0].get_int_evals()?.into_iter().into(),
+                &int_input,
                 scale,
                 &values[1]
                     .get_int_evals()?
