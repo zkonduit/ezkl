@@ -40,7 +40,7 @@ fn init() {
     assert!(status.success());
 }
 
-const TESTS: [&str; 22] = [
+const TESTS: [&str; 23] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -68,7 +68,7 @@ const TESTS: [&str; 22] = [
     "1l_erf",
 ];
 
-const PACKING_TESTS: [&str; 13] = [
+const PACKING_TESTS: [&str; 14] = [
     "1l_mlp",
     "1l_average",
     "1l_div",
@@ -85,7 +85,7 @@ const PACKING_TESTS: [&str; 13] = [
     "2l_relu_small",
 ];
 
-const TESTS_AGGR: [&str; 16] = [
+const TESTS_AGGR: [&str; 17] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -110,7 +110,7 @@ const NEG_TESTS: [(&str, &str); 2] = [
     ("2l_relu_small", "2l_relu_sigmoid_small"),
 ];
 
-const TESTS_EVM: [&str; 14] = [
+const TESTS_EVM: [&str; 15] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -138,7 +138,7 @@ macro_rules! test_func_aggr {
             use crate::TESTS_AGGR;
             use test_case::test_case;
             use crate::kzg_aggr_prove_and_verify;
-            seq!(N in 0..=15 {
+            seq!(N in 0..=16 {
 
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_prove_and_verify_(test: &str) {
@@ -160,7 +160,7 @@ macro_rules! test_packed_func {
             use crate::mock_packed_outputs;
             use crate::mock_everything;
 
-            seq!(N in 0..=12 {
+            seq!(N in 0..=13 {
 
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_packed_outputs_(test: &str) {
@@ -194,7 +194,7 @@ macro_rules! test_func {
             use crate::tutorial as run_tutorial;
 
 
-            seq!(N in 0..=21 {
+            seq!(N in 0..=22 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
@@ -244,18 +244,19 @@ macro_rules! test_func_evm {
 
             /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
             /// specify a few that will
-            const TESTS_SOLIDITY: [&str; 8] = [
+            const TESTS_SOLIDITY: [&str; 9] = [
                 "1l_relu",
                 "1l_div",
                 "1l_leakyrelu",
                 "1l_sqrt",
                 "1l_prelu",
+                "1l_gelu_noappx",
                 "1l_sigmoid",
                 "1l_reshape",
                 "2l_relu_fc"
             ];
 
-            seq!(N in 0..=13 {
+            seq!(N in 0..=14 {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
