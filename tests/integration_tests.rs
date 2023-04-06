@@ -40,7 +40,7 @@ fn init() {
     assert!(status.success());
 }
 
-const TESTS: [&str; 22] = [
+const TESTS: [&str; 21] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -48,7 +48,6 @@ const TESTS: [&str; 22] = [
     "1l_pad",
     "1l_reshape",
     "1l_sigmoid",
-    "tutorial",
     "1l_sqrt",
     "1l_prelu",
     "1l_leakyrelu",
@@ -187,7 +186,7 @@ macro_rules! test_func {
             use crate::render_circuit;
 
 
-            seq!(N in 0..=21 {
+            seq!(N in 0..=20 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
@@ -303,6 +302,20 @@ macro_rules! test_neg_examples {
     };
 }
 
+macro_rules! test_tutorial {
+    () => {
+        #[cfg(test)]
+        mod tutorial {
+            use crate::tutorial as run;
+            #[test]
+            fn tutorial_() {
+                run();
+            }
+        }
+    };
+}
+
+test_tutorial!();
 test_func!();
 test_func_aggr!();
 test_func_evm!();
@@ -399,6 +412,25 @@ fn render_circuit(example_name: String) {
                 example_name
             )
             .as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+// Mock prove (fast, but does not cover some potential issues)
+fn tutorial() {
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--tolerance=2",
+            "--scale=4",
+            "--bits=16",
+            "-K=17",
+            "mock",
+            "-D",
+            format!("./examples/onnx/tutorial/input.json").as_str(),
+            "-M",
+            format!("./examples/onnx/tutorial/network.onnx").as_str(),
         ])
         .status()
         .expect("failed to execute process");
