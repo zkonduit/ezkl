@@ -197,6 +197,12 @@ pub enum LookupOp {
     Tanh {
         scales: (usize, usize),
     },
+    Max {
+        scale: usize,
+    },
+    Min {
+        scale: usize,
+    },
 }
 
 impl LookupOp {
@@ -227,11 +233,15 @@ impl LookupOp {
             LookupOp::Tanh { scales } => {
                 Ok(tensor::ops::nonlinearities::tanh(&x, scales.0, scales.1))
             }
+            LookupOp::Max { .. } => Tensor::new(Some(&[*x.iter().max().unwrap()]), &[1]),
+            LookupOp::Min { .. } => Tensor::new(Some(&[*x.iter().min().unwrap()]), &[1]),
         }
     }
 
     fn as_str(&self) -> &'static str {
         match self {
+            LookupOp::Min { .. } => "MIN",
+            LookupOp::Max { .. } => "MAX",
             LookupOp::Div { .. } => "DIV",
             LookupOp::ReLU { .. } => "RELU",
             LookupOp::LeakyReLU { .. } => "LEAKY_RELU",
@@ -537,6 +547,8 @@ impl OpKind {
     /// Produce an OpKind from a `&str` onnx name  
     pub fn new(name: &str) -> Self {
         match name {
+            "Reduce<Min>" => OpKind::Lookup(LookupOp::Min { scale: 1 }),
+            "Reduce<Max>" => OpKind::Lookup(LookupOp::Max { scale: 1 }),
             "Clip" => OpKind::Lookup(LookupOp::ReLU { scale: 1 }),
             "Prelu" => OpKind::Lookup(LookupOp::PReLU {
                 scale: 1,
@@ -915,6 +927,20 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             }),
             OpKind::Lookup(nl) => match nl {
                 LookupOp::PReLU { scale, .. } => Some(layouts::prelu(
+                    self,
+                    region,
+                    cp_values[..].try_into()?,
+                    scale,
+                    offset,
+                )?),
+                LookupOp::Max { scale, .. } => Some(layouts::max(
+                    self,
+                    region,
+                    cp_values[..].try_into()?,
+                    scale,
+                    offset,
+                )?),
+                LookupOp::Min { scale, .. } => Some(layouts::min(
                     self,
                     region,
                     cp_values[..].try_into()?,

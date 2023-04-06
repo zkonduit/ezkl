@@ -166,6 +166,58 @@ impl Node {
         let mn = match opkind {
             OpKind::Lookup(ref s) => {
                 match s {
+                    LookupOp::Min { .. } => {
+                        let input_node = &inputs[0];
+                        let scale_diff = input_node.out_scale;
+                        let mut output_max = input_node.output_max;
+                        if scale_diff > 0 {
+                            let mult = scale_to_multiplier(scale_diff);
+                            opkind = OpKind::Lookup(LookupOp::Min {
+                                scale: mult as usize,
+                            }); // now the input will be scaled down to match
+                            output_max = input_node.output_max / mult;
+                        }
+
+                        Node {
+                            idx,
+                            opkind,
+                            inputs: node.inputs.clone(),
+                            in_dims: vec![input_node.out_dims.clone()],
+                            out_dims: input_node.out_dims.clone(),
+                            in_scale: input_node.out_scale,
+                            out_scale: scale,
+                            output_max: output_max,
+                            const_value: None,
+                            raw_const_value: None,
+                            bucket: None,
+                        }
+                    }
+                    LookupOp::Max { .. } => {
+                        let input_node = &inputs[0];
+                        let scale_diff = input_node.out_scale;
+                        let mut output_max = input_node.output_max;
+                        if scale_diff > 0 {
+                            let mult = scale_to_multiplier(scale_diff);
+                            opkind = OpKind::Lookup(LookupOp::Max {
+                                scale: mult as usize,
+                            }); // now the input will be scaled down to match
+                            output_max = input_node.output_max / mult;
+                        }
+
+                        Node {
+                            idx,
+                            opkind,
+                            inputs: node.inputs.clone(),
+                            in_dims: vec![input_node.out_dims.clone()],
+                            out_dims: input_node.out_dims.clone(),
+                            in_scale: input_node.out_scale,
+                            out_scale: scale,
+                            output_max: output_max,
+                            const_value: None,
+                            raw_const_value: None,
+                            bucket: None,
+                        }
+                    }
                     LookupOp::Sigmoid { .. } => {
                         let input_node = &inputs[0];
                         let scale_diff = input_node.out_scale;
@@ -353,7 +405,7 @@ impl Node {
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
-                            out_scale: scale,
+                            out_scale: 2 * scale,
                             output_max,
                             ..Default::default()
                         }

@@ -461,7 +461,7 @@ impl Model {
         };
 
         match op {
-            LookupOp::PReLU { scale, .. } => {
+            LookupOp::PReLU { scale, .. } | LookupOp::Max { scale } | LookupOp::Min { scale } => {
                 op = LookupOp::ReLU { scale };
             }
             _ => {}

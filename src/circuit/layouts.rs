@@ -924,11 +924,8 @@ pub fn prelu<F: FieldExt + TensorType>(
     }
 
     let diff = (values[0].len()) / slopes.len();
-    println!("diff: {}", diff);
-    println!("slopes: {:?}", slopes);
     slopes.repeat_rows(diff)?;
     slopes.reshape(values[0].dims())?;
-    println!("slopes: {:?}", slopes);
 
     // relu(x)
     let relu = nonlinearity(
@@ -938,18 +935,24 @@ pub fn prelu<F: FieldExt + TensorType>(
         LookupOp::ReLU { scale },
         offset,
     )?;
+    let relu_double_scale = nonlinearity(
+        config,
+        region,
+        &[values[0].clone()],
+        LookupOp::ReLU { scale: 2 * scale },
+        offset,
+    )?;
     // -x
     let neg_x = neg(config, region, &[values[0].clone()], offset)?;
     // relu(-x)
     let relu_neg_x = nonlinearity(config, region, &[neg_x], LookupOp::ReLU { scale }, offset)?;
     // relu(-x) * slope
-
     let scaled_relu_neg_x = pairwise(config, region, &[relu_neg_x, slopes], offset, BaseOp::Mult)?;
 
     let prelu = pairwise(
         config,
         region,
-        &[relu, scaled_relu_neg_x],
+        &[relu_double_scale, scaled_relu_neg_x],
         offset,
         BaseOp::Sub,
     )?;
@@ -982,4 +985,178 @@ pub fn prelu<F: FieldExt + TensorType>(
     };
 
     Ok(prelu)
+}
+
+/// max layout
+pub fn max<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    region: &mut Region<F>,
+    values: &[ValTensor<F>; 1],
+    scale: usize,
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // this is safe because we later constrain it
+    let max_int = values[0].get_int_evals()?.into_iter().max().unwrap();
+    let max_val = Tensor::new(Some(&vec![Value::known(i128_to_felt::<F>(max_int))]), &[1])?.into();
+
+    // max(x - 1)
+    let assigned_max_val: ValTensor<F> = config.inputs[1].assign(region, *offset, &max_val)?.into();
+    *offset += 1;
+
+    let sum_constraint: ValTensor<F> =
+        Tensor::new(Some(&vec![Value::known(F::from(1))]), &[1])?.into();
+
+    let max_minus_1 = pairwise(
+        config,
+        region,
+        &[assigned_max_val.clone(), sum_constraint.clone()],
+        offset,
+        BaseOp::Sub,
+    )?;
+
+    // x - max(x - 1)
+    let diff = pairwise(
+        config,
+        region,
+        &[values[0].clone(), max_minus_1.clone()],
+        offset,
+        BaseOp::Sub,
+    )?;
+    // relu(x - max(x - 1))
+    let relu = nonlinearity(config, region, &[diff], LookupOp::ReLU { scale }, offset)?;
+    let one_minus_relu = pairwise(
+        config,
+        region,
+        &[sum_constraint.clone(), relu.clone()],
+        offset,
+        BaseOp::Sub,
+    )?;
+    let relu_one_minus_relu = pairwise(
+        config,
+        region,
+        &[relu.clone(), one_minus_relu.clone()],
+        offset,
+        BaseOp::Mult,
+    )?;
+
+    let mut unit = sum_constraint.clone();
+    let len = relu_one_minus_relu.dims().iter().product();
+    unit.tile(len)?;
+
+    // y_i*(1 - y_i) =0 // assert the values are either 0 or 1
+    config.inputs[1].assign(region, *offset, &relu_one_minus_relu)?;
+    config.output.assign(region, *offset, &unit)?;
+    for i in 0..len {
+        let (x, y) = config.output.cartesian_coord(*offset + i);
+        config
+            .selectors
+            .get(&(BaseOp::Identity, x))
+            .unwrap()
+            .enable(region, y)?;
+    }
+
+    *offset += len;
+
+    let max_sum = range_check(config, region, &[relu], offset)?;
+    // relu(x - max(x - 1))
+
+    config.inputs[1].assign(region, *offset, &max_sum)?;
+    config.output.assign(region, *offset, &sum_constraint)?;
+
+    println!("offset {}", offset);
+    let (x, y) = config.output.cartesian_coord(*offset);
+    config
+        .selectors
+        .get(&(BaseOp::Identity, x))
+        .unwrap()
+        .enable(region, y)?;
+    *offset += 1;
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(assigned_max_val.get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let ref_max: Tensor<i32> = Tensor::new(
+                Some(&[values[0].get_int_evals()?.into_iter().max().unwrap() as i32]),
+                &[1],
+            )?;
+
+            assert_eq!(Into::<Tensor<i32>>::into(max_val.get_inner()?), ref_max,)
+        }
+    };
+    println!("assigned_max_val: {:?}", assigned_max_val.show());
+    Ok(assigned_max_val)
+}
+
+/// min layout
+pub fn min<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    region: &mut Region<F>,
+    values: &[ValTensor<F>; 1],
+    scale: usize,
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // this is safe because we later constrain it
+    let min_int = values[0].get_int_evals()?.into_iter().min().unwrap();
+    let min_val = Tensor::new(Some(&vec![Value::known(i128_to_felt::<F>(min_int))]), &[1])?.into();
+
+    // min(x) - 1
+    let assigned_min_val: ValTensor<F> = config.inputs[1].assign(region, *offset, &min_val)?.into();
+    *offset += 1;
+
+    let sum_constraint: ValTensor<F> =
+        Tensor::new(Some(&vec![Value::known(F::from(1))]), &[1])?.into();
+
+    let min_minus_1 = pairwise(
+        config,
+        region,
+        &[assigned_min_val.clone(), sum_constraint.clone()],
+        offset,
+        BaseOp::Sub,
+    )?;
+
+    // min(x - 1) - x
+    let diff = pairwise(
+        config,
+        region,
+        &[min_minus_1, values[0].clone()],
+        offset,
+        BaseOp::Sub,
+    )?;
+    // relu(x - min(x - 1))
+    let relu = nonlinearity(config, region, &[diff], LookupOp::ReLU { scale }, offset)?;
+    let min_sum = sum(config, region, &[relu], offset)?;
+
+    config.inputs[1].assign(region, *offset, &min_sum)?;
+    config.output.assign(region, *offset, &sum_constraint)?;
+
+    let (x, y) = config.output.cartesian_coord(*offset);
+    config
+        .selectors
+        .get(&(BaseOp::Identity, x))
+        .unwrap()
+        .enable(region, y)?;
+    *offset += 1;
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(assigned_min_val.get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let ref_min: Tensor<i32> = Tensor::new(
+                Some(&[values[0].get_int_evals()?.into_iter().min().unwrap() as i32]),
+                &[1],
+            )?;
+
+            assert_eq!(Into::<Tensor<i32>>::into(min_val.get_inner()?), ref_min,)
+        }
+    };
+
+    println!("assigned min val: {:?}", assigned_min_val.show());
+    Ok(assigned_min_val)
 }
