@@ -184,7 +184,13 @@ macro_rules! test_func {
             use crate::forward_pass;
             use crate::kzg_prove_and_verify;
             use crate::render_circuit;
+            use crate::tutorial as run_tutorial;
 
+
+            #[test]
+            fn tutorial_() {
+                run_tutorial();
+            }
 
             seq!(N in 0..=20 {
 
@@ -302,20 +308,6 @@ macro_rules! test_neg_examples {
     };
 }
 
-macro_rules! test_tutorial {
-    () => {
-        #[cfg(test)]
-        mod tutorial {
-            use crate::tutorial as run;
-            #[test]
-            fn tutorial_() {
-                run();
-            }
-        }
-    };
-}
-
-test_tutorial!();
 test_func!();
 test_func_aggr!();
 test_func_evm!();
