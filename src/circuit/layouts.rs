@@ -261,129 +261,178 @@ pub fn matmul<F: FieldExt + TensorType>(
             "accum matmul layout".to_string(),
         )));
     };
+
+    // number of stacked matrices
+    let num_stacked_a = Vec::from(&values[0].dims()[0..values[0].dims().len() - 2])
+        .iter()
+        .product::<usize>();
+    let num_stacked_b = Vec::from(&values[1].dims()[0..values[1].dims().len() - 2])
+        .iter()
+        .product::<usize>();
+    if num_stacked_a != num_stacked_b {
+        return Err(Box::new(CircuitError::DimMismatch(
+            "accum matmul layout".to_string(),
+        )));
+    };
+
+    let num_stacked = num_stacked_a;
+
     // [m,n]
-    let mut a = values[0].clone();
+    let mut a_stacked = values[0].clone();
+    a_stacked.reshape(&[
+        num_stacked,
+        a_stacked.dims()[a_stacked.dims().len() - 2],
+        a_stacked.dims()[a_stacked.dims().len() - 1],
+    ])?;
     // [n,k]
-    let mut b = values[1].clone();
-    // [k,n]
-    b.transpose_2d()?;
+    let mut b_stacked = values[1].clone();
+    b_stacked.reshape(&[
+        num_stacked,
+        b_stacked.dims()[b_stacked.dims().len() - 2],
+        b_stacked.dims()[b_stacked.dims().len() - 1],
+    ])?;
 
-    // [k]
-    let num_a_repeats = b.dims()[0];
-    // [m]
-    let num_b_tiles = a.dims()[0];
-    let b_row_len = b.dims()[1];
+    let mut res = vec![];
 
-    a.repeat_rows(num_a_repeats)?;
-    b.tile(num_b_tiles)?;
+    for i in 0..num_stacked {
+        let mut a = a_stacked.get_slice(&[i..i + 1])?;
+        a.reshape(&[a.dims()[1], a.dims()[2]])?;
+        let mut b = b_stacked.get_slice(&[i..i + 1])?;
+        b.reshape(&[b.dims()[1], b.dims()[2]])?;
 
-    let mut inputs = vec![];
-    let mut assigned_len = 0;
-    for (i, elem) in vec![a.clone(), b.clone()].iter().enumerate() {
-        let inp = utils::value_muxer(
-            &config.inputs[i],
-            &{
-                let (res, len) = config.inputs[i].assign_with_duplication(
-                    region,
-                    *offset,
-                    elem,
-                    &config.check_mode,
-                )?;
-                assigned_len = len;
-                res.map(|e| e.value_field().evaluate())
-            },
-            elem,
-        );
-        inputs.push(inp);
-    }
+        let original_a_dims = a.dims().to_vec();
+        let original_b_dims = b.dims().to_vec();
 
-    // remove any repeats from the assignment
-    if num_a_repeats > 1 {
-        let dims = inputs[0].dims().to_vec();
-        inputs[0].reshape(&[dims[0], dims[1..].iter().product()]);
-        let mut rm_dup = vec![];
-        for i in 0..dims[0] {
-            rm_dup.push(inputs[0].get_slice(&[i..i + 1, 0..dims[1]]).unwrap());
+        // [k,n]
+        b.transpose_2d()?;
+
+        // [k]
+        let num_a_repeats = b.dims()[0];
+        // [m]
+        let num_b_tiles = a.dims()[0];
+        let b_row_len = b.dims()[1];
+
+        a.repeat_rows(num_a_repeats)?;
+        b.tile(num_b_tiles)?;
+
+        let mut inputs = vec![];
+        let mut assigned_len = 0;
+        for (i, elem) in vec![a.clone(), b.clone()].iter().enumerate() {
+            let inp = utils::value_muxer(
+                &config.inputs[i],
+                &{
+                    let (res, len) = config.inputs[i].assign_with_duplication(
+                        region,
+                        *offset,
+                        elem,
+                        &config.check_mode,
+                    )?;
+                    assigned_len = len;
+                    res.map(|e| e.value_field().evaluate())
+                },
+                elem,
+            );
+            inputs.push(inp);
         }
-        inputs[0] = Tensor::new(Some(&rm_dup), &[rm_dup.len()])
-            .unwrap()
-            .combine()
-            .unwrap();
-    }
 
-    inputs[0].reshape(values[0].dims());
-
-    // transpose it back to its normal shape
-    inputs[1] = inputs[1].get_slice(&[0..1]).unwrap();
-    inputs[1].reshape(&[values[1].dims()[1], values[1].dims()[0]]);
-    inputs[1].transpose_2d().unwrap();
-
-    // now perform matrix multiplication on the processed tensors
-    let accumulated_matmul = accumulated::matmul(&[inputs[0].clone(), inputs[1].clone()])
-        .expect("accum poly: matmul op failed");
-
-    let (output, output_assigned_len) = config.output.assign_with_duplication(
-        region,
-        *offset,
-        &accumulated_matmul.into(),
-        &config.check_mode,
-    )?;
-
-    assert_eq!(assigned_len, output_assigned_len);
-
-    let mut idx_wo_duplicates = 0;
-    for i in 0..assigned_len {
-        let (x, y) = config.output.cartesian_coord(*offset + i);
-        // skip over duplicates at start of column
-        if y == 0 && i > 0 {
-            continue;
-        }
-        if idx_wo_duplicates % b_row_len > 0 {
-            config
-                .selectors
-                .get(&(BaseOp::Dot, x))
+        // remove any repeats from the assignment
+        if num_a_repeats > 1 {
+            let dims = inputs[0].dims().to_vec();
+            inputs[0].reshape(&[dims[0], dims[1..].iter().product()]);
+            let mut rm_dup = vec![];
+            for i in 0..dims[0] {
+                rm_dup.push(inputs[0].get_slice(&[i..i + 1, 0..dims[1]]).unwrap());
+            }
+            inputs[0] = Tensor::new(Some(&rm_dup), &[rm_dup.len()])
                 .unwrap()
-                .enable(region, y)?;
-        } else {
-            config
-                .selectors
-                .get(&(BaseOp::Mult, x))
-                .unwrap()
-                .enable(region, y)?;
+                .combine()
+                .unwrap();
         }
-        idx_wo_duplicates += 1;
+
+        inputs[0].reshape(&original_a_dims);
+
+        // transpose it back to its normal shape
+        inputs[1] = inputs[1].get_slice(&[0..1]).unwrap();
+        inputs[1].reshape(&[original_b_dims[1], original_b_dims[0]]);
+        inputs[1].transpose_2d().unwrap();
+
+        // now perform matrix multiplication on the processed tensors
+        let accumulated_matmul = accumulated::matmul(&[inputs[0].clone(), inputs[1].clone()])
+            .expect("accum poly: matmul op failed");
+
+        let (output, output_assigned_len) = config.output.assign_with_duplication(
+            region,
+            *offset,
+            &accumulated_matmul.into(),
+            &config.check_mode,
+        )?;
+
+        assert_eq!(assigned_len, output_assigned_len);
+
+        let mut idx_wo_duplicates = 0;
+        for i in 0..assigned_len {
+            let (x, y) = config.output.cartesian_coord(*offset + i);
+            // skip over duplicates at start of column
+            if y == 0 && i > 0 {
+                continue;
+            }
+            if idx_wo_duplicates % b_row_len > 0 {
+                config
+                    .selectors
+                    .get(&(BaseOp::Dot, x))
+                    .unwrap()
+                    .enable(region, y)?;
+            } else {
+                config
+                    .selectors
+                    .get(&(BaseOp::Mult, x))
+                    .unwrap()
+                    .enable(region, y)?;
+            }
+            idx_wo_duplicates += 1;
+        }
+
+        let dims = output.dims();
+        let mut last_dims = vec![];
+
+        for d in &dims[0..dims.len() - 1] {
+            last_dims.push(0..*d);
+        }
+        let script_len = dims.last().unwrap();
+        last_dims.push(script_len - 1..*script_len);
+
+        let mut last_elem = output
+            .get_slice(&last_dims)
+            .expect("accum poly: failed to fetch last elem");
+
+        last_elem.reshape(&[original_a_dims[0], original_b_dims[1]]);
+
+        if matches!(&config.check_mode, CheckMode::SAFE) {
+            let safe_mm = non_accum_matmul(&inputs).map_err(|e| {
+                error!("{}", e);
+                halo2_proofs::plonk::Error::Synthesis
+            })?;
+
+            assert_eq!(
+                Into::<Tensor<i32>>::into(last_elem.clone()),
+                Into::<Tensor<i32>>::into(safe_mm),
+            )
+        }
+
+        *offset += assigned_len;
+
+        res.push(last_elem.clone());
     }
 
-    let dims = output.dims();
-    let mut last_dims = vec![];
+    let mut res = Tensor::new(Some(&res), &[res.len()])?.combine()?;
+    let mut res_dims = Vec::from(&values[0].dims()[0..values[0].dims().len() - 2]);
+    res_dims.push(values[0].dims()[values[0].dims().len() - 2]);
+    res_dims.push(values[1].dims()[values[0].dims().len() - 1]);
 
-    for d in &dims[0..dims.len() - 1] {
-        last_dims.push(0..*d);
-    }
-    let script_len = dims.last().unwrap();
-    last_dims.push(script_len - 1..*script_len);
+    res.reshape(&res_dims);
 
-    let mut last_elem = output
-        .get_slice(&last_dims)
-        .expect("accum poly: failed to fetch last elem");
-
-    last_elem.reshape(&[values[0].dims()[0], values[1].dims()[1]]);
-
-    if matches!(&config.check_mode, CheckMode::SAFE) {
-        let safe_mm = non_accum_matmul(&inputs).map_err(|e| {
-            error!("{}", e);
-            halo2_proofs::plonk::Error::Synthesis
-        })?;
-
-        assert_eq!(
-            Into::<Tensor<i32>>::into(last_elem.clone()),
-            Into::<Tensor<i32>>::into(safe_mm),
-        )
-    }
-
-    *offset += assigned_len;
     // Now we can assign the matmul op
-    Ok(ValTensor::from(last_elem))
+    Ok(ValTensor::from(res))
 }
 
 /// Affine operation accumulated layout
@@ -924,11 +973,8 @@ pub fn prelu<F: FieldExt + TensorType>(
     }
 
     let diff = (values[0].len()) / slopes.len();
-    println!("diff: {}", diff);
-    println!("slopes: {:?}", slopes);
     slopes.repeat_rows(diff)?;
     slopes.reshape(values[0].dims())?;
-    println!("slopes: {:?}", slopes);
 
     // relu(x)
     let relu = nonlinearity(

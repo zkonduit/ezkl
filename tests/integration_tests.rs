@@ -40,7 +40,7 @@ fn init() {
     assert!(status.success());
 }
 
-const TESTS: [&str; 21] = [
+const TESTS: [&str; 22] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -48,6 +48,7 @@ const TESTS: [&str; 21] = [
     "1l_pad",
     "1l_reshape",
     "1l_sigmoid",
+    "tutorial",
     "1l_sqrt",
     "1l_prelu",
     "1l_leakyrelu",
@@ -186,7 +187,7 @@ macro_rules! test_func {
             use crate::render_circuit;
 
 
-            seq!(N in 0..=20 {
+            seq!(N in 0..=21 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
