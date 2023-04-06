@@ -105,7 +105,7 @@ pub fn dot<F: FieldExt + TensorType>(
 pub fn sum<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     region: &mut Region<F>,
-    values: &[ValTensor<F>],  // never make it [ValTensor<F>; 1], it leads to an error 
+    values: &[ValTensor<F>; 1],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let assigned_len: usize;
@@ -670,7 +670,7 @@ pub fn conv<F: FieldExt + TensorType>(
 pub fn pow<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     region: &mut Region<F>,
-    values: &[ValTensor<F>],  // never make it [ValTensor<F>; 1], it leads to an error 
+    values: &[ValTensor<F>; 1],
     exponent: u32,
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
@@ -757,7 +757,7 @@ pub fn rescale<F: FieldExt + TensorType>(
 pub fn pack<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     region: &mut Region<F>,
-    values: &[ValTensor<F>],  // never make it [ValTensor<F>; 1], it leads to an error 
+    values: &[ValTensor<F>; 1],
     base: u32,
     scale: u32,
     offset: &mut usize,
@@ -813,7 +813,7 @@ pub fn pack<F: FieldExt + TensorType>(
 
 /// Dummy (no contraints) reshape layout
 pub fn reshape<F: FieldExt + TensorType>(
-    values: &[ValTensor<F>],  // never make it [ValTensor<F>; 1], it leads to an error 
+    values: &[ValTensor<F>; 1],
     new_dims: &[usize],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let mut t = values[0].clone();
@@ -825,7 +825,7 @@ pub fn reshape<F: FieldExt + TensorType>(
 pub fn identity<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     region: &mut Region<F>,
-    values: &[ValTensor<F>],  // never make it [ValTensor<F>; 1], it leads to an error 
+    values: &[ValTensor<F>; 1],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let output = config.output.assign(region, *offset, &values[0].clone())?;
@@ -904,7 +904,7 @@ pub fn range_check<F: FieldExt + TensorType>(
 pub fn nonlinearity<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     region: &mut Region<F>,
-    values: &[ValTensor<F>],  // never make it [ValTensor<F>; 1], it leads to an error 
+    values: &[ValTensor<F>; 1],
     nl: LookupOp,
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {

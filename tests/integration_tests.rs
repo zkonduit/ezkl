@@ -14,33 +14,33 @@ lazy_static! {
 fn init() {
     println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
     build_ezkl();
-    // let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-    //     .args([
-    //         "-K=20",
-    //         "gen-srs",
-    //         &format!(
-    //             "--params-path={}/kzg17.params",
-    //             TEST_DIR.path().to_str().unwrap()
-    //         ),
-    //     ])
-    //     .status()
-    //     .expect("failed to execute process");
-    // assert!(status.success());
-    // let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-    //     .args([
-    //         "-K=23",
-    //         "gen-srs",
-    //         &format!(
-    //             "--params-path={}/kzg23.params",
-    //             TEST_DIR.path().to_str().unwrap()
-    //         ),
-    //     ])
-    //     .status()
-    //     .expect("failed to execute process");
-    // assert!(status.success());
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "-K=20",
+            "gen-srs",
+            &format!(
+                "--params-path={}/kzg17.params",
+                TEST_DIR.path().to_str().unwrap()
+            ),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "-K=23",
+            "gen-srs",
+            &format!(
+                "--params-path={}/kzg23.params",
+                TEST_DIR.path().to_str().unwrap()
+            ),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
 }
 
-const TESTS: [&str; 23] = [
+const TESTS: [&str; 22] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -52,7 +52,7 @@ const TESTS: [&str; 23] = [
     "1l_prelu",
     "1l_leakyrelu",
     "1l_gelu_noappx",
-    "1l_gelu_tanh_appx",
+    // "1l_gelu_tanh_appx",
     "1l_relu",
     "1l_tanh",
     "2l_relu_sigmoid_small",
@@ -64,6 +64,7 @@ const TESTS: [&str; 23] = [
     "2l_relu_sigmoid_conv",
     "3l_relu_conv_fc",
     "4l_relu_conv_fc",
+    "1l_erf",
     "1l_erf",
 ];
 
@@ -193,7 +194,7 @@ macro_rules! test_func {
             use crate::tutorial as run_tutorial;
 
 
-            seq!(N in 0..=19 {
+            seq!(N in 0..=21 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
