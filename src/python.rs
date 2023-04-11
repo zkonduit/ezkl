@@ -5,7 +5,7 @@ use pyo3_log;
 use tabled::Table;
 use crate::graph::{Model, Visibility, VarVisibility, Mode, vector_to_quantized};
 use crate::commands::RunArgs;
-use crate::circuit::base::CheckMode;
+use crate::circuit::CheckMode;
 use crate::pfsys::{gen_srs as ezkl_gen_srs, save_params, prepare_data};
 use std::path::PathBuf;
 use std::fs::File;
@@ -122,7 +122,7 @@ fn forward(
     public_params: bool,
     pack_base: u32,
     check_mode: &str
-) -> Result<Py<PyAny>, PyErr> {
+) -> PyResult<()> {
     let data = prepare_data(data);
 
     match data {
@@ -168,17 +168,19 @@ fn forward(
 
                     match serde_json::to_writer(&File::create(output)?, &new_data) {
                         Ok(_) => {
+                            // TODO output a dictionary
                             // obtain gil
                             // TODO: Convert to Python::with_gil() when it stabilizes
-                            let gil = Python::acquire_gil();
+                            // let gil = Python::acquire_gil();
                             // obtain python instance
-                            let py = gil.python();
-                            return Ok(new_data.to_object(py))
+                            // let py = gil.python();
+                            // return Ok(new_data.to_object(py))
+                            Ok(())
                         },
                         Err(_) => {
                             return Err(PyIOError::new_err("Failed to create output file"))
                         }
-                    };
+                    }
                 }
                 Err(_) => {
                     Err(PyRuntimeError::new_err("Failed to compute forward pass"))
