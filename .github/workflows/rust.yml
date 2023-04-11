@@ -315,3 +315,26 @@ jobs:
         run: cargo test neg_tests::neg_examples_
       - name: Mock proving tests (WASI) (should fail)
         run: cargo test neg_tests_wasi::neg_examples_
+
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.7'
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2022-11-03
+          override: true
+          components: rustfmt, clippy
+      - name: Install wasm32-wasi
+        run: rustup target add wasm32-wasi
+      - name: Install solc
+        run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
+      - name: Install python dependencies
+        run: pip install -r requirements.txt
+      - name: Run pytest
+        run: pytest
+
