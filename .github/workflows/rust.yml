@@ -335,6 +335,8 @@ jobs:
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
       - name: Install python dependencies
         run: pip install -r requirements.txt
+      - name: Build python ezkl_lib
+        run: maturin develop --features python-bindings
       - name: Run pytest
         run: pytest
 
