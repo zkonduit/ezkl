@@ -1,5 +1,4 @@
-use ezkl_lib::circuit::base::{BaseConfig as PolyConfig, CheckMode, Op as PolyOp};
-use ezkl_lib::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
+use ezkl_lib::circuit::{BaseConfig as PolyConfig, CheckMode, LookupOp, Op as PolyOp};
 use ezkl_lib::fieldutils;
 use ezkl_lib::fieldutils::i32_to_felt;
 use ezkl_lib::tensor::*;
@@ -54,7 +53,6 @@ struct Config<
 {
     // this will be a conv layer
     layer_config: PolyConfig<F>,
-    relu: LookupConfig<F>,
     // this will be an affine layer
     public_output: Column<Instance>,
 }
@@ -145,18 +143,18 @@ where
 
         println!("INPUT COL {:#?}", input);
 
-        let layer_config =
+        let mut layer_config =
             PolyConfig::configure(cs, &[input.clone(), params], &output, CheckMode::SAFE, 0);
 
-        let relu =
-            LookupConfig::configure(cs, &input, &output, BITS, &[LookupOp::ReLU { scale: 32 }]);
+        layer_config
+            .configure_lookup(cs, &input, &output, BITS, &LookupOp::ReLU { scale: 32 })
+            .unwrap();
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
 
         Config {
             layer_config,
-            relu,
             public_output,
         }
     }
@@ -166,7 +164,7 @@ where
         mut config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        config.relu.layout_table(&mut layouter).unwrap();
+        config.layer_config.layout_tables(&mut layouter).unwrap();
 
         let x = layouter
             .assign_region(
@@ -187,11 +185,20 @@ where
                                 self.l0_params[1].clone(),
                             ],
                             &mut offset,
-                            op.clone(),
+                            op.into(),
                         )
                         .unwrap();
 
-                    let mut x = config.relu.layout(&mut region, &x, &mut offset).unwrap();
+                    let mut x = config
+                        .layer_config
+                        .layout(
+                            &mut region,
+                            &[x.unwrap()],
+                            &mut offset,
+                            LookupOp::ReLU { scale: 32 }.into(),
+                        )
+                        .unwrap()
+                        .unwrap();
                     x.flatten();
                     let l2out = config
                         .layer_config
@@ -199,7 +206,7 @@ where
                             &mut region,
                             &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
                             &mut offset,
-                            PolyOp::Affine,
+                            PolyOp::Affine.into(),
                         )
                         .unwrap();
                     Ok(l2out)
@@ -207,7 +214,7 @@ where
             )
             .unwrap();
 
-        match x {
+        match x.unwrap() {
             ValTensor::Value { inner: v, dims: _ } => v
                 .enum_map(|i, x| match x {
                     ValType::PrevAssigned(v) => {
@@ -224,6 +231,8 @@ where
 }
 
 pub fn runconv() {
+    env_logger::init();
+
     const KERNEL_HEIGHT: usize = 5;
     const KERNEL_WIDTH: usize = 5;
     const OUT_CHANNELS: usize = 4;

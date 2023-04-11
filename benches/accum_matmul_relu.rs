@@ -1,6 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl_lib::circuit::base::*;
-use ezkl_lib::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
+use ezkl_lib::circuit::*;
 
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
@@ -29,7 +28,6 @@ struct MyCircuit {
 #[derive(Clone)]
 struct MyConfig {
     base_config: BaseConfig<Fr>,
-    l1: LookupConfig<Fr>,
 }
 
 impl Circuit<Fr> for MyCircuit {
@@ -47,11 +45,15 @@ impl Circuit<Fr> for MyCircuit {
         let b = VarTensor::new_advice(cs, K, len, true);
         let output = VarTensor::new_advice(cs, K, len, true);
 
-        // sets up a new relu table
-        let l1 = LookupConfig::configure(cs, &b, &output, BITS, &[LookupOp::ReLU { scale: 1 }]);
+        let mut base_config =
+            BaseConfig::configure(cs, &[a, b.clone()], &output, CheckMode::UNSAFE, 0);
 
-        let base_config = BaseConfig::configure(cs, &[a, b], &output, CheckMode::UNSAFE, 0);
-        MyConfig { base_config, l1 }
+        // sets up a new relu table
+        base_config
+            .configure_lookup(cs, &b, &output, BITS, &LookupOp::ReLU { scale: 1 })
+            .unwrap();
+
+        MyConfig { base_config }
     }
 
     fn synthesize(
@@ -59,7 +61,7 @@ impl Circuit<Fr> for MyCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        config.l1.layout_table(&mut layouter).unwrap();
+        config.base_config.layout_tables(&mut layouter).unwrap();
         layouter.assign_region(
             || "",
             |mut region| {
@@ -67,9 +69,17 @@ impl Circuit<Fr> for MyCircuit {
                 let mut offset = 0;
                 let output = config
                     .base_config
-                    .layout(&mut region, &self.inputs, &mut offset, op.clone())
+                    .layout(&mut region, &self.inputs, &mut offset, op.into())
                     .unwrap();
-                let _output = config.l1.layout(&mut region, &output, &mut offset).unwrap();
+                let _output = config
+                    .base_config
+                    .layout(
+                        &mut region,
+                        &[output.unwrap()],
+                        &mut offset,
+                        LookupOp::ReLU { scale: 1 }.into(),
+                    )
+                    .unwrap();
                 Ok(())
             },
         )?;

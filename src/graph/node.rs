@@ -1,8 +1,8 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
-use crate::circuit::base::BaseConfig as PolyConfig;
-use crate::circuit::base::Op as PolyOp;
-use crate::circuit::lookup::Config as LookupConfig;
-use crate::circuit::lookup::Op as LookupOp;
+use crate::circuit::BaseConfig;
+use crate::circuit::LookupOp;
+use crate::circuit::Op as PolyOp;
+use crate::circuit::OpKind;
 use crate::graph::GraphError;
 use crate::tensor::Tensor;
 use crate::tensor::TensorType;
@@ -34,125 +34,14 @@ use tract_onnx::tract_hir::{
     },
 };
 
-// Initially, some of these OpKinds will be folded into others (for example, Const nodes that
-// contain parameters will be handled at the consuming self.
-// Eventually, though, we probably want to keep them and treat them directly (layouting and configuring
-// at each type of node)
-/// Enum of the different kinds of operations `ezkl` can support.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd)]
-pub enum OpKind {
-    /// A nonlinearity
-    Lookup(LookupOp),
-    /// A fused op, combining affine layers or other arithmetic
-    Poly(PolyOp),
-    /// Constant
-    Const,
-    /// Input node
-    Input,
-    /// Unable to parse the node type
-    Unknown(String),
-    #[allow(missing_docs)]
-    #[default]
-    None,
-}
-
-impl OpKind {
-    /// Produce an OpKind from a `&str` onnx name  
-    pub fn new(name: &str) -> Self {
-        match name {
-            "Clip" => OpKind::Lookup(LookupOp::ReLU { scale: 1 }),
-            "Prelu" => OpKind::Lookup(LookupOp::PReLU {
-                scale: 1,
-                slopes: vec![],
-            }),
-            "LeakyRelu" => OpKind::Lookup(LookupOp::LeakyReLU {
-                scale: 1,
-                slope: F32(0.0),
-            }),
-            "Sigmoid" => OpKind::Lookup(LookupOp::Sigmoid { scales: (1, 1) }),
-            "Sqrt" => OpKind::Lookup(LookupOp::Sqrt { scales: (1, 1) }),
-            "Tanh" => OpKind::Lookup(LookupOp::Tanh {scales: (1, 1)}),
-            "Div" => OpKind::Lookup(LookupOp::Div { denom: F32(1.0) }),
-            "Const" => OpKind::Const,
-            "Source" => OpKind::Input,
-            "Add" => OpKind::Poly(PolyOp::Add),
-            "Sub" => OpKind::Poly(PolyOp::Sub),
-            "Mul" => OpKind::Poly(PolyOp::Mult),
-            "Gemm" => OpKind::Poly(PolyOp::Affine),
-            "MatMulInference" => OpKind::Poly(PolyOp::Matmul),
-            "Dot" => OpKind::Poly(PolyOp::Dot),
-            "Reduce<Sum>" => OpKind::Poly(PolyOp::Sum),
-            "Pow" => OpKind::Poly(PolyOp::Pow(1)),
-            "Conv" => OpKind::Poly(PolyOp::Conv {
-                padding: (1, 1),
-                stride: (1, 1),
-            }),
-            "ConvHir" => OpKind::Poly(PolyOp::Conv {
-                padding: (1, 1),
-                stride: (1, 1),
-            }),
-            "SumPool" => OpKind::Poly(PolyOp::SumPool {
-                padding: (1, 1),
-                stride: (1, 1),
-                kernel_shape: (1, 1),
-            }),
-            "GlobalAvgPool" => OpKind::Poly(PolyOp::GlobalSumPool),
-            "Pad" => OpKind::Poly(PolyOp::Pad(0, 0)),
-            "Reshape" => OpKind::Poly(PolyOp::Reshape(Vec::new())),
-            "Flatten" => OpKind::Poly(PolyOp::Flatten(Vec::new())),
-            "BatchNorm" => OpKind::Poly(PolyOp::BatchNorm),
-            c => {
-                warn!("{:?} is not currently supported", c);
-                OpKind::Unknown(c.to_string())
-            }
-        }
-    }
-    /// Identify fused OpKind
-    pub fn is_poly(&self) -> bool {
-        matches!(self, OpKind::Poly(_))
-    }
-
-    /// Identify fused OpKind
-    pub fn is_lookup(&self) -> bool {
-        matches!(self, OpKind::Lookup(_))
-    }
-
-    /// Identify fused OpKind
-    pub fn is_input(&self) -> bool {
-        matches!(self, OpKind::Input)
-    }
-
-    /// Identify constant OpKind
-    pub fn is_const(&self) -> bool {
-        matches!(self, OpKind::Const)
-    }
-}
-
-impl fmt::Display for OpKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            OpKind::Const => write!(f, "const"),
-            OpKind::Input => write!(f, "input"),
-            OpKind::Lookup(s) => write!(f, "{}", s),
-            OpKind::Poly(s) => write!(f, "{}", s),
-            OpKind::Unknown(c) => write!(f, "? {}", c),
-            OpKind::None => write!(f, "n/a",),
-        }
-    }
-}
-
 /// Enum of the different kinds of node configurations `ezkl` can support.
 #[allow(missing_docs)]
 #[derive(Clone, Default, Debug)]
 pub enum NodeConfig<F: FieldExt + TensorType> {
-    Lookup {
-        config: Rc<RefCell<LookupConfig<F>>>,
+    Op {
+        config: Rc<RefCell<BaseConfig<F>>>,
         inputs: Vec<usize>,
-    },
-    Poly {
-        config: Rc<RefCell<PolyConfig<F>>>,
-        inputs: Vec<usize>,
-        op: PolyOp,
+        op: OpKind,
     },
     Const,
     Input,
@@ -442,7 +331,7 @@ impl Node {
                             .iter()
                             .map(|value| F32(*value))
                             .collect_vec();
-                        node.inputs.pop();
+                        // node.inputs.pop();
 
                         let scale_diff = input_node.out_scale - scale;
                         // We can also consider adjusting the scale of all inputs and the output in a more custom way.

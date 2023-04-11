@@ -1,6 +1,5 @@
 use eq_float::F32;
-use ezkl_lib::circuit::base::{BaseConfig as PolyConfig, CheckMode, Op as PolyOp};
-use ezkl_lib::circuit::lookup::{Config as LookupConfig, Op as LookupOp};
+use ezkl_lib::circuit::{BaseConfig as PolyConfig, CheckMode, LookupOp, Op as PolyOp};
 use ezkl_lib::fieldutils::i32_to_felt;
 use ezkl_lib::tensor::*;
 use halo2_proofs::dev::MockProver;
@@ -17,9 +16,6 @@ const K: usize = 15;
 #[derive(Clone)]
 struct MyConfig<F: FieldExt + TensorType> {
     layer_config: PolyConfig<F>,
-    l1: LookupConfig<F>,
-    l3: LookupConfig<F>,
-    l4: LookupConfig<F>,
     public_output: Column<Instance>,
 }
 
@@ -55,38 +51,32 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         let output = VarTensor::new_advice(cs, K, LEN, true);
         // tells the config layer to add an affine op to the circuit gate
 
-        let layer_config =
+        let mut layer_config =
             PolyConfig::<F>::configure(cs, &[input.clone(), params], &output, CheckMode::SAFE, 0);
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
-        let [l1, l3]: [LookupConfig<F>; 2] = LookupConfig::configure_multiple(
-            cs,
-            &input,
-            &output,
-            BITS,
-            &[LookupOp::ReLU { scale: 1 }],
-        )
-        .unwrap();
+        layer_config
+            .configure_lookup(cs, &input, &output, BITS, &LookupOp::ReLU { scale: 1 })
+            .unwrap();
 
-        // sets up a new Divide by table
-        let l4 = LookupConfig::configure(
-            cs,
-            &input,
-            &output,
-            BITS,
-            &[LookupOp::Div {
-                denom: F32::from(128.),
-            }],
-        );
+        // sets up a new ReLU table and resuses it for l1 and l3 non linearities
+        layer_config
+            .configure_lookup(
+                cs,
+                &input,
+                &output,
+                BITS,
+                &LookupOp::Div {
+                    denom: F32::from(128.),
+                },
+            )
+            .unwrap();
 
         let public_output: Column<Instance> = cs.instance_column();
         cs.enable_equality(public_output);
 
         MyConfig {
             layer_config,
-            l1,
-            l3,
-            l4,
             public_output,
         }
     }
@@ -96,9 +86,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
         mut config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        config.l1.layout_table(&mut layouter).unwrap();
-        config.l3.layout_table(&mut layouter).unwrap();
-        config.l4.layout_table(&mut layouter).unwrap();
+        config.layer_config.layout_tables(&mut layouter).unwrap();
 
         let x = layouter
             .assign_region(
@@ -115,13 +103,25 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                                 self.l0_params[1].clone(),
                             ],
                             &mut offset,
-                            PolyOp::Affine,
+                            PolyOp::Affine.into(),
                         )
+                        .unwrap()
                         .unwrap();
 
                     println!("offset: {}", offset);
-                    let mut x = config.l1.layout(&mut region, &x, &mut offset).unwrap();
+                    println!("x shape: {:?}", x.dims());
+                    let mut x = config
+                        .layer_config
+                        .layout(
+                            &mut region,
+                            &[x],
+                            &mut offset,
+                            LookupOp::ReLU { scale: 1 }.into(),
+                        )
+                        .unwrap()
+                        .unwrap();
                     println!("offset: {}", offset);
+                    println!("x shape: {:?}", x.dims());
                     x.reshape(&[x.dims()[0], 1]).unwrap();
                     let x = config
                         .layer_config
@@ -129,17 +129,38 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                             &mut region,
                             &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
                             &mut offset,
-                            PolyOp::Affine,
+                            PolyOp::Affine.into(),
+                        )
+                        .unwrap()
+                        .unwrap();
+                    println!("offset: {}", offset);
+                    println!("x shape: {:?}", x.dims());
+                    let x = config
+                        .layer_config
+                        .layout(
+                            &mut region,
+                            &[x],
+                            &mut offset,
+                            LookupOp::ReLU { scale: 1 }.into(),
                         )
                         .unwrap();
                     println!("offset: {}", offset);
-                    let x = config.l3.layout(&mut region, &x, &mut offset).unwrap();
-                    println!("offset: {}", offset);
-                    Ok(config.l4.layout(&mut region, &x, &mut offset).unwrap())
+                    Ok(config
+                        .layer_config
+                        .layout(
+                            &mut region,
+                            &[x.unwrap()],
+                            &mut offset,
+                            LookupOp::Div {
+                                denom: F32::from(128.),
+                            }
+                            .into(),
+                        )
+                        .unwrap())
                 },
             )
             .unwrap();
-        match x {
+        match x.unwrap() {
             ValTensor::Value { inner: v, dims: _ } => v
                 .enum_map(|i, x| match x {
                     ValType::PrevAssigned(v) => {
@@ -155,6 +176,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
 }
 
 pub fn runmlp() {
+    env_logger::init();
     // parameters
     let l0_kernel: Tensor<Value<F>> = Tensor::<i32>::new(
         Some(&[10, 0, 0, -1, 0, 10, 1, 0, 0, 1, 10, 0, 1, 0, 0, 10]),

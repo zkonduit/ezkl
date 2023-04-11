@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io::{stdin, stdout, Read, Write};
 use std::path::PathBuf;
 
-use crate::circuit::base::CheckMode;
+use crate::circuit::CheckMode;
 
 #[allow(missing_docs)]
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
