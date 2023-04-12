@@ -1,4 +1,3 @@
-use eq_float::F32;
 use ezkl_lib::circuit::{BaseConfig as PolyConfig, CheckMode, LookupOp, Op as PolyOp};
 use ezkl_lib::fieldutils::i32_to_felt;
 use ezkl_lib::tensor::*;
@@ -67,7 +66,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                 &output,
                 BITS,
                 &LookupOp::Div {
-                    denom: F32::from(128.),
+                    denom: ezkl_lib::circuit::utils::F32::from(128.),
                 },
             )
             .unwrap();
@@ -152,7 +151,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                             &[x.unwrap()],
                             &mut offset,
                             LookupOp::Div {
-                                denom: F32::from(128.),
+                                denom: ezkl_lib::circuit::utils::F32::from(128.),
                             }
                             .into(),
                         )

@@ -1716,6 +1716,7 @@ name = "ezkl-lib"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bincode",
  "clap 4.1.13",
  "colored",
  "colored_json",
@@ -1751,6 +1752,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tract-onnx",
+ "wasm-bindgen",
 ]
 
 [[package]]

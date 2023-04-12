@@ -14,10 +14,7 @@ use crate::pfsys::evm::{evm_verify, DeploymentCode};
 #[cfg(feature = "render")]
 use crate::pfsys::prepare_model_circuit;
 use crate::pfsys::{create_keys, load_params, load_vk, save_params, Snark};
-use crate::pfsys::{
-    create_proof_circuit, gen_srs, prepare_data, prepare_model_circuit_and_public_input, save_vk,
-    verify_proof_circuit,
-};
+use crate::pfsys::{create_proof_circuit, gen_srs, prepare_data, save_vk, verify_proof_circuit};
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::providers::Middleware;
 use halo2_proofs::dev::VerifyFailure;
@@ -254,10 +251,12 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
 
             serde_json::to_writer(&File::create(output)?, &data)?;
         }
-        Commands::Mock { ref data, model: _ } => {
+        Commands::Mock { ref data, model } => {
             let data = prepare_data(data.to_string())?;
-            let (circuit, public_inputs) =
-                prepare_model_circuit_and_public_input::<Fr>(&data, &cli)?;
+            let model = Model::read_from_file(model.into())?;
+            let circuit = ModelCircuit::<Fr>::new(&data, model)?;
+            let public_inputs = circuit.prepare_public_inputs(&data)?;
+
             info!("Mock proof");
 
             let prover = MockProver::run(cli.args.logrows, &circuit, public_inputs)
@@ -270,7 +269,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
             ref data,
-            model: _,
+            model,
             ref vk_path,
             ref params_path,
             ref deployment_code_path,
@@ -278,7 +277,9 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => {
             let data = prepare_data(data.to_string())?;
 
-            let (_, public_inputs) = prepare_model_circuit_and_public_input::<Fr>(&data, &cli)?;
+            let model = Model::read_from_file(model)?;
+            let circuit = ModelCircuit::<Fr>::new(&data, model)?;
+            let public_inputs = circuit.prepare_public_inputs(&data)?;
             let num_instance = public_inputs.iter().map(|x| x.len()).collect();
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
@@ -324,7 +325,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         }
         Commands::Prove {
             ref data,
-            model: _,
+            model,
             ref vk_path,
             ref proof_path,
             ref params_path,
@@ -333,7 +334,10 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => {
             let data = prepare_data(data.to_string())?;
 
-            let (circuit, public_inputs) = prepare_model_circuit_and_public_input(&data, &cli)?;
+            let model = Model::read_from_file(model)?;
+            let circuit = ModelCircuit::<Fr>::new(&data, model)?;
+            let public_inputs = circuit.prepare_public_inputs(&data)?;
+
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
             info!("downsizing params to {} logrows", cli.args.logrows);

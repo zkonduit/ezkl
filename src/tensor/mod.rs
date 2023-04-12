@@ -5,6 +5,7 @@ pub mod val;
 /// A wrapper around a tensor of Halo2 Value types.
 pub mod var;
 
+use serde::{Deserialize, Serialize};
 pub use val::*;
 pub use var::*;
 
@@ -222,7 +223,7 @@ impl TensorType for halo2curves::bn256::Fr {
 /// A generic multi-dimensional array representation of a Tensor.
 /// The `inner` attribute contains a vector of values whereas `dims` corresponds to the dimensionality of the array
 /// and as such determines how we index, query for values, or slice a Tensor.
-#[derive(Clone, Debug, Eq)]
+#[derive(Clone, Debug, Eq, Serialize, Deserialize)]
 pub struct Tensor<T: TensorType> {
     inner: Vec<T>,
     dims: Vec<usize>,

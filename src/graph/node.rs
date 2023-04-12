@@ -7,10 +7,10 @@ use crate::graph::GraphError;
 use crate::tensor::Tensor;
 use crate::tensor::TensorType;
 use anyhow::Result;
-use eq_float::F32;
 use halo2_proofs::arithmetic::FieldExt;
 use itertools::Itertools;
 use log::{info, trace, warn};
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -19,7 +19,7 @@ use std::ops::Deref;
 use std::rc::Rc;
 use tabled::Tabled;
 use tract_onnx;
-use tract_onnx::prelude::{DatumType, InferenceFact, Node as OnnxNode, OutletId};
+use tract_onnx::prelude::{DatumType, InferenceFact, Node as OnnxNode};
 use tract_onnx::tract_hir::{
     infer::Factoid,
     internal::InferenceOp,
@@ -63,18 +63,6 @@ fn display_vector<T: fmt::Debug>(v: &Vec<T>) -> String {
     format!("{:?}", v)
 }
 
-fn display_inputs(o: &Vec<OutletId>) -> String {
-    if !o.is_empty() {
-        let mut nodes = vec![];
-        for id in o.iter() {
-            nodes.push(id.node);
-        }
-        format!("{:?}", nodes)
-    } else {
-        String::new()
-    }
-}
-
 fn display_tensor(o: &Option<Tensor<i128>>) -> String {
     match o {
         Some(s) => format!("[{:#?}...]", s[0]),
@@ -99,7 +87,7 @@ fn display_tensorf32(o: &Option<Tensor<f32>>) -> String {
 /// * `const_value` - The constants potentially associated with this self.
 /// * `idx` - The node's unique identifier.
 /// * `bucket` - The execution bucket this node has been assigned to.
-#[derive(Clone, Debug, Default, Tabled)]
+#[derive(Clone, Debug, Default, Tabled, Serialize, Deserialize)]
 pub struct Node {
     /// [OpKind] enum, i.e what operation this node represents.
     pub opkind: OpKind,
@@ -117,9 +105,9 @@ pub struct Node {
     pub raw_const_value: Option<Tensor<f32>>,
     // Usually there is a simple in and out shape of the node as an operator.  For example, an Affine node has three input_shapes (one for the input, weight, and bias),
     // but in_dim is [in], out_dim is [out]
-    #[tabled(display_with = "display_inputs")]
+    #[tabled(display_with = "display_vector")]
     /// The indices of the node's inputs.
-    pub inputs: Vec<OutletId>,
+    pub inputs: Vec<usize>,
     #[tabled(display_with = "display_vector")]
     /// Dimensions of input.
     pub in_dims: Vec<Vec<usize>>,
@@ -183,7 +171,7 @@ impl Node {
                         Node {
                             idx,
                             opkind,
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
@@ -210,7 +198,7 @@ impl Node {
                         Node {
                             idx,
                             opkind,
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
@@ -237,7 +225,7 @@ impl Node {
                         Node {
                             idx,
                             opkind,
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
@@ -262,7 +250,7 @@ impl Node {
                         Node {
                             idx,
                             opkind,
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
@@ -302,13 +290,13 @@ impl Node {
 
                         opkind = OpKind::Lookup(LookupOp::LeakyReLU {
                             scale: layer_scale,
-                            slope: F32(leaky_op.0),
+                            slope: crate::circuit::utils::F32(leaky_op.0),
                         }); // now the input will be scaled down to match
 
                         Node {
                             idx,
                             opkind,
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
@@ -329,7 +317,7 @@ impl Node {
                             .unwrap()
                             .deref()
                             .iter()
-                            .map(|value| F32(*value))
+                            .map(|value| crate::circuit::utils::F32(*value))
                             .collect_vec();
                         // node.inputs.pop();
 
@@ -349,7 +337,7 @@ impl Node {
                         Node {
                             idx,
                             opkind,
-                            inputs: node.inputs,
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
@@ -377,18 +365,20 @@ impl Node {
                         if scale_diff > 0 {
                             let mult = scale_to_multiplier(scale_diff);
                             opkind = OpKind::Lookup(LookupOp::Div {
-                                denom: F32(denom * mult),
+                                denom: crate::circuit::utils::F32(denom * mult),
                             }); // now the input will be scaled down to match
                             output_max = input_node.output_max / (denom * mult);
                         } else {
-                            opkind = OpKind::Lookup(LookupOp::Div { denom: F32(denom) }); // now the input will be scaled down to match
+                            opkind = OpKind::Lookup(LookupOp::Div {
+                                denom: crate::circuit::utils::F32(denom),
+                            }); // now the input will be scaled down to match
                             output_max = input_node.output_max / (denom);
                         }
 
                         Node {
                             idx,
                             opkind,
-                            inputs: input_outlets,
+                            inputs: input_outlets.iter().map(|i| i.node).collect(),
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: input_node.out_dims.clone(),
                             // in scale is the same as the input
@@ -460,7 +450,7 @@ impl Node {
                         Node {
                             idx,
                             opkind: OpKind::Poly(PolyOp::Pad(padding_h, padding_w)),
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: vec![input_channels, out_height, out_width],
                             in_scale: input_node.out_scale,
@@ -548,7 +538,7 @@ impl Node {
                                 padding: (padding_h, padding_w),
                                 stride: (stride_h, stride_w),
                             }),
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: vec![out_channels, out_height, out_width],
                             in_scale: input_node.out_scale,
@@ -615,7 +605,7 @@ impl Node {
                                 stride: (stride_h, stride_w),
                                 kernel_shape: (kernel_height, kernel_width),
                             }),
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: vec![input_channels, out_height, out_width],
                             in_scale: input_node.out_scale,
@@ -651,7 +641,7 @@ impl Node {
                                 stride: (stride_h, stride_w),
                                 kernel_shape: (kernel_height, kernel_width),
                             }),
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: vec![input_channels, out_height, out_width],
                             in_scale: input_node.out_scale,
@@ -676,7 +666,7 @@ impl Node {
                         Node {
                             idx,
                             opkind,
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: vec![vec![in_dim]],
                             out_dims: dims.clone(),
                             in_scale: a_node.out_scale,
@@ -703,7 +693,7 @@ impl Node {
                         Node {
                             idx,
                             opkind,
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: vec![out_dim],
                             in_scale: input_node.out_scale,
@@ -744,7 +734,7 @@ impl Node {
                         Node {
                             idx,
                             opkind: OpKind::Poly(PolyOp::ScaleAndShift),
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: inputs[0].out_dims.clone(),
                             in_scale,
@@ -776,7 +766,7 @@ impl Node {
                         Node {
                             idx,
                             opkind,
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: inputs[0].out_dims.clone(),
                             in_scale: inputs.iter().map(|input| input.out_scale).max().unwrap(),
@@ -793,7 +783,7 @@ impl Node {
                         Node {
                             idx,
                             opkind,
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: vec![1],
                             in_scale: inputs.iter().map(|input| input.out_scale).max().unwrap(),
@@ -823,7 +813,7 @@ impl Node {
                         Node {
                             idx,
                             opkind,
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: inputs[0].out_dims.clone(),
                             in_scale: inputs.iter().map(|input| input.out_scale).max().unwrap(),
@@ -838,7 +828,7 @@ impl Node {
                         Node {
                             idx,
                             opkind,
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: inputs[0].out_dims.clone(),
                             in_scale: input_node.out_scale,
@@ -867,7 +857,7 @@ impl Node {
                         Node {
                             idx,
                             opkind: OpKind::Poly(PolyOp::Pow(pow as u32)),
-                            inputs: node.inputs,
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
@@ -891,7 +881,7 @@ impl Node {
                         Node {
                             idx,
                             opkind,
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
@@ -907,7 +897,7 @@ impl Node {
                         Node {
                             idx,
                             opkind: OpKind::Poly(PolyOp::Flatten(new_dims.clone())),
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: new_dims,
                             in_scale: input_node.out_scale,
@@ -969,7 +959,7 @@ impl Node {
                         Node {
                             idx,
                             opkind: OpKind::Poly(PolyOp::Reshape(new_dims.clone())),
-                            inputs: node.inputs[0..1].to_vec(),
+                            inputs: node.inputs[0..1].iter().map(|i| i.node).collect(),
                             in_dims: inputs.iter().map(|inp| inp.out_dims.clone()).collect(),
                             out_dims: new_dims,
                             in_scale: input_node.out_scale,
@@ -1004,7 +994,7 @@ impl Node {
                         Node {
                             idx,
                             opkind,
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: vec![dims.clone()],
                             out_dims: dims,
                             in_scale: scale,
@@ -1025,7 +1015,7 @@ impl Node {
                         Node {
                             idx,
                             opkind,
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: vec![dims.clone()],
                             out_dims: dims,
                             in_scale: scale,
@@ -1068,7 +1058,7 @@ impl Node {
                 Node {
                     idx,
                     opkind,
-                    inputs: node.inputs.clone(),
+                    inputs: node.inputs.iter().map(|i| i.node).collect(),
                     in_dims: vec![out_dims.clone()],
                     out_dims,
                     in_scale: scale,
