@@ -103,7 +103,7 @@ You can easily create an `.onnx` file using `pytorch`. For samples of Onnx files
 Sample onnx files are also available in `./examples/onnx`. To generate a proof on one of the examples, first build ezkl (`cargo build --release`) and add it to your favourite `PATH` variables, then generate a structured reference string (SRS):
 ```bash
 ezkl -K=17 gen-srs --params-path=kzg.params
-``` 
+```
 
 
 ```bash
@@ -138,7 +138,7 @@ ezkl --bits=16 -K=17 prove -D ./examples/onnx/1l_relu/input.json -M ./examples/o
 ezkl -K=17 --bits=16 create-evm-verifier -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --deployment-code-path 1l_relu.code --params-path=kzg.params --vk-path 1l_relu.vk --sol-code-path 1l_relu.sol
 ```
 ```bash
-# Verify (EVM) 
+# Verify (EVM)
 ezkl -K=17 --bits=16 verify-evm --proof-path 1l_relu.pf --deployment-code-path 1l_relu.code
 ```
 
@@ -159,21 +159,21 @@ ezkl -K=17 --bits=16 prove --transcript=poseidon --strategy=accum -D ./examples/
 ```bash
 # Aggregate -> generates aggregate proof and also (mock)-verifies + verifies natively as sanity check
 ezkl -K=20 --bits=16 aggregate --app-logrows=17 --transcript=evm -M ./examples/onnx/1l_relu/network.onnx --aggregation-snarks=1l_relu.pf --aggregation-vk-paths 1l_relu.vk --vk-path aggr_1l_relu.vk --proof-path aggr_1l_relu.pf --params-path=kzg.params
-``` 
+```
 
 ```bash
-# Generate verifier code -> create the EVM verifier code 
+# Generate verifier code -> create the EVM verifier code
 ezkl -K=17 --bits=16 create-evm-verifier-aggr --deployment-code-path aggr_1l_relu.code --params-path=kzg.params --vk-path aggr_1l_relu.vk
 ```
 
 ```bash
-# Verify (EVM) -> 
+# Verify (EVM) ->
 ezkl -K=17 --bits=16 verify-evm --proof-path aggr_1l_relu.pf --deployment-code-path aggr_1l_relu.code
 ```
 
 Also note that this may require a local [solc](https://docs.soliditylang.org/en/v0.8.17/installing-solidity.html) installation, and that aggregated proof verification in Solidity is not currently supported.
 
-For both pipelines the resulting verifier can be deployed to an EVM instance (mainnet or otherwise !) using the `deploy-verifier-evm` command: 
+For both pipelines the resulting verifier can be deployed to an EVM instance (mainnet or otherwise !) using the `deploy-verifier-evm` command:
 
 ```bash
 Deploys an EVM verifier
@@ -194,13 +194,13 @@ Options:
 
 ```
 
-For instance: 
+For instance:
 
-```bash 
+```bash
 ezkl deploy-verifier-evm -S ./mymnemonic.txt -U myethnode.xyz --deployment-code-path aggr_1l_relu.code
 ```
 
-You can also send proofs to be verified on deployed contracts using `send-proof`: 
+You can also send proofs to be verified on deployed contracts using `send-proof`:
 
 ```bash
 Send a proof to be verified to an already deployed verifier
@@ -216,16 +216,16 @@ Options:
 
 ```
 
-For instance: 
+For instance:
 
-```bash 
+```bash
 ezkl send-proof-evm -S ./mymnemonic.txt -U myethnode.xyz --addr 0xFFFF --proof-path my.snark
 ```
 
 
 ### using pre-generated SRS
 
-Note that you can use pre-generated KZG SRS. These SRS can be converted to a format that is ingestable by the `pse/halo2` prover ezkl uses by leveraging [han0110/halo2-kzg-srs](https://github.com/han0110/halo2-kzg-srs). This repo also contains pre-converted SRS from large projects such as Hermez and the [perpetual powers of tau repo](https://github.com/privacy-scaling-explorations/perpetualpowersoftau). Simply download the pre-converted file locally and point `--params-path` to the file. 
+Note that you can use pre-generated KZG SRS. These SRS can be converted to a format that is ingestable by the `pse/halo2` prover ezkl uses by leveraging [han0110/halo2-kzg-srs](https://github.com/han0110/halo2-kzg-srs). This repo also contains pre-converted SRS from large projects such as Hermez and the [perpetual powers of tau repo](https://github.com/privacy-scaling-explorations/perpetualpowersoftau). Simply download the pre-converted file locally and point `--params-path` to the file.
 
 > Note: Ensure you download the files in raw format. As this will be more performant and is the serialization format `ezkl` assumes.
 
@@ -292,12 +292,12 @@ For examples of such files see `examples/onnx_models`.
 
 To run a simple example using the cli see **python and cli tutorial** above.
 
-If the above commands get too heavy and it becomes difficult to track parameters across commands; `ezkl` also supports loading global arguments (those specified before a subcommand) from a `.json` file. This can be done using the `RUNARGS` environment variable. For instance: 
+If the above commands get too heavy and it becomes difficult to track parameters across commands; `ezkl` also supports loading global arguments (those specified before a subcommand) from a `.json` file. This can be done using the `RUNARGS` environment variable. For instance:
 
 ```bash
-RUNARGS=/path/to/args.json ezkl subcommand --subcommand-params... 
+RUNARGS=/path/to/args.json ezkl subcommand --subcommand-params...
 ```
-For an example of such a file see `examples/default_run_args.json`: 
+For an example of such a file see `examples/default_run_args.json`:
 ```json
 {
     "tolerance": 0,
@@ -310,10 +310,10 @@ For an example of such a file see `examples/default_run_args.json`:
 }
 ```
 
-Note that command-wide arguments can be specified using the `EZKLCONF` environment variable; which supercedes `RUNARGS` in priority ! 
-This json includes both global level arguments _and_ subcommand specific arguments. Usage is thus as such: 
+Note that command-wide arguments can be specified using the `EZKLCONF` environment variable; which supercedes `RUNARGS` in priority !
+This json includes both global level arguments _and_ subcommand specific arguments. Usage is thus as such:
 ```bash
-EZKLCONF=/path/to/fullconfig.json ezkl 
+EZKLCONF=/path/to/fullconfig.json ezkl
 ```
 
 
@@ -382,10 +382,10 @@ cargo run --release --example mlp_4d
 
 ## Compiling to wasm 💾
 
-The cli can also be compiled to for `wasm32-wasi` target (browser bindings with `wasm32-unknown-unknown` coming soon). To do so first ensure that [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/) is installed. 
+The cli can also be compiled to for `wasm32-wasi` target (browser bindings with `wasm32-unknown-unknown` coming soon). To do so first ensure that [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/) is installed.
 
 
-You can then run: 
+You can then run:
 ```bash
 rustup target add wasm32-wasi
 
@@ -393,9 +393,43 @@ wasm-pack build --bin ezkl --target wasm32-wasi
 ```
 >Note: On Mac you may need to install llvm and clang using homebrew then explicitly set the `CC` and `AR` environment variables. For instance: `AR=/opt/homebrew/opt/llvm/bin/llvm-ar CC=/opt/homebrew/opt/llvm/bin/clang wasm-pack build --bin ezkl --target wasm32-wasi`
 
-You can then run the compiled `.wasm` file as you would the normal cli detailed above (just not the `EVM` related commands), by using [wasmtime](https://docs.wasmtime.dev/cli-install.html).  
+You can then run the compiled `.wasm` file as you would the normal cli detailed above (just not the `EVM` related commands), by using [wasmtime](https://docs.wasmtime.dev/cli-install.html).
 
 ```bash
 wasmtime './target/wasm32-wasi/release/ezkl.wasm' -- --help
 ```
 ----------------------
+
+## python bindings
+Python bindings are built for `ezkl` using [PyO3](https://pyo3.rs) and [Maturin](https://github.com/PyO3/maturin). This is done so to allow users of `ezkl` to leverage on the rich Data Science ecosystem that Python has instead of using Rust only.
+
+### production
+Production Python bindings are made available via [pyezkl](https://github.com/zkonduit/pyezkl).
+
+
+### development
+To test the developmental Python bindings you will need to install [Python3](https://realpython.com/installing-python/). `ezkl` only supports version of python where `python >=3.7`.
+
+Once python is installed setup a virtual environment and install `maturin`
+```bash
+python -m venv .env
+source .env/bin/activate
+pip install -r requirements.txt
+```
+
+You can now build the package for development and enable python bindings.
+```bash
+maturin develop --features python-bindings
+```
+
+Once done you will be able to access `ezkl_lib` as a python import as follows.
+```python
+import ezkl_lib
+```
+
+You may test if the existing build is working properly.
+```
+pytest
+```
+
+The list of python functions that can be accessed are found within `src/python.rs`
