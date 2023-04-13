@@ -192,6 +192,11 @@ macro_rules! test_func {
             use crate::render_circuit;
             use crate::tutorial as run_tutorial;
 
+            #[test]
+            fn tutorial_() {
+                run_tutorial();
+            }
+
 
             seq!(N in 0..=22 {
 
