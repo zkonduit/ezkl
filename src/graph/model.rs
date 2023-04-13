@@ -63,6 +63,15 @@ pub struct ModelConfig<F: FieldExt + TensorType> {
     pub vars: ModelVars<F>,
 }
 
+///
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum BaseGateColumns {
+    AF, // Advice and Fixed
+    AA, // Advice and Advice
+    FF, // Fixed and Fixed
+    FA, // Fixed and Advice
+}
+
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
 #[derive(Clone, Debug)]
 pub struct Model {
@@ -274,7 +283,7 @@ impl Model {
 
         if !lookup_ops.is_empty() {
             for (i, node) in lookup_ops {
-                let base_config = match base_gates.get(&false) {
+                let base_config = match base_gates.get(&BaseGateColumns::AA) {
                     Some(c) => c.clone(),
                     // Note: this is a hack to get around the borrow checker. We need to insert a default config into the base_gates map
                     // For the composite ops update we'll need to make this more sophisticated. Eg. is it a comp op which involved fixed params ? or does it only involve advices ?
@@ -286,9 +295,9 @@ impl Model {
                             self.run_args.check_mode,
                             self.run_args.tolerance as i32,
                         );
-                        base_gates.insert(false, Rc::new(RefCell::new(config)));
+                        base_gates.insert(BaseGateColumns::AA, Rc::new(RefCell::new(config)));
                         // safe
-                        base_gates.get(&false).unwrap().clone()
+                        base_gates.get(&BaseGateColumns::AA).unwrap().clone()
                     }
                 };
                 let config = self.conf_lookup(base_config.clone(), node, meta, vars)?;
@@ -319,12 +328,12 @@ impl Model {
         &self,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-        base_gates: &mut BTreeMap<bool, Rc<RefCell<PolyConfig<F>>>>,
+        base_gates: &mut BTreeMap<BaseGateColumns, Rc<RefCell<PolyConfig<F>>>>,
     ) -> Vec<Rc<RefCell<PolyConfig<F>>>> {
         let mut configs = vec![];
 
         for _ in self.output_shapes() {
-            let config = match base_gates.get(&false) {
+            let config = match base_gates.get(&BaseGateColumns::AA) {
                 Some(config) => config.clone(),
                 None => {
                     let config = Rc::new(RefCell::new(PolyConfig::<F>::configure(
@@ -334,7 +343,7 @@ impl Model {
                         CheckMode::SAFE,
                         self.run_args.tolerance.try_into().unwrap(),
                     )));
-                    base_gates.insert(false, config.clone());
+                    base_gates.insert(BaseGateColumns::AA, config.clone());
                     config
                 }
             };
@@ -380,7 +389,7 @@ impl Model {
         node: &Node,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-        base_gates: &mut BTreeMap<bool, Rc<RefCell<PolyConfig<F>>>>,
+        base_gates: &mut BTreeMap<BaseGateColumns, Rc<RefCell<PolyConfig<F>>>>,
     ) -> Result<NodeConfig<F>, Box<dyn Error>> {
         let input_nodes = node
             .inputs
@@ -390,11 +399,18 @@ impl Model {
 
         let input_idx = input_nodes.iter().map(|f| f.idx).collect_vec();
 
-        let fixed_flag = !input_nodes
-            .iter()
-            .filter(|f| f.opkind.is_const() && self.visibility.params.is_public())
-            .collect_vec()
-            .is_empty();
+        let constant_index = input_nodes.iter().position(|f| {
+            // if rescaled then the const becomes an advice
+            f.opkind.is_const() && self.visibility.params.is_public() && !node.opkind.is_rescaled()
+        });
+
+        // TODO: this isn't robust to more complex ops and we should improve this
+        let fixed_flag = match constant_index {
+            Some(0) => BaseGateColumns::FA,
+            Some(1) => BaseGateColumns::AF,
+            Some(2) => BaseGateColumns::FF,
+            _ => BaseGateColumns::AA,
+        };
 
         let config = match base_gates.get(&fixed_flag) {
             Some(config) => {
@@ -402,11 +418,13 @@ impl Model {
                 config.clone()
             }
             None => {
-                let inputs: [VarTensor; 2] = if fixed_flag {
-                    [vars.fixed[0].clone(), vars.advices[1].clone()]
-                } else {
-                    [vars.advices[0].clone(), vars.advices[1].clone()]
+                let inputs: [VarTensor; 2] = match fixed_flag {
+                    BaseGateColumns::FA => [vars.fixed[0].clone(), vars.advices[1].clone()],
+                    BaseGateColumns::AF => [vars.advices[1].clone(), vars.fixed[0].clone()],
+                    BaseGateColumns::AA => [vars.advices[0].clone(), vars.advices[1].clone()],
+                    BaseGateColumns::FF => [vars.fixed[0].clone(), vars.fixed[1].clone()],
                 };
+
                 // output node
                 let output = &vars.advices[2];
                 let config = Rc::new(RefCell::new(PolyConfig::configure(

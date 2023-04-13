@@ -1044,11 +1044,17 @@ impl Node {
                 })
                 .collect_vec();
         }
+
         if let OpKind::Poly(c) = &opkind {
-            Ok(OpKind::Poly(PolyOp::Rescaled {
-                inner: Box::new(c.clone()),
-                scale: (0..inputs.len()).zip(multipliers).collect_vec(),
-            }))
+            // only rescale if need to
+            if multipliers.iter().sum::<usize>() > multipliers.len() {
+                Ok(OpKind::Poly(PolyOp::Rescaled {
+                    inner: Box::new(c.clone()),
+                    scale: (0..inputs.len()).zip(multipliers).collect_vec(),
+                }))
+            } else {
+                Ok(opkind)
+            }
         } else {
             Err(Box::new(GraphError::RescalingError(opkind)))
         }
