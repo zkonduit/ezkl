@@ -2,12 +2,9 @@
 pub mod evm;
 
 use crate::circuit::CheckMode;
-use crate::commands::{data_path, Cli, RunArgs};
+use crate::commands::data_path;
 use crate::execute::ExecutionError;
-use crate::fieldutils::i128_to_felt;
-use crate::graph::{utilities::vector_to_quantized, Model, ModelCircuit};
-use crate::tensor::ops::pack;
-use crate::tensor::{Tensor, TensorType};
+use crate::tensor::TensorType;
 use halo2_proofs::arithmetic::FieldExt;
 use halo2_proofs::circuit::Value;
 use halo2_proofs::dev::MockProver;
@@ -28,7 +25,6 @@ use snark_verifier::verifier::plonk::PlonkProtocol;
 use std::error::Error;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Cursor, Read, Write};
-use std::marker::PhantomData;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -120,9 +116,9 @@ impl<F: FieldExt + SerdeObject, C: CurveAffine> Snark<F, C> {
         }
     }
 
-    /// Saves the Proof to a specified `proof_path`.
-    pub fn save(&self, proof_path: &PathBuf) -> Result<(), Box<dyn Error>> {
-        let self_i128 = Snarkbytes {
+    /// Converts to Snarkbytes
+    pub fn to_bytes(&self) -> Snarkbytes {
+        Snarkbytes {
             num_instance: self.protocol.as_ref().unwrap().num_instance.clone(),
             instances: self
                 .instances
@@ -130,7 +126,12 @@ impl<F: FieldExt + SerdeObject, C: CurveAffine> Snark<F, C> {
                 .map(|i| i.iter().map(|e| e.to_raw_bytes()).collect::<Vec<Vec<u8>>>())
                 .collect::<Vec<Vec<Vec<u8>>>>(),
             proof: self.proof.clone(),
-        };
+        }
+    }
+
+    /// Saves the Proof to a specified `proof_path`.
+    pub fn save(&self, proof_path: &PathBuf) -> Result<(), Box<dyn Error>> {
+        let self_i128 = self.to_bytes();
 
         let serialized = serde_json::to_string(&self_i128).map_err(Box::<dyn Error>::from)?;
 
@@ -224,76 +225,6 @@ impl<F: FieldExt + SerdeObject, C: CurveAffine> From<Snark<F, C>> for SnarkWitne
             proof: Value::known(snark.proof),
         }
     }
-}
-
-type CircuitInputs<F> = (ModelCircuit<F>, Vec<Vec<F>>);
-
-/// Initialize the model circuit and quantize the provided float inputs from the provided `ModelInput`.
-pub fn prepare_model_circuit_and_public_input<F: FieldExt + TensorType>(
-    data: &ModelInput,
-    cli: &Cli,
-) -> Result<CircuitInputs<F>, Box<dyn Error>> {
-    let model = Model::from_ezkl_conf(cli.clone())?;
-    let out_scales = model.get_output_scales();
-    let circuit = prepare_model_circuit(data, &cli.args)?;
-
-    // quantize the supplied data using the provided scale.
-    // the ordering here is important, we want the inputs to come before the outputs
-    // as they are configured in that order as Column<Instances>
-    let mut public_inputs = vec![];
-    if model.visibility.input.is_public() {
-        for v in data.input_data.iter() {
-            let t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, model.run_args.scale)?;
-            public_inputs.push(t);
-        }
-    }
-    if model.visibility.output.is_public() {
-        for (idx, v) in data.output_data.iter().enumerate() {
-            let mut t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx])?;
-            let len = t.len();
-            if cli.args.pack_base > 1 {
-                let max_exponent = (((len - 1) as u32) * (cli.args.scale + 1)) as f64;
-                if max_exponent > (i128::MAX as f64).log(cli.args.pack_base as f64) {
-                    return Err(Box::new(PfSysError::PackingExponent));
-                }
-                t = pack(&t, cli.args.pack_base as i128, cli.args.scale)?;
-            }
-            public_inputs.push(t);
-        }
-    }
-    info!(
-        "public inputs lengths: {:?}",
-        public_inputs
-            .iter()
-            .map(|i| i.len())
-            .collect::<Vec<usize>>()
-    );
-    trace!("{:?}", public_inputs);
-
-    let pi_inner: Vec<Vec<F>> = public_inputs
-        .iter()
-        .map(|i| i.iter().map(|e| i128_to_felt::<F>(*e)).collect::<Vec<F>>())
-        .collect::<Vec<Vec<F>>>();
-
-    Ok((circuit, pi_inner))
-}
-
-/// Initialize the model circuit
-pub fn prepare_model_circuit<F: FieldExt>(
-    data: &ModelInput,
-    args: &RunArgs,
-) -> Result<ModelCircuit<F>, Box<dyn Error>> {
-    // quantize the supplied data using the provided scale.
-    let mut inputs: Vec<Tensor<i128>> = vec![];
-    for (input, shape) in data.input_data.iter().zip(data.input_shapes.clone()) {
-        let t = vector_to_quantized(input, &shape, 0.0, args.scale)?;
-        inputs.push(t);
-    }
-
-    Ok(ModelCircuit::<F> {
-        inputs,
-        _marker: PhantomData,
-    })
 }
 
 /// Deserializes the required inputs to a model at path `datapath` to a [ModelInput] struct.
