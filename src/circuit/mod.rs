@@ -172,10 +172,10 @@ impl fmt::Display for BaseOp {
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be used to express more complex operations via accumulation
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
 pub enum LookupOp {
     Div {
-        denom: eq_float::F32,
+        denom: utils::F32,
     },
     ReLU {
         scale: usize,
@@ -185,11 +185,11 @@ pub enum LookupOp {
     },
     LeakyReLU {
         scale: usize,
-        slope: eq_float::F32,
+        slope: utils::F32,
     },
     PReLU {
         scale: usize,
-        slopes: Vec<eq_float::F32>,
+        slopes: Vec<utils::F32>,
     },
     Sigmoid {
         scales: (usize, usize),
@@ -258,7 +258,7 @@ impl LookupOp {
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be used to express more complex operations via accumulation
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
 pub enum Op {
     Dot,
     Matmul,
@@ -511,7 +511,7 @@ impl fmt::Display for Op {
 // Eventually, though, we probably want to keep them and treat them directly (layouting and configuring
 // at each type of node)
 /// Enum of the different kinds of operations `ezkl` can support.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd, Deserialize, Serialize)]
 pub enum OpKind {
     /// A nonlinearity
     Lookup(LookupOp),
@@ -551,14 +551,14 @@ impl OpKind {
             }),
             "LeakyRelu" => OpKind::Lookup(LookupOp::LeakyReLU {
                 scale: 1,
-                slope: eq_float::F32(0.0),
+                slope: utils::F32(0.0),
             }),
             "Sigmoid" => OpKind::Lookup(LookupOp::Sigmoid { scales: (1, 1) }),
             "Sqrt" => OpKind::Lookup(LookupOp::Sqrt { scales: (1, 1) }),
             "Tanh" => OpKind::Lookup(LookupOp::Tanh { scales: (1, 1) }),
             "onnx.Erf" => OpKind::Lookup(LookupOp::Erf { scales: (1, 1) }),
             "Div" => OpKind::Lookup(LookupOp::Div {
-                denom: eq_float::F32(1.0),
+                denom: utils::F32(1.0),
             }),
             "Const" => OpKind::Const,
             "Source" => OpKind::Input,
