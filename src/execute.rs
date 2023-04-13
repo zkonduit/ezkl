@@ -11,8 +11,6 @@ use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 use crate::pfsys::evm::{aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::{evm_verify, DeploymentCode};
-#[cfg(feature = "render")]
-use crate::pfsys::prepare_model_circuit;
 use crate::pfsys::{create_keys, load_params, load_vk, save_params, Snark};
 use crate::pfsys::{create_proof_circuit, gen_srs, prepare_data, save_vk, verify_proof_circuit};
 #[cfg(not(target_arch = "wasm32"))]
