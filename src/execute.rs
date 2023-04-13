@@ -208,11 +208,11 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         #[cfg(feature = "render")]
         Commands::RenderCircuit {
             ref data,
-            model,
+            model: _,
             ref output,
         } => {
             let data = prepare_data(data.to_string())?;
-            let model = Model::read_from_file(model.into())?;
+            let model = Model::from_arg()?;
             let circuit = ModelCircuit::<Fr>::new(&data, model)?;
             info!("Rendering circuit");
 
@@ -250,9 +250,9 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
 
             serde_json::to_writer(&File::create(output)?, &data)?;
         }
-        Commands::Mock { ref data, model } => {
+        Commands::Mock { ref data, model: _ } => {
             let data = prepare_data(data.to_string())?;
-            let model = Model::read_from_file(model.into())?;
+            let model = Model::from_arg()?;
             let circuit = ModelCircuit::<Fr>::new(&data, model)?;
             let public_inputs = circuit.prepare_public_inputs(&data)?;
 
@@ -268,7 +268,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
             ref data,
-            model,
+            model: _,
             ref vk_path,
             ref params_path,
             ref deployment_code_path,
@@ -276,7 +276,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => {
             let data = prepare_data(data.to_string())?;
 
-            let model = Model::read_from_file(model)?;
+            let model = Model::from_arg()?;
             let circuit = ModelCircuit::<Fr>::new(&data, model)?;
             let public_inputs = circuit.prepare_public_inputs(&data)?;
             let num_instance = public_inputs.iter().map(|x| x.len()).collect();
@@ -324,7 +324,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         }
         Commands::Prove {
             ref data,
-            model,
+            model: _,
             ref vk_path,
             ref proof_path,
             ref params_path,
@@ -333,7 +333,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => {
             let data = prepare_data(data.to_string())?;
 
-            let model = Model::read_from_file(model)?;
+            let model = Model::from_arg()?;
             let circuit = ModelCircuit::<Fr>::new(&data, model)?;
             let public_inputs = circuit.prepare_public_inputs(&data)?;
 
