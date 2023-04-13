@@ -208,7 +208,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         #[cfg(feature = "render")]
         Commands::RenderCircuit {
             ref data,
-            model: _,
+            model,
             ref output,
         } => {
             let data = prepare_data(data.to_string())?;
