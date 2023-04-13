@@ -212,7 +212,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             ref output,
         } => {
             let data = prepare_data(data.to_string())?;
-            let circuit = prepare_model_circuit::<Fr>(&data, &cli.args)?;
+            let model = Model::read_from_file(model.into())?;
+            let circuit = ModelCircuit::<Fr>::new(&data, model)?;
             info!("Rendering circuit");
 
             // Create the area we want to draw on.
