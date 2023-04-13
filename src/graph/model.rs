@@ -71,7 +71,7 @@ pub struct ModelConfig<F: FieldExt + TensorType> {
 enum BaseGateColumns {
     AF, // Advice and Fixed
     AA, // Advice and Advice
-    FF, // Fixed and Fixed
+    // FF, // Fixed and Fixed
     FA, // Fixed and Advice
 }
 
@@ -440,13 +440,16 @@ impl Model {
             f.opkind.is_const() && self.visibility.params.is_public() && !node.opkind.is_rescaled()
         });
 
+        println!("constant_index {:?}", constant_index);
+
         // TODO: this isn't robust to more complex ops and we should improve this
         let fixed_flag = match constant_index {
-            Some(0) => BaseGateColumns::FA,
-            Some(1) => BaseGateColumns::AF,
-            Some(2) => BaseGateColumns::FF,
+            Some(1) => BaseGateColumns::FA,
+            Some(0) => BaseGateColumns::AF,
             _ => BaseGateColumns::AA,
         };
+
+        println!("fixed {:?}", fixed_flag);
 
         let config = match base_gates.get(&fixed_flag) {
             Some(config) => {
@@ -458,7 +461,7 @@ impl Model {
                     BaseGateColumns::FA => [vars.fixed[0].clone(), vars.advices[1].clone()],
                     BaseGateColumns::AF => [vars.advices[1].clone(), vars.fixed[0].clone()],
                     BaseGateColumns::AA => [vars.advices[0].clone(), vars.advices[1].clone()],
-                    BaseGateColumns::FF => [vars.fixed[0].clone(), vars.fixed[1].clone()],
+                    // BaseGateColumns::FF => [vars.fixed[0].clone(), vars.fixed[1].clone()],
                 };
 
                 // output node
