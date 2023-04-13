@@ -1,0 +1,11 @@
+attrs==22.2.0
+exceptiongroup==1.1.1
+importlib-metadata==6.1.0
+iniconfig==2.0.0
+maturin==0.14.16
+packaging==23.0
+pluggy==1.0.0
+pytest==7.2.2
+tomli==2.0.1
+typing-extensions==4.5.0
+zipp==3.15.0

@@ -256,7 +256,7 @@ pub enum Commands {
             value_enum
         )]
         transcript: TranscriptType,
-        /// The proving strategy  
+        /// The proving strategy
         #[arg(
             long,
             require_equals = true,
