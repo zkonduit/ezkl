@@ -65,7 +65,6 @@ const TESTS: [&str; 23] = [
     "3l_relu_conv_fc",
     "4l_relu_conv_fc",
     "1l_erf",
-    "1l_erf",
 ];
 
 const PACKING_TESTS: [&str; 14] = [
