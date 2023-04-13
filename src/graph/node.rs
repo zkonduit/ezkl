@@ -241,7 +241,7 @@ impl Node {
                         Node {
                             idx,
                             opkind,
-                            inputs: node.inputs.clone(),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
