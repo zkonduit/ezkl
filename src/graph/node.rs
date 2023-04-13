@@ -60,7 +60,11 @@ fn display_option<T: fmt::Debug>(o: &Option<T>) -> String {
 }
 
 fn display_vector<T: fmt::Debug>(v: &Vec<T>) -> String {
-    format!("{:?}", v)
+    if v.len() > 0 {
+        format!("{:?}", v)
+    } else {
+        format!("")
+    }
 }
 
 fn display_tensor(o: &Option<Tensor<i128>>) -> String {
