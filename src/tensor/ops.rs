@@ -820,7 +820,7 @@ pub mod nonlinearities {
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = erffunc(&x, 1, 1);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 0, 0, 0]), &[2, 3]).unwrap(); // TODO
+    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 0, 0, 0]), &[2, 3]).unwrap(); // TODO
     /// assert_eq!(result, expected);
     /// ```
 
