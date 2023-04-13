@@ -440,16 +440,18 @@ impl Model {
             f.opkind.is_const() && self.visibility.params.is_public() && !node.opkind.is_rescaled()
         });
 
-        println!("constant_index {:?}", constant_index);
-
         // TODO: this isn't robust to more complex ops and we should improve this
         let fixed_flag = match constant_index {
-            Some(1) => BaseGateColumns::FA,
-            Some(0) => BaseGateColumns::AF,
+            Some(1) => {
+                if node.opkind.is_parameterized() {
+                    BaseGateColumns::FA
+                } else {
+                    BaseGateColumns::AF
+                }
+            }
+            Some(0) => BaseGateColumns::FA,
             _ => BaseGateColumns::AA,
         };
-
-        println!("fixed {:?}", fixed_flag);
 
         let config = match base_gates.get(&fixed_flag) {
             Some(config) => {

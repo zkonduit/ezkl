@@ -193,7 +193,7 @@ pub fn pairwise<F: FieldExt + TensorType>(
         ))));
     }
 
-    let (mut lhs, mut rhs) = (values[1].clone(), values[0].clone());
+    let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
 
     // casts a 1D addition
     if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {

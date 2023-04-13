@@ -604,6 +604,14 @@ impl OpKind {
         matches!(self, OpKind::Lookup(_))
     }
 
+    /// is lookup based op
+    pub fn is_parameterized(&self) -> bool {
+        match self {
+            OpKind::Poly(Op::Affine) | OpKind::Poly(Op::Conv { .. }) => true,
+            _ => false,
+        }
+    }
+
     /// is rescaled op
     pub fn is_rescaled(&self) -> bool {
         matches!(self, OpKind::Poly(Op::Rescaled { .. }))
