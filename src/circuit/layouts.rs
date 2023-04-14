@@ -1029,3 +1029,20 @@ pub fn prelu<F: FieldExt + TensorType>(
 
     Ok(prelu)
 }
+
+/// mean function layout
+pub fn mean<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    region: &mut Region<F>,
+    values: &[ValTensor<F>; 1],
+    scale: usize,
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let x = &values[0];
+
+    let sum_x = sum(config, region, &[x.clone()], offset)?;
+    let nl = LookupOp::Div {
+        denom: utils::F32((scale * x.len()) as f32),
+    };
+    nonlinearity(config, region, &[sum_x], nl, offset)
+}

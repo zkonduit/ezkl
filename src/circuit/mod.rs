@@ -200,6 +200,9 @@ pub enum LookupOp {
     Erf {
         scales: (usize, usize),
     },
+    Mean {
+        scale: usize,
+    },
 }
 
 impl LookupOp {
@@ -233,6 +236,7 @@ impl LookupOp {
             LookupOp::Erf { scales } => {
                 Ok(tensor::ops::nonlinearities::erffunc(&x, scales.0, scales.1))
             }
+            LookupOp::Mean { scale } => Ok(tensor::ops::nonlinearities::mean(&x, *scale)),
         }
     }
 
@@ -246,6 +250,7 @@ impl LookupOp {
             LookupOp::Sqrt { .. } => "SQRT",
             LookupOp::Tanh { .. } => "TANH",
             LookupOp::Erf { .. } => "ERF",
+            LookupOp::Mean { .. } => "MEAN",
         }
     }
 
@@ -569,12 +574,9 @@ impl OpKind {
             "MatMulInference" => OpKind::Poly(Op::Matmul),
             "Dot" => OpKind::Poly(Op::Dot),
             "Reduce<Sum>" => OpKind::Poly(Op::Sum),
+            "Reduce<Mean>" => OpKind::Lookup(LookupOp::Mean { scale: 1 }),
             "Pow" => OpKind::Poly(Op::Pow(1)),
-            "Conv" => OpKind::Poly(Op::Conv {
-                padding: (1, 1),
-                stride: (1, 1),
-            }),
-            "ConvHir" => OpKind::Poly(Op::Conv {
+            "Conv" | "ConvHir" => OpKind::Poly(Op::Conv {
                 padding: (1, 1),
                 stride: (1, 1),
             }),
@@ -936,6 +938,13 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             }),
             OpKind::Lookup(nl) => match nl {
                 LookupOp::PReLU { scale, .. } => Some(layouts::prelu(
+                    self,
+                    region,
+                    cp_values[..].try_into()?,
+                    scale,
+                    offset,
+                )?),
+                LookupOp::Mean { scale, .. } => Some(layouts::mean(
                     self,
                     region,
                     cp_values[..].try_into()?,

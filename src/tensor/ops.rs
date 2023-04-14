@@ -939,6 +939,27 @@ pub mod nonlinearities {
         }
         output
     }
+
+    /// Takes the mean of a tensor
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::mean;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[2, 1, 2, 7, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = mean(&x);
+    /// let expected = Tensor::<i128>::new(Some(&[2]), &[1]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn mean(a: &Tensor<i128>, scale: usize) -> Tensor<i128> {
+        let sum = sum(a).unwrap();
+        const_div(&sum, (scale * a.len()) as f32)
+    }
 }
 
 /// Ops that return the transcript i.e intermediate calcs of an op
