@@ -197,6 +197,9 @@ pub enum LookupOp {
     Tanh {
         scales: (usize, usize),
     },
+    Erf {
+        scales: (usize, usize),
+    },
 }
 
 impl LookupOp {
@@ -227,6 +230,9 @@ impl LookupOp {
             LookupOp::Tanh { scales } => {
                 Ok(tensor::ops::nonlinearities::tanh(&x, scales.0, scales.1))
             }
+            LookupOp::Erf { scales } => {
+                Ok(tensor::ops::nonlinearities::erffunc(&x, scales.0, scales.1))
+            }
         }
     }
 
@@ -239,6 +245,7 @@ impl LookupOp {
             LookupOp::Sigmoid { .. } => "SIGMOID",
             LookupOp::Sqrt { .. } => "SQRT",
             LookupOp::Tanh { .. } => "TANH",
+            LookupOp::Erf { .. } => "ERF",
         }
     }
 
@@ -549,6 +556,7 @@ impl OpKind {
             "Sigmoid" => OpKind::Lookup(LookupOp::Sigmoid { scales: (1, 1) }),
             "Sqrt" => OpKind::Lookup(LookupOp::Sqrt { scales: (1, 1) }),
             "Tanh" => OpKind::Lookup(LookupOp::Tanh { scales: (1, 1) }),
+            "onnx.Erf" => OpKind::Lookup(LookupOp::Erf { scales: (1, 1) }),
             "Div" => OpKind::Lookup(LookupOp::Div {
                 denom: utils::F32(1.0),
             }),
@@ -586,22 +594,35 @@ impl OpKind {
             }
         }
     }
-    /// Identify fused OpKind
+    /// is ploy type constrant
     pub fn is_poly(&self) -> bool {
         matches!(self, OpKind::Poly(_))
     }
 
-    /// Identify fused OpKind
+    /// is lookup based op
     pub fn is_lookup(&self) -> bool {
         matches!(self, OpKind::Lookup(_))
     }
 
-    /// Identify fused OpKind
+    /// is lookup based op
+    pub fn is_parameterized(&self) -> bool {
+        match self {
+            OpKind::Poly(Op::Affine) | OpKind::Poly(Op::Conv { .. }) => true,
+            _ => false,
+        }
+    }
+
+    /// is rescaled op
+    pub fn is_rescaled(&self) -> bool {
+        matches!(self, OpKind::Poly(Op::Rescaled { .. }))
+    }
+
+    /// is input
     pub fn is_input(&self) -> bool {
         matches!(self, OpKind::Input)
     }
 
-    /// Identify constant OpKind
+    /// is const
     pub fn is_const(&self) -> bool {
         matches!(self, OpKind::Const)
     }
