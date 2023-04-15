@@ -413,7 +413,7 @@ impl Node {
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
-                            out_scale: 2 * scale,
+                            out_scale: scale,
                             ..Default::default()
                         }
                     }
