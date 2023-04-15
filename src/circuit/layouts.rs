@@ -976,12 +976,11 @@ pub fn prelu<F: FieldExt + TensorType>(
     slopes.repeat_rows(diff)?;
     slopes.reshape(values[0].dims())?;
 
-    // relu(x)
-    let relu_double_scale = nonlinearity(
+    let relu = nonlinearity(
         config,
         region,
         &[values[0].clone()],
-        LookupOp::ReLU { scale: 2 * scale },
+        LookupOp::ReLU { scale },
         offset,
     )?;
     // -x
@@ -994,7 +993,7 @@ pub fn prelu<F: FieldExt + TensorType>(
     let prelu = pairwise(
         config,
         region,
-        &[relu_double_scale, scaled_relu_neg_x],
+        &[relu, scaled_relu_neg_x],
         offset,
         BaseOp::Sub,
     )?;
