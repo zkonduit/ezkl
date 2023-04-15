@@ -523,6 +523,15 @@ impl Model {
             LookupOp::PReLU { scale, .. } => {
                 op = LookupOp::ReLU { scale };
             }
+            LookupOp::Mean { scale } => {
+                assert_eq!(input_nodes.len(), 1);
+                op = LookupOp::Div {
+                    denom: crate::circuit::utils::F32(
+                        // we need to scale the denom by the number of elements in the input tensor and the calculated scale diff
+                        (scale * input_nodes[0].out_dims.iter().product::<usize>()) as f32,
+                    ),
+                };
+            }
             _ => {}
         }
 

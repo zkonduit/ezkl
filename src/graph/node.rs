@@ -271,6 +271,27 @@ impl Node {
                             ..Default::default()
                         }
                     }
+                    LookupOp::Mean { .. } => {
+                        let input_node = &inputs[0];
+                        let scale_diff = input_node.out_scale - scale;
+                        // We can also consider adjusting the scale of all inputs and the output in a more custom way.
+                        if scale_diff > 0 {
+                            let mult = scale_to_multiplier(scale_diff);
+                            opkind = OpKind::Lookup(LookupOp::Mean {
+                                scale: mult as usize,
+                            }); // now the input will be scaled down to match
+                        }
+                        Node {
+                            idx,
+                            opkind,
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
+                            in_dims: vec![input_node.out_dims.clone()],
+                            out_dims: vec![1],
+                            in_scale: input_node.out_scale,
+                            out_scale: scale,
+                            ..Default::default()
+                        }
+                    }
                     LookupOp::LeakyReLU {
                         scale: mut layer_scale,
                         ..
