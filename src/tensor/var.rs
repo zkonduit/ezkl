@@ -1,3 +1,5 @@
+use log::error;
+
 use crate::circuit::CheckMode;
 
 use super::*;
@@ -227,7 +229,9 @@ impl VarTensor {
                         VarTensor::Advice { inner: advices, .. } => {
                             v.copy_advice(|| "k", region, advices[x], y)
                         }
-                        _ => Err(halo2_proofs::plonk::Error::Synthesis),
+                        _ => {
+                            error!("PrevAssigned is only supported for advice columns");
+                            Err(halo2_proofs::plonk::Error::Synthesis)},
                     },
                     ValType::AssignedValue(v) => match &self {
                         VarTensor::Fixed { inner: fixed, .. } => region

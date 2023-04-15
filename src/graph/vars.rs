@@ -5,12 +5,12 @@ use crate::tensor::TensorType;
 use crate::tensor::{ValTensor, VarTensor};
 use halo2_proofs::{arithmetic::FieldExt, plonk::ConstraintSystem};
 use itertools::Itertools;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::GraphError;
 
 /// Label Enum to track whether model input, model parameters, and model output are public or private
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Visibility {
     /// Mark an item as private to the prover (not in the proof submitted for verification)
     Private,
@@ -33,7 +33,7 @@ impl std::fmt::Display for Visibility {
 }
 
 /// Whether the model input, model parameters, and model output are Public or Private to the prover.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct VarVisibility {
     /// Input to the model or computational graph
     pub input: Visibility,

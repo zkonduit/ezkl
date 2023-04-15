@@ -6,6 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
+# Name to be imported within python
+# Example: import ezkl_lib
+name = "ezkl_lib"
 crate-type = ["cdylib", "rlib"]
 
 
@@ -23,7 +26,6 @@ serde = { version = "1.0.126", features = ["derive"], optional = true  }
 serde_json = { version = "1.0.64", optional = true }
 log = { version = "0.4.17", optional = true }
 tabled = { version = "0.9.0", optional = true}
-eq-float = "0.1.0"
 thiserror = "1.0.38"
 hex = "0.4.3"
 ethereum_types = { package = "ethereum-types", version = "0.14.1", default-features = false, features = ["std"]}
@@ -34,6 +36,15 @@ colored = { version = "2.0.0", optional = true}
 env_logger = { version = "0.10.0", optional = true}
 colored_json =  { version = "3.0.1", optional = true}
 tokio = { version = "1.26.0", features = ["macros", "rt"] }
+puruspe = "0.2.0"
+bincode = "*"
+
+# python binding related deps
+pyo3 = { version = "0.18.2", features = ["extension-module", "abi3-py37"], optional = true }
+pyo3-log = { version = "0.8.1", optional = true }
+# Omit for the time being as ndarrays are not being used
+# numpy = { version = "0.18.0", optional = true }
+
 
 # evm related deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -119,4 +130,5 @@ default = ["ezkl"]
 render = ["halo2_proofs/dev-graph", "plotters"]
 tensorflow = ["dep:tensorflow"]
 onnx = ["dep:tract-onnx"]
+python-bindings = ["pyo3", "pyo3-log"]
 ezkl = ["onnx", "serde", "serde_json", "log", "colored", "env_logger", "tabled", "colored_json"]

@@ -172,10 +172,10 @@ impl fmt::Display for BaseOp {
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be used to express more complex operations via accumulation
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
 pub enum LookupOp {
     Div {
-        denom: eq_float::F32,
+        denom: utils::F32,
     },
     ReLU {
         scale: usize,
@@ -185,17 +185,23 @@ pub enum LookupOp {
     },
     LeakyReLU {
         scale: usize,
-        slope: eq_float::F32,
+        slope: utils::F32,
     },
     PReLU {
         scale: usize,
-        slopes: Vec<eq_float::F32>,
+        slopes: Vec<utils::F32>,
     },
     Sigmoid {
         scales: (usize, usize),
     },
     Tanh {
         scales: (usize, usize),
+    },
+    Erf {
+        scales: (usize, usize),
+    },
+    Mean {
+        scale: usize,
     },
     Max {
         scale: usize,
@@ -233,8 +239,12 @@ impl LookupOp {
             LookupOp::Tanh { scales } => {
                 Ok(tensor::ops::nonlinearities::tanh(&x, scales.0, scales.1))
             }
-            LookupOp::Max { .. } => Tensor::new(Some(&[*x.iter().max().unwrap()]), &[1]),
+            LookupOp::Erf { scales } => {
+                Ok(tensor::ops::nonlinearities::erffunc(&x, scales.0, scales.1))
+                LookupOp::Max { .. } => Tensor::new(Some(&[*x.iter().max().unwrap()]), &[1]),
             LookupOp::Min { .. } => Tensor::new(Some(&[*x.iter().min().unwrap()]), &[1]),
+        }
+            LookupOp::Mean { scale } => Ok(tensor::ops::nonlinearities::mean(&x, *scale)),
         }
     }
 
@@ -249,6 +259,8 @@ impl LookupOp {
             LookupOp::Sigmoid { .. } => "SIGMOID",
             LookupOp::Sqrt { .. } => "SQRT",
             LookupOp::Tanh { .. } => "TANH",
+            LookupOp::Erf { .. } => "ERF",
+            LookupOp::Mean { .. } => "MEAN",
         }
     }
 
@@ -261,7 +273,7 @@ impl LookupOp {
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be used to express more complex operations via accumulation
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
 pub enum Op {
     Dot,
     Matmul,
@@ -514,7 +526,7 @@ impl fmt::Display for Op {
 // Eventually, though, we probably want to keep them and treat them directly (layouting and configuring
 // at each type of node)
 /// Enum of the different kinds of operations `ezkl` can support.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd, Deserialize, Serialize)]
 pub enum OpKind {
     /// A nonlinearity
     Lookup(LookupOp),
@@ -556,13 +568,14 @@ impl OpKind {
             }),
             "LeakyRelu" => OpKind::Lookup(LookupOp::LeakyReLU {
                 scale: 1,
-                slope: eq_float::F32(0.0),
+                slope: utils::F32(0.0),
             }),
             "Sigmoid" => OpKind::Lookup(LookupOp::Sigmoid { scales: (1, 1) }),
             "Sqrt" => OpKind::Lookup(LookupOp::Sqrt { scales: (1, 1) }),
             "Tanh" => OpKind::Lookup(LookupOp::Tanh { scales: (1, 1) }),
+            "onnx.Erf" => OpKind::Lookup(LookupOp::Erf { scales: (1, 1) }),
             "Div" => OpKind::Lookup(LookupOp::Div {
-                denom: eq_float::F32(1.0),
+                denom: utils::F32(1.0),
             }),
             "Const" => OpKind::Const,
             "Source" => OpKind::Input,
@@ -573,12 +586,9 @@ impl OpKind {
             "MatMulInference" => OpKind::Poly(Op::Matmul),
             "Dot" => OpKind::Poly(Op::Dot),
             "Reduce<Sum>" => OpKind::Poly(Op::Sum),
+            "Reduce<Mean>" => OpKind::Lookup(LookupOp::Mean { scale: 1 }),
             "Pow" => OpKind::Poly(Op::Pow(1)),
-            "Conv" => OpKind::Poly(Op::Conv {
-                padding: (1, 1),
-                stride: (1, 1),
-            }),
-            "ConvHir" => OpKind::Poly(Op::Conv {
+            "Conv" | "ConvHir" => OpKind::Poly(Op::Conv {
                 padding: (1, 1),
                 stride: (1, 1),
             }),
@@ -598,22 +608,35 @@ impl OpKind {
             }
         }
     }
-    /// Identify fused OpKind
+    /// is ploy type constrant
     pub fn is_poly(&self) -> bool {
         matches!(self, OpKind::Poly(_))
     }
 
-    /// Identify fused OpKind
+    /// is lookup based op
     pub fn is_lookup(&self) -> bool {
         matches!(self, OpKind::Lookup(_))
     }
 
-    /// Identify fused OpKind
+    /// is lookup based op
+    pub fn is_parameterized(&self) -> bool {
+        match self {
+            OpKind::Poly(Op::Affine) | OpKind::Poly(Op::Conv { .. }) => true,
+            _ => false,
+        }
+    }
+
+    /// is rescaled op
+    pub fn is_rescaled(&self) -> bool {
+        matches!(self, OpKind::Poly(Op::Rescaled { .. }))
+    }
+
+    /// is input
     pub fn is_input(&self) -> bool {
         matches!(self, OpKind::Input)
     }
 
-    /// Identify constant OpKind
+    /// is const
     pub fn is_const(&self) -> bool {
         matches!(self, OpKind::Const)
     }
@@ -927,6 +950,13 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             }),
             OpKind::Lookup(nl) => match nl {
                 LookupOp::PReLU { scale, .. } => Some(layouts::prelu(
+                    self,
+                    region,
+                    cp_values[..].try_into()?,
+                    scale,
+                    offset,
+                )?),
+                LookupOp::Mean { scale, .. } => Some(layouts::mean(
                     self,
                     region,
                     cp_values[..].try_into()?,

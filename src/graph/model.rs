@@ -12,8 +12,9 @@ use crate::graph::scale_to_multiplier;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor, VarTensor};
 use anyhow::Context;
+use serde::Deserialize;
+use serde::Serialize;
 //use clap::Parser;
-use anyhow::Error as AnyError;
 use core::panic;
 use halo2_proofs::circuit::Region;
 use halo2_proofs::{
@@ -28,14 +29,16 @@ use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::BTreeMap;
 use std::error::Error;
+use std::fs::File;
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
+use std::path::PathBuf;
 use std::rc::Rc;
 use tabled::Table;
 use tract_onnx;
-use tract_onnx::prelude::{Framework, Graph, InferenceFact, Node as OnnxNode, OutletId};
-use tract_onnx::tract_hir::internal::InferenceOp;
+use tract_onnx::prelude::Framework;
 /// Mode we're using the model in.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Mode {
     /// Initialize the model and display the operations table / graph
     Table,
@@ -63,11 +66,22 @@ pub struct ModelConfig<F: FieldExt + TensorType> {
     pub vars: ModelVars<F>,
 }
 
+///
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum BaseGateColumns {
+    AF, // Advice and Fixed
+    AA, // Advice and Advice
+    // FF, // Fixed and Fixed
+    FA, // Fixed and Advice
+}
+
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Model {
-    /// The raw tract [Graph] data structure.
-    pub model: Graph<InferenceFact, Box<dyn InferenceOp>>,
+    /// input indices
+    pub inputs: Vec<usize>,
+    /// output indices
+    pub outputs: Vec<usize>,
     /// Graph of nodes we are loading from Onnx.
     pub nodes: NodeGraph, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
     /// The [RunArgs] being used
@@ -103,7 +117,8 @@ impl Model {
             nodes.insert(i, n);
         }
         let om = Model {
-            model: model.clone(),
+            inputs: model.inputs.iter().map(|o| o.node).collect(),
+            outputs: model.outputs.iter().map(|o| o.node).collect(),
             run_args,
             nodes,
             mode,
@@ -142,9 +157,9 @@ impl Model {
         for (i, n) in nodes.iter() {
             let mut inputs = vec![];
             for i in n.inputs.iter() {
-                match results.get(&i.node) {
+                match results.get(&i) {
                     Some(value) => inputs.push(value.clone()),
-                    None => return Err(Box::new(GraphError::MissingNode(i.node))),
+                    None => return Err(Box::new(GraphError::MissingNode(*i))),
                 }
             }
             match &n.opkind {
@@ -213,10 +228,40 @@ impl Model {
         }
     }
 
+    ///
+    pub fn write<W: Write>(&self, mut writer: BufWriter<W>) -> Result<(), Box<dyn Error>> {
+        let circuit_bytes = bincode::serialize(&self)?;
+        writer.write(&circuit_bytes)?;
+        writer.flush()?;
+        Ok(())
+    }
+
+    ///
+    pub fn write_to_file(&self, path: PathBuf) -> Result<(), Box<dyn Error>> {
+        let fs = File::create(path)?;
+        let buffer = BufWriter::new(fs);
+        self.write(buffer)
+    }
+
+    ///
+    pub fn read<R: Read>(mut reader: BufReader<R>) -> Result<Self, Box<dyn Error>> {
+        let buffer: &mut Vec<u8> = &mut vec![];
+        reader.read_to_end(buffer)?;
+
+        let circuit = bincode::deserialize(&buffer)?;
+        Ok(circuit)
+    }
+    ///
+    pub fn read_from_file(path: PathBuf) -> Result<Self, Box<dyn Error>> {
+        let f = File::open(path)?;
+        let reader = BufReader::new(f);
+        Self::read(reader)
+    }
+
     /// Creates a `Model` based on CLI arguments
     pub fn from_arg() -> Result<Self, Box<dyn Error>> {
-        let args = Cli::create()?;
-        Self::from_ezkl_conf(args)
+        let conf = Cli::create()?;
+        Self::from_ezkl_conf(conf)
     }
 
     /// Configures an `Model`. Does so one execution `bucket` at a time. Each bucket holds either:
@@ -274,7 +319,7 @@ impl Model {
 
         if !lookup_ops.is_empty() {
             for (i, node) in lookup_ops {
-                let base_config = match base_gates.get(&false) {
+                let base_config = match base_gates.get(&BaseGateColumns::AA) {
                     Some(c) => c.clone(),
                     // Note: this is a hack to get around the borrow checker. We need to insert a default config into the base_gates map
                     // For the composite ops update we'll need to make this more sophisticated. Eg. is it a comp op which involved fixed params ? or does it only involve advices ?
@@ -286,9 +331,9 @@ impl Model {
                             self.run_args.check_mode,
                             self.run_args.tolerance as i32,
                         );
-                        base_gates.insert(false, Rc::new(RefCell::new(config)));
+                        base_gates.insert(BaseGateColumns::AA, Rc::new(RefCell::new(config)));
                         // safe
-                        base_gates.get(&false).unwrap().clone()
+                        base_gates.get(&BaseGateColumns::AA).unwrap().clone()
                     }
                 };
                 let config = self.conf_lookup(base_config.clone(), node, meta, vars)?;
@@ -319,12 +364,12 @@ impl Model {
         &self,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-        base_gates: &mut BTreeMap<bool, Rc<RefCell<PolyConfig<F>>>>,
+        base_gates: &mut BTreeMap<BaseGateColumns, Rc<RefCell<PolyConfig<F>>>>,
     ) -> Vec<Rc<RefCell<PolyConfig<F>>>> {
         let mut configs = vec![];
 
         for _ in self.output_shapes() {
-            let config = match base_gates.get(&false) {
+            let config = match base_gates.get(&BaseGateColumns::AA) {
                 Some(config) => config.clone(),
                 None => {
                     let config = Rc::new(RefCell::new(PolyConfig::<F>::configure(
@@ -334,7 +379,7 @@ impl Model {
                         CheckMode::SAFE,
                         self.run_args.tolerance.try_into().unwrap(),
                     )));
-                    base_gates.insert(false, config.clone());
+                    base_gates.insert(BaseGateColumns::AA, config.clone());
                     config
                 }
             };
@@ -380,21 +425,33 @@ impl Model {
         node: &Node,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-        base_gates: &mut BTreeMap<bool, Rc<RefCell<PolyConfig<F>>>>,
+        base_gates: &mut BTreeMap<BaseGateColumns, Rc<RefCell<PolyConfig<F>>>>,
     ) -> Result<NodeConfig<F>, Box<dyn Error>> {
         let input_nodes = node
             .inputs
             .iter()
-            .map(|i| self.nodes.get(&i.node).unwrap())
+            .map(|i| self.nodes.get(&i).unwrap())
             .collect_vec();
 
         let input_idx = input_nodes.iter().map(|f| f.idx).collect_vec();
 
-        let fixed_flag = !input_nodes
-            .iter()
-            .filter(|f| f.opkind.is_const() && self.visibility.params.is_public())
-            .collect_vec()
-            .is_empty();
+        let constant_index = input_nodes.iter().position(|f| {
+            // if rescaled then the const becomes an advice
+            f.opkind.is_const() && self.visibility.params.is_public() && !node.opkind.is_rescaled()
+        });
+
+        // TODO: this isn't robust to more complex ops and we should improve this
+        let fixed_flag = match constant_index {
+            Some(1) => {
+                if node.opkind.is_parameterized() {
+                    BaseGateColumns::FA
+                } else {
+                    BaseGateColumns::AF
+                }
+            }
+            Some(0) => BaseGateColumns::FA,
+            _ => BaseGateColumns::AA,
+        };
 
         let config = match base_gates.get(&fixed_flag) {
             Some(config) => {
@@ -402,11 +459,13 @@ impl Model {
                 config.clone()
             }
             None => {
-                let inputs: [VarTensor; 2] = if fixed_flag {
-                    [vars.fixed[0].clone(), vars.advices[1].clone()]
-                } else {
-                    [vars.advices[0].clone(), vars.advices[1].clone()]
+                let inputs: [VarTensor; 2] = match fixed_flag {
+                    BaseGateColumns::FA => [vars.fixed[0].clone(), vars.advices[1].clone()],
+                    BaseGateColumns::AF => [vars.advices[1].clone(), vars.fixed[0].clone()],
+                    BaseGateColumns::AA => [vars.advices[0].clone(), vars.advices[1].clone()],
+                    // BaseGateColumns::FF => [vars.fixed[0].clone(), vars.fixed[1].clone()],
                 };
+
                 // output node
                 let output = &vars.advices[2];
                 let config = Rc::new(RefCell::new(PolyConfig::configure(
@@ -448,7 +507,7 @@ impl Model {
         let input_nodes = node
             .inputs
             .iter()
-            .map(|i| self.nodes.get(&i.node).unwrap())
+            .map(|i| self.nodes.get(&i).unwrap())
             .collect_vec();
 
         let input_idx = input_nodes.iter().map(|f| f.idx).collect_vec();
@@ -463,6 +522,15 @@ impl Model {
         match op {
             LookupOp::PReLU { scale, .. } | LookupOp::Max { scale } | LookupOp::Min { scale } => {
                 op = LookupOp::ReLU { scale };
+            }
+            LookupOp::Mean { scale } => {
+                assert_eq!(input_nodes.len(), 1);
+                op = LookupOp::Div {
+                    denom: crate::circuit::utils::F32(
+                        // we need to scale the denom by the number of elements in the input tensor and the calculated scale diff
+                        (scale * input_nodes[0].out_dims.iter().product::<usize>()) as f32,
+                    ),
+                };
             }
             _ => {}
         }
@@ -539,13 +607,10 @@ impl Model {
                     }
                 }
 
-                let output_nodes = self.model.outputs.iter();
-                info!(
-                    "model outputs are nodes: {:?}",
-                    output_nodes.clone().map(|o| o.node).collect_vec()
-                );
+                let output_nodes = self.outputs.iter();
+                info!("model outputs are nodes: {:?}", output_nodes);
                 let mut outputs = output_nodes
-                    .map(|o| results.get(&o.node).unwrap().clone())
+                    .map(|o| results.get(&o).unwrap().clone())
                     .collect_vec();
 
                 // pack outputs if need be
@@ -646,64 +711,39 @@ impl Model {
         Ok(res)
     }
 
-    /// Get a linear extension of the model (an evaluation order), for example to feed to circuit construction.
-    /// Note that this order is not stable over multiple reloads of the model.  For example, it will freely
-    /// interchange the order of evaluation of fixed parameters.   For example weight could have id 1 on one load,
-    /// and bias id 2, and vice versa on the next load of the same file. The ids are also not stable.
-    pub fn eval_order(&self) -> Result<Vec<usize>, AnyError> {
-        self.model.eval_order()
-    }
-
-    /// Note that this order is not stable.
-    pub fn nodes(&self) -> Vec<OnnxNode<InferenceFact, Box<dyn InferenceOp>>> {
-        self.model.nodes().to_vec()
-    }
-
-    /// Returns the ID of the computational graph's inputs
-    pub fn input_outlets(&self) -> Result<Vec<OutletId>, Box<dyn Error>> {
-        Ok(self.model.input_outlets()?.to_vec())
-    }
-
-    /// Returns the ID of the computational graph's outputs
-    pub fn output_outlets(&self) -> Result<Vec<OutletId>, Box<dyn Error>> {
-        Ok(self.model.output_outlets()?.to_vec())
-    }
-
     /// Returns the number of the computational graph's inputs
     pub fn num_inputs(&self) -> usize {
-        let input_nodes = self.model.inputs.iter();
+        let input_nodes = self.inputs.iter();
         input_nodes.len()
     }
 
     ///  Returns shapes of the computational graph's inputs
     pub fn input_shapes(&self) -> Vec<Vec<usize>> {
-        self.model
-            .inputs
+        self.inputs
             .iter()
-            .map(|o| self.nodes.get(&o.node).unwrap().out_dims.clone())
+            .map(|o| self.nodes.get(&o).unwrap().out_dims.clone())
             .collect_vec()
     }
 
     /// Returns the number of the computational graph's outputs
     pub fn num_outputs(&self) -> usize {
-        let output_nodes = self.model.outputs.iter();
+        let output_nodes = self.outputs.iter();
         output_nodes.len()
     }
 
     /// Returns shapes of the computational graph's outputs
     pub fn output_shapes(&self) -> Vec<Vec<usize>> {
-        self.model
-            .outputs
+        self.outputs
             .iter()
-            .map(|o| self.nodes.get(&o.node).unwrap().out_dims.clone())
+            .map(|o| self.nodes.get(&o).unwrap().out_dims.clone())
             .collect_vec()
     }
 
     /// Returns the fixed point scale of the computational graph's outputs
     pub fn get_output_scales(&self) -> Vec<u32> {
-        let output_nodes = self.model.outputs.iter();
+        let output_nodes = self.outputs.iter();
         output_nodes
-            .map(|o| self.nodes.get(&o.node).unwrap().out_scale)
+            .map(|o| self.nodes.get(&o).unwrap().out_scale)
             .collect_vec()
     }
 
@@ -759,7 +799,7 @@ impl Model {
                     let in_dims = n
                         .inputs
                         .iter()
-                        .map(|i| self.nodes.get(&i.node).unwrap().out_dims.clone());
+                        .map(|i| self.nodes.get(&i).unwrap().out_dims.clone());
                     let layout_shape = p.circuit_shapes(in_dims.collect_vec());
                     maximum_var_len += layout_shape.last().unwrap();
                 }

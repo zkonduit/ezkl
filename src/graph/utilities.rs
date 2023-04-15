@@ -27,7 +27,7 @@ pub fn vector_to_quantized(
 
 /// Converts a scale (log base 2) to a fixed point multiplier.
 pub fn scale_to_multiplier(scale: u32) -> f32 {
-    i32::pow(2, scale) as f32
+    i128::pow(2, scale) as f32
 }
 
 /// Gets the shape of a onnx node's outlets.

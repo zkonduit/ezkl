@@ -147,6 +147,21 @@ jobs:
       - name: Circuit Render
         run: cargo test --release --verbose tests::render_circuit_
 
+  tutorial:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2022-11-03
+          override: true
+          components: rustfmt, clippy
+      - name: Install wasm32-wasi
+        run: rustup target add wasm32-wasi
+      - name: Circuit Render
+        run: cargo test --release --verbose tests::tutorial_
+
   mock-proving-tests:
     runs-on: ubuntu-latest-32-cores
     steps:
@@ -262,7 +277,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
       - name: KZG prove and verify aggr tests
-        run: cargo test --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ -- --include-ignored
+        run: cargo test --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ -- --include-ignored --test-threads 8
 
   examples:
     runs-on: ubuntu-latest-32-cores
@@ -300,3 +315,27 @@ jobs:
         run: cargo test neg_tests::neg_examples_
       - name: Mock proving tests (WASI) (should fail)
         run: cargo test neg_tests_wasi::neg_examples_
+
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.7"
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2022-11-03
+          override: true
+          components: rustfmt, clippy
+      - name: Install wasm32-wasi
+        run: rustup target add wasm32-wasi
+      - name: Install solc
+        run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
+      - name: Setup Virtual Env and Install python dependencies
+        run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
+      - name: Build python ezkl_lib
+        run: source .env/bin/activate; maturin develop --features python-bindings
+      - name: Run pytest
+        run: source .env/bin/activate; pytest

@@ -11,13 +11,8 @@ use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 use crate::pfsys::evm::{aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::{evm_verify, DeploymentCode};
-#[cfg(feature = "render")]
-use crate::pfsys::prepare_model_circuit;
 use crate::pfsys::{create_keys, load_params, load_vk, save_params, Snark};
-use crate::pfsys::{
-    create_proof_circuit, gen_srs, prepare_data, prepare_model_circuit_and_public_input, save_vk,
-    verify_proof_circuit,
-};
+use crate::pfsys::{create_proof_circuit, gen_srs, prepare_data, save_vk, verify_proof_circuit};
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::providers::Middleware;
 use halo2_proofs::dev::VerifyFailure;
@@ -217,7 +212,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             ref output,
         } => {
             let data = prepare_data(data.to_string())?;
-            let circuit = prepare_model_circuit::<Fr>(&data, &cli.args)?;
+            let model = Model::from_arg()?;
+            let circuit = ModelCircuit::<Fr>::new(&data, model)?;
             info!("Rendering circuit");
 
             // Create the area we want to draw on.
@@ -256,8 +252,10 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         }
         Commands::Mock { ref data, model: _ } => {
             let data = prepare_data(data.to_string())?;
-            let (circuit, public_inputs) =
-                prepare_model_circuit_and_public_input::<Fr>(&data, &cli)?;
+            let model = Model::from_arg()?;
+            let circuit = ModelCircuit::<Fr>::new(&data, model)?;
+            let public_inputs = circuit.prepare_public_inputs(&data)?;
+
             info!("Mock proof");
 
             let prover = MockProver::run(cli.args.logrows, &circuit, public_inputs)
@@ -278,7 +276,9 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => {
             let data = prepare_data(data.to_string())?;
 
-            let (_, public_inputs) = prepare_model_circuit_and_public_input::<Fr>(&data, &cli)?;
+            let model = Model::from_arg()?;
+            let circuit = ModelCircuit::<Fr>::new(&data, model)?;
+            let public_inputs = circuit.prepare_public_inputs(&data)?;
             let num_instance = public_inputs.iter().map(|x| x.len()).collect();
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
@@ -333,7 +333,10 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => {
             let data = prepare_data(data.to_string())?;
 
-            let (circuit, public_inputs) = prepare_model_circuit_and_public_input(&data, &cli)?;
+            let model = Model::from_arg()?;
+            let circuit = ModelCircuit::<Fr>::new(&data, model)?;
+            let public_inputs = circuit.prepare_public_inputs(&data)?;
+
             let mut params: ParamsKZG<Bn256> =
                 load_params::<KZGCommitmentScheme<Bn256>>(params_path.to_path_buf())?;
             info!("downsizing params to {} logrows", cli.args.logrows);
