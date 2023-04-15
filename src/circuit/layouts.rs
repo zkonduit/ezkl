@@ -207,7 +207,7 @@ pub fn pairwise<F: FieldExt + TensorType>(
     }
 
     let mut inputs = vec![];
-    for (i, input) in [lhs, rhs].iter().enumerate() {
+    for (i, input) in [lhs.clone(), rhs.clone()].iter().enumerate() {
         let inp = utils::value_muxer(
             &config.inputs[i],
             &{
@@ -244,7 +244,7 @@ pub fn pairwise<F: FieldExt + TensorType>(
 
     *offset += output.len();
 
-    output.reshape(values[0].dims());
+    output.reshape(lhs.dims().clone());
 
     Ok(ValTensor::from(output))
 }
@@ -977,13 +977,6 @@ pub fn prelu<F: FieldExt + TensorType>(
     slopes.reshape(values[0].dims())?;
 
     // relu(x)
-    let relu = nonlinearity(
-        config,
-        region,
-        &[values[0].clone()],
-        LookupOp::ReLU { scale },
-        offset,
-    )?;
     let relu_double_scale = nonlinearity(
         config,
         region,
@@ -1065,17 +1058,22 @@ pub fn max<F: FieldExt + TensorType>(
     let max_int = values[0].get_int_evals()?.into_iter().max().unwrap();
     let max_val = Tensor::new(Some(&vec![Value::known(i128_to_felt::<F>(max_int))]), &[1])?.into();
 
-    // max(x - 1)
     let assigned_max_val: ValTensor<F> = config.inputs[1].assign(region, *offset, &max_val)?.into();
     *offset += 1;
 
-    let sum_constraint: ValTensor<F> =
-        Tensor::new(Some(&vec![Value::known(F::from(1))]), &[1])?.into();
+    // TODO: fix these
+    let unit: ValTensor<F> = Tensor::new(Some(&vec![Value::known(F::from(1))]), &[1])?.into();
+    let x_len: ValTensor<F> = Tensor::new(
+        Some(&vec![Value::known(F::from(values[0].len() as u64))]),
+        &[1],
+    )?
+    .into();
 
+    // max(x - 1)
     let max_minus_1 = pairwise(
         config,
         region,
-        &[assigned_max_val.clone(), sum_constraint.clone()],
+        &[assigned_max_val.clone(), unit.clone()],
         offset,
         BaseOp::Sub,
     )?;
@@ -1090,13 +1088,16 @@ pub fn max<F: FieldExt + TensorType>(
     )?;
     // relu(x - max(x - 1))
     let relu = nonlinearity(config, region, &[diff], LookupOp::ReLU { scale }, offset)?;
+    // 1 - relu(x - max(x - 1))
     let one_minus_relu = pairwise(
         config,
         region,
-        &[sum_constraint.clone(), relu.clone()],
+        &[unit.clone(), relu.clone()],
         offset,
         BaseOp::Sub,
     )?;
+    // constrain relu(x - max(x - 1)) to be 0 or 1
+    // relu(x - max(x - 1))*(1 - relu(x - max(x - 1)) = 0
     let relu_one_minus_relu = pairwise(
         config,
         region,
@@ -1105,38 +1106,76 @@ pub fn max<F: FieldExt + TensorType>(
         BaseOp::Mult,
     )?;
 
-    let mut unit = sum_constraint.clone();
+    println!("relu_one_minus_relu: {:?}", relu_one_minus_relu.show());
+
     let len = relu_one_minus_relu.dims().iter().product();
-    unit.tile(len)?;
 
     // y_i*(1 - y_i) =0 // assert the values are either 0 or 1
     config.inputs[1].assign(region, *offset, &relu_one_minus_relu)?;
-    config.output.assign(region, *offset, &unit)?;
     for i in 0..len {
         let (x, y) = config.output.cartesian_coord(*offset + i);
         config
             .selectors
-            .get(&(BaseOp::Identity, x))
+            .get(&(BaseOp::IsZero, x))
             .unwrap()
             .enable(region, y)?;
     }
-
     *offset += len;
 
-    let max_sum = range_check(config, region, &[relu], offset)?;
-    // relu(x - max(x - 1))
+    // sum(relu(x - max(x - 1)))
+    let sum_relu = sum(config, region, &[relu], offset)?;
+    // 1 - sum(relu(x - max(x - 1)))
+    let one_minus_sum_relu = pairwise(
+        config,
+        region,
+        &[unit.clone(), sum_relu.clone()],
+        offset,
+        BaseOp::Sub,
+    )?;
+    // relu(1 - sum(relu(x - max(x - 1))))
+    let relu_one_minus_sum_relu = nonlinearity(
+        config,
+        region,
+        &[one_minus_sum_relu],
+        LookupOp::ReLU { scale },
+        offset,
+    )?;
+    // sum(relu(x - max(x - 1))) - len(x)
+    let sum_relu_minus_len = pairwise(
+        config,
+        region,
+        &[sum_relu.clone(), x_len],
+        offset,
+        BaseOp::Sub,
+    )?;
+    // relu(sum(relu(x - max(x - 1)) - len(x)))
+    let relu_sum_relu_minus_len = nonlinearity(
+        config,
+        region,
+        &[sum_relu_minus_len],
+        LookupOp::ReLU { scale },
+        offset,
+    )?;
+    // relu(sum(relu(x - max(x - 1)) - len(x))) * relu(1 - sum(relu(x - max(x - 1))))
+    let final_product = pairwise(
+        config,
+        region,
+        &[relu_sum_relu_minus_len, relu_one_minus_sum_relu],
+        offset,
+        BaseOp::Mult,
+    )?;
+    println!("final_product: {:?}", final_product.show());
 
-    config.inputs[1].assign(region, *offset, &max_sum)?;
-    config.output.assign(region, *offset, &sum_constraint)?;
+    // constraining relu(sum(relu(x - max(x - 1)) - len(x))) * relu(1 - sum(relu(x - max(x - 1)))) = 0
+    config.inputs[1].assign(region, *offset, &final_product)?;
 
-    println!("offset {}", offset);
     let (x, y) = config.output.cartesian_coord(*offset);
     config
         .selectors
-        .get(&(BaseOp::Identity, x))
+        .get(&(BaseOp::IsZero, x))
         .unwrap()
         .enable(region, y)?;
-    *offset += 1;
+    *offset += final_product.len();
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
@@ -1169,43 +1208,121 @@ pub fn min<F: FieldExt + TensorType>(
     let min_int = values[0].get_int_evals()?.into_iter().min().unwrap();
     let min_val = Tensor::new(Some(&vec![Value::known(i128_to_felt::<F>(min_int))]), &[1])?.into();
 
-    // min(x) - 1
     let assigned_min_val: ValTensor<F> = config.inputs[1].assign(region, *offset, &min_val)?.into();
     *offset += 1;
 
-    let sum_constraint: ValTensor<F> =
-        Tensor::new(Some(&vec![Value::known(F::from(1))]), &[1])?.into();
+    // TODO: fix these
+    let unit: ValTensor<F> = Tensor::new(Some(&vec![Value::known(F::from(1))]), &[1])?.into();
+    let x_len: ValTensor<F> = Tensor::new(
+        Some(&vec![Value::known(F::from(values[0].len() as u64))]),
+        &[1],
+    )?
+    .into();
 
-    let min_minus_1 = pairwise(
+    // min(x + 1)
+    let min_plus_1 = pairwise(
         config,
         region,
-        &[assigned_min_val.clone(), sum_constraint.clone()],
+        &[assigned_min_val.clone(), unit.clone()],
         offset,
-        BaseOp::Sub,
+        BaseOp::Add,
     )?;
 
-    // min(x - 1) - x
+    // min(x + 1)  - x
     let diff = pairwise(
         config,
         region,
-        &[min_minus_1, values[0].clone()],
+        &[min_plus_1.clone(), values[0].clone()],
         offset,
         BaseOp::Sub,
     )?;
-    // relu(x - min(x - 1))
+    // relu(min(x + 1)  - x)
     let relu = nonlinearity(config, region, &[diff], LookupOp::ReLU { scale }, offset)?;
-    let min_sum = sum(config, region, &[relu], offset)?;
+    let one_minus_relu = pairwise(
+        config,
+        region,
+        &[unit.clone(), relu.clone()],
+        offset,
+        BaseOp::Sub,
+    )?;
+    // constrain relu(min(x + 1)  - x) to be 0 or 1
+    // relu(min(x + 1)  - x)*(1 - relu(min(x + 1)  - x) = 0
+    let relu_one_minus_relu = pairwise(
+        config,
+        region,
+        &[relu.clone(), one_minus_relu.clone()],
+        offset,
+        BaseOp::Mult,
+    )?;
 
-    config.inputs[1].assign(region, *offset, &min_sum)?;
-    config.output.assign(region, *offset, &sum_constraint)?;
+    let len = relu_one_minus_relu.dims().iter().product();
+
+    // y_i*(1 - y_i) =0 // assert the values are either 0 or 1
+    config.inputs[1].assign(region, *offset, &relu_one_minus_relu)?;
+    for i in 0..len {
+        let (x, y) = config.output.cartesian_coord(*offset + i);
+        config
+            .selectors
+            .get(&(BaseOp::IsZero, x))
+            .unwrap()
+            .enable(region, y)?;
+    }
+
+    *offset += len;
+
+    // sum(relu(min(x + 1) - x))
+    let sum_relu = sum(config, region, &[relu], offset)?;
+    // 1 - sum(relu(min(x + 1) - x))
+    let one_minus_sum_relu = pairwise(
+        config,
+        region,
+        &[unit.clone(), sum_relu.clone()],
+        offset,
+        BaseOp::Sub,
+    )?;
+    // relu(1 - sum(relu(min(x + 1) - x)))
+    let relu_one_minus_sum_relu = nonlinearity(
+        config,
+        region,
+        &[one_minus_sum_relu],
+        LookupOp::ReLU { scale },
+        offset,
+    )?;
+    // sum(relu(min(x + 1) - x)) - len(x)
+    let sum_relu_minus_len = pairwise(
+        config,
+        region,
+        &[sum_relu.clone(), x_len],
+        offset,
+        BaseOp::Sub,
+    )?;
+    // relu(sum(relu(min(x + 1) - x)) - len(x)))
+    let relu_sum_relu_minus_len = nonlinearity(
+        config,
+        region,
+        &[sum_relu_minus_len],
+        LookupOp::ReLU { scale },
+        offset,
+    )?;
+    // relu(sum(relu(min(x + 1) - x)) - len(x))) * relu(1 - sum(relu(min(x + 1) - x))))
+    let final_product = pairwise(
+        config,
+        region,
+        &[relu_sum_relu_minus_len, relu_one_minus_sum_relu],
+        offset,
+        BaseOp::Mult,
+    )?;
+
+    // constraining product to 0
+    config.inputs[1].assign(region, *offset, &final_product)?;
 
     let (x, y) = config.output.cartesian_coord(*offset);
     config
         .selectors
-        .get(&(BaseOp::Identity, x))
+        .get(&(BaseOp::IsZero, x))
         .unwrap()
         .enable(region, y)?;
-    *offset += 1;
+    *offset += final_product.len();
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
@@ -1222,7 +1339,6 @@ pub fn min<F: FieldExt + TensorType>(
             assert_eq!(Into::<Tensor<i32>>::into(min_val.get_inner()?), ref_min,)
         }
     };
-
-    println!("assigned min val: {:?}", assigned_min_val.show());
+    println!("assigned_min_val: {:?}", assigned_min_val.show());
     Ok(assigned_min_val)
 }

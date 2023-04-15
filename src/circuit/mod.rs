@@ -69,6 +69,7 @@ pub enum BaseOp {
     Sum,
     Neg,
     Range { tol: i32 },
+    IsZero,
 }
 
 #[allow(missing_docs)]
@@ -111,6 +112,7 @@ impl BaseOp {
             BaseOp::Sub => a - b,
             BaseOp::Mult => a * b,
             BaseOp::Range { .. } => b,
+            BaseOp::IsZero => b,
         }
     }
 
@@ -124,6 +126,7 @@ impl BaseOp {
             BaseOp::Mult => "MULT",
             BaseOp::Sum => "SUM",
             BaseOp::Range { .. } => "RANGE",
+            BaseOp::IsZero => "ISZERO",
         }
     }
     fn query_offset_rng(&self) -> (i32, usize) {
@@ -136,6 +139,7 @@ impl BaseOp {
             BaseOp::Mult => (0, 1),
             BaseOp::Sum => (-1, 2),
             BaseOp::Range { .. } => (0, 1),
+            BaseOp::IsZero => (0, 1),
         }
     }
     fn num_inputs(&self) -> usize {
@@ -148,6 +152,7 @@ impl BaseOp {
             BaseOp::Mult => 2,
             BaseOp::Sum => 1,
             BaseOp::Range { .. } => 1,
+            BaseOp::IsZero => 1,
         }
     }
     fn constraint_idx(&self) -> usize {
@@ -160,6 +165,7 @@ impl BaseOp {
             BaseOp::Mult => 0,
             BaseOp::Range { .. } => 0,
             BaseOp::Sum => 1,
+            BaseOp::IsZero => 0,
         }
     }
 }
@@ -241,9 +247,10 @@ impl LookupOp {
             }
             LookupOp::Erf { scales } => {
                 Ok(tensor::ops::nonlinearities::erffunc(&x, scales.0, scales.1))
-                LookupOp::Max { .. } => Tensor::new(Some(&[*x.iter().max().unwrap()]), &[1]),
+            }
+            LookupOp::Max { .. } => Tensor::new(Some(&[*x.iter().max().unwrap()]), &[1]),
             LookupOp::Min { .. } => Tensor::new(Some(&[*x.iter().min().unwrap()]), &[1]),
-        }
+
             LookupOp::Mean { scale } => Ok(tensor::ops::nonlinearities::mean(&x, *scale)),
         }
     }
@@ -706,6 +713,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             selectors.insert((BaseOp::Mult, i), meta.selector());
             selectors.insert((BaseOp::Identity, i), meta.selector());
             selectors.insert((BaseOp::Range { tol }, i), meta.selector());
+            selectors.insert((BaseOp::IsZero, i), meta.selector());
         }
 
         // Given a range R and a value v, returns the expression
@@ -736,20 +744,28 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                 // Get output expressions for each input channel
                 let (rotation_offset, rng) = base_op.query_offset_rng();
 
-                let expected_output: Tensor<Expression<F>> = output
-                    .query_rng(meta, rotation_offset, idx_offset, rng)
-                    .expect("poly: output query failed");
-
-                let res = base_op.f((qis[0].clone(), qis[1].clone(), expected_output[0].clone()));
-
                 let constraints = match base_op {
                     BaseOp::Range { tol } => {
+                        let expected_output: Tensor<Expression<F>> = output
+                            .query_rng(meta, rotation_offset, idx_offset, rng)
+                            .expect("poly: output query failed");
+
+                        let res = qis[1].clone();
                         vec![range_check(
                             *tol,
                             res - expected_output[base_op.constraint_idx()].clone(),
                         )]
                     }
-                    _ => vec![expected_output[base_op.constraint_idx()].clone() - res],
+                    BaseOp::IsZero => vec![qis[1].clone()],
+                    _ => {
+                        let expected_output: Tensor<Expression<F>> = output
+                            .query_rng(meta, rotation_offset, idx_offset, rng)
+                            .expect("poly: output query failed");
+
+                        let res =
+                            base_op.f((qis[0].clone(), qis[1].clone(), expected_output[0].clone()));
+                        vec![expected_output[base_op.constraint_idx()].clone() - res]
+                    }
                 };
 
                 Constraints::with_selector(selector, constraints)
