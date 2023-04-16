@@ -33,7 +33,7 @@ impl Circuit<Fr> for NLCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         unsafe {
             let advices = (0..2)
-                .map(|_| VarTensor::new_advice(cs, K, LEN, true))
+                .map(|_| VarTensor::new_advice(cs, K, LEN))
                 .collect::<Vec<_>>();
 
             let nl = LookupOp::ReLU { scale: 128 };

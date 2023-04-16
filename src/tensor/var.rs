@@ -50,7 +50,6 @@ impl VarTensor {
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         capacity: usize,
-        equality: bool,
     ) -> Self {
         let base = 2u32;
         let max_rows = base.pow(logrows as u32) as usize - cs.blinding_factors() - 1;
@@ -61,9 +60,7 @@ impl VarTensor {
         let mut advices = vec![];
         for _ in 0..modulo {
             let col = cs.advice_column();
-            if equality {
-                cs.enable_equality(col);
-            }
+            cs.enable_equality(col);
             advices.push(col);
         }
 
@@ -85,7 +82,6 @@ impl VarTensor {
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         capacity: usize,
-        equality: bool,
     ) -> Self {
         let base = 2u32;
         let max_rows = base.pow(logrows as u32) as usize - cs.blinding_factors() - 1;
@@ -96,9 +92,7 @@ impl VarTensor {
         let mut fixed = vec![];
         for _ in 0..modulo {
             let col = cs.fixed_column();
-            if equality {
-                cs.enable_equality(col);
-            }
+            cs.enable_constant(col);
             fixed.push(col);
         }
 
@@ -179,12 +173,34 @@ impl VarTensor {
                 );
                 Ok(c)
             }
-            _ => Err(halo2_proofs::plonk::Error::Synthesis)
+            _ => {
+                error!("VarTensor was not initialized");
+                Err(halo2_proofs::plonk::Error::Synthesis)}
         }
     }
 
+    ///
+    pub fn assign_constant<F: FieldExt + TensorType>(
+        &self, 
+        region: &mut Region<'_, F>,
+        offset: usize,
+        constant: F
+    ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error>{ 
+        let (x, y) = self.cartesian_coord(offset);
+        
+        match &self {
+            VarTensor::Advice { inner: advices, .. } => {
+                region.assign_advice_from_constant(|| "constant", advices[x], y, constant)
+            }
+            VarTensor::Fixed { inner: fixed, ..} => {
+                region.assign_fixed(|| "constant", fixed[x], y, || Value::known(constant))
+            }
+            _ => panic!()
+        
+    }}
+
    
-    /// Assigns specific values (`ValTensor`) to the columns of the inner tensor.
+    /// Assigns specific values [ValTensor] to the columns of the inner tensor.
     pub fn assign<F: FieldExt + TensorType>(
         &self,
         region: &mut Region<'_, F>,
@@ -210,7 +226,10 @@ impl VarTensor {
                         )
                     })
                 }
-                _ => Err(halo2_proofs::plonk::Error::Synthesis),
+                _ => {
+                    error!("Instance is only supported for advice columns");
+                    Err(halo2_proofs::plonk::Error::Synthesis)
+                },
             },
             ValTensor::Value { inner: v, .. } => v.enum_map(|coord, k| {
                 let (x, y) = self.cartesian_coord(offset + coord);
@@ -242,6 +261,9 @@ impl VarTensor {
                             .map(|a| a.evaluate()),
                         _ => unimplemented!(),
                     },
+                    ValType::Constant(v) => {
+                        self.assign_constant(region, offset + coord, v)
+                    }
                 }
             }),
         }
@@ -282,7 +304,10 @@ impl VarTensor {
                             VarTensor::Advice { inner: advices, .. } => {
                                 v.copy_advice(|| "k", region, advices[x], y)
                             }
-                            _ => Err(halo2_proofs::plonk::Error::Synthesis),
+                            _ => {
+                                error!("PrevAssigned is only supported for advice columns");
+                                Err(halo2_proofs::plonk::Error::Synthesis)},
+
                         },
                         ValType::AssignedValue(v) => match &self {
                             VarTensor::Fixed { inner: fixed, .. } => region
@@ -293,6 +318,9 @@ impl VarTensor {
                                 .map(|a| a.evaluate()),
                             _ => unimplemented!(),
                         },
+                        ValType::Constant(v) => {
+                            self.assign_constant(region, offset + coord, v)
+                        }
                     }
                 })?;
                 let mut non_duplicated_res = res.remove_every_n(self.col_size(), offset).unwrap();

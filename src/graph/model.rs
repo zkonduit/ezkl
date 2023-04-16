@@ -2,15 +2,15 @@ use super::node::*;
 use super::vars::*;
 use super::GraphError;
 use crate::circuit::BaseConfig as PolyConfig;
-use crate::circuit::CheckMode;
 use crate::circuit::LookupOp;
 use crate::circuit::Op as PolyOp;
 use crate::circuit::OpKind;
 use crate::commands::RunArgs;
 use crate::commands::{Cli, Commands};
+use crate::fieldutils::i128_to_felt;
 use crate::graph::scale_to_multiplier;
 use crate::tensor::TensorType;
-use crate::tensor::{Tensor, ValTensor, VarTensor};
+use crate::tensor::{Tensor, ValTensor};
 use anyhow::Context;
 use serde::Deserialize;
 use serde::Serialize;
@@ -64,15 +64,6 @@ pub struct ModelConfig<F: FieldExt + TensorType> {
     pub packed_outputs: Vec<Rc<RefCell<PolyConfig<F>>>>,
     /// A wrapper for holding all columns that will be assigned to by the model
     pub vars: ModelVars<F>,
-}
-
-///
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum BaseGateColumns {
-    AF, // Advice and Fixed
-    AA, // Advice and Advice
-    // FF, // Fixed and Fixed
-    FA, // Fixed and Advice
 }
 
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
@@ -278,7 +269,14 @@ impl Model {
     ) -> Result<ModelConfig<F>, Box<dyn Error>> {
         info!("configuring model");
         let mut results = BTreeMap::new();
-        let mut base_gates = BTreeMap::new();
+
+        let mut base_gate = Rc::new(RefCell::new(PolyConfig::configure(
+            meta,
+            vars.advices[0..2].try_into()?,
+            &vars.advices[2],
+            self.run_args.check_mode,
+            self.run_args.tolerance as i32,
+        )));
 
         let non_op_nodes: BTreeMap<&usize, &Node> = self
             .nodes
@@ -301,7 +299,7 @@ impl Model {
         // preserves ordering
         if !poly_ops.is_empty() {
             for (i, node) in poly_ops {
-                let config = self.conf_poly_ops(node, meta, vars, &mut base_gates)?;
+                let config = self.conf_poly_ops(node, &mut base_gate)?;
                 results.insert(*i, config);
 
                 let mut display: String = "Poly nodes: ".to_string();
@@ -319,24 +317,7 @@ impl Model {
 
         if !lookup_ops.is_empty() {
             for (i, node) in lookup_ops {
-                let base_config = match base_gates.get(&BaseGateColumns::AA) {
-                    Some(c) => c.clone(),
-                    // Note: this is a hack to get around the borrow checker. We need to insert a default config into the base_gates map
-                    // For the composite ops update we'll need to make this more sophisticated. Eg. is it a comp op which involved fixed params ? or does it only involve advices ?
-                    None => {
-                        let config = PolyConfig::configure(
-                            meta,
-                            vars.advices[0..2].try_into()?,
-                            &vars.advices[2],
-                            self.run_args.check_mode,
-                            self.run_args.tolerance as i32,
-                        );
-                        base_gates.insert(BaseGateColumns::AA, Rc::new(RefCell::new(config)));
-                        // safe
-                        base_gates.get(&BaseGateColumns::AA).unwrap().clone()
-                    }
-                };
-                let config = self.conf_lookup(base_config.clone(), node, meta, vars)?;
+                let config = self.conf_lookup(base_gate.clone(), node, meta, vars)?;
                 results.insert(*i, config);
             }
         }
@@ -345,10 +326,10 @@ impl Model {
         let mut packed_outputs = vec![];
         if self.run_args.pack_base > 1 {
             info!("packing outputs...");
-            packed_outputs = self.output_ops(meta, vars, &mut base_gates);
+            packed_outputs = self.output_ops(&mut base_gate);
         }
         if self.visibility.output.is_public() {
-            range_checks = self.output_ops(meta, vars, &mut base_gates);
+            range_checks = self.output_ops(&mut base_gate);
         };
 
         Ok(ModelConfig {
@@ -362,28 +343,12 @@ impl Model {
 
     fn output_ops<F: FieldExt + TensorType>(
         &self,
-        meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars<F>,
-        base_gates: &mut BTreeMap<BaseGateColumns, Rc<RefCell<PolyConfig<F>>>>,
+        base_gate: &mut Rc<RefCell<PolyConfig<F>>>,
     ) -> Vec<Rc<RefCell<PolyConfig<F>>>> {
         let mut configs = vec![];
 
         for _ in self.output_shapes() {
-            let config = match base_gates.get(&BaseGateColumns::AA) {
-                Some(config) => config.clone(),
-                None => {
-                    let config = Rc::new(RefCell::new(PolyConfig::<F>::configure(
-                        meta,
-                        &[vars.advices[0].clone(), vars.advices[1].clone()],
-                        &vars.advices[2],
-                        CheckMode::SAFE,
-                        self.run_args.tolerance.try_into().unwrap(),
-                    )));
-                    base_gates.insert(BaseGateColumns::AA, config.clone());
-                    config
-                }
-            };
-            configs.push(config);
+            configs.push(base_gate.clone());
         }
 
         configs
@@ -423,9 +388,7 @@ impl Model {
     fn conf_poly_ops<F: FieldExt + TensorType>(
         &self,
         node: &Node,
-        meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars<F>,
-        base_gates: &mut BTreeMap<BaseGateColumns, Rc<RefCell<PolyConfig<F>>>>,
+        base_gate: &mut Rc<RefCell<PolyConfig<F>>>,
     ) -> Result<NodeConfig<F>, Box<dyn Error>> {
         let input_nodes = node
             .inputs
@@ -435,53 +398,8 @@ impl Model {
 
         let input_idx = input_nodes.iter().map(|f| f.idx).collect_vec();
 
-        let constant_index = input_nodes.iter().position(|f| {
-            // if rescaled then the const becomes an advice
-            f.opkind.is_const() && self.visibility.params.is_public() && !node.opkind.is_rescaled()
-        });
-
-        // TODO: this isn't robust to more complex ops and we should improve this
-        let fixed_flag = match constant_index {
-            Some(1) => {
-                if node.opkind.is_parameterized() {
-                    BaseGateColumns::FA
-                } else {
-                    BaseGateColumns::AF
-                }
-            }
-            Some(0) => BaseGateColumns::FA,
-            _ => BaseGateColumns::AA,
-        };
-
-        let config = match base_gates.get(&fixed_flag) {
-            Some(config) => {
-                trace!("reusing base gate config");
-                config.clone()
-            }
-            None => {
-                let inputs: [VarTensor; 2] = match fixed_flag {
-                    BaseGateColumns::FA => [vars.fixed[0].clone(), vars.advices[1].clone()],
-                    BaseGateColumns::AF => [vars.advices[1].clone(), vars.fixed[0].clone()],
-                    BaseGateColumns::AA => [vars.advices[0].clone(), vars.advices[1].clone()],
-                    // BaseGateColumns::FF => [vars.fixed[0].clone(), vars.fixed[1].clone()],
-                };
-
-                // output node
-                let output = &vars.advices[2];
-                let config = Rc::new(RefCell::new(PolyConfig::configure(
-                    meta,
-                    inputs.into_iter().collect_vec()[..].try_into()?,
-                    output,
-                    CheckMode::SAFE,
-                    self.run_args.tolerance.try_into().unwrap(),
-                )));
-                base_gates.insert(fixed_flag, config.clone());
-                config
-            }
-        };
-
         let config = NodeConfig::Op {
-            config,
+            config: base_gate.clone(),
             inputs: input_idx,
             op: node.opkind.clone(),
         };
@@ -520,7 +438,7 @@ impl Model {
         };
 
         match op {
-            LookupOp::PReLU { scale, .. } => {
+            LookupOp::PReLU { scale, .. } | LookupOp::Max { scale } | LookupOp::Min { scale } => {
                 op = LookupOp::ReLU { scale };
             }
             LookupOp::Mean { scale } => {
@@ -608,7 +526,10 @@ impl Model {
                 }
 
                 let output_nodes = self.outputs.iter();
-                info!("model outputs are nodes: {:?}", output_nodes);
+                info!(
+                    "model outputs are nodes: {:?}",
+                    output_nodes.clone().collect_vec()
+                );
                 let mut outputs = output_nodes
                     .map(|o| results.get(&o).unwrap().clone())
                     .collect_vec();
@@ -691,7 +612,19 @@ impl Model {
                                     .clone()
                                     .context("Tensor<i128> should already be loaded")
                                     .unwrap();
-                                <Tensor<i128> as Into<Tensor<Value<F>>>>::into(val).into()
+                                if self.visibility.params.is_public() {
+                                    val.map(|x| {
+                                        crate::tensor::ValType::Constant(i128_to_felt::<F>(x))
+                                    })
+                                    .into()
+                                } else {
+                                    val.map(|x| {
+                                        crate::tensor::ValType::Value(Value::known(
+                                            i128_to_felt::<F>(x),
+                                        ))
+                                    })
+                                    .into()
+                                }
                             }
                             _ => inputs.get(i).unwrap().clone(),
                         }

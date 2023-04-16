@@ -31,20 +31,16 @@ pub fn dot<F: FieldExt + TensorType>(
     let mut inputs = vec![];
     let mut assigned_len = 0;
     for (i, input) in values.iter().enumerate() {
-        let inp = utils::value_muxer(
-            &config.inputs[i],
-            &{
-                let (res, len) = config.inputs[i].assign_with_duplication(
-                    region,
-                    *offset,
-                    input,
-                    &config.check_mode,
-                )?;
-                assigned_len = len;
-                res.map(|e| e.value_field().evaluate())
-            },
-            input,
-        );
+        let inp = {
+            let (res, len) = config.inputs[i].assign_with_duplication(
+                region,
+                *offset,
+                input,
+                &config.check_mode,
+            )?;
+            assigned_len = len;
+            res.map(|e| e.value_field().evaluate())
+        };
         inputs.push(inp);
     }
 
@@ -109,20 +105,16 @@ pub fn sum<F: FieldExt + TensorType>(
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let assigned_len: usize;
-    let input = utils::value_muxer(
-        &config.inputs[1],
-        &{
-            let (res, len) = config.inputs[1].assign_with_duplication(
-                region,
-                *offset,
-                &values[0],
-                &config.check_mode,
-            )?;
-            assigned_len = len;
-            res.map(|e| e.value_field().evaluate())
-        },
-        &values[0],
-    );
+    let input = {
+        let (res, len) = config.inputs[1].assign_with_duplication(
+            region,
+            *offset,
+            &values[0],
+            &config.check_mode,
+        )?;
+        assigned_len = len;
+        res.map(|e| e.value_field().evaluate())
+    };
 
     // Now we can assign the dot product
     let accumulated_sum = accumulated::sum(&input).expect("accum poly: sum op failed");
@@ -207,15 +199,12 @@ pub fn pairwise<F: FieldExt + TensorType>(
     }
 
     let mut inputs = vec![];
-    for (i, input) in [lhs, rhs].iter().enumerate() {
-        let inp = utils::value_muxer(
-            &config.inputs[i],
-            &{
-                let res = config.inputs[i].assign(region, *offset, input)?;
-                res.map(|e| e.value_field().evaluate())
-            },
-            input,
-        );
+
+    for (i, input) in [lhs.clone(), rhs.clone()].iter().enumerate() {
+        let inp = {
+            let res = config.inputs[i].assign(region, *offset, input)?;
+            res.map(|e| e.value_field().evaluate())
+        };
         inputs.push(inp);
     }
 
@@ -244,7 +233,7 @@ pub fn pairwise<F: FieldExt + TensorType>(
 
     *offset += output.len();
 
-    output.reshape(values[0].dims());
+    output.reshape(lhs.dims().clone());
 
     Ok(ValTensor::from(output))
 }
@@ -318,20 +307,16 @@ pub fn matmul<F: FieldExt + TensorType>(
         let mut inputs = vec![];
         let mut assigned_len = 0;
         for (i, elem) in vec![a.clone(), b.clone()].iter().enumerate() {
-            let inp = utils::value_muxer(
-                &config.inputs[i],
-                &{
-                    let (res, len) = config.inputs[i].assign_with_duplication(
-                        region,
-                        *offset,
-                        elem,
-                        &config.check_mode,
-                    )?;
-                    assigned_len = len;
-                    res.map(|e| e.value_field().evaluate())
-                },
-                elem,
-            );
+            let inp = {
+                let (res, len) = config.inputs[i].assign_with_duplication(
+                    region,
+                    *offset,
+                    elem,
+                    &config.check_mode,
+                )?;
+                assigned_len = len;
+                res.map(|e| e.value_field().evaluate())
+            };
             inputs.push(inp);
         }
 
@@ -489,14 +474,10 @@ pub fn neg<F: FieldExt + TensorType>(
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let input = utils::value_muxer(
-        &config.inputs[1],
-        &{
-            let res = config.inputs[1].assign(region, *offset, &values[0])?;
-            res.map(|e| e.value_field().evaluate())
-        },
-        &values[0],
-    );
+    let input = {
+        let res = config.inputs[1].assign(region, *offset, &values[0])?;
+        res.map(|e| e.value_field().evaluate())
+    };
 
     let neg = input.map(|e| -e);
 
@@ -976,7 +957,6 @@ pub fn prelu<F: FieldExt + TensorType>(
     slopes.repeat_rows(diff)?;
     slopes.reshape(values[0].dims())?;
 
-    // relu(x)
     let relu = nonlinearity(
         config,
         region,
@@ -989,7 +969,6 @@ pub fn prelu<F: FieldExt + TensorType>(
     // relu(-x)
     let relu_neg_x = nonlinearity(config, region, &[neg_x], LookupOp::ReLU { scale }, offset)?;
     // relu(-x) * slope
-
     let scaled_relu_neg_x = pairwise(config, region, &[relu_neg_x, slopes], offset, BaseOp::Mult)?;
 
     let prelu = pairwise(
@@ -1045,4 +1024,219 @@ pub fn mean<F: FieldExt + TensorType>(
         denom: utils::F32((scale * x.len()) as f32),
     };
     nonlinearity(config, region, &[sum_x], nl, offset)
+}
+
+/// max layout
+pub fn max<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    region: &mut Region<F>,
+    values: &[ValTensor<F>; 1],
+    scale: usize,
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // this is safe because we later constrain it
+    let max_int = values[0].get_int_evals()?.into_iter().max();
+    let max_val: ValTensor<F> = match max_int {
+        None => Tensor::new(Some(&vec![Value::<F>::unknown()]), &[1])?.into(),
+        Some(i) => Tensor::new(Some(&vec![Value::known(i128_to_felt::<F>(i))]), &[1])?.into(),
+    };
+
+    let assigned_max_val: ValTensor<F> = config.inputs[1].assign(region, *offset, &max_val)?.into();
+    *offset += 1;
+
+    let unit: ValTensor<F> = Tensor::from(
+        vec![config.inputs[1].assign_constant(region, *offset, F::from(1))?].into_iter(),
+    )
+    .into();
+    *offset += 1;
+
+    // max(x - 1)
+    let max_minus_1 = pairwise(
+        config,
+        region,
+        &[assigned_max_val.clone(), unit.clone()],
+        offset,
+        BaseOp::Sub,
+    )?;
+
+    // x - max(x - 1)
+    let diff = pairwise(
+        config,
+        region,
+        &[values[0].clone(), max_minus_1.clone()],
+        offset,
+        BaseOp::Sub,
+    )?;
+    // relu(x - max(x - 1))
+    let relu = nonlinearity(config, region, &[diff], LookupOp::ReLU { scale }, offset)?;
+
+    let len = relu.dims().iter().product();
+
+    // y_i*(1 - y_i) =0 // assert the values are either 0 or 1
+    config.inputs[1].assign(region, *offset, &relu)?;
+    for i in 0..len {
+        let (x, y) = config.output.cartesian_coord(*offset + i);
+        config
+            .selectors
+            .get(&(BaseOp::IsBoolean, x))
+            .unwrap()
+            .enable(region, y)?;
+    }
+    *offset += len;
+
+    // sum(relu(x - max(x - 1)))
+    let sum_relu = sum(config, region, &[relu], offset)?;
+    // 1 - sum(relu(x - max(x - 1)))
+    let one_minus_sum_relu = pairwise(
+        config,
+        region,
+        &[unit.clone(), sum_relu.clone()],
+        offset,
+        BaseOp::Sub,
+    )?;
+    // relu(1 - sum(relu(x - max(x - 1))))
+    let relu_one_minus_sum_relu = nonlinearity(
+        config,
+        region,
+        &[one_minus_sum_relu],
+        LookupOp::ReLU { scale },
+        offset,
+    )?;
+
+    // constraining relu(sum(relu(x - max(x - 1)) - len(x))) = 0
+    config.inputs[1].assign(region, *offset, &relu_one_minus_sum_relu)?;
+
+    let (x, y) = config.output.cartesian_coord(*offset);
+    config
+        .selectors
+        .get(&(BaseOp::IsZero, x))
+        .unwrap()
+        .enable(region, y)?;
+    *offset += relu_one_minus_sum_relu.len();
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(assigned_max_val.get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let ref_max: Tensor<i32> = Tensor::new(
+                Some(&[values[0].get_int_evals()?.into_iter().max().unwrap() as i32]),
+                &[1],
+            )?;
+
+            assert_eq!(Into::<Tensor<i32>>::into(max_val.get_inner()?), ref_max,)
+        }
+    };
+    Ok(assigned_max_val)
+}
+
+/// min layout
+pub fn min<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    region: &mut Region<F>,
+    values: &[ValTensor<F>; 1],
+    scale: usize,
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // this is safe because we later constrain it
+
+    let min_int = values[0].get_int_evals()?.into_iter().min();
+    let min_val: ValTensor<F> = match min_int {
+        None => Tensor::new(Some(&vec![Value::<F>::unknown()]), &[1])?.into(),
+        Some(i) => Tensor::new(Some(&vec![Value::known(i128_to_felt::<F>(i))]), &[1])?.into(),
+    };
+
+    let assigned_min_val: ValTensor<F> = config.inputs[1].assign(region, *offset, &min_val)?.into();
+    *offset += 1;
+
+    let unit: ValTensor<F> = Tensor::from(
+        vec![config.inputs[1].assign_constant(region, *offset, F::from(1))?].into_iter(),
+    )
+    .into();
+    *offset += 1;
+
+    // min(x + 1)
+    let min_plus_1 = pairwise(
+        config,
+        region,
+        &[assigned_min_val.clone(), unit.clone()],
+        offset,
+        BaseOp::Add,
+    )?;
+
+    // min(x + 1)  - x
+    let diff = pairwise(
+        config,
+        region,
+        &[min_plus_1.clone(), values[0].clone()],
+        offset,
+        BaseOp::Sub,
+    )?;
+
+    // relu(min(x + 1)  - x)
+    let relu = nonlinearity(config, region, &[diff], LookupOp::ReLU { scale }, offset)?;
+
+    let len = relu.dims().iter().product();
+
+    // y_i*(1 - y_i) =0 // assert the values are either 0 or 1
+    config.inputs[1].assign(region, *offset, &relu)?;
+    for i in 0..len {
+        let (x, y) = config.output.cartesian_coord(*offset + i);
+        config
+            .selectors
+            .get(&(BaseOp::IsBoolean, x))
+            .unwrap()
+            .enable(region, y)?;
+    }
+
+    *offset += len;
+
+    // sum(relu(min(x + 1) - x))
+    let sum_relu = sum(config, region, &[relu], offset)?;
+    // 1 - sum(relu(min(x + 1) - x))
+    let one_minus_sum_relu = pairwise(
+        config,
+        region,
+        &[unit.into(), sum_relu.clone()],
+        offset,
+        BaseOp::Sub,
+    )?;
+    // relu(1 - sum(relu(min(x + 1) - x)))
+    let relu_one_minus_sum_relu = nonlinearity(
+        config,
+        region,
+        &[one_minus_sum_relu],
+        LookupOp::ReLU { scale },
+        offset,
+    )?;
+
+    // constraining product to 0
+    config.inputs[1].assign(region, *offset, &relu_one_minus_sum_relu)?;
+
+    let (x, y) = config.output.cartesian_coord(*offset);
+    config
+        .selectors
+        .get(&(BaseOp::IsZero, x))
+        .unwrap()
+        .enable(region, y)?;
+    *offset += relu_one_minus_sum_relu.len();
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(assigned_min_val.get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let ref_min: Tensor<i32> = Tensor::new(
+                Some(&[values[0].get_int_evals()?.into_iter().min().unwrap() as i32]),
+                &[1],
+            )?;
+
+            assert_eq!(Into::<Tensor<i32>>::into(min_val.get_inner()?), ref_min,)
+        }
+    };
+    Ok(assigned_min_val.into())
 }

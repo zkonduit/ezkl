@@ -69,6 +69,8 @@ pub enum BaseOp {
     Sum,
     Neg,
     Range { tol: i32 },
+    IsZero,
+    IsBoolean,
 }
 
 #[allow(missing_docs)]
@@ -111,6 +113,8 @@ impl BaseOp {
             BaseOp::Sub => a - b,
             BaseOp::Mult => a * b,
             BaseOp::Range { .. } => b,
+            BaseOp::IsZero => b,
+            BaseOp::IsBoolean => b,
         }
     }
 
@@ -124,6 +128,8 @@ impl BaseOp {
             BaseOp::Mult => "MULT",
             BaseOp::Sum => "SUM",
             BaseOp::Range { .. } => "RANGE",
+            BaseOp::IsZero => "ISZERO",
+            BaseOp::IsBoolean => "ISBOOLEAN",
         }
     }
     fn query_offset_rng(&self) -> (i32, usize) {
@@ -136,6 +142,8 @@ impl BaseOp {
             BaseOp::Mult => (0, 1),
             BaseOp::Sum => (-1, 2),
             BaseOp::Range { .. } => (0, 1),
+            BaseOp::IsZero => (0, 1),
+            BaseOp::IsBoolean => (0, 1),
         }
     }
     fn num_inputs(&self) -> usize {
@@ -148,6 +156,8 @@ impl BaseOp {
             BaseOp::Mult => 2,
             BaseOp::Sum => 1,
             BaseOp::Range { .. } => 1,
+            BaseOp::IsZero => 1,
+            BaseOp::IsBoolean => 1,
         }
     }
     fn constraint_idx(&self) -> usize {
@@ -160,6 +170,8 @@ impl BaseOp {
             BaseOp::Mult => 0,
             BaseOp::Range { .. } => 0,
             BaseOp::Sum => 1,
+            BaseOp::IsZero => 0,
+            BaseOp::IsBoolean => 0,
         }
     }
 }
@@ -203,6 +215,12 @@ pub enum LookupOp {
     Mean {
         scale: usize,
     },
+    Max {
+        scale: usize,
+    },
+    Min {
+        scale: usize,
+    },
 }
 
 impl LookupOp {
@@ -236,12 +254,17 @@ impl LookupOp {
             LookupOp::Erf { scales } => {
                 Ok(tensor::ops::nonlinearities::erffunc(&x, scales.0, scales.1))
             }
+            LookupOp::Max { .. } => Tensor::new(Some(&[*x.iter().max().unwrap()]), &[1]),
+            LookupOp::Min { .. } => Tensor::new(Some(&[*x.iter().min().unwrap()]), &[1]),
+
             LookupOp::Mean { scale } => Ok(tensor::ops::nonlinearities::mean(&x, *scale)),
         }
     }
 
     fn as_str(&self) -> &'static str {
         match self {
+            LookupOp::Min { .. } => "MIN",
+            LookupOp::Max { .. } => "MAX",
             LookupOp::Div { .. } => "DIV",
             LookupOp::ReLU { .. } => "RELU",
             LookupOp::LeakyReLU { .. } => "LEAKY_RELU",
@@ -549,6 +572,8 @@ impl OpKind {
     /// Produce an OpKind from a `&str` onnx name  
     pub fn new(name: &str) -> Self {
         match name {
+            "Reduce<Min>" => OpKind::Lookup(LookupOp::Min { scale: 1 }),
+            "Reduce<Max>" => OpKind::Lookup(LookupOp::Max { scale: 1 }),
             "Clip" => OpKind::Lookup(LookupOp::ReLU { scale: 1 }),
             "Prelu" => OpKind::Lookup(LookupOp::PReLU {
                 scale: 1,
@@ -694,6 +719,8 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             selectors.insert((BaseOp::Mult, i), meta.selector());
             selectors.insert((BaseOp::Identity, i), meta.selector());
             selectors.insert((BaseOp::Range { tol }, i), meta.selector());
+            selectors.insert((BaseOp::IsZero, i), meta.selector());
+            selectors.insert((BaseOp::IsBoolean, i), meta.selector());
         }
 
         // Given a range R and a value v, returns the expression
@@ -724,25 +751,39 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                 // Get output expressions for each input channel
                 let (rotation_offset, rng) = base_op.query_offset_rng();
 
-                let expected_output: Tensor<Expression<F>> = output
-                    .query_rng(meta, rotation_offset, idx_offset, rng)
-                    .expect("poly: output query failed");
-
-                let res = base_op.f((qis[0].clone(), qis[1].clone(), expected_output[0].clone()));
-
                 let constraints = match base_op {
                     BaseOp::Range { tol } => {
+                        let expected_output: Tensor<Expression<F>> = output
+                            .query_rng(meta, rotation_offset, idx_offset, rng)
+                            .expect("poly: output query failed");
+
+                        let res = qis[1].clone();
                         vec![range_check(
                             *tol,
                             res - expected_output[base_op.constraint_idx()].clone(),
                         )]
                     }
-                    _ => vec![expected_output[base_op.constraint_idx()].clone() - res],
+                    BaseOp::IsBoolean => {
+                        vec![(qis[1].clone()) * (qis[1].clone() - Expression::Constant(F::from(1)))]
+                    }
+                    BaseOp::IsZero => vec![qis[1].clone()],
+                    _ => {
+                        let expected_output: Tensor<Expression<F>> = output
+                            .query_rng(meta, rotation_offset, idx_offset, rng)
+                            .expect("poly: output query failed");
+
+                        let res =
+                            base_op.f((qis[0].clone(), qis[1].clone(), expected_output[0].clone()));
+                        vec![expected_output[base_op.constraint_idx()].clone() - res]
+                    }
                 };
 
                 Constraints::with_selector(selector, constraints)
             });
         }
+
+        let col = meta.fixed_column();
+        meta.enable_constant(col);
 
         Self {
             selectors,
@@ -850,6 +891,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         op: OpKind,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         let mut cp_values = vec![];
+
         for v in values.iter() {
             if let ValTensor::Instance { .. } = v {
                 cp_values.push(layouts::identity(self, region, &[v.clone()], offset)?);
@@ -945,6 +987,20 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                     offset,
                 )?),
                 LookupOp::Mean { scale, .. } => Some(layouts::mean(
+                    self,
+                    region,
+                    cp_values[..].try_into()?,
+                    scale,
+                    offset,
+                )?),
+                LookupOp::Max { scale, .. } => Some(layouts::max(
+                    self,
+                    region,
+                    cp_values[..].try_into()?,
+                    scale,
+                    offset,
+                )?),
+                LookupOp::Min { scale, .. } => Some(layouts::min(
                     self,
                     region,
                     cp_values[..].try_into()?,

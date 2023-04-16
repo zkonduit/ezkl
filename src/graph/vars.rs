@@ -103,17 +103,17 @@ impl<F: FieldExt + TensorType> ModelVars<F> {
         visibility: VarVisibility,
     ) -> Self {
         let advices = (0..3)
-            .map(|_| VarTensor::new_advice(cs, logrows, var_len, true))
+            .map(|_| VarTensor::new_advice(cs, logrows, var_len))
             .collect_vec();
         let mut fixed = vec![];
         if visibility.params == Visibility::Public {
             fixed = (0..1)
-                .map(|_| VarTensor::new_fixed(cs, logrows, var_len, true))
+                .map(|_| VarTensor::new_fixed(cs, logrows, var_len))
                 .collect_vec();
         }
         // will be empty if instances dims has len 0
         let instances = (0..instance_dims.len())
-            .map(|i| ValTensor::new_instance(cs, instance_dims[i].clone(), true))
+            .map(|i| ValTensor::new_instance(cs, instance_dims[i].clone()))
             .collect_vec();
         ModelVars {
             advices,
