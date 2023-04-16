@@ -1067,33 +1067,16 @@ pub fn max<F: FieldExt + TensorType>(
     )?;
     // relu(x - max(x - 1))
     let relu = nonlinearity(config, region, &[diff], LookupOp::ReLU { scale }, offset)?;
-    // 1 - relu(x - max(x - 1))
-    let one_minus_relu = pairwise(
-        config,
-        region,
-        &[unit.clone(), relu.clone()],
-        offset,
-        BaseOp::Sub,
-    )?;
-    // constrain relu(x - max(x - 1)) to be 0 or 1
-    // relu(x - max(x - 1))*(1 - relu(x - max(x - 1)) = 0
-    let relu_one_minus_relu = pairwise(
-        config,
-        region,
-        &[relu.clone(), one_minus_relu.clone()],
-        offset,
-        BaseOp::Mult,
-    )?;
 
-    let len = relu_one_minus_relu.dims().iter().product();
+    let len = relu.dims().iter().product();
 
     // y_i*(1 - y_i) =0 // assert the values are either 0 or 1
-    config.inputs[1].assign(region, *offset, &relu_one_minus_relu)?;
+    config.inputs[1].assign(region, *offset, &relu)?;
     for i in 0..len {
         let (x, y) = config.output.cartesian_coord(*offset + i);
         config
             .selectors
-            .get(&(BaseOp::IsZero, x))
+            .get(&(BaseOp::IsBoolean, x))
             .unwrap()
             .enable(region, y)?;
     }
@@ -1192,32 +1175,16 @@ pub fn min<F: FieldExt + TensorType>(
 
     // relu(min(x + 1)  - x)
     let relu = nonlinearity(config, region, &[diff], LookupOp::ReLU { scale }, offset)?;
-    let one_minus_relu = pairwise(
-        config,
-        region,
-        &[unit.clone(), relu.clone()],
-        offset,
-        BaseOp::Sub,
-    )?;
-    // constrain relu(min(x + 1)  - x) to be 0 or 1
-    // relu(min(x + 1)  - x)*(1 - relu(min(x + 1)  - x) = 0
-    let relu_one_minus_relu = pairwise(
-        config,
-        region,
-        &[relu.clone(), one_minus_relu.clone()],
-        offset,
-        BaseOp::Mult,
-    )?;
 
-    let len = relu_one_minus_relu.dims().iter().product();
+    let len = relu.dims().iter().product();
 
     // y_i*(1 - y_i) =0 // assert the values are either 0 or 1
-    config.inputs[1].assign(region, *offset, &relu_one_minus_relu)?;
+    config.inputs[1].assign(region, *offset, &relu)?;
     for i in 0..len {
         let (x, y) = config.output.cartesian_coord(*offset + i);
         config
             .selectors
-            .get(&(BaseOp::IsZero, x))
+            .get(&(BaseOp::IsBoolean, x))
             .unwrap()
             .enable(region, y)?;
     }

@@ -70,6 +70,7 @@ pub enum BaseOp {
     Neg,
     Range { tol: i32 },
     IsZero,
+    IsBoolean,
 }
 
 #[allow(missing_docs)]
@@ -113,6 +114,7 @@ impl BaseOp {
             BaseOp::Mult => a * b,
             BaseOp::Range { .. } => b,
             BaseOp::IsZero => b,
+            BaseOp::IsBoolean => b,
         }
     }
 
@@ -127,6 +129,7 @@ impl BaseOp {
             BaseOp::Sum => "SUM",
             BaseOp::Range { .. } => "RANGE",
             BaseOp::IsZero => "ISZERO",
+            BaseOp::IsBoolean => "ISBOOLEAN",
         }
     }
     fn query_offset_rng(&self) -> (i32, usize) {
@@ -140,6 +143,7 @@ impl BaseOp {
             BaseOp::Sum => (-1, 2),
             BaseOp::Range { .. } => (0, 1),
             BaseOp::IsZero => (0, 1),
+            BaseOp::IsBoolean => (0, 1),
         }
     }
     fn num_inputs(&self) -> usize {
@@ -153,6 +157,7 @@ impl BaseOp {
             BaseOp::Sum => 1,
             BaseOp::Range { .. } => 1,
             BaseOp::IsZero => 1,
+            BaseOp::IsBoolean => 1,
         }
     }
     fn constraint_idx(&self) -> usize {
@@ -166,6 +171,7 @@ impl BaseOp {
             BaseOp::Range { .. } => 0,
             BaseOp::Sum => 1,
             BaseOp::IsZero => 0,
+            BaseOp::IsBoolean => 0,
         }
     }
 }
@@ -714,6 +720,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             selectors.insert((BaseOp::Identity, i), meta.selector());
             selectors.insert((BaseOp::Range { tol }, i), meta.selector());
             selectors.insert((BaseOp::IsZero, i), meta.selector());
+            selectors.insert((BaseOp::IsBoolean, i), meta.selector());
         }
 
         // Given a range R and a value v, returns the expression
@@ -755,6 +762,9 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                             *tol,
                             res - expected_output[base_op.constraint_idx()].clone(),
                         )]
+                    }
+                    BaseOp::IsBoolean => {
+                        vec![(qis[1].clone()) * (qis[1].clone() - Expression::Constant(F::from(1)))]
                     }
                     BaseOp::IsZero => vec![qis[1].clone()],
                     _ => {
