@@ -1054,8 +1054,11 @@ pub fn max<F: FieldExt + TensorType>(
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // this is safe because we later constrain it
-    let max_int = values[0].get_int_evals()?.into_iter().max().unwrap();
-    let max_val = Tensor::new(Some(&vec![Value::known(i128_to_felt::<F>(max_int))]), &[1])?.into();
+    let max_int = values[0].get_int_evals()?.into_iter().max();
+    let max_val: ValTensor<F> = match max_int {
+        None => Tensor::new(Some(&vec![Value::<F>::unknown()]), &[1])?.into(),
+        Some(i) => Tensor::new(Some(&vec![Value::known(i128_to_felt::<F>(i))]), &[1])?.into(),
+    };
 
     let assigned_max_val: ValTensor<F> = config.inputs[1].assign(region, *offset, &max_val)?.into();
     *offset += 1;
@@ -1204,8 +1207,11 @@ pub fn min<F: FieldExt + TensorType>(
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // this is safe because we later constrain it
-    let min_int = values[0].get_int_evals()?.into_iter().min().unwrap();
-    let min_val = Tensor::new(Some(&vec![Value::known(i128_to_felt::<F>(min_int))]), &[1])?.into();
+    let min_int = values[0].get_int_evals()?.into_iter().min();
+    let min_val: ValTensor<F> = match min_int {
+        None => Tensor::new(Some(&vec![Value::<F>::unknown()]), &[1])?.into(),
+        Some(i) => Tensor::new(Some(&vec![Value::known(i128_to_felt::<F>(i))]), &[1])?.into(),
+    };
 
     let assigned_min_val: ValTensor<F> = config.inputs[1].assign(region, *offset, &min_val)?.into();
     *offset += 1;
