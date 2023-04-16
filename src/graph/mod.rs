@@ -221,6 +221,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
         let var_len = model.total_var_len();
 
         info!("total var len: {:?}", var_len);
+        info!("instance_shapes: {:?}", instance_shapes);
 
         let mut vars = ModelVars::new(
             cs,

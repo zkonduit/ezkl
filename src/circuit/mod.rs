@@ -772,6 +772,9 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             });
         }
 
+        let col = meta.fixed_column();
+        meta.enable_constant(col);
+
         Self {
             selectors,
             lookup_selectors: BTreeMap::new(),
@@ -878,6 +881,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         op: OpKind,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         let mut cp_values = vec![];
+
         for v in values.iter() {
             if let ValTensor::Instance { .. } = v {
                 cp_values.push(layouts::identity(self, region, &[v.clone()], offset)?);
