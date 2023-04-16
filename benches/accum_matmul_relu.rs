@@ -41,9 +41,9 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len, true);
-        let b = VarTensor::new_advice(cs, K, len, true);
-        let output = VarTensor::new_advice(cs, K, len, true);
+        let a = VarTensor::new_advice(cs, K, len);
+        let b = VarTensor::new_advice(cs, K, len);
+        let output = VarTensor::new_advice(cs, K, len);
 
         let mut base_config =
             BaseConfig::configure(cs, &[a, b.clone()], &output, CheckMode::UNSAFE, 0);

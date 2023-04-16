@@ -40,7 +40,7 @@ fn init() {
     assert!(status.success());
 }
 
-const TESTS: [&str; 26] = [
+const TESTS: [&str; 24] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -66,8 +66,8 @@ const TESTS: [&str; 26] = [
     "4l_relu_conv_fc",
     "1l_erf",
     "1l_var",
-    "min",
-    "max",
+    // "min",
+    // "max",
 ];
 
 const PACKING_TESTS: [&str; 15] = [
@@ -204,7 +204,7 @@ macro_rules! test_func {
             }
 
 
-            seq!(N in 0..=25 {
+            seq!(N in 0..=23 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {

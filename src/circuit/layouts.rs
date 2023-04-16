@@ -31,20 +31,16 @@ pub fn dot<F: FieldExt + TensorType>(
     let mut inputs = vec![];
     let mut assigned_len = 0;
     for (i, input) in values.iter().enumerate() {
-        let inp = utils::value_muxer(
-            &config.inputs[i],
-            &{
-                let (res, len) = config.inputs[i].assign_with_duplication(
-                    region,
-                    *offset,
-                    input,
-                    &config.check_mode,
-                )?;
-                assigned_len = len;
-                res.map(|e| e.value_field().evaluate())
-            },
-            input,
-        );
+        let inp = {
+            let (res, len) = config.inputs[i].assign_with_duplication(
+                region,
+                *offset,
+                input,
+                &config.check_mode,
+            )?;
+            assigned_len = len;
+            res.map(|e| e.value_field().evaluate())
+        };
         inputs.push(inp);
     }
 
@@ -109,20 +105,16 @@ pub fn sum<F: FieldExt + TensorType>(
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let assigned_len: usize;
-    let input = utils::value_muxer(
-        &config.inputs[1],
-        &{
-            let (res, len) = config.inputs[1].assign_with_duplication(
-                region,
-                *offset,
-                &values[0],
-                &config.check_mode,
-            )?;
-            assigned_len = len;
-            res.map(|e| e.value_field().evaluate())
-        },
-        &values[0],
-    );
+    let input = {
+        let (res, len) = config.inputs[1].assign_with_duplication(
+            region,
+            *offset,
+            &values[0],
+            &config.check_mode,
+        )?;
+        assigned_len = len;
+        res.map(|e| e.value_field().evaluate())
+    };
 
     // Now we can assign the dot product
     let accumulated_sum = accumulated::sum(&input).expect("accum poly: sum op failed");
@@ -207,15 +199,12 @@ pub fn pairwise<F: FieldExt + TensorType>(
     }
 
     let mut inputs = vec![];
+
     for (i, input) in [lhs.clone(), rhs.clone()].iter().enumerate() {
-        let inp = utils::value_muxer(
-            &config.inputs[i],
-            &{
-                let res = config.inputs[i].assign(region, *offset, input)?;
-                res.map(|e| e.value_field().evaluate())
-            },
-            input,
-        );
+        let inp = {
+            let res = config.inputs[i].assign(region, *offset, input)?;
+            res.map(|e| e.value_field().evaluate())
+        };
         inputs.push(inp);
     }
 
@@ -318,20 +307,16 @@ pub fn matmul<F: FieldExt + TensorType>(
         let mut inputs = vec![];
         let mut assigned_len = 0;
         for (i, elem) in vec![a.clone(), b.clone()].iter().enumerate() {
-            let inp = utils::value_muxer(
-                &config.inputs[i],
-                &{
-                    let (res, len) = config.inputs[i].assign_with_duplication(
-                        region,
-                        *offset,
-                        elem,
-                        &config.check_mode,
-                    )?;
-                    assigned_len = len;
-                    res.map(|e| e.value_field().evaluate())
-                },
-                elem,
-            );
+            let inp = {
+                let (res, len) = config.inputs[i].assign_with_duplication(
+                    region,
+                    *offset,
+                    elem,
+                    &config.check_mode,
+                )?;
+                assigned_len = len;
+                res.map(|e| e.value_field().evaluate())
+            };
             inputs.push(inp);
         }
 
@@ -489,14 +474,10 @@ pub fn neg<F: FieldExt + TensorType>(
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let input = utils::value_muxer(
-        &config.inputs[1],
-        &{
-            let res = config.inputs[1].assign(region, *offset, &values[0])?;
-            res.map(|e| e.value_field().evaluate())
-        },
-        &values[0],
-    );
+    let input = {
+        let res = config.inputs[1].assign(region, *offset, &values[0])?;
+        res.map(|e| e.value_field().evaluate())
+    };
 
     let neg = input.map(|e| -e);
 
@@ -1063,13 +1044,18 @@ pub fn max<F: FieldExt + TensorType>(
     let assigned_max_val: ValTensor<F> = config.inputs[1].assign(region, *offset, &max_val)?.into();
     *offset += 1;
 
-    // TODO: fix these
-    let unit: ValTensor<F> = Tensor::new(Some(&vec![Value::known(F::from(1))]), &[1])?.into();
-    let x_len: ValTensor<F> = Tensor::new(
-        Some(&vec![Value::known(F::from(values[0].len() as u64))]),
-        &[1],
-    )?
+    let unit: ValTensor<F> = Tensor::from(
+        vec![config.inputs[1].assign_constant(region, *offset, F::from(1))?].into_iter(),
+    )
     .into();
+    *offset += 1;
+
+    let x_len: ValTensor<F> = Tensor::from(
+        vec![config.inputs[1].assign_constant(region, *offset, F::from(values[0].len() as u64))?]
+            .into_iter(),
+    )
+    .into();
+    *offset += 1;
 
     // max(x - 1)
     let max_minus_1 = pairwise(
@@ -1107,8 +1093,6 @@ pub fn max<F: FieldExt + TensorType>(
         offset,
         BaseOp::Mult,
     )?;
-
-    println!("relu_one_minus_relu: {:?}", relu_one_minus_relu.show());
 
     let len = relu_one_minus_relu.dims().iter().product();
 
@@ -1166,7 +1150,6 @@ pub fn max<F: FieldExt + TensorType>(
         offset,
         BaseOp::Mult,
     )?;
-    println!("final_product: {:?}", final_product.show());
 
     // constraining relu(sum(relu(x - max(x - 1)) - len(x))) * relu(1 - sum(relu(x - max(x - 1)))) = 0
     config.inputs[1].assign(region, *offset, &final_product)?;
@@ -1194,7 +1177,6 @@ pub fn max<F: FieldExt + TensorType>(
             assert_eq!(Into::<Tensor<i32>>::into(max_val.get_inner()?), ref_max,)
         }
     };
-    println!("assigned_max_val: {:?}", assigned_max_val.show());
     Ok(assigned_max_val)
 }
 
@@ -1216,13 +1198,18 @@ pub fn min<F: FieldExt + TensorType>(
     let assigned_min_val: ValTensor<F> = config.inputs[1].assign(region, *offset, &min_val)?.into();
     *offset += 1;
 
-    // TODO: fix these
-    let unit: ValTensor<F> = Tensor::new(Some(&vec![Value::known(F::from(1))]), &[1])?.into();
-    let x_len: ValTensor<F> = Tensor::new(
-        Some(&vec![Value::known(F::from(values[0].len() as u64))]),
-        &[1],
-    )?
+    let unit: ValTensor<F> = Tensor::from(
+        vec![config.inputs[1].assign_constant(region, *offset, F::from(1))?].into_iter(),
+    )
     .into();
+    *offset += 1;
+
+    let x_len: ValTensor<F> = Tensor::from(
+        vec![config.inputs[1].assign_constant(region, *offset, F::from(values[0].len() as u64))?]
+            .into_iter(),
+    )
+    .into();
+    *offset += 1;
 
     // min(x + 1)
     let min_plus_1 = pairwise(
@@ -1241,6 +1228,7 @@ pub fn min<F: FieldExt + TensorType>(
         offset,
         BaseOp::Sub,
     )?;
+
     // relu(min(x + 1)  - x)
     let relu = nonlinearity(config, region, &[diff], LookupOp::ReLU { scale }, offset)?;
     let one_minus_relu = pairwise(
@@ -1281,7 +1269,7 @@ pub fn min<F: FieldExt + TensorType>(
     let one_minus_sum_relu = pairwise(
         config,
         region,
-        &[unit.clone(), sum_relu.clone()],
+        &[unit.into(), sum_relu.clone()],
         offset,
         BaseOp::Sub,
     )?;
@@ -1297,7 +1285,7 @@ pub fn min<F: FieldExt + TensorType>(
     let sum_relu_minus_len = pairwise(
         config,
         region,
-        &[sum_relu.clone(), x_len],
+        &[sum_relu.clone(), x_len.into()],
         offset,
         BaseOp::Sub,
     )?;
@@ -1344,6 +1332,5 @@ pub fn min<F: FieldExt + TensorType>(
             assert_eq!(Into::<Tensor<i32>>::into(min_val.get_inner()?), ref_min,)
         }
     };
-    println!("assigned_min_val: {:?}", assigned_min_val.show());
-    Ok(assigned_min_val)
+    Ok(assigned_min_val.into())
 }

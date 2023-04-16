@@ -32,9 +32,9 @@ mod matmul {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN * LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN * LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN * LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, LEN * LEN);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
@@ -48,12 +48,7 @@ mod matmul {
                     || "",
                     |mut region| {
                         config
-                            .layout(
-                                &mut region,
-                                &self.inputs.clone(),
-                                &mut 0,
-                                Op::Matmul.into(),
-                            )
+                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Matmul.into())
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -105,9 +100,9 @@ mod matmul_col_overflow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN * LEN * LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN * LEN * LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN * LEN * LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
@@ -171,9 +166,9 @@ mod dot {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
@@ -236,9 +231,9 @@ mod dot_col_overflow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
@@ -301,9 +296,9 @@ mod sum {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
@@ -364,9 +359,9 @@ mod sum_col_overflow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
@@ -428,9 +423,9 @@ mod batchnorm {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
@@ -504,9 +499,9 @@ mod affine {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
-            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
-            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
+            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
@@ -575,9 +570,9 @@ mod affine_col_overflow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
-            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
-            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
+            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
@@ -644,9 +639,9 @@ mod composition {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
@@ -734,9 +729,9 @@ mod conv {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
-            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
-            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
+            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
@@ -860,9 +855,9 @@ mod sumpool {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
-            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
-            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN, true);
+            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
+            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
+            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
@@ -939,9 +934,9 @@ mod add_w_shape_casting {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
@@ -1004,9 +999,9 @@ mod add {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
@@ -1069,9 +1064,9 @@ mod add_with_overflow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
@@ -1134,9 +1129,9 @@ mod sub {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
@@ -1199,9 +1194,9 @@ mod mult {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
@@ -1264,9 +1259,9 @@ mod pow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
@@ -1327,9 +1322,9 @@ mod pack {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
@@ -1395,9 +1390,9 @@ mod rescaled {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
@@ -1475,9 +1470,9 @@ mod matmul_relu {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
 
             let mut base_config =
                 BaseConfig::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE, 0);
@@ -1574,9 +1569,9 @@ mod rangecheck {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN, true);
-            let b = VarTensor::new_advice(cs, K, LEN, true);
-            let output = VarTensor::new_advice(cs, K, LEN, true);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, RANGE as i32)
         }
@@ -1668,7 +1663,7 @@ mod relu {
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
             let advices = (0..2)
-                .map(|_| VarTensor::new_advice(cs, 4, 3, true))
+                .map(|_| VarTensor::new_advice(cs, 4, 3))
                 .collect::<Vec<_>>();
 
             let nl = LookupOp::ReLU { scale: 1 };
