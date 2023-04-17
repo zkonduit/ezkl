@@ -529,7 +529,7 @@ pub fn sumpool<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 3, 3],
 /// ).unwrap();
-/// let pooled = max_pool2d::<i128>(&x, (0, 0), (1, 1), (2, 2)).unwrap();
+/// let pooled = max_pool2d::<i128>(&x, &(0, 0), &(1, 1), &(2, 2)).unwrap();
 /// let expected: Tensor<i128> = Tensor::<i128>::new(Some(&[5, 4, 4, 6]), &[1, 2, 2]).unwrap();
 /// assert_eq!(pooled, expected);
 /// ```
