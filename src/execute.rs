@@ -278,6 +278,7 @@ pub fn create_proof_circuit_kzg<
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn send_proof_evm(
     secret: Option<PathBuf>,
     rpc_url: String,
@@ -301,6 +302,7 @@ async fn send_proof_evm(
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn deploy_verifier_evm(
     secret: Option<PathBuf>,
     rpc_url: String,
@@ -406,6 +408,7 @@ fn render(data: String, output: String, logrows: u32) -> Result<(), Box<dyn Erro
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn create_evm_verifier(
     data: String,
     vk_path: PathBuf,
@@ -440,6 +443,7 @@ fn create_evm_verifier(
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn verify_evm(
     proof_path: PathBuf,
     deployment_code_path: PathBuf,
@@ -461,6 +465,7 @@ async fn verify_evm(
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn create_evm_aggregate_verifier(
     params_path: PathBuf,
     deployment_code_path: PathBuf,
