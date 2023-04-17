@@ -217,6 +217,15 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     }
 
     /// Fetches the inner tensor as a [Tensor<Value<F>>]
+    pub fn get_inner_tensor(&self) -> Result<Tensor<ValType<F>>, TensorError> {
+        warn!("using 'get_inner' in constraints can create soundness issues.");
+        Ok(match self {
+            ValTensor::Value { inner: v, .. } => v.clone(),
+            ValTensor::Instance { .. } => return Err(TensorError::WrongMethod),
+        })
+    }
+
+    /// Fetches the inner tensor as a [Tensor<Value<F>>]
     pub fn get_inner(&self) -> Result<Tensor<Value<F>>, TensorError> {
         warn!("using 'get_inner' in constraints can create soundness issues.");
         Ok(match self {

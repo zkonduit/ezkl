@@ -10,12 +10,12 @@ use crate::{
     tensor::{
         ops::{
             accumulated, add, affine as non_accum_affine, convolution as non_accum_conv,
-            dot as non_accum_dot, matmul as non_accum_matmul, mult,
-            nonlinearities::prelu as ref_prelu, pack as non_accum_pack, rescale as ref_rescaled,
-            scale_and_shift as ref_scale_and_shift, sub, sum as non_accum_sum,
-            sumpool as non_accum_sumpool,
+            dot as non_accum_dot, matmul as non_accum_matmul, max_pool2d as non_accum_max_pool2d,
+            mult, nonlinearities::prelu as ref_prelu, pack as non_accum_pack,
+            rescale as ref_rescaled, scale_and_shift as ref_scale_and_shift, sub,
+            sum as non_accum_sum, sumpool as non_accum_sumpool,
         },
-        Tensor, TensorError,
+        Tensor, TensorError, ValType,
     },
 };
 
@@ -500,8 +500,10 @@ pub fn sumpool<F: FieldExt + TensorType>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let image_channels = values[0].dims()[0];
 
-    let mut kernel = Tensor::from(0..kernel_shape.0 * kernel_shape.1)
-        .map(|_| Value::known(<F as TensorType>::one().unwrap()));
+    let unit = config.inputs[1].assign_constant(region, *offset, F::from(1))?;
+    *offset += 1;
+
+    let mut kernel = Tensor::from(0..kernel_shape.0 * kernel_shape.1).map(|_| unit.clone());
     kernel.reshape(&[1, 1, kernel_shape.0, kernel_shape.1]);
 
     let mut res = vec![];
@@ -543,6 +545,74 @@ pub fn sumpool<F: FieldExt + TensorType>(
         }
     }
     Ok(last_elem)
+}
+
+/// Convolution accumulated layout
+pub fn max_pool2d<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    region: &mut Region<F>,
+    values: &[ValTensor<F>; 1],
+    padding: (usize, usize),
+    stride: (usize, usize),
+    pool_dims: (usize, usize),
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let image = values[0].clone();
+
+    if image.dims().len() != 3 {
+        return Err(Box::new(TensorError::DimMismatch("max_pool2d".to_string())));
+    }
+    let image_dims = image.dims();
+
+    let input_channels = image_dims[0];
+    let (image_height, image_width) = (image_dims[1], image_dims[2]);
+
+    let mut padded_image = image.clone();
+    padded_image.pad(padding)?;
+
+    let horz_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
+    let vert_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
+
+    let mut output: Tensor<ValType<F>> =
+        Tensor::new(None, &[input_channels, horz_slides, vert_slides]).unwrap();
+
+    for i in 0..input_channels {
+        for j in 0..horz_slides {
+            let rs = j * stride.0;
+            for k in 0..vert_slides {
+                let cs = k * stride.1;
+                let slice = padded_image.get_slice(&[
+                    i..(i + 1),
+                    rs..(rs + pool_dims.0),
+                    cs..(cs + pool_dims.1),
+                ])?;
+                let max_w = max(config, region, &[slice], offset)?;
+                let max_w = &max_w.get_inner_tensor()?[0];
+                output.set(&[i, j, k], max_w.clone());
+            }
+        }
+    }
+
+    let res: ValTensor<F> = output.into();
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(res.clone().get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let safe_max_pool =
+                non_accum_max_pool2d(&image.get_inner()?, &padding, &stride, &pool_dims)?;
+
+            assert_eq!(
+                Into::<Tensor<i32>>::into(res.get_inner()?),
+                Into::<Tensor<i32>>::into(safe_max_pool),
+            )
+        }
+    }
+
+    Ok(res)
 }
 
 /// Convolution accumulated layout
@@ -921,6 +991,9 @@ pub fn nonlinearity<F: FieldExt + TensorType>(
         .lookup_output
         .assign(region, *offset, &output.into())?;
 
+    println!("lookup_selectors {:?}", config.lookup_selectors);
+    println!("nk {:?}", nl);
+
     for i in 0..x.len() {
         let (x, y) = config.lookup_input.cartesian_coord(*offset + i);
         config
@@ -1031,7 +1104,6 @@ pub fn max<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     region: &mut Region<F>,
     values: &[ValTensor<F>; 1],
-    scale: usize,
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // this is safe because we later constrain it
@@ -1068,7 +1140,7 @@ pub fn max<F: FieldExt + TensorType>(
         BaseOp::Sub,
     )?;
     // relu(x - max(x - 1))
-    let relu = nonlinearity(config, region, &[diff], LookupOp::ReLU { scale }, offset)?;
+    let relu = nonlinearity(config, region, &[diff], LookupOp::ReLU { scale: 1 }, offset)?;
 
     let len = relu.dims().iter().product();
 
@@ -1099,7 +1171,7 @@ pub fn max<F: FieldExt + TensorType>(
         config,
         region,
         &[one_minus_sum_relu],
-        LookupOp::ReLU { scale },
+        LookupOp::ReLU { scale: 1 },
         offset,
     )?;
 
@@ -1137,7 +1209,6 @@ pub fn min<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     region: &mut Region<F>,
     values: &[ValTensor<F>; 1],
-    scale: usize,
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // this is safe because we later constrain it
@@ -1176,7 +1247,7 @@ pub fn min<F: FieldExt + TensorType>(
     )?;
 
     // relu(min(x + 1)  - x)
-    let relu = nonlinearity(config, region, &[diff], LookupOp::ReLU { scale }, offset)?;
+    let relu = nonlinearity(config, region, &[diff], LookupOp::ReLU { scale: 1 }, offset)?;
 
     let len = relu.dims().iter().product();
 
@@ -1208,7 +1279,7 @@ pub fn min<F: FieldExt + TensorType>(
         config,
         region,
         &[one_minus_sum_relu],
-        LookupOp::ReLU { scale },
+        LookupOp::ReLU { scale: 1 },
         offset,
     )?;
 

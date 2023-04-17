@@ -25,7 +25,7 @@ use tract_onnx::tract_hir::{
     internal::InferenceOp,
     ops::activations::LeakyRelu,
     ops::array::{Pad, PadMode},
-    ops::cnn::{Conv, PoolSpec, SumPool},
+    ops::cnn::{Conv, MaxPool, PoolSpec, SumPool},
     ops::expandable::Expansion,
     ops::nn::DataFormat,
     tract_core::ops::{
@@ -148,13 +148,6 @@ impl Node {
                 match s {
                     LookupOp::Min { .. } => {
                         let input_node = &inputs[0];
-                        let scale_diff = input_node.out_scale;
-                        if scale_diff > 0 {
-                            let mult = scale_to_multiplier(scale_diff);
-                            opkind = OpKind::Lookup(LookupOp::Min {
-                                scale: mult as usize,
-                            }); // now the input will be scaled down to match
-                        }
 
                         Node {
                             idx,
@@ -163,20 +156,13 @@ impl Node {
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: vec![1],
                             in_scale: input_node.out_scale,
-                            out_scale: scale,
+                            out_scale: input_node.out_scale,
                             const_value: None,
                             raw_const_value: None,
                         }
                     }
                     LookupOp::Max { .. } => {
                         let input_node = &inputs[0];
-                        let scale_diff = input_node.out_scale;
-                        if scale_diff > 0 {
-                            let mult = scale_to_multiplier(scale_diff);
-                            opkind = OpKind::Lookup(LookupOp::Max {
-                                scale: mult as usize,
-                            }); // now the input will be scaled down to match
-                        }
 
                         Node {
                             idx,
@@ -185,7 +171,7 @@ impl Node {
                             in_dims: vec![input_node.out_dims.clone()],
                             out_dims: vec![1],
                             in_scale: input_node.out_scale,
-                            out_scale: scale,
+                            out_scale: input_node.out_scale,
                             const_value: None,
                             raw_const_value: None,
                         }
@@ -212,6 +198,69 @@ impl Node {
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
                             out_scale: scale,
+                            ..Default::default()
+                        }
+                    }
+                    LookupOp::MaxPool2d { .. } => {
+                        // input_nodes come in all shapes and sizes we gotta homogenize, especially for 2D (single channel images)
+                        let input_node = other_nodes.get_mut(&node.inputs[0].node).unwrap();
+                        inputs[0] = Self::format_3d_inputs(input_node)?.clone();
+
+                        let input_node = &inputs[0];
+
+                        // Extract the padding and stride layer hyperparams
+                        let op = Box::new(node.op());
+                        let sumpool_node: &MaxPool = match op.downcast_ref() {
+                            Some(b) => b,
+                            None => {
+                                return Err(Box::new(GraphError::OpMismatch(idx, opkind)));
+                            }
+                        };
+
+                        let pool_spec: &PoolSpec = &sumpool_node.pool_spec;
+
+                        // only support pytorch type formatting for now
+                        if pool_spec.data_format != DataFormat::NCHW {
+                            return Err(Box::new(GraphError::MissingParams(
+                                "data in wrong format".to_string(),
+                            )));
+                        }
+
+                        let stride = pool_spec.strides.clone().unwrap();
+                        let padding = match &pool_spec.padding {
+                            PaddingSpec::Explicit(p, _, _) => p,
+                            _ => {
+                                return Err(Box::new(GraphError::MissingParams(
+                                    "padding".to_string(),
+                                )));
+                            }
+                        };
+                        let kernel_shape = &pool_spec.kernel_shape;
+
+                        let (padding_h, padding_w, stride_h, stride_w) =
+                            (padding[0], padding[1], stride[0], stride[1]);
+                        let (kernel_height, kernel_width) = (kernel_shape[0], kernel_shape[1]);
+
+                        let input_channels = input_node.out_dims[0];
+                        let input_height = input_node.out_dims[1];
+                        let input_width = input_node.out_dims[2];
+
+                        let out_height =
+                            (input_height + 2 * padding_h - kernel_height) / stride_h + 1;
+                        let out_width = (input_width + 2 * padding_w - kernel_width) / stride_w + 1;
+
+                        Node {
+                            idx,
+                            opkind: OpKind::Lookup(LookupOp::MaxPool2d {
+                                padding: (padding_h, padding_w),
+                                stride: (stride_h, stride_w),
+                                pool_dims: (kernel_height, kernel_width),
+                            }),
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
+                            in_dims: vec![input_node.out_dims.clone()],
+                            out_dims: vec![input_channels, out_height, out_width],
+                            in_scale: input_node.out_scale,
+                            out_scale: input_node.out_scale,
                             ..Default::default()
                         }
                     }

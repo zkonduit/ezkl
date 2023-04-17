@@ -40,7 +40,7 @@ fn init() {
     assert!(status.success());
 }
 
-const TESTS: [&str; 26] = [
+const TESTS: [&str; 27] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -68,6 +68,7 @@ const TESTS: [&str; 26] = [
     "1l_var",
     "min",
     "max",
+    "1l_max_pool",
 ];
 
 const PACKING_TESTS: [&str; 15] = [
@@ -88,7 +89,7 @@ const PACKING_TESTS: [&str; 15] = [
     "2l_relu_small",
 ];
 
-const TESTS_AGGR: [&str; 18] = [
+const TESTS_AGGR: [&str; 21] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -107,6 +108,9 @@ const TESTS_AGGR: [&str; 18] = [
     "2l_relu_sigmoid_small",
     "2l_relu_small",
     "1l_conv",
+    "min",
+    "max",
+    "1l_max_pool",
 ];
 
 const NEG_TESTS: [(&str, &str); 2] = [
@@ -114,7 +118,7 @@ const NEG_TESTS: [(&str, &str); 2] = [
     ("2l_relu_small", "2l_relu_sigmoid_small"),
 ];
 
-const TESTS_EVM: [&str; 16] = [
+const TESTS_EVM: [&str; 19] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -131,6 +135,9 @@ const TESTS_EVM: [&str; 16] = [
     "2l_relu_sigmoid_small",
     "2l_relu_small",
     "2l_relu_fc",
+    "min",
+    "max",
+    "1l_max_pool",
 ];
 
 const EXAMPLES: [&str; 2] = ["mlp_4d", "conv2d_mnist"];
@@ -204,7 +211,7 @@ macro_rules! test_func {
             }
 
 
-            seq!(N in 0..=25 {
+            seq!(N in 0..=26 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
@@ -267,7 +274,7 @@ macro_rules! test_func_evm {
                 "1l_var"
             ];
 
-            seq!(N in 0..=15 {
+            seq!(N in 0..=18 {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {

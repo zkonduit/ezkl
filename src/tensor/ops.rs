@@ -535,9 +535,9 @@ pub fn sumpool<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// ```
 pub fn max_pool2d<T: TensorType>(
     image: &Tensor<T>,
-    padding: (usize, usize),
-    stride: (usize, usize),
-    pool_dims: (usize, usize),
+    padding: &(usize, usize),
+    stride: &(usize, usize),
+    pool_dims: &(usize, usize),
 ) -> Result<Tensor<T>, TensorError> {
     if image.dims().len() != 3 {
         return Err(TensorError::DimMismatch("max_pool2d".to_string()));
@@ -547,7 +547,7 @@ pub fn max_pool2d<T: TensorType>(
     let input_channels = image_dims[0];
     let (image_height, image_width) = (image_dims[1], image_dims[2]);
 
-    let padded_image = pad::<T>(image, padding)?;
+    let padded_image = pad::<T>(image, padding.clone())?;
 
     let horz_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
     let vert_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
