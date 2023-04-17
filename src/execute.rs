@@ -78,10 +78,10 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         Commands::Table { model: _ } => table(cli),
         #[cfg(feature = "render")]
         Commands::RenderCircuit {
-            ref data,
+            data,
             model: _,
-            ref output,
-        } => render(data, output),
+            output,
+        } => render(data, output, cli.args.logrows),
         Commands::Forward {
             data,
             model,
@@ -386,7 +386,7 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<(), Box<dyn Error>> {
 }
 
 #[cfg(feature = "render")]
-fn render(data: String, output: String) -> Result<(), Box<dyn Error>> {
+fn render(data: String, output: String, logrows: u32) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data.to_string())?;
     let model = Model::from_arg()?;
     let circuit = ModelCircuit::<Fr>::new(&data, model)?;
@@ -395,14 +395,14 @@ fn render(data: String, output: String) -> Result<(), Box<dyn Error>> {
     // Create the area we want to draw on.
     // We could use SVGBackend if we want to render to .svg instead.
     // for an overview of how to interpret these plots, see https://zcash.github.io/halo2/user/dev-tools.html
-    let root = BitMapBackend::new(output, (512, 512)).into_drawing_area();
+    let root = BitMapBackend::new(&output, (512, 512)).into_drawing_area();
     root.fill(&TRANSPARENT).unwrap();
     let root = root.titled("Layout", ("sans-serif", 20))?;
 
     halo2_proofs::dev::CircuitLayout::default()
         // We hide labels, else most circuits become impossible to decipher because of overlaid text
         .show_labels(false)
-        .render(cli.args.logrows, &circuit, &root)?;
+        .render(logrows, &circuit, &root)?;
     Ok(())
 }
 
