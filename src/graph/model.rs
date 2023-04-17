@@ -438,8 +438,11 @@ impl Model {
         };
 
         match op {
-            LookupOp::PReLU { scale, .. } | LookupOp::Max { scale } | LookupOp::Min { scale } => {
+            LookupOp::PReLU { scale, .. } => {
                 op = LookupOp::ReLU { scale };
+            }
+            LookupOp::Max | LookupOp::Min | LookupOp::MaxPool2d { .. } => {
+                op = LookupOp::ReLU { scale: 1 };
             }
             LookupOp::Mean { scale } => {
                 assert_eq!(input_nodes.len(), 1);

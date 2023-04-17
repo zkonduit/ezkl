@@ -215,12 +215,13 @@ pub enum LookupOp {
     Mean {
         scale: usize,
     },
-    Max {
-        scale: usize,
+    Max,
+    MaxPool2d {
+        padding: (usize, usize),
+        stride: (usize, usize),
+        pool_dims: (usize, usize),
     },
-    Min {
-        scale: usize,
-    },
+    Min,
 }
 
 impl LookupOp {
@@ -256,6 +257,11 @@ impl LookupOp {
             }
             LookupOp::Max { .. } => Tensor::new(Some(&[*x.iter().max().unwrap()]), &[1]),
             LookupOp::Min { .. } => Tensor::new(Some(&[*x.iter().min().unwrap()]), &[1]),
+            LookupOp::MaxPool2d {
+                padding,
+                stride,
+                pool_dims,
+            } => tensor::ops::max_pool2d(&x, padding, stride, pool_dims),
 
             LookupOp::Mean { scale } => Ok(tensor::ops::nonlinearities::mean(&x, *scale)),
         }
@@ -265,6 +271,7 @@ impl LookupOp {
         match self {
             LookupOp::Min { .. } => "MIN",
             LookupOp::Max { .. } => "MAX",
+            LookupOp::MaxPool2d { .. } => "MAXPOOL",
             LookupOp::Div { .. } => "DIV",
             LookupOp::ReLU { .. } => "RELU",
             LookupOp::LeakyReLU { .. } => "LEAKY_RELU",
@@ -572,8 +579,8 @@ impl OpKind {
     /// Produce an OpKind from a `&str` onnx name  
     pub fn new(name: &str) -> Self {
         match name {
-            "Reduce<Min>" => OpKind::Lookup(LookupOp::Min { scale: 1 }),
-            "Reduce<Max>" => OpKind::Lookup(LookupOp::Max { scale: 1 }),
+            "Reduce<Min>" => OpKind::Lookup(LookupOp::Min),
+            "Reduce<Max>" => OpKind::Lookup(LookupOp::Max),
             "Clip" => OpKind::Lookup(LookupOp::ReLU { scale: 1 }),
             "Prelu" => OpKind::Lookup(LookupOp::PReLU {
                 scale: 1,
@@ -597,6 +604,11 @@ impl OpKind {
             "Mul" => OpKind::Poly(Op::Mult),
             "Gemm" => OpKind::Poly(Op::Affine),
             "MatMulInference" => OpKind::Poly(Op::Matmul),
+            "MaxPool" => OpKind::Lookup(LookupOp::MaxPool2d {
+                padding: (1, 1),
+                stride: (1, 1),
+                pool_dims: (1, 1),
+            }),
             "Dot" => OpKind::Poly(Op::Dot),
             "Reduce<Sum>" => OpKind::Poly(Op::Sum),
             "Reduce<Mean>" => OpKind::Lookup(LookupOp::Mean { scale: 1 }),
@@ -993,18 +1005,29 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                     scale,
                     offset,
                 )?),
-                LookupOp::Max { scale, .. } => Some(layouts::max(
+                LookupOp::MaxPool2d {
+                    padding,
+                    stride,
+                    pool_dims,
+                } => Some(layouts::max_pool2d(
                     self,
                     region,
                     cp_values[..].try_into()?,
-                    scale,
+                    padding,
+                    stride,
+                    pool_dims,
                     offset,
                 )?),
-                LookupOp::Min { scale, .. } => Some(layouts::min(
+                LookupOp::Max => Some(layouts::max(
                     self,
                     region,
                     cp_values[..].try_into()?,
-                    scale,
+                    offset,
+                )?),
+                LookupOp::Min => Some(layouts::min(
+                    self,
+                    region,
+                    cp_values[..].try_into()?,
                     offset,
                 )?),
                 _ => Some(layouts::nonlinearity(
