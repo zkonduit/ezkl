@@ -9,7 +9,6 @@ pub mod node;
 /// Representations of a computational graph's variables.
 pub mod vars;
 
-use crate::circuit::OpKind;
 use crate::commands::Cli;
 use crate::fieldutils::i128_to_felt;
 use crate::pfsys::ModelInput;
@@ -40,16 +39,16 @@ pub enum GraphError {
     InvalidLookupInputs,
     /// Shape mismatch in circuit construction
     #[error("invalid dimensions used for node {0} ({1})")]
-    InvalidDims(usize, OpKind),
+    InvalidDims(usize, String),
     /// Wrong method was called to configure an op
     #[error("wrong method was called to configure node {0} ({1})")]
-    WrongMethod(usize, OpKind),
+    WrongMethod(usize, String),
     /// A requested node is missing in the graph
     #[error("a requested node is missing in the graph: {0}")]
     MissingNode(usize),
     /// The wrong method was called on an operation
     #[error("an unsupported method was called on node {0} ({1})")]
-    OpMismatch(usize, OpKind),
+    OpMismatch(usize, String),
     /// This operation is unsupported
     #[error("unsupported operation in graph")]
     UnsupportedOp,
@@ -70,7 +69,7 @@ pub enum GraphError {
     NonConstantPower,
     /// Error when attempting to rescale an operation
     #[error("failed to rescale inputs for {0}")]
-    RescalingError(OpKind),
+    RescalingError(String),
     /// Error when attempting to load a model
     #[error("failed to load model")]
     ModelLoad,
@@ -81,7 +80,7 @@ pub enum GraphError {
 
 /// Defines the circuit for a computational graph / model loaded from a `.onnx` file.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ModelCircuit<F: FieldExt> {
+pub struct ModelCircuit<F: FieldExt + TensorType> {
     /// Vector of input tensors to the model / graph of computations.
     pub inputs: Vec<Tensor<i128>>,
     ///

@@ -1,10 +1,12 @@
 use super::node::*;
 use super::vars::*;
 use super::GraphError;
+use crate::circuit::hybrid::HybridOp;
+use crate::circuit::ops::lookup::LookupOp;
+use crate::circuit::ops::poly::PolyOp;
 use crate::circuit::BaseConfig as PolyConfig;
-use crate::circuit::LookupOp;
-use crate::circuit::Op as PolyOp;
-use crate::circuit::OpKind;
+use crate::circuit::Op;
+
 use crate::commands::RunArgs;
 use crate::commands::{Cli, Commands};
 use crate::fieldutils::i128_to_felt;
@@ -12,6 +14,7 @@ use crate::graph::scale_to_multiplier;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor};
 use anyhow::Context;
+use halo2curves::bn256::Fr;
 use serde::Deserialize;
 use serde::Serialize;
 //use clap::Parser;
@@ -156,10 +159,10 @@ impl Model {
             match &n.opkind {
                 OpKind::Lookup(op) => {
                     // assert_eq!(inputs.len(), 1);
-                    results.insert(i, op.f(inputs[0].clone())?);
+                    results.insert(i, Op::<Fr>::f(op, &[inputs[0].clone()])?);
                 }
                 OpKind::Poly(op) => {
-                    results.insert(i, op.f(inputs)?);
+                    results.insert(i, Op::<Fr>::f(op, &inputs)?);
                 }
                 OpKind::Input => {
                     let mut t = model_inputs[*i].clone();
@@ -312,7 +315,7 @@ impl Model {
         let lookup_ops: BTreeMap<&usize, &Node> = self
             .nodes
             .iter()
-            .filter(|(_, n)| n.opkind.is_lookup())
+            .filter(|(_, n)| n.opkind.is_lookup() || n.opkind.is_hybrid())
             .collect();
 
         if !lookup_ops.is_empty() {
@@ -373,7 +376,10 @@ impl Model {
             OpKind::Unknown(_c) => {
                 unimplemented!()
             }
-            c => Err(Box::new(GraphError::WrongMethod(node.idx, c.clone()))),
+            c => Err(Box::new(GraphError::WrongMethod(
+                node.idx,
+                c.clone().to_string(),
+            ))),
         }
     }
 
@@ -430,31 +436,29 @@ impl Model {
 
         let input_idx = input_nodes.iter().map(|f| f.idx).collect_vec();
 
-        let mut op = match &node.opkind {
-            OpKind::Lookup(l) => l.clone(),
-            c => {
-                return Err(Box::new(GraphError::WrongMethod(node.idx, c.clone())));
-            }
-        };
-
-        match op {
-            LookupOp::PReLU { scale, .. } => {
-                op = LookupOp::ReLU { scale };
-            }
-            LookupOp::Max | LookupOp::Min | LookupOp::MaxPool2d { .. } => {
-                op = LookupOp::ReLU { scale: 1 };
-            }
-            LookupOp::Mean { scale } => {
+        let op = match &node.opkind {
+            OpKind::Hybrid(HybridOp::PReLU { scale, .. }) => LookupOp::ReLU { scale: *scale },
+            OpKind::Hybrid(HybridOp::Max)
+            | OpKind::Hybrid(HybridOp::Min)
+            | OpKind::Hybrid(HybridOp::MaxPool2d { .. }) => LookupOp::ReLU { scale: 1 },
+            OpKind::Hybrid(HybridOp::InstanceNorm2d { .. }) => LookupOp::Sqrt { scales: (1, 1) },
+            OpKind::Hybrid(HybridOp::Mean { scale }) => {
                 assert_eq!(input_nodes.len(), 1);
-                op = LookupOp::Div {
+                LookupOp::Div {
                     denom: crate::circuit::utils::F32(
                         // we need to scale the denom by the number of elements in the input tensor and the calculated scale diff
                         (scale * input_nodes[0].out_dims.iter().product::<usize>()) as f32,
                     ),
-                };
+                }
             }
-            _ => {}
-        }
+            OpKind::Lookup(nl) => nl.clone(),
+            c => {
+                return Err(Box::new(GraphError::WrongMethod(
+                    node.idx,
+                    c.clone().to_string(),
+                )));
+            }
+        };
 
         config
             .borrow_mut()
@@ -546,7 +550,7 @@ impl Model {
                             &mut region,
                             &outputs[i..i + 1],
                             &mut offset,
-                            PolyOp::Pack(self.run_args.pack_base, self.run_args.scale).into(),
+                            Box::new(PolyOp::Pack(self.run_args.pack_base, self.run_args.scale)),
                         )
                         .map_err(|e| {
                             error!("{}", e);
@@ -573,7 +577,7 @@ impl Model {
                             &mut region,
                             &[output, vars.instances[instance_offset + i].clone()],
                             &mut offset,
-                            PolyOp::RangeCheck(self.run_args.tolerance as i32).into(),
+                            Box::new(PolyOp::RangeCheck(self.run_args.tolerance as i32)),
                         )
                     })
                     .collect_vec();
@@ -634,7 +638,9 @@ impl Model {
                     })
                     .collect_vec();
 
-                let res = config.borrow_mut().layout(region, &values, offset, op)?;
+                let res = config
+                    .borrow_mut()
+                    .layout(region, &values, offset, op.get_inner())?;
 
                 res
             }

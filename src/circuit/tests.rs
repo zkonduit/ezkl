@@ -1,3 +1,4 @@
+use crate::circuit::ops::poly::PolyOp;
 use crate::circuit::*;
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -48,7 +49,12 @@ mod matmul {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Matmul.into())
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Box::new(PolyOp::Matmul),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -116,7 +122,12 @@ mod matmul_col_overflow {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Matmul.into())
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Box::new(PolyOp::Matmul),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -146,6 +157,8 @@ mod matmul_col_overflow {
 
 #[cfg(test)]
 mod dot {
+    use ops::poly::PolyOp;
+
     use super::*;
 
     const K: usize = 4;
@@ -183,7 +196,12 @@ mod dot {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Dot.into())
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Box::new(PolyOp::Dot),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -248,7 +266,12 @@ mod dot_col_overflow {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Dot.into())
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Box::new(PolyOp::Dot),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -313,7 +336,12 @@ mod sum {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Sum.into())
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Box::new(PolyOp::Sum),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -376,7 +404,12 @@ mod sum_col_overflow {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Sum.into())
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Box::new(PolyOp::Sum),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -443,7 +476,7 @@ mod batchnorm {
                                 &mut region,
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Op::BatchNorm.into(),
+                                Box::new(PolyOp::BatchNorm),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -515,7 +548,12 @@ mod affine {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Affine.into())
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Box::new(PolyOp::Affine),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -586,7 +624,12 @@ mod affine_col_overflow {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Affine.into())
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Box::new(PolyOp::Affine),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -662,7 +705,7 @@ mod composition {
                                 &mut region,
                                 &self.inputs.clone(),
                                 &mut offset,
-                                Op::Dot.into(),
+                                Box::new(PolyOp::Dot),
                             )
                             .unwrap();
                         let _ = config
@@ -670,7 +713,7 @@ mod composition {
                                 &mut region,
                                 &self.inputs.clone(),
                                 &mut offset,
-                                Op::Dot.into(),
+                                Box::new(PolyOp::Dot),
                             )
                             .unwrap();
                         config
@@ -678,7 +721,7 @@ mod composition {
                                 &mut region,
                                 &self.inputs.clone(),
                                 &mut offset,
-                                Op::Dot.into(),
+                                Box::new(PolyOp::Dot),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -749,11 +792,10 @@ mod conv {
                                 &mut region,
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Op::Conv {
+                                Box::new(PolyOp::Conv {
                                     padding: (1, 1),
                                     stride: (2, 2),
-                                }
-                                .into(),
+                                }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -875,12 +917,11 @@ mod sumpool {
                                 &mut region,
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Op::SumPool {
+                                Box::new(PolyOp::SumPool {
                                     padding: (0, 0),
                                     stride: (1, 1),
                                     kernel_shape: (3, 3),
-                                }
-                                .into(),
+                                }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -951,7 +992,12 @@ mod add_w_shape_casting {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Add.into())
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Box::new(PolyOp::Add),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -1016,7 +1062,12 @@ mod add {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Add.into())
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Box::new(PolyOp::Add),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -1081,7 +1132,12 @@ mod add_with_overflow {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Add.into())
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Box::new(PolyOp::Add),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -1146,7 +1202,12 @@ mod sub {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Sub.into())
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Box::new(PolyOp::Sub),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -1211,7 +1272,12 @@ mod mult {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Mult.into())
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Box::new(PolyOp::Mult),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -1276,7 +1342,12 @@ mod pow {
                     || "",
                     |mut region| {
                         config
-                            .layout(&mut region, &self.inputs.clone(), &mut 0, Op::Pow(5).into())
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                &mut 0,
+                                Box::new(PolyOp::Pow(5)),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -1343,7 +1414,7 @@ mod pack {
                                 &mut region,
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Op::Pack(2, 1).into(),
+                                Box::new(PolyOp::Pack(2, 1)),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1411,11 +1482,10 @@ mod rescaled {
                                 &mut region,
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Op::Rescaled {
-                                    inner: Box::new(Op::Sum),
+                                Box::new(PolyOp::Rescaled {
+                                    inner: Box::new(PolyOp::Sum),
                                     scale: vec![(0, 5)],
-                                }
-                                .into(),
+                                }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1447,7 +1517,7 @@ mod matmul_relu {
 
     const K: usize = 18;
     const LEN: usize = 32;
-    use crate::circuit::LookupOp;
+    use crate::circuit::lookup::LookupOp;
 
     #[derive(Clone)]
     struct MyCircuit<F: FieldExt + TensorType> {
@@ -1493,11 +1563,11 @@ mod matmul_relu {
             layouter.assign_region(
                 || "",
                 |mut region| {
-                    let op = Op::Matmul;
+                    let op = PolyOp::Matmul;
                     let mut offset = 0;
                     let output = config
                         .base_config
-                        .layout(&mut region, &self.inputs, &mut offset, op.into())
+                        .layout(&mut region, &self.inputs, &mut offset, Box::new(op))
                         .unwrap();
                     let _output = config
                         .base_config
@@ -1505,7 +1575,7 @@ mod matmul_relu {
                             &mut region,
                             &[output.unwrap()],
                             &mut offset,
-                            LookupOp::ReLU { scale: 1 }.into(),
+                            Box::new(LookupOp::ReLU { scale: 1 }),
                         )
                         .unwrap();
                     Ok(())
@@ -1590,7 +1660,7 @@ mod rangecheck {
                                 &mut region,
                                 &[self.input.clone(), self.output.clone()],
                                 &mut 0,
-                                Op::RangeCheck(RANGE as i32).into(),
+                                Box::new(PolyOp::RangeCheck(RANGE as i32)),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1691,7 +1761,7 @@ mod relu {
                                 &mut region,
                                 &[self.input.clone()],
                                 &mut 0,
-                                LookupOp::ReLU { scale: 1 }.into(),
+                                Box::new(LookupOp::ReLU { scale: 1 }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },

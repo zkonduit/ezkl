@@ -2,10 +2,11 @@ use core::panic;
 use std::error::Error;
 
 use halo2_proofs::circuit::{Region, Value};
-use log::error;
+use itertools::Itertools;
+use log::{error, trace};
 
 use crate::{
-    circuit::{utils, CircuitError},
+    circuit::{ops::base::BaseOp, utils, BaseConfig, CheckMode, CircuitError},
     fieldutils::i128_to_felt,
     tensor::{
         ops::{
@@ -21,6 +22,7 @@ use crate::{
 };
 
 use super::*;
+use crate::circuit::ops::lookup::LookupOp;
 
 /// Dot product accumulated layout
 pub fn dot<F: FieldExt + TensorType>(
@@ -957,7 +959,7 @@ pub fn nonlinearity<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     region: &mut Region<F>,
     values: &[ValTensor<F>; 1],
-    nl: LookupOp,
+    nl: &LookupOp,
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let region_name = format!("Lookup for {:#?}", nl);
@@ -983,7 +985,7 @@ pub fn nonlinearity<F: FieldExt + TensorType>(
         0 => Tensor::from((0..x.dims().iter().product::<usize>()).map(|_| Value::unknown())),
         // if not empty apply the nonlinearity !
         _ => {
-            let x = nl.f(integer_evals)?;
+            let x = Op::<F>::f(nl, &[integer_evals])?;
             x.map(|elem| Value::known(i128_to_felt(elem)))
         }
     };
@@ -1035,13 +1037,13 @@ pub fn prelu<F: FieldExt + TensorType>(
         config,
         region,
         &[values[0].clone()],
-        LookupOp::ReLU { scale },
+        &LookupOp::ReLU { scale },
         offset,
     )?;
     // -x
     let neg_x = neg(config, region, &[values[0].clone()], offset)?;
     // relu(-x)
-    let relu_neg_x = nonlinearity(config, region, &[neg_x], LookupOp::ReLU { scale }, offset)?;
+    let relu_neg_x = nonlinearity(config, region, &[neg_x], &LookupOp::ReLU { scale }, offset)?;
     // relu(-x) * slope
     let scaled_relu_neg_x = pairwise(config, region, &[relu_neg_x, slopes], offset, BaseOp::Mult)?;
 
@@ -1097,7 +1099,7 @@ pub fn mean<F: FieldExt + TensorType>(
     let nl = LookupOp::Div {
         denom: utils::F32((scale * x.len()) as f32),
     };
-    nonlinearity(config, region, &[sum_x], nl, offset)
+    nonlinearity(config, region, &[sum_x], &nl, offset)
 }
 
 /// variance function layout
@@ -1129,7 +1131,7 @@ pub fn variance<F: FieldExt + TensorType>(
         denom: utils::F32((scale * x.len()) as f32),
     };
 
-    let variance = nonlinearity(config, region, &[sum_square], nl, offset)?;
+    let variance = nonlinearity(config, region, &[sum_square], &nl, offset)?;
 
     Ok(variance)
 }
@@ -1175,7 +1177,13 @@ pub fn max<F: FieldExt + TensorType>(
         BaseOp::Sub,
     )?;
     // relu(x - max(x - 1))
-    let relu = nonlinearity(config, region, &[diff], LookupOp::ReLU { scale: 1 }, offset)?;
+    let relu = nonlinearity(
+        config,
+        region,
+        &[diff],
+        &LookupOp::ReLU { scale: 1 },
+        offset,
+    )?;
 
     let len = relu.dims().iter().product();
 
@@ -1206,7 +1214,7 @@ pub fn max<F: FieldExt + TensorType>(
         config,
         region,
         &[one_minus_sum_relu],
-        LookupOp::ReLU { scale: 1 },
+        &LookupOp::ReLU { scale: 1 },
         offset,
     )?;
 
@@ -1282,7 +1290,13 @@ pub fn min<F: FieldExt + TensorType>(
     )?;
 
     // relu(min(x + 1)  - x)
-    let relu = nonlinearity(config, region, &[diff], LookupOp::ReLU { scale: 1 }, offset)?;
+    let relu = nonlinearity(
+        config,
+        region,
+        &[diff],
+        &LookupOp::ReLU { scale: 1 },
+        offset,
+    )?;
 
     let len = relu.dims().iter().product();
 
@@ -1314,7 +1328,7 @@ pub fn min<F: FieldExt + TensorType>(
         config,
         region,
         &[one_minus_sum_relu],
-        LookupOp::ReLU { scale: 1 },
+        &LookupOp::ReLU { scale: 1 },
         offset,
     )?;
 
@@ -1387,6 +1401,7 @@ pub fn instance_norm<F: FieldExt + TensorType>(
             region,
             &[
                 variance.clone(),
+                // TODO: should we make this a constant ? doesn't matter I think
                 Tensor::from(vec![F::from(epsilon)].into_iter()).into(),
             ],
             offset,
@@ -1397,7 +1412,7 @@ pub fn instance_norm<F: FieldExt + TensorType>(
             config,
             region,
             &[denominator],
-            LookupOp::Sqrt {
+            &LookupOp::Sqrt {
                 scales: (scale, scale),
             },
             offset,
@@ -1463,18 +1478,12 @@ pub fn instance_norm<F: FieldExt + TensorType>(
             .all(|&x| x == 0);
         if is_assigned {
             let ref_instance_norm: Tensor<i32> = ref_instance_norm(
-                &Tensor::from(values[0].get_int_evals()?.into_iter()),
-                &gamma
-                    .get_int_evals()?
-                    .iter()
-                    .map(|&x| x as f32)
-                    .collect_vec()[..],
-                &beta
-                    .get_int_evals()?
-                    .iter()
-                    .map(|&x| x as f32)
-                    .collect_vec()[..],
-                epsilon as f32,
+                [
+                    Tensor::from(values[0].get_int_evals()?.into_iter()),
+                    Tensor::from(gamma.get_int_evals()?.into_iter()),
+                    Tensor::from(beta.get_int_evals()?.into_iter()),
+                ],
+                epsilon as i128,
             )
             .map(|x| x as i32);
             assert_eq!(

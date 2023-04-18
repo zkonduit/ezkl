@@ -6,9 +6,15 @@ use halo2_proofs::{
 };
 use halo2curves::FieldExt;
 
-use crate::{circuit::CircuitError, fieldutils::i128_to_felt, tensor::Tensor};
+use crate::{
+    circuit::CircuitError,
+    fieldutils::i128_to_felt,
+    tensor::{Tensor, TensorType},
+};
 
-use super::LookupOp;
+use crate::circuit::lookup::LookupOp;
+
+use super::Op;
 
 /// Halo2 lookup table for element wise non-linearities.
 // Table that should be reused across all lookups (so no Clone)
@@ -27,7 +33,7 @@ pub struct Table<F: FieldExt> {
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> Table<F> {
+impl<F: FieldExt + TensorType> Table<F> {
     /// Configures the table.
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
@@ -56,7 +62,7 @@ impl<F: FieldExt> Table<F> {
         // let largest = base.pow(3);
         let inputs = Tensor::from(smallest..largest);
         // println!("Are we here Tuesday input {:?}", inputs);
-        let evals = self.nonlinearity.f(inputs.clone())?;
+        let evals = Op::<F>::f(&self.nonlinearity, &[inputs.clone()])?;
         // println!("Tuesday If we are here then evals {:?}", evals);
 
         self.is_assigned = true;

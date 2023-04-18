@@ -1354,6 +1354,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "erased-serde"
+version = "0.3.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f2b0c2380453a92ea8b6c8e5f64ecaafccddde8ceab55ff7a8ac1029f894569"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "errno"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1724,6 +1733,7 @@ dependencies = [
  "ctor",
  "ecc",
  "env_logger",
+ "erased-serde",
  "ethereum-types",
  "ethers",
  "ethers-solc",

@@ -1,4 +1,6 @@
-use ezkl_lib::circuit::{BaseConfig as PolyConfig, CheckMode, LookupOp, Op as PolyOp};
+use ezkl_lib::circuit::{
+    ops::lookup::LookupOp, ops::poly::PolyOp, BaseConfig as PolyConfig, CheckMode,
+};
 use ezkl_lib::fieldutils;
 use ezkl_lib::fieldutils::i32_to_felt;
 use ezkl_lib::tensor::*;
@@ -185,7 +187,7 @@ where
                                 self.l0_params[1].clone(),
                             ],
                             &mut offset,
-                            op.into(),
+                            Box::new(op),
                         )
                         .unwrap();
 
@@ -195,7 +197,7 @@ where
                             &mut region,
                             &[x.unwrap()],
                             &mut offset,
-                            LookupOp::ReLU { scale: 32 }.into(),
+                            Box::new(LookupOp::ReLU { scale: 32 }),
                         )
                         .unwrap()
                         .unwrap();
@@ -206,7 +208,7 @@ where
                             &mut region,
                             &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
                             &mut offset,
-                            PolyOp::Affine.into(),
+                            Box::new(PolyOp::Affine),
                         )
                         .unwrap();
                     Ok(l2out)

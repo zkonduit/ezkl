@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use ezkl_lib::circuit::poly::PolyOp;
 use ezkl_lib::circuit::*;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
@@ -51,7 +52,7 @@ impl Circuit<Fr> for MyCircuit {
             || "",
             |mut region| {
                 config
-                    .layout(&mut region, &self.inputs, &mut 0, Op::Pow(4).into())
+                    .layout(&mut region, &self.inputs, &mut 0, Box::new(PolyOp::Pow(4)))
                     .unwrap();
                 Ok(())
             },

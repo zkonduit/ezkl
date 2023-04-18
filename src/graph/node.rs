@@ -1,8 +1,9 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
+use crate::circuit::hybrid::HybridOp;
+use crate::circuit::ops::lookup::LookupOp;
+use crate::circuit::ops::poly::PolyOp;
+use crate::circuit::utils;
 use crate::circuit::BaseConfig;
-use crate::circuit::LookupOp;
-use crate::circuit::Op as PolyOp;
-use crate::circuit::OpKind;
 use crate::graph::GraphError;
 use crate::tensor::Tensor;
 use crate::tensor::TensorType;
@@ -34,6 +35,170 @@ use tract_onnx::tract_hir::{
     },
 };
 
+// Initially, some of these OpKinds will be folded into others (for example, Const nodes that
+// contain parameters will be handled at the consuming self.
+// Eventually, though, we probably want to keep them and treat them directly (layouting and configuring
+// at each type of node)
+/// Enum of the different kinds of operations `ezkl` can support.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Ord, PartialOrd, Deserialize, Serialize)]
+pub enum OpKind {
+    /// A nonlinearity
+    Lookup(LookupOp),
+    /// A nonlinearity
+    Hybrid(HybridOp),
+    /// A fused op, combining affine layers or other arithmetic
+    Poly(PolyOp),
+    /// Constant
+    Const,
+    /// Input node
+    Input,
+    /// Unable to parse the node type
+    Unknown(String),
+    #[allow(missing_docs)]
+    #[default]
+    None,
+}
+
+impl From<PolyOp> for OpKind {
+    fn from(op: PolyOp) -> Self {
+        OpKind::Poly(op)
+    }
+}
+
+impl From<LookupOp> for OpKind {
+    fn from(op: LookupOp) -> Self {
+        OpKind::Lookup(op)
+    }
+}
+
+impl OpKind {
+    /// Produce an OpKind from a `&str` onnx name  
+    pub fn new(name: &str) -> Self {
+        match name {
+            "Reduce<Min>" => OpKind::Hybrid(HybridOp::Min),
+            "Reduce<Max>" => OpKind::Hybrid(HybridOp::Max),
+            "Clip" => OpKind::Lookup(LookupOp::ReLU { scale: 1 }),
+            "Prelu" => OpKind::Hybrid(HybridOp::PReLU {
+                scale: 1,
+                slopes: vec![],
+            }),
+            "LeakyRelu" => OpKind::Lookup(LookupOp::LeakyReLU {
+                scale: 1,
+                slope: utils::F32(0.0),
+            }),
+            "Sigmoid" => OpKind::Lookup(LookupOp::Sigmoid { scales: (1, 1) }),
+            "Sqrt" => OpKind::Lookup(LookupOp::Sqrt { scales: (1, 1) }),
+            "Tanh" => OpKind::Lookup(LookupOp::Tanh { scales: (1, 1) }),
+            "onnx.Erf" => OpKind::Lookup(LookupOp::Erf { scales: (1, 1) }),
+            "Div" => OpKind::Lookup(LookupOp::Div {
+                denom: utils::F32(1.0),
+            }),
+
+            "Const" => OpKind::Const,
+            "Source" => OpKind::Input,
+            "Add" => OpKind::Poly(PolyOp::Add),
+            "Sub" => OpKind::Poly(PolyOp::Sub),
+            "Mul" => OpKind::Poly(PolyOp::Mult),
+            "Gemm" => OpKind::Poly(PolyOp::Affine),
+            "MatMulInference" => OpKind::Poly(PolyOp::Matmul),
+            "MaxPool" => OpKind::Hybrid(HybridOp::MaxPool2d {
+                padding: (1, 1),
+                stride: (1, 1),
+                pool_dims: (1, 1),
+            }),
+            "Dot" => OpKind::Poly(PolyOp::Dot),
+            "Reduce<Sum>" => OpKind::Poly(PolyOp::Sum),
+            "Reduce<Mean>" => OpKind::Hybrid(HybridOp::Mean { scale: 1 }),
+            "Pow" => OpKind::Poly(PolyOp::Pow(1)),
+            "Conv" | "ConvHir" => OpKind::Poly(PolyOp::Conv {
+                padding: (1, 1),
+                stride: (1, 1),
+            }),
+            "SumPool" => OpKind::Poly(PolyOp::SumPool {
+                padding: (1, 1),
+                stride: (1, 1),
+                kernel_shape: (1, 1),
+            }),
+            "InstanceNorm" => OpKind::Hybrid(HybridOp::InstanceNorm2d {
+                epsilon: utils::F32(1e-5),
+            }),
+            "GlobalAvgPool" => OpKind::Poly(PolyOp::GlobalSumPool),
+            "Pad" => OpKind::Poly(PolyOp::Pad(0, 0)),
+            "Reshape" => OpKind::Poly(PolyOp::Reshape(Vec::new())),
+            "Flatten" => OpKind::Poly(PolyOp::Flatten(Vec::new())),
+            "BatchNorm" => OpKind::Poly(PolyOp::BatchNorm),
+            c => {
+                warn!("{:?} is not currently supported", c);
+                OpKind::Unknown(c.to_string())
+            }
+        }
+    }
+
+    /// Get the inner op
+    pub fn get_inner<F: FieldExt + TensorType>(&self) -> Box<dyn crate::circuit::Op<F>> {
+        match self {
+            OpKind::Poly(op) => Box::new(op.clone()),
+            OpKind::Lookup(op) => Box::new(op.clone()),
+            OpKind::Hybrid(op) => Box::new(op.clone()),
+            OpKind::Const => Box::new(crate::circuit::ops::Const),
+            OpKind::Input => Box::new(crate::circuit::ops::Input),
+            OpKind::Unknown(s) => Box::new(crate::circuit::ops::Unknown(s.to_string())),
+            OpKind::None => Box::new(crate::circuit::ops::Unknown("".to_string())),
+        }
+    }
+
+    /// is ploy type constrant
+    pub fn is_poly(&self) -> bool {
+        matches!(self, OpKind::Poly(_))
+    }
+
+    /// is lookup based op
+    pub fn is_lookup(&self) -> bool {
+        matches!(self, OpKind::Lookup(_))
+    }
+
+    /// is hybriud based op
+    pub fn is_hybrid(&self) -> bool {
+        matches!(self, OpKind::Hybrid(_))
+    }
+
+    /// is lookup based op
+    pub fn is_parameterized(&self) -> bool {
+        match self {
+            OpKind::Poly(PolyOp::Affine) | OpKind::Poly(PolyOp::Conv { .. }) => true,
+            _ => false,
+        }
+    }
+
+    /// is rescaled op
+    pub fn is_rescaled(&self) -> bool {
+        matches!(self, OpKind::Poly(PolyOp::Rescaled { .. }))
+    }
+
+    /// is input
+    pub fn is_input(&self) -> bool {
+        matches!(self, OpKind::Input)
+    }
+
+    /// is const
+    pub fn is_const(&self) -> bool {
+        matches!(self, OpKind::Const)
+    }
+}
+
+impl fmt::Display for OpKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            OpKind::Const => write!(f, "const"),
+            OpKind::Input => write!(f, "input"),
+            OpKind::Hybrid(s) => write!(f, "{:#?}", s),
+            OpKind::Lookup(s) => write!(f, "{:#?}", s),
+            OpKind::Poly(s) => write!(f, "{}", s),
+            OpKind::Unknown(c) => write!(f, "? {}", c),
+            OpKind::None => write!(f, "n/a",),
+        }
+    }
+}
 /// Enum of the different kinds of node configurations `ezkl` can support.
 #[allow(missing_docs)]
 #[derive(Clone, Default, Debug)]
@@ -144,38 +309,181 @@ impl Node {
         let mut opkind = OpKind::new(node.op().name().as_ref()); // parses the op name
 
         let mn = match opkind {
+            OpKind::Hybrid(ref s) => match s {
+                HybridOp::Min { .. } => {
+                    let input_node = &inputs[0];
+
+                    Node {
+                        idx,
+                        opkind,
+                        inputs: node.inputs.iter().map(|i| i.node).collect(),
+                        in_dims: vec![input_node.out_dims.clone()],
+                        out_dims: vec![1],
+                        in_scale: input_node.out_scale,
+                        out_scale: input_node.out_scale,
+                        const_value: None,
+                        raw_const_value: None,
+                    }
+                }
+                HybridOp::Max { .. } => {
+                    let input_node = &inputs[0];
+
+                    Node {
+                        idx,
+                        opkind,
+                        inputs: node.inputs.iter().map(|i| i.node).collect(),
+                        in_dims: vec![input_node.out_dims.clone()],
+                        out_dims: vec![1],
+                        in_scale: input_node.out_scale,
+                        out_scale: input_node.out_scale,
+                        const_value: None,
+                        raw_const_value: None,
+                    }
+                }
+
+                HybridOp::MaxPool2d { .. } => {
+                    // input_nodes come in all shapes and sizes we gotta homogenize, especially for 2D (single channel images)
+                    let input_node = other_nodes.get_mut(&node.inputs[0].node).unwrap();
+                    inputs[0] = Self::format_3d_inputs(input_node)?.clone();
+
+                    let input_node = &inputs[0];
+
+                    // Extract the padding and stride layer hyperparams
+                    let op = Box::new(node.op());
+                    let sumpool_node: &MaxPool = match op.downcast_ref() {
+                        Some(b) => b,
+                        None => {
+                            return Err(Box::new(GraphError::OpMismatch(idx, opkind.to_string())));
+                        }
+                    };
+
+                    let pool_spec: &PoolSpec = &sumpool_node.pool_spec;
+
+                    // only support pytorch type formatting for now
+                    if pool_spec.data_format != DataFormat::NCHW {
+                        return Err(Box::new(GraphError::MissingParams(
+                            "data in wrong format".to_string(),
+                        )));
+                    }
+
+                    let stride = pool_spec.strides.clone().unwrap();
+                    let padding = match &pool_spec.padding {
+                        PaddingSpec::Explicit(p, _, _) => p,
+                        _ => {
+                            return Err(Box::new(GraphError::MissingParams("padding".to_string())));
+                        }
+                    };
+                    let kernel_shape = &pool_spec.kernel_shape;
+
+                    let (padding_h, padding_w, stride_h, stride_w) =
+                        (padding[0], padding[1], stride[0], stride[1]);
+                    let (kernel_height, kernel_width) = (kernel_shape[0], kernel_shape[1]);
+
+                    let input_channels = input_node.out_dims[0];
+                    let input_height = input_node.out_dims[1];
+                    let input_width = input_node.out_dims[2];
+
+                    let out_height = (input_height + 2 * padding_h - kernel_height) / stride_h + 1;
+                    let out_width = (input_width + 2 * padding_w - kernel_width) / stride_w + 1;
+
+                    Node {
+                        idx,
+                        opkind: OpKind::Hybrid(HybridOp::MaxPool2d {
+                            padding: (padding_h, padding_w),
+                            stride: (stride_h, stride_w),
+                            pool_dims: (kernel_height, kernel_width),
+                        }),
+                        inputs: node.inputs.iter().map(|i| i.node).collect(),
+                        in_dims: vec![input_node.out_dims.clone()],
+                        out_dims: vec![input_channels, out_height, out_width],
+                        in_scale: input_node.out_scale,
+                        out_scale: input_node.out_scale,
+                        ..Default::default()
+                    }
+                }
+
+                HybridOp::InstanceNorm2d { .. } => {
+                    // input_nodes come in all shapes and sizes we gotta homogenize, especially for 2D (single channel images)
+                    let input_node = other_nodes.get_mut(&node.inputs[0].node).unwrap();
+                    inputs[0] = Self::format_3d_inputs(input_node)?.clone();
+
+                    let input_node = &inputs[0];
+
+                    Node {
+                        idx,
+                        opkind,
+                        inputs: node.inputs.iter().map(|i| i.node).collect(),
+                        in_dims: vec![input_node.out_dims.clone()],
+                        out_dims: input_node.out_dims.clone(),
+                        in_scale: input_node.out_scale,
+                        out_scale: input_node.out_scale,
+                        ..Default::default()
+                    }
+                }
+
+                HybridOp::Mean { .. } => {
+                    let input_node = &inputs[0];
+                    let scale_diff = input_node.out_scale - scale;
+                    // We can also consider adjusting the scale of all inputs and the output in a more custom way.
+                    if scale_diff > 0 {
+                        let mult = scale_to_multiplier(scale_diff);
+                        opkind = OpKind::Hybrid(HybridOp::Mean {
+                            scale: mult as usize,
+                        }); // now the input will be scaled down to match
+                    }
+                    Node {
+                        idx,
+                        opkind,
+                        inputs: node.inputs.iter().map(|i| i.node).collect(),
+                        in_dims: vec![input_node.out_dims.clone()],
+                        out_dims: vec![1],
+                        in_scale: input_node.out_scale,
+                        out_scale: scale,
+                        ..Default::default()
+                    }
+                }
+                HybridOp::PReLU {
+                    scale: mut layer_scale,
+                    ..
+                } => {
+                    let input_node = &inputs[0];
+                    // Extract the slope layer hyperparams
+                    let slopes = inputs[1]
+                        .clone()
+                        .raw_const_value
+                        .unwrap()
+                        .deref()
+                        .iter()
+                        .map(|value| crate::circuit::utils::F32(*value))
+                        .collect_vec();
+                    // node.inputs.pop();
+
+                    let scale_diff = input_node.out_scale - scale;
+                    // We can also consider adjusting the scale of all inputs and the output in a more custom way.
+                    if scale_diff > 0 {
+                        layer_scale = scale_to_multiplier(scale_diff) as usize;
+                    }
+
+                    opkind = OpKind::Hybrid(HybridOp::PReLU {
+                        scale: layer_scale,
+                        slopes,
+                    }); // now the input will be scaled down to match
+
+                    Node {
+                        idx,
+                        opkind,
+                        inputs: node.inputs.iter().map(|i| i.node).collect(),
+                        in_dims: vec![input_node.out_dims.clone()],
+                        out_dims: input_node.out_dims.clone(),
+                        in_scale: input_node.out_scale,
+                        out_scale: scale,
+                        ..Default::default()
+                    }
+                }
+            },
+
             OpKind::Lookup(ref s) => {
                 match s {
-                    LookupOp::Min { .. } => {
-                        let input_node = &inputs[0];
-
-                        Node {
-                            idx,
-                            opkind,
-                            inputs: node.inputs.iter().map(|i| i.node).collect(),
-                            in_dims: vec![input_node.out_dims.clone()],
-                            out_dims: vec![1],
-                            in_scale: input_node.out_scale,
-                            out_scale: input_node.out_scale,
-                            const_value: None,
-                            raw_const_value: None,
-                        }
-                    }
-                    LookupOp::Max { .. } => {
-                        let input_node = &inputs[0];
-
-                        Node {
-                            idx,
-                            opkind,
-                            inputs: node.inputs.iter().map(|i| i.node).collect(),
-                            in_dims: vec![input_node.out_dims.clone()],
-                            out_dims: vec![1],
-                            in_scale: input_node.out_scale,
-                            out_scale: input_node.out_scale,
-                            const_value: None,
-                            raw_const_value: None,
-                        }
-                    }
                     LookupOp::Sigmoid { .. } => {
                         let input_node = &inputs[0];
                         let scale_diff = input_node.out_scale;
@@ -198,88 +506,6 @@ impl Node {
                             out_dims: input_node.out_dims.clone(),
                             in_scale: input_node.out_scale,
                             out_scale: scale,
-                            ..Default::default()
-                        }
-                    }
-                    LookupOp::MaxPool2d { .. } => {
-                        // input_nodes come in all shapes and sizes we gotta homogenize, especially for 2D (single channel images)
-                        let input_node = other_nodes.get_mut(&node.inputs[0].node).unwrap();
-                        inputs[0] = Self::format_3d_inputs(input_node)?.clone();
-
-                        let input_node = &inputs[0];
-
-                        // Extract the padding and stride layer hyperparams
-                        let op = Box::new(node.op());
-                        let sumpool_node: &MaxPool = match op.downcast_ref() {
-                            Some(b) => b,
-                            None => {
-                                return Err(Box::new(GraphError::OpMismatch(idx, opkind)));
-                            }
-                        };
-
-                        let pool_spec: &PoolSpec = &sumpool_node.pool_spec;
-
-                        // only support pytorch type formatting for now
-                        if pool_spec.data_format != DataFormat::NCHW {
-                            return Err(Box::new(GraphError::MissingParams(
-                                "data in wrong format".to_string(),
-                            )));
-                        }
-
-                        let stride = pool_spec.strides.clone().unwrap();
-                        let padding = match &pool_spec.padding {
-                            PaddingSpec::Explicit(p, _, _) => p,
-                            _ => {
-                                return Err(Box::new(GraphError::MissingParams(
-                                    "padding".to_string(),
-                                )));
-                            }
-                        };
-                        let kernel_shape = &pool_spec.kernel_shape;
-
-                        let (padding_h, padding_w, stride_h, stride_w) =
-                            (padding[0], padding[1], stride[0], stride[1]);
-                        let (kernel_height, kernel_width) = (kernel_shape[0], kernel_shape[1]);
-
-                        let input_channels = input_node.out_dims[0];
-                        let input_height = input_node.out_dims[1];
-                        let input_width = input_node.out_dims[2];
-
-                        let out_height =
-                            (input_height + 2 * padding_h - kernel_height) / stride_h + 1;
-                        let out_width = (input_width + 2 * padding_w - kernel_width) / stride_w + 1;
-
-                        Node {
-                            idx,
-                            opkind: OpKind::Lookup(LookupOp::MaxPool2d {
-                                padding: (padding_h, padding_w),
-                                stride: (stride_h, stride_w),
-                                pool_dims: (kernel_height, kernel_width),
-                            }),
-                            inputs: node.inputs.iter().map(|i| i.node).collect(),
-                            in_dims: vec![input_node.out_dims.clone()],
-                            out_dims: vec![input_channels, out_height, out_width],
-                            in_scale: input_node.out_scale,
-                            out_scale: input_node.out_scale,
-                            ..Default::default()
-                        }
-                    }
-
-                    LookupOp::InstanceNorm2d { .. } => {
-                        // input_nodes come in all shapes and sizes we gotta homogenize, especially for 2D (single channel images)
-                        let input_node = other_nodes.get_mut(&node.inputs[0].node).unwrap();
-                        inputs[0] = Self::format_3d_inputs(input_node)?.clone();
-
-                        let input_node = &inputs[0];
-
-                        Node {
-                            idx,
-                            opkind,
-                            inputs: node.inputs.iter().map(|i| i.node).collect(),
-                            in_dims: vec![input_node.out_dims.clone()],
-                            out_dims: input_node.out_dims.clone(),
-                            in_scale: input_node.out_scale,
-                            out_scale: input_node.out_scale,
                             ..Default::default()
                         }
                     }
@@ -383,27 +609,7 @@ impl Node {
                             ..Default::default()
                         }
                     }
-                    LookupOp::Mean { .. } => {
-                        let input_node = &inputs[0];
-                        let scale_diff = input_node.out_scale - scale;
-                        // We can also consider adjusting the scale of all inputs and the output in a more custom way.
-                        if scale_diff > 0 {
-                            let mult = scale_to_multiplier(scale_diff);
-                            opkind = OpKind::Lookup(LookupOp::Mean {
-                                scale: mult as usize,
-                            }); // now the input will be scaled down to match
-                        }
-                        Node {
-                            idx,
-                            opkind,
-                            inputs: node.inputs.iter().map(|i| i.node).collect(),
-                            in_dims: vec![input_node.out_dims.clone()],
-                            out_dims: vec![1],
-                            in_scale: input_node.out_scale,
-                            out_scale: scale,
-                            ..Default::default()
-                        }
-                    }
+
                     LookupOp::LeakyReLU {
                         scale: mut layer_scale,
                         ..
@@ -417,11 +623,17 @@ impl Node {
                             Some(b) => match (*b).as_any().downcast_ref() {
                                 Some(b) => b,
                                 None => {
-                                    return Err(Box::new(GraphError::OpMismatch(idx, opkind)));
+                                    return Err(Box::new(GraphError::OpMismatch(
+                                        idx,
+                                        opkind.to_string(),
+                                    )));
                                 }
                             },
                             None => {
-                                return Err(Box::new(GraphError::OpMismatch(idx, opkind)));
+                                return Err(Box::new(GraphError::OpMismatch(
+                                    idx,
+                                    opkind.to_string(),
+                                )));
                             }
                         };
 
@@ -447,44 +659,7 @@ impl Node {
                             ..Default::default()
                         }
                     }
-                    LookupOp::PReLU {
-                        scale: mut layer_scale,
-                        ..
-                    } => {
-                        let input_node = &inputs[0];
-                        // Extract the slope layer hyperparams
-                        let slopes = inputs[1]
-                            .clone()
-                            .raw_const_value
-                            .unwrap()
-                            .deref()
-                            .iter()
-                            .map(|value| crate::circuit::utils::F32(*value))
-                            .collect_vec();
-                        // node.inputs.pop();
 
-                        let scale_diff = input_node.out_scale - scale;
-                        // We can also consider adjusting the scale of all inputs and the output in a more custom way.
-                        if scale_diff > 0 {
-                            layer_scale = scale_to_multiplier(scale_diff) as usize;
-                        }
-
-                        opkind = OpKind::Lookup(LookupOp::PReLU {
-                            scale: layer_scale,
-                            slopes,
-                        }); // now the input will be scaled down to match
-
-                        Node {
-                            idx,
-                            opkind,
-                            inputs: node.inputs.iter().map(|i| i.node).collect(),
-                            in_dims: vec![input_node.out_dims.clone()],
-                            out_dims: input_node.out_dims.clone(),
-                            in_scale: input_node.out_scale,
-                            out_scale: scale,
-                            ..Default::default()
-                        }
-                    }
                     LookupOp::Div { .. } => {
                         if (inputs[1].out_dims.clone() != [1])
                             || !matches!(inputs[1].opkind, OpKind::Const)
@@ -541,7 +716,10 @@ impl Node {
                         let pad_node: &Pad = match node.op().downcast_ref::<Pad>() {
                             Some(b) => b,
                             None => {
-                                return Err(Box::new(GraphError::OpMismatch(idx, opkind)));
+                                return Err(Box::new(GraphError::OpMismatch(
+                                    idx,
+                                    opkind.to_string(),
+                                )));
                             }
                         };
                         // we only support constant 0 padding
@@ -607,11 +785,17 @@ impl Node {
                             Some(b) => match (*b).as_any().downcast_ref() {
                                 Some(b) => b,
                                 None => {
-                                    return Err(Box::new(GraphError::OpMismatch(idx, opkind)));
+                                    return Err(Box::new(GraphError::OpMismatch(
+                                        idx,
+                                        opkind.to_string(),
+                                    )));
                                 }
                             },
                             None => {
-                                return Err(Box::new(GraphError::OpMismatch(idx, opkind)));
+                                return Err(Box::new(GraphError::OpMismatch(
+                                    idx,
+                                    opkind.to_string(),
+                                )));
                             }
                         };
 
@@ -648,7 +832,9 @@ impl Node {
                             bias_node = Self::scale_up_const_node(bias_node, scale + scale_diff)?;
                             if (input_node.out_scale + weight_node.out_scale) != bias_node.out_scale
                             {
-                                return Err(Box::new(GraphError::RescalingError(opkind)));
+                                return Err(Box::new(GraphError::RescalingError(
+                                    opkind.to_string(),
+                                )));
                             }
                         }
 
@@ -693,7 +879,10 @@ impl Node {
                         let sumpool_node: &SumPool = match op.downcast_ref() {
                             Some(b) => b,
                             None => {
-                                return Err(Box::new(GraphError::OpMismatch(idx, opkind)));
+                                return Err(Box::new(GraphError::OpMismatch(
+                                    idx,
+                                    opkind.to_string(),
+                                )));
                             }
                         };
 
@@ -809,7 +998,7 @@ impl Node {
                         let mut bias_node = other_nodes.get_mut(&node.inputs[2].node).unwrap();
                         bias_node = Self::scale_up_const_node(bias_node, scale + scale_diff)?;
                         if (input_node.out_scale + weight_node.out_scale) != bias_node.out_scale {
-                            return Err(Box::new(GraphError::RescalingError(opkind)));
+                            return Err(Box::new(GraphError::RescalingError(opkind.to_string())));
                         }
 
                         let out_dim = weight_node.out_dims.clone()[0];
@@ -880,7 +1069,7 @@ impl Node {
                     }
                     PolyOp::Sum => {
                         if inputs.len() != 1 {
-                            return Err(Box::new(GraphError::InvalidDims(idx, opkind)));
+                            return Err(Box::new(GraphError::InvalidDims(idx, opkind.to_string())));
                         };
 
                         Node {
@@ -944,7 +1133,7 @@ impl Node {
                         }
                     }
                     PolyOp::Rescaled { .. } => {
-                        return Err(Box::new(GraphError::RescalingError(opkind)));
+                        return Err(Box::new(GraphError::RescalingError(opkind.to_string())));
                     }
                     PolyOp::Identity => {
                         let input_node = &inputs[0];
@@ -998,7 +1187,10 @@ impl Node {
                                 let mut res = vec![];
                                 for x in shapes.iter() {
                                     if x <= &0 {
-                                        return Err(Box::new(GraphError::InvalidDims(idx, opkind)));
+                                        return Err(Box::new(GraphError::InvalidDims(
+                                            idx,
+                                            opkind.to_string(),
+                                        )));
                                     }
                                     res.push(*x as usize);
                                 }
@@ -1008,7 +1200,10 @@ impl Node {
                                 let explicit_prod: i128 =
                                     shapes.iter().filter(|x| *x > &0).product();
                                 if explicit_prod <= 0 {
-                                    return Err(Box::new(GraphError::InvalidDims(idx, opkind)));
+                                    return Err(Box::new(GraphError::InvalidDims(
+                                        idx,
+                                        opkind.to_string(),
+                                    )));
                                 }
                                 let inferred = num_entries / (explicit_prod as usize);
                                 let mut new_dims: Vec<usize> = Vec::new();
@@ -1043,7 +1238,7 @@ impl Node {
                 let const_node: &Const = match op.as_any().downcast_ref() {
                     Some(b) => b,
                     None => {
-                        return Err(Box::new(GraphError::OpMismatch(idx, opkind)));
+                        return Err(Box::new(GraphError::OpMismatch(idx, opkind.to_string())));
                     }
                 };
                 let dt = const_node.0.datum_type();
@@ -1182,7 +1377,7 @@ impl Node {
                 Ok(opkind)
             }
         } else {
-            Err(Box::new(GraphError::RescalingError(opkind)))
+            Err(Box::new(GraphError::RescalingError(opkind.to_string())))
         }
     }
 
@@ -1190,7 +1385,7 @@ impl Node {
         if !self.opkind.is_const() {
             return Err(Box::new(GraphError::WrongMethod(
                 self.idx,
-                self.opkind.clone(),
+                self.opkind.clone().to_string(),
             )));
         };
         let raw = self.raw_const_value.as_ref().unwrap();
@@ -1205,7 +1400,7 @@ impl Node {
         if !node.opkind.is_const() {
             return Err(Box::new(GraphError::WrongMethod(
                 node.idx,
-                node.opkind.clone(),
+                node.opkind.clone().to_string(),
             )));
         };
         if scale > 0 {
@@ -1227,7 +1422,7 @@ impl Node {
         if node.opkind.is_const() {
             return Err(Box::new(GraphError::WrongMethod(
                 node.idx,
-                node.opkind.clone(),
+                node.opkind.clone().to_string(),
             )));
         };
         // input_nodes come in all shapes and sizes we gotta homogenize, especially for 2D (single channel images)
@@ -1240,7 +1435,7 @@ impl Node {
         if node.out_dims.len() != 3 {
             return Err(Box::new(GraphError::InvalidDims(
                 node.idx,
-                node.clone().opkind,
+                node.clone().opkind.to_string(),
             )));
         }
         Ok(node)
@@ -1251,7 +1446,7 @@ impl Node {
         if node.opkind.is_const() {
             return Err(Box::new(GraphError::WrongMethod(
                 node.idx,
-                node.opkind.clone(),
+                node.opkind.clone().to_string(),
             )));
         };
         let mut dims = vec![1];
@@ -1265,7 +1460,7 @@ impl Node {
         if node.opkind.is_const() {
             return Err(Box::new(GraphError::WrongMethod(
                 node.idx,
-                node.opkind.clone(),
+                node.opkind.to_string(),
             )));
         };
         let dims = &node.out_dims;
@@ -1275,7 +1470,7 @@ impl Node {
             if *dim != 1 {
                 return Err(Box::new(GraphError::InvalidDims(
                     node.idx,
-                    node.opkind.clone(),
+                    node.opkind.to_string(),
                 )));
             }
         }

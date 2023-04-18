@@ -887,12 +887,10 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[0, 28, 0, 0, 0, 0, 28, 29, 28]), &[1, 3, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn instance_norm(
-        a: &Tensor<i128>,
-        gamma: &[f32],
-        beta: &[f32],
-        epsilon: f32,
-    ) -> Tensor<i128> {
+    pub fn instance_norm(inputs: [Tensor<i128>; 3], epsilon: i128) -> Tensor<i128> {
+        let a = &inputs[0];
+        let gamma = &inputs[1];
+        let beta = &inputs[2];
         // calculate value of output
         assert!(a.len() > 1);
         assert!(a.dims().len() == 3);
@@ -903,16 +901,15 @@ pub mod nonlinearities {
         for i in 0..gamma.len() {
             let row = a.get_slice(&[i..i + 1]).unwrap();
             let sum = sum(&row).unwrap();
-            let mean = sum.map(|x| (x as f32) / (row.len() as f32));
-            let f32_x = row.map(|x| x as f32);
+            let mean = sum.map(|x| (x) / (row.len() as i128));
 
             // unbiased = false in pytorch definition. if it was unbiased we would divide by row.len() - 1
-            let var = (f32_x.clone() - mean.clone())
+            let var = (row.clone() - mean.clone())
                 .unwrap()
-                .map(|e| e / (row.len() as f32));
+                .map(|e| e / (row.len() as i128));
 
-            let denom = var.map(|e| (e + epsilon).sqrt());
-            let numerator = (f32_x - mean).unwrap() * vec![gamma[i]].into_iter().into();
+            let denom = var.map(|e| ((e + epsilon) as f32).sqrt().round() as i128);
+            let numerator = (row - mean).unwrap() * vec![gamma[i]].into_iter().into();
 
             let result =
                 ((numerator.unwrap() / denom).unwrap() + vec![beta[i]].into_iter().into()).unwrap();
@@ -920,8 +917,7 @@ pub mod nonlinearities {
             output.push(result);
         }
 
-        let output = Tensor::from(output.into_iter()).combine().unwrap();
-        let mut output = output.map(|x| x.round() as i128);
+        let mut output = Tensor::from(output.into_iter()).combine().unwrap();
         output.reshape(a.dims());
 
         output
