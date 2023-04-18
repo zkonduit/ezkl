@@ -221,6 +221,9 @@ pub enum LookupOp {
         stride: (usize, usize),
         pool_dims: (usize, usize),
     },
+    InstanceNorm2d {
+        epsilon: utils::F32,
+    },
     Min,
 }
 
@@ -263,6 +266,9 @@ impl LookupOp {
                 pool_dims,
             } => tensor::ops::max_pool2d(&x, padding, stride, pool_dims),
 
+            LookupOp::InstanceNorm2d { .. } => {
+                todo!()
+            }
             LookupOp::Mean { scale } => Ok(tensor::ops::nonlinearities::mean(&x, *scale)),
         }
     }
@@ -281,6 +287,7 @@ impl LookupOp {
             LookupOp::Tanh { .. } => "TANH",
             LookupOp::Erf { .. } => "ERF",
             LookupOp::Mean { .. } => "MEAN",
+            LookupOp::InstanceNorm2d { .. } => "INSTANCE_NORM",
         }
     }
 
@@ -597,6 +604,7 @@ impl OpKind {
             "Div" => OpKind::Lookup(LookupOp::Div {
                 denom: utils::F32(1.0),
             }),
+
             "Const" => OpKind::Const,
             "Source" => OpKind::Input,
             "Add" => OpKind::Poly(Op::Add),
@@ -621,6 +629,9 @@ impl OpKind {
                 padding: (1, 1),
                 stride: (1, 1),
                 kernel_shape: (1, 1),
+            }),
+            "InstanceNorm" => OpKind::Lookup(LookupOp::InstanceNorm2d {
+                epsilon: utils::F32(1e-5),
             }),
             "GlobalAvgPool" => OpKind::Poly(Op::GlobalSumPool),
             "Pad" => OpKind::Poly(Op::Pad(0, 0)),

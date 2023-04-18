@@ -11,9 +11,10 @@ use crate::{
         ops::{
             accumulated, add, affine as non_accum_affine, convolution as non_accum_conv,
             dot as non_accum_dot, matmul as non_accum_matmul, max_pool2d as non_accum_max_pool2d,
-            mult, nonlinearities::prelu as ref_prelu, pack as non_accum_pack,
-            rescale as ref_rescaled, scale_and_shift as ref_scale_and_shift, sub,
-            sum as non_accum_sum, sumpool as non_accum_sumpool,
+            mult, nonlinearities::instance_norm as ref_instance_norm,
+            nonlinearities::prelu as ref_prelu, pack as non_accum_pack, rescale as ref_rescaled,
+            scale_and_shift as ref_scale_and_shift, sub, sum as non_accum_sum,
+            sumpool as non_accum_sumpool,
         },
         Tensor, TensorError, ValType,
     },
@@ -1099,6 +1100,40 @@ pub fn mean<F: FieldExt + TensorType>(
     nonlinearity(config, region, &[sum_x], nl, offset)
 }
 
+/// variance function layout
+pub fn variance<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    region: &mut Region<F>,
+    values: &[ValTensor<F>; 1],
+    scale: usize,
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let x = &values[0];
+
+    let mean = mean(config, region, &[x.clone()], scale, offset)?;
+
+    let sub = pairwise(
+        config,
+        region,
+        &[x.clone(), mean.clone()],
+        offset,
+        BaseOp::Sub,
+    )?;
+
+    let square = pairwise(config, region, &[sub.clone(), sub], offset, BaseOp::Mult)?;
+
+    let sum_square = sum(config, region, &[square], offset)?;
+
+    // biased estimator
+    let nl = LookupOp::Div {
+        denom: utils::F32((scale * x.len()) as f32),
+    };
+
+    let variance = nonlinearity(config, region, &[sum_square], nl, offset)?;
+
+    Ok(variance)
+}
+
 /// max layout
 pub fn max<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
@@ -1310,4 +1345,144 @@ pub fn min<F: FieldExt + TensorType>(
         }
     };
     Ok(assigned_min_val.into())
+}
+
+///
+pub fn instance_norm<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    region: &mut Region<F>,
+    values: &[ValTensor<F>; 3],
+    scale: usize,
+    epsilon: u64,
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let gamma = values[1].clone();
+    let beta = values[2].clone();
+
+    if gamma.len() != values[0].dims()[0] {
+        return Err("gamma and x channels must have the same length".into());
+    };
+    if beta.len() != values[0].dims()[0] {
+        return Err("beta and x channels must have the same length".into());
+    };
+
+    let mut channel_norms = vec![];
+
+    // iterate over inner channel
+    for i in 0..values[0].dims()[0] {
+        let x = values[0].get_slice(&[i..i + 1])?;
+        let mean = mean(config, region, &[x.clone()], scale, offset)?;
+        let variance = variance(config, region, &[x.clone()], scale, offset)?;
+
+        let numerator = pairwise(
+            config,
+            region,
+            &[x.clone(), mean.clone()],
+            offset,
+            BaseOp::Sub,
+        )?;
+
+        let denominator = pairwise(
+            config,
+            region,
+            &[
+                variance.clone(),
+                Tensor::from(vec![F::from(epsilon)].into_iter()).into(),
+            ],
+            offset,
+            BaseOp::Add,
+        )?;
+
+        let denominator = nonlinearity(
+            config,
+            region,
+            &[denominator],
+            LookupOp::Sqrt {
+                scales: (scale, scale),
+            },
+            offset,
+        )?;
+
+        let product = pairwise(
+            config,
+            region,
+            &[numerator.clone(), denominator.clone()],
+            offset,
+            BaseOp::Mult,
+        )?;
+
+        let result = numerator
+            .get_int_evals()?
+            .iter()
+            .zip(denominator.get_int_evals()?)
+            .map(|(x, y)| F::from((x / y) as u64))
+            .collect::<Vec<_>>();
+
+        let result = Tensor::from(result.into_iter()).into();
+
+        // constraining product to 0
+        let result = config.inputs[1].assign(region, *offset, &result)?;
+        config.output.assign(region, *offset, &product)?;
+
+        let (x, y) = config.output.cartesian_coord(*offset);
+        config
+            .selectors
+            .get(&(BaseOp::Identity, x))
+            .unwrap()
+            .enable(region, y)?;
+        *offset += result.len();
+
+        let scaled_fraction = pairwise(
+            config,
+            region,
+            &[result.into(), gamma.clone()],
+            offset,
+            BaseOp::Mult,
+        )?;
+
+        let instance_norm = pairwise(
+            config,
+            region,
+            &[scaled_fraction, beta.clone()],
+            offset,
+            BaseOp::Add,
+        )?;
+
+        channel_norms.push(instance_norm.get_inner_tensor()?);
+    }
+
+    let mut instance_norm = Tensor::from(channel_norms.into_iter()).combine()?;
+    instance_norm.reshape(&values[0].dims());
+    let instance_norm: ValTensor<F> = instance_norm.into();
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(instance_norm.get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let ref_instance_norm: Tensor<i32> = ref_instance_norm(
+                &Tensor::from(values[0].get_int_evals()?.into_iter()),
+                &gamma
+                    .get_int_evals()?
+                    .iter()
+                    .map(|&x| x as f32)
+                    .collect_vec()[..],
+                &beta
+                    .get_int_evals()?
+                    .iter()
+                    .map(|&x| x as f32)
+                    .collect_vec()[..],
+                epsilon as f32,
+            )
+            .map(|x| x as i32);
+            assert_eq!(
+                Into::<Tensor<i32>>::into(instance_norm.get_inner()?),
+                ref_instance_norm,
+            )
+        }
+    };
+
+    Ok(instance_norm)
 }

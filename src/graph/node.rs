@@ -265,6 +265,25 @@ impl Node {
                         }
                     }
 
+                    LookupOp::InstanceNorm2d { .. } => {
+                        // input_nodes come in all shapes and sizes we gotta homogenize, especially for 2D (single channel images)
+                        let input_node = other_nodes.get_mut(&node.inputs[0].node).unwrap();
+                        inputs[0] = Self::format_3d_inputs(input_node)?.clone();
+
+                        let input_node = &inputs[0];
+
+                        Node {
+                            idx,
+                            opkind,
+                            inputs: node.inputs.iter().map(|i| i.node).collect(),
+                            in_dims: vec![input_node.out_dims.clone()],
+                            out_dims: input_node.out_dims.clone(),
+                            in_scale: input_node.out_scale,
+                            out_scale: input_node.out_scale,
+                            ..Default::default()
+                        }
+                    }
+
                     LookupOp::Sqrt { .. } => {
                         let input_node = &inputs[0];
                         let scale_diff = input_node.out_scale;

@@ -869,6 +869,64 @@ pub mod nonlinearities {
         output
     }
 
+    /// Elementwise applies instance norm to a tensor of integers.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `gamma` - vector of scale values
+    /// * `beta` - vector of offset values
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::instance_norm;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[4, 25, 8, 1, 1, 0, 25, 28, 23]),
+    ///     &[1, 3, 3],
+    /// ).unwrap();
+    /// let result = instance_norm(&x, &[0.5], &[23.0], 0.1);
+    /// let expected = Tensor::<i128>::new(Some(&[0, 28, 0, 0, 0, 0, 28, 29, 28]), &[1, 3, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn instance_norm(
+        a: &Tensor<i128>,
+        gamma: &[f32],
+        beta: &[f32],
+        epsilon: f32,
+    ) -> Tensor<i128> {
+        // calculate value of output
+        assert!(a.len() > 1);
+        assert!(a.dims().len() == 3);
+        assert_eq!(gamma.len(), beta.len());
+        // assert num channels is same as num of parameters
+        assert_eq!(gamma.len(), a.dims()[0]);
+        let mut output = vec![];
+        for i in 0..gamma.len() {
+            let row = a.get_slice(&[i..i + 1]).unwrap();
+            let sum = sum(&row).unwrap();
+            let mean = sum.map(|x| (x as f32) / (row.len() as f32));
+            let f32_x = row.map(|x| x as f32);
+
+            // unbiased = false in pytorch definition. if it was unbiased we would divide by row.len() - 1
+            let var = (f32_x.clone() - mean.clone())
+                .unwrap()
+                .map(|e| e / (row.len() as f32));
+
+            let denom = var.map(|e| (e + epsilon).sqrt());
+            let numerator = (f32_x - mean).unwrap() * vec![gamma[i]].into_iter().into();
+
+            let result =
+                ((numerator.unwrap() / denom).unwrap() + vec![beta[i]].into_iter().into()).unwrap();
+
+            output.push(result);
+        }
+
+        let output = Tensor::from(output.into_iter()).combine().unwrap();
+        let mut output = output.map(|x| x.round() as i128);
+        output.reshape(a.dims());
+
+        output
+    }
+
     /// Elementwise applies prelu to a tensor of integers.
     /// # Arguments
     ///
