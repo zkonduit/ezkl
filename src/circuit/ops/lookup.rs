@@ -89,7 +89,7 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
             config,
             region,
             values[..].try_into()?,
-            &self,
+            self,
             offset,
         )?))
     }

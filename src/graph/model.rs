@@ -164,6 +164,9 @@ impl Model {
                 OpKind::Poly(op) => {
                     results.insert(i, Op::<Fr>::f(op, &inputs)?);
                 }
+                OpKind::Hybrid(op) => {
+                    results.insert(i, Op::<Fr>::f(op, &inputs)?);
+                }
                 OpKind::Input => {
                     let mut t = model_inputs[*i].clone();
                     t.reshape(&n.out_dims);

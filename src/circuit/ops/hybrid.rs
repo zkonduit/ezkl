@@ -48,7 +48,7 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
             } => tensor::ops::max_pool2d(&inputs[0], padding, stride, pool_dims),
             HybridOp::InstanceNorm2d { epsilon } => Ok(tensor::ops::nonlinearities::instance_norm(
                 inputs.to_vec().try_into().unwrap(),
-                epsilon.0 as i128,
+                epsilon.0,
             )),
             HybridOp::Min => Ok(Tensor::new(
                 Some(&[inputs[0].clone().into_iter().min().unwrap()]),

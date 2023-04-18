@@ -880,14 +880,25 @@ pub mod nonlinearities {
     /// use ezkl_lib::tensor::Tensor;
     /// use ezkl_lib::tensor::ops::nonlinearities::instance_norm;
     /// let x = Tensor::<i128>::new(
-    ///     Some(&[4, 25, 8, 1, 1, 0, 25, 28, 23]),
+    ///     Some(&[4, 2, 8, 1, 1, 2, 2, 2, 3]),
     ///     &[1, 3, 3],
     /// ).unwrap();
-    /// let result = instance_norm(&x, &[0.5], &[23.0], 0.1);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 28, 0, 0, 0, 0, 28, 29, 28]), &[1, 3, 3]).unwrap();
+    ///
+    /// let gamma = Tensor::<i128>::new(
+    ///     Some(&[1]),
+    ///     &[1],
+    /// ).unwrap();
+    ///
+    /// let beta = Tensor::<i128>::new(
+    ///     Some(&[23]),
+    ///     &[1],
+    /// ).unwrap();
+    ///
+    /// let result = instance_norm([x, gamma, beta], 1.0);
+    /// let expected = Tensor::<i128>::new(Some(&[25, 23, 29, 22, 22, 23, 23, 23, 24]), &[1, 3, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn instance_norm(inputs: [Tensor<i128>; 3], epsilon: i128) -> Tensor<i128> {
+    pub fn instance_norm(inputs: [Tensor<i128>; 3], epsilon: f32) -> Tensor<i128> {
         let a = &inputs[0];
         let gamma = &inputs[1];
         let beta = &inputs[2];
@@ -906,9 +917,9 @@ pub mod nonlinearities {
             // unbiased = false in pytorch definition. if it was unbiased we would divide by row.len() - 1
             let var = (row.clone() - mean.clone())
                 .unwrap()
-                .map(|e| e / (row.len() as i128));
+                .map(|e| (e as f32) / (row.len() as f32));
 
-            let denom = var.map(|e| ((e + epsilon) as f32).sqrt().round() as i128);
+            let denom = var.map(|e| (e + epsilon).sqrt().round() as i128);
             let numerator = (row - mean).unwrap() * vec![gamma[i]].into_iter().into();
 
             let result =

@@ -58,12 +58,9 @@ impl<F: FieldExt + TensorType> Table<F> {
         let base = 2i128;
         let smallest = -base.pow(self.bits as u32 - 1);
         let largest = base.pow(self.bits as u32 - 1);
-        // let smallest = -base.pow(3);
-        // let largest = base.pow(3);
+
         let inputs = Tensor::from(smallest..largest);
-        // println!("Are we here Tuesday input {:?}", inputs);
         let evals = Op::<F>::f(&self.nonlinearity, &[inputs.clone()])?;
-        // println!("Tuesday If we are here then evals {:?}", evals);
 
         self.is_assigned = true;
         layouter
@@ -87,7 +84,6 @@ impl<F: FieldExt + TensorType> Table<F> {
                                 row_offset,
                                 || Value::known(i128_to_felt::<F>(evals[row_offset])),
                             )?;
-                            // println!("All good here inside assign table, Tuesday");
                             Ok(())
                         })
                         .collect::<Result<Vec<()>, halo2_proofs::plonk::Error>>()?;

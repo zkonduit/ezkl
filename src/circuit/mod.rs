@@ -303,7 +303,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             }
         }
         trace!("laying out {:?}", op);
-        let res = op.layout(self, region, values, offset);
+        let res = op.layout(self, region, &cp_values, offset);
         res
     }
 }

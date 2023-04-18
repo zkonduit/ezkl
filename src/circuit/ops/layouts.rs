@@ -431,6 +431,7 @@ pub fn affine<F: FieldExt + TensorType>(
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let (mut input, kernel, mut bias) = (values[0].clone(), values[1].clone(), values[2].clone());
+
     if input.dims().len() == 1 {
         input.reshape(&[input.len(), 1])?;
     }
@@ -994,9 +995,6 @@ pub fn nonlinearity<F: FieldExt + TensorType>(
         .lookup_output
         .assign(region, *offset, &output.into())?;
 
-    println!("lookup_selectors {:?}", config.lookup_selectors);
-    println!("nk {:?}", nl);
-
     for i in 0..x.len() {
         let (x, y) = config.lookup_input.cartesian_coord(*offset + i);
         config
@@ -1483,7 +1481,7 @@ pub fn instance_norm<F: FieldExt + TensorType>(
                     Tensor::from(gamma.get_int_evals()?.into_iter()),
                     Tensor::from(beta.get_int_evals()?.into_iter()),
                 ],
-                epsilon as i128,
+                epsilon as f32,
             )
             .map(|x| x as i32);
             assert_eq!(
