@@ -242,6 +242,7 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
                         return Err(Box::new(GraphError::NonConstantPower));
                     }
                 }
+                inputs.pop();
                 Box::new(PolyOp::Pow(*pow as u32))
             }
             _ => return Err(Box::new(GraphError::MissingParams("pow".to_string()))),
