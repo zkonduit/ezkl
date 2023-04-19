@@ -23,14 +23,9 @@ use halo2_proofs::{
 use itertools::Itertools;
 use log::error;
 use log::{debug, info, trace};
-use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::error::Error;
-// use std::fs::File;
-// use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
-// use std::path::PathBuf;
-use std::rc::Rc;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::Framework;
@@ -52,7 +47,7 @@ pub enum Mode {
 /// A circuit configuration for the entirety of a model loaded from an Onnx file.
 #[derive(Clone, Debug)]
 pub struct ModelConfig<F: FieldExt + TensorType> {
-    config: Rc<RefCell<PolyConfig<F>>>,
+    base: PolyConfig<F>,
     /// The model struct
     pub model: Model<F>,
     /// A wrapper for holding all columns that will be assigned to by the model
@@ -220,13 +215,13 @@ impl<F: FieldExt + TensorType> Model<F> {
         info!("configuring model");
         let mut results = BTreeMap::new();
 
-        let base_gate = Rc::new(RefCell::new(PolyConfig::configure(
+        let mut base_gate = PolyConfig::configure(
             meta,
             vars.advices[0..2].try_into()?,
             &vars.advices[2],
             self.run_args.check_mode,
             self.run_args.tolerance as i32,
-        )));
+        );
 
         let lookup_ops: BTreeMap<&usize, &Node<F>> = self
             .nodes
@@ -236,13 +231,13 @@ impl<F: FieldExt + TensorType> Model<F> {
 
         if !lookup_ops.is_empty() {
             for (i, node) in lookup_ops {
-                let config = self.conf_lookup(base_gate.clone(), node, meta, vars)?;
+                let config = self.conf_lookup(&mut base_gate, node, meta, vars)?;
                 results.insert(*i, config);
             }
         }
 
         Ok(ModelConfig {
-            config: base_gate,
+            base: base_gate,
             model: self.clone(),
             vars: vars.clone(),
         })
@@ -257,7 +252,7 @@ impl<F: FieldExt + TensorType> Model<F> {
     /// * `vars` - [ModelVars] for the model.
     fn conf_lookup(
         &self,
-        config: Rc<RefCell<PolyConfig<F>>>,
+        config: &mut PolyConfig<F>,
         node: &Node<F>,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
@@ -275,9 +270,7 @@ impl<F: FieldExt + TensorType> Model<F> {
             }
         };
 
-        config
-            .borrow_mut()
-            .configure_lookup(meta, input, output, self.run_args.bits, &op)?;
+        config.configure_lookup(meta, input, output, self.run_args.bits, &op)?;
 
         Ok(())
     }
@@ -290,7 +283,7 @@ impl<F: FieldExt + TensorType> Model<F> {
     /// * `inputs` - The values to feed into the circuit.
     pub fn layout(
         &self,
-        config: ModelConfig<F>,
+        mut config: ModelConfig<F>,
         layouter: &mut impl Layouter<F>,
         inputs: &[ValTensor<F>],
         vars: &ModelVars<F>,
@@ -305,7 +298,7 @@ impl<F: FieldExt + TensorType> Model<F> {
             }
         }
 
-        config.config.borrow_mut().layout_tables(layouter)?;
+        config.base.layout_tables(layouter)?;
 
         layouter.assign_region(
             || "model",
@@ -339,8 +332,7 @@ impl<F: FieldExt + TensorType> Model<F> {
 
                     trace!("laying out offset {}", offset);
                     let res = config
-                        .config
-                        .borrow_mut()
+                        .base
                         .layout(
                             Some(&mut region),
                             &values,
@@ -380,8 +372,7 @@ impl<F: FieldExt + TensorType> Model<F> {
                     for i in 0..outputs.len() {
                         info!("packing outputs...");
                         outputs[i] = config
-                            .config
-                            .borrow_mut()
+                            .base
                             .layout(
                                 Some(&mut region),
                                 &outputs[i..i + 1],
@@ -412,7 +403,7 @@ impl<F: FieldExt + TensorType> Model<F> {
                             if self.visibility.input.is_public() {
                                 instance_offset += inputs.len();
                             };
-                            config.config.borrow_mut().layout(
+                            config.base.layout(
                                 Some(&mut region),
                                 &[output, vars.instances[instance_offset + i].clone()],
                                 &mut offset,
@@ -451,9 +442,7 @@ impl<F: FieldExt + TensorType> Model<F> {
             results.insert(i, input_value.clone());
         }
 
-        let dummy_config = Rc::new(RefCell::new(PolyConfig::dummy(
-            self.run_args.logrows as usize,
-        )));
+        let mut dummy_config = PolyConfig::dummy(self.run_args.logrows as usize);
 
         let mut offset: usize = 0;
         for (idx, node) in self.nodes.iter() {
@@ -469,7 +458,6 @@ impl<F: FieldExt + TensorType> Model<F> {
                 .collect_vec();
 
             let res = dummy_config
-                .borrow_mut()
                 .layout(None, &values, &mut offset, node.opkind.clone_dyn())
                 .map_err(|e| {
                     error!("{}", e);
@@ -496,7 +484,6 @@ impl<F: FieldExt + TensorType> Model<F> {
             for i in 0..outputs.len() {
                 info!("packing outputs...");
                 outputs[i] = dummy_config
-                    .borrow_mut()
                     .layout(
                         None,
                         &outputs[i..i + 1],
@@ -515,7 +502,7 @@ impl<F: FieldExt + TensorType> Model<F> {
             let _ = outputs
                 .into_iter()
                 .map(|output| {
-                    dummy_config.borrow_mut().layout(
+                    dummy_config.layout(
                         None,
                         &[output.clone(), output],
                         &mut offset,
