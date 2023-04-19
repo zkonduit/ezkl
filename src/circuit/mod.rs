@@ -265,6 +265,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             self.lookup_input = input.clone();
         }
         if let VarTensor::None = self.lookup_output {
+            warn!("assiging lookup output");
             self.lookup_output = output.clone();
         }
         Ok(())

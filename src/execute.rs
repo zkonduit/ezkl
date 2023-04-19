@@ -331,7 +331,7 @@ fn gen_srs_cmd(params_path: PathBuf, logrows: u32) -> Result<(), Box<dyn Error>>
 }
 
 fn table(cli: Cli) -> Result<(), Box<dyn Error>> {
-    let om = Model::from_ezkl_conf::<Fr>(cli)?;
+    let om = Model::<Fr>::from_ezkl_conf(cli)?;
     info!("{}", Table::new(om.nodes.iter()));
     Ok(())
 }
@@ -351,7 +351,7 @@ fn forward(
         model_inputs.push(t);
     }
 
-    let res = Model::forward::<Fr>(model, &model_inputs, args)?;
+    let res = Model::<Fr>::forward(model, &model_inputs, args)?;
 
     let float_res: Vec<Vec<f32>> = res.iter().map(|t| t.to_vec()).collect();
     trace!("forward pass output: {:?}", float_res);

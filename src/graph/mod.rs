@@ -1,6 +1,5 @@
 /// Helper functions
 pub mod utilities;
-use serde::{Deserialize, Serialize};
 pub use utilities::*;
 /// Crate for defining a computational graph and building a ZK-circuit from it.
 pub mod model;
@@ -24,10 +23,10 @@ use halo2_proofs::{
 use log::{info, trace};
 pub use model::*;
 pub use node::*;
-use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Write};
+// use std::fs::File;
+// use std::io::{BufReader, BufWriter, Read, Write};
 use std::marker::PhantomData;
-use std::path::PathBuf;
+// use std::path::PathBuf;
 use thiserror::Error;
 pub use vars::*;
 
@@ -79,12 +78,12 @@ pub enum GraphError {
 }
 
 /// Defines the circuit for a computational graph / model loaded from a `.onnx` file.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct ModelCircuit<F: FieldExt + TensorType> {
     /// Vector of input tensors to the model / graph of computations.
     pub inputs: Vec<Tensor<i128>>,
     ///
-    pub model: Model,
+    pub model: Model<F>,
     /// Represents the Field we are using.
     pub _marker: PhantomData<F>,
 }
@@ -93,7 +92,7 @@ impl<F: FieldExt + TensorType> ModelCircuit<F> {
     ///
     pub fn new(
         data: &ModelInput,
-        model: Model,
+        model: Model<F>,
     ) -> Result<ModelCircuit<F>, Box<dyn std::error::Error>> {
         // quantize the supplied data using the provided scale.
         let mut inputs: Vec<Tensor<i128>> = vec![];
@@ -109,43 +108,43 @@ impl<F: FieldExt + TensorType> ModelCircuit<F> {
         })
     }
 
-    ///
-    pub fn write<W: Write>(
-        &self,
-        mut writer: BufWriter<W>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let circuit_bytes = bincode::serialize(&self)?;
-        writer.write(&circuit_bytes)?;
-        writer.flush()?;
-        Ok(())
-    }
+    // ///
+    // pub fn write<W: Write>(
+    //     &self,
+    //     mut writer: BufWriter<W>,
+    // ) -> Result<(), Box<dyn std::error::Error>> {
+    //     let circuit_bytes = bincode::serialize(&self)?;
+    //     writer.write(&circuit_bytes)?;
+    //     writer.flush()?;
+    //     Ok(())
+    // }
 
-    ///
-    pub fn write_to_file(&self, path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-        let fs = File::create(path)?;
-        let buffer = BufWriter::new(fs);
-        self.write(buffer)
-    }
+    // ///
+    // pub fn write_to_file(&self, path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    //     let fs = File::create(path)?;
+    //     let buffer = BufWriter::new(fs);
+    //     self.write(buffer)
+    // }
 
-    ///
-    pub fn read<R: Read>(mut reader: BufReader<R>) -> Result<Self, Box<dyn std::error::Error>> {
-        let buffer: &mut Vec<u8> = &mut vec![];
-        reader.read_to_end(buffer)?;
+    // ///
+    // pub fn read<R: Read>(mut reader: BufReader<R>) -> Result<Self, Box<dyn std::error::Error>> {
+    //     let buffer: &mut Vec<u8> = &mut vec![];
+    //     reader.read_to_end(buffer)?;
 
-        let circuit = bincode::deserialize(&buffer)?;
-        Ok(circuit)
-    }
-    ///
-    pub fn read_from_file(path: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
-        let f = File::open(path)?;
-        let reader = BufReader::new(f);
-        Self::read(reader)
-    }
+    //     let circuit = bincode::deserialize(&buffer)?;
+    //     Ok(circuit)
+    // }
+    // ///
+    // pub fn read_from_file(path: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
+    //     let f = File::open(path)?;
+    //     let reader = BufReader::new(f);
+    //     Self::read(reader)
+    // }
 
     ///
     pub fn from_arg(data: &ModelInput) -> Result<Self, Box<dyn std::error::Error>> {
         let cli = Cli::create()?;
-        let model = Model::from_ezkl_conf::<halo2curves::bn256::Fr>(cli)?;
+        let model = Model::from_ezkl_conf(cli)?;
         Self::new(data, model)
     }
 

@@ -442,6 +442,32 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
             _ => false,
         }
     }
+
+    fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
+        Box::new(self.clone())
+    }
+
+    fn requires_homogenous_input_scales(&self) -> bool {
+        match self {
+            PolyOp::Add | PolyOp::Sub | PolyOp::Affine | PolyOp::Conv { .. } => true,
+            _ => false,
+        }
+    }
+
+    fn bias_variable(&self) -> Option<usize> {
+        match self {
+            PolyOp::Affine | PolyOp::ScaleAndShift | PolyOp::Conv { .. } => Some(2),
+            _ => None,
+        }
+    }
+
+    fn required_poly(&self) -> Option<PolyOp> {
+        Some(self.clone())
+    }
+
+    fn clone_dyn(&self) -> Box<dyn Op<F>> {
+        Box::new(self.clone()) // Forward to the derive(Clone) impl
+    }
 }
 
 impl fmt::Display for PolyOp {

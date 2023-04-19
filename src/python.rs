@@ -54,7 +54,7 @@ fn table(model: String) -> Result<String, PyErr> {
         output: Visibility::Public,
     };
 
-    let result = Model::new::<Fr>(model, run_args, Mode::Mock, visibility);
+    let result = Model::<Fr>::new(model, run_args, Mode::Mock, visibility);
 
     match result {
         Ok(m) => Ok(Table::new(m.nodes.iter()).to_string()),
@@ -132,7 +132,7 @@ fn forward(
                     Err(_) => return Err(PyValueError::new_err("Failed to quantize vector")),
                 }
             }
-            let res = Model::forward::<Fr>(model, &model_inputs, run_args);
+            let res = Model::<Fr>::forward(model, &model_inputs, run_args);
 
             match res {
                 Ok(r) => {

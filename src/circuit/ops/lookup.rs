@@ -7,6 +7,7 @@ use std::error::Error;
 use crate::{
     circuit::{layouts, utils},
     fieldutils::i128_to_felt,
+    graph::scale_to_multiplier,
     tensor::{self, Tensor, TensorError, TensorType},
 };
 
@@ -92,5 +93,39 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
             self,
             offset,
         )?))
+    }
+
+    fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>> {
+        let scale_diff = scale_to_multiplier(inputs_scale[0] - global_scale) as usize;
+        match self {
+            LookupOp::Div { denom } => Box::new(LookupOp::Div {
+                denom: crate::circuit::utils::F32(denom.0 * scale_diff as f32),
+            }),
+            LookupOp::ReLU { .. } => Box::new(LookupOp::ReLU { scale: scale_diff }),
+            LookupOp::LeakyReLU { slope, .. } => Box::new(LookupOp::LeakyReLU {
+                scale: scale_diff,
+                slope: slope.clone(),
+            }),
+            LookupOp::Sigmoid { .. } => Box::new(LookupOp::Sigmoid {
+                scales: (scale_diff, global_scale as usize),
+            }),
+            LookupOp::Sqrt { .. } => Box::new(LookupOp::Sqrt {
+                scales: (scale_diff, global_scale as usize),
+            }),
+            LookupOp::Tanh { .. } => Box::new(LookupOp::Tanh {
+                scales: (scale_diff, global_scale as usize),
+            }),
+            LookupOp::Erf { .. } => Box::new(LookupOp::Erf {
+                scales: (scale_diff, global_scale as usize),
+            }),
+        }
+    }
+
+    fn required_lookup(&self) -> Option<LookupOp> {
+        Some(self.clone())
+    }
+
+    fn clone_dyn(&self) -> Box<dyn Op<F>> {
+        Box::new(self.clone()) // Forward to the derive(Clone) impl
     }
 }

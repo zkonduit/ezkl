@@ -1,7 +1,6 @@
 use super::node::*;
 use super::vars::*;
 use super::GraphError;
-use crate::circuit::hybrid::HybridOp;
 use crate::circuit::ops::lookup::LookupOp;
 use crate::circuit::ops::poly::PolyOp;
 use crate::circuit::BaseConfig as PolyConfig;
@@ -13,7 +12,6 @@ use crate::fieldutils::i128_to_felt;
 use crate::graph::scale_to_multiplier;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor};
-use halo2curves::bn256::Fr;
 use serde::Deserialize;
 use serde::Serialize;
 //use clap::Parser;
@@ -31,10 +29,10 @@ use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::BTreeMap;
 use std::error::Error;
-use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Write};
+// use std::fs::File;
+// use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
-use std::path::PathBuf;
+// use std::path::PathBuf;
 use std::rc::Rc;
 use tabled::Table;
 use tract_onnx;
@@ -59,7 +57,7 @@ pub enum Mode {
 pub struct ModelConfig<F: FieldExt + TensorType> {
     configs: BTreeMap<usize, NodeConfig<F>>,
     /// The model struct
-    pub model: Model,
+    pub model: Model<F>,
     /// (optional) range checked outputs of the model graph
     pub range_checks: Vec<Rc<RefCell<PolyConfig<F>>>>,
     /// (optional) packed outputs of the model graph
@@ -69,14 +67,14 @@ pub struct ModelConfig<F: FieldExt + TensorType> {
 }
 
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Model {
+#[derive(Clone, Debug)]
+pub struct Model<F: FieldExt + TensorType> {
     /// input indices
     pub inputs: Vec<usize>,
     /// output indices
     pub outputs: Vec<usize>,
     /// Graph of nodes we are loading from Onnx.
-    pub nodes: NodeGraph, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
+    pub nodes: NodeGraph<F>, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
     /// The [RunArgs] being used
     pub run_args: RunArgs,
     /// The [Mode] we're using the model in.
@@ -85,7 +83,7 @@ pub struct Model {
     pub visibility: VarVisibility,
 }
 
-impl Model {
+impl<F: FieldExt + TensorType> Model<F> {
     /// Creates an `Model` from a specified path to an Onnx file.
     /// # Arguments
     ///
@@ -93,7 +91,7 @@ impl Model {
     /// * `run_args` - [RunArgs]
     /// * `mode` - The [Mode] we're using the model in.
     /// * `visibility` - Which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
-    pub fn new<F: FieldExt + TensorType>(
+    pub fn new(
         path: impl AsRef<Path>,
         run_args: RunArgs,
         mode: Mode,
@@ -104,9 +102,9 @@ impl Model {
             .map_err(|_| GraphError::ModelLoad)?;
         info!("visibility: {}", visibility);
 
-        let mut nodes = BTreeMap::<usize, Node>::new();
+        let mut nodes = BTreeMap::<usize, Node<F>>::new();
         for (i, n) in model.nodes.iter().enumerate() {
-            let n = Node::new::<F>(n.clone(), &mut nodes, run_args.scale, i)?;
+            let n = Node::<F>::new(n.clone(), &mut nodes, run_args.scale, i)?;
             nodes.insert(i, n);
         }
         let om = Model {
@@ -118,7 +116,7 @@ impl Model {
             visibility,
         };
 
-        debug!("{}", Table::new(om.nodes.iter()).to_string());
+        debug!("\n {}", Table::new(om.nodes.iter()).to_string());
 
         Ok(om)
     }
@@ -128,7 +126,7 @@ impl Model {
     ///
     /// * `path` - A path to an Onnx file.
     /// * `run_args` - [RunArgs]
-    pub fn forward<F: FieldExt + TensorType>(
+    pub fn forward(
         model_path: impl AsRef<Path>,
         model_inputs: &[Tensor<i128>],
         run_args: RunArgs,
@@ -138,9 +136,9 @@ impl Model {
             .map_err(|_| GraphError::ModelLoad)?;
         info!("running forward pass");
 
-        let mut nodes = BTreeMap::<usize, Node>::new();
+        let mut nodes = BTreeMap::<usize, Node<F>>::new();
         for (i, n) in model.nodes.iter().enumerate() {
-            let n = Node::new::<F>(n.clone(), &mut nodes, run_args.scale, i)?;
+            let n = Node::new(n.clone(), &mut nodes, run_args.scale, i)?;
             nodes.insert(i, n);
         }
 
@@ -149,35 +147,19 @@ impl Model {
         let mut results: BTreeMap<&usize, Tensor<i128>> = BTreeMap::new();
         for (i, n) in nodes.iter() {
             let mut inputs = vec![];
-            for i in n.inputs.iter() {
-                match results.get(&i) {
-                    Some(value) => inputs.push(value.clone()),
-                    None => return Err(Box::new(GraphError::MissingNode(*i))),
+            if n.opkind.is_input() {
+                let mut t = model_inputs[*i].clone();
+                t.reshape(&n.out_dims);
+                inputs.push(t);
+            } else {
+                for i in n.inputs.iter() {
+                    match results.get(&i) {
+                        Some(value) => inputs.push(value.clone()),
+                        None => return Err(Box::new(GraphError::MissingNode(*i))),
+                    }
                 }
-            }
-            match &n.opkind {
-                OpKind::Lookup(op) => {
-                    // assert_eq!(inputs.len(), 1);
-                    results.insert(i, Op::<Fr>::f(op, &[inputs[0].clone()])?);
-                }
-                OpKind::Poly(op) => {
-                    results.insert(i, Op::<Fr>::f(op, &inputs)?);
-                }
-                OpKind::Hybrid(op) => {
-                    results.insert(i, Op::<Fr>::f(op, &inputs)?);
-                }
-                OpKind::Input => {
-                    let mut t = model_inputs[*i].clone();
-                    t.reshape(&n.out_dims);
-                    results.insert(i, t);
-                }
-                OpKind::Const { const_value, .. } => {
-                    results.insert(i, const_value.clone());
-                }
-                _ => {
-                    panic!("unsupported op")
-                }
-            }
+            };
+            results.insert(i, Op::<F>::f(&*n.opkind, &inputs)?);
         }
 
         let output_nodes = model.outputs.iter();
@@ -201,63 +183,63 @@ impl Model {
     }
 
     /// Creates a `Model` from parsed CLI arguments
-    pub fn from_ezkl_conf<F: FieldExt + TensorType>(cli: Cli) -> Result<Self, Box<dyn Error>> {
+    pub fn from_ezkl_conf(cli: Cli) -> Result<Self, Box<dyn Error>> {
         let visibility = VarVisibility::from_args(cli.args.clone())?;
         match cli.command {
             Commands::Table { model } | Commands::Mock { model, .. } => {
-                Model::new::<F>(model, cli.args, Mode::Mock, visibility)
+                Model::new(model, cli.args, Mode::Mock, visibility)
             }
             Commands::Prove { model, .. }
             | Commands::Verify { model, .. }
             | Commands::Aggregate { model, .. } => {
-                Model::new::<F>(model, cli.args, Mode::Prove, visibility)
+                Model::new(model, cli.args, Mode::Prove, visibility)
             }
             #[cfg(not(target_arch = "wasm32"))]
             Commands::CreateEVMVerifier { model, .. } => {
-                Model::new::<F>(model, cli.args, Mode::Prove, visibility)
+                Model::new(model, cli.args, Mode::Prove, visibility)
             }
             #[cfg(feature = "render")]
             Commands::RenderCircuit { model, .. } => {
-                Model::new::<F>(model, cli.args, Mode::Table, visibility)
+                Model::new(model, cli.args, Mode::Table, visibility)
             }
             _ => panic!(),
         }
     }
 
-    ///
-    pub fn write<W: Write>(&self, mut writer: BufWriter<W>) -> Result<(), Box<dyn Error>> {
-        let circuit_bytes = bincode::serialize(&self)?;
-        writer.write(&circuit_bytes)?;
-        writer.flush()?;
-        Ok(())
-    }
+    // ///
+    // pub fn write<W: Write>(&self, mut writer: BufWriter<W>) -> Result<(), Box<dyn Error>> {
+    //     let circuit_bytes = bincode::serialize(&self)?;
+    //     writer.write(&circuit_bytes)?;
+    //     writer.flush()?;
+    //     Ok(())
+    // }
 
-    ///
-    pub fn write_to_file(&self, path: PathBuf) -> Result<(), Box<dyn Error>> {
-        let fs = File::create(path)?;
-        let buffer = BufWriter::new(fs);
-        self.write(buffer)
-    }
+    // ///
+    // pub fn write_to_file(&self, path: PathBuf) -> Result<(), Box<dyn Error>> {
+    //     let fs = File::create(path)?;
+    //     let buffer = BufWriter::new(fs);
+    //     self.write(buffer)
+    // }
 
-    ///
-    pub fn read<R: Read>(mut reader: BufReader<R>) -> Result<Self, Box<dyn Error>> {
-        let buffer: &mut Vec<u8> = &mut vec![];
-        reader.read_to_end(buffer)?;
+    // ///
+    // pub fn read<R: Read>(mut reader: BufReader<R>) -> Result<Self, Box<dyn Error>> {
+    //     let buffer: &mut Vec<u8> = &mut vec![];
+    //     reader.read_to_end(buffer)?;
 
-        let circuit = bincode::deserialize(&buffer)?;
-        Ok(circuit)
-    }
-    ///
-    pub fn read_from_file(path: PathBuf) -> Result<Self, Box<dyn Error>> {
-        let f = File::open(path)?;
-        let reader = BufReader::new(f);
-        Self::read(reader)
-    }
+    //     let circuit = bincode::deserialize(&buffer)?;
+    //     Ok(circuit)
+    // }
+    // ///
+    // pub fn read_from_file(path: PathBuf) -> Result<Self, Box<dyn Error>> {
+    //     let f = File::open(path)?;
+    //     let reader = BufReader::new(f);
+    //     Self::read(reader)
+    // }
 
     /// Creates a `Model` based on CLI arguments
     pub fn from_arg() -> Result<Self, Box<dyn Error>> {
         let conf = Cli::create()?;
-        Self::from_ezkl_conf::<Fr>(conf)
+        Self::from_ezkl_conf(conf)
     }
 
     /// Configures an `Model`. Does so one execution `bucket` at a time. Each bucket holds either:
@@ -267,7 +249,7 @@ impl Model {
     ///
     /// * `meta` - Halo2 ConstraintSystem.
     /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure all the nodes loaded in `self.nodes`.
-    pub fn configure<F: FieldExt + TensorType>(
+    pub fn configure(
         &self,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
@@ -283,23 +265,25 @@ impl Model {
             self.run_args.tolerance as i32,
         )));
 
-        let non_op_nodes: BTreeMap<&usize, &Node> = self
+        let non_op_nodes: BTreeMap<&usize, &Node<F>> = self
             .nodes
             .iter()
             .filter(|(_, n)| n.opkind.is_const() || n.opkind.is_input())
             .collect();
         if !non_op_nodes.is_empty() {
             for (i, node) in non_op_nodes {
-                let config = self.conf_non_op_node(node)?;
+                let config = NodeConfig::NonOp {
+                    op: node.opkind.clone(),
+                };
                 results.insert(*i, config);
             }
         }
 
         // preserves ordering
-        let poly_ops: BTreeMap<&usize, &Node> = self
+        let poly_ops: BTreeMap<&usize, &Node<F>> = self
             .nodes
             .iter()
-            .filter(|(_, n)| n.opkind.is_poly())
+            .filter(|(_, n)| n.opkind.required_lookup().is_none())
             .collect();
         // preserves ordering
         if !poly_ops.is_empty() {
@@ -314,10 +298,10 @@ impl Model {
             }
         }
 
-        let lookup_ops: BTreeMap<&usize, &Node> = self
+        let lookup_ops: BTreeMap<&usize, &Node<F>> = self
             .nodes
             .iter()
-            .filter(|(_, n)| n.opkind.is_lookup() || n.opkind.is_hybrid())
+            .filter(|(_, n)| n.opkind.required_lookup().is_some())
             .collect();
 
         if !lookup_ops.is_empty() {
@@ -346,7 +330,7 @@ impl Model {
         })
     }
 
-    fn output_ops<F: FieldExt + TensorType>(
+    fn output_ops(
         &self,
         base_gate: &mut Rc<RefCell<PolyConfig<F>>>,
     ) -> Vec<Rc<RefCell<PolyConfig<F>>>> {
@@ -359,32 +343,6 @@ impl Model {
         configs
     }
 
-    /// Configures non op related nodes (eg. representing an input or const value)
-    pub fn conf_non_op_node<F: FieldExt + TensorType>(
-        &self,
-        node: &Node,
-    ) -> Result<NodeConfig<F>, Box<dyn Error>> {
-        match &node.opkind {
-            OpKind::Const { .. } => {
-                // Typically parameters for one or more layers.
-                // Currently this is handled in the consuming node(s), but will be moved here.
-                Ok(NodeConfig::Const)
-            }
-            OpKind::Input => {
-                // This is the input to the model (e.g. the image).
-                // Currently this is handled in the consuming node(s), but will be moved here.
-                Ok(NodeConfig::Input)
-            }
-            OpKind::Unknown => {
-                unimplemented!()
-            }
-            c => Err(Box::new(GraphError::WrongMethod(
-                node.idx,
-                c.clone().to_string(),
-            ))),
-        }
-    }
-
     /// Configures a [BTreeMap] of operations that can be constrained using polynomials. These correspond to operations that are represented in
     /// the `circuit::polynomial` module. A single configuration is output, representing the amalgamation of these operations into
     /// a single Halo2 gate.
@@ -393,9 +351,9 @@ impl Model {
     /// * `nodes` - A [BTreeMap] of (node index, [Node] pairs). The [Node] must represent a polynomial op.
     /// * `meta` - Halo2 ConstraintSystem.
     /// * `vars` - [ModelVars] for the model.
-    fn conf_poly_ops<F: FieldExt + TensorType>(
+    fn conf_poly_ops(
         &self,
-        node: &Node,
+        node: &Node<F>,
         base_gate: &mut Rc<RefCell<PolyConfig<F>>>,
     ) -> Result<NodeConfig<F>, Box<dyn Error>> {
         let input_nodes = node
@@ -421,10 +379,10 @@ impl Model {
     /// * `node` - The [Node] must represent a lookup based op.
     /// * `meta` - Halo2 ConstraintSystem.
     /// * `vars` - [ModelVars] for the model.
-    fn conf_lookup<F: FieldExt + TensorType>(
+    fn conf_lookup(
         &self,
         config: Rc<RefCell<PolyConfig<F>>>,
-        node: &Node,
+        node: &Node<F>,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
     ) -> Result<NodeConfig<F>, Box<dyn Error>> {
@@ -438,26 +396,12 @@ impl Model {
 
         let input_idx = input_nodes.iter().map(|f| f.idx).collect_vec();
 
-        let op = match &node.opkind {
-            OpKind::Hybrid(HybridOp::PReLU { scale, .. }) => LookupOp::ReLU { scale: *scale },
-            OpKind::Hybrid(HybridOp::Max)
-            | OpKind::Hybrid(HybridOp::Min)
-            | OpKind::Hybrid(HybridOp::MaxPool2d { .. }) => LookupOp::ReLU { scale: 1 },
-            OpKind::Hybrid(HybridOp::InstanceNorm2d { .. }) => LookupOp::Sqrt { scales: (1, 1) },
-            OpKind::Hybrid(HybridOp::Mean { scale }) => {
-                assert_eq!(input_nodes.len(), 1);
-                LookupOp::Div {
-                    denom: crate::circuit::utils::F32(
-                        // we need to scale the denom by the number of elements in the input tensor and the calculated scale diff
-                        (scale * input_nodes[0].out_dims.iter().product::<usize>()) as f32,
-                    ),
-                }
-            }
-            OpKind::Lookup(nl) => nl.clone(),
-            c => {
+        let op = match &node.opkind.required_lookup() {
+            Some(nl) => nl.clone(),
+            None => {
                 return Err(Box::new(GraphError::WrongMethod(
                     node.idx,
-                    c.clone().to_string(),
+                    node.opkind.as_str().to_string(),
                 )));
             }
         };
@@ -480,7 +424,7 @@ impl Model {
     /// * `config` - [ModelConfig] holding all node configs.
     /// * `layouter` - Halo2 Layouter.
     /// * `inputs` - The values to feed into the circuit.
-    pub fn layout<F: FieldExt + TensorType>(
+    pub fn layout(
         &self,
         mut config: ModelConfig<F>,
         layouter: &mut impl Layouter<F>,
@@ -596,7 +540,7 @@ impl Model {
     /// * `config` - [NodeConfig] the single region we will layout.
     /// * `layouter` - Halo2 Layouter.
     /// * `inputs` - [BTreeMap] of values to feed into the [NodeConfig], can also include previous intermediate results, i.e the output of other nodes.
-    fn layout_config<F: FieldExt + TensorType>(
+    fn layout_config(
         &self,
         region: &mut Region<F>,
         inputs: &mut BTreeMap<usize, ValTensor<F>>,
@@ -614,8 +558,9 @@ impl Model {
                     .iter()
                     .map(|i| {
                         let node = &self.nodes.get(i).unwrap();
-                        match &node.opkind {
-                            OpKind::Const { const_value, .. } => {
+
+                        match &node.opkind.const_value() {
+                            Some(const_value) => {
                                 if self.visibility.params.is_public() {
                                     const_value
                                         .map(|x| {
@@ -637,14 +582,11 @@ impl Model {
                     })
                     .collect_vec();
 
-                let res = config
-                    .borrow_mut()
-                    .layout(region, &values, offset, op.get_inner())?;
+                let res = config.borrow_mut().layout(region, &values, offset, op)?;
 
                 res
             }
-            NodeConfig::Input => None,
-            NodeConfig::Const => None,
+            NodeConfig::NonOp { .. } => None,
             _ => {
                 return Err(Box::new(GraphError::UnsupportedOp));
             }
@@ -692,9 +634,9 @@ impl Model {
     pub fn num_vars_lookup_op(&self, lookup_op: &LookupOp) -> Vec<usize> {
         let mut count = BTreeMap::<LookupOp, (usize, usize)>::new();
         for (_, n) in self.nodes.iter() {
-            if n.opkind == OpKind::Lookup(lookup_op.clone()) {
-                match &n.opkind {
-                    OpKind::Lookup(op) => {
+            match &n.opkind.required_lookup() {
+                Some(op) => {
+                    if op.clone() == lookup_op.clone() {
                         let elem = count.get_mut(op);
                         // handle output variables
                         let output_size: usize = n.out_dims.iter().product();
@@ -709,8 +651,10 @@ impl Model {
                             }
                         }
                     }
-                    // should never reach here
-                    _ => panic!(),
+                }
+                // should never reach here
+                _ => {
+                    panic!()
                 }
             }
         }
@@ -727,16 +671,16 @@ impl Model {
     pub fn total_var_len(&self) -> usize {
         let mut maximum_var_len = 0;
 
-        let poly_ops: BTreeMap<&usize, &Node> = self
+        let poly_ops: BTreeMap<&usize, &Node<F>> = self
             .nodes
             .iter()
-            .filter(|(_, n)| n.opkind.is_poly())
+            .filter(|(_, n)| n.opkind.required_poly().is_some())
             .collect();
 
         let _: Vec<_> = poly_ops
             .values()
-            .map(|n| match &n.opkind {
-                OpKind::Poly(p) => {
+            .map(|n| match &n.opkind.required_poly() {
+                Some(p) => {
                     let in_dims = n
                         .inputs
                         .iter()
@@ -748,10 +692,10 @@ impl Model {
             })
             .collect();
 
-        let lookup_ops: BTreeMap<&usize, &Node> = self
+        let lookup_ops: BTreeMap<&usize, &Node<F>> = self
             .nodes
             .iter()
-            .filter(|(_, n)| n.opkind.is_lookup())
+            .filter(|(_, n)| n.opkind.required_lookup().is_some())
             .collect();
 
         for op in lookup_ops {

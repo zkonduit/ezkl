@@ -3,11 +3,12 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    circuit::layouts,
+    circuit::{layouts, utils},
+    graph::scale_to_multiplier,
     tensor::{self, Tensor, TensorError, TensorType},
 };
 
-use super::Op;
+use super::{lookup::LookupOp, Op};
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be used to express more complex operations via accumulation
@@ -15,6 +16,7 @@ use super::Op;
 pub enum HybridOp {
     Mean {
         scale: usize,
+        num_inputs: usize,
     },
     Max,
     MaxPool2d {
@@ -36,7 +38,9 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         match &self {
-            HybridOp::Mean { scale } => Ok(tensor::ops::nonlinearities::mean(&inputs[0], *scale)),
+            HybridOp::Mean { scale, .. } => {
+                Ok(tensor::ops::nonlinearities::mean(&inputs[0], *scale))
+            }
             HybridOp::Max => Ok(Tensor::new(
                 Some(&[inputs[0].clone().into_iter().max().unwrap()]),
                 &[1],
@@ -170,5 +174,47 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
             HybridOp::InstanceNorm2d { .. } => true,
             _ => false,
         }
+    }
+
+    fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>> {
+        let mult = scale_to_multiplier(inputs_scale[0] - global_scale);
+        match self {
+            HybridOp::PReLU { scale: _, slopes } => Box::new(HybridOp::PReLU {
+                scale: mult as usize,
+                slopes: slopes.to_vec(),
+            }),
+            HybridOp::Mean {
+                scale: _,
+                num_inputs,
+            } => Box::new(HybridOp::Mean {
+                scale: mult as usize,
+                num_inputs: *num_inputs,
+            }),
+            _ => Box::new(self.clone()),
+        }
+    }
+
+    fn required_lookup(&self) -> Option<LookupOp> {
+        match self {
+            HybridOp::PReLU { scale, .. } => Some(LookupOp::ReLU { scale: *scale }),
+            HybridOp::Max | HybridOp::Min | HybridOp::MaxPool2d { .. } => {
+                Some(LookupOp::ReLU { scale: 1 })
+            }
+            HybridOp::Mean { scale, num_inputs } => Some(LookupOp::Div {
+                denom: utils::F32((*scale * *num_inputs) as f32),
+            }),
+            HybridOp::InstanceNorm2d { .. } => Some(LookupOp::Sqrt { scales: (1, 1) }),
+        }
+    }
+
+    fn bias_variable(&self) -> Option<usize> {
+        match self {
+            HybridOp::InstanceNorm2d { .. } => Some(2),
+            _ => None,
+        }
+    }
+
+    fn clone_dyn(&self) -> Box<dyn Op<F>> {
+        Box::new(self.clone()) // Forward to the derive(Clone) impl
     }
 }
