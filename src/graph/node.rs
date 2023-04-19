@@ -178,7 +178,7 @@ impl<F: FieldExt + TensorType> Node<F> {
                 } else {
                     let bias_node = &inputs[idx];
                     let scale_diff = out_scale - bias_node.out_scale;
-                    let mut bias_node = other_nodes.get_mut(&node.inputs[2].node).unwrap();
+                    let mut bias_node = other_nodes.get_mut(&inputs[idx].idx).unwrap();
                     bias_node = Self::scale_up_const_node(bias_node, scale + scale_diff)?;
                     if (out_scale) != bias_node.out_scale {
                         return Err(Box::new(GraphError::RescalingError(

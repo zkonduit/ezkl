@@ -449,7 +449,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
 
     fn requires_homogenous_input_scales(&self) -> bool {
         match self {
-            PolyOp::Add | PolyOp::Sub | PolyOp::Affine | PolyOp::Conv { .. } => true,
+            PolyOp::Add | PolyOp::Sub => true,
             _ => false,
         }
     }
