@@ -22,9 +22,9 @@ pub mod poly;
 ///
 pub trait Op<F: FieldExt + TensorType>: std::fmt::Debug + Send + Sync {
     ///
-    fn f(self: &Self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError>;
+    fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError>;
     ///
-    fn as_str(self: &Self) -> &'static str;
+    fn as_str(&self) -> &'static str;
 
     ///
     fn layout(
@@ -108,11 +108,11 @@ impl<F: FieldExt + TensorType> Clone for Box<dyn Op<F>> {
 pub struct Input;
 
 impl<F: FieldExt + TensorType> Op<F> for Input {
-    fn f(self: &Self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
+    fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         Ok(x[0].clone())
     }
 
-    fn as_str(self: &Self) -> &'static str {
+    fn as_str(&self) -> &'static str {
         "Input"
     }
     fn layout(
@@ -148,11 +148,11 @@ pub struct Const {
 }
 
 impl<F: FieldExt + TensorType> Op<F> for Const {
-    fn f(self: &Self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
+    fn f(&self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         Ok(self.const_value.clone())
     }
 
-    fn as_str(self: &Self) -> &'static str {
+    fn as_str(&self) -> &'static str {
         "Const"
     }
     fn layout(
@@ -190,11 +190,11 @@ impl<F: FieldExt + TensorType> Op<F> for Const {
 pub struct Unknown;
 
 impl<F: FieldExt + TensorType> Op<F> for Unknown {
-    fn f(self: &Self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
+    fn f(&self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         Err(TensorError::WrongMethod)
     }
 
-    fn as_str(self: &Self) -> &'static str {
+    fn as_str(&self) -> &'static str {
         "Unknown"
     }
     fn layout(

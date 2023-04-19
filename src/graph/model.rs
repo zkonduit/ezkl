@@ -213,7 +213,6 @@ impl<F: FieldExt + TensorType> Model<F> {
         vars: &mut ModelVars<F>,
     ) -> Result<ModelConfig<F>, Box<dyn Error>> {
         info!("configuring model");
-        let mut results = BTreeMap::new();
 
         let mut base_gate = PolyConfig::configure(
             meta,
@@ -229,11 +228,8 @@ impl<F: FieldExt + TensorType> Model<F> {
             .filter(|(_, n)| n.opkind.required_lookup().is_some())
             .collect();
 
-        if !lookup_ops.is_empty() {
-            for (i, node) in lookup_ops {
-                let config = self.conf_lookup(&mut base_gate, node, meta, vars)?;
-                results.insert(*i, config);
-            }
+        for node in lookup_ops.values() {
+            self.conf_lookup(&mut base_gate, node, meta, vars)?;
         }
 
         Ok(ModelConfig {
@@ -364,7 +360,7 @@ impl<F: FieldExt + TensorType> Model<F> {
                     output_nodes.clone().collect_vec()
                 );
                 let mut outputs = output_nodes
-                    .map(|o| results.get(&o).unwrap().clone())
+                    .map(|o| results.get(o).unwrap().clone())
                     .collect_vec();
 
                 // pack outputs if need be
@@ -433,7 +429,7 @@ impl<F: FieldExt + TensorType> Model<F> {
         let inputs: Vec<ValTensor<F>> = input_shapes
             .iter()
             .map(|shape| {
-                let t: Tensor<Value<F>> = Tensor::new(None, &shape).unwrap();
+                let t: Tensor<Value<F>> = Tensor::new(None, shape).unwrap();
                 t.into()
             })
             .collect_vec();
@@ -476,7 +472,7 @@ impl<F: FieldExt + TensorType> Model<F> {
             output_nodes.clone().collect_vec()
         );
         let mut outputs = output_nodes
-            .map(|o| results.get(&o).unwrap().clone())
+            .map(|o| results.get(o).unwrap().clone())
             .collect_vec();
 
         // pack outputs if need be
@@ -525,7 +521,7 @@ impl<F: FieldExt + TensorType> Model<F> {
     pub fn input_shapes(&self) -> Vec<Vec<usize>> {
         self.inputs
             .iter()
-            .map(|o| self.nodes.get(&o).unwrap().out_dims.clone())
+            .map(|o| self.nodes.get(o).unwrap().out_dims.clone())
             .collect_vec()
     }
 
@@ -539,7 +535,7 @@ impl<F: FieldExt + TensorType> Model<F> {
     pub fn output_shapes(&self) -> Vec<Vec<usize>> {
         self.outputs
             .iter()
-            .map(|o| self.nodes.get(&o).unwrap().out_dims.clone())
+            .map(|o| self.nodes.get(o).unwrap().out_dims.clone())
             .collect_vec()
     }
 
@@ -547,7 +543,7 @@ impl<F: FieldExt + TensorType> Model<F> {
     pub fn get_output_scales(&self) -> Vec<u32> {
         let output_nodes = self.outputs.iter();
         output_nodes
-            .map(|o| self.nodes.get(&o).unwrap().out_scale)
+            .map(|o| self.nodes.get(o).unwrap().out_scale)
             .collect_vec()
     }
 

@@ -92,17 +92,15 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
                 }
                 tensor::ops::pad(&inputs[0], (*dim1, *dim2))
             }
-            PolyOp::Add => tensor::ops::add(&inputs),
-            PolyOp::Sub => tensor::ops::sub(&inputs),
-            PolyOp::Mult => tensor::ops::mult(&inputs),
-            PolyOp::Affine => tensor::ops::affine(&inputs),
-            PolyOp::BatchNorm => tensor::ops::scale_and_shift(&inputs),
-            PolyOp::ScaleAndShift => tensor::ops::scale_and_shift(&inputs),
-            PolyOp::Matmul => tensor::ops::matmul(&inputs),
+            PolyOp::Add => tensor::ops::add(inputs),
+            PolyOp::Sub => tensor::ops::sub(inputs),
+            PolyOp::Mult => tensor::ops::mult(inputs),
+            PolyOp::Affine => tensor::ops::affine(inputs),
+            PolyOp::BatchNorm => tensor::ops::scale_and_shift(inputs),
+            PolyOp::ScaleAndShift => tensor::ops::scale_and_shift(inputs),
+            PolyOp::Matmul => tensor::ops::matmul(inputs),
             PolyOp::Dot => tensor::ops::dot(&inputs.iter().collect()),
-            PolyOp::Conv { padding, stride } => {
-                tensor::ops::convolution(&inputs, *padding, *stride)
-            }
+            PolyOp::Conv { padding, stride } => tensor::ops::convolution(inputs, *padding, *stride),
             PolyOp::SumPool {
                 padding,
                 stride,
@@ -160,8 +158,8 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
                 config,
                 region,
                 values[..].try_into()?,
-                padding.clone(),
-                stride.clone(),
+                *padding,
+                *stride,
                 offset,
             )?,
             PolyOp::SumPool {
@@ -172,9 +170,9 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
                 config,
                 region,
                 values[..].try_into()?,
-                padding.clone(),
-                stride.clone(),
-                kernel_shape.clone(),
+                *padding,
+                *stride,
+                *kernel_shape,
                 offset,
             )?,
             PolyOp::Add => {
@@ -187,9 +185,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
                 layouts::pairwise(config, region, values[..].try_into()?, offset, BaseOp::Mult)?
             }
             PolyOp::Identity => layouts::identity(config, region, values[..].try_into()?, offset)?,
-            PolyOp::Reshape(d) | PolyOp::Flatten(d) => {
-                layouts::reshape(values[..].try_into()?, &d)?
-            }
+            PolyOp::Reshape(d) | PolyOp::Flatten(d) => layouts::reshape(values[..].try_into()?, d)?,
             PolyOp::BatchNorm => {
                 layouts::scale_and_shift(config, region, values[..].try_into()?, offset)?
             }
@@ -224,7 +220,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
                     config,
                     region.as_deref_mut(),
                     values[..].try_into()?,
-                    &scale,
+                    scale,
                     offset,
                 )?[..];
                 inner.layout(config, region, res, offset)?.unwrap()
@@ -236,7 +232,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
         }))
     }
 
-    fn out_scale(&self, in_scales: Vec<u32>, global_scale: u32) -> u32 {
+    fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
         match self {
             PolyOp::Dot => in_scales[0] + in_scales[1],
             PolyOp::Sum => in_scales[0],
@@ -254,7 +250,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
             PolyOp::Pad(_, _) => in_scales[0],
             PolyOp::Pow(pow) => in_scales[0] * (*pow),
             PolyOp::Pack(_, _) => in_scales[0],
-            PolyOp::Rescaled { inner, .. } => Op::<F>::out_scale(&**inner, in_scales, global_scale),
+            PolyOp::Rescaled { inner, .. } => Op::<F>::out_scale(&**inner, in_scales, _g),
             PolyOp::RangeCheck(_) => in_scales[0],
             PolyOp::GlobalSumPool => in_scales[0],
         }
@@ -340,13 +336,13 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
     }
 
     fn has_3d_input(&self) -> bool {
-        match self {
-            PolyOp::Conv { .. } => true,
-            PolyOp::SumPool { .. } => true,
-            PolyOp::GlobalSumPool => true,
-            PolyOp::Pad { .. } => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            PolyOp::Conv { .. }
+                | PolyOp::SumPool { .. }
+                | PolyOp::GlobalSumPool
+                | PolyOp::Pad { .. }
+        )
     }
 
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
@@ -354,10 +350,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
     }
 
     fn requires_homogenous_input_scales(&self) -> bool {
-        match self {
-            PolyOp::Add | PolyOp::Sub => true,
-            _ => false,
-        }
+        matches!(self, PolyOp::Add | PolyOp::Sub)
     }
 
     fn bias_variable(&self) -> Option<usize> {

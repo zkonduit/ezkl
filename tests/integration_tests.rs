@@ -441,9 +441,9 @@ fn tutorial() {
             "-K=17",
             "mock",
             "-D",
-            format!("./examples/onnx/tutorial/input.json").as_str(),
+            "./examples/onnx/tutorial/input.json".to_string().as_str(),
             "-M",
-            format!("./examples/onnx/tutorial/network.onnx").as_str(),
+            "./examples/onnx/tutorial/network.onnx".to_string().as_str(),
         ])
         .status()
         .expect("failed to execute process");

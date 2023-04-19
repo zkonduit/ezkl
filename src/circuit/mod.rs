@@ -289,7 +289,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
 
     /// layout_tables must be called before layout.
     pub fn layout_tables(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), Box<dyn Error>> {
-        for (_, table) in &self.tables {
+        for table in self.tables.values() {
             if !table.borrow().is_assigned {
                 table.borrow_mut().layout(layouter)?;
             }

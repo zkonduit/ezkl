@@ -161,7 +161,7 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
                     let raw: Tensor<f32> = Tensor::new(Some(&vec), &dims).unwrap();
                     let t = vector_to_quantized(&vec, &dims, 0f32, scale).unwrap();
                     const_value = t;
-                    raw_const_value = Some(raw.map(|f| utils::F32(f)));
+                    raw_const_value = Some(raw.map(utils::F32));
                 }
 
                 DatumType::I64 => {
@@ -475,9 +475,9 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
                 }
             };
 
-            let a = (gamma.clone() / sigma.clone())?;
-            let amu: Tensor<f32> = (a.clone() * mu.clone())?;
-            let amupb: Tensor<f32> = (amu + beta.clone())?;
+            let a = (gamma / sigma)?;
+            let amu: Tensor<f32> = (a.clone() * mu)?;
+            let amupb: Tensor<f32> = (amu + beta)?;
             let b = (amupb * Tensor::new(Some(&[-1f32]), &[1])?)?;
 
             let in_scale = inputs[0].out_scale;
@@ -485,14 +485,14 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
             // gamma node becomes the scale (weigh) in scale and shift
             inputs[1].opkind = Box::new(crate::circuit::ops::Const {
                 const_value: Tensor::new(None, &[1])?,
-                raw_const_value: Some(a.map(|x| crate::circuit::utils::F32(x))),
+                raw_const_value: Some(a.map(utils::F32)),
             });
             inputs[1].quantize_const_to_scale(in_scale)?;
 
             // beta node becomes the shift (bias)
             inputs[2].opkind = Box::new(crate::circuit::ops::Const {
                 const_value: Tensor::new(None, &[1])?,
-                raw_const_value: Some(b.map(|x| utils::F32(x))),
+                raw_const_value: Some(b.map(utils::F32)),
             });
             inputs[2].quantize_const_to_scale(out_scale)?;
 

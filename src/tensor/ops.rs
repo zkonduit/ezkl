@@ -547,7 +547,7 @@ pub fn max_pool2d<T: TensorType>(
     let input_channels = image_dims[0];
     let (image_height, image_width) = (image_dims[1], image_dims[2]);
 
-    let padded_image = pad::<T>(image, padding.clone())?;
+    let padded_image = pad::<T>(image, *padding)?;
 
     let horz_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
     let vert_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
@@ -828,7 +828,7 @@ pub mod nonlinearities {
         let mut output = a.clone();
 
         for i in 0..a.len() {
-            let mut z = a[i].clone() as f32 / (scale_input as f32);
+            let mut z = a[i] as f32 / (scale_input as f32);
             z = (scale_output as f32) * (erf(z as f64) as f32);
             output[i] = z as i128;
         }

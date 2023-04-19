@@ -20,15 +20,15 @@ use tract_onnx::tract_hir::{infer::Factoid, internal::InferenceOp};
 pub type NodeGraph<F> = BTreeMap<usize, Node<F>>;
 
 fn display_vector<T: fmt::Debug>(v: &Vec<T>) -> String {
-    if v.len() > 0 {
+    if !v.is_empty() {
         format!("{:?}", v)
     } else {
-        format!("")
+        String::new()
     }
 }
 
 fn display_opkind<F: FieldExt + TensorType>(v: &Box<dyn Op<F>>) -> String {
-    format!("{}", v.as_str())
+    v.as_str().to_string()
 }
 
 /// A single operation in a Model.
@@ -139,7 +139,7 @@ impl<F: FieldExt + TensorType> Node<F> {
                                 .map(|x| (*x as i128) as usize)
                                 .collect()
                         };
-                        if dims.len() > 0 && dims[0] == 1 && dims.len() > 1 {
+                        if !dims.is_empty() && dims[0] == 1 && dims.len() > 1 {
                             dims[1..].to_vec()
                         } else {
                             dims
@@ -153,22 +153,19 @@ impl<F: FieldExt + TensorType> Node<F> {
 
         // we now run a forward pass to re-quantize the inputs to the node
         // this is necessary because the inputs to the node may have been quantized differently
-        match opkind.bias_variable() {
-            Some(idx) => {
-                if idx >= inputs.len() {
-                } else {
-                    let bias_node = &inputs[idx];
-                    let scale_diff = out_scale - bias_node.out_scale;
-                    let mut bias_node = other_nodes.get_mut(&inputs[idx].idx).unwrap();
-                    bias_node = Self::scale_up_const_node(bias_node, scale + scale_diff)?;
-                    if (out_scale) != bias_node.out_scale {
-                        return Err(Box::new(GraphError::RescalingError(
-                            opkind.as_str().to_string(),
-                        )));
-                    }
+        if let Some(idx) = opkind.bias_variable() {
+            if idx >= inputs.len() {
+            } else {
+                let bias_node = &inputs[idx];
+                let scale_diff = out_scale - bias_node.out_scale;
+                let mut bias_node = other_nodes.get_mut(&inputs[idx].idx).unwrap();
+                bias_node = Self::scale_up_const_node(bias_node, scale + scale_diff)?;
+                if (out_scale) != bias_node.out_scale {
+                    return Err(Box::new(GraphError::RescalingError(
+                        opkind.as_str().to_string(),
+                    )));
                 }
             }
-            _ => {}
         }
 
         Ok(Node {

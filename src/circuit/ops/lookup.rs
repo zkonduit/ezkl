@@ -107,7 +107,7 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
             }),
             LookupOp::LeakyReLU { slope, .. } => Box::new(LookupOp::LeakyReLU {
                 scale: scale_to_multiplier(inputs_scale[0] - global_scale) as usize,
-                slope: slope.clone(),
+                slope: *slope,
             }),
             LookupOp::Sigmoid { .. } => Box::new(LookupOp::Sigmoid {
                 scales: (

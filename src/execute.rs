@@ -342,7 +342,7 @@ fn forward(
     output: String,
     args: RunArgs,
 ) -> Result<(), Box<dyn Error>> {
-    let mut data = prepare_data(data.to_string())?;
+    let mut data = prepare_data(data)?;
 
     // quantize the supplied data using the provided scale.
     let mut model_inputs = vec![];
@@ -362,7 +362,7 @@ fn forward(
 }
 
 fn mock(data: String, logrows: u32) -> Result<(), Box<dyn Error>> {
-    let data = prepare_data(data.to_string())?;
+    let data = prepare_data(data)?;
     let model = Model::from_arg()?;
     let circuit = ModelCircuit::<Fr>::new(&data, model)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
@@ -417,7 +417,7 @@ fn create_evm_verifier(
     sol_code_path: Option<PathBuf>,
     logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
-    let data = prepare_data(data.to_string())?;
+    let data = prepare_data(data)?;
 
     let model = Model::from_arg()?;
     let circuit = ModelCircuit::<Fr>::new(&data, model)?;
@@ -425,7 +425,7 @@ fn create_evm_verifier(
     let num_instance = public_inputs.iter().map(|x| x.len()).collect();
     let params = load_params_cmd(params_path, logrows)?;
 
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path.to_path_buf())?;
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path)?;
     trace!("params computed");
 
     let (deployment_code, yul_code) = gen_evm_verifier(&params, &vk, num_instance)?;
@@ -495,7 +495,7 @@ fn prove(
     logrows: u32,
     check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
-    let data = prepare_data(data.to_string())?;
+    let data = prepare_data(data)?;
 
     let model = Model::from_arg()?;
     let circuit = ModelCircuit::<Fr>::new(&data, model)?;

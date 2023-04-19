@@ -355,7 +355,7 @@ impl VarTensor {
                 if matches!(check_mode, CheckMode::SAFE) {     
                      // during key generation this will be 0 so we use this as a flag to check
                      // TODO: this isn't very safe and would be better to get the phase directly
-                    let is_assigned = !Into::<Tensor<i32>>::into(ValTensor::from(res.clone()).get_inner().unwrap())
+                    let is_assigned = !Into::<Tensor<i32>>::into(res.clone().get_inner().unwrap())
                     .iter()
                     .all(|&x| x == 0);
                     if is_assigned {       

@@ -89,14 +89,14 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
                 config,
                 region,
                 values[..].try_into()?,
-                scale.clone(),
+                *scale,
                 offset,
             )?),
             HybridOp::Mean { scale, .. } => Some(layouts::mean(
                 config,
                 region,
                 values[..].try_into()?,
-                scale.clone(),
+                *scale,
                 offset,
             )?),
             HybridOp::MaxPool2d {
@@ -107,9 +107,9 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
                 config,
                 region,
                 values[..].try_into()?,
-                padding.clone(),
-                stride.clone(),
-                pool_dims.clone(),
+                *padding,
+                *stride,
+                *pool_dims,
                 offset,
             )?),
             HybridOp::Max => Some(layouts::max(
@@ -169,11 +169,10 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
     }
 
     fn has_3d_input(&self) -> bool {
-        match self {
-            HybridOp::MaxPool2d { .. } => true,
-            HybridOp::InstanceNorm2d { .. } => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            HybridOp::MaxPool2d { .. } | HybridOp::InstanceNorm2d { .. }
+        )
     }
 
     fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>> {
