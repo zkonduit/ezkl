@@ -96,27 +96,42 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
     }
 
     fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>> {
-        let scale_diff = scale_to_multiplier(inputs_scale[0] - global_scale) as usize;
         match self {
             LookupOp::Div { denom } => Box::new(LookupOp::Div {
-                denom: crate::circuit::utils::F32(denom.0 * scale_diff as f32),
+                denom: crate::circuit::utils::F32(
+                    denom.0 * scale_to_multiplier(inputs_scale[0] - global_scale),
+                ),
             }),
-            LookupOp::ReLU { .. } => Box::new(LookupOp::ReLU { scale: scale_diff }),
+            LookupOp::ReLU { .. } => Box::new(LookupOp::ReLU {
+                scale: scale_to_multiplier(inputs_scale[0] - global_scale) as usize,
+            }),
             LookupOp::LeakyReLU { slope, .. } => Box::new(LookupOp::LeakyReLU {
-                scale: scale_diff,
+                scale: scale_to_multiplier(inputs_scale[0] - global_scale) as usize,
                 slope: slope.clone(),
             }),
             LookupOp::Sigmoid { .. } => Box::new(LookupOp::Sigmoid {
-                scales: (scale_diff, global_scale as usize),
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
             }),
             LookupOp::Sqrt { .. } => Box::new(LookupOp::Sqrt {
-                scales: (scale_diff, global_scale as usize),
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
             }),
             LookupOp::Tanh { .. } => Box::new(LookupOp::Tanh {
-                scales: (scale_diff, global_scale as usize),
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
             }),
             LookupOp::Erf { .. } => Box::new(LookupOp::Erf {
-                scales: (scale_diff, global_scale as usize),
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
             }),
         }
     }
