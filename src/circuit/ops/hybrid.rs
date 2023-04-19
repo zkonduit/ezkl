@@ -80,7 +80,7 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: &mut halo2_proofs::circuit::Region<F>,
+        region: Option<&mut halo2_proofs::circuit::Region<F>>,
         values: &[tensor::ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<tensor::ValTensor<F>>, Box<dyn std::error::Error>> {

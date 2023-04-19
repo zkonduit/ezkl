@@ -30,7 +30,7 @@ pub trait Op<F: FieldExt + TensorType>: std::fmt::Debug + Send + Sync {
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: &mut Region<F>,
+        region: Option<&mut Region<F>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>>;
@@ -117,10 +117,10 @@ impl<F: FieldExt + TensorType> Op<F> for Input {
     }
     fn layout(
         &self,
-        _config: &mut crate::circuit::BaseConfig<F>,
-        _region: &mut Region<F>,
-        _values: &[ValTensor<F>],
-        _offset: &mut usize,
+        _: &mut crate::circuit::BaseConfig<F>,
+        _: Option<&mut Region<F>>,
+        _: &[ValTensor<F>],
+        _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         Ok(None)
     }
@@ -157,10 +157,10 @@ impl<F: FieldExt + TensorType> Op<F> for Const {
     }
     fn layout(
         &self,
-        _config: &mut crate::circuit::BaseConfig<F>,
-        _region: &mut Region<F>,
-        _values: &[ValTensor<F>],
-        _offset: &mut usize,
+        _: &mut crate::circuit::BaseConfig<F>,
+        _: Option<&mut Region<F>>,
+        _: &[ValTensor<F>],
+        _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         Ok(None)
     }
@@ -199,10 +199,10 @@ impl<F: FieldExt + TensorType> Op<F> for Unknown {
     }
     fn layout(
         &self,
-        _config: &mut crate::circuit::BaseConfig<F>,
-        _region: &mut Region<F>,
-        _values: &[ValTensor<F>],
-        _offset: &mut usize,
+        _: &mut crate::circuit::BaseConfig<F>,
+        _: Option<&mut Region<F>>,
+        _: &[ValTensor<F>],
+        _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         Err(Box::new(super::CircuitError::UnsupportedOp))
     }

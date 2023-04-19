@@ -27,7 +27,7 @@ use crate::circuit::ops::lookup::LookupOp;
 /// Dot product accumulated layout
 pub fn dot<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
@@ -36,13 +36,13 @@ pub fn dot<F: FieldExt + TensorType>(
     for (i, input) in values.iter().enumerate() {
         let inp = {
             let (res, len) = config.inputs[i].assign_with_duplication(
-                region,
+                region.as_deref_mut(),
                 *offset,
                 input,
                 &config.check_mode,
             )?;
             assigned_len = len;
-            res.map(|e| e.value_field().evaluate())
+            res.get_inner()?
         };
         inputs.push(inp);
     }
@@ -51,7 +51,7 @@ pub fn dot<F: FieldExt + TensorType>(
     let accumulated_dot = accumulated::dot(&[inputs[0].clone(), inputs[1].clone()])
         .expect("accum poly: dot op failed");
     let (output, output_assigned_len) = config.output.assign_with_duplication(
-        region,
+        region.as_deref_mut(),
         *offset,
         &accumulated_dot.into(),
         &config.check_mode,
@@ -59,24 +59,26 @@ pub fn dot<F: FieldExt + TensorType>(
 
     assert_eq!(assigned_len, output_assigned_len);
 
-    for i in 0..assigned_len {
-        let (x, y) = config.output.cartesian_coord(*offset + i);
-        // hop over duplicates at start of column
-        if y == 0 && i > 0 {
-            continue;
-        }
-        if i == 0 {
-            config
-                .selectors
-                .get(&(BaseOp::Mult, x))
-                .unwrap()
-                .enable(region, y)?;
-        } else {
-            config
-                .selectors
-                .get(&(BaseOp::Dot, x))
-                .unwrap()
-                .enable(region, y)?;
+    if let Some(region) = region {
+        for i in 0..assigned_len {
+            let (x, y) = config.output.cartesian_coord(*offset + i);
+            // hop over duplicates at start of column
+            if y == 0 && i > 0 {
+                continue;
+            }
+            if i == 0 {
+                config
+                    .selectors
+                    .get(&(BaseOp::Mult, x))
+                    .unwrap()
+                    .enable(region, y)?;
+            } else {
+                config
+                    .selectors
+                    .get(&(BaseOp::Dot, x))
+                    .unwrap()
+                    .enable(region, y)?;
+            }
         }
     }
 
@@ -91,7 +93,7 @@ pub fn dot<F: FieldExt + TensorType>(
         })?;
 
         assert_eq!(
-            Into::<Tensor<i32>>::into(last_elem.clone()),
+            Into::<Tensor<i32>>::into(last_elem.get_inner()?),
             Into::<Tensor<i32>>::into(safe_dot),
         );
     }
@@ -103,27 +105,27 @@ pub fn dot<F: FieldExt + TensorType>(
 /// Sum accumulated layout
 pub fn sum<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let assigned_len: usize;
     let input = {
         let (res, len) = config.inputs[1].assign_with_duplication(
-            region,
+            region.as_deref_mut(),
             *offset,
             &values[0],
             &config.check_mode,
         )?;
         assigned_len = len;
-        res.map(|e| e.value_field().evaluate())
+        res.get_inner()?
     };
 
     // Now we can assign the dot product
     let accumulated_sum = accumulated::sum(&input).expect("accum poly: sum op failed");
 
     let (output, output_assigned_len) = config.output.assign_with_duplication(
-        region,
+        region.as_deref_mut(),
         *offset,
         &accumulated_sum.into(),
         &config.check_mode,
@@ -131,24 +133,26 @@ pub fn sum<F: FieldExt + TensorType>(
 
     assert_eq!(assigned_len, output_assigned_len);
 
-    for i in 0..assigned_len {
-        let (x, y) = config.output.cartesian_coord(*offset + i);
-        // skip over duplicates at start of column
-        if y == 0 && i > 0 {
-            continue;
-        }
-        if i == 0 {
-            config
-                .selectors
-                .get(&(BaseOp::Identity, x))
-                .unwrap()
-                .enable(region, y)?;
-        } else {
-            config
-                .selectors
-                .get(&(BaseOp::Sum, x))
-                .unwrap()
-                .enable(region, y)?;
+    if let Some(region) = region {
+        for i in 0..assigned_len {
+            let (x, y) = config.output.cartesian_coord(*offset + i);
+            // skip over duplicates at start of column
+            if y == 0 && i > 0 {
+                continue;
+            }
+            if i == 0 {
+                config
+                    .selectors
+                    .get(&(BaseOp::Identity, x))
+                    .unwrap()
+                    .enable(region, y)?;
+            } else {
+                config
+                    .selectors
+                    .get(&(BaseOp::Sum, x))
+                    .unwrap()
+                    .enable(region, y)?;
+            }
         }
     }
 
@@ -163,7 +167,7 @@ pub fn sum<F: FieldExt + TensorType>(
         })?;
 
         assert_eq!(
-            Into::<Tensor<i32>>::into(last_elem.clone()),
+            Into::<Tensor<i32>>::into(last_elem.get_inner()?),
             Into::<Tensor<i32>>::into(safe_dot),
         )
     }
@@ -176,7 +180,7 @@ pub fn sum<F: FieldExt + TensorType>(
 /// Pairwise (elementwise) op layout
 pub fn pairwise<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
     offset: &mut usize,
     op: BaseOp,
@@ -205,8 +209,8 @@ pub fn pairwise<F: FieldExt + TensorType>(
 
     for (i, input) in [lhs.clone(), rhs.clone()].iter().enumerate() {
         let inp = {
-            let res = config.inputs[i].assign(region, *offset, input)?;
-            res.map(|e| e.value_field().evaluate())
+            let res = config.inputs[i].assign(region.as_deref_mut(), *offset, input)?;
+            res.get_inner()?
         };
         inputs.push(inp);
     }
@@ -223,20 +227,24 @@ pub fn pairwise<F: FieldExt + TensorType>(
         halo2_proofs::plonk::Error::Synthesis
     })?;
 
-    let mut output = config.output.assign(region, *offset, &op_result.into())?;
+    let mut output = config
+        .output
+        .assign(region.as_deref_mut(), *offset, &op_result.into())?;
 
-    for i in 0..inputs[0].len() {
-        let (x, y) = config.inputs[0].cartesian_coord(*offset + i);
-        config
-            .selectors
-            .get(&(op.clone(), x))
-            .unwrap()
-            .enable(region, y)?;
+    if let Some(region) = region {
+        for i in 0..inputs[0].len() {
+            let (x, y) = config.inputs[0].cartesian_coord(*offset + i);
+            config
+                .selectors
+                .get(&(op.clone(), x))
+                .unwrap()
+                .enable(region, y)?;
+        }
     }
 
     *offset += output.len();
 
-    output.reshape(lhs.dims().clone());
+    output.reshape(lhs.dims().clone())?;
 
     Ok(ValTensor::from(output))
 }
@@ -244,7 +252,7 @@ pub fn pairwise<F: FieldExt + TensorType>(
 /// Matrix multiplication accumulated layout
 pub fn matmul<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
@@ -312,13 +320,13 @@ pub fn matmul<F: FieldExt + TensorType>(
         for (i, elem) in vec![a.clone(), b.clone()].iter().enumerate() {
             let inp = {
                 let (res, len) = config.inputs[i].assign_with_duplication(
-                    region,
+                    region.as_deref_mut(),
                     *offset,
                     elem,
                     &config.check_mode,
                 )?;
                 assigned_len = len;
-                res.map(|e| e.value_field().evaluate())
+                res.get_inner()?
             };
             inputs.push(inp);
         }
@@ -349,7 +357,7 @@ pub fn matmul<F: FieldExt + TensorType>(
             .expect("accum poly: matmul op failed");
 
         let (output, output_assigned_len) = config.output.assign_with_duplication(
-            region,
+            region.as_deref_mut(),
             *offset,
             &accumulated_matmul.into(),
             &config.check_mode,
@@ -357,27 +365,29 @@ pub fn matmul<F: FieldExt + TensorType>(
 
         assert_eq!(assigned_len, output_assigned_len);
 
-        let mut idx_wo_duplicates = 0;
-        for i in 0..assigned_len {
-            let (x, y) = config.output.cartesian_coord(*offset + i);
-            // skip over duplicates at start of column
-            if y == 0 && i > 0 {
-                continue;
+        if let Some(region) = region.as_deref_mut() {
+            let mut idx_wo_duplicates = 0;
+            for i in 0..assigned_len {
+                let (x, y) = config.output.cartesian_coord(*offset + i);
+                // skip over duplicates at start of column
+                if y == 0 && i > 0 {
+                    continue;
+                }
+                if idx_wo_duplicates % b_row_len > 0 {
+                    config
+                        .selectors
+                        .get(&(BaseOp::Dot, x))
+                        .unwrap()
+                        .enable(region, y)?;
+                } else {
+                    config
+                        .selectors
+                        .get(&(BaseOp::Mult, x))
+                        .unwrap()
+                        .enable(region, y)?;
+                }
+                idx_wo_duplicates += 1;
             }
-            if idx_wo_duplicates % b_row_len > 0 {
-                config
-                    .selectors
-                    .get(&(BaseOp::Dot, x))
-                    .unwrap()
-                    .enable(region, y)?;
-            } else {
-                config
-                    .selectors
-                    .get(&(BaseOp::Mult, x))
-                    .unwrap()
-                    .enable(region, y)?;
-            }
-            idx_wo_duplicates += 1;
         }
 
         let dims = output.dims();
@@ -393,7 +403,7 @@ pub fn matmul<F: FieldExt + TensorType>(
             .get_slice(&last_dims)
             .expect("accum poly: failed to fetch last elem");
 
-        last_elem.reshape(&[original_a_dims[0], original_b_dims[1]]);
+        last_elem.reshape(&[original_a_dims[0], original_b_dims[1]])?;
 
         if matches!(&config.check_mode, CheckMode::SAFE) {
             let safe_mm = non_accum_matmul(&inputs).map_err(|e| {
@@ -402,14 +412,14 @@ pub fn matmul<F: FieldExt + TensorType>(
             })?;
 
             assert_eq!(
-                Into::<Tensor<i32>>::into(last_elem.clone()),
+                Into::<Tensor<i32>>::into(last_elem.get_inner()?),
                 Into::<Tensor<i32>>::into(safe_mm),
             )
         }
 
         *offset += assigned_len;
 
-        res.push(last_elem.clone());
+        res.push(last_elem.get_inner_tensor()?);
     }
 
     let mut res = Tensor::new(Some(&res), &[res.len()])?.combine()?;
@@ -426,7 +436,7 @@ pub fn matmul<F: FieldExt + TensorType>(
 /// Affine operation accumulated layout
 pub fn affine<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 3],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
@@ -474,18 +484,31 @@ pub fn affine<F: FieldExt + TensorType>(
 /// Negation operation accumulated layout
 pub fn neg<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let input = {
-        let res = config.inputs[1].assign(region, *offset, &values[0])?;
-        res.map(|e| e.value_field().evaluate())
+        let res = config.inputs[1].assign(region.as_deref_mut(), *offset, &values[0])?;
+        res.get_inner()?
     };
 
     let neg = input.map(|e| -e);
 
-    let output = config.output.assign(region, *offset, &neg.into())?;
+    let output = config
+        .output
+        .assign(region.as_deref_mut(), *offset, &neg.into())?;
+
+    if let Some(region) = region {
+        for i in 0..values[0].len() {
+            let (x, y) = config.inputs[1].cartesian_coord(*offset + i);
+            config
+                .selectors
+                .get(&(BaseOp::Neg, x))
+                .unwrap()
+                .enable(region, y)?;
+        }
+    }
 
     *offset += output.len();
 
@@ -495,7 +518,7 @@ pub fn neg<F: FieldExt + TensorType>(
 /// Sumpool accumulated layout
 pub fn sumpool<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>],
     padding: (usize, usize),
     stride: (usize, usize),
@@ -504,7 +527,15 @@ pub fn sumpool<F: FieldExt + TensorType>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let image_channels = values[0].dims()[0];
 
-    let unit = config.inputs[1].assign_constant(region, *offset, F::from(1))?;
+    let unit: ValType<F> = if let Some(region) = region.as_deref_mut() {
+        config.inputs[1]
+            .assign_constant(region, *offset, F::from(1))?
+            .into()
+    } else {
+        // for dummy run throughs
+        Value::known(F::from(1)).into()
+    };
+
     *offset += 1;
 
     let mut kernel = Tensor::from(0..kernel_shape.0 * kernel_shape.1).map(|_| unit.clone());
@@ -514,7 +545,7 @@ pub fn sumpool<F: FieldExt + TensorType>(
     for i in 0..image_channels {
         res.push(conv(
             config,
-            region,
+            region.as_deref_mut(),
             &[values[0].get_slice(&[i..i + 1])?, kernel.clone().into()],
             padding,
             stride,
@@ -554,7 +585,7 @@ pub fn sumpool<F: FieldExt + TensorType>(
 /// Convolution accumulated layout
 pub fn max_pool2d<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     padding: (usize, usize),
     stride: (usize, usize),
@@ -590,7 +621,7 @@ pub fn max_pool2d<F: FieldExt + TensorType>(
                     rs..(rs + pool_dims.0),
                     cs..(cs + pool_dims.1),
                 ])?;
-                let max_w = max(config, region, &[slice], offset)?;
+                let max_w = max(config, region.as_deref_mut(), &[slice], offset)?;
                 let max_w = &max_w.get_inner_tensor()?[0];
                 output.set(&[i, j, k], max_w.clone());
             }
@@ -622,7 +653,7 @@ pub fn max_pool2d<F: FieldExt + TensorType>(
 /// Convolution accumulated layout
 pub fn conv<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    region: Option<&mut Region<F>>,
     values: &[ValTensor<F>],
     padding: (usize, usize),
     stride: (usize, usize),
@@ -724,7 +755,7 @@ pub fn conv<F: FieldExt + TensorType>(
 /// Power accumulated layout
 pub fn pow<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     exponent: u32,
     offset: &mut usize,
@@ -734,7 +765,7 @@ pub fn pow<F: FieldExt + TensorType>(
     for _ in 1..exponent {
         t = pairwise(
             config,
-            region,
+            region.as_deref_mut(),
             &[t, values[0].clone()],
             offset,
             BaseOp::Mult,
@@ -766,7 +797,7 @@ pub fn pow<F: FieldExt + TensorType>(
 /// Rescaled op accumulated layout
 pub fn rescale<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>],
     scales: &[(usize, usize)],
     offset: &mut usize,
@@ -778,7 +809,7 @@ pub fn rescale<F: FieldExt + TensorType>(
         let mult_tensor = Tensor::new(Some(&vec![mult; num_elems]), ri.dims())?;
         let scaled_input = pairwise(
             config,
-            region,
+            region.as_deref_mut(),
             &[ri.clone(), mult_tensor.into()],
             offset,
             BaseOp::Mult,
@@ -811,7 +842,7 @@ pub fn rescale<F: FieldExt + TensorType>(
 /// Pack accumulated layout
 pub fn pack<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     base: u32,
     scale: u32,
@@ -835,7 +866,7 @@ pub fn pack<F: FieldExt + TensorType>(
     let base_tensor = Tensor::new(Some(&accum_base), &[accum_base.len()])?;
     let base_prod = pairwise(
         config,
-        region,
+        region.as_deref_mut(),
         &[t.clone(), base_tensor.into()],
         offset,
         BaseOp::Mult,
@@ -879,7 +910,7 @@ pub fn reshape<F: FieldExt + TensorType>(
 /// Identity constraint. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
 pub fn identity<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
@@ -893,13 +924,25 @@ pub fn identity<F: FieldExt + TensorType>(
 /// Scale and shift accumulated layout
 pub fn scale_and_shift<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 3],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let (input, kernel, bias) = (values[0].clone(), values[1].clone(), values[2].clone());
-    let prod = pairwise(config, region, &[input, kernel], offset, BaseOp::Mult)?;
-    let res = pairwise(config, region, &[prod, bias], offset, BaseOp::Add)?;
+    let prod = pairwise(
+        config,
+        region.as_deref_mut(),
+        &[input, kernel],
+        offset,
+        BaseOp::Mult,
+    )?;
+    let res = pairwise(
+        config,
+        region.as_deref_mut(),
+        &[prod, bias],
+        offset,
+        BaseOp::Add,
+    )?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
@@ -931,23 +974,27 @@ pub fn scale_and_shift<F: FieldExt + TensorType>(
 /// Layout for range check.
 pub fn range_check<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
     offset: &mut usize,
     tol: i32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // assigns the instance to the advice.
-    config.inputs[1].assign(region, *offset, &values[0])?;
+    config.inputs[1].assign(region.as_deref_mut(), *offset, &values[0])?;
 
-    let output = config.output.assign(region, *offset, &values[1])?;
+    let output = config
+        .output
+        .assign(region.as_deref_mut(), *offset, &values[1])?;
 
-    for i in 0..values[0].len() {
-        let (x, y) = config.inputs[1].cartesian_coord(*offset + i);
-        config
-            .selectors
-            .get(&(BaseOp::Range { tol }, x))
-            .unwrap()
-            .enable(region, y)?;
+    if let Some(region) = region {
+        for i in 0..values[0].len() {
+            let (x, y) = config.inputs[1].cartesian_coord(*offset + i);
+            config
+                .selectors
+                .get(&(BaseOp::Range { tol }, x))
+                .unwrap()
+                .enable(region, y)?;
+        }
     }
 
     *offset += output.len();
@@ -958,7 +1005,7 @@ pub fn range_check<F: FieldExt + TensorType>(
 ///
 pub fn nonlinearity<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     nl: &LookupOp,
     offset: &mut usize,
@@ -969,7 +1016,11 @@ pub fn nonlinearity<F: FieldExt + TensorType>(
 
     trace!("laying out {}", region_name);
 
-    let w = ValTensor::from(config.lookup_input.assign(region, *offset, x)?);
+    let w = ValTensor::from(
+        config
+            .lookup_input
+            .assign(region.as_deref_mut(), *offset, x)?,
+    );
     // extract integer_valuations
     let integer_evals: Tensor<i128> = w
         .get_int_evals()
@@ -993,18 +1044,20 @@ pub fn nonlinearity<F: FieldExt + TensorType>(
 
     let mut output = config
         .lookup_output
-        .assign(region, *offset, &output.into())?;
+        .assign(region.as_deref_mut(), *offset, &output.into())?;
 
-    for i in 0..x.len() {
-        let (x, y) = config.lookup_input.cartesian_coord(*offset + i);
-        config
-            .lookup_selectors
-            .get(&(nl.clone(), x))
-            .unwrap()
-            .enable(region, y)?;
+    if let Some(region) = region.as_deref_mut() {
+        for i in 0..x.len() {
+            let (x, y) = config.lookup_input.cartesian_coord(*offset + i);
+            config
+                .lookup_selectors
+                .get(&(nl.clone(), x))
+                .unwrap()
+                .enable(region, y)?;
+        }
     }
 
-    output.reshape(x.dims());
+    output.reshape(x.dims())?;
 
     *offset += x.len();
 
@@ -1015,7 +1068,7 @@ pub fn nonlinearity<F: FieldExt + TensorType>(
 /// PrElu layout
 pub fn prelu<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
     scale: usize,
     offset: &mut usize,
@@ -1033,21 +1086,33 @@ pub fn prelu<F: FieldExt + TensorType>(
 
     let relu = nonlinearity(
         config,
-        region,
+        region.as_deref_mut(),
         &[values[0].clone()],
         &LookupOp::ReLU { scale },
         offset,
     )?;
     // -x
-    let neg_x = neg(config, region, &[values[0].clone()], offset)?;
+    let neg_x = neg(config, region.as_deref_mut(), &[values[0].clone()], offset)?;
     // relu(-x)
-    let relu_neg_x = nonlinearity(config, region, &[neg_x], &LookupOp::ReLU { scale }, offset)?;
+    let relu_neg_x = nonlinearity(
+        config,
+        region.as_deref_mut(),
+        &[neg_x],
+        &LookupOp::ReLU { scale },
+        offset,
+    )?;
     // relu(-x) * slope
-    let scaled_relu_neg_x = pairwise(config, region, &[relu_neg_x, slopes], offset, BaseOp::Mult)?;
+    let scaled_relu_neg_x = pairwise(
+        config,
+        region.as_deref_mut(),
+        &[relu_neg_x, slopes],
+        offset,
+        BaseOp::Mult,
+    )?;
 
     let prelu = pairwise(
         config,
-        region,
+        region.as_deref_mut(),
         &[relu, scaled_relu_neg_x],
         offset,
         BaseOp::Sub,
@@ -1086,50 +1151,56 @@ pub fn prelu<F: FieldExt + TensorType>(
 /// mean function layout
 pub fn mean<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     scale: usize,
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let x = &values[0];
 
-    let sum_x = sum(config, region, &[x.clone()], offset)?;
+    let sum_x = sum(config, region.as_deref_mut(), &[x.clone()], offset)?;
     let nl = LookupOp::Div {
         denom: utils::F32((scale * x.len()) as f32),
     };
-    nonlinearity(config, region, &[sum_x], &nl, offset)
+    nonlinearity(config, region.as_deref_mut(), &[sum_x], &nl, offset)
 }
 
 /// variance function layout
 pub fn variance<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     scale: usize,
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let x = &values[0];
 
-    let mean = mean(config, region, &[x.clone()], scale, offset)?;
+    let mean = mean(config, region.as_deref_mut(), &[x.clone()], scale, offset)?;
 
     let sub = pairwise(
         config,
-        region,
+        region.as_deref_mut(),
         &[x.clone(), mean.clone()],
         offset,
         BaseOp::Sub,
     )?;
 
-    let square = pairwise(config, region, &[sub.clone(), sub], offset, BaseOp::Mult)?;
+    let square = pairwise(
+        config,
+        region.as_deref_mut(),
+        &[sub.clone(), sub],
+        offset,
+        BaseOp::Mult,
+    )?;
 
-    let sum_square = sum(config, region, &[square], offset)?;
+    let sum_square = sum(config, region.as_deref_mut(), &[square], offset)?;
 
     // biased estimator
     let nl = LookupOp::Div {
         denom: utils::F32((scale * x.len()) as f32),
     };
 
-    let variance = nonlinearity(config, region, &[sum_square], &nl, offset)?;
+    let variance = nonlinearity(config, region.as_deref_mut(), &[sum_square], &nl, offset)?;
 
     Ok(variance)
 }
@@ -1137,7 +1208,7 @@ pub fn variance<F: FieldExt + TensorType>(
 /// max layout
 pub fn max<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
@@ -1148,19 +1219,26 @@ pub fn max<F: FieldExt + TensorType>(
         Some(i) => Tensor::new(Some(&vec![Value::known(i128_to_felt::<F>(i))]), &[1])?.into(),
     };
 
-    let assigned_max_val: ValTensor<F> = config.inputs[1].assign(region, *offset, &max_val)?.into();
+    let assigned_max_val: ValTensor<F> = config.inputs[1]
+        .assign(region.as_deref_mut(), *offset, &max_val)?
+        .into();
     *offset += 1;
 
-    let unit: ValTensor<F> = Tensor::from(
-        vec![config.inputs[1].assign_constant(region, *offset, F::from(1))?].into_iter(),
-    )
-    .into();
+    let unit: ValTensor<F> = if let Some(region) = region.as_deref_mut() {
+        Tensor::from(
+            vec![config.inputs[1].assign_constant(region, *offset, F::from(1))?].into_iter(),
+        )
+        .into()
+    } else {
+        // for dummy run throughs
+        Tensor::from(vec![Value::known(F::from(1))].into_iter()).into()
+    };
     *offset += 1;
 
     // max(x - 1)
     let max_minus_1 = pairwise(
         config,
-        region,
+        region.as_deref_mut(),
         &[assigned_max_val.clone(), unit.clone()],
         offset,
         BaseOp::Sub,
@@ -1169,7 +1247,7 @@ pub fn max<F: FieldExt + TensorType>(
     // x - max(x - 1)
     let diff = pairwise(
         config,
-        region,
+        region.as_deref_mut(),
         &[values[0].clone(), max_minus_1.clone()],
         offset,
         BaseOp::Sub,
@@ -1177,7 +1255,7 @@ pub fn max<F: FieldExt + TensorType>(
     // relu(x - max(x - 1))
     let relu = nonlinearity(
         config,
-        region,
+        region.as_deref_mut(),
         &[diff],
         &LookupOp::ReLU { scale: 1 },
         offset,
@@ -1186,23 +1264,25 @@ pub fn max<F: FieldExt + TensorType>(
     let len = relu.dims().iter().product();
 
     // y_i*(1 - y_i) =0 // assert the values are either 0 or 1
-    config.inputs[1].assign(region, *offset, &relu)?;
-    for i in 0..len {
-        let (x, y) = config.output.cartesian_coord(*offset + i);
-        config
-            .selectors
-            .get(&(BaseOp::IsBoolean, x))
-            .unwrap()
-            .enable(region, y)?;
+    config.inputs[1].assign(region.as_deref_mut(), *offset, &relu)?;
+    if let Some(region) = region.as_deref_mut() {
+        for i in 0..len {
+            let (x, y) = config.output.cartesian_coord(*offset + i);
+            config
+                .selectors
+                .get(&(BaseOp::IsBoolean, x))
+                .unwrap()
+                .enable(region, y)?;
+        }
     }
     *offset += len;
 
     // sum(relu(x - max(x - 1)))
-    let sum_relu = sum(config, region, &[relu], offset)?;
+    let sum_relu = sum(config, region.as_deref_mut(), &[relu], offset)?;
     // 1 - sum(relu(x - max(x - 1)))
     let one_minus_sum_relu = pairwise(
         config,
-        region,
+        region.as_deref_mut(),
         &[unit.clone(), sum_relu.clone()],
         offset,
         BaseOp::Sub,
@@ -1210,21 +1290,23 @@ pub fn max<F: FieldExt + TensorType>(
     // relu(1 - sum(relu(x - max(x - 1))))
     let relu_one_minus_sum_relu = nonlinearity(
         config,
-        region,
+        region.as_deref_mut(),
         &[one_minus_sum_relu],
         &LookupOp::ReLU { scale: 1 },
         offset,
     )?;
 
     // constraining relu(sum(relu(x - max(x - 1)) - len(x))) = 0
-    config.inputs[1].assign(region, *offset, &relu_one_minus_sum_relu)?;
+    config.inputs[1].assign(region.as_deref_mut(), *offset, &relu_one_minus_sum_relu)?;
 
-    let (x, y) = config.output.cartesian_coord(*offset);
-    config
-        .selectors
-        .get(&(BaseOp::IsZero, x))
-        .unwrap()
-        .enable(region, y)?;
+    if let Some(region) = region.as_deref_mut() {
+        let (x, y) = config.output.cartesian_coord(*offset);
+        config
+            .selectors
+            .get(&(BaseOp::IsZero, x))
+            .unwrap()
+            .enable(region, y)?;
+    }
     *offset += relu_one_minus_sum_relu.len();
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
@@ -1248,7 +1330,7 @@ pub fn max<F: FieldExt + TensorType>(
 /// min layout
 pub fn min<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
@@ -1260,19 +1342,26 @@ pub fn min<F: FieldExt + TensorType>(
         Some(i) => Tensor::new(Some(&vec![Value::known(i128_to_felt::<F>(i))]), &[1])?.into(),
     };
 
-    let assigned_min_val: ValTensor<F> = config.inputs[1].assign(region, *offset, &min_val)?.into();
+    let assigned_min_val: ValTensor<F> = config.inputs[1]
+        .assign(region.as_deref_mut(), *offset, &min_val)?
+        .into();
     *offset += 1;
 
-    let unit: ValTensor<F> = Tensor::from(
-        vec![config.inputs[1].assign_constant(region, *offset, F::from(1))?].into_iter(),
-    )
-    .into();
+    let unit: ValTensor<F> = if let Some(region) = region.as_deref_mut() {
+        Tensor::from(
+            vec![config.inputs[1].assign_constant(region, *offset, F::from(1))?].into_iter(),
+        )
+        .into()
+    } else {
+        // for dummy run throughs
+        Tensor::from(vec![Value::known(F::from(1))].into_iter()).into()
+    };
     *offset += 1;
 
     // min(x + 1)
     let min_plus_1 = pairwise(
         config,
-        region,
+        region.as_deref_mut(),
         &[assigned_min_val.clone(), unit.clone()],
         offset,
         BaseOp::Add,
@@ -1281,7 +1370,7 @@ pub fn min<F: FieldExt + TensorType>(
     // min(x + 1)  - x
     let diff = pairwise(
         config,
-        region,
+        region.as_deref_mut(),
         &[min_plus_1.clone(), values[0].clone()],
         offset,
         BaseOp::Sub,
@@ -1290,7 +1379,7 @@ pub fn min<F: FieldExt + TensorType>(
     // relu(min(x + 1)  - x)
     let relu = nonlinearity(
         config,
-        region,
+        region.as_deref_mut(),
         &[diff],
         &LookupOp::ReLU { scale: 1 },
         offset,
@@ -1299,24 +1388,26 @@ pub fn min<F: FieldExt + TensorType>(
     let len = relu.dims().iter().product();
 
     // y_i*(1 - y_i) =0 // assert the values are either 0 or 1
-    config.inputs[1].assign(region, *offset, &relu)?;
-    for i in 0..len {
-        let (x, y) = config.output.cartesian_coord(*offset + i);
-        config
-            .selectors
-            .get(&(BaseOp::IsBoolean, x))
-            .unwrap()
-            .enable(region, y)?;
+    config.inputs[1].assign(region.as_deref_mut(), *offset, &relu)?;
+    if let Some(region) = region.as_deref_mut() {
+        for i in 0..len {
+            let (x, y) = config.output.cartesian_coord(*offset + i);
+            config
+                .selectors
+                .get(&(BaseOp::IsBoolean, x))
+                .unwrap()
+                .enable(region, y)?;
+        }
     }
 
     *offset += len;
 
     // sum(relu(min(x + 1) - x))
-    let sum_relu = sum(config, region, &[relu], offset)?;
+    let sum_relu = sum(config, region.as_deref_mut(), &[relu], offset)?;
     // 1 - sum(relu(min(x + 1) - x))
     let one_minus_sum_relu = pairwise(
         config,
-        region,
+        region.as_deref_mut(),
         &[unit.into(), sum_relu.clone()],
         offset,
         BaseOp::Sub,
@@ -1324,21 +1415,23 @@ pub fn min<F: FieldExt + TensorType>(
     // relu(1 - sum(relu(min(x + 1) - x)))
     let relu_one_minus_sum_relu = nonlinearity(
         config,
-        region,
+        region.as_deref_mut(),
         &[one_minus_sum_relu],
         &LookupOp::ReLU { scale: 1 },
         offset,
     )?;
 
     // constraining product to 0
-    config.inputs[1].assign(region, *offset, &relu_one_minus_sum_relu)?;
+    config.inputs[1].assign(region.as_deref_mut(), *offset, &relu_one_minus_sum_relu)?;
 
-    let (x, y) = config.output.cartesian_coord(*offset);
-    config
-        .selectors
-        .get(&(BaseOp::IsZero, x))
-        .unwrap()
-        .enable(region, y)?;
+    if let Some(region) = region.as_deref_mut() {
+        let (x, y) = config.output.cartesian_coord(*offset);
+        config
+            .selectors
+            .get(&(BaseOp::IsZero, x))
+            .unwrap()
+            .enable(region, y)?;
+    }
     *offset += relu_one_minus_sum_relu.len();
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
@@ -1362,7 +1455,7 @@ pub fn min<F: FieldExt + TensorType>(
 ///
 pub fn instance_norm<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
-    region: &mut Region<F>,
+    mut region: Option<&mut Region<F>>,
     values: &[ValTensor<F>; 3],
     scale: usize,
     epsilon: u64,
@@ -1383,12 +1476,12 @@ pub fn instance_norm<F: FieldExt + TensorType>(
     // iterate over inner channel
     for i in 0..values[0].dims()[0] {
         let x = values[0].get_slice(&[i..i + 1])?;
-        let mean = mean(config, region, &[x.clone()], scale, offset)?;
-        let variance = variance(config, region, &[x.clone()], scale, offset)?;
+        let mean = mean(config, region.as_deref_mut(), &[x.clone()], scale, offset)?;
+        let variance = variance(config, region.as_deref_mut(), &[x.clone()], scale, offset)?;
 
         let numerator = pairwise(
             config,
-            region,
+            region.as_deref_mut(),
             &[x.clone(), mean.clone()],
             offset,
             BaseOp::Sub,
@@ -1396,7 +1489,7 @@ pub fn instance_norm<F: FieldExt + TensorType>(
 
         let denominator = pairwise(
             config,
-            region,
+            region.as_deref_mut(),
             &[
                 variance.clone(),
                 // TODO: should we make this a constant ? doesn't matter I think
@@ -1408,7 +1501,7 @@ pub fn instance_norm<F: FieldExt + TensorType>(
 
         let denominator = nonlinearity(
             config,
-            region,
+            region.as_deref_mut(),
             &[denominator],
             &LookupOp::Sqrt {
                 scales: (scale, scale),
@@ -1418,7 +1511,7 @@ pub fn instance_norm<F: FieldExt + TensorType>(
 
         let product = pairwise(
             config,
-            region,
+            region.as_deref_mut(),
             &[numerator.clone(), denominator.clone()],
             offset,
             BaseOp::Mult,
@@ -1434,20 +1527,24 @@ pub fn instance_norm<F: FieldExt + TensorType>(
         let result = Tensor::from(result.into_iter()).into();
 
         // constraining product to 0
-        let result = config.inputs[1].assign(region, *offset, &result)?;
-        config.output.assign(region, *offset, &product)?;
-
-        let (x, y) = config.output.cartesian_coord(*offset);
+        let result = config.inputs[1].assign(region.as_deref_mut(), *offset, &result)?;
         config
-            .selectors
-            .get(&(BaseOp::Identity, x))
-            .unwrap()
-            .enable(region, y)?;
+            .output
+            .assign(region.as_deref_mut(), *offset, &product)?;
+
+        if let Some(region) = region.as_deref_mut() {
+            let (x, y) = config.output.cartesian_coord(*offset);
+            config
+                .selectors
+                .get(&(BaseOp::Identity, x))
+                .unwrap()
+                .enable(region, y)?;
+        }
         *offset += result.len();
 
         let scaled_fraction = pairwise(
             config,
-            region,
+            region.as_deref_mut(),
             &[result.into(), gamma.clone()],
             offset,
             BaseOp::Mult,
@@ -1455,7 +1552,7 @@ pub fn instance_norm<F: FieldExt + TensorType>(
 
         let instance_norm = pairwise(
             config,
-            region,
+            region.as_deref_mut(),
             &[scaled_fraction, beta.clone()],
             offset,
             BaseOp::Add,

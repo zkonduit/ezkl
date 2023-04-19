@@ -182,7 +182,7 @@ impl VarTensor {
     ///
     pub fn assign_constant<F: FieldExt + TensorType>(
         &self, 
-        region: &mut Region<'_, F>,
+        region: &mut Region<F>,
         offset: usize,
         constant: F
     ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error>{ 
@@ -203,10 +203,12 @@ impl VarTensor {
     /// Assigns specific values [ValTensor] to the columns of the inner tensor.
     pub fn assign<F: FieldExt + TensorType>(
         &self,
-        region: &mut Region<'_, F>,
+        region: Option<&mut Region<F>>,
         offset: usize,
         values: &ValTensor<F>,
-    ) -> Result<Tensor<AssignedCell<F, F>>, halo2_proofs::plonk::Error> {
+    ) -> Result<ValTensor<F>, halo2_proofs::plonk::Error> {
+        match region {
+            Some(region) => {
         match values {
             ValTensor::Instance {
                 inner: instance,
@@ -215,7 +217,7 @@ impl VarTensor {
                 VarTensor::Advice { inner: v, .. } => {
                     // this should never ever fail
                     let t: Tensor<i32> = Tensor::new(None, dims).unwrap();
-                    t.enum_map(|coord, _| {
+                    Ok(t.enum_map(|coord, _| {
                         let (x, y) = self.cartesian_coord(offset + coord);
                         region.assign_advice_from_instance(
                             || "pub input anchor",
@@ -224,14 +226,14 @@ impl VarTensor {
                             v[x],
                             y,
                         )
-                    })
+                    })?.into())
                 }
                 _ => {
                     error!("Instance is only supported for advice columns");
                     Err(halo2_proofs::plonk::Error::Synthesis)
                 },
             },
-            ValTensor::Value { inner: v, .. } => v.enum_map(|coord, k| {
+            ValTensor::Value { inner: v, .. } => Ok(v.enum_map(|coord, k| {
                 let (x, y) = self.cartesian_coord(offset + coord);
                 
                 match k {
@@ -265,31 +267,37 @@ impl VarTensor {
                         self.assign_constant(region, offset + coord, v)
                     }
                 }
-            }),
+            })?.into()),
         }
+    }
+    None => Ok(values.clone())
+}
     }
 
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor.
     pub fn assign_with_duplication<F: FieldExt + TensorType>(
         &self,
-        region: &mut Region<'_, F>,
+        region: Option<&mut Region<F>>,
         offset: usize,
         values: &ValTensor<F>,
         check_mode: &CheckMode
-    ) -> Result<(Tensor<AssignedCell<F, F>>, usize), halo2_proofs::plonk::Error> {
+    ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
         
+
         match values {
         
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
             ValTensor::Value { inner: v, dims } => {
                 // duplicates every nth element to adjust for column overflow               
                 let v = v.duplicate_every_n(self.col_size(), offset).unwrap();
-                let res = v.enum_map(|coord, k| {
+                let mut res: ValTensor<F> = if let Some(region) = region { 
+                    v.enum_map(|coord, k| {
                     let (x, y) = self.cartesian_coord(offset + coord);
                     if matches!(check_mode, CheckMode::SAFE) && x > 0 && y == 0 {
                         // assert that duplication occurred correctly
                         assert_eq!(Into::<i32>::into(k.clone()), Into::<i32>::into(v[coord - 1].clone()));
                     };
+                   
                     match k {
                         ValType::Value(v) => match &self {
                             VarTensor::Fixed { inner: fixed, .. } => {
@@ -322,26 +330,29 @@ impl VarTensor {
                             self.assign_constant(region, offset + coord, v)
                         }
                     }
-                })?;
-                let mut non_duplicated_res = res.remove_every_n(self.col_size(), offset).unwrap();
+                })?.into()} else {
+                    v.into()
+                }; 
+                let total_used_len = res.len();
+                res.remove_every_n(self.col_size(), offset).unwrap();
                 
-                non_duplicated_res.reshape(dims);
+                res.reshape(dims).unwrap();
 
                 if matches!(check_mode, CheckMode::SAFE) {     
                      // during key generation this will be 0 so we use this as a flag to check
                      // TODO: this isn't very safe and would be better to get the phase directly
-                    let is_assigned = !Into::<Tensor<i32>>::into(ValTensor::from(non_duplicated_res.clone()).get_inner().unwrap())
+                    let is_assigned = !Into::<Tensor<i32>>::into(ValTensor::from(res.clone()).get_inner().unwrap())
                     .iter()
                     .all(|&x| x == 0);
                     if is_assigned {       
                         assert_eq!(
                             Into::<Tensor<i32>>::into(values.get_inner().unwrap()),
-                            Into::<Tensor<i32>>::into(non_duplicated_res.clone())
+                            Into::<Tensor<i32>>::into(res.get_inner().unwrap())
                     )};
                 }
 
                 
-                Ok((non_duplicated_res, res.len()))
+                Ok((res, total_used_len))
             }
         }
     }

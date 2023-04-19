@@ -57,7 +57,7 @@ impl Circuit<Fr> for MyCircuit {
             |mut region| {
                 config
                     .layout(
-                        &mut region,
+                        Some(&mut region),
                         &[self.image.clone()],
                         &mut 0,
                         Box::new(PolyOp::SumPool {

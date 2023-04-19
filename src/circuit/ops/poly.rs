@@ -246,7 +246,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: &mut Region<F>,
+        mut region: Option<&mut Region<F>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
@@ -319,8 +319,13 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
                     )));
                 }
 
-                let res =
-                    &layouts::rescale(config, region, values[..].try_into()?, &scale, offset)?[..];
+                let res = &layouts::rescale(
+                    config,
+                    region.as_deref_mut(),
+                    values[..].try_into()?,
+                    &scale,
+                    offset,
+                )?[..];
                 inner.layout(config, region, res, offset)?.unwrap()
             }
             PolyOp::RangeCheck(tol) => {

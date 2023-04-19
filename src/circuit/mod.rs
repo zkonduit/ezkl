@@ -119,10 +119,12 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             selectors.insert((BaseOp::Sub, i), meta.selector());
             selectors.insert((BaseOp::Dot, i), meta.selector());
             selectors.insert((BaseOp::Sum, i), meta.selector());
+            selectors.insert((BaseOp::Neg, i), meta.selector());
             selectors.insert((BaseOp::Mult, i), meta.selector());
-            selectors.insert((BaseOp::Identity, i), meta.selector());
+
             selectors.insert((BaseOp::Range { tol }, i), meta.selector());
             selectors.insert((BaseOp::IsZero, i), meta.selector());
+            selectors.insert((BaseOp::Identity, i), meta.selector());
             selectors.insert((BaseOp::IsBoolean, i), meta.selector());
         }
 
@@ -289,7 +291,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
     /// * `op` - The operation being represented.
     pub fn layout(
         &mut self,
-        region: &mut Region<F>,
+        mut region: Option<&mut Region<F>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
         op: Box<dyn Op<F>>,
@@ -298,7 +300,12 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
 
         for v in values.iter() {
             if let ValTensor::Instance { .. } = v {
-                cp_values.push(layouts::identity(self, region, &[v.clone()], offset)?);
+                cp_values.push(layouts::identity(
+                    self,
+                    region.as_deref_mut(),
+                    &[v.clone()],
+                    offset,
+                )?);
             } else {
                 cp_values.push(v.clone());
             }

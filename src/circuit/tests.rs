@@ -50,7 +50,7 @@ mod matmul {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Matmul),
@@ -123,7 +123,7 @@ mod matmul_col_overflow {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Matmul),
@@ -197,7 +197,7 @@ mod dot {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Dot),
@@ -267,7 +267,7 @@ mod dot_col_overflow {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Dot),
@@ -337,7 +337,7 @@ mod sum {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Sum),
@@ -405,7 +405,7 @@ mod sum_col_overflow {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Sum),
@@ -473,7 +473,7 @@ mod batchnorm {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::BatchNorm),
@@ -549,7 +549,7 @@ mod affine {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Affine),
@@ -625,7 +625,7 @@ mod affine_col_overflow {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Affine),
@@ -702,7 +702,7 @@ mod composition {
                         let mut offset = 0;
                         let _ = config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut offset,
                                 Box::new(PolyOp::Dot),
@@ -710,7 +710,7 @@ mod composition {
                             .unwrap();
                         let _ = config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut offset,
                                 Box::new(PolyOp::Dot),
@@ -718,7 +718,7 @@ mod composition {
                             .unwrap();
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut offset,
                                 Box::new(PolyOp::Dot),
@@ -789,7 +789,7 @@ mod conv {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Conv {
@@ -914,7 +914,7 @@ mod sumpool {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::SumPool {
@@ -993,7 +993,7 @@ mod add_w_shape_casting {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Add),
@@ -1063,7 +1063,7 @@ mod add {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Add),
@@ -1133,7 +1133,7 @@ mod add_with_overflow {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Add),
@@ -1203,7 +1203,7 @@ mod sub {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Sub),
@@ -1273,7 +1273,7 @@ mod mult {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Mult),
@@ -1343,7 +1343,7 @@ mod pow {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Pow(5)),
@@ -1411,7 +1411,7 @@ mod pack {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Pack(2, 1)),
@@ -1479,7 +1479,7 @@ mod rescaled {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Rescaled {
@@ -1567,12 +1567,12 @@ mod matmul_relu {
                     let mut offset = 0;
                     let output = config
                         .base_config
-                        .layout(&mut region, &self.inputs, &mut offset, Box::new(op))
+                        .layout(Some(&mut region), &self.inputs, &mut offset, Box::new(op))
                         .unwrap();
                     let _output = config
                         .base_config
                         .layout(
-                            &mut region,
+                            Some(&mut region),
                             &[output.unwrap()],
                             &mut offset,
                             Box::new(LookupOp::ReLU { scale: 1 }),
@@ -1657,7 +1657,7 @@ mod rangecheck {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &[self.input.clone(), self.output.clone()],
                                 &mut 0,
                                 Box::new(PolyOp::RangeCheck(RANGE as i32)),
@@ -1758,7 +1758,7 @@ mod relu {
                     |mut region| {
                         config
                             .layout(
-                                &mut region,
+                                Some(&mut region),
                                 &[self.input.clone()],
                                 &mut 0,
                                 Box::new(LookupOp::ReLU { scale: 1 }),

@@ -108,39 +108,6 @@ impl<F: FieldExt + TensorType> ModelCircuit<F> {
         })
     }
 
-    // ///
-    // pub fn write<W: Write>(
-    //     &self,
-    //     mut writer: BufWriter<W>,
-    // ) -> Result<(), Box<dyn std::error::Error>> {
-    //     let circuit_bytes = bincode::serialize(&self)?;
-    //     writer.write(&circuit_bytes)?;
-    //     writer.flush()?;
-    //     Ok(())
-    // }
-
-    // ///
-    // pub fn write_to_file(&self, path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-    //     let fs = File::create(path)?;
-    //     let buffer = BufWriter::new(fs);
-    //     self.write(buffer)
-    // }
-
-    // ///
-    // pub fn read<R: Read>(mut reader: BufReader<R>) -> Result<Self, Box<dyn std::error::Error>> {
-    //     let buffer: &mut Vec<u8> = &mut vec![];
-    //     reader.read_to_end(buffer)?;
-
-    //     let circuit = bincode::deserialize(&buffer)?;
-    //     Ok(circuit)
-    // }
-    // ///
-    // pub fn read_from_file(path: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
-    //     let f = File::open(path)?;
-    //     let reader = BufReader::new(f);
-    //     Self::read(reader)
-    // }
-
     ///
     pub fn from_arg(data: &ModelInput) -> Result<Self, Box<dyn std::error::Error>> {
         let cli = Cli::create()?;

@@ -52,7 +52,12 @@ impl Circuit<Fr> for MyCircuit {
             || "",
             |mut region| {
                 config
-                    .layout(&mut region, &self.inputs, &mut 0, Box::new(PolyOp::Add))
+                    .layout(
+                        Some(&mut region),
+                        &self.inputs,
+                        &mut 0,
+                        Box::new(PolyOp::Add),
+                    )
                     .unwrap();
                 Ok(())
             },

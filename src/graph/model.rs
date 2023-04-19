@@ -16,7 +16,6 @@ use serde::Deserialize;
 use serde::Serialize;
 //use clap::Parser;
 use core::panic;
-use halo2_proofs::circuit::Region;
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Layouter, Value},
@@ -55,13 +54,9 @@ pub enum Mode {
 /// A circuit configuration for the entirety of a model loaded from an Onnx file.
 #[derive(Clone, Debug)]
 pub struct ModelConfig<F: FieldExt + TensorType> {
-    configs: BTreeMap<usize, NodeConfig<F>>,
+    config: Rc<RefCell<PolyConfig<F>>>,
     /// The model struct
     pub model: Model<F>,
-    /// (optional) range checked outputs of the model graph
-    pub range_checks: Vec<Rc<RefCell<PolyConfig<F>>>>,
-    /// (optional) packed outputs of the model graph
-    pub packed_outputs: Vec<Rc<RefCell<PolyConfig<F>>>>,
     /// A wrapper for holding all columns that will be assigned to by the model
     pub vars: ModelVars<F>,
 }
@@ -206,36 +201,6 @@ impl<F: FieldExt + TensorType> Model<F> {
         }
     }
 
-    // ///
-    // pub fn write<W: Write>(&self, mut writer: BufWriter<W>) -> Result<(), Box<dyn Error>> {
-    //     let circuit_bytes = bincode::serialize(&self)?;
-    //     writer.write(&circuit_bytes)?;
-    //     writer.flush()?;
-    //     Ok(())
-    // }
-
-    // ///
-    // pub fn write_to_file(&self, path: PathBuf) -> Result<(), Box<dyn Error>> {
-    //     let fs = File::create(path)?;
-    //     let buffer = BufWriter::new(fs);
-    //     self.write(buffer)
-    // }
-
-    // ///
-    // pub fn read<R: Read>(mut reader: BufReader<R>) -> Result<Self, Box<dyn Error>> {
-    //     let buffer: &mut Vec<u8> = &mut vec![];
-    //     reader.read_to_end(buffer)?;
-
-    //     let circuit = bincode::deserialize(&buffer)?;
-    //     Ok(circuit)
-    // }
-    // ///
-    // pub fn read_from_file(path: PathBuf) -> Result<Self, Box<dyn Error>> {
-    //     let f = File::open(path)?;
-    //     let reader = BufReader::new(f);
-    //     Self::read(reader)
-    // }
-
     /// Creates a `Model` based on CLI arguments
     pub fn from_arg() -> Result<Self, Box<dyn Error>> {
         let conf = Cli::create()?;
@@ -257,46 +222,13 @@ impl<F: FieldExt + TensorType> Model<F> {
         info!("configuring model");
         let mut results = BTreeMap::new();
 
-        let mut base_gate = Rc::new(RefCell::new(PolyConfig::configure(
+        let base_gate = Rc::new(RefCell::new(PolyConfig::configure(
             meta,
             vars.advices[0..2].try_into()?,
             &vars.advices[2],
             self.run_args.check_mode,
             self.run_args.tolerance as i32,
         )));
-
-        let non_op_nodes: BTreeMap<&usize, &Node<F>> = self
-            .nodes
-            .iter()
-            .filter(|(_, n)| n.opkind.is_const() || n.opkind.is_input())
-            .collect();
-        if !non_op_nodes.is_empty() {
-            for (i, node) in non_op_nodes {
-                let config = NodeConfig::NonOp {
-                    op: node.opkind.clone(),
-                };
-                results.insert(*i, config);
-            }
-        }
-
-        // preserves ordering
-        let poly_ops: BTreeMap<&usize, &Node<F>> = self
-            .nodes
-            .iter()
-            .filter(|(_, n)| n.opkind.required_lookup().is_none())
-            .collect();
-        // preserves ordering
-        if !poly_ops.is_empty() {
-            for (i, node) in poly_ops {
-                let config = self.conf_poly_ops(node, &mut base_gate)?;
-                results.insert(*i, config);
-
-                let mut display: String = "Poly nodes: ".to_string();
-                display.push_str(&format!("| {} ({:?}) | ", i, node.opkind));
-
-                trace!("{}", display);
-            }
-        }
 
         let lookup_ops: BTreeMap<&usize, &Node<F>> = self
             .nodes
@@ -311,65 +243,11 @@ impl<F: FieldExt + TensorType> Model<F> {
             }
         }
 
-        let mut range_checks = vec![];
-        let mut packed_outputs = vec![];
-        if self.run_args.pack_base > 1 {
-            info!("packing outputs...");
-            packed_outputs = self.output_ops(&mut base_gate);
-        }
-        if self.visibility.output.is_public() {
-            range_checks = self.output_ops(&mut base_gate);
-        };
-
         Ok(ModelConfig {
-            configs: results,
+            config: base_gate,
             model: self.clone(),
-            range_checks,
-            packed_outputs,
             vars: vars.clone(),
         })
-    }
-
-    fn output_ops(
-        &self,
-        base_gate: &mut Rc<RefCell<PolyConfig<F>>>,
-    ) -> Vec<Rc<RefCell<PolyConfig<F>>>> {
-        let mut configs = vec![];
-
-        for _ in self.output_shapes() {
-            configs.push(base_gate.clone());
-        }
-
-        configs
-    }
-
-    /// Configures a [BTreeMap] of operations that can be constrained using polynomials. These correspond to operations that are represented in
-    /// the `circuit::polynomial` module. A single configuration is output, representing the amalgamation of these operations into
-    /// a single Halo2 gate.
-    /// # Arguments
-    ///
-    /// * `nodes` - A [BTreeMap] of (node index, [Node] pairs). The [Node] must represent a polynomial op.
-    /// * `meta` - Halo2 ConstraintSystem.
-    /// * `vars` - [ModelVars] for the model.
-    fn conf_poly_ops(
-        &self,
-        node: &Node<F>,
-        base_gate: &mut Rc<RefCell<PolyConfig<F>>>,
-    ) -> Result<NodeConfig<F>, Box<dyn Error>> {
-        let input_nodes = node
-            .inputs
-            .iter()
-            .map(|i| self.nodes.get(&i).unwrap())
-            .collect_vec();
-
-        let input_idx = input_nodes.iter().map(|f| f.idx).collect_vec();
-
-        let config = NodeConfig::Op {
-            config: base_gate.clone(),
-            inputs: input_idx,
-            op: node.opkind.clone(),
-        };
-        Ok(config)
     }
 
     /// Configures a lookup table based operation. These correspond to operations that are represented in
@@ -385,16 +263,9 @@ impl<F: FieldExt + TensorType> Model<F> {
         node: &Node<F>,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-    ) -> Result<NodeConfig<F>, Box<dyn Error>> {
+    ) -> Result<(), Box<dyn Error>> {
         let input = &vars.advices[0];
         let output = &vars.advices[1];
-        let input_nodes = node
-            .inputs
-            .iter()
-            .map(|i| self.nodes.get(&i).unwrap())
-            .collect_vec();
-
-        let input_idx = input_nodes.iter().map(|f| f.idx).collect_vec();
 
         let op = match &node.opkind.required_lookup() {
             Some(nl) => nl.clone(),
@@ -410,12 +281,7 @@ impl<F: FieldExt + TensorType> Model<F> {
             .borrow_mut()
             .configure_lookup(meta, input, output, self.run_args.bits, &op)?;
 
-        let config = NodeConfig::Op {
-            config,
-            inputs: input_idx,
-            op: node.opkind.clone(),
-        };
-        Ok(config)
+        Ok(())
     }
 
     /// Assigns values to the regions created when calling `configure`.
@@ -426,7 +292,7 @@ impl<F: FieldExt + TensorType> Model<F> {
     /// * `inputs` - The values to feed into the circuit.
     pub fn layout(
         &self,
-        mut config: ModelConfig<F>,
+        config: ModelConfig<F>,
         layouter: &mut impl Layouter<F>,
         inputs: &[ValTensor<F>],
         vars: &ModelVars<F>,
@@ -441,30 +307,54 @@ impl<F: FieldExt + TensorType> Model<F> {
             }
         }
 
-        // layout any lookup tables
-        let _: Vec<()> = config
-            .configs
-            .values()
-            .map(|c| match c {
-                // only lays out tables if they exist so this can be called safely
-                NodeConfig::Op { config, .. } => config.borrow_mut().layout_tables(layouter),
-                _ => Ok(()),
-            })
-            .collect::<Result<Vec<()>, _>>()?;
+        config.config.borrow_mut().layout_tables(layouter)?;
 
         layouter.assign_region(
             || "model",
             |mut region| {
                 let mut offset: usize = 0;
-                for (idx, config) in config.configs.iter() {
+                for (idx, node) in self.nodes.iter() {
+                    let values: Vec<ValTensor<F>> = node
+                        .inputs
+                        .iter()
+                        .map(|i| match &self.nodes.get(i).unwrap().opkind.const_value() {
+                            Some(const_value) => {
+                                if self.visibility.params.is_public() {
+                                    const_value
+                                        .map(|x| {
+                                            crate::tensor::ValType::Constant(i128_to_felt::<F>(x))
+                                        })
+                                        .into()
+                                } else {
+                                    const_value
+                                        .map(|x| {
+                                            crate::tensor::ValType::Value(Value::known(
+                                                i128_to_felt::<F>(x),
+                                            ))
+                                        })
+                                        .into()
+                                }
+                            }
+                            _ => results.get(i).unwrap().clone(),
+                        })
+                        .collect_vec();
+
                     trace!("laying out offset {}", offset);
-                    if let Some(vt) = self
-                        .layout_config(&mut region, &mut results, config, &mut offset)
+                    let res = config
+                        .config
+                        .borrow_mut()
+                        .layout(
+                            Some(&mut region),
+                            &values,
+                            &mut offset,
+                            node.opkind.clone_dyn(),
+                        )
                         .map_err(|e| {
                             error!("{}", e);
                             halo2_proofs::plonk::Error::Synthesis
-                        })?
-                    {
+                        })?;
+
+                    if let Some(vt) = res {
                         // we get the max as for fused nodes this corresponds to the node output
                         results.insert(*idx, vt);
                         //only use with mock prover
@@ -488,110 +378,57 @@ impl<F: FieldExt + TensorType> Model<F> {
                     .collect_vec();
 
                 // pack outputs if need be
-                for (i, packed_output) in config.packed_outputs.iter_mut().enumerate() {
-                    info!("packing outputs...");
-                    outputs[i] = packed_output
-                        .borrow_mut()
-                        .layout(
-                            &mut region,
-                            &outputs[i..i + 1],
-                            &mut offset,
-                            Box::new(PolyOp::Pack(self.run_args.pack_base, self.run_args.scale)),
-                        )
-                        .map_err(|e| {
-                            error!("{}", e);
-                            halo2_proofs::plonk::Error::Synthesis
-                        })?
-                        .unwrap();
-                    // only use with mock prover
-                    if matches!(self.mode, Mode::Mock) {
-                        trace!("------------ packed output {:?}", outputs[i].show());
+                if self.run_args.pack_base > 1 {
+                    for i in 0..outputs.len() {
+                        info!("packing outputs...");
+                        outputs[i] = config
+                            .config
+                            .borrow_mut()
+                            .layout(
+                                Some(&mut region),
+                                &outputs[i..i + 1],
+                                &mut offset,
+                                Box::new(PolyOp::Pack(
+                                    self.run_args.pack_base,
+                                    self.run_args.scale,
+                                )),
+                            )
+                            .map_err(|e| {
+                                error!("{}", e);
+                                halo2_proofs::plonk::Error::Synthesis
+                            })?
+                            .unwrap();
+                        // only use with mock prover
+                        if matches!(self.mode, Mode::Mock) {
+                            trace!("------------ packed output {:?}", outputs[i].show());
+                        }
                     }
                 }
 
-                let _ = config
-                    .range_checks
-                    .iter()
-                    .zip(outputs)
-                    .enumerate()
-                    .map(|(i, (range_check, output))| {
-                        let mut instance_offset = 0;
-                        if self.visibility.input.is_public() {
-                            instance_offset += inputs.len();
-                        };
-                        range_check.borrow_mut().layout(
-                            &mut region,
-                            &[output, vars.instances[instance_offset + i].clone()],
-                            &mut offset,
-                            Box::new(PolyOp::RangeCheck(self.run_args.tolerance as i32)),
-                        )
-                    })
-                    .collect_vec();
+                if self.run_args.public_outputs {
+                    let _ = outputs
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, output)| {
+                            let mut instance_offset = 0;
+                            if self.visibility.input.is_public() {
+                                instance_offset += inputs.len();
+                            };
+                            config.config.borrow_mut().layout(
+                                Some(&mut region),
+                                &[output, vars.instances[instance_offset + i].clone()],
+                                &mut offset,
+                                Box::new(PolyOp::RangeCheck(self.run_args.tolerance as i32)),
+                            )
+                        })
+                        .collect_vec();
+                }
+
                 Ok(())
             },
         )?;
         info!("computing...");
         Ok(())
-    }
-
-    /// Assigns values to a single region, represented as a [NodeConfig].
-    /// # Arguments
-    ///
-    /// * `config` - [NodeConfig] the single region we will layout.
-    /// * `layouter` - Halo2 Layouter.
-    /// * `inputs` - [BTreeMap] of values to feed into the [NodeConfig], can also include previous intermediate results, i.e the output of other nodes.
-    fn layout_config(
-        &self,
-        region: &mut Region<F>,
-        inputs: &mut BTreeMap<usize, ValTensor<F>>,
-        config: &NodeConfig<F>,
-        offset: &mut usize,
-    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        // The node kind and the config should be the same.
-        let res = match config.clone() {
-            NodeConfig::Op {
-                config,
-                inputs: idx,
-                op,
-            } => {
-                let values: Vec<ValTensor<F>> = idx
-                    .iter()
-                    .map(|i| {
-                        let node = &self.nodes.get(i).unwrap();
-
-                        match &node.opkind.const_value() {
-                            Some(const_value) => {
-                                if self.visibility.params.is_public() {
-                                    const_value
-                                        .map(|x| {
-                                            crate::tensor::ValType::Constant(i128_to_felt::<F>(x))
-                                        })
-                                        .into()
-                                } else {
-                                    const_value
-                                        .map(|x| {
-                                            crate::tensor::ValType::Value(Value::known(
-                                                i128_to_felt::<F>(x),
-                                            ))
-                                        })
-                                        .into()
-                                }
-                            }
-                            _ => inputs.get(i).unwrap().clone(),
-                        }
-                    })
-                    .collect_vec();
-
-                let res = config.borrow_mut().layout(region, &values, offset, op)?;
-
-                res
-            }
-            NodeConfig::NonOp { .. } => None,
-            _ => {
-                return Err(Box::new(GraphError::UnsupportedOp));
-            }
-        };
-        Ok(res)
     }
 
     /// Returns the number of the computational graph's inputs

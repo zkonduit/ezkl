@@ -97,7 +97,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            &mut region,
+                            Some(&mut region),
                             &[
                                 self.input.clone(),
                                 self.l0_params[0].clone(),
@@ -114,7 +114,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let mut x = config
                         .layer_config
                         .layout(
-                            &mut region,
+                            Some(&mut region),
                             &[x],
                             &mut offset,
                             Box::new(LookupOp::ReLU { scale: 1 }),
@@ -127,7 +127,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            &mut region,
+                            Some(&mut region),
                             &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
                             &mut offset,
                             Box::new(PolyOp::Affine),
@@ -139,7 +139,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            &mut region,
+                            Some(&mut region),
                             &[x],
                             &mut offset,
                             Box::new(LookupOp::ReLU { scale: 1 }),
@@ -149,7 +149,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     Ok(config
                         .layer_config
                         .layout(
-                            &mut region,
+                            Some(&mut region),
                             &[x.unwrap()],
                             &mut offset,
                             Box::new(LookupOp::Div {

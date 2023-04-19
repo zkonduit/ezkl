@@ -82,7 +82,7 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: &mut Region<F>,
+        region: Option<&mut Region<F>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {

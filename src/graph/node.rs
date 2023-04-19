@@ -1,6 +1,5 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
 use crate::circuit::ops::poly::PolyOp;
-use crate::circuit::BaseConfig;
 use crate::circuit::Op;
 use crate::graph::new_op_from_onnx;
 use crate::graph::GraphError;
@@ -9,31 +8,13 @@ use anyhow::Result;
 use halo2_proofs::arithmetic::FieldExt;
 use itertools::Itertools;
 use log::{info, trace};
-use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
-use std::rc::Rc;
 use tabled::Tabled;
 use tract_onnx;
 use tract_onnx::prelude::{InferenceFact, Node as OnnxNode};
 use tract_onnx::tract_hir::{infer::Factoid, internal::InferenceOp};
-
-/// Enum of the different kinds of node configurations `ezkl` can support.
-#[allow(missing_docs)]
-#[derive(Clone, Default, Debug)]
-pub enum NodeConfig<F: FieldExt + TensorType> {
-    Op {
-        config: Rc<RefCell<BaseConfig<F>>>,
-        inputs: Vec<usize>,
-        op: Box<dyn Op<F>>,
-    },
-    NonOp {
-        op: Box<dyn Op<F>>,
-    },
-    #[default]
-    NotConfigured,
-}
 
 /// Representation of an execution graph divided into execution 'buckets'.
 pub type NodeGraph<F> = BTreeMap<usize, Node<F>>;

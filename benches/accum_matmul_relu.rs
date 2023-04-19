@@ -71,12 +71,12 @@ impl Circuit<Fr> for MyCircuit {
                 let mut offset = 0;
                 let output = config
                     .base_config
-                    .layout(&mut region, &self.inputs, &mut offset, Box::new(op))
+                    .layout(Some(&mut region), &self.inputs, &mut offset, Box::new(op))
                     .unwrap();
                 let _output = config
                     .base_config
                     .layout(
-                        &mut region,
+                        Some(&mut region),
                         &[output.unwrap()],
                         &mut offset,
                         Box::new(LookupOp::ReLU { scale: 1 }),

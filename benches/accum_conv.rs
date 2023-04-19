@@ -62,7 +62,7 @@ impl Circuit<Fr> for MyCircuit {
             |mut region| {
                 config
                     .layout(
-                        &mut region,
+                        Some(&mut region),
                         &[self.image.clone(), self.kernel.clone(), self.bias.clone()],
                         &mut 0,
                         Box::new(PolyOp::Conv {
