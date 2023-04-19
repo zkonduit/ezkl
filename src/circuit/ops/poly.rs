@@ -329,6 +329,119 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
             PolyOp::GlobalSumPool => unreachable!(),
         }))
     }
+
+    fn out_scale(&self, in_scales: Vec<u32>, global_scale: u32) -> u32 {
+        match self {
+            PolyOp::Dot => in_scales[0] + in_scales[1],
+            PolyOp::Sum => in_scales[0],
+            PolyOp::Matmul => in_scales[0] + in_scales[1],
+            PolyOp::Affine => in_scales[0] + in_scales[1],
+            PolyOp::Conv { .. } => in_scales[0] + in_scales[1],
+            PolyOp::SumPool { .. } => in_scales[0],
+            PolyOp::Add => in_scales[0],
+            PolyOp::Sub => in_scales[0],
+            PolyOp::Mult => in_scales[0] + in_scales[1],
+            PolyOp::Identity => in_scales[0],
+            PolyOp::Reshape(_) | PolyOp::Flatten(_) => in_scales[0],
+            PolyOp::BatchNorm => 2 * in_scales[0],
+            PolyOp::ScaleAndShift => 2 * in_scales[0],
+            PolyOp::Pad(_, _) => in_scales[0],
+            PolyOp::Pow(pow) => in_scales[0] * (*pow),
+            PolyOp::Pack(_, _) => in_scales[0],
+            PolyOp::Rescaled { inner, .. } => Op::<F>::out_scale(&**inner, in_scales, global_scale),
+            PolyOp::RangeCheck(_) => in_scales[0],
+            PolyOp::GlobalSumPool => in_scales[0],
+        }
+    }
+
+    fn out_dims(&self, in_dims: Vec<Vec<usize>>) -> Vec<usize> {
+        match self {
+            PolyOp::Dot => vec![1],
+            PolyOp::Sum => vec![1],
+            PolyOp::Matmul => {
+                let a_dims = in_dims[0].clone();
+                let b_dims = in_dims[1].clone();
+                let mut dims = Vec::from(&a_dims[0..a_dims.len() - 2]);
+                dims.push(a_dims[a_dims.len() - 2]);
+                dims.push(b_dims[a_dims.len() - 1]);
+                dims
+            }
+            PolyOp::Affine => {
+                let weight_node = &in_dims[1];
+                let out_dim = weight_node.clone()[0];
+                vec![out_dim]
+            }
+            PolyOp::Conv { padding, stride } => {
+                let oihw = in_dims[1].clone();
+                let (out_channels, _, kernel_height, kernel_width) =
+                    (oihw[0], oihw[1], oihw[2], oihw[3]);
+
+                let (padding_h, padding_w, stride_h, stride_w) =
+                    (padding.0, padding.1, stride.0, stride.1);
+
+                println!("in_dims: {:?}", in_dims);
+
+                let input_height = in_dims[0][1];
+                let input_width = in_dims[0][2];
+
+                let out_height = (input_height + 2 * padding_h - kernel_height) / stride_h + 1;
+                let out_width = (input_width + 2 * padding_w - kernel_width) / stride_w + 1;
+
+                vec![out_channels, out_height, out_width]
+            }
+            PolyOp::SumPool {
+                padding,
+                stride,
+                kernel_shape,
+            } => {
+                let (input_channels, kernel_height, kernel_width) =
+                    (in_dims[0][0], kernel_shape.0, kernel_shape.1);
+
+                let (padding_h, padding_w, stride_h, stride_w) =
+                    (padding.0, padding.1, stride.0, stride.1);
+
+                let input_height = in_dims[0][1];
+                let input_width = in_dims[0][2];
+
+                let out_height = (input_height + 2 * padding_h - kernel_height) / stride_h + 1;
+                let out_width = (input_width + 2 * padding_w - kernel_width) / stride_w + 1;
+
+                vec![input_channels, out_height, out_width]
+            }
+            PolyOp::Add => in_dims[0].clone(),
+            PolyOp::Sub => in_dims[0].clone(),
+            PolyOp::Mult => in_dims[0].clone(),
+            PolyOp::Identity => in_dims[0].clone(),
+            PolyOp::Reshape(d) | PolyOp::Flatten(d) => d.clone(),
+            PolyOp::BatchNorm => in_dims[0].clone(),
+            PolyOp::ScaleAndShift => in_dims[0].clone(),
+            PolyOp::Pad(padding_h, padding_w) => {
+                let input_channels = in_dims[0][0];
+
+                let out_height = in_dims[0][1] + 2 * padding_h;
+                let out_width = in_dims[0][2] + 2 * padding_w;
+                vec![input_channels, out_height, out_width]
+            }
+            PolyOp::Pow(_) => in_dims[0].clone(),
+            PolyOp::Pack(_, _) => vec![1],
+            PolyOp::Rescaled { inner, .. } => Op::<F>::out_dims(&**inner, in_dims),
+            PolyOp::RangeCheck(_) => in_dims[0].clone(),
+            PolyOp::GlobalSumPool => {
+                let input_channels = in_dims[0][0];
+                vec![input_channels, 1, 1]
+            }
+        }
+    }
+
+    fn has_3d_input(&self) -> bool {
+        match self {
+            PolyOp::Conv { .. } => true,
+            PolyOp::SumPool { .. } => true,
+            PolyOp::GlobalSumPool => true,
+            PolyOp::Pad { .. } => true,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for PolyOp {

@@ -13,7 +13,6 @@ use crate::fieldutils::i128_to_felt;
 use crate::graph::scale_to_multiplier;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor};
-use anyhow::Context;
 use halo2curves::bn256::Fr;
 use serde::Deserialize;
 use serde::Serialize;
@@ -94,7 +93,7 @@ impl Model {
     /// * `run_args` - [RunArgs]
     /// * `mode` - The [Mode] we're using the model in.
     /// * `visibility` - Which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
-    pub fn new(
+    pub fn new<F: FieldExt + TensorType>(
         path: impl AsRef<Path>,
         run_args: RunArgs,
         mode: Mode,
@@ -107,7 +106,7 @@ impl Model {
 
         let mut nodes = BTreeMap::<usize, Node>::new();
         for (i, n) in model.nodes.iter().enumerate() {
-            let n = Node::new(n.clone(), &mut nodes, run_args.scale, i)?;
+            let n = Node::new::<F>(n.clone(), &mut nodes, run_args.scale, i)?;
             nodes.insert(i, n);
         }
         let om = Model {
@@ -129,7 +128,7 @@ impl Model {
     ///
     /// * `path` - A path to an Onnx file.
     /// * `run_args` - [RunArgs]
-    pub fn forward(
+    pub fn forward<F: FieldExt + TensorType>(
         model_path: impl AsRef<Path>,
         model_inputs: &[Tensor<i128>],
         run_args: RunArgs,
@@ -141,7 +140,7 @@ impl Model {
 
         let mut nodes = BTreeMap::<usize, Node>::new();
         for (i, n) in model.nodes.iter().enumerate() {
-            let n = Node::new(n.clone(), &mut nodes, run_args.scale, i)?;
+            let n = Node::new::<F>(n.clone(), &mut nodes, run_args.scale, i)?;
             nodes.insert(i, n);
         }
 
@@ -172,8 +171,8 @@ impl Model {
                     t.reshape(&n.out_dims);
                     results.insert(i, t);
                 }
-                OpKind::Const => {
-                    results.insert(i, n.const_value.as_ref().unwrap().clone());
+                OpKind::Const { const_value, .. } => {
+                    results.insert(i, const_value.clone());
                 }
                 _ => {
                     panic!("unsupported op")
@@ -202,24 +201,24 @@ impl Model {
     }
 
     /// Creates a `Model` from parsed CLI arguments
-    pub fn from_ezkl_conf(cli: Cli) -> Result<Self, Box<dyn Error>> {
+    pub fn from_ezkl_conf<F: FieldExt + TensorType>(cli: Cli) -> Result<Self, Box<dyn Error>> {
         let visibility = VarVisibility::from_args(cli.args.clone())?;
         match cli.command {
             Commands::Table { model } | Commands::Mock { model, .. } => {
-                Model::new(model, cli.args, Mode::Mock, visibility)
+                Model::new::<F>(model, cli.args, Mode::Mock, visibility)
             }
             Commands::Prove { model, .. }
             | Commands::Verify { model, .. }
             | Commands::Aggregate { model, .. } => {
-                Model::new(model, cli.args, Mode::Prove, visibility)
+                Model::new::<F>(model, cli.args, Mode::Prove, visibility)
             }
             #[cfg(not(target_arch = "wasm32"))]
             Commands::CreateEVMVerifier { model, .. } => {
-                Model::new(model, cli.args, Mode::Prove, visibility)
+                Model::new::<F>(model, cli.args, Mode::Prove, visibility)
             }
             #[cfg(feature = "render")]
             Commands::RenderCircuit { model, .. } => {
-                Model::new(model, cli.args, Mode::Table, visibility)
+                Model::new::<F>(model, cli.args, Mode::Table, visibility)
             }
             _ => panic!(),
         }
@@ -258,7 +257,7 @@ impl Model {
     /// Creates a `Model` based on CLI arguments
     pub fn from_arg() -> Result<Self, Box<dyn Error>> {
         let conf = Cli::create()?;
-        Self::from_ezkl_conf(conf)
+        Self::from_ezkl_conf::<Fr>(conf)
     }
 
     /// Configures an `Model`. Does so one execution `bucket` at a time. Each bucket holds either:
@@ -366,7 +365,7 @@ impl Model {
         node: &Node,
     ) -> Result<NodeConfig<F>, Box<dyn Error>> {
         match &node.opkind {
-            OpKind::Const => {
+            OpKind::Const { .. } => {
                 // Typically parameters for one or more layers.
                 // Currently this is handled in the consuming node(s), but will be moved here.
                 Ok(NodeConfig::Const)
@@ -376,7 +375,7 @@ impl Model {
                 // Currently this is handled in the consuming node(s), but will be moved here.
                 Ok(NodeConfig::Input)
             }
-            OpKind::Unknown(_c) => {
+            OpKind::Unknown => {
                 unimplemented!()
             }
             c => Err(Box::new(GraphError::WrongMethod(
@@ -615,25 +614,22 @@ impl Model {
                     .iter()
                     .map(|i| {
                         let node = &self.nodes.get(i).unwrap();
-                        match node.opkind {
-                            OpKind::Const => {
-                                let val = node
-                                    .const_value
-                                    .clone()
-                                    .context("Tensor<i128> should already be loaded")
-                                    .unwrap();
+                        match &node.opkind {
+                            OpKind::Const { const_value, .. } => {
                                 if self.visibility.params.is_public() {
-                                    val.map(|x| {
-                                        crate::tensor::ValType::Constant(i128_to_felt::<F>(x))
-                                    })
-                                    .into()
+                                    const_value
+                                        .map(|x| {
+                                            crate::tensor::ValType::Constant(i128_to_felt::<F>(x))
+                                        })
+                                        .into()
                                 } else {
-                                    val.map(|x| {
-                                        crate::tensor::ValType::Value(Value::known(
-                                            i128_to_felt::<F>(x),
-                                        ))
-                                    })
-                                    .into()
+                                    const_value
+                                        .map(|x| {
+                                            crate::tensor::ValType::Value(Value::known(
+                                                i128_to_felt::<F>(x),
+                                            ))
+                                        })
+                                        .into()
                                 }
                             }
                             _ => inputs.get(i).unwrap().clone(),

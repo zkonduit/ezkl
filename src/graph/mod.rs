@@ -145,7 +145,7 @@ impl<F: FieldExt + TensorType> ModelCircuit<F> {
     ///
     pub fn from_arg(data: &ModelInput) -> Result<Self, Box<dyn std::error::Error>> {
         let cli = Cli::create()?;
-        let model = Model::from_ezkl_conf(cli)?;
+        let model = Model::from_ezkl_conf::<halo2curves::bn256::Fr>(cli)?;
         Self::new(data, model)
     }
 

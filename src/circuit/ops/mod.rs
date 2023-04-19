@@ -34,6 +34,21 @@ pub trait Op<F: FieldExt + TensorType>:
         values: &[ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>>;
+
+    ///
+    fn out_scale(&self, _: Vec<u32>, global_scale: u32) -> u32 {
+        global_scale
+    }
+
+    ///
+    fn out_dims(&self, in_dims: Vec<Vec<usize>>) -> Vec<usize> {
+        in_dims[0].clone()
+    }
+
+    ///
+    fn has_3d_input(&self) -> bool {
+        false
+    }
 }
 
 ///
@@ -84,7 +99,7 @@ impl<F: FieldExt + TensorType> Op<F> for Const {
 
 ///
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
-pub struct Unknown(pub String);
+pub struct Unknown;
 
 impl<F: FieldExt + TensorType> Op<F> for Unknown {
     fn f(self: &Self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
@@ -92,7 +107,7 @@ impl<F: FieldExt + TensorType> Op<F> for Unknown {
     }
 
     fn as_str(self: &Self) -> &'static str {
-        "UnknownOp: "
+        "Unknown"
     }
     fn layout(
         &self,

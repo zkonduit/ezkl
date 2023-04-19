@@ -130,4 +130,45 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
             )?),
         })
     }
+
+    fn out_scale(&self, in_scales: Vec<u32>, _: u32) -> u32 {
+        in_scales[0]
+    }
+
+    fn out_dims(&self, in_dims: Vec<Vec<usize>>) -> Vec<usize> {
+        match self {
+            HybridOp::Mean { .. } => vec![1],
+            HybridOp::Max => vec![1],
+            HybridOp::MaxPool2d {
+                padding,
+                stride,
+                pool_dims,
+            } => {
+                let (out_channels, kernel_height, kernel_width) =
+                    (in_dims[0][0], pool_dims.0, pool_dims.1);
+
+                let (padding_h, padding_w, stride_h, stride_w) =
+                    (padding.0, padding.1, stride.0, stride.1);
+
+                let input_height = in_dims[0][1];
+                let input_width = in_dims[0][2];
+
+                let out_height = (input_height + 2 * padding_h - kernel_height) / stride_h + 1;
+                let out_width = (input_width + 2 * padding_w - kernel_width) / stride_w + 1;
+
+                vec![out_channels, out_height, out_width]
+            }
+            HybridOp::InstanceNorm2d { .. } => in_dims[0].clone(),
+            HybridOp::Min => vec![1],
+            HybridOp::PReLU { .. } => in_dims[0].clone(),
+        }
+    }
+
+    fn has_3d_input(&self) -> bool {
+        match self {
+            HybridOp::MaxPool2d { .. } => true,
+            HybridOp::InstanceNorm2d { .. } => true,
+            _ => false,
+        }
+    }
 }

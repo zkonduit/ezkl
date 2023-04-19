@@ -9,7 +9,10 @@ use serde::{Deserialize, Serialize};
 pub use val::*;
 pub use var::*;
 
-use crate::fieldutils::{felt_to_i32, i128_to_felt, i32_to_felt};
+use crate::{
+    circuit::utils,
+    fieldutils::{felt_to_i32, i128_to_felt, i32_to_felt},
+};
 
 use halo2_proofs::{
     arithmetic::FieldExt,
@@ -100,6 +103,7 @@ tensor_type!(i128, Int128, 0, 1);
 tensor_type!(i32, Int32, 0, 1);
 tensor_type!(usize, USize, 0, 1);
 tensor_type!((), Empty, (), ());
+tensor_type!(utils::F32, F32, utils::F32(0.0), utils::F32(1.0));
 
 impl<T: TensorType> TensorType for Tensor<T> {
     fn zero() -> Option<Self> {
@@ -223,7 +227,7 @@ impl TensorType for halo2curves::bn256::Fr {
 /// A generic multi-dimensional array representation of a Tensor.
 /// The `inner` attribute contains a vector of values whereas `dims` corresponds to the dimensionality of the array
 /// and as such determines how we index, query for values, or slice a Tensor.
-#[derive(Clone, Debug, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct Tensor<T: TensorType> {
     inner: Vec<T>,
     dims: Vec<usize>,
