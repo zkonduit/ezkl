@@ -11,7 +11,7 @@ use super::*;
 /// about the column layout. This enum is generally used to configure and layout circuit variables / advices.
 /// For instance can be used to represent neural network parameters within a circuit that we later assign to
 /// using the `assign` method called on a [ValTensor].
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub enum VarTensor {
     /// A VarTensor for holding Advice values, which are assigned at proving time.
     Advice {
@@ -31,9 +31,14 @@ pub enum VarTensor {
         /// Total capacity (number of advice cells), usually inner.len()*col_size
         capacity: usize,
     },
+    /// Dummy var
+    Dummy {
+        /// Number of rows available to be used in each column of the storage
+        col_size: usize,
+    },
+    /// Empty var
     #[default]
-    /// Dummy / empty var
-    None
+    Empty
 }
 
 impl VarTensor {
@@ -68,6 +73,15 @@ impl VarTensor {
             inner: advices,
             col_size: max_rows,
             capacity,
+        }
+    }
+
+    /// Create a new VarTensor::Dummy
+    pub fn dummy(logrows: usize) -> Self {
+        let base = 2u32;
+        let max_rows = base.pow(logrows as u32) as usize - 6;
+        VarTensor::Dummy {
+            col_size: max_rows,
         }
     }
 
@@ -115,7 +129,7 @@ impl VarTensor {
     /// Gets the size of each column
     pub fn col_size(&self) -> usize {
         match self {
-            VarTensor::Advice { col_size, .. } | VarTensor::Fixed { col_size, .. } => *col_size,
+            VarTensor::Advice { col_size, .. } | VarTensor::Fixed { col_size, .. } | VarTensor::Dummy { col_size } => *col_size,
             _ => 0
         }
     }

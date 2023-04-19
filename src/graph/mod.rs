@@ -179,11 +179,11 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
     }
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let model = Model::from_arg().expect("model should load");
+        let model: Model<F> = Model::from_arg().expect("model should load");
 
         // for now the number of instances corresponds to the number of graph / model outputs
         let instance_shapes = model.instance_shapes();
-        let var_len = model.total_var_len();
+        let var_len = model.dummy_layout(&model.input_shapes()).unwrap();
 
         info!("total var len: {:?}", var_len);
         info!("instance_shapes: {:?}", instance_shapes);

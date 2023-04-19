@@ -1,7 +1,6 @@
 use super::node::*;
 use super::vars::*;
 use super::GraphError;
-use crate::circuit::ops::lookup::LookupOp;
 use crate::circuit::ops::poly::PolyOp;
 use crate::circuit::BaseConfig as PolyConfig;
 use crate::circuit::Op;
@@ -25,7 +24,6 @@ use itertools::Itertools;
 use log::error;
 use log::{debug, info, trace};
 use std::cell::RefCell;
-use std::cmp::max;
 use std::collections::BTreeMap;
 use std::error::Error;
 // use std::fs::File;
@@ -431,6 +429,105 @@ impl<F: FieldExt + TensorType> Model<F> {
         Ok(())
     }
 
+    /// Assigns values to the regions created when calling `configure`.
+    /// # Arguments
+    ///
+    /// * `config` - [ModelConfig] holding all node configs.
+    /// * `layouter` - Halo2 Layouter.
+    /// * `inputs` - The values to feed into the circuit.
+    pub fn dummy_layout(&self, input_shapes: &[Vec<usize>]) -> Result<usize, Box<dyn Error>> {
+        info!("model layout");
+        let mut results = BTreeMap::<usize, ValTensor<F>>::new();
+
+        let inputs: Vec<ValTensor<F>> = input_shapes
+            .iter()
+            .map(|shape| {
+                let t: Tensor<Value<F>> = Tensor::new(None, &shape).unwrap();
+                t.into()
+            })
+            .collect_vec();
+
+        for (i, input_value) in inputs.iter().enumerate() {
+            results.insert(i, input_value.clone());
+        }
+
+        let dummy_config = Rc::new(RefCell::new(PolyConfig::dummy(
+            self.run_args.logrows as usize,
+        )));
+
+        let mut offset: usize = 0;
+        for (idx, node) in self.nodes.iter() {
+            let values: Vec<ValTensor<F>> = node
+                .inputs
+                .iter()
+                .map(|i| match &self.nodes.get(i).unwrap().opkind.const_value() {
+                    Some(const_value) => const_value
+                        .map(|x| crate::tensor::ValType::Value(Value::known(i128_to_felt::<F>(x))))
+                        .into(),
+                    _ => results.get(i).unwrap().clone(),
+                })
+                .collect_vec();
+
+            let res = dummy_config
+                .borrow_mut()
+                .layout(None, &values, &mut offset, node.opkind.clone_dyn())
+                .map_err(|e| {
+                    error!("{}", e);
+                    halo2_proofs::plonk::Error::Synthesis
+                })?;
+
+            if let Some(vt) = res {
+                // we get the max as for fused nodes this corresponds to the node output
+                results.insert(*idx, vt);
+            }
+        }
+
+        let output_nodes = self.outputs.iter();
+        info!(
+            "model outputs are nodes: {:?}",
+            output_nodes.clone().collect_vec()
+        );
+        let mut outputs = output_nodes
+            .map(|o| results.get(&o).unwrap().clone())
+            .collect_vec();
+
+        // pack outputs if need be
+        if self.run_args.pack_base > 1 {
+            for i in 0..outputs.len() {
+                info!("packing outputs...");
+                outputs[i] = dummy_config
+                    .borrow_mut()
+                    .layout(
+                        None,
+                        &outputs[i..i + 1],
+                        &mut offset,
+                        Box::new(PolyOp::Pack(self.run_args.pack_base, self.run_args.scale)),
+                    )
+                    .map_err(|e| {
+                        error!("{}", e);
+                        halo2_proofs::plonk::Error::Synthesis
+                    })?
+                    .unwrap();
+            }
+        }
+
+        if self.run_args.public_outputs {
+            let _ = outputs
+                .into_iter()
+                .map(|output| {
+                    dummy_config.borrow_mut().layout(
+                        None,
+                        &[output.clone(), output],
+                        &mut offset,
+                        Box::new(PolyOp::RangeCheck(self.run_args.tolerance as i32)),
+                    )
+                })
+                .collect_vec();
+        }
+
+        Ok(offset)
+    }
+
     /// Returns the number of the computational graph's inputs
     pub fn num_inputs(&self) -> usize {
         let input_nodes = self.inputs.iter();
@@ -465,104 +562,6 @@ impl<F: FieldExt + TensorType> Model<F> {
         output_nodes
             .map(|o| self.nodes.get(&o).unwrap().out_scale)
             .collect_vec()
-    }
-
-    /// Total number of variables in lookup layers
-    pub fn num_vars_lookup_op(&self, lookup_op: &LookupOp) -> Vec<usize> {
-        let mut count = BTreeMap::<LookupOp, (usize, usize)>::new();
-        for (_, n) in self.nodes.iter() {
-            match &n.opkind.required_lookup() {
-                Some(op) => {
-                    if op.clone() == lookup_op.clone() {
-                        let elem = count.get_mut(op);
-                        // handle output variables
-                        let output_size: usize = n.out_dims.iter().product();
-                        let input_size = output_size;
-                        match elem {
-                            None => {
-                                count.insert(op.clone(), (input_size, output_size));
-                            }
-                            Some(m) => {
-                                m.0 += input_size;
-                                m.1 += output_size;
-                            }
-                        }
-                    }
-                }
-                // should never reach here
-                _ => {
-                    panic!()
-                }
-            }
-        }
-        // now get the max across all ops
-        let (mut num_inputs, mut num_outputs) = (0, 0);
-        for (_, v) in count.iter() {
-            num_inputs = max(num_inputs, v.0);
-            num_outputs = max(num_outputs, v.1);
-        }
-        vec![num_inputs, num_outputs]
-    }
-
-    /// Maximum number of input variables
-    pub fn total_var_len(&self) -> usize {
-        let mut maximum_var_len = 0;
-
-        let poly_ops: BTreeMap<&usize, &Node<F>> = self
-            .nodes
-            .iter()
-            .filter(|(_, n)| n.opkind.required_poly().is_some())
-            .collect();
-
-        let _: Vec<_> = poly_ops
-            .values()
-            .map(|n| match &n.opkind.required_poly() {
-                Some(p) => {
-                    let in_dims = n
-                        .inputs
-                        .iter()
-                        .map(|i| self.nodes.get(&i).unwrap().out_dims.clone());
-                    let layout_shape = p.circuit_shapes(in_dims.collect_vec());
-                    maximum_var_len += layout_shape.last().unwrap();
-                }
-                _ => panic!(),
-            })
-            .collect();
-
-        let lookup_ops: BTreeMap<&usize, &Node<F>> = self
-            .nodes
-            .iter()
-            .filter(|(_, n)| n.opkind.required_lookup().is_some())
-            .collect();
-
-        for op in lookup_ops {
-            let len = (*op.1.out_dims).iter().product::<usize>();
-            maximum_var_len += len;
-        }
-
-        let output_lens: usize = self
-            .output_shapes()
-            .iter()
-            .map(|s| s.iter().product::<usize>())
-            .sum::<usize>();
-
-        let input_lens: usize = self
-            .input_shapes()
-            .iter()
-            .map(|s| s.iter().product::<usize>())
-            .sum::<usize>();
-
-        if self.run_args.pack_base > 1 {
-            maximum_var_len += output_lens;
-        }
-        if matches!(self.visibility.output, Visibility::Public) {
-            maximum_var_len += output_lens;
-        }
-        if matches!(self.visibility.output, Visibility::Public) {
-            maximum_var_len += input_lens;
-        }
-
-        maximum_var_len
     }
 
     /// Number of instances used by the circuit

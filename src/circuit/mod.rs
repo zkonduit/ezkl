@@ -96,6 +96,21 @@ pub struct BaseConfig<F: FieldExt + TensorType> {
 }
 
 impl<F: FieldExt + TensorType> BaseConfig<F> {
+    /// Returns a new [BaseConfig] with no inputs, no selectors, and no tables.
+    pub fn dummy(col_size: usize) -> Self {
+        Self {
+            inputs: vec![VarTensor::dummy(col_size), VarTensor::dummy(col_size)],
+            lookup_input: VarTensor::dummy(col_size),
+            output: VarTensor::dummy(col_size),
+            lookup_output: VarTensor::dummy(col_size),
+            selectors: BTreeMap::new(),
+            lookup_selectors: BTreeMap::new(),
+            tables: BTreeMap::new(),
+            check_mode: CheckMode::SAFE,
+            _marker: PhantomData,
+        }
+    }
+
     /// Configures [BaseOp]s for a given [ConstraintSystem].
     /// # Arguments
     /// * `inputs` - The explicit inputs to the operations.
@@ -121,7 +136,6 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             selectors.insert((BaseOp::Sum, i), meta.selector());
             selectors.insert((BaseOp::Neg, i), meta.selector());
             selectors.insert((BaseOp::Mult, i), meta.selector());
-
             selectors.insert((BaseOp::Range { tol }, i), meta.selector());
             selectors.insert((BaseOp::IsZero, i), meta.selector());
             selectors.insert((BaseOp::Identity, i), meta.selector());
@@ -194,8 +208,8 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             selectors,
             lookup_selectors: BTreeMap::new(),
             inputs: inputs.to_vec(),
-            lookup_input: VarTensor::None,
-            lookup_output: VarTensor::None,
+            lookup_input: VarTensor::Empty,
+            lookup_output: VarTensor::Empty,
             tables: BTreeMap::new(),
             output: output.clone(),
             check_mode,
@@ -262,11 +276,11 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         }
         self.lookup_selectors.extend(selectors);
         // if we haven't previously initialized the input/output, do so now
-        if let VarTensor::None = self.lookup_input {
+        if let VarTensor::Empty = self.lookup_input {
             warn!("assiging lookup input");
             self.lookup_input = input.clone();
         }
-        if let VarTensor::None = self.lookup_output {
+        if let VarTensor::Empty = self.lookup_output {
             warn!("assiging lookup output");
             self.lookup_output = output.clone();
         }
