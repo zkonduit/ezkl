@@ -21,7 +21,7 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use halo2curves::FieldExt;
-use log::{trace, warn};
+use log::warn;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -29,7 +29,7 @@ use crate::{
     fieldutils::i32_to_felt,
     tensor::{Tensor, TensorType, ValTensor, VarTensor},
 };
-use std::{cell::RefCell, collections::BTreeMap, error::Error, marker::PhantomData, rc::Rc};
+use std::{collections::BTreeMap, error::Error, marker::PhantomData};
 
 use self::{ops::lookup::LookupOp, table::Table};
 
@@ -89,7 +89,7 @@ pub struct BaseConfig<F: FieldExt + TensorType> {
     /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many lookup ops.
     pub lookup_selectors: BTreeMap<(LookupOp, usize), Selector>,
     /// [Table]
-    pub tables: BTreeMap<LookupOp, Rc<RefCell<Table<F>>>>,
+    pub tables: BTreeMap<LookupOp, Table<F>>,
     /// Activate sanity checks
     pub check_mode: CheckMode,
     _marker: PhantomData<F>,
@@ -229,7 +229,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         let mut selectors = BTreeMap::new();
         let table =
             if let std::collections::btree_map::Entry::Vacant(e) = self.tables.entry(nl.clone()) {
-                let table = Rc::new(RefCell::new(Table::<F>::configure(cs, bits, nl)));
+                let table = Table::<F>::configure(cs, bits, nl);
                 e.insert(table.clone());
                 table
             } else {
@@ -255,7 +255,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                             }
                             _ => panic!("uninitialized Vartensor"),
                         },
-                        table.clone().borrow().table_input,
+                        table.table_input,
                     ),
                     (
                         match &output {
@@ -269,7 +269,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                             }
                             _ => panic!("uninitialized Vartensor"),
                         },
-                        table.clone().borrow().table_output,
+                        table.table_output,
                     ),
                 ]
             });
@@ -289,9 +289,9 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
 
     /// layout_tables must be called before layout.
     pub fn layout_tables(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), Box<dyn Error>> {
-        for table in self.tables.values() {
-            if !table.borrow().is_assigned {
-                table.borrow_mut().layout(layouter)?;
+        for table in self.tables.values_mut() {
+            if !table.is_assigned {
+                table.layout(layouter)?;
             }
         }
         Ok(())
@@ -311,7 +311,6 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         op: Box<dyn Op<F>>,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         let mut cp_values = vec![];
-
         for v in values.iter() {
             if let ValTensor::Instance { .. } = v {
                 cp_values.push(layouts::identity(
@@ -324,7 +323,6 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
                 cp_values.push(v.clone());
             }
         }
-        trace!("laying out {:?}", op);
         let res = op.layout(self, region, &cp_values, offset);
         res
     }

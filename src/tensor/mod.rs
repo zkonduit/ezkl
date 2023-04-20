@@ -1017,7 +1017,7 @@ impl<T: TensorType + Add<Output = T>> Add for Tensor<T> {
                 output[i] = output[i].clone() + self[0].clone();
             }
         } else {
-            if self.dims() != rhs.dims() {
+            if self.len() != rhs.len() {
                 return Err(TensorError::DimMismatch("add".to_string()));
             }
 
@@ -1068,6 +1068,9 @@ impl<T: TensorType + Sub<Output = T>> Sub for Tensor<T> {
     fn sub(self, rhs: Self) -> Self::Output {
         // calculate value of output
         let mut output: Tensor<T> = self.clone();
+
+        println!("self dims {:?}", self.dims());
+        println!("rhs dims {:?}", rhs.dims());
 
         // casts a 1D addition
         if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {

@@ -1,24 +1,28 @@
+use std::sync::Arc;
+
 use super::{node::*, GraphError};
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::poly::PolyOp;
 use crate::circuit::utils;
-use crate::tensor::{Tensor, TensorError, TensorType};
+use crate::fieldutils::i128_to_felt;
+use crate::tensor::{Tensor, TensorError, TensorType, ValTensor};
 use anyhow::Result;
+use halo2_proofs::circuit::Value;
 use halo2curves::FieldExt;
 use log::warn;
-use tract_onnx::prelude::{DatumType, InferenceFact, Node as OnnxNode};
+use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
+use tract_onnx::tract_core::ops::binary::UnaryOp;
+use tract_onnx::tract_core::ops::matmul::MatMulUnary;
+use tract_onnx::tract_core::ops::nn::LeakyRelu;
+use tract_onnx::tract_hir::internal::AxisOp;
+use tract_onnx::tract_hir::ops::cnn::ConvUnary;
+use tract_onnx::tract_hir::ops::element_wise::ElementWiseOp;
 use tract_onnx::tract_hir::{
-    internal::InferenceOp,
-    ops::activations::LeakyRelu,
     ops::array::{Pad, PadMode},
-    ops::cnn::{Conv, MaxPool, PoolSpec, SumPool},
-    ops::expandable::Expansion,
+    ops::cnn::{MaxPool, PoolSpec, SumPool},
     ops::nn::DataFormat,
-    tract_core::ops::{
-        cnn::{conv::KernelFormat, PaddingSpec},
-        konst::Const,
-    },
+    tract_core::ops::cnn::{conv::KernelFormat, PaddingSpec},
 };
 
 // Warning: currently ignores stride information
@@ -48,62 +52,109 @@ pub fn scale_to_multiplier(scale: u32) -> f32 {
     i128::pow(2, scale) as f32
 }
 
+/// Converts a scale (log base 2) to a fixed point multiplier.
+pub fn mult_to_scale(mult: f32) -> u32 {
+    mult.log2().round() as u32
+}
+
 /// Gets the shape of a onnx node's outlets.
 pub fn node_output_shapes(
-    node: &OnnxNode<InferenceFact, Box<dyn InferenceOp>>,
+    node: &OnnxNode<TypedFact, Box<dyn TypedOp>>,
 ) -> Result<Vec<Option<Vec<usize>>>> {
     let mut shapes = Vec::new();
     let outputs = node.outputs.to_vec();
     for output in outputs {
-        let mv = output
-            .fact
-            .shape
-            .clone()
-            .as_concrete_finite()?
-            .map(|x| x.to_vec());
+        let mv = output.fact.shape.clone().as_concrete().map(|x| x.to_vec());
         shapes.push(mv)
     }
     Ok(shapes)
+}
+
+fn extract_tensor_value<F: FieldExt + TensorType>(
+    input: Arc<tract_onnx::prelude::Tensor>,
+    scale: u32,
+    public_params: bool,
+) -> Result<ValTensor<F>, Box<dyn std::error::Error>> {
+    let dt = input.datum_type();
+    let mut dims = input.shape().to_vec();
+    if dims.is_empty() {
+        dims.push(1)
+    } else if dims.iter().product::<usize>() == 1 {
+        dims = vec![1];
+    };
+
+    let const_value: Tensor<i128>;
+    match dt {
+        DatumType::F32 => {
+            let vec = input.as_slice::<f32>()?.to_vec();
+            const_value = vector_to_quantized(&vec, &dims, 0f32, scale)?;
+        }
+
+        DatumType::I64 => {
+            // Generally a shape or hyperparam
+            let vec = input.as_slice::<i64>()?.to_vec();
+            let cast: Vec<i128> = vec.iter().map(|x| *x as i128).collect();
+            const_value = Tensor::<i128>::new(Some(&cast), &dims)?;
+        }
+        _ => todo!(),
+    }
+
+    let mut value: ValTensor<F> = if public_params {
+        const_value
+            .map(|x| crate::tensor::ValType::Constant(i128_to_felt::<F>(x)))
+            .into()
+    } else {
+        const_value
+            .map(|x| crate::tensor::ValType::Value(Value::known(i128_to_felt::<F>(x))))
+            .into()
+    };
+    value.set_scale(scale);
+    Ok(value)
 }
 
 /// Matches an onnx node to a [OpKind] and returns a [Node] with the corresponding [OpKind].  
 pub fn new_op_from_onnx<F: FieldExt + TensorType>(
     idx: usize,
     scale: u32,
-    node: OnnxNode<InferenceFact, Box<dyn InferenceOp>>,
+    public_params: bool,
+    node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
     inputs: &mut Vec<Node<F>>,
 ) -> Result<Box<dyn crate::circuit::Op<F>>, Box<dyn std::error::Error>> {
+    println!("node: {:?}", node);
+    println!("nodeop: {:?}", node.op().name());
+
     Ok(match node.op().name().as_ref() {
         "Reduce<Min>" => Box::new(HybridOp::Min),
         "Reduce<Max>" => Box::new(HybridOp::Max),
-        "Clip" => Box::new(LookupOp::ReLU { scale: 1 }),
-        "Prelu" => {
-            let slopes = match inputs[1].opkind.raw_const_value() {
-                Some(raw_const_value) => raw_const_value,
-                _ => {
-                    return Err(Box::new(GraphError::MissingParams("slopes".to_string())));
+        // TODO: this is a hack to get around the fact that onnx replace ReLU with Max(0, x) -- we should probably implement
+        "MaxUnary" => {
+            // Extract the slope layer hyperparams
+            let max_op: &UnaryOp = match node.op().downcast_ref::<UnaryOp>() {
+                Some(b) => b,
+                None => {
+                    return Err(Box::new(GraphError::OpMismatch(idx, "mul".to_string())));
                 }
             };
 
-            Box::new(HybridOp::PReLU {
-                scale: 1,
-                slopes: slopes.to_vec(),
-            })
+            // this is actually better represented as a DIV op
+            if max_op.a.shape().into_iter().product::<usize>() == 1
+                && max_op.a.as_slice::<f32>()?.to_vec()[0] == 0.0
+            {
+                Box::new(LookupOp::ReLU {
+                    scale: inputs[0].out_scale as usize,
+                })
+            } else {
+                let matrix = extract_tensor_value(max_op.a.clone(), scale, public_params)?;
+                Box::new(HybridOp::EltWiseMax { a: Some(matrix) })
+            }
+        }
+        "Prelu" => {
+            unreachable!("Prelu should be converted to a more complex format in Onnx");
         }
         "LeakyRelu" => {
             // Extract the slope layer hyperparams
-            let op = Box::new(node.op());
-
-            let leaky_op: &LeakyRelu = match op.downcast_ref::<Box<dyn Expansion>>() {
-                Some(b) => match (*b).as_any().downcast_ref() {
-                    Some(b) => b,
-                    None => {
-                        return Err(Box::new(GraphError::OpMismatch(
-                            idx,
-                            "leaky relu".to_string(),
-                        )));
-                    }
-                },
+            let leaky_op: &ElementWiseOp = match node.op().downcast_ref::<ElementWiseOp>() {
+                Some(b) => b,
                 None => {
                     return Err(Box::new(GraphError::OpMismatch(
                         idx,
@@ -111,79 +162,96 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
                     )));
                 }
             };
+
+            let leaky_op: &LeakyRelu = match leaky_op.0.downcast_ref::<LeakyRelu>() {
+                Some(b) => b,
+                None => {
+                    return Err(Box::new(GraphError::OpMismatch(
+                        idx,
+                        "leaky relu".to_string(),
+                    )));
+                }
+            };
+
             Box::new(LookupOp::LeakyReLU {
                 scale: 1,
-                slope: crate::circuit::utils::F32(leaky_op.0),
+                slope: crate::circuit::utils::F32(leaky_op.alpha),
             })
         }
         "Sigmoid" => Box::new(LookupOp::Sigmoid { scales: (1, 1) }),
         "Sqrt" => Box::new(LookupOp::Sqrt { scales: (1, 1) }),
         "Tanh" => Box::new(LookupOp::Tanh { scales: (1, 1) }),
         "onnx.Erf" => Box::new(LookupOp::Erf { scales: (1, 1) }),
-        "Div" => {
-            if (inputs[1].out_dims.clone() != [1]) || !inputs[1].opkind.is_const() {
-                return Err(Box::new(GraphError::NonConstantDiv));
-            }
-
-            let denom = match &inputs[1].opkind.raw_const_value() {
-                Some(raw_const_value) => raw_const_value.map(|x| x.0)[0],
-                _ => {
-                    return Err(Box::new(GraphError::MissingParams("slopes".to_string())));
-                }
-            };
-
-            inputs.pop();
-
-            Box::new(LookupOp::Div {
-                denom: crate::circuit::utils::F32(denom),
-            })
-        }
-
-        "Const" => {
-            let op = Box::new(node.op());
-            let const_node: &Const = match op.as_any().downcast_ref() {
+        "Source" => Box::new(crate::circuit::ops::Input),
+        "Add" => Box::new(PolyOp::Add { a: None }),
+        "Sub" => Box::new(PolyOp::Sub),
+        "Mul" => Box::new(PolyOp::Mult { a: None }),
+        "Gemm" => Box::new(PolyOp::Affine),
+        "Greater" => Box::new(HybridOp::Greater { a: None }),
+        "GreaterUnary" => {
+            // Extract the slope layer hyperparams
+            let greater: &UnaryOp = match node.op().downcast_ref::<UnaryOp>() {
                 Some(b) => b,
                 None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "const".to_string())));
+                    return Err(Box::new(GraphError::OpMismatch(idx, "greater".to_string())));
                 }
             };
-            let dt = const_node.0.datum_type();
-            let mut dims = const_node.0.shape().to_vec();
-            if dims.is_empty() {
-                dims.push(1)
-            }
+            let matrix = extract_tensor_value(greater.a.clone(), scale, public_params)?;
+            println!("matrix {:?}", matrix);
 
-            let const_value: Tensor<i128>;
-            let mut raw_const_value = None;
-            match dt {
-                DatumType::F32 => {
-                    let vec = const_node.0.as_slice::<f32>().unwrap().to_vec();
-                    let raw: Tensor<f32> = Tensor::new(Some(&vec), &dims).unwrap();
-                    let t = vector_to_quantized(&vec, &dims, 0f32, scale).unwrap();
-                    const_value = t;
-                    raw_const_value = Some(raw.map(utils::F32));
-                }
-
-                DatumType::I64 => {
-                    // Generally a shape or hyperparam
-                    let vec = const_node.0.as_slice::<i64>().unwrap().to_vec();
-                    let cast: Vec<i128> = vec.iter().map(|x| *x as i128).collect();
-                    let t = Tensor::<i128>::new(Some(&cast), &dims).unwrap();
-                    const_value = t;
-                }
-                _ => todo!(),
-            }
-            Box::new(crate::circuit::ops::Const {
-                const_value,
-                raw_const_value,
-            })
+            Box::new(HybridOp::Greater { a: Some(matrix) })
         }
-        "Source" => Box::new(crate::circuit::ops::Input),
-        "Add" => Box::new(PolyOp::Add),
-        "Sub" => Box::new(PolyOp::Sub),
-        "Mul" => Box::new(PolyOp::Mult),
-        "Gemm" => Box::new(PolyOp::Affine),
-        "MatMulInference" => Box::new(PolyOp::Matmul),
+        "MatMulUnary" => {
+            // Extract the slope layer hyperparams
+            let mm_op: &MatMulUnary = match node.op().downcast_ref::<MatMulUnary>() {
+                Some(b) => b,
+                None => {
+                    return Err(Box::new(GraphError::OpMismatch(idx, "mm".to_string())));
+                }
+            };
+
+            let matrix = extract_tensor_value(mm_op.a.clone(), scale, public_params)?;
+            println!("matrix {:?}", matrix);
+
+            Box::new(PolyOp::Matmul { a: Some(matrix) })
+        }
+        "MatMul" => Box::new(PolyOp::Matmul { a: None }),
+        "AddUnary" => {
+            // Extract the slope layer hyperparams
+            let add_op: &UnaryOp = match node.op().downcast_ref::<UnaryOp>() {
+                Some(b) => b,
+                None => {
+                    return Err(Box::new(GraphError::OpMismatch(idx, "add".to_string())));
+                }
+            };
+            let matrix =
+                extract_tensor_value(add_op.a.clone(), inputs[0].out_scale, public_params)?;
+            println!("matrix {:?}", matrix);
+
+            Box::new(PolyOp::Add { a: Some(matrix) })
+        }
+        "MulUnary" => {
+            // Extract the slope layer hyperparams
+            let mul_op: &UnaryOp = match node.op().downcast_ref::<UnaryOp>() {
+                Some(b) => b,
+                None => {
+                    return Err(Box::new(GraphError::OpMismatch(idx, "mul".to_string())));
+                }
+            };
+
+            // this is actually better represented as a DIV op
+            if mul_op.a.shape().into_iter().product::<usize>() == 1
+                && mul_op.a.as_slice::<f32>()?.to_vec()[0] < 1.0
+            {
+                let denom = 1.0 / mul_op.a.as_slice::<f32>()?.to_vec()[0];
+                Box::new(LookupOp::Div {
+                    denom: crate::circuit::utils::F32(denom),
+                })
+            } else {
+                let matrix = extract_tensor_value(mul_op.a.clone(), scale, public_params)?;
+                Box::new(PolyOp::Mult { a: Some(matrix) })
+            }
+        }
         "MaxPool" => {
             // Extract the padding and stride layer hyperparams
             let op = Box::new(node.op());
@@ -234,36 +302,16 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
             scale: 1,
             num_inputs: inputs[0].out_dims.iter().product::<usize>(),
         }),
-        "Pow" => match &inputs[1].opkind.raw_const_value() {
-            Some(raw_const_value) => {
-                let pow = &raw_const_value[0].0;
-                if inputs[1].out_dims != [1] {
-                    {
-                        return Err(Box::new(GraphError::NonConstantPower));
-                    }
-                }
-                inputs.pop();
-                Box::new(PolyOp::Pow(*pow as u32))
-            }
-            _ => return Err(Box::new(GraphError::MissingParams("pow".to_string()))),
-        },
-        "Conv" | "ConvHir" => {
-            // Extract the padding and stride layer hyperparams
-            let op = Box::new(node.op());
-
-            let conv_node: &Conv = match op.downcast_ref::<Box<dyn Expansion>>() {
-                Some(b) => match (*b).as_any().downcast_ref() {
-                    Some(b) => b,
-                    None => {
-                        return Err(Box::new(GraphError::OpMismatch(idx, "conv".to_string())));
-                    }
-                },
+        "Square" => Box::new(PolyOp::Pow(2)),
+        "ConvUnary" => {
+            let conv_node: &ConvUnary = match node.op().downcast_ref::<ConvUnary>() {
+                Some(b) => b,
                 None => {
                     return Err(Box::new(GraphError::OpMismatch(idx, "conv".to_string())));
                 }
             };
 
-            if (conv_node.data_format != DataFormat::NCHW)
+            if (conv_node.pool_spec.data_format != DataFormat::NCHW)
                 || (conv_node.kernel_fmt != KernelFormat::OIHW)
             {
                 return Err(Box::new(GraphError::MisformedParams(
@@ -271,13 +319,13 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
                 )));
             }
 
-            let stride = match conv_node.strides.clone() {
+            let stride = match conv_node.pool_spec.strides.clone() {
                 Some(s) => s,
                 None => {
                     return Err(Box::new(GraphError::MissingParams("strides".to_string())));
                 }
             };
-            let padding = match &conv_node.padding {
+            let padding = match &conv_node.pool_spec.padding {
                 PaddingSpec::Explicit(p, _, _) => p,
                 _ => {
                     return Err(Box::new(GraphError::MissingParams("padding".to_string())));
@@ -286,7 +334,21 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
 
             let (padding_h, padding_w, stride_h, stride_w) =
                 (padding[0], padding[1], stride[0], stride[1]);
+
+            let kernel = extract_tensor_value(conv_node.kernel.clone(), scale, public_params)?;
+
+            let bias = match conv_node.bias.clone() {
+                Some(b) => Some(extract_tensor_value(
+                    b,
+                    scale + inputs[0].out_scale,
+                    public_params,
+                )?),
+                None => None,
+            };
+
             Box::new(PolyOp::Conv {
+                kernel,
+                bias,
                 padding: (padding_h, padding_w),
                 stride: (stride_h, stride_w),
             })
@@ -379,63 +441,44 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
             );
             Box::new(PolyOp::Pad(padding_h, padding_w))
         }
-        "Reshape" => {
-            let input_node = &inputs[0];
-            let shape_const_node = &inputs[1];
-            let shape_const = match shape_const_node.opkind.const_value() {
-                Some(const_value) => const_value,
-                _ => {
-                    return Err(Box::new(GraphError::MissingParams(
-                        "shape constant".to_string(),
-                    )));
+        "RmAxis" => {
+            // Extract the slope layer hyperparams
+            let reshape: &AxisOp = match node.op().downcast_ref::<AxisOp>() {
+                Some(b) => b,
+                None => {
+                    return Err(Box::new(GraphError::OpMismatch(idx, "reshape".to_string())));
                 }
             };
 
-            let mut shapes = &shape_const[0..];
+            let new_dims: Vec<usize> = match reshape {
+                AxisOp::Rm(_) => inputs[0].out_dims.clone(),
+                _ => {
+                    return Err(Box::new(GraphError::MisformedParams("reshape".to_string())));
+                }
+            };
 
-            // we remove batch dims as we assume single elem batches
-            if shapes[0] == -1 && shapes.len() > 1 {
-                shapes = &shapes[1..];
-            }
+            Box::new(PolyOp::Reshape(new_dims.to_vec()))
+        }
+        "Reshape" => {
+            // Extract the slope layer hyperparams
+            let reshape: &AxisOp = match node.op().downcast_ref::<AxisOp>() {
+                Some(b) => b,
+                None => {
+                    return Err(Box::new(GraphError::OpMismatch(idx, "reshape".to_string())));
+                }
+            };
 
-            let new_dims: Result<Vec<usize>, Box<dyn std::error::Error>> =
-                if shapes.iter().all(|x| x > &0) {
-                    let mut res = vec![];
-                    for x in shapes.iter() {
-                        if x <= &0 {
-                            return Err(Box::new(GraphError::InvalidDims(
-                                idx,
-                                "reshape".to_string(),
-                            )));
-                        }
-                        res.push(*x as usize);
-                    }
-                    Ok(res)
-                } else {
-                    let num_entries: usize = input_node.out_dims.iter().product();
-                    let explicit_prod: i128 = shapes.iter().filter(|x| *x > &0).product();
-                    if explicit_prod <= 0 {
-                        return Err(Box::new(GraphError::InvalidDims(
-                            idx,
-                            "reshape".to_string(),
-                        )));
-                    }
-                    let inferred = num_entries / (explicit_prod as usize);
-                    let mut new_dims: Vec<usize> = Vec::new();
-                    for i in shapes {
-                        match i {
-                            -1 => new_dims.push(inferred),
-                            0 => continue,
-                            x => new_dims.push(*x as usize),
-                        }
-                    }
-                    Ok(new_dims)
-                };
+            let new_dims: Vec<usize> = match reshape {
+                AxisOp::Reshape(_, _shape_from, shape_to) => shape_to
+                    .iter()
+                    .map(|a| a.to_i64().unwrap() as usize)
+                    .collect(),
+                _ => {
+                    return Err(Box::new(GraphError::MisformedParams("reshape".to_string())));
+                }
+            };
 
-            let new_dims = new_dims?;
-            inputs.pop();
-
-            Box::new(PolyOp::Reshape(new_dims))
+            Box::new(PolyOp::Reshape(new_dims.to_vec()))
         }
         "Flatten" => {
             let new_dims: Vec<usize> = vec![inputs[0].out_dims.iter().product::<usize>()];
@@ -447,59 +490,60 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
         "BatchNorm" => {
             //Compute scale and shift from the four inputs,
             // then replace the first two, and change this node to a ScaleAndShift
-            let gamma = match &inputs[1].opkind.raw_const_value() {
-                Some(raw_const_value, ..) => raw_const_value.map(|x| x.0),
-                _ => {
-                    return Err(Box::new(GraphError::MissingParams("bn_gamma".to_string())));
-                }
-            };
+            todo!();
+            // let gamma = match &inputs[1].opkind.raw_const_value() {
+            //     Some(raw_const_value, ..) => raw_const_value.map(|x| x.0),
+            //     _ => {
+            //         return Err(Box::new(GraphError::MissingParams("bn_gamma".to_string())));
+            //     }
+            // };
 
-            let beta = match &inputs[2].opkind.raw_const_value() {
-                Some(raw_const_value, ..) => raw_const_value.map(|x| x.0),
-                _ => {
-                    return Err(Box::new(GraphError::MissingParams("bn_beta".to_string())));
-                }
-            };
+            // let beta = match &inputs[2].opkind.raw_const_value() {
+            //     Some(raw_const_value, ..) => raw_const_value.map(|x| x.0),
+            //     _ => {
+            //         return Err(Box::new(GraphError::MissingParams("bn_beta".to_string())));
+            //     }
+            // };
 
-            let mu = match &inputs[3].opkind.raw_const_value() {
-                Some(raw_const_value, ..) => raw_const_value.map(|x| x.0),
-                _ => {
-                    return Err(Box::new(GraphError::MissingParams("bn_mu".to_string())));
-                }
-            };
+            // let mu = match &inputs[3].opkind.raw_const_value() {
+            //     Some(raw_const_value, ..) => raw_const_value.map(|x| x.0),
+            //     _ => {
+            //         return Err(Box::new(GraphError::MissingParams("bn_mu".to_string())));
+            //     }
+            // };
 
-            let sigma = match &inputs[4].opkind.raw_const_value() {
-                Some(raw_const_value, ..) => raw_const_value.map(|x| x.0),
-                _ => {
-                    return Err(Box::new(GraphError::MissingParams("bn_sigma".to_string())));
-                }
-            };
+            // let sigma = match &inputs[4].opkind.raw_const_value() {
+            //     Some(raw_const_value, ..) => raw_const_value.map(|x| x.0),
+            //     _ => {
+            //         return Err(Box::new(GraphError::MissingParams("bn_sigma".to_string())));
+            //     }
+            // };
 
-            let a = (gamma / sigma)?;
-            let amu: Tensor<f32> = (a.clone() * mu)?;
-            let amupb: Tensor<f32> = (amu + beta)?;
-            let b = (amupb * Tensor::new(Some(&[-1f32]), &[1])?)?;
+            // let a = (gamma / sigma)?;
+            // let amu: Tensor<f32> = (a.clone() * mu)?;
+            // let amupb: Tensor<f32> = (amu + beta)?;
+            // let b = (amupb * Tensor::new(Some(&[-1f32]), &[1])?)?;
 
-            let in_scale = inputs[0].out_scale;
-            let out_scale = 2 * inputs[0].out_scale;
-            // gamma node becomes the scale (weigh) in scale and shift
-            inputs[1].opkind = Box::new(crate::circuit::ops::Const {
-                const_value: Tensor::new(None, &[1])?,
-                raw_const_value: Some(a.map(utils::F32)),
-            });
-            inputs[1].quantize_const_to_scale(in_scale)?;
+            // let in_scale = inputs[0].out_scale;
+            // let out_scale = 2 * inputs[0].out_scale;
+            // // gamma node becomes the scale (weigh) in scale and shift
+            // inputs[1].opkind = Box::new(crate::circuit::ops::Const {
+            //     const_value: Tensor::new(None, &[1])?,
+            //     raw_const_value: Some(a.map(utils::F32)),
+            // });
+            // inputs[1].quantize_const_to_scale(in_scale)?;
 
-            // beta node becomes the shift (bias)
-            inputs[2].opkind = Box::new(crate::circuit::ops::Const {
-                const_value: Tensor::new(None, &[1])?,
-                raw_const_value: Some(b.map(utils::F32)),
-            });
-            inputs[2].quantize_const_to_scale(out_scale)?;
+            // // beta node becomes the shift (bias)
+            // inputs[2].opkind = Box::new(crate::circuit::ops::Const {
+            //     const_value: Tensor::new(None, &[1])?,
+            //     raw_const_value: Some(b.map(utils::F32)),
+            // });
+            // inputs[2].quantize_const_to_scale(out_scale)?;
 
-            inputs.pop();
-            inputs.pop();
+            // inputs.pop();
+            // inputs.pop();
 
-            Box::new(PolyOp::ScaleAndShift)
+            // Box::new(PolyOp::ScaleAndShift)
         }
         c => {
             warn!("{:?} is not currently supported", c);

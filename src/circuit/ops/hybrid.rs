@@ -1,24 +1,26 @@
 use halo2curves::FieldExt;
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
 
 use crate::{
     circuit::{layouts, utils},
     graph::scale_to_multiplier,
-    tensor::{self, Tensor, TensorError, TensorType},
+    tensor::{self, Tensor, TensorError, TensorType, ValTensor},
 };
 
 use super::{lookup::LookupOp, Op};
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be used to express more complex operations via accumulation
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
-pub enum HybridOp {
+#[derive(Clone, Debug)]
+pub enum HybridOp<F: FieldExt + TensorType> {
     Mean {
         scale: usize,
         num_inputs: usize,
     },
     Max,
+    EltWiseMax {
+        a: Option<ValTensor<F>>,
+    },
     MaxPool2d {
         padding: (usize, usize),
         stride: (usize, usize),
@@ -32,19 +34,35 @@ pub enum HybridOp {
         scale: usize,
         slopes: Vec<crate::circuit::utils::F32>,
     },
+    Greater {
+        a: Option<ValTensor<F>>,
+    },
 }
 
-impl<F: FieldExt + TensorType> Op<F> for HybridOp {
+impl<F: FieldExt + TensorType> Op<F> for HybridOp<F> {
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         match &self {
             HybridOp::Mean { scale, .. } => {
                 Ok(tensor::ops::nonlinearities::mean(&inputs[0], *scale))
             }
+            HybridOp::Greater { .. } => Ok(inputs[0]
+                .iter()
+                .zip(inputs[1].iter())
+                .map(|(a, b)| if a > b { 1 } else { 0 })
+                .collect_vec()
+                .into_iter()
+                .into()),
             HybridOp::Max => Ok(Tensor::new(
                 Some(&[inputs[0].clone().into_iter().max().unwrap()]),
                 &[1],
             )?),
+
+            HybridOp::EltWiseMax { .. } => Ok(Tensor::new(
+                Some(&[inputs[0].clone().into_iter().max().unwrap()]),
+                &inputs[0].dims(),
+            )?),
+
             HybridOp::MaxPool2d {
                 padding,
                 stride,
@@ -68,8 +86,10 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
 
     fn as_str(&self) -> &'static str {
         match &self {
+            HybridOp::EltWiseMax { .. } => "ELTWISEMAX",
             HybridOp::Mean { .. } => "MEAN",
             HybridOp::Max => "MAX",
+            HybridOp::Greater { .. } => "GREATER",
             HybridOp::MaxPool2d { .. } => "MAXPOOL2D",
             HybridOp::InstanceNorm2d { .. } => "INSTANCENORM",
             HybridOp::Min => "MIN",
@@ -81,9 +101,10 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
         region: Option<&mut halo2_proofs::circuit::Region<F>>,
-        values: &[tensor::ValTensor<F>],
+        values: &[ValTensor<F>],
         offset: &mut usize,
-    ) -> Result<Option<tensor::ValTensor<F>>, Box<dyn std::error::Error>> {
+    ) -> Result<Option<ValTensor<F>>, Box<dyn std::error::Error>> {
+        let mut values = values.to_vec();
         Ok(match self {
             HybridOp::PReLU { scale, .. } => Some(layouts::prelu(
                 config,
@@ -92,6 +113,24 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
                 *scale,
                 offset,
             )?),
+            HybridOp::EltWiseMax { a } => {
+                if let Some(a) = a {
+                    values.push(a.clone());
+                }
+                todo!("EltWiseMax")
+            }
+            HybridOp::Greater { a } => {
+                if let Some(a) = a {
+                    values.push(a.clone());
+                }
+                todo!()
+                // Some(layouts::greater_than(
+                //     config,
+                //     region,
+                //     values[..].try_into()?,
+                //     offset,
+                // )?)
+            }
             HybridOp::Mean { scale, .. } => Some(layouts::mean(
                 config,
                 region,
@@ -139,35 +178,6 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
         in_scales[0]
     }
 
-    fn out_dims(&self, in_dims: Vec<Vec<usize>>) -> Vec<usize> {
-        match self {
-            HybridOp::Mean { .. } => vec![1],
-            HybridOp::Max => vec![1],
-            HybridOp::MaxPool2d {
-                padding,
-                stride,
-                pool_dims,
-            } => {
-                let (out_channels, kernel_height, kernel_width) =
-                    (in_dims[0][0], pool_dims.0, pool_dims.1);
-
-                let (padding_h, padding_w, stride_h, stride_w) =
-                    (padding.0, padding.1, stride.0, stride.1);
-
-                let input_height = in_dims[0][1];
-                let input_width = in_dims[0][2];
-
-                let out_height = (input_height + 2 * padding_h - kernel_height) / stride_h + 1;
-                let out_width = (input_width + 2 * padding_w - kernel_width) / stride_w + 1;
-
-                vec![out_channels, out_height, out_width]
-            }
-            HybridOp::InstanceNorm2d { .. } => in_dims[0].clone(),
-            HybridOp::Min => vec![1],
-            HybridOp::PReLU { .. } => in_dims[0].clone(),
-        }
-    }
-
     fn has_3d_input(&self) -> bool {
         matches!(
             self,
@@ -196,20 +206,15 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
     fn required_lookup(&self) -> Option<LookupOp> {
         match self {
             HybridOp::PReLU { scale, .. } => Some(LookupOp::ReLU { scale: *scale }),
-            HybridOp::Max | HybridOp::Min | HybridOp::MaxPool2d { .. } => {
-                Some(LookupOp::ReLU { scale: 1 })
-            }
+            HybridOp::Max
+            | HybridOp::Min
+            | HybridOp::MaxPool2d { .. }
+            | HybridOp::Greater { .. }
+            | HybridOp::EltWiseMax { .. } => Some(LookupOp::ReLU { scale: 1 }),
             HybridOp::Mean { scale, num_inputs } => Some(LookupOp::Div {
                 denom: utils::F32((*scale * *num_inputs) as f32),
             }),
             HybridOp::InstanceNorm2d { .. } => Some(LookupOp::Sqrt { scales: (1, 1) }),
-        }
-    }
-
-    fn bias_variable(&self) -> Option<usize> {
-        match self {
-            HybridOp::InstanceNorm2d { .. } => Some(2),
-            _ => None,
         }
     }
 

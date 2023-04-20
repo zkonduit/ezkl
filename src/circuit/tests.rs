@@ -53,7 +53,7 @@ mod matmul {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Matmul),
+                                Box::new(PolyOp::Matmul { a: None }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -126,7 +126,7 @@ mod matmul_col_overflow {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Matmul),
+                                Box::new(PolyOp::Matmul { a: None }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -790,9 +790,11 @@ mod conv {
                         config
                             .layout(
                                 Some(&mut region),
-                                &self.inputs.clone(),
+                                &[self.inputs[0].clone()],
                                 &mut 0,
                                 Box::new(PolyOp::Conv {
+                                    kernel: self.inputs[1].clone(),
+                                    bias: None,
                                     padding: (1, 1),
                                     stride: (2, 2),
                                 }),
@@ -996,7 +998,7 @@ mod add_w_shape_casting {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Add),
+                                Box::new(PolyOp::Add { a: None }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1066,7 +1068,7 @@ mod add {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Add),
+                                Box::new(PolyOp::Add { a: None }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1136,7 +1138,7 @@ mod add_with_overflow {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Add),
+                                Box::new(PolyOp::Add { a: None }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1276,7 +1278,7 @@ mod mult {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Mult),
+                                Box::new(PolyOp::Mult { a: None }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1563,7 +1565,7 @@ mod matmul_relu {
             layouter.assign_region(
                 || "",
                 |mut region| {
-                    let op = PolyOp::Matmul;
+                    let op = PolyOp::Matmul { a: None };
                     let mut offset = 0;
                     let output = config
                         .base_config

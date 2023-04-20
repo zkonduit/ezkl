@@ -262,11 +262,21 @@ pub fn matmul<F: FieldExt + TensorType>(
         )));
     };
 
+    let mut a = values[0].clone();
+    let mut b = values[1].clone();
+
+    if a.dims().len() == 1 {
+        a.reshape(&[1, a.dims()[0]])?;
+    }
+    if b.dims().len() == 1 {
+        b.reshape(&[b.dims()[0], 1])?;
+    }
+
     // number of stacked matrices
-    let num_stacked_a = Vec::from(&values[0].dims()[0..values[0].dims().len() - 2])
+    let num_stacked_a = Vec::from(&a.dims()[0..a.dims().len() - 2])
         .iter()
         .product::<usize>();
-    let num_stacked_b = Vec::from(&values[1].dims()[0..values[1].dims().len() - 2])
+    let num_stacked_b = Vec::from(&b.dims()[0..b.dims().len() - 2])
         .iter()
         .product::<usize>();
     if num_stacked_a != num_stacked_b {
@@ -278,14 +288,14 @@ pub fn matmul<F: FieldExt + TensorType>(
     let num_stacked = num_stacked_a;
 
     // [m,n]
-    let mut a_stacked = values[0].clone();
+    let mut a_stacked = a.clone();
     a_stacked.reshape(&[
         num_stacked,
         a_stacked.dims()[a_stacked.dims().len() - 2],
         a_stacked.dims()[a_stacked.dims().len() - 1],
     ])?;
     // [n,k]
-    let mut b_stacked = values[1].clone();
+    let mut b_stacked = b.clone();
     b_stacked.reshape(&[
         num_stacked,
         b_stacked.dims()[b_stacked.dims().len() - 2],
@@ -423,9 +433,9 @@ pub fn matmul<F: FieldExt + TensorType>(
     }
 
     let mut res = Tensor::new(Some(&res), &[res.len()])?.combine()?;
-    let mut res_dims = Vec::from(&values[0].dims()[0..values[0].dims().len() - 2]);
-    res_dims.push(values[0].dims()[values[0].dims().len() - 2]);
-    res_dims.push(values[1].dims()[values[0].dims().len() - 1]);
+    let mut res_dims = Vec::from(&a.dims()[0..a.dims().len() - 2]);
+    res_dims.push(a.dims()[a.dims().len() - 2]);
+    res_dims.push(b.dims()[b.dims().len() - 1]);
 
     res.reshape(&res_dims);
 
@@ -805,7 +815,7 @@ pub fn rescale<F: FieldExt + TensorType>(
     let mut rescaled_inputs = vec![];
     for (i, ri) in values.iter().enumerate() {
         let num_elems = ri.dims().iter().product::<usize>();
-        let mult = Value::known(F::from(scales[i].1 as u64));
+        let mult = ValType::Constant(F::from(scales[i].1 as u64));
         let mult_tensor = Tensor::new(Some(&vec![mult; num_elems]), ri.dims())?;
         let scaled_input = pairwise(
             config,
@@ -1579,3 +1589,111 @@ pub fn instance_norm<F: FieldExt + TensorType>(
 
     Ok(instance_norm)
 }
+
+// /// Creates a boolean mask for the max of two tensors
+// pub fn greater_than<F: FieldExt + TensorType>(
+//     config: &mut BaseConfig<F>,
+//     mut region: Option<&mut Region<F>>,
+//     values: &[ValTensor<F>; 2],
+//     offset: &mut usize,
+// ) -> Result<ValTensor<F>, Box<dyn Error>> {
+//     let x = values[0].clone();
+//     let y = values[1].clone();
+
+//     let unit: ValTensor<F> = if let Some(region) = region.as_deref_mut() {
+//         Tensor::from(
+//             vec![config.inputs[1].assign_constant(region, *offset, F::from(1))?].into_iter(),
+//         )
+//         .into()
+//     } else {
+//         // for dummy run throughs
+//         Tensor::from(vec![Value::known(F::from(1))].into_iter()).into()
+//     };
+
+//     *offset += 1;
+
+//     let mut y_evals = y.get_int_evals()?;
+//     if y.len() == 1 {
+//         y_evals = vec![y_evals[0]; x.len()]
+//     }
+
+//     let greater_than: ValTensor<F> =
+//         Tensor::from(x.get_int_evals()?.iter().zip(y_evals.iter()).map(|(x, y)| {
+//             if x > y {
+//                 Value::known(F::from(1))
+//             } else {
+//                 Value::known(F::from(0))
+//             }
+//         }))
+//         .into();
+
+//     let sub = pairwise(
+//         config,
+//         region.as_deref_mut(),
+//         &[x.clone(), y.clone()],
+//         offset,
+//         BaseOp::Sub,
+//     )?;
+
+//     let relu_sub = nonlinearity(
+//         config,
+//         region.as_deref_mut(),
+//         &[sub],
+//         &LookupOp::ReLU { scale: 1 },
+//         offset,
+//     )?;
+
+//     let output = config.inputs[1].assign(region.as_deref_mut(), *offset, &greater_than)?;
+//     *offset += output.len();
+
+//     let assigned_x = config.inputs[1].assign(region.as_deref_mut(), *offset, &x)?;
+
+//     let len = output.len();
+//     let output = config.inputs[1].assign(region.as_deref_mut(), *offset, &output)?;
+//     if let Some(region) = region.as_deref_mut() {
+//         for i in 0..len {
+//             let (x, y) = config.output.cartesian_coord(*offset + i);
+//             config
+//                 .selectors
+//                 .get(&(BaseOp::IsBoolean, x))
+//                 .unwrap()
+//                 .enable(region, y)?;
+//         }
+//     }
+//     *offset += output.len();
+
+//     if matches!(&config.check_mode, CheckMode::SAFE) {
+//         // during key generation this will be 0 so we use this as a flag to check
+//         // TODO: this isn't very safe and would be better to get the phase directly
+//         let is_assigned = !Into::<Tensor<i32>>::into(output.get_inner()?)
+//             .iter()
+//             .all(|&x| x == 0);
+//         if is_assigned {
+//             let mut y_evals = y.get_int_evals()?;
+//             if y.len() == 1 {
+//                 y_evals = vec![y_evals[0]; x.len()]
+//             }
+
+//             let mut greater_than: Tensor<i32> =
+//                 Tensor::from(x.get_int_evals()?.iter().zip(y_evals.iter()).map(|(x, y)| {
+//                     if x > y {
+//                         1
+//                     } else {
+//                         0
+//                     }
+//                 }));
+
+//             println!("x {:?}", x.get_int_evals());
+//             println!("y {:?}", y.get_int_evals());
+//             println!("greater dims {:?}", greater_than.dims());
+//             println!("x dims {:?}", x.dims());
+
+//             greater_than.reshape(x.dims());
+
+//             assert_eq!(Into::<Tensor<i32>>::into(output.get_inner()?), greater_than,)
+//         }
+
+//         // during key generation this will be 0 so we use this as a flag to check
+//     }
+//     Ok(output)
+// }

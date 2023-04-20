@@ -194,6 +194,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
             var_len,
             instance_shapes.clone(),
             model.visibility.clone(),
+            model.run_args.scale,
         );
         info!(
             "number of advices used: {:?}",

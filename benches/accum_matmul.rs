@@ -58,7 +58,7 @@ impl Circuit<Fr> for MyCircuit {
                         Some(&mut region),
                         &self.inputs,
                         &mut 0,
-                        Box::new(PolyOp::Matmul),
+                        Box::new(PolyOp::Matmul { a: None }),
                     )
                     .unwrap();
                 Ok(())

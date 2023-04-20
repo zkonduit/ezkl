@@ -41,11 +41,6 @@ pub trait Op<F: FieldExt + TensorType>: std::fmt::Debug + Send + Sync {
     }
 
     ///
-    fn out_dims(&self, in_dims: Vec<Vec<usize>>) -> Vec<usize> {
-        in_dims[0].clone()
-    }
-
-    ///
     fn has_3d_input(&self) -> bool {
         false
     }
@@ -56,7 +51,7 @@ pub trait Op<F: FieldExt + TensorType>: std::fmt::Debug + Send + Sync {
     }
 
     ///
-    fn required_poly(&self) -> Option<PolyOp> {
+    fn required_poly(&self) -> Option<PolyOp<F>> {
         None
     }
 
@@ -71,26 +66,6 @@ pub trait Op<F: FieldExt + TensorType>: std::fmt::Debug + Send + Sync {
     ///
     fn is_input(&self) -> bool {
         false
-    }
-
-    ///
-    fn is_const(&self) -> bool {
-        false
-    }
-
-    ///
-    fn const_value(&self) -> Option<Tensor<i128>> {
-        None
-    }
-
-    ///
-    fn raw_const_value(&self) -> Option<Tensor<super::utils::F32>> {
-        None
-    }
-
-    /// bias variable index (if any)
-    fn bias_variable(&self) -> Option<usize> {
-        None
     }
 
     ///
@@ -131,53 +106,6 @@ impl<F: FieldExt + TensorType> Op<F> for Input {
 
     fn is_input(&self) -> bool {
         true
-    }
-
-    fn clone_dyn(&self) -> Box<dyn Op<F>> {
-        Box::new(self.clone()) // Forward to the derive(Clone) impl
-    }
-}
-
-///
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
-pub struct Const {
-    /// The quantized constants potentially associated with this self.
-    pub const_value: Tensor<i128>,
-    /// The un-quantized constants potentially associated with this self.
-    pub raw_const_value: Option<Tensor<super::utils::F32>>,
-}
-
-impl<F: FieldExt + TensorType> Op<F> for Const {
-    fn f(&self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
-        Ok(self.const_value.clone())
-    }
-
-    fn as_str(&self) -> &'static str {
-        "Const"
-    }
-    fn layout(
-        &self,
-        _: &mut crate::circuit::BaseConfig<F>,
-        _: Option<&mut Region<F>>,
-        _: &[ValTensor<F>],
-        _: &mut usize,
-    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        Ok(None)
-    }
-    fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
-        Box::new(self.clone())
-    }
-
-    fn is_const(&self) -> bool {
-        true
-    }
-
-    fn const_value(&self) -> Option<Tensor<i128>> {
-        Some(self.const_value.clone())
-    }
-
-    fn raw_const_value(&self) -> Option<Tensor<super::utils::F32>> {
-        self.raw_const_value.clone()
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {

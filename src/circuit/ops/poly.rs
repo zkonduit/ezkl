@@ -1,8 +1,3 @@
-use std::fmt;
-
-use itertools::Itertools;
-use serde::{Deserialize, Serialize};
-
 use crate::{
     circuit::layouts,
     tensor::{self, Tensor, TensorError},
@@ -12,12 +7,16 @@ use super::{base::BaseOp, *};
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be used to express more complex operations via accumulation
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
-pub enum PolyOp {
+#[derive(Clone, Debug)]
+pub enum PolyOp<F: FieldExt + TensorType> {
     Dot,
-    Matmul,
+    Matmul {
+        a: Option<ValTensor<F>>,
+    },
     Affine,
     Conv {
+        kernel: ValTensor<F>,
+        bias: Option<ValTensor<F>>,
         padding: (usize, usize),
         stride: (usize, usize),
     },
@@ -26,9 +25,13 @@ pub enum PolyOp {
         stride: (usize, usize),
         kernel_shape: (usize, usize),
     },
-    Add,
+    Add {
+        a: Option<ValTensor<F>>,
+    },
     Sub,
-    Mult,
+    Mult {
+        a: Option<ValTensor<F>>,
+    },
     Identity,
     Reshape(Vec<usize>),
     Flatten(Vec<usize>),
@@ -40,21 +43,21 @@ pub enum PolyOp {
     Pack(u32, u32),
     GlobalSumPool,
     Rescaled {
-        inner: Box<PolyOp>,
+        inner: Box<PolyOp<F>>,
         scale: Vec<(usize, usize)>,
     },
     RangeCheck(i32),
 }
 
-impl<F: FieldExt + TensorType> Op<F> for PolyOp {
+impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
     fn as_str(&self) -> &'static str {
         match &self {
             PolyOp::Identity => "IDENTITY",
             PolyOp::Reshape(_) => "RESHAPE",
             PolyOp::Flatten(_) => "FLATTEN",
             PolyOp::Pad(_, _) => "PAD",
-            PolyOp::Add => "ADD",
-            PolyOp::Mult => "MULT",
+            PolyOp::Add { .. } => "ADD",
+            PolyOp::Mult { .. } => "MULT",
             PolyOp::Sub => "SUB",
             PolyOp::Sum => "SUM",
             PolyOp::Dot => "DOT",
@@ -66,7 +69,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
             PolyOp::Conv { .. } => "CONV",
             PolyOp::SumPool { .. } => "SUMPOOL",
             PolyOp::Affine => "AFFINE",
-            PolyOp::Matmul => "MATMUL",
+            PolyOp::Matmul { .. } => "MATMUL",
             PolyOp::Rescaled { inner, .. } => Op::<F>::as_str(&**inner),
             PolyOp::RangeCheck(..) => "RANGECHECK",
         }
@@ -92,15 +95,17 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
                 }
                 tensor::ops::pad(&inputs[0], (*dim1, *dim2))
             }
-            PolyOp::Add => tensor::ops::add(inputs),
+            PolyOp::Add { .. } => tensor::ops::add(inputs),
             PolyOp::Sub => tensor::ops::sub(inputs),
-            PolyOp::Mult => tensor::ops::mult(inputs),
+            PolyOp::Mult { .. } => tensor::ops::mult(inputs),
             PolyOp::Affine => tensor::ops::affine(inputs),
             PolyOp::BatchNorm => tensor::ops::scale_and_shift(inputs),
             PolyOp::ScaleAndShift => tensor::ops::scale_and_shift(inputs),
-            PolyOp::Matmul => tensor::ops::matmul(inputs),
+            PolyOp::Matmul { .. } => tensor::ops::matmul(inputs),
             PolyOp::Dot => tensor::ops::dot(&inputs.iter().collect()),
-            PolyOp::Conv { padding, stride } => tensor::ops::convolution(inputs, *padding, *stride),
+            PolyOp::Conv {
+                padding, stride, ..
+            } => tensor::ops::convolution(inputs, *padding, *stride),
             PolyOp::SumPool {
                 padding,
                 stride,
@@ -149,19 +154,40 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
         values: &[ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
+        let mut values = values.to_vec();
+
         Ok(Some(match self {
             PolyOp::Dot => layouts::dot(config, region, values[..].try_into()?, offset)?,
             PolyOp::Sum => layouts::sum(config, region, values[..].try_into()?, offset)?,
-            PolyOp::Matmul => layouts::matmul(config, region, values[..].try_into()?, offset)?,
+            PolyOp::Matmul { a } => {
+                if let Some(a) = a {
+                    let b = values;
+                    values = vec![a.clone()];
+                    values.extend(b);
+                }
+
+                layouts::matmul(config, region, values[..].try_into()?, offset)?
+            }
             PolyOp::Affine => layouts::affine(config, region, values[..].try_into()?, offset)?,
-            PolyOp::Conv { padding, stride } => layouts::conv(
-                config,
-                region,
-                values[..].try_into()?,
-                *padding,
-                *stride,
-                offset,
-            )?,
+            PolyOp::Conv {
+                kernel,
+                bias,
+                padding,
+                stride,
+            } => {
+                values.push(kernel.clone());
+                if let Some(bias) = bias {
+                    values.push(bias.clone());
+                }
+                layouts::conv(
+                    config,
+                    region,
+                    values[..].try_into()?,
+                    *padding,
+                    *stride,
+                    offset,
+                )?
+            }
             PolyOp::SumPool {
                 padding,
                 stride,
@@ -175,13 +201,20 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
                 *kernel_shape,
                 offset,
             )?,
-            PolyOp::Add => {
+            PolyOp::Add { a } => {
+                if let Some(a) = a {
+                    values.push(a.clone());
+                }
+
                 layouts::pairwise(config, region, values[..].try_into()?, offset, BaseOp::Add)?
             }
             PolyOp::Sub => {
                 layouts::pairwise(config, region, values[..].try_into()?, offset, BaseOp::Sub)?
             }
-            PolyOp::Mult => {
+            PolyOp::Mult { a } => {
+                if let Some(a) = a {
+                    values.push(a.clone());
+                }
                 layouts::pairwise(config, region, values[..].try_into()?, offset, BaseOp::Mult)?
             }
             PolyOp::Identity => layouts::identity(config, region, values[..].try_into()?, offset)?,
@@ -236,13 +269,45 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
         match self {
             PolyOp::Dot => in_scales[0] + in_scales[1],
             PolyOp::Sum => in_scales[0],
-            PolyOp::Matmul => in_scales[0] + in_scales[1],
+            PolyOp::Matmul { a } => {
+                let mut scale = in_scales[0];
+                if let Some(a) = a {
+                    scale += a.scale();
+                } else {
+                    scale += in_scales[1];
+                }
+                scale
+            }
             PolyOp::Affine => in_scales[0] + in_scales[1],
-            PolyOp::Conv { .. } => in_scales[0] + in_scales[1],
+            PolyOp::Conv { kernel, bias, .. } => {
+                let output_scale = in_scales[0] + kernel.scale();
+                if let Some(b) = bias {
+                    assert_eq!(output_scale, b.scale());
+                }
+                output_scale
+            }
             PolyOp::SumPool { .. } => in_scales[0],
-            PolyOp::Add => in_scales[0],
+            PolyOp::Add { a } => {
+                let mut scale_a = 0;
+                let scale_b = in_scales[0];
+                if let Some(a) = a {
+                    scale_a += a.scale();
+                } else {
+                    scale_a += in_scales[1];
+                }
+                assert_eq!(scale_a, scale_b);
+                scale_a
+            }
             PolyOp::Sub => in_scales[0],
-            PolyOp::Mult => in_scales[0] + in_scales[1],
+            PolyOp::Mult { a } => {
+                let mut scale = in_scales[0];
+                if let Some(a) = a {
+                    scale += a.scale();
+                } else {
+                    scale += in_scales[1];
+                }
+                scale
+            }
             PolyOp::Identity => in_scales[0],
             PolyOp::Reshape(_) | PolyOp::Flatten(_) => in_scales[0],
             PolyOp::BatchNorm => 2 * in_scales[0],
@@ -250,88 +315,16 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
             PolyOp::Pad(_, _) => in_scales[0],
             PolyOp::Pow(pow) => in_scales[0] * (*pow),
             PolyOp::Pack(_, _) => in_scales[0],
-            PolyOp::Rescaled { inner, .. } => Op::<F>::out_scale(&**inner, in_scales, _g),
+            PolyOp::Rescaled { inner, scale } => {
+                let in_scales = in_scales
+                    .into_iter()
+                    .zip(scale.iter())
+                    .map(|(a, b)| a + crate::graph::mult_to_scale(b.1 as f32))
+                    .collect();
+                Op::<F>::out_scale(&**inner, in_scales, _g)
+            }
             PolyOp::RangeCheck(_) => in_scales[0],
             PolyOp::GlobalSumPool => in_scales[0],
-        }
-    }
-
-    fn out_dims(&self, in_dims: Vec<Vec<usize>>) -> Vec<usize> {
-        match self {
-            PolyOp::Dot => vec![1],
-            PolyOp::Sum => vec![1],
-            PolyOp::Matmul => {
-                let a_dims = in_dims[0].clone();
-                let b_dims = in_dims[1].clone();
-                let mut dims = Vec::from(&a_dims[0..a_dims.len() - 2]);
-                dims.push(a_dims[a_dims.len() - 2]);
-                dims.push(b_dims[a_dims.len() - 1]);
-                dims
-            }
-            PolyOp::Affine => {
-                let weight_node = &in_dims[1];
-                let out_dim = weight_node.clone()[0];
-                vec![out_dim]
-            }
-            PolyOp::Conv { padding, stride } => {
-                let oihw = in_dims[1].clone();
-                let (out_channels, _, kernel_height, kernel_width) =
-                    (oihw[0], oihw[1], oihw[2], oihw[3]);
-
-                let (padding_h, padding_w, stride_h, stride_w) =
-                    (padding.0, padding.1, stride.0, stride.1);
-
-                println!("in_dims: {:?}", in_dims);
-
-                let input_height = in_dims[0][1];
-                let input_width = in_dims[0][2];
-
-                let out_height = (input_height + 2 * padding_h - kernel_height) / stride_h + 1;
-                let out_width = (input_width + 2 * padding_w - kernel_width) / stride_w + 1;
-
-                vec![out_channels, out_height, out_width]
-            }
-            PolyOp::SumPool {
-                padding,
-                stride,
-                kernel_shape,
-            } => {
-                let (input_channels, kernel_height, kernel_width) =
-                    (in_dims[0][0], kernel_shape.0, kernel_shape.1);
-
-                let (padding_h, padding_w, stride_h, stride_w) =
-                    (padding.0, padding.1, stride.0, stride.1);
-
-                let input_height = in_dims[0][1];
-                let input_width = in_dims[0][2];
-
-                let out_height = (input_height + 2 * padding_h - kernel_height) / stride_h + 1;
-                let out_width = (input_width + 2 * padding_w - kernel_width) / stride_w + 1;
-
-                vec![input_channels, out_height, out_width]
-            }
-            PolyOp::Add => in_dims[0].clone(),
-            PolyOp::Sub => in_dims[0].clone(),
-            PolyOp::Mult => in_dims[0].clone(),
-            PolyOp::Identity => in_dims[0].clone(),
-            PolyOp::Reshape(d) | PolyOp::Flatten(d) => d.clone(),
-            PolyOp::BatchNorm => in_dims[0].clone(),
-            PolyOp::ScaleAndShift => in_dims[0].clone(),
-            PolyOp::Pad(padding_h, padding_w) => {
-                let input_channels = in_dims[0][0];
-
-                let out_height = in_dims[0][1] + 2 * padding_h;
-                let out_width = in_dims[0][2] + 2 * padding_w;
-                vec![input_channels, out_height, out_width]
-            }
-            PolyOp::Pow(_) => in_dims[0].clone(),
-            PolyOp::Pack(_, _) => vec![1],
-            PolyOp::Rescaled { inner, .. } => Op::<F>::out_dims(&**inner, in_dims),
-            PolyOp::RangeCheck(_) => in_dims[0].clone(),
-            PolyOp::GlobalSumPool => {
-                let input_channels = in_dims[0][0];
-                vec![input_channels, 1, 1]
-            }
         }
     }
 
@@ -350,67 +343,14 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp {
     }
 
     fn requires_homogenous_input_scales(&self) -> bool {
-        matches!(self, PolyOp::Add | PolyOp::Sub)
+        matches!(self, PolyOp::Add { .. } | PolyOp::Sub)
     }
 
-    fn bias_variable(&self) -> Option<usize> {
-        match self {
-            PolyOp::Affine | PolyOp::ScaleAndShift | PolyOp::Conv { .. } => Some(2),
-            _ => None,
-        }
-    }
-
-    fn required_poly(&self) -> Option<PolyOp> {
+    fn required_poly(&self) -> Option<PolyOp<F>> {
         Some(self.clone())
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
         Box::new(self.clone()) // Forward to the derive(Clone) impl
-    }
-}
-
-impl fmt::Display for PolyOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            PolyOp::Identity => write!(f, "identity"),
-            PolyOp::Reshape(new_dims) => write!(f, "reshape to {:?}", new_dims),
-            PolyOp::Flatten(new_dims) => write!(f, "flatten to {:?}", new_dims),
-            PolyOp::Pad(dim1, dim2) => write!(f, "padding: ({:?}, {:?})", dim1, dim2),
-            PolyOp::Add => write!(f, "add"),
-            PolyOp::Sub => write!(f, "sub"),
-            PolyOp::Sum => write!(f, "sum"),
-            PolyOp::Mult => write!(f, "mult"),
-            PolyOp::Matmul => write!(f, "matmul"),
-            PolyOp::Dot => write!(f, "dot"),
-            PolyOp::Pack(base, _) => write!(f, "pack with base {:?}", base),
-            PolyOp::Affine => write!(f, "affine"),
-            PolyOp::BatchNorm => write!(f, "batchnorm"),
-            PolyOp::ScaleAndShift => write!(f, "scale & shift"),
-            PolyOp::Conv { padding, stride } => {
-                write!(f, "conv w/ padding: {:?}, stride: {:?}", padding, stride)
-            }
-            PolyOp::SumPool {
-                padding,
-                stride,
-                kernel_shape,
-            } => {
-                write!(
-                    f,
-                    "avg pl w/ padding: {:?}, stride: {:?}, kernel shape: {:?}",
-                    padding, stride, kernel_shape,
-                )
-            }
-            PolyOp::GlobalSumPool => write!(f, "globalsumpool"),
-            PolyOp::Pow(s) => write!(f, "pow {}", s),
-            PolyOp::Rescaled { inner, scale } => {
-                write!(
-                    f,
-                    "rescaled {} w/ scalings: {:?}",
-                    **inner,
-                    scale.iter().map(|e| e.1).collect_vec()
-                )
-            }
-            PolyOp::RangeCheck(tol) => write!(f, "range check w/ tol {}", tol),
-        }
     }
 }

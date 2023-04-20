@@ -7,12 +7,18 @@ use crate::circuit::Op;
 
 use crate::commands::RunArgs;
 use crate::commands::{Cli, Commands};
-use crate::fieldutils::i128_to_felt;
 use crate::graph::scale_to_multiplier;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor};
 use serde::Deserialize;
 use serde::Serialize;
+use tract_onnx::prelude::DatumExt;
+use tract_onnx::prelude::Graph;
+use tract_onnx::prelude::InferenceModelExt;
+use tract_onnx::prelude::TypedFact;
+use tract_onnx::prelude::TypedOp;
+use tract_onnx::tract_hir::internal::Factoid;
+use tract_onnx::tract_hir::internal::GenericFactoid;
 //use clap::Parser;
 use core::panic;
 use halo2_proofs::{
@@ -74,7 +80,6 @@ pub struct Model<F: FieldExt + TensorType> {
 impl<F: FieldExt + TensorType> Model<F> {
     /// Creates an `Model` from a specified path to an Onnx file.
     /// # Arguments
-    ///
     /// * `path` - A path to an Onnx file.
     /// * `run_args` - [RunArgs]
     /// * `mode` - The [Mode] we're using the model in.
@@ -85,16 +90,8 @@ impl<F: FieldExt + TensorType> Model<F> {
         mode: Mode,
         visibility: VarVisibility,
     ) -> Result<Self, Box<dyn Error>> {
-        let model = tract_onnx::onnx()
-            .model_for_path(path)
-            .map_err(|_| GraphError::ModelLoad)?;
-        info!("visibility: {}", visibility);
+        let (model, nodes) = Self::load_onnx_model(path, run_args.scale, run_args.public_params)?;
 
-        let mut nodes = BTreeMap::<usize, Node<F>>::new();
-        for (i, n) in model.nodes.iter().enumerate() {
-            let n = Node::<F>::new(n.clone(), &mut nodes, run_args.scale, i)?;
-            nodes.insert(i, n);
-        }
         let om = Model {
             inputs: model.inputs.iter().map(|o| o.node).collect(),
             outputs: model.outputs.iter().map(|o| o.node).collect(),
@@ -104,14 +101,11 @@ impl<F: FieldExt + TensorType> Model<F> {
             visibility,
         };
 
-        debug!("\n {}", Table::new(om.nodes.iter()).to_string());
-
         Ok(om)
     }
 
-    /// Runs a dummy forward pass on sample data !
+    /// Runs a forward pass on sample data !
     /// # Arguments
-    ///
     /// * `path` - A path to an Onnx file.
     /// * `run_args` - [RunArgs]
     pub fn forward(
@@ -119,18 +113,8 @@ impl<F: FieldExt + TensorType> Model<F> {
         model_inputs: &[Tensor<i128>],
         run_args: RunArgs,
     ) -> Result<Vec<Tensor<f32>>, Box<dyn Error>> {
-        let model = tract_onnx::onnx()
-            .model_for_path(model_path)
-            .map_err(|_| GraphError::ModelLoad)?;
-        info!("running forward pass");
-
-        let mut nodes = BTreeMap::<usize, Node<F>>::new();
-        for (i, n) in model.nodes.iter().enumerate() {
-            let n = Node::new(n.clone(), &mut nodes, run_args.scale, i)?;
-            nodes.insert(i, n);
-        }
-
-        debug!("{}", Table::new(nodes.clone()).to_string());
+        let (model, nodes) =
+            Self::load_onnx_model(model_path, run_args.scale, run_args.public_params)?;
 
         let mut results: BTreeMap<&usize, Tensor<i128>> = BTreeMap::new();
         for (i, n) in nodes.iter() {
@@ -170,7 +154,63 @@ impl<F: FieldExt + TensorType> Model<F> {
         Ok(outputs)
     }
 
+    /// Loads an Onnx model from a specified path.
+    /// # Arguments
+    /// * `path` - A path to an Onnx file.
+    /// * `scale` - The scale to use for quantization.
+    fn load_onnx_model(
+        path: impl AsRef<Path>,
+        scale: u32,
+        public_params: bool,
+    ) -> Result<(Graph<TypedFact, Box<dyn TypedOp>>, BTreeMap<usize, Node<F>>), Box<dyn Error>>
+    {
+        let mut model = tract_onnx::onnx()
+            .model_for_path(path)
+            .map_err(|_| GraphError::ModelLoad)?;
+        // .into_optimized()?;
+
+        for (i, id) in model.clone().inputs.iter().enumerate() {
+            let input = model.node(id.node);
+
+            // add batch dim
+            let mut dims = vec![];
+            let extracted_dims: Vec<usize> = input.outputs[0]
+                .fact
+                .shape
+                .dims()
+                .filter_map(|x| x.concretize())
+                .map(|x| x.to_i64().unwrap() as usize)
+                .collect();
+
+            // if we have unknown / unspecified dims, add a batch dim of 1
+            if let GenericFactoid::Only(elem) = input.outputs[0].fact.shape.rank() {
+                if (elem as usize) > extracted_dims.len() {
+                    dims.push(1);
+                }
+            };
+            dims.extend(extracted_dims);
+
+            model = model.with_input_fact(i, f32::fact(dims).into())?;
+        }
+        // Note: do not optimize the model, as the layout will depend on underlying hardware
+        let model = model.into_typed()?.into_decluttered()?;
+
+        println!("model {}", model);
+
+        let mut nodes = BTreeMap::<usize, Node<F>>::new();
+        for (i, n) in model.nodes.iter().enumerate() {
+            let n = Node::<F>::new(n.clone(), &mut nodes, scale, public_params, i)?;
+            nodes.insert(i, n);
+        }
+
+        debug!("\n {}", Table::new(nodes.iter()).to_string());
+
+        Ok((model, nodes))
+    }
+
     /// Creates a `Model` from parsed CLI arguments
+    /// # Arguments
+    /// * `cli` - [Cli]
     pub fn from_ezkl_conf(cli: Cli) -> Result<Self, Box<dyn Error>> {
         let visibility = VarVisibility::from_args(cli.args.clone())?;
         match cli.command {
@@ -204,7 +244,6 @@ impl<F: FieldExt + TensorType> Model<F> {
     /// a) independent lookup operations (i.e operations that don't feed into one another so can be processed in parallel).
     /// b) operations that can be fused together, i.e the output of one op might feed into another.
     /// # Arguments
-    ///
     /// * `meta` - Halo2 ConstraintSystem.
     /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure all the nodes loaded in `self.nodes`.
     pub fn configure(
@@ -286,11 +325,11 @@ impl<F: FieldExt + TensorType> Model<F> {
     ) -> Result<(), Box<dyn Error>> {
         info!("model layout");
         let mut results = BTreeMap::<usize, ValTensor<F>>::new();
-        for (i, input_value) in inputs.iter().enumerate() {
+        for (i, input_idx) in self.inputs.iter().enumerate() {
             if self.visibility.input.is_public() {
-                results.insert(i, vars.instances[i].clone());
+                results.insert(*input_idx, vars.instances[i].clone());
             } else {
-                results.insert(i, input_value.clone());
+                results.insert(*input_idx, inputs[i].clone());
             }
         }
 
@@ -304,26 +343,7 @@ impl<F: FieldExt + TensorType> Model<F> {
                     let values: Vec<ValTensor<F>> = node
                         .inputs
                         .iter()
-                        .map(|i| match &self.nodes.get(i).unwrap().opkind.const_value() {
-                            Some(const_value) => {
-                                if self.visibility.params.is_public() {
-                                    const_value
-                                        .map(|x| {
-                                            crate::tensor::ValType::Constant(i128_to_felt::<F>(x))
-                                        })
-                                        .into()
-                                } else {
-                                    const_value
-                                        .map(|x| {
-                                            crate::tensor::ValType::Value(Value::known(
-                                                i128_to_felt::<F>(x),
-                                            ))
-                                        })
-                                        .into()
-                                }
-                            }
-                            _ => results.get(i).unwrap().clone(),
-                        })
+                        .map(|i| results.get(i).unwrap().clone())
                         .collect_vec();
 
                     trace!("laying out offset {}", offset);
@@ -434,8 +454,8 @@ impl<F: FieldExt + TensorType> Model<F> {
             })
             .collect_vec();
 
-        for (i, input_value) in inputs.iter().enumerate() {
-            results.insert(i, input_value.clone());
+        for (i, input_idx) in self.inputs.iter().enumerate() {
+            results.insert(*input_idx, inputs[i].clone());
         }
 
         let mut dummy_config = PolyConfig::dummy(self.run_args.logrows as usize);
@@ -445,12 +465,7 @@ impl<F: FieldExt + TensorType> Model<F> {
             let values: Vec<ValTensor<F>> = node
                 .inputs
                 .iter()
-                .map(|i| match &self.nodes.get(i).unwrap().opkind.const_value() {
-                    Some(const_value) => const_value
-                        .map(|x| crate::tensor::ValType::Value(Value::known(i128_to_felt::<F>(x))))
-                        .into(),
-                    _ => results.get(i).unwrap().clone(),
-                })
+                .map(|i| results.get(i).unwrap().clone())
                 .collect_vec();
 
             let res = dummy_config
