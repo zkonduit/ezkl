@@ -44,6 +44,9 @@ pub mod fieldutils;
 pub mod graph;
 /// Tools for proofs and verification used by cli
 pub mod pfsys;
+/// Python bindings
+#[cfg(feature = "python-bindings")]
+pub mod python;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
 /// Python bindings

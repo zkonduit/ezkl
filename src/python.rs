@@ -1,23 +1,17 @@
+use crate::circuit::CheckMode;
+use crate::commands::RunArgs;
+use crate::graph::{vector_to_quantized, Mode, Model, VarVisibility, Visibility};
+use crate::pfsys::{gen_srs as ezkl_gen_srs, prepare_data, save_params};
+use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+use halo2curves::bn256::{Bn256, Fr};
+use log::trace;
+use pyo3::exceptions::{PyIOError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
-use pyo3::exceptions::{PyIOError, PyRuntimeError, PyValueError};
 use pyo3_log;
-use tabled::Table;
-use crate::graph::{Model, Visibility, VarVisibility, Mode, vector_to_quantized};
-use crate::commands::{Cli, RunArgs, Commands::Mock};
-use crate::circuit::CheckMode;
-use crate::pfsys::{
-    gen_srs as ezkl_gen_srs,
-    save_params,
-    prepare_data,
-    prepare_model_circuit_and_public_input
-};
-use std::path::PathBuf;
 use std::fs::File;
-use log::trace;
-use halo2curves::bn256::{Bn256, Fr};
-use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-use halo2_proofs::dev::MockProver;
+use std::path::PathBuf;
+use tabled::Table;
 
 // See commands.rs and execute.rs
 // RenderCircuit
@@ -36,11 +30,10 @@ use halo2_proofs::dev::MockProver;
 //         .render(args.logrows, &circuit, &root)?;
 // }
 
+// Table
 
 #[pyfunction]
-fn table(
-    model: String,
-) -> Result<String, PyErr> {
+fn table(model: String) -> Result<String, PyErr> {
     // use default values to initialize model
     let run_args = RunArgs {
         tolerance: 0,
@@ -61,31 +54,16 @@ fn table(
         output: Visibility::Public,
     };
 
-    let result = Model::new(
-        model,
-        run_args,
-        Mode::Mock,
-        visibility,
-    );
+    let result = Model::<Fr>::new(model, run_args, Mode::Mock, visibility);
 
     match result {
-        Ok(m) => {
-            Ok(Table::new(m.nodes.iter()).to_string())
-        },
-        Err(_) => {
-            Err(PyIOError::new_err("Failed to import model"))
-        },
+        Ok(m) => Ok(Table::new(m.nodes.iter()).to_string()),
+        Err(_) => Err(PyIOError::new_err("Failed to import model")),
     }
 }
 
-#[pyfunction(signature = (
-    params_path,
-    logrows=17,
-))]
-fn gen_srs(
-    params_path: PathBuf,
-    logrows: u32,
-) -> PyResult<()> {
+#[pyfunction]
+fn gen_srs(params_path: PathBuf, logrows: u32) -> PyResult<()> {
     let run_args = RunArgs {
         tolerance: 0,
         scale: 7,
@@ -128,7 +106,7 @@ fn forward(
     public_outputs: bool,
     public_params: bool,
     pack_base: u32,
-    check_mode: &str
+    check_mode: &str,
 ) -> PyResult<()> {
     let data = prepare_data(data);
 
@@ -149,23 +127,12 @@ fn forward(
             let mut model_inputs = vec![];
             // quantize the supplied data using the provided scale.
             for v in new_data.input_data.iter() {
-                match vector_to_quantized(
-                    v,
-                    &Vec::from([v.len()]),
-                    0.0,
-                    run_args.scale
-                ) {
+                match vector_to_quantized(v, &Vec::from([v.len()]), 0.0, run_args.scale) {
                     Ok(t) => model_inputs.push(t),
-                    Err(_) => {
-                        return Err(PyValueError::new_err("Failed to quantize vector"))
-                    }
+                    Err(_) => return Err(PyValueError::new_err("Failed to quantize vector")),
                 }
             }
-            let res = Model::forward(
-                model,
-                &model_inputs,
-                run_args
-            );
+            let res = Model::<Fr>::forward(model, &model_inputs, run_args);
 
             match res {
                 Ok(r) => {
@@ -183,20 +150,14 @@ fn forward(
                             // let py = gil.python();
                             // return Ok(new_data.to_object(py))
                             Ok(())
-                        },
-                        Err(_) => {
-                            return Err(PyIOError::new_err("Failed to create output file"))
                         }
+                        Err(_) => return Err(PyIOError::new_err("Failed to create output file")),
                     }
                 }
-                Err(_) => {
-                    Err(PyRuntimeError::new_err("Failed to compute forward pass"))
-                }
+                Err(_) => Err(PyRuntimeError::new_err("Failed to compute forward pass")),
             }
-        },
-        Err(_) => {
-            Err(PyIOError::new_err("Failed to import files"))
-        },
+        }
+        Err(_) => Err(PyIOError::new_err("Failed to import files")),
     }
 }
 
@@ -260,19 +221,13 @@ fn mock(
                                 }
                             }
                         },
-                        Err(_) => {
-                            Err(PyRuntimeError::new_err("Failed to generate prover"))
-                        }
+                        Err(_) => return Err(PyRuntimeError::new_err("Failed to generate prover")),
                     }
                 },
-                Err(_) => {
-                    Err(PyRuntimeError::new_err("Failed to prepare model circuit and public input"))
-                }
+                Err(_) => Err(PyRuntimeError::new_err("Failed to prepare model circuit and public input")),
             }
         },
-        Err(_) => {
-            Err(PyIOError::new_err("Failed to import data"))
-        }
+        Err(_) => Err(PyIOError::new_err("Failed to import data")),
     }
 }
 

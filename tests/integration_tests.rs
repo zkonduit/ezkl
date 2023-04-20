@@ -40,7 +40,7 @@ fn init() {
     assert!(status.success());
 }
 
-const TESTS: [&str; 21] = [
+const TESTS: [&str; 27] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -51,6 +51,8 @@ const TESTS: [&str; 21] = [
     "1l_sqrt",
     "1l_prelu",
     "1l_leakyrelu",
+    "1l_gelu_noappx",
+    // "1l_gelu_tanh_appx",
     "1l_relu",
     "1l_tanh",
     "2l_relu_sigmoid_small",
@@ -62,9 +64,14 @@ const TESTS: [&str; 21] = [
     "2l_relu_sigmoid_conv",
     "3l_relu_conv_fc",
     "4l_relu_conv_fc",
+    "1l_erf",
+    "1l_var",
+    "min",
+    "max",
+    "1l_max_pool",
 ];
 
-const PACKING_TESTS: [&str; 13] = [
+const PACKING_TESTS: [&str; 15] = [
     "1l_mlp",
     "1l_average",
     "1l_div",
@@ -73,14 +80,16 @@ const PACKING_TESTS: [&str; 13] = [
     "1l_sqrt",
     "1l_leakyrelu",
     "1l_prelu",
+    "1l_var",
     "1l_relu",
     "1l_tanh",
+    "1l_gelu_noappx",
     "2l_relu_sigmoid_small",
     "2l_relu_fc",
     "2l_relu_small",
 ];
 
-const TESTS_AGGR: [&str; 16] = [
+const TESTS_AGGR: [&str; 21] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -88,8 +97,10 @@ const TESTS_AGGR: [&str; 16] = [
     "1l_div",
     "1l_pad",
     "1l_sigmoid",
+    "1l_gelu_noappx",
     "1l_sqrt",
     "1l_prelu",
+    "1l_var",
     "1l_leakyrelu",
     "1l_relu",
     "1l_tanh",
@@ -97,6 +108,9 @@ const TESTS_AGGR: [&str; 16] = [
     "2l_relu_sigmoid_small",
     "2l_relu_small",
     "1l_conv",
+    "min",
+    "max",
+    "1l_max_pool",
 ];
 
 const NEG_TESTS: [(&str, &str); 2] = [
@@ -104,7 +118,7 @@ const NEG_TESTS: [(&str, &str); 2] = [
     ("2l_relu_small", "2l_relu_sigmoid_small"),
 ];
 
-const TESTS_EVM: [&str; 14] = [
+const TESTS_EVM: [&str; 19] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -113,12 +127,17 @@ const TESTS_EVM: [&str; 14] = [
     "1l_div",
     "1l_sqrt",
     "1l_prelu",
+    "1l_var",
     "1l_leakyrelu",
+    "1l_gelu_noappx",
     "1l_relu",
     "1l_tanh",
     "2l_relu_sigmoid_small",
     "2l_relu_small",
     "2l_relu_fc",
+    "min",
+    "max",
+    "1l_max_pool",
 ];
 
 const EXAMPLES: [&str; 2] = ["mlp_4d", "conv2d_mnist"];
@@ -131,7 +150,7 @@ macro_rules! test_func_aggr {
             use crate::TESTS_AGGR;
             use test_case::test_case;
             use crate::kzg_aggr_prove_and_verify;
-            seq!(N in 0..=14 {
+            seq!(N in 0..=17 {
 
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_prove_and_verify_(test: &str) {
@@ -153,7 +172,7 @@ macro_rules! test_packed_func {
             use crate::mock_packed_outputs;
             use crate::mock_everything;
 
-            seq!(N in 0..=12 {
+            seq!(N in 0..=14 {
 
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_packed_outputs_(test: &str) {
@@ -186,13 +205,13 @@ macro_rules! test_func {
             use crate::render_circuit;
             use crate::tutorial as run_tutorial;
 
-
             #[test]
             fn tutorial_() {
                 run_tutorial();
             }
 
-            seq!(N in 0..=20 {
+
+            seq!(N in 0..=26 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
@@ -242,18 +261,20 @@ macro_rules! test_func_evm {
 
             /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
             /// specify a few that will
-            const TESTS_SOLIDITY: [&str; 8] = [
+            const TESTS_SOLIDITY: [&str; 10] = [
                 "1l_relu",
                 "1l_div",
                 "1l_leakyrelu",
                 "1l_sqrt",
                 "1l_prelu",
+                "1l_gelu_noappx",
                 "1l_sigmoid",
                 "1l_reshape",
-                "2l_relu_fc"
+                "2l_relu_fc",
+                "1l_var"
             ];
 
-            seq!(N in 0..=13 {
+            seq!(N in 0..=18 {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
@@ -420,9 +441,9 @@ fn tutorial() {
             "-K=17",
             "mock",
             "-D",
-            format!("./examples/onnx/tutorial/input.json").as_str(),
+            "./examples/onnx/tutorial/input.json".to_string().as_str(),
             "-M",
-            format!("./examples/onnx/tutorial/network.onnx").as_str(),
+            "./examples/onnx/tutorial/network.onnx".to_string().as_str(),
         ])
         .status()
         .expect("failed to execute process");

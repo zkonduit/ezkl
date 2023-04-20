@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use ezkl_lib::circuit::poly::PolyOp;
 use ezkl_lib::circuit::*;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
@@ -37,11 +38,11 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = 10;
 
-        let a = VarTensor::new_advice(cs, K, len * len, true);
+        let a = VarTensor::new_advice(cs, K, len * len);
 
-        let b = VarTensor::new_advice(cs, K, len * len, true);
+        let b = VarTensor::new_advice(cs, K, len * len);
 
-        let output = VarTensor::new_advice(cs, K, (len + 1) * len, true);
+        let output = VarTensor::new_advice(cs, K, (len + 1) * len);
 
         Self::Config::configure(cs, &[a, b], &output, CheckMode::UNSAFE, 0)
     }
@@ -56,15 +57,14 @@ impl Circuit<Fr> for MyCircuit {
             |mut region| {
                 config
                     .layout(
-                        &mut region,
+                        Some(&mut region),
                         &[self.image.clone()],
                         &mut 0,
-                        Op::SumPool {
+                        Box::new(PolyOp::SumPool {
                             padding: (0, 0),
                             stride: (1, 1),
                             kernel_shape: (2, 2),
-                        }
-                        .into(),
+                        }),
                     )
                     .unwrap();
                 Ok(())

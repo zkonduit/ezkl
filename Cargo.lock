@@ -1354,12 +1354,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "eq-float"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c02b5d1d1e6ba431b960d4bf971c8b0e2d2942b8cbc577d9bdf9c60fca5d41d"
-
-[[package]]
 name = "errno"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1722,6 +1716,7 @@ name = "ezkl-lib"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bincode",
  "clap 4.1.13",
  "colored",
  "colored_json",
@@ -1729,7 +1724,6 @@ dependencies = [
  "ctor",
  "ecc",
  "env_logger",
- "eq-float",
  "ethereum-types",
  "ethers",
  "ethers-solc",
@@ -1742,6 +1736,7 @@ dependencies = [
  "log",
  "mnist",
  "plotters",
+ "puruspe",
  "pyo3",
  "pyo3-log",
  "rand 0.8.5",
@@ -3753,6 +3748,12 @@ name = "protobuf"
 version = "2.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf7e6d18738ecd0902d30d1ad232c9125985a3422929b16c65517b38adc14f96"
+
+[[package]]
+name = "puruspe"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe7765e19fb2ba6fd4373b8d90399f5321683ea7c11b598c6bbaa3a72e9c83b8"
 
 [[package]]
 name = "pyo3"

@@ -277,7 +277,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
       - name: KZG prove and verify aggr tests
-        run: cargo test --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ -- --include-ignored
+        run: cargo test --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ -- --include-ignored --test-threads 8
 
   examples:
     runs-on: ubuntu-latest-32-cores
@@ -323,7 +323,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.7'
+          python-version: "3.7"
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2022-11-03
@@ -339,4 +339,3 @@ jobs:
         run: source .env/bin/activate; maturin develop --features python-bindings
       - name: Run pytest
         run: source .env/bin/activate; pytest
-

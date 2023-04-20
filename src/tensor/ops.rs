@@ -1,6 +1,7 @@
 use super::TensorError;
 use crate::tensor::{Tensor, TensorType};
 use itertools::Itertools;
+use puruspe::erf;
 pub use std::ops::{Add, Div, Mul, Sub};
 
 /// Matrix multiplies two 2D tensors (and adds an offset).
@@ -528,15 +529,15 @@ pub fn sumpool<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 3, 3],
 /// ).unwrap();
-/// let pooled = max_pool2d::<i128>(&x, (0, 0), (1, 1), (2, 2)).unwrap();
+/// let pooled = max_pool2d::<i128>(&x, &(0, 0), &(1, 1), &(2, 2)).unwrap();
 /// let expected: Tensor<i128> = Tensor::<i128>::new(Some(&[5, 4, 4, 6]), &[1, 2, 2]).unwrap();
 /// assert_eq!(pooled, expected);
 /// ```
 pub fn max_pool2d<T: TensorType>(
     image: &Tensor<T>,
-    padding: (usize, usize),
-    stride: (usize, usize),
-    pool_dims: (usize, usize),
+    padding: &(usize, usize),
+    stride: &(usize, usize),
+    pool_dims: &(usize, usize),
 ) -> Result<Tensor<T>, TensorError> {
     if image.dims().len() != 3 {
         return Err(TensorError::DimMismatch("max_pool2d".to_string()));
@@ -546,7 +547,7 @@ pub fn max_pool2d<T: TensorType>(
     let input_channels = image_dims[0];
     let (image_height, image_width) = (image_dims[1], image_dims[2]);
 
-    let padded_image = pad::<T>(image, padding)?;
+    let padded_image = pad::<T>(image, *padding)?;
 
     let horz_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
     let vert_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
@@ -804,6 +805,36 @@ pub mod nonlinearities {
         output
     }
 
+    /// Applies error function (erf) on a tensor of integers.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::erffunc;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[4, 25, 8, 1, 1, 0]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = erffunc(&x, 1, 1);
+    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 0, 0, 0]), &[2, 3]).unwrap(); // TODO
+    /// assert_eq!(result, expected);
+    /// ```
+
+    pub fn erffunc(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        let mut output = a.clone();
+
+        for i in 0..a.len() {
+            let mut z = a[i] as f32 / (scale_input as f32);
+            z = (scale_output as f32) * (erf(z as f64) as f32);
+            output[i] = z as i128;
+        }
+        output
+    }
+
     /// Elementwise applies leaky relu to a tensor of integers.
     /// # Arguments
     ///
@@ -835,6 +866,71 @@ pub mod nonlinearities {
                 d_inv_x.round() as i128
             };
         }
+        output
+    }
+
+    /// Elementwise applies instance norm to a tensor of integers.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `gamma` - vector of scale values
+    /// * `beta` - vector of offset values
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::instance_norm;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[4, 2, 8, 1, 1, 2, 2, 2, 3]),
+    ///     &[1, 3, 3],
+    /// ).unwrap();
+    ///
+    /// let gamma = Tensor::<i128>::new(
+    ///     Some(&[1]),
+    ///     &[1],
+    /// ).unwrap();
+    ///
+    /// let beta = Tensor::<i128>::new(
+    ///     Some(&[23]),
+    ///     &[1],
+    /// ).unwrap();
+    ///
+    /// let result = instance_norm([x, gamma, beta], 1.0);
+    /// let expected = Tensor::<i128>::new(Some(&[25, 23, 29, 22, 22, 23, 23, 23, 24]), &[1, 3, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn instance_norm(inputs: [Tensor<i128>; 3], epsilon: f32) -> Tensor<i128> {
+        let a = &inputs[0];
+        let gamma = &inputs[1];
+        let beta = &inputs[2];
+        // calculate value of output
+        assert!(a.len() > 1);
+        assert!(a.dims().len() == 3);
+        assert_eq!(gamma.len(), beta.len());
+        // assert num channels is same as num of parameters
+        assert_eq!(gamma.len(), a.dims()[0]);
+        let mut output = vec![];
+        for i in 0..gamma.len() {
+            let row = a.get_slice(&[i..i + 1]).unwrap();
+            let sum = sum(&row).unwrap();
+            let mean = sum.map(|x| (x) / (row.len() as i128));
+
+            // unbiased = false in pytorch definition. if it was unbiased we would divide by row.len() - 1
+            let var = (row.clone() - mean.clone())
+                .unwrap()
+                .map(|e| (e as f32) / (row.len() as f32));
+
+            let denom = var.map(|e| (e + epsilon).sqrt().round() as i128);
+            let numerator = (row - mean).unwrap() * vec![gamma[i]].into_iter().into();
+
+            let result =
+                ((numerator.unwrap() / denom).unwrap() + vec![beta[i]].into_iter().into()).unwrap();
+
+            output.push(result);
+        }
+
+        let mut output = Tensor::from(output.into_iter()).combine().unwrap();
+        output.reshape(a.dims());
+
         output
     }
 
@@ -907,6 +1003,27 @@ pub mod nonlinearities {
             output[i] = d_inv_x.round() as i128;
         }
         output
+    }
+
+    /// Takes the mean of a tensor
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::mean;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[2, 1, 2, 7, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = mean(&x, 1);
+    /// let expected = Tensor::<i128>::new(Some(&[2]), &[1]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn mean(a: &Tensor<i128>, scale: usize) -> Tensor<i128> {
+        let sum = sum(a).unwrap();
+        const_div(&sum, (scale * a.len()) as f32)
     }
 }
 

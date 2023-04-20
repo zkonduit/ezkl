@@ -11,6 +11,8 @@ pub enum ValType<F: FieldExt + TensorType> {
     AssignedValue(Value<Assigned<F>>),
     /// previously assigned value
     PrevAssigned(AssignedCell<F, F>),
+    /// constant
+    Constant(F),
 }
 
 impl<F: FieldExt + TensorType> From<ValType<F>> for i32 {
@@ -46,7 +48,14 @@ impl<F: FieldExt + TensorType> From<ValType<F>> for i32 {
                 });
                 output
             }
+            ValType::Constant(v) => felt_to_i32(v),
         }
+    }
+}
+
+impl<F: FieldExt + TensorType> From<F> for ValType<F> {
+    fn from(t: F) -> ValType<F> {
+        ValType::Constant(t)
     }
 }
 
@@ -106,6 +115,15 @@ impl<F: FieldExt + TensorType> From<Tensor<ValType<F>>> for ValTensor<F> {
     }
 }
 
+impl<F: FieldExt + TensorType> From<Tensor<F>> for ValTensor<F> {
+    fn from(t: Tensor<F>) -> ValTensor<F> {
+        ValTensor::Value {
+            inner: t.map(|x| x.into()),
+            dims: t.dims().to_vec(),
+        }
+    }
+}
+
 impl<F: FieldExt + TensorType> From<Tensor<Value<F>>> for ValTensor<F> {
     fn from(t: Tensor<Value<F>>) -> ValTensor<F> {
         ValTensor::Value {
@@ -135,11 +153,9 @@ impl<F: FieldExt + TensorType> From<Tensor<AssignedCell<F, F>>> for ValTensor<F>
 
 impl<F: FieldExt + TensorType> ValTensor<F> {
     /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
-    pub fn new_instance(cs: &mut ConstraintSystem<F>, dims: Vec<usize>, equality: bool) -> Self {
+    pub fn new_instance(cs: &mut ConstraintSystem<F>, dims: Vec<usize>) -> Self {
         let col = cs.instance_column();
-        if equality {
-            cs.enable_equality(col);
-        }
+        cs.enable_equality(col);
         ValTensor::Instance { inner: col, dims }
     }
 
@@ -160,6 +176,10 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                     ValType::PrevAssigned(v) => v.value_field().map(|f| {
                         integer_evals.push(crate::fieldutils::felt_to_i128(f.evaluate()));
                     }),
+                    ValType::Constant(v) => {
+                        integer_evals.push(crate::fieldutils::felt_to_i128(v));
+                        Value::unknown()
+                    }
                 });
             }
             _ => return Err(Box::new(TensorError::WrongMethod)),
@@ -197,6 +217,15 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     }
 
     /// Fetches the inner tensor as a [Tensor<Value<F>>]
+    pub fn get_inner_tensor(&self) -> Result<Tensor<ValType<F>>, TensorError> {
+        warn!("using 'get_inner' in constraints can create soundness issues.");
+        Ok(match self {
+            ValTensor::Value { inner: v, .. } => v.clone(),
+            ValTensor::Instance { .. } => return Err(TensorError::WrongMethod),
+        })
+    }
+
+    /// Fetches the inner tensor as a [Tensor<Value<F>>]
     pub fn get_inner(&self) -> Result<Tensor<Value<F>>, TensorError> {
         warn!("using 'get_inner' in constraints can create soundness issues.");
         Ok(match self {
@@ -204,6 +233,7 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                 ValType::Value(v) => v,
                 ValType::AssignedValue(v) => v.evaluate(),
                 ValType::PrevAssigned(v) => v.value_field().evaluate(),
+                ValType::Constant(v) => Value::known(v),
             }),
             ValTensor::Instance { .. } => return Err(TensorError::WrongMethod),
         })
@@ -320,6 +350,11 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
                 dims.iter().product::<usize>()
             }
         }
+    }
+
+    ///
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     /// Calls `pad_row_ones` on the inner [Tensor].

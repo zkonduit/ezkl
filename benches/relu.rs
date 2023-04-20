@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl_lib::circuit::{BaseConfig as Config, CheckMode, LookupOp};
+use ezkl_lib::circuit::{ops::lookup::LookupOp, BaseConfig as Config, CheckMode};
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::{create_keys, gen_srs};
@@ -33,7 +33,7 @@ impl Circuit<Fr> for NLCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         unsafe {
             let advices = (0..2)
-                .map(|_| VarTensor::new_advice(cs, K, LEN, true))
+                .map(|_| VarTensor::new_advice(cs, K, LEN))
                 .collect::<Vec<_>>();
 
             let nl = LookupOp::ReLU { scale: 128 };
@@ -59,10 +59,10 @@ impl Circuit<Fr> for NLCircuit {
             |mut region| {
                 config
                     .layout(
-                        &mut region,
+                        Some(&mut region),
                         &[self.input.clone()],
                         &mut 0,
-                        LookupOp::ReLU { scale: 128 }.into(),
+                        Box::new(LookupOp::ReLU { scale: 128 }),
                     )
                     .unwrap();
                 Ok(())

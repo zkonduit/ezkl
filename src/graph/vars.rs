@@ -5,12 +5,12 @@ use crate::tensor::TensorType;
 use crate::tensor::{ValTensor, VarTensor};
 use halo2_proofs::{arithmetic::FieldExt, plonk::ConstraintSystem};
 use itertools::Itertools;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use super::GraphError;
 
 /// Label Enum to track whether model input, model parameters, and model output are public or private
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Visibility {
     /// Mark an item as private to the prover (not in the proof submitted for verification)
     Private,
@@ -33,7 +33,7 @@ impl std::fmt::Display for Visibility {
 }
 
 /// Whether the model input, model parameters, and model output are Public or Private to the prover.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct VarVisibility {
     /// Input to the model or computational graph
     pub input: Visibility,
@@ -103,17 +103,17 @@ impl<F: FieldExt + TensorType> ModelVars<F> {
         visibility: VarVisibility,
     ) -> Self {
         let advices = (0..3)
-            .map(|_| VarTensor::new_advice(cs, logrows, var_len, true))
+            .map(|_| VarTensor::new_advice(cs, logrows, var_len))
             .collect_vec();
         let mut fixed = vec![];
         if visibility.params == Visibility::Public {
             fixed = (0..1)
-                .map(|_| VarTensor::new_fixed(cs, logrows, var_len, true))
+                .map(|_| VarTensor::new_fixed(cs, logrows, var_len))
                 .collect_vec();
         }
         // will be empty if instances dims has len 0
         let instances = (0..instance_dims.len())
-            .map(|i| ValTensor::new_instance(cs, instance_dims[i].clone(), true))
+            .map(|i| ValTensor::new_instance(cs, instance_dims[i].clone()))
             .collect_vec();
         ModelVars {
             advices,

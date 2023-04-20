@@ -410,7 +410,7 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         if let Some(m) = m {
             let mstore = m.get(1).unwrap().as_str();
             let addr = m.get(2).unwrap().as_str();
-            let addr_as_num = u32::from_str_radix(addr, 10)?;
+            let addr_as_num = addr.parse::<u32>()?;
             let transcript_addr = format!("{:#x}", addr_as_num);
             transcript_addrs.push(addr_as_num);
             line = line.replace(
@@ -423,7 +423,7 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         if let Some(m) = m {
             let mstore = m.get(1).unwrap().as_str();
             let addr = m.get(2).unwrap().as_str();
-            let addr_as_num = u32::from_str_radix(addr, 10)?;
+            let addr_as_num = addr.parse::<u32>()?;
             let transcript_addr = format!("{:#x}", addr_as_num);
             transcript_addrs.push(addr_as_num);
             line = line.replace(

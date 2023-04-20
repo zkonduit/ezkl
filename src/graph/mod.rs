@@ -8,7 +8,10 @@ pub mod node;
 /// Representations of a computational graph's variables.
 pub mod vars;
 
-use crate::circuit::OpKind;
+use crate::commands::Cli;
+use crate::fieldutils::i128_to_felt;
+use crate::pfsys::ModelInput;
+use crate::tensor::ops::pack;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor};
 use anyhow::Result;
@@ -20,7 +23,10 @@ use halo2_proofs::{
 use log::{info, trace};
 pub use model::*;
 pub use node::*;
+// use std::fs::File;
+// use std::io::{BufReader, BufWriter, Read, Write};
 use std::marker::PhantomData;
+// use std::path::PathBuf;
 use thiserror::Error;
 pub use vars::*;
 
@@ -32,16 +38,16 @@ pub enum GraphError {
     InvalidLookupInputs,
     /// Shape mismatch in circuit construction
     #[error("invalid dimensions used for node {0} ({1})")]
-    InvalidDims(usize, OpKind),
+    InvalidDims(usize, String),
     /// Wrong method was called to configure an op
     #[error("wrong method was called to configure node {0} ({1})")]
-    WrongMethod(usize, OpKind),
+    WrongMethod(usize, String),
     /// A requested node is missing in the graph
     #[error("a requested node is missing in the graph: {0}")]
     MissingNode(usize),
     /// The wrong method was called on an operation
     #[error("an unsupported method was called on node {0} ({1})")]
-    OpMismatch(usize, OpKind),
+    OpMismatch(usize, String),
     /// This operation is unsupported
     #[error("unsupported operation in graph")]
     UnsupportedOp,
@@ -62,19 +68,106 @@ pub enum GraphError {
     NonConstantPower,
     /// Error when attempting to rescale an operation
     #[error("failed to rescale inputs for {0}")]
-    RescalingError(OpKind),
+    RescalingError(String),
     /// Error when attempting to load a model
     #[error("failed to load model")]
     ModelLoad,
+    /// Packing exponent is too large
+    #[error("largest packing exponent exceeds max. try reducing the scale")]
+    PackingExponent,
 }
 
 /// Defines the circuit for a computational graph / model loaded from a `.onnx` file.
 #[derive(Clone, Debug)]
-pub struct ModelCircuit<F: FieldExt> {
+pub struct ModelCircuit<F: FieldExt + TensorType> {
     /// Vector of input tensors to the model / graph of computations.
     pub inputs: Vec<Tensor<i128>>,
+    ///
+    pub model: Model<F>,
     /// Represents the Field we are using.
     pub _marker: PhantomData<F>,
+}
+
+impl<F: FieldExt + TensorType> ModelCircuit<F> {
+    ///
+    pub fn new(
+        data: &ModelInput,
+        model: Model<F>,
+    ) -> Result<ModelCircuit<F>, Box<dyn std::error::Error>> {
+        // quantize the supplied data using the provided scale.
+        let mut inputs: Vec<Tensor<i128>> = vec![];
+        for (input, shape) in data.input_data.iter().zip(data.input_shapes.clone()) {
+            let t = vector_to_quantized(input, &shape, 0.0, model.run_args.scale)?;
+            inputs.push(t);
+        }
+
+        Ok(ModelCircuit::<F> {
+            inputs,
+            model,
+            _marker: PhantomData,
+        })
+    }
+
+    ///
+    pub fn from_arg(data: &ModelInput) -> Result<Self, Box<dyn std::error::Error>> {
+        let cli = Cli::create()?;
+        let model = Model::from_ezkl_conf(cli)?;
+        Self::new(data, model)
+    }
+
+    ///
+    pub fn prepare_public_inputs(
+        &self,
+        data: &ModelInput,
+    ) -> Result<Vec<Vec<F>>, Box<dyn std::error::Error>> {
+        let out_scales = self.model.get_output_scales();
+
+        // quantize the supplied data using the provided scale.
+        // the ordering here is important, we want the inputs to come before the outputs
+        // as they are configured in that order as Column<Instances>
+        let mut public_inputs = vec![];
+        if self.model.visibility.input.is_public() {
+            for v in data.input_data.iter() {
+                let t =
+                    vector_to_quantized(v, &Vec::from([v.len()]), 0.0, self.model.run_args.scale)?;
+                public_inputs.push(t);
+            }
+        }
+        if self.model.visibility.output.is_public() {
+            for (idx, v) in data.output_data.iter().enumerate() {
+                let mut t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx])?;
+                let len = t.len();
+                if self.model.run_args.pack_base > 1 {
+                    let max_exponent =
+                        (((len - 1) as u32) * (self.model.run_args.scale + 1)) as f64;
+                    if max_exponent > (i128::MAX as f64).log(self.model.run_args.pack_base as f64) {
+                        return Err(Box::new(GraphError::PackingExponent));
+                    }
+                    t = pack(
+                        &t,
+                        self.model.run_args.pack_base as i128,
+                        self.model.run_args.scale,
+                    )?;
+                }
+                public_inputs.push(t);
+            }
+        }
+        info!(
+            "public inputs lengths: {:?}",
+            public_inputs
+                .iter()
+                .map(|i| i.len())
+                .collect::<Vec<usize>>()
+        );
+        trace!("{:?}", public_inputs);
+
+        let pi_inner: Vec<Vec<F>> = public_inputs
+            .iter()
+            .map(|i| i.iter().map(|e| i128_to_felt::<F>(*e)).collect::<Vec<F>>())
+            .collect::<Vec<Vec<F>>>();
+
+        Ok(pi_inner)
+    }
 }
 
 impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
@@ -86,13 +179,14 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
     }
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let model = Model::from_arg().expect("model should load from args");
+        let model: Model<F> = Model::from_arg().expect("model should load");
 
         // for now the number of instances corresponds to the number of graph / model outputs
         let instance_shapes = model.instance_shapes();
-        let var_len = model.total_var_len();
+        let var_len = model.dummy_layout(&model.input_shapes()).unwrap();
 
         info!("total var len: {:?}", var_len);
+        info!("instance_shapes: {:?}", instance_shapes);
 
         let mut vars = ModelVars::new(
             cs,
@@ -133,3 +227,5 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
         Ok(())
     }
 }
+
+////////////////////////

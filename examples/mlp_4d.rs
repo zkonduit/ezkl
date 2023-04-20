@@ -1,5 +1,6 @@
-use eq_float::F32;
-use ezkl_lib::circuit::{BaseConfig as PolyConfig, CheckMode, LookupOp, Op as PolyOp};
+use ezkl_lib::circuit::{
+    ops::lookup::LookupOp, ops::poly::PolyOp, BaseConfig as PolyConfig, CheckMode,
+};
 use ezkl_lib::fieldutils::i32_to_felt;
 use ezkl_lib::tensor::*;
 use halo2_proofs::dev::MockProver;
@@ -46,9 +47,9 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let input = VarTensor::new_advice(cs, K, LEN, true);
-        let params = VarTensor::new_advice(cs, K, LEN * LEN, true);
-        let output = VarTensor::new_advice(cs, K, LEN, true);
+        let input = VarTensor::new_advice(cs, K, LEN);
+        let params = VarTensor::new_advice(cs, K, LEN * LEN);
+        let output = VarTensor::new_advice(cs, K, LEN);
         // tells the config layer to add an affine op to the circuit gate
 
         let mut layer_config =
@@ -67,7 +68,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                 &output,
                 BITS,
                 &LookupOp::Div {
-                    denom: F32::from(128.),
+                    denom: ezkl_lib::circuit::utils::F32::from(128.),
                 },
             )
             .unwrap();
@@ -96,14 +97,14 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            &mut region,
+                            Some(&mut region),
                             &[
                                 self.input.clone(),
                                 self.l0_params[0].clone(),
                                 self.l0_params[1].clone(),
                             ],
                             &mut offset,
-                            PolyOp::Affine.into(),
+                            Box::new(PolyOp::Affine),
                         )
                         .unwrap()
                         .unwrap();
@@ -113,10 +114,10 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let mut x = config
                         .layer_config
                         .layout(
-                            &mut region,
+                            Some(&mut region),
                             &[x],
                             &mut offset,
-                            LookupOp::ReLU { scale: 1 }.into(),
+                            Box::new(LookupOp::ReLU { scale: 1 }),
                         )
                         .unwrap()
                         .unwrap();
@@ -126,10 +127,10 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            &mut region,
+                            Some(&mut region),
                             &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
                             &mut offset,
-                            PolyOp::Affine.into(),
+                            Box::new(PolyOp::Affine),
                         )
                         .unwrap()
                         .unwrap();
@@ -138,23 +139,22 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            &mut region,
+                            Some(&mut region),
                             &[x],
                             &mut offset,
-                            LookupOp::ReLU { scale: 1 }.into(),
+                            Box::new(LookupOp::ReLU { scale: 1 }),
                         )
                         .unwrap();
                     println!("offset: {}", offset);
                     Ok(config
                         .layer_config
                         .layout(
-                            &mut region,
+                            Some(&mut region),
                             &[x.unwrap()],
                             &mut offset,
-                            LookupOp::Div {
-                                denom: F32::from(128.),
-                            }
-                            .into(),
+                            Box::new(LookupOp::Div {
+                                denom: ezkl_lib::circuit::utils::F32::from(128.),
+                            }),
                         )
                         .unwrap())
                 },

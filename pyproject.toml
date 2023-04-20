@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-v -p pytester --strict-markers"
+addopts = "-rfEX -p pytester --strict-markers"
 testpaths = [
     "tests/python/*_tests.py",
 ]

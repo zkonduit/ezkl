@@ -302,9 +302,9 @@ pub enum Commands {
         /// The path to output to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
-        /// The path to output to the desired verification code
+        /// The path to the deployment code
         #[arg(long)]
-        deployment_code_path: Option<PathBuf>,
+        deployment_code_path: PathBuf,
         // todo, optionally allow supplying proving key
     },
 
