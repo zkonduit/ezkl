@@ -1484,7 +1484,7 @@ mod rescaled {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Rescaled {
+                                Box::new(Rescaled {
                                     inner: Box::new(PolyOp::Sum),
                                     scale: vec![(0, 5)],
                                 }),

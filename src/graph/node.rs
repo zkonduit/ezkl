@@ -1,5 +1,4 @@
 use super::utilities::{node_output_shapes, scale_to_multiplier};
-use crate::circuit::ops::poly::PolyOp;
 use crate::circuit::Op;
 use crate::graph::new_op_from_onnx;
 use crate::graph::GraphError;
@@ -177,20 +176,14 @@ impl<F: FieldExt + TensorType> Node<F> {
                 .collect_vec();
         }
 
-        if let Some(c) = &opkind.required_poly() {
-            // only rescale if need to
-            if multipliers.iter().sum::<usize>() > multipliers.len() {
-                Ok(Box::new(PolyOp::Rescaled {
-                    inner: Box::new(c.clone()),
-                    scale: (0..inputs.len()).zip(multipliers).collect_vec(),
-                }))
-            } else {
-                Ok(opkind)
-            }
+        // only rescale if need to
+        if multipliers.iter().sum::<usize>() > multipliers.len() {
+            Ok(Box::new(crate::circuit::Rescaled {
+                inner: opkind,
+                scale: (0..inputs.len()).zip(multipliers).collect_vec(),
+            }))
         } else {
-            Err(Box::new(GraphError::RescalingError(
-                opkind.as_str().to_string(),
-            )))
+            Ok(opkind)
         }
     }
 

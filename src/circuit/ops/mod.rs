@@ -4,9 +4,9 @@ use halo2_proofs::circuit::Region;
 use halo2curves::FieldExt;
 use serde::Serialize;
 
-use crate::tensor::{Tensor, TensorError, TensorType, ValTensor};
+use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor};
 
-use self::{lookup::LookupOp, poly::PolyOp};
+use self::lookup::LookupOp;
 
 ///
 pub mod base;
@@ -48,11 +48,6 @@ pub trait Op<F: FieldExt + TensorType>: std::fmt::Debug + Send + Sync {
     ///
     fn requires_homogenous_input_scales(&self) -> bool {
         false
-    }
-
-    ///
-    fn required_poly(&self) -> Option<PolyOp<F>> {
-        None
     }
 
     ///
@@ -106,6 +101,65 @@ impl<F: FieldExt + TensorType> Op<F> for Input {
 
     fn is_input(&self) -> bool {
         true
+    }
+
+    fn clone_dyn(&self) -> Box<dyn Op<F>> {
+        Box::new(self.clone()) // Forward to the derive(Clone) impl
+    }
+}
+
+///
+#[derive(Clone, Debug)]
+pub struct Rescaled<F: FieldExt + TensorType> {
+    ///
+    pub inner: Box<dyn Op<F>>,
+    ///
+    pub scale: Vec<(usize, usize)>,
+}
+
+impl<F: FieldExt + TensorType> Op<F> for Rescaled<F> {
+    fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
+        if self.scale.len() != x.len() {
+            return Err(TensorError::DimMismatch("rescaled inputs".to_string()));
+        }
+
+        let mut rescaled_inputs = vec![];
+        let inputs = &mut x.to_vec();
+        for (i, ri) in inputs.iter_mut().enumerate() {
+            rescaled_inputs.push(tensor::ops::rescale(ri, self.scale[i].1)?);
+        }
+        Ok(Op::<F>::f(&*self.inner, &rescaled_inputs)?)
+    }
+
+    fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
+        Box::new(self.clone())
+    }
+
+    fn as_str(&self) -> &'static str {
+        self.inner.as_str()
+    }
+
+    fn layout(
+        &self,
+        config: &mut crate::circuit::BaseConfig<F>,
+        mut region: Option<&mut Region<F>>,
+        values: &[ValTensor<F>],
+        offset: &mut usize,
+    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
+        if self.scale.len() != values.len() {
+            return Err(Box::new(TensorError::DimMismatch(
+                "rescaled inputs".to_string(),
+            )));
+        }
+
+        let res = &layouts::rescale(
+            config,
+            region.as_deref_mut(),
+            values[..].try_into()?,
+            &self.scale,
+            offset,
+        )?[..];
+        self.inner.layout(config, region, res, offset)
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {

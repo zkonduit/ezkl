@@ -42,10 +42,6 @@ pub enum PolyOp<F: FieldExt + TensorType> {
     Pow(u32),
     Pack(u32, u32),
     GlobalSumPool,
-    Rescaled {
-        inner: Box<PolyOp<F>>,
-        scale: Vec<(usize, usize)>,
-    },
     RangeCheck(i32),
 }
 
@@ -70,7 +66,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
             PolyOp::SumPool { .. } => "SUMPOOL",
             PolyOp::Affine => "AFFINE",
             PolyOp::Matmul { .. } => "MATMUL",
-            PolyOp::Rescaled { inner, .. } => Op::<F>::as_str(&**inner),
             PolyOp::RangeCheck(..) => "RANGECHECK",
         }
     }
@@ -130,18 +125,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
                 }
                 tensor::ops::sum(&inputs[0])
             }
-            PolyOp::Rescaled { inner, scale } => {
-                if scale.len() != inputs.len() {
-                    return Err(TensorError::DimMismatch("rescaled inputs".to_string()));
-                }
-
-                let mut rescaled_inputs = vec![];
-                let inputs = &mut inputs.to_vec();
-                for (i, ri) in inputs.iter_mut().enumerate() {
-                    rescaled_inputs.push(tensor::ops::rescale(ri, scale[i].1)?);
-                }
-                Ok(Op::<F>::f(&**inner, &rescaled_inputs)?)
-            }
             PolyOp::GlobalSumPool => unreachable!(),
             PolyOp::RangeCheck(..) => Ok(inputs[0].clone()),
         }
@@ -150,7 +133,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        mut region: Option<&mut Region<F>>,
+        region: Option<&mut Region<F>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
@@ -242,22 +225,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
                 *scale,
                 offset,
             )?,
-            PolyOp::Rescaled { inner, scale } => {
-                if scale.len() != values.len() {
-                    return Err(Box::new(TensorError::DimMismatch(
-                        "rescaled inputs".to_string(),
-                    )));
-                }
-
-                let res = &layouts::rescale(
-                    config,
-                    region.as_deref_mut(),
-                    values[..].try_into()?,
-                    scale,
-                    offset,
-                )?[..];
-                inner.layout(config, region, res, offset)?.unwrap()
-            }
             PolyOp::RangeCheck(tol) => {
                 layouts::range_check(config, region, values[..].try_into()?, offset, *tol)?
             }
@@ -315,14 +282,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
             PolyOp::Pad(_, _) => in_scales[0],
             PolyOp::Pow(pow) => in_scales[0] * (*pow),
             PolyOp::Pack(_, _) => in_scales[0],
-            PolyOp::Rescaled { inner, scale } => {
-                let in_scales = in_scales
-                    .into_iter()
-                    .zip(scale.iter())
-                    .map(|(a, b)| a + crate::graph::mult_to_scale(b.1 as f32))
-                    .collect();
-                Op::<F>::out_scale(&**inner, in_scales, _g)
-            }
             PolyOp::RangeCheck(_) => in_scales[0],
             PolyOp::GlobalSumPool => in_scales[0],
         }
@@ -344,10 +303,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
 
     fn requires_homogenous_input_scales(&self) -> bool {
         matches!(self, PolyOp::Add { .. } | PolyOp::Sub)
-    }
-
-    fn required_poly(&self) -> Option<PolyOp<F>> {
-        Some(self.clone())
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
