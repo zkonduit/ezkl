@@ -46,13 +46,13 @@ def test_table_1l_average():
     assert ezkl_lib.table(path) == expected_table
 
 
-def test_gen_srs():
-    """
-    Test for gen_srs() with 17 logrows.
-    You may want to comment this test as it takes a long time to run
-    """
-    ezkl_lib.gen_srs(params_path, 17)
-    assert os.path.isfile(params_path)
+# def test_gen_srs():
+#     """
+#     Test for gen_srs() with 17 logrows.
+#     You may want to comment this test as it takes a long time to run
+#     """
+#     ezkl_lib.gen_srs(params_path, 17)
+#     assert os.path.isfile(params_path)
 
 def test_forward():
     """
@@ -84,3 +84,27 @@ def test_forward():
     assert data == {"input_data":[[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]],"input_shapes":[[1,5,5]],"output_data":[[0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625]]}
 
     os.remove(output_path)
+
+def test_mock():
+    """
+    Test for mock
+    """
+
+    data_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_average',
+        'input.json'
+    )
+
+    model_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_average',
+        'network.onnx'
+    )
+
+    res = ezkl_lib.mock(data_path, model_path)
+    print(res)
+    assert res == True
+

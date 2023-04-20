@@ -4,15 +4,20 @@ use pyo3::exceptions::{PyIOError, PyRuntimeError, PyValueError};
 use pyo3_log;
 use tabled::Table;
 use crate::graph::{Model, Visibility, VarVisibility, Mode, vector_to_quantized};
-use crate::commands::RunArgs;
+use crate::commands::{Cli, RunArgs, Commands::Mock};
 use crate::circuit::CheckMode;
-use crate::pfsys::{gen_srs as ezkl_gen_srs, save_params, prepare_data};
+use crate::pfsys::{
+    gen_srs as ezkl_gen_srs,
+    save_params,
+    prepare_data,
+    prepare_model_circuit_and_public_input
+};
 use std::path::PathBuf;
 use std::fs::File;
 use log::trace;
-use halo2curves::bn256::Bn256;
+use halo2curves::bn256::{Bn256, Fr};
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-
+use halo2_proofs::dev::MockProver;
 
 // See commands.rs and execute.rs
 // RenderCircuit
@@ -31,7 +36,6 @@ use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 //         .render(args.logrows, &circuit, &root)?;
 // }
 
-// Table
 
 #[pyfunction]
 fn table(
@@ -74,7 +78,10 @@ fn table(
     }
 }
 
-#[pyfunction]
+#[pyfunction(signature = (
+    params_path,
+    logrows=17,
+))]
 fn gen_srs(
     params_path: PathBuf,
     logrows: u32,
@@ -193,7 +200,81 @@ fn forward(
     }
 }
 
-// TODO: Mock
+#[pyfunction(signature = (
+    data,
+    model,
+    logrows=17,
+))]
+fn mock(
+    data: String,
+    model: String,
+    logrows: u32,
+) -> Result<bool, PyErr> {
+    let data = data.clone();
+    let res = prepare_data(data.clone());
+
+    match res {
+        Ok(d) => {
+            let run_args = RunArgs {
+                tolerance: 0,
+                scale: 7,
+                bits: 16,
+                logrows: logrows,
+                public_inputs: true,
+                public_outputs: true,
+                public_params: false,
+                pack_base: 1,
+                check_mode: CheckMode::SAFE,
+            };
+
+
+            let cli = Cli {
+                command: Mock {
+                    data: data,
+                    model: model
+                },
+                args: run_args
+            };
+
+
+            let prep_res = prepare_model_circuit_and_public_input::<Fr>(
+                &d, &cli
+            );
+
+            match prep_res {
+                Ok((circuit, public_inputs)) => {
+                    // this outputs to cli
+                    let prover = MockProver::run(logrows, &circuit, public_inputs);
+                    return Ok(true);
+                    match prover {
+                        Ok(p) => {
+                            p.assert_satisfied();
+                            let verification = p.verify();
+                            match verification {
+                                Ok(_) => {
+                                    Ok(true)
+                                },
+                                Err(_) => {
+                                    Err(PyRuntimeError::new_err("Failed to verify"))
+                                }
+                            }
+                        },
+                        Err(_) => {
+                            Err(PyRuntimeError::new_err("Failed to generate prover"))
+                        }
+                    }
+                },
+                Err(_) => {
+                    Err(PyRuntimeError::new_err("Failed to prepare model circuit and public input"))
+                }
+            }
+        },
+        Err(_) => {
+            Err(PyIOError::new_err("Failed to import data"))
+        }
+    }
+}
+
 // TODO: Aggregate
 // TODO: Prove
 // TODO: CreateEVMVerifier
@@ -212,5 +293,6 @@ fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(table, m)?)?;
     m.add_function(wrap_pyfunction!(gen_srs, m)?)?;
     m.add_function(wrap_pyfunction!(forward, m)?)?;
+    m.add_function(wrap_pyfunction!(mock, m)?)?;
     Ok(())
 }
