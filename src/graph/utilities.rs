@@ -112,6 +112,38 @@ fn extract_tensor_value<F: FieldExt + TensorType>(
     Ok(value)
 }
 
+/// Extracts a unary op from an onnx node.
+fn load_unary_op(
+    op: &dyn tract_onnx::prelude::Op,
+    idx: usize,
+    name: String,
+) -> Result<UnaryOp, Box<dyn std::error::Error>> {
+    // Extract the slope layer hyperparams
+    let op: &UnaryOp = match op.downcast_ref::<UnaryOp>() {
+        Some(b) => b,
+        None => {
+            return Err(Box::new(GraphError::OpMismatch(idx, name)));
+        }
+    };
+    Ok(op.clone())
+}
+
+/// Extracts an axis op from an onnx node.
+fn load_axis_op(
+    op: &dyn tract_onnx::prelude::Op,
+    idx: usize,
+    name: String,
+) -> Result<AxisOp, Box<dyn std::error::Error>> {
+    // Extract the slope layer hyperparams
+    let op: &AxisOp = match op.downcast_ref::<AxisOp>() {
+        Some(b) => b,
+        None => {
+            return Err(Box::new(GraphError::OpMismatch(idx, name)));
+        }
+    };
+    Ok(op.clone())
+}
+
 /// Matches an onnx node to a [OpKind] and returns a [Node] with the corresponding [OpKind].  
 pub fn new_op_from_onnx<F: FieldExt + TensorType>(
     idx: usize,
@@ -129,12 +161,7 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
         // TODO: this is a hack to get around the fact that onnx replace ReLU with Max(0, x) -- we should probably implement
         "MaxUnary" => {
             // Extract the slope layer hyperparams
-            let max_op: &UnaryOp = match node.op().downcast_ref::<UnaryOp>() {
-                Some(b) => b,
-                None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "mul".to_string())));
-                }
-            };
+            let max_op = load_unary_op(node.op(), idx, node.op().name().to_string())?;
 
             // this is actually better represented as a DIV op
             if max_op.a.shape().into_iter().product::<usize>() == 1
@@ -190,12 +217,7 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
         "Greater" => Box::new(HybridOp::Greater { a: None }),
         "GreaterUnary" => {
             // Extract the slope layer hyperparams
-            let greater: &UnaryOp = match node.op().downcast_ref::<UnaryOp>() {
-                Some(b) => b,
-                None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "greater".to_string())));
-                }
-            };
+            let greater = load_unary_op(node.op(), idx, node.op().name().to_string())?;
             let matrix = extract_tensor_value(greater.a.clone(), scale, public_params)?;
             println!("matrix {:?}", matrix);
 
@@ -218,12 +240,7 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
         "MatMul" => Box::new(PolyOp::Matmul { a: None }),
         "AddUnary" => {
             // Extract the slope layer hyperparams
-            let add_op: &UnaryOp = match node.op().downcast_ref::<UnaryOp>() {
-                Some(b) => b,
-                None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "add".to_string())));
-                }
-            };
+            let add_op = load_unary_op(node.op(), idx, node.op().name().to_string())?;
             let matrix =
                 extract_tensor_value(add_op.a.clone(), inputs[0].out_scale, public_params)?;
             println!("matrix {:?}", matrix);
@@ -232,12 +249,7 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
         }
         "MulUnary" => {
             // Extract the slope layer hyperparams
-            let mul_op: &UnaryOp = match node.op().downcast_ref::<UnaryOp>() {
-                Some(b) => b,
-                None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "mul".to_string())));
-                }
-            };
+            let mul_op = load_unary_op(node.op(), idx, node.op().name().to_string())?;
 
             // this is actually better represented as a DIV op
             if mul_op.a.shape().into_iter().product::<usize>() == 1
@@ -443,12 +455,7 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
         }
         "RmAxis" => {
             // Extract the slope layer hyperparams
-            let reshape: &AxisOp = match node.op().downcast_ref::<AxisOp>() {
-                Some(b) => b,
-                None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "reshape".to_string())));
-                }
-            };
+            let reshape = load_axis_op(node.op(), idx, node.op().name().to_string())?;
 
             let new_dims: Vec<usize> = match reshape {
                 AxisOp::Rm(_) => inputs[0].out_dims.clone(),
@@ -461,12 +468,7 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
         }
         "Reshape" => {
             // Extract the slope layer hyperparams
-            let reshape: &AxisOp = match node.op().downcast_ref::<AxisOp>() {
-                Some(b) => b,
-                None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "reshape".to_string())));
-                }
-            };
+            let reshape = load_axis_op(node.op(), idx, node.op().name().to_string())?;
 
             let new_dims: Vec<usize> = match reshape {
                 AxisOp::Reshape(_, _shape_from, shape_to) => shape_to
@@ -491,59 +493,6 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
             //Compute scale and shift from the four inputs,
             // then replace the first two, and change this node to a ScaleAndShift
             todo!();
-            // let gamma = match &inputs[1].opkind.raw_const_value() {
-            //     Some(raw_const_value, ..) => raw_const_value.map(|x| x.0),
-            //     _ => {
-            //         return Err(Box::new(GraphError::MissingParams("bn_gamma".to_string())));
-            //     }
-            // };
-
-            // let beta = match &inputs[2].opkind.raw_const_value() {
-            //     Some(raw_const_value, ..) => raw_const_value.map(|x| x.0),
-            //     _ => {
-            //         return Err(Box::new(GraphError::MissingParams("bn_beta".to_string())));
-            //     }
-            // };
-
-            // let mu = match &inputs[3].opkind.raw_const_value() {
-            //     Some(raw_const_value, ..) => raw_const_value.map(|x| x.0),
-            //     _ => {
-            //         return Err(Box::new(GraphError::MissingParams("bn_mu".to_string())));
-            //     }
-            // };
-
-            // let sigma = match &inputs[4].opkind.raw_const_value() {
-            //     Some(raw_const_value, ..) => raw_const_value.map(|x| x.0),
-            //     _ => {
-            //         return Err(Box::new(GraphError::MissingParams("bn_sigma".to_string())));
-            //     }
-            // };
-
-            // let a = (gamma / sigma)?;
-            // let amu: Tensor<f32> = (a.clone() * mu)?;
-            // let amupb: Tensor<f32> = (amu + beta)?;
-            // let b = (amupb * Tensor::new(Some(&[-1f32]), &[1])?)?;
-
-            // let in_scale = inputs[0].out_scale;
-            // let out_scale = 2 * inputs[0].out_scale;
-            // // gamma node becomes the scale (weigh) in scale and shift
-            // inputs[1].opkind = Box::new(crate::circuit::ops::Const {
-            //     const_value: Tensor::new(None, &[1])?,
-            //     raw_const_value: Some(a.map(utils::F32)),
-            // });
-            // inputs[1].quantize_const_to_scale(in_scale)?;
-
-            // // beta node becomes the shift (bias)
-            // inputs[2].opkind = Box::new(crate::circuit::ops::Const {
-            //     const_value: Tensor::new(None, &[1])?,
-            //     raw_const_value: Some(b.map(utils::F32)),
-            // });
-            // inputs[2].quantize_const_to_scale(out_scale)?;
-
-            // inputs.pop();
-            // inputs.pop();
-
-            // Box::new(PolyOp::ScaleAndShift)
         }
         c => {
             warn!("{:?} is not currently supported", c);
