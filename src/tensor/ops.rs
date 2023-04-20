@@ -127,7 +127,14 @@ pub fn scale_and_shift<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     inputs: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
-    let (a, b) = (inputs[0].clone(), inputs[1].clone());
+    let (mut a, mut b) = (inputs[0].clone(), inputs[1].clone());
+
+    if a.dims().len() == 1 {
+        a.reshape(&[1, a.dims()[0]]);
+    }
+    if b.dims().len() == 1 {
+        b.reshape(&[b.dims()[0], 1]);
+    }
 
     if (inputs.len() != 2)
         || (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])

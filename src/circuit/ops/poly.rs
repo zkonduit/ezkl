@@ -72,6 +72,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
 
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
+        let mut inputs = inputs.to_vec();
         match &self {
             PolyOp::Identity => Ok(inputs[0].clone()),
             PolyOp::Reshape(new_dims) => {
@@ -90,17 +91,44 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
                 }
                 tensor::ops::pad(&inputs[0], (*dim1, *dim2))
             }
-            PolyOp::Add { .. } => tensor::ops::add(inputs),
-            PolyOp::Sub => tensor::ops::sub(inputs),
-            PolyOp::Mult { .. } => tensor::ops::mult(inputs),
-            PolyOp::Affine => tensor::ops::affine(inputs),
-            PolyOp::BatchNorm => tensor::ops::scale_and_shift(inputs),
-            PolyOp::ScaleAndShift => tensor::ops::scale_and_shift(inputs),
-            PolyOp::Matmul { .. } => tensor::ops::matmul(inputs),
+            PolyOp::Add { a } => {
+                if let Some(a) = a {
+                    inputs.push(Tensor::new(Some(&a.get_int_evals().unwrap()), a.dims())?);
+                }
+                tensor::ops::add(&inputs)
+            }
+            PolyOp::Sub => tensor::ops::sub(&inputs),
+            PolyOp::Mult { a } => {
+                if let Some(a) = a {
+                    inputs.push(Tensor::new(Some(&a.get_int_evals().unwrap()), a.dims())?);
+                }
+                tensor::ops::mult(&inputs)
+            }
+            PolyOp::Affine => tensor::ops::affine(&inputs),
+            PolyOp::BatchNorm => tensor::ops::scale_and_shift(&inputs),
+            PolyOp::ScaleAndShift => tensor::ops::scale_and_shift(&inputs),
+            PolyOp::Matmul { a } => {
+                if let Some(a) = a {
+                    let b = inputs;
+                    inputs = vec![Tensor::new(Some(&a.get_int_evals().unwrap()), a.dims())?];
+                    inputs.extend(b);
+                }
+
+                tensor::ops::matmul(&inputs)
+            }
             PolyOp::Dot => tensor::ops::dot(&inputs.iter().collect()),
             PolyOp::Conv {
-                padding, stride, ..
-            } => tensor::ops::convolution(inputs, *padding, *stride),
+                kernel: a,
+                bias,
+                padding,
+                stride,
+            } => {
+                inputs.push(Tensor::new(Some(&a.get_int_evals().unwrap()), a.dims())?);
+                if let Some(b) = bias {
+                    inputs.push(Tensor::new(Some(&b.get_int_evals().unwrap()), b.dims())?);
+                }
+                tensor::ops::convolution(&inputs, *padding, *stride)
+            }
             PolyOp::SumPool {
                 padding,
                 stride,

@@ -195,8 +195,6 @@ impl<F: FieldExt + TensorType> Model<F> {
         // Note: do not optimize the model, as the layout will depend on underlying hardware
         let model = model.into_typed()?.into_decluttered()?;
 
-        println!("model {}", model);
-
         let mut nodes = BTreeMap::<usize, Node<F>>::new();
         for (i, n) in model.nodes.iter().enumerate() {
             let n = Node::<F>::new(n.clone(), &mut nodes, scale, public_params, i)?;

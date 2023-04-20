@@ -152,9 +152,6 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
     inputs: &mut Vec<Node<F>>,
 ) -> Result<Box<dyn crate::circuit::Op<F>>, Box<dyn std::error::Error>> {
-    println!("node: {:?}", node);
-    println!("nodeop: {:?}", node.op().name());
-
     Ok(match node.op().name().as_ref() {
         "Reduce<Min>" => Box::new(HybridOp::Min),
         "Reduce<Max>" => Box::new(HybridOp::Max),
@@ -219,7 +216,6 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
             // Extract the slope layer hyperparams
             let greater = load_unary_op(node.op(), idx, node.op().name().to_string())?;
             let matrix = extract_tensor_value(greater.a.clone(), scale, public_params)?;
-            println!("matrix {:?}", matrix);
 
             Box::new(HybridOp::Greater { a: Some(matrix) })
         }
@@ -233,7 +229,6 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
             };
 
             let matrix = extract_tensor_value(mm_op.a.clone(), scale, public_params)?;
-            println!("matrix {:?}", matrix);
 
             Box::new(PolyOp::Matmul { a: Some(matrix) })
         }
@@ -243,7 +238,6 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
             let add_op = load_unary_op(node.op(), idx, node.op().name().to_string())?;
             let matrix =
                 extract_tensor_value(add_op.a.clone(), inputs[0].out_scale, public_params)?;
-            println!("matrix {:?}", matrix);
 
             Box::new(PolyOp::Add { a: Some(matrix) })
         }

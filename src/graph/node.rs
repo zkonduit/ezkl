@@ -137,8 +137,6 @@ impl<F: FieldExt + TensorType> Node<F> {
             out_dims = vec![1];
         };
 
-        println!("Node {} has output shape {:?}", idx, out_dims);
-
         Ok(Node {
             idx,
             opkind,
