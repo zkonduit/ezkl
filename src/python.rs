@@ -256,6 +256,7 @@ fn mock(
                                 },
                                 Err(_) => {
                                     Err(PyRuntimeError::new_err("Failed to verify"))
+                                    // Ok(false)
                                 }
                             }
                         },
