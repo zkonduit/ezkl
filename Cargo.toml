@@ -39,6 +39,7 @@ tokio = { version = "1.26.0", features = ["macros", "rt"] }
 puruspe = "0.2.0"
 bincode = "*"
 
+
 # python binding related deps
 pyo3 = { version = "0.18.2", features = ["extension-module", "abi3-py37"], optional = true }
 pyo3-log = { version = "0.8.1", optional = true }

@@ -1,4 +1,6 @@
-use ezkl_lib::circuit::{BaseConfig as PolyConfig, CheckMode, LookupOp, Op as PolyOp};
+use ezkl_lib::circuit::{
+    ops::lookup::LookupOp, ops::poly::PolyOp, BaseConfig as PolyConfig, CheckMode,
+};
 use ezkl_lib::fieldutils::i32_to_felt;
 use ezkl_lib::tensor::*;
 use halo2_proofs::dev::MockProver;
@@ -95,14 +97,14 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            &mut region,
+                            Some(&mut region),
                             &[
                                 self.input.clone(),
                                 self.l0_params[0].clone(),
                                 self.l0_params[1].clone(),
                             ],
                             &mut offset,
-                            PolyOp::Affine.into(),
+                            Box::new(PolyOp::Affine),
                         )
                         .unwrap()
                         .unwrap();
@@ -112,10 +114,10 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let mut x = config
                         .layer_config
                         .layout(
-                            &mut region,
+                            Some(&mut region),
                             &[x],
                             &mut offset,
-                            LookupOp::ReLU { scale: 1 }.into(),
+                            Box::new(LookupOp::ReLU { scale: 1 }),
                         )
                         .unwrap()
                         .unwrap();
@@ -125,10 +127,10 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            &mut region,
+                            Some(&mut region),
                             &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
                             &mut offset,
-                            PolyOp::Affine.into(),
+                            Box::new(PolyOp::Affine),
                         )
                         .unwrap()
                         .unwrap();
@@ -137,23 +139,22 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            &mut region,
+                            Some(&mut region),
                             &[x],
                             &mut offset,
-                            LookupOp::ReLU { scale: 1 }.into(),
+                            Box::new(LookupOp::ReLU { scale: 1 }),
                         )
                         .unwrap();
                     println!("offset: {}", offset);
                     Ok(config
                         .layer_config
                         .layout(
-                            &mut region,
+                            Some(&mut region),
                             &[x.unwrap()],
                             &mut offset,
-                            LookupOp::Div {
+                            Box::new(LookupOp::Div {
                                 denom: ezkl_lib::circuit::utils::F32::from(128.),
-                            }
-                            .into(),
+                            }),
                         )
                         .unwrap())
                 },

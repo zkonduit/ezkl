@@ -1,6 +1,8 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use ezkl_lib::circuit::*;
 
+use ezkl_lib::circuit::lookup::LookupOp;
+use ezkl_lib::circuit::poly::PolyOp;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::{create_keys, gen_srs};
@@ -65,19 +67,19 @@ impl Circuit<Fr> for MyCircuit {
         layouter.assign_region(
             || "",
             |mut region| {
-                let op = Op::Matmul;
+                let op = PolyOp::Matmul;
                 let mut offset = 0;
                 let output = config
                     .base_config
-                    .layout(&mut region, &self.inputs, &mut offset, op.into())
+                    .layout(Some(&mut region), &self.inputs, &mut offset, Box::new(op))
                     .unwrap();
                 let _output = config
                     .base_config
                     .layout(
-                        &mut region,
+                        Some(&mut region),
                         &[output.unwrap()],
                         &mut offset,
-                        LookupOp::ReLU { scale: 1 }.into(),
+                        Box::new(LookupOp::ReLU { scale: 1 }),
                     )
                     .unwrap();
                 Ok(())

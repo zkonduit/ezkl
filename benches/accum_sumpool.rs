@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use ezkl_lib::circuit::poly::PolyOp;
 use ezkl_lib::circuit::*;
 use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
@@ -56,15 +57,14 @@ impl Circuit<Fr> for MyCircuit {
             |mut region| {
                 config
                     .layout(
-                        &mut region,
+                        Some(&mut region),
                         &[self.image.clone()],
                         &mut 0,
-                        Op::SumPool {
+                        Box::new(PolyOp::SumPool {
                             padding: (0, 0),
                             stride: (1, 1),
                             kernel_shape: (2, 2),
-                        }
-                        .into(),
+                        }),
                     )
                     .unwrap();
                 Ok(())

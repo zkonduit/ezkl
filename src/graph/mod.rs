@@ -1,6 +1,5 @@
 /// Helper functions
 pub mod utilities;
-use serde::{Deserialize, Serialize};
 pub use utilities::*;
 /// Crate for defining a computational graph and building a ZK-circuit from it.
 pub mod model;
@@ -9,7 +8,6 @@ pub mod node;
 /// Representations of a computational graph's variables.
 pub mod vars;
 
-use crate::circuit::OpKind;
 use crate::commands::Cli;
 use crate::fieldutils::i128_to_felt;
 use crate::pfsys::ModelInput;
@@ -25,10 +23,10 @@ use halo2_proofs::{
 use log::{info, trace};
 pub use model::*;
 pub use node::*;
-use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Write};
+// use std::fs::File;
+// use std::io::{BufReader, BufWriter, Read, Write};
 use std::marker::PhantomData;
-use std::path::PathBuf;
+// use std::path::PathBuf;
 use thiserror::Error;
 pub use vars::*;
 
@@ -40,16 +38,16 @@ pub enum GraphError {
     InvalidLookupInputs,
     /// Shape mismatch in circuit construction
     #[error("invalid dimensions used for node {0} ({1})")]
-    InvalidDims(usize, OpKind),
+    InvalidDims(usize, String),
     /// Wrong method was called to configure an op
     #[error("wrong method was called to configure node {0} ({1})")]
-    WrongMethod(usize, OpKind),
+    WrongMethod(usize, String),
     /// A requested node is missing in the graph
     #[error("a requested node is missing in the graph: {0}")]
     MissingNode(usize),
     /// The wrong method was called on an operation
     #[error("an unsupported method was called on node {0} ({1})")]
-    OpMismatch(usize, OpKind),
+    OpMismatch(usize, String),
     /// This operation is unsupported
     #[error("unsupported operation in graph")]
     UnsupportedOp,
@@ -70,7 +68,7 @@ pub enum GraphError {
     NonConstantPower,
     /// Error when attempting to rescale an operation
     #[error("failed to rescale inputs for {0}")]
-    RescalingError(OpKind),
+    RescalingError(String),
     /// Error when attempting to load a model
     #[error("failed to load model")]
     ModelLoad,
@@ -80,12 +78,12 @@ pub enum GraphError {
 }
 
 /// Defines the circuit for a computational graph / model loaded from a `.onnx` file.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ModelCircuit<F: FieldExt> {
+#[derive(Clone, Debug)]
+pub struct ModelCircuit<F: FieldExt + TensorType> {
     /// Vector of input tensors to the model / graph of computations.
     pub inputs: Vec<Tensor<i128>>,
     ///
-    pub model: Model,
+    pub model: Model<F>,
     /// Represents the Field we are using.
     pub _marker: PhantomData<F>,
 }
@@ -94,7 +92,7 @@ impl<F: FieldExt + TensorType> ModelCircuit<F> {
     ///
     pub fn new(
         data: &ModelInput,
-        model: Model,
+        model: Model<F>,
     ) -> Result<ModelCircuit<F>, Box<dyn std::error::Error>> {
         // quantize the supplied data using the provided scale.
         let mut inputs: Vec<Tensor<i128>> = vec![];
@@ -108,39 +106,6 @@ impl<F: FieldExt + TensorType> ModelCircuit<F> {
             model,
             _marker: PhantomData,
         })
-    }
-
-    ///
-    pub fn write<W: Write>(
-        &self,
-        mut writer: BufWriter<W>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let circuit_bytes = bincode::serialize(&self)?;
-        writer.write(&circuit_bytes)?;
-        writer.flush()?;
-        Ok(())
-    }
-
-    ///
-    pub fn write_to_file(&self, path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-        let fs = File::create(path)?;
-        let buffer = BufWriter::new(fs);
-        self.write(buffer)
-    }
-
-    ///
-    pub fn read<R: Read>(mut reader: BufReader<R>) -> Result<Self, Box<dyn std::error::Error>> {
-        let buffer: &mut Vec<u8> = &mut vec![];
-        reader.read_to_end(buffer)?;
-
-        let circuit = bincode::deserialize(&buffer)?;
-        Ok(circuit)
-    }
-    ///
-    pub fn read_from_file(path: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
-        let f = File::open(path)?;
-        let reader = BufReader::new(f);
-        Self::read(reader)
     }
 
     ///
@@ -214,11 +179,11 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
     }
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let model = Model::from_arg().expect("model should load");
+        let model: Model<F> = Model::from_arg().expect("model should load");
 
         // for now the number of instances corresponds to the number of graph / model outputs
         let instance_shapes = model.instance_shapes();
-        let var_len = model.total_var_len();
+        let var_len = model.dummy_layout(&model.input_shapes()).unwrap();
 
         info!("total var len: {:?}", var_len);
         info!("instance_shapes: {:?}", instance_shapes);

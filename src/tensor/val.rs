@@ -352,6 +352,11 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
         }
     }
 
+    ///
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Calls `pad_row_ones` on the inner [Tensor].
     pub fn pad_row_ones(&mut self) -> Result<(), TensorError> {
         match self {
