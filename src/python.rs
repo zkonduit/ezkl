@@ -1,8 +1,9 @@
 use crate::circuit::CheckMode;
 use crate::commands::RunArgs;
-use crate::graph::{vector_to_quantized, Mode, Model, VarVisibility, Visibility};
+use crate::graph::{vector_to_quantized, Mode, Model, ModelCircuit, VarVisibility, Visibility};
 use crate::pfsys::{gen_srs as ezkl_gen_srs, prepare_data, save_params};
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+use halo2_proofs::dev::MockProver;
 use halo2curves::bn256::{Bn256, Fr};
 use log::trace;
 use pyo3::exceptions::{PyIOError, PyRuntimeError, PyValueError};
@@ -171,11 +172,11 @@ fn mock(
     model: String,
     logrows: u32,
 ) -> Result<bool, PyErr> {
-    let data = data.clone();
-    let res = prepare_data(data.clone());
+    let data = prepare_data(data);
 
-    match res {
+    match data {
         Ok(d) => {
+            // use default values except for logrows to initialize model
             let run_args = RunArgs {
                 tolerance: 0,
                 scale: 7,
@@ -187,47 +188,49 @@ fn mock(
                 pack_base: 1,
                 check_mode: CheckMode::SAFE,
             };
-
-
-            let cli = Cli {
-                command: Mock {
-                    data: data,
-                    model: model
-                },
-                args: run_args
+            // use default values to initialize model
+            let visibility = VarVisibility {
+                input: Visibility::Public,
+                params: Visibility::Private,
+                output: Visibility::Public,
             };
 
+            let model_proc = Model::<Fr>::new(model, run_args, Mode::Mock, visibility);
 
-            let prep_res = prepare_model_circuit_and_public_input::<Fr>(
-                &d, &cli
-            );
+            match model_proc {
+                Ok(m) => {
+                    let circuit = ModelCircuit::<Fr>::new(&d, m);
 
-            match prep_res {
-                Ok((circuit, public_inputs)) => {
-                    // this outputs to cli
-                    let prover = MockProver::run(logrows, &circuit, public_inputs);
-                    return Ok(true);
-                    match prover {
-                        Ok(p) => {
-                            p.assert_satisfied();
-                            let verification = p.verify();
-                            match verification {
-                                Ok(_) => {
-                                    Ok(true)
-                                },
-                                Err(_) => {
-                                    Err(PyRuntimeError::new_err("Failed to verify"))
-                                    // Ok(false)
+                    match circuit {
+                        Ok(c) => {
+                            let public_inputs = c.prepare_public_inputs(&d);
+
+                            match public_inputs {
+                                Ok(pi) => {
+                                    let prover = MockProver::run(logrows, &c, pi); // this is putting messages in stdout
+                                    match prover {
+                                        Ok(pr) => {
+                                            pr.assert_satisfied();
+
+                                            let res = pr.verify();
+                                            match res {
+                                                Ok(_) => return Ok(true),
+                                                Err(_) => return Ok(false),
+                                            }
+                                        }
+                                        Err(_) => Err(PyRuntimeError::new_err("Failed to run prover")),
+                                    }
                                 }
+                                Err(_) => Err(PyRuntimeError::new_err("Failed to prepare public inputs")),
                             }
-                        },
-                        Err(_) => return Err(PyRuntimeError::new_err("Failed to generate prover")),
+                        }
+                        Err(_) => Err(PyRuntimeError::new_err("Failed to create circuit")),
                     }
-                },
-                Err(_) => Err(PyRuntimeError::new_err("Failed to prepare model circuit and public input")),
+                }
+                Err(_) => Err(PyIOError::new_err("Failed to process model"))
             }
-        },
-        Err(_) => Err(PyIOError::new_err("Failed to import data")),
+        }
+        Err(_) => Err(PyIOError::new_err("Failed to import files")),
     }
 }
 
