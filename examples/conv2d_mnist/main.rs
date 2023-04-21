@@ -174,6 +174,8 @@ where
                 |mut region| {
                     let mut offset = 0;
                     let op = PolyOp::Conv {
+                        kernel: self.l0_params[0].clone(),
+                        bias: Some(self.l0_params[1].clone()),
                         padding: (PADDING, PADDING),
                         stride: (STRIDE, STRIDE),
                     };
@@ -181,11 +183,7 @@ where
                         .layer_config
                         .layout(
                             Some(&mut region),
-                            &[
-                                self.input.clone(),
-                                self.l0_params[0].clone(),
-                                self.l0_params[1].clone(),
-                            ],
+                            &[self.input.clone()],
                             &mut offset,
                             Box::new(op),
                         )
@@ -217,7 +215,9 @@ where
             .unwrap();
 
         match x.unwrap() {
-            ValTensor::Value { inner: v, dims: _ } => v
+            ValTensor::Value {
+                inner: v, dims: _, ..
+            } => v
                 .enum_map(|i, x| match x {
                     ValType::PrevAssigned(v) => {
                         layouter.constrain_instance(v.cell(), config.public_output, i)

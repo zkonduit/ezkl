@@ -4,9 +4,9 @@ use halo2_proofs::circuit::Region;
 use halo2curves::FieldExt;
 use serde::Serialize;
 
-use crate::tensor::{Tensor, TensorError, TensorType, ValTensor};
+use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor};
 
-use self::{lookup::LookupOp, poly::PolyOp};
+use self::lookup::LookupOp;
 
 ///
 pub mod base;
@@ -41,11 +41,6 @@ pub trait Op<F: FieldExt + TensorType>: std::fmt::Debug + Send + Sync {
     }
 
     ///
-    fn out_dims(&self, in_dims: Vec<Vec<usize>>) -> Vec<usize> {
-        in_dims[0].clone()
-    }
-
-    ///
     fn has_3d_input(&self) -> bool {
         false
     }
@@ -53,11 +48,6 @@ pub trait Op<F: FieldExt + TensorType>: std::fmt::Debug + Send + Sync {
     ///
     fn requires_homogenous_input_scales(&self) -> bool {
         false
-    }
-
-    ///
-    fn required_poly(&self) -> Option<PolyOp> {
-        None
     }
 
     ///
@@ -71,26 +61,6 @@ pub trait Op<F: FieldExt + TensorType>: std::fmt::Debug + Send + Sync {
     ///
     fn is_input(&self) -> bool {
         false
-    }
-
-    ///
-    fn is_const(&self) -> bool {
-        false
-    }
-
-    ///
-    fn const_value(&self) -> Option<Tensor<i128>> {
-        None
-    }
-
-    ///
-    fn raw_const_value(&self) -> Option<Tensor<super::utils::F32>> {
-        None
-    }
-
-    /// bias variable index (if any)
-    fn bias_variable(&self) -> Option<usize> {
-        None
     }
 
     ///
@@ -139,45 +109,66 @@ impl<F: FieldExt + TensorType> Op<F> for Input {
 }
 
 ///
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
-pub struct Const {
-    /// The quantized constants potentially associated with this self.
-    pub const_value: Tensor<i128>,
-    /// The un-quantized constants potentially associated with this self.
-    pub raw_const_value: Option<Tensor<super::utils::F32>>,
+#[derive(Clone, Debug)]
+pub struct Rescaled<F: FieldExt + TensorType> {
+    ///
+    pub inner: Box<dyn Op<F>>,
+    ///
+    pub scale: Vec<(usize, usize)>,
 }
 
-impl<F: FieldExt + TensorType> Op<F> for Const {
-    fn f(&self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
-        Ok(self.const_value.clone())
+impl<F: FieldExt + TensorType> Op<F> for Rescaled<F> {
+    fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
+        if self.scale.len() != x.len() {
+            return Err(TensorError::DimMismatch("rescaled inputs".to_string()));
+        }
+
+        let mut rescaled_inputs = vec![];
+        let inputs = &mut x.to_vec();
+        for (i, ri) in inputs.iter_mut().enumerate() {
+            rescaled_inputs.push(tensor::ops::rescale(ri, self.scale[i].1)?);
+        }
+        Ok(Op::<F>::f(&*self.inner, &rescaled_inputs)?)
     }
 
-    fn as_str(&self) -> &'static str {
-        "Const"
-    }
-    fn layout(
-        &self,
-        _: &mut crate::circuit::BaseConfig<F>,
-        _: Option<&mut Region<F>>,
-        _: &[ValTensor<F>],
-        _: &mut usize,
-    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        Ok(None)
-    }
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
         Box::new(self.clone())
     }
 
-    fn is_const(&self) -> bool {
-        true
+    fn as_str(&self) -> &'static str {
+        self.inner.as_str()
     }
 
-    fn const_value(&self) -> Option<Tensor<i128>> {
-        Some(self.const_value.clone())
+    fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
+        let in_scales = in_scales
+            .into_iter()
+            .zip(self.scale.iter())
+            .map(|(a, b)| a + crate::graph::mult_to_scale(b.1 as f32))
+            .collect();
+        Op::<F>::out_scale(&*self.inner, in_scales, _g)
     }
 
-    fn raw_const_value(&self) -> Option<Tensor<super::utils::F32>> {
-        self.raw_const_value.clone()
+    fn layout(
+        &self,
+        config: &mut crate::circuit::BaseConfig<F>,
+        mut region: Option<&mut Region<F>>,
+        values: &[ValTensor<F>],
+        offset: &mut usize,
+    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
+        if self.scale.len() != values.len() {
+            return Err(Box::new(TensorError::DimMismatch(
+                "rescaled inputs".to_string(),
+            )));
+        }
+
+        let res = &layouts::rescale(
+            config,
+            region.as_deref_mut(),
+            values[..].try_into()?,
+            &self.scale,
+            offset,
+        )?[..];
+        self.inner.layout(config, region, res, offset)
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {

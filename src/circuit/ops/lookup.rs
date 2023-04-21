@@ -20,6 +20,7 @@ pub enum LookupOp {
     Div { denom: utils::F32 },
     ReLU { scale: usize },
     Sqrt { scales: (usize, usize) },
+    Rsqrt { scales: (usize, usize) },
     LeakyReLU { scale: usize, slope: utils::F32 },
     Sigmoid { scales: (usize, usize) },
     Tanh { scales: (usize, usize) },
@@ -48,6 +49,7 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
             LookupOp::ReLU { scale } => {
                 Ok(tensor::ops::nonlinearities::leakyrelu(&x[0], *scale, 0_f32))
             }
+
             LookupOp::LeakyReLU { scale, slope } => Ok(tensor::ops::nonlinearities::leakyrelu(
                 &x[0], *scale, slope.0,
             )),
@@ -57,6 +59,9 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
             LookupOp::Sqrt { scales } => {
                 Ok(tensor::ops::nonlinearities::sqrt(&x[0], scales.0, scales.1))
             }
+            LookupOp::Rsqrt { scales } => Ok(tensor::ops::nonlinearities::rsqrt(
+                &x[0], scales.0, scales.1,
+            )),
             LookupOp::Tanh { scales } => {
                 Ok(tensor::ops::nonlinearities::tanh(&x[0], scales.0, scales.1))
             }
@@ -76,6 +81,7 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
             LookupOp::Sqrt { .. } => "SQRT",
             LookupOp::Tanh { .. } => "TANH",
             LookupOp::Erf { .. } => "ERF",
+            LookupOp::Rsqrt { .. } => "RSQRT",
         }
     }
 
@@ -116,6 +122,12 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
                 ),
             }),
             LookupOp::Sqrt { .. } => Box::new(LookupOp::Sqrt {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
+            LookupOp::Rsqrt { .. } => Box::new(LookupOp::Rsqrt {
                 scales: (
                     scale_to_multiplier(inputs_scale[0]) as usize,
                     scale_to_multiplier(global_scale) as usize,

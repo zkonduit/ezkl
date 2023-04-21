@@ -221,12 +221,13 @@ impl VarTensor {
         offset: usize,
         values: &ValTensor<F>,
     ) -> Result<ValTensor<F>, halo2_proofs::plonk::Error> {
-        match region {
+        let mut res = match region {
             Some(region) => {
         match values {
             ValTensor::Instance {
                 inner: instance,
                 dims,
+                ..
             } => match &self {
                 VarTensor::Advice { inner: v, .. } => {
                     // this should never ever fail
@@ -285,7 +286,9 @@ impl VarTensor {
         }
     }
     None => Ok(values.clone())
-}
+    }?;
+    res.set_scale(values.scale());
+    Ok(res)
     }
 
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor.
@@ -299,9 +302,8 @@ impl VarTensor {
         
 
         match values {
-        
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
-            ValTensor::Value { inner: v, dims } => {
+            ValTensor::Value { inner: v, dims , ..} => {
                 // duplicates every nth element to adjust for column overflow               
                 let v = v.duplicate_every_n(self.col_size(), offset).unwrap();
                 let mut res: ValTensor<F> = if let Some(region) = region { 
@@ -351,6 +353,7 @@ impl VarTensor {
                 res.remove_every_n(self.col_size(), offset).unwrap();
                 
                 res.reshape(dims).unwrap();
+                res.set_scale(values.scale());
 
                 if matches!(check_mode, CheckMode::SAFE) {     
                      // during key generation this will be 0 so we use this as a flag to check

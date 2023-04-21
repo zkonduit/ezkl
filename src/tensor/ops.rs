@@ -127,7 +127,14 @@ pub fn scale_and_shift<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     inputs: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
-    let (a, b) = (inputs[0].clone(), inputs[1].clone());
+    let (mut a, mut b) = (inputs[0].clone(), inputs[1].clone());
+
+    if a.dims().len() == 1 {
+        a.reshape(&[1, a.dims()[0]]);
+    }
+    if b.dims().len() == 1 {
+        b.reshape(&[b.dims()[0], 1]);
+    }
 
     if (inputs.len() != 2)
         || (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])
@@ -766,6 +773,37 @@ pub mod nonlinearities {
         for (i, a_i) in a.iter().enumerate() {
             let kix = (*a_i as f32) / (scale_input as f32);
             let fout = (scale_output as f32) * kix.sqrt();
+            let rounded = fout.round();
+            output[i] = rounded as i128;
+        }
+        output
+    }
+
+    /// Elementwise applies reciprocal square root to a tensor of integers.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::rsqrt;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[4, 25, 8, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = rsqrt(&x, 1, 1);
+    /// let expected = Tensor::<i128>::new(Some(&[1, 0, 0, 1, 1, 1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn rsqrt(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        // calculate value of output
+        let mut output: Tensor<i128> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            let kix = (*a_i as f32) / (scale_input as f32);
+            let fout = (scale_output as f32) * (1.0 / kix.sqrt());
             let rounded = fout.round();
             output[i] = rounded as i128;
         }

@@ -161,7 +161,9 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
             )
             .unwrap();
         match x.unwrap() {
-            ValTensor::Value { inner: v, dims: _ } => v
+            ValTensor::Value {
+                inner: v, dims: _, ..
+            } => v
                 .enum_map(|i, x| match x {
                     ValType::PrevAssigned(v) => {
                         layouter.constrain_instance(v.cell(), config.public_output, i)

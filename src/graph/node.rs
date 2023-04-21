@@ -1,5 +1,4 @@
-use super::utilities::{node_output_shapes, scale_to_multiplier, vector_to_quantized};
-use crate::circuit::ops::poly::PolyOp;
+use super::utilities::{node_output_shapes, scale_to_multiplier};
 use crate::circuit::Op;
 use crate::graph::new_op_from_onnx;
 use crate::graph::GraphError;
@@ -13,8 +12,9 @@ use std::error::Error;
 use std::fmt;
 use tabled::Tabled;
 use tract_onnx;
-use tract_onnx::prelude::{InferenceFact, Node as OnnxNode};
-use tract_onnx::tract_hir::{infer::Factoid, internal::InferenceOp};
+use tract_onnx::prelude::Node as OnnxNode;
+use tract_onnx::prelude::TypedFact;
+use tract_onnx::prelude::TypedOp;
 
 /// Representation of an execution graph divided into execution 'buckets'.
 pub type NodeGraph<F> = BTreeMap<usize, Node<F>>;
@@ -68,9 +68,10 @@ impl<F: FieldExt + TensorType> Node<F> {
     /// * `scale` - The denominator in the fixed point representation. Tensors of differing scales should not be combined.
     /// * `idx` - The node's unique identifier.
     pub fn new(
-        mut node: OnnxNode<InferenceFact, Box<dyn InferenceOp>>,
+        mut node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
         other_nodes: &mut BTreeMap<usize, Node<F>>,
         scale: u32,
+        public_params: bool,
         idx: usize,
     ) -> Result<Self, Box<dyn Error>> {
         trace!("Create {:?}", node);
@@ -85,7 +86,7 @@ impl<F: FieldExt + TensorType> Node<F> {
             }
         }
 
-        let mut opkind = new_op_from_onnx(idx, scale, node.clone(), &mut inputs)?; // parses the op name
+        let mut opkind = new_op_from_onnx(idx, scale, public_params, node.clone(), &mut inputs)?; // parses the op name
 
         // if the op requires 3d inputs, we need to make sure the input shape is consistent with that
         if opkind.has_3d_input() {
@@ -108,65 +109,33 @@ impl<F: FieldExt + TensorType> Node<F> {
         };
 
         // get the output shape
-        let in_dims: Vec<Vec<usize>> = inputs.iter().map(|i| i.out_dims.clone()).collect();
-        let out_dims = match in_dims.len() {
-            // if there are no inputs, we need to get the output shape from the node
-            0 => {
-                // remove batch dim for now
-                match opkind.const_value() {
-                    Some(ref const_value) => const_value.dims().to_vec(),
-                    _ => {
-                        let output_shapes = match node_output_shapes(&node) {
-                            Ok(s) => Some(s),
-                            _ => None,
-                        };
+        let mut out_dims = {
+            let output_shapes = match node_output_shapes(&node) {
+                Ok(s) => Some(s),
+                _ => None,
+            };
 
-                        let dims = if let Some([Some(v)]) = output_shapes.as_deref() {
-                            v.to_vec()
-                        } else {
-                            // Turn  `outputs: [?,3,32,32,F32 >3/0]` into `vec![3,32,32]`  in two steps
-                            let the_shape: Result<Vec<i64>> = node.outputs[0]
-                                .fact
-                                .shape
-                                .dims()
-                                .filter_map(|x| x.concretize())
-                                .map(|x| x.to_i64())
-                                .collect();
-
-                            the_shape
-                                .unwrap()
-                                .iter()
-                                .map(|x| (*x as i128) as usize)
-                                .collect()
-                        };
-                        if !dims.is_empty() && dims[0] == 1 && dims.len() > 1 {
-                            dims[1..].to_vec()
-                        } else {
-                            dims
-                        }
-                    }
-                }
+            if let Some([Some(v)]) = output_shapes.as_deref() {
+                v.to_vec()
+            } else {
+                // Turn  `outputs: [?,3,32,32,F32 >3/0]` into `vec![3,32,32]`  in two steps
+                node.outputs[0]
+                    .fact
+                    .shape
+                    .iter()
+                    // .filter_map(|x| x.concretize())
+                    .map(|x| x.to_i64().unwrap() as usize)
+                    .collect()
             }
-            // else calculate the output shape from the inputs
-            _ => opkind.out_dims(in_dims),
         };
 
-        // we now run a forward pass to re-quantize the inputs to the node
-        // this is necessary because the inputs to the node may have been quantized differently
-        if let Some(idx) = opkind.bias_variable() {
-            if idx >= inputs.len() {
-            } else {
-                let bias_node = &inputs[idx];
-                let scale_diff = out_scale - bias_node.out_scale;
-                let mut bias_node = other_nodes.get_mut(&inputs[idx].idx).unwrap();
-                bias_node = Self::scale_up_const_node(bias_node, scale + scale_diff)?;
-                if (out_scale) != bias_node.out_scale {
-                    return Err(Box::new(GraphError::RescalingError(
-                        opkind.as_str().to_string(),
-                    )));
-                }
-            }
+        // rm batch
+        if !out_dims.is_empty() && out_dims[0] == 1 && out_dims.len() > 1 {
+            out_dims = out_dims[1..].to_vec();
         }
+        if out_dims.iter().product::<usize>() == 1 {
+            out_dims = vec![1];
+        };
 
         Ok(Node {
             idx,
@@ -205,91 +174,19 @@ impl<F: FieldExt + TensorType> Node<F> {
                 .collect_vec();
         }
 
-        if let Some(c) = &opkind.required_poly() {
-            // only rescale if need to
-            if multipliers.iter().sum::<usize>() > multipliers.len() {
-                Ok(Box::new(PolyOp::Rescaled {
-                    inner: Box::new(c.clone()),
-                    scale: (0..inputs.len()).zip(multipliers).collect_vec(),
-                }))
-            } else {
-                Ok(opkind)
-            }
+        // only rescale if need to
+        if multipliers.iter().sum::<usize>() > multipliers.len() {
+            Ok(Box::new(crate::circuit::Rescaled {
+                inner: opkind,
+                scale: (0..inputs.len()).zip(multipliers).collect_vec(),
+            }))
         } else {
-            Err(Box::new(GraphError::RescalingError(
-                opkind.as_str().to_string(),
-            )))
+            Ok(opkind)
         }
-    }
-
-    /// Scales up a constant node by a given scale.
-    pub fn quantize_const_to_scale(&mut self, scale: u32) -> Result<(), Box<dyn Error>> {
-        match &self.opkind.raw_const_value() {
-            Some(raw) => {
-                self.out_scale = scale;
-                let t = vector_to_quantized(&raw.map(|e| e.0), raw.dims(), 0f32, self.out_scale)
-                    .unwrap();
-                self.opkind = Box::new(crate::circuit::ops::Const {
-                    const_value: t,
-                    raw_const_value: Some(raw.clone()),
-                });
-                Ok(())
-            }
-            _ => {
-                return Err(Box::new(GraphError::WrongMethod(
-                    self.idx,
-                    self.opkind.as_str().to_string(),
-                )))
-            }
-        }
-    }
-
-    /// Re-quantizes a constant value node to a new scale.
-    fn scale_up_const_node(node: &mut Self, scale: u32) -> Result<&mut Self, Box<dyn Error>> {
-        if !node.opkind.is_const() {
-            return Err(Box::new(GraphError::WrongMethod(
-                node.idx,
-                node.opkind.as_str().to_string(),
-            )));
-        };
-        if scale > 0 {
-            match &node.opkind.raw_const_value() {
-                Some(raw_const_value) => {
-                    let t = vector_to_quantized(
-                        &raw_const_value.map(|f| f.0),
-                        raw_const_value.dims(),
-                        0f32,
-                        scale,
-                    )?;
-                    info!(
-                        "------ scaled const node {:?}: {:?} -> {:?}",
-                        node.idx, node.out_scale, scale
-                    );
-                    node.out_scale = scale;
-                    node.opkind = Box::new(crate::circuit::ops::Const {
-                        const_value: t,
-                        raw_const_value: Some(raw_const_value.clone()),
-                    });
-                }
-                _ => {
-                    return Err(Box::new(GraphError::WrongMethod(
-                        node.idx,
-                        node.opkind.as_str().to_string(),
-                    )))
-                }
-            }
-        }
-        Ok(node)
     }
 
     /// Formats 3d inputs if they have under or overspecified dims (casting 2D -> 3D and nD -> 3D)
     fn format_3d_inputs(mut node: &mut Self) -> Result<(), Box<dyn Error>> {
-        if node.opkind.is_const() {
-            return Err(Box::new(GraphError::WrongMethod(
-                node.idx,
-                node.opkind.as_str().to_string(),
-            )));
-        };
         // input_nodes come in all shapes and sizes we gotta homogenize, especially for 2D (single channel images)
         if node.out_dims.len() == 2 {
             node = Self::pad_channel_input_node(node)?;
@@ -308,12 +205,6 @@ impl<F: FieldExt + TensorType> Node<F> {
 
     /// Adds an extra channel dim to nodes that need it.
     fn pad_channel_input_node(node: &mut Self) -> Result<&mut Self, Box<dyn Error>> {
-        if node.opkind.is_const() {
-            return Err(Box::new(GraphError::WrongMethod(
-                node.idx,
-                node.opkind.as_str().to_string(),
-            )));
-        };
         let mut dims = vec![1];
         dims.append(&mut node.out_dims);
         node.out_dims = dims;
@@ -322,12 +213,6 @@ impl<F: FieldExt + TensorType> Node<F> {
 
     /// Removes excess channels for an image
     fn rm_redundant_3d_channels(node: &mut Self) -> Result<&mut Self, Box<dyn Error>> {
-        if node.opkind.is_const() {
-            return Err(Box::new(GraphError::WrongMethod(
-                node.idx,
-                node.opkind.as_str().to_string(),
-            )));
-        };
         let dims = &node.out_dims;
         let last_dims = &dims[dims.len() - 3..];
         let channel_dims = &dims[..dims.len() - 3];
