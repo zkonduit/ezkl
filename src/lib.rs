@@ -19,7 +19,6 @@
     trivial_numeric_casts,
     unused_extern_crates,
     unused_import_braces,
-    unused_qualifications,
     missing_debug_implementations,
     unsafe_code
 )]
