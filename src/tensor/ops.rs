@@ -790,11 +790,11 @@ pub mod nonlinearities {
     /// use ezkl_lib::tensor::Tensor;
     /// use ezkl_lib::tensor::ops::nonlinearities::rsqrt;
     /// let x = Tensor::<i128>::new(
-    ///     Some(&[4, 25, 8, 1, 1, 0]),
+    ///     Some(&[4, 25, 8, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = rsqrt(&x, 1, 1);
-    /// let expected = Tensor::<i128>::new(Some(&[2, 5, 3, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[1, 0, 0, 1, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn rsqrt(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
