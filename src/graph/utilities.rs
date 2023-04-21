@@ -4,7 +4,6 @@ use super::{node::*, GraphError};
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::poly::PolyOp;
-use crate::circuit::utils;
 use crate::fieldutils::i128_to_felt;
 use crate::tensor::{Tensor, TensorError, TensorType, ValTensor};
 use anyhow::Result;
@@ -204,6 +203,7 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
         }
         "Sigmoid" => Box::new(LookupOp::Sigmoid { scales: (1, 1) }),
         "Sqrt" => Box::new(LookupOp::Sqrt { scales: (1, 1) }),
+        "Rsqrt" => Box::new(LookupOp::Rsqrt { scales: (1, 1) }),
         "Tanh" => Box::new(LookupOp::Tanh { scales: (1, 1) }),
         "onnx.Erf" => Box::new(LookupOp::Erf { scales: (1, 1) }),
         "Source" => Box::new(crate::circuit::ops::Input),
@@ -398,9 +398,6 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
                 kernel_shape: (kernel_height, kernel_width),
             })
         }
-        "InstanceNorm" => Box::new(HybridOp::InstanceNorm2d {
-            epsilon: utils::F32(1e-5),
-        }),
         "GlobalAvgPool" => Box::new(PolyOp::SumPool {
             padding: (0, 0),
             stride: (1, 1),

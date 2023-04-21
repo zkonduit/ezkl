@@ -779,6 +779,37 @@ pub mod nonlinearities {
         output
     }
 
+    /// Elementwise applies reciprocal square root to a tensor of integers.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::rsqrt;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[4, 25, 8, 1, 1, 0]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = rsqrt(&x, 1, 1);
+    /// let expected = Tensor::<i128>::new(Some(&[2, 5, 3, 1, 1, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn rsqrt(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        // calculate value of output
+        let mut output: Tensor<i128> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            let kix = (*a_i as f32) / (scale_input as f32);
+            let fout = (scale_output as f32) * (1.0 / kix.sqrt());
+            let rounded = fout.round();
+            output[i] = rounded as i128;
+        }
+        output
+    }
+
     /// Elementwise applies tanh activation to a tensor of integers.
     /// # Arguments
     ///

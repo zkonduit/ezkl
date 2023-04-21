@@ -26,9 +26,6 @@ pub enum HybridOp<F: FieldExt + TensorType> {
         stride: (usize, usize),
         pool_dims: (usize, usize),
     },
-    InstanceNorm2d {
-        epsilon: crate::circuit::utils::F32,
-    },
     Min,
     PReLU {
         scale: usize,
@@ -68,10 +65,6 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp<F> {
                 stride,
                 pool_dims,
             } => tensor::ops::max_pool2d(&inputs[0], padding, stride, pool_dims),
-            HybridOp::InstanceNorm2d { epsilon } => Ok(tensor::ops::nonlinearities::instance_norm(
-                inputs.to_vec().try_into().unwrap(),
-                epsilon.0,
-            )),
             HybridOp::Min => Ok(Tensor::new(
                 Some(&[inputs[0].clone().into_iter().min().unwrap()]),
                 &[1],
@@ -91,7 +84,6 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp<F> {
             HybridOp::Max => "MAX",
             HybridOp::Greater { .. } => "GREATER",
             HybridOp::MaxPool2d { .. } => "MAXPOOL2D",
-            HybridOp::InstanceNorm2d { .. } => "INSTANCENORM",
             HybridOp::Min => "MIN",
             HybridOp::PReLU { .. } => "PRELU",
         }
@@ -124,12 +116,6 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp<F> {
                     values.push(a.clone());
                 }
                 todo!()
-                // Some(layouts::greater_than(
-                //     config,
-                //     region,
-                //     values[..].try_into()?,
-                //     offset,
-                // )?)
             }
             HybridOp::Mean { scale, .. } => Some(layouts::mean(
                 config,
@@ -163,14 +149,6 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp<F> {
                 values[..].try_into()?,
                 offset,
             )?),
-            HybridOp::InstanceNorm2d { epsilon } => Some(layouts::instance_norm(
-                config,
-                region,
-                values[..].try_into()?,
-                1,
-                epsilon.0 as u64,
-                offset,
-            )?),
         })
     }
 
@@ -179,10 +157,7 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp<F> {
     }
 
     fn has_3d_input(&self) -> bool {
-        matches!(
-            self,
-            HybridOp::MaxPool2d { .. } | HybridOp::InstanceNorm2d { .. }
-        )
+        matches!(self, HybridOp::MaxPool2d { .. })
     }
 
     fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>> {
@@ -214,7 +189,6 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp<F> {
             HybridOp::Mean { scale, num_inputs } => Some(LookupOp::Div {
                 denom: utils::F32((*scale * *num_inputs) as f32),
             }),
-            HybridOp::InstanceNorm2d { .. } => Some(LookupOp::Sqrt { scales: (1, 1) }),
         }
     }
 
