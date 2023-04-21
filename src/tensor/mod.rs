@@ -744,6 +744,11 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// let mut c = a.repeat_rows(2).unwrap();
     /// let mut expected = Tensor::<i32>::new(Some(&[1, 2, 1, 2, 3, 4, 3, 4, 5, 6, 5, 6]), &[3, 2, 2]).unwrap();
     /// assert_eq!(c, expected);
+    ///
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
+    /// let mut c = a.repeat_rows(2).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 1, 2, 2, 3, 3]), &[3, 2]).unwrap();
+    /// assert_eq!(c, expected);
     /// ```
     pub fn repeat_rows(&self, n: usize) -> Result<Tensor<T>, TensorError> {
         let mut rows = vec![];
@@ -999,13 +1004,47 @@ impl<T: TensorType + Add<Output = T>> Add for Tensor<T> {
     /// let result = x.add(k).unwrap();
     /// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 3, 3, 3]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
+    ///
+    ///
+    /// // Now test 2D casting
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[2, 1, 2, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<i32>::new(
+    ///     Some(&[2, 3]),
+    ///     &[2]).unwrap();
+    /// let result = x.add(k).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 4, 4, 4]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
     /// ```
     fn add(self, rhs: Self) -> Self::Output {
         // calculate value of output
         let mut output: Tensor<T> = self.clone();
 
+        if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+            && rhs.dims().len() > 1
+            && self.dims() != rhs.dims()
+        {
+            assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
+            let mut lhs = self.clone();
+            lhs.reshape(&[rhs.dims()[0]]);
+            lhs = self.repeat_rows(rhs.dims()[1..].iter().product::<usize>())?;
+            lhs.reshape(rhs.dims());
+            return lhs + rhs;
+        } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+            && self.dims().len() > 1
+            && self.dims() != rhs.dims()
+        {
+            assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
+            let mut rhs = rhs.clone();
+            rhs.reshape(&[self.dims()[0]]);
+            rhs = rhs.repeat_rows(self.dims()[1..].iter().product::<usize>())?;
+            rhs.reshape(self.dims());
+            return self + rhs;
+        }
         // casts a 1D addition
-        if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
+        else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
             for i in 0..output.len() {
                 output[i] = output[i].clone() + rhs[0].clone();
             }
@@ -1064,16 +1103,47 @@ impl<T: TensorType + Sub<Output = T>> Sub for Tensor<T> {
     /// let result = x.sub(k).unwrap();
     /// let expected = Tensor::<i32>::new(Some(&[0, -1, 0, -1, -1, -1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
+    ///
+    /// // Now test 2D sub
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[2, 1, 2, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<i32>::new(
+    ///     Some(&[2, 3]),
+    ///     &[2],
+    /// ).unwrap();
+    /// let result = x.sub(k).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[0, -1, 0, -2, -2, -2]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
     /// ```
     fn sub(self, rhs: Self) -> Self::Output {
         // calculate value of output
         let mut output: Tensor<T> = self.clone();
 
-        println!("self dims {:?}", self.dims());
-        println!("rhs dims {:?}", rhs.dims());
-
+        if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+            && rhs.dims().len() > 1
+            && self.dims() != rhs.dims()
+        {
+            assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
+            let mut lhs = self.clone();
+            lhs.reshape(&[rhs.dims()[0]]);
+            lhs = self.repeat_rows(rhs.dims()[1..].iter().product::<usize>())?;
+            lhs.reshape(rhs.dims());
+            return lhs - rhs;
+        } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+            && self.dims().len() > 1
+            && self.dims() != rhs.dims()
+        {
+            assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
+            let mut rhs = rhs.clone();
+            rhs.reshape(&[self.dims()[0]]);
+            rhs = rhs.repeat_rows(self.dims()[1..].iter().product::<usize>())?;
+            rhs.reshape(self.dims());
+            return self - rhs;
+        }
         // casts a 1D addition
-        if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
+        else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
             for i in 0..output.len() {
                 output[i] = output[i].clone() - rhs[0].clone();
             }
@@ -1131,13 +1201,46 @@ impl<T: TensorType + Mul<Output = T>> Mul for Tensor<T> {
     /// let result = x.mul(k).unwrap();
     /// let expected = Tensor::<i32>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
+    ///
+    /// // Now test 2D mult
+    /// let x = Tensor::<i32>::new(
+    ///     Some(&[2, 1, 2, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let k = Tensor::<i32>::new(
+    ///     Some(&[2, 2]),
+    ///     &[2]).unwrap();
+    /// let result = x.mul(k).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
     /// ```
     fn mul(self, rhs: Self) -> Self::Output {
         // calculate value of output
         let mut output: Tensor<T> = self.clone();
 
-        // casts a 1D multiplication
-        if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
+        if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+            && rhs.dims().len() > 1
+            && self.dims() != rhs.dims()
+        {
+            assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
+            let mut lhs = self.clone();
+            lhs.reshape(&[rhs.dims()[0]]);
+            lhs = self.repeat_rows(rhs.dims()[1..].iter().product::<usize>())?;
+            lhs.reshape(rhs.dims());
+            return lhs * rhs;
+        } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+            && self.dims().len() > 1
+            && self.dims() != rhs.dims()
+        {
+            assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
+            let mut rhs = rhs.clone();
+            rhs.reshape(&[self.dims()[0]]);
+            rhs = rhs.repeat_rows(self.dims()[1..].iter().product::<usize>())?;
+            rhs.reshape(self.dims());
+            return self * rhs;
+        }
+        // cast 1D mul
+        else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
             for i in 0..output.len() {
                 output[i] = output[i].clone() * rhs[0].clone();
             }

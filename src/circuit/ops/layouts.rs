@@ -194,8 +194,37 @@ pub fn pairwise<F: FieldExt + TensorType>(
 
     let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
 
-    // casts a 1D addition
-    if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
+    // casts ND
+    if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+        && lhs.dims().len() > 1
+        && lhs.dims() != rhs.dims()
+    {
+        if lhs.dims()[0] != rhs.dims().iter().product::<usize>() {
+            return Err(Box::new(CircuitError::DimMismatch(format!(
+                "pairwise {} layout",
+                op.as_str()
+            ))));
+        }
+        rhs.reshape(&[lhs.dims()[0]])?;
+        rhs.repeat_rows(lhs.dims()[1..].iter().product::<usize>())?;
+        rhs.reshape(lhs.dims())?;
+    }
+    // make ND commutative
+    else if lhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+        && rhs.dims().len() > 1
+        && lhs.dims() != rhs.dims()
+    {
+        if rhs.dims()[0] != lhs.dims().iter().product::<usize>() {
+            return Err(Box::new(CircuitError::DimMismatch(format!(
+                "pairwise {} layout",
+                op.as_str()
+            ))));
+        }
+        lhs.reshape(&[rhs.dims()[0]])?;
+        lhs.tile(rhs.dims()[1..].iter().product::<usize>())?;
+        lhs.reshape(rhs.dims())?;
+    // 1D casting
+    } else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
         rhs.tile(lhs.dims().iter().product::<usize>())?;
         rhs.reshape(lhs.dims())?;
     }

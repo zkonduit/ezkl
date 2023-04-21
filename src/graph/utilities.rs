@@ -480,14 +480,6 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
             let new_dims: Vec<usize> = vec![inputs[0].out_dims.iter().product::<usize>()];
             Box::new(PolyOp::Flatten(new_dims))
         }
-        // BatchNorm take four parameters, does some f32 arithmetic and then quantizes
-        // while ScaleAndShift takes the final two parameters immediately.
-        // We will also reach back and quantize
-        "BatchNorm" => {
-            //Compute scale and shift from the four inputs,
-            // then replace the first two, and change this node to a ScaleAndShift
-            todo!();
-        }
         c => {
             warn!("{:?} is not currently supported", c);
             Box::new(crate::circuit::ops::Unknown)

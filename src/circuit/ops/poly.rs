@@ -35,8 +35,6 @@ pub enum PolyOp<F: FieldExt + TensorType> {
     Identity,
     Reshape(Vec<usize>),
     Flatten(Vec<usize>),
-    BatchNorm,
-    ScaleAndShift,
     Pad(usize, usize),
     Sum,
     Pow(u32),
@@ -60,8 +58,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
             PolyOp::Pow(_) => "POW",
             PolyOp::Pack(_, _) => "PACK",
             PolyOp::GlobalSumPool => "GLOBALSUMPOOL",
-            PolyOp::ScaleAndShift => "SCALESHIFT",
-            PolyOp::BatchNorm => "BATCHNORM",
             PolyOp::Conv { .. } => "CONV",
             PolyOp::SumPool { .. } => "SUMPOOL",
             PolyOp::Affine => "AFFINE",
@@ -105,8 +101,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
                 tensor::ops::mult(&inputs)
             }
             PolyOp::Affine => tensor::ops::affine(&inputs),
-            PolyOp::BatchNorm => tensor::ops::scale_and_shift(&inputs),
-            PolyOp::ScaleAndShift => tensor::ops::scale_and_shift(&inputs),
             PolyOp::Matmul { a } => {
                 if let Some(a) = a {
                     let b = inputs;
@@ -230,12 +224,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
             }
             PolyOp::Identity => layouts::identity(config, region, values[..].try_into()?, offset)?,
             PolyOp::Reshape(d) | PolyOp::Flatten(d) => layouts::reshape(values[..].try_into()?, d)?,
-            PolyOp::BatchNorm => {
-                layouts::scale_and_shift(config, region, values[..].try_into()?, offset)?
-            }
-            PolyOp::ScaleAndShift => {
-                layouts::scale_and_shift(config, region, values[..].try_into()?, offset)?
-            }
             PolyOp::Pad(p1, p2) => {
                 if values.len() != 1 {
                     return Err(Box::new(TensorError::DimError));
@@ -305,8 +293,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
             }
             PolyOp::Identity => in_scales[0],
             PolyOp::Reshape(_) | PolyOp::Flatten(_) => in_scales[0],
-            PolyOp::BatchNorm => 2 * in_scales[0],
-            PolyOp::ScaleAndShift => 2 * in_scales[0],
             PolyOp::Pad(_, _) => in_scales[0],
             PolyOp::Pow(pow) => in_scales[0] * (*pow),
             PolyOp::Pack(_, _) => in_scales[0],

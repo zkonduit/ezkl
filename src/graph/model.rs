@@ -201,6 +201,8 @@ impl<F: FieldExt + TensorType> Model<F> {
             nodes.insert(i, n);
         }
 
+        debug!("\n {}", model);
+
         debug!("\n {}", Table::new(nodes.iter()).to_string());
 
         Ok((model, nodes))
