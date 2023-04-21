@@ -1022,44 +1022,44 @@ impl<T: TensorType + Add<Output = T>> Add for Tensor<T> {
         // calculate value of output
         let mut output: Tensor<T> = self.clone();
 
-        if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-            && rhs.dims().len() > 1
-            && self.dims() != rhs.dims()
-        {
-            assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
-            let mut lhs = self.clone();
-            lhs.reshape(&[rhs.dims()[0]]);
-            lhs = self.repeat_rows(rhs.dims()[1..].iter().product::<usize>())?;
-            lhs.reshape(rhs.dims());
-            return lhs + rhs;
-        } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-            && self.dims().len() > 1
-            && self.dims() != rhs.dims()
-        {
-            assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
-            let mut rhs = rhs.clone();
-            rhs.reshape(&[self.dims()[0]]);
-            rhs = rhs.repeat_rows(self.dims()[1..].iter().product::<usize>())?;
-            rhs.reshape(self.dims());
-            return self + rhs;
-        }
-        // casts a 1D addition
-        else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
-            for i in 0..output.len() {
-                output[i] = output[i].clone() + rhs[0].clone();
+        if self.len() != rhs.len() {
+            if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+                && rhs.dims().len() > 1
+                && self.dims() != rhs.dims()
+            {
+                assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
+                let mut lhs = self.clone();
+                lhs.reshape(&[rhs.dims()[0]]);
+                lhs = self.repeat_rows(rhs.dims()[1..].iter().product::<usize>())?;
+                lhs.reshape(rhs.dims());
+                return lhs + rhs;
+            } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+                && self.dims().len() > 1
+                && self.dims() != rhs.dims()
+            {
+                assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
+                let mut rhs = rhs.clone();
+                rhs.reshape(&[self.dims()[0]]);
+                rhs = rhs.repeat_rows(self.dims()[1..].iter().product::<usize>())?;
+                rhs.reshape(self.dims());
+                return self + rhs;
             }
-        }
-        // make 1D casting commutative
-        else if self.dims().len() == 1 && self.dims()[0] == 1 {
-            output = rhs.clone();
-            for i in 0..rhs.len() {
-                output[i] = output[i].clone() + self[0].clone();
+            // casts a 1D addition
+            else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
+                for i in 0..output.len() {
+                    output[i] = output[i].clone() + rhs[0].clone();
+                }
             }
-        } else {
-            if self.len() != rhs.len() {
+            // make 1D casting commutative
+            else if self.dims().len() == 1 && self.dims()[0] == 1 {
+                output = rhs.clone();
+                for i in 0..rhs.len() {
+                    output[i] = output[i].clone() + self[0].clone();
+                }
+            } else {
                 return Err(TensorError::DimMismatch("add".to_string()));
             }
-
+        } else {
             for (i, e_i) in rhs.iter().enumerate() {
                 output[i] = output[i].clone() + e_i.clone()
             }
@@ -1121,44 +1121,44 @@ impl<T: TensorType + Sub<Output = T>> Sub for Tensor<T> {
         // calculate value of output
         let mut output: Tensor<T> = self.clone();
 
-        if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-            && rhs.dims().len() > 1
-            && self.dims() != rhs.dims()
-        {
-            assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
-            let mut lhs = self.clone();
-            lhs.reshape(&[rhs.dims()[0]]);
-            lhs = self.repeat_rows(rhs.dims()[1..].iter().product::<usize>())?;
-            lhs.reshape(rhs.dims());
-            return lhs - rhs;
-        } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-            && self.dims().len() > 1
-            && self.dims() != rhs.dims()
-        {
-            assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
-            let mut rhs = rhs.clone();
-            rhs.reshape(&[self.dims()[0]]);
-            rhs = rhs.repeat_rows(self.dims()[1..].iter().product::<usize>())?;
-            rhs.reshape(self.dims());
-            return self - rhs;
-        }
-        // casts a 1D addition
-        else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
-            for i in 0..output.len() {
-                output[i] = output[i].clone() - rhs[0].clone();
+        if self.len() != rhs.len() {
+            if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+                && rhs.dims().len() > 1
+                && self.dims() != rhs.dims()
+            {
+                assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
+                let mut lhs = self.clone();
+                lhs.reshape(&[rhs.dims()[0]]);
+                lhs = self.repeat_rows(rhs.dims()[1..].iter().product::<usize>())?;
+                lhs.reshape(rhs.dims());
+                return lhs - rhs;
+            } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+                && self.dims().len() > 1
+                && self.dims() != rhs.dims()
+            {
+                assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
+                let mut rhs = rhs.clone();
+                rhs.reshape(&[self.dims()[0]]);
+                rhs = rhs.repeat_rows(self.dims()[1..].iter().product::<usize>())?;
+                rhs.reshape(self.dims());
+                return self - rhs;
             }
-        }
-        // make 1D casting commutative
-        else if self.dims().len() == 1 && self.dims()[0] == 1 {
-            output = rhs.clone();
-            for i in 0..rhs.len() {
-                output[i] = self[0].clone() - output[i].clone();
+            // casts a 1D addition
+            else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
+                for i in 0..output.len() {
+                    output[i] = output[i].clone() - rhs[0].clone();
+                }
             }
-        } else {
-            if self.dims() != rhs.dims() {
+            // make 1D casting commutative
+            else if self.dims().len() == 1 && self.dims()[0] == 1 {
+                output = rhs.clone();
+                for i in 0..rhs.len() {
+                    output[i] = self[0].clone() - output[i].clone();
+                }
+            } else {
                 return Err(TensorError::DimMismatch("sub".to_string()));
             }
-
+        } else {
             for (i, e_i) in rhs.iter().enumerate() {
                 output[i] = output[i].clone() - e_i.clone()
             }
@@ -1218,44 +1218,44 @@ impl<T: TensorType + Mul<Output = T>> Mul for Tensor<T> {
         // calculate value of output
         let mut output: Tensor<T> = self.clone();
 
-        if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-            && rhs.dims().len() > 1
-            && self.dims() != rhs.dims()
-        {
-            assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
-            let mut lhs = self.clone();
-            lhs.reshape(&[rhs.dims()[0]]);
-            lhs = self.repeat_rows(rhs.dims()[1..].iter().product::<usize>())?;
-            lhs.reshape(rhs.dims());
-            return lhs * rhs;
-        } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-            && self.dims().len() > 1
-            && self.dims() != rhs.dims()
-        {
-            assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
-            let mut rhs = rhs.clone();
-            rhs.reshape(&[self.dims()[0]]);
-            rhs = rhs.repeat_rows(self.dims()[1..].iter().product::<usize>())?;
-            rhs.reshape(self.dims());
-            return self * rhs;
-        }
-        // cast 1D mul
-        else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
-            for i in 0..output.len() {
-                output[i] = output[i].clone() * rhs[0].clone();
+        if self.len() != rhs.len() {
+            if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+                && rhs.dims().len() > 1
+                && self.dims() != rhs.dims()
+            {
+                assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
+                let mut lhs = self.clone();
+                lhs.reshape(&[rhs.dims()[0]]);
+                lhs = self.repeat_rows(rhs.dims()[1..].iter().product::<usize>())?;
+                lhs.reshape(rhs.dims());
+                return lhs * rhs;
+            } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+                && self.dims().len() > 1
+                && self.dims() != rhs.dims()
+            {
+                assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
+                let mut rhs = rhs.clone();
+                rhs.reshape(&[self.dims()[0]]);
+                rhs = rhs.repeat_rows(self.dims()[1..].iter().product::<usize>())?;
+                rhs.reshape(self.dims());
+                return self * rhs;
             }
-        }
-        // make 1D casting commutative
-        else if self.dims().len() == 1 && self.dims()[0] == 1 {
-            output = rhs.clone();
-            for i in 0..rhs.len() {
-                output[i] = output[i].clone() * self[0].clone();
+            // cast 1D mul
+            else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
+                for i in 0..output.len() {
+                    output[i] = output[i].clone() * rhs[0].clone();
+                }
             }
-        } else {
-            if self.dims() != rhs.dims() {
+            // make 1D casting commutative
+            else if self.dims().len() == 1 && self.dims()[0] == 1 {
+                output = rhs.clone();
+                for i in 0..rhs.len() {
+                    output[i] = output[i].clone() * self[0].clone();
+                }
+            } else {
                 return Err(TensorError::DimMismatch("mul".to_string()));
             }
-
+        } else {
             for (i, e_i) in rhs.iter().enumerate() {
                 output[i] = output[i].clone() * e_i.clone()
             }
