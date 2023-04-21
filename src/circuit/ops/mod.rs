@@ -139,6 +139,15 @@ impl<F: FieldExt + TensorType> Op<F> for Rescaled<F> {
         self.inner.as_str()
     }
 
+    fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
+        let in_scales = in_scales
+            .into_iter()
+            .zip(self.scale.iter())
+            .map(|(a, b)| a + crate::graph::mult_to_scale(b.1 as f32))
+            .collect();
+        Op::<F>::out_scale(&*self.inner, in_scales, _g)
+    }
+
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
