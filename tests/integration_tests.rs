@@ -493,7 +493,7 @@ fn mock_everything(example_name: String) {
         .args([
             "--bits=16",
             "-K=17",
-            "--public-inputs",
+            "--public-inputs=true",
             "--pack-base=2",
             "mock",
             "-D",
@@ -510,7 +510,7 @@ fn mock_everything(example_name: String) {
 fn mock_public_inputs(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
-            "--public-inputs",
+            "--public-inputs=true",
             "--public-outputs=false",
             "--bits=16",
             "-K=17",
@@ -529,7 +529,7 @@ fn mock_public_inputs(example_name: String) {
 fn mock_public_params(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
-            "--public-params",
+            "--public-params=true",
             "--public-outputs=false",
             "--bits=16",
             "-K=17",

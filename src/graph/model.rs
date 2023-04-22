@@ -124,6 +124,7 @@ impl<F: FieldExt + TensorType> Model<F> {
                 t.reshape(&n.out_dims);
                 inputs.push(t);
             } else {
+                trace!("executing {}", n.opkind.as_str());
                 for i in n.inputs.iter() {
                     match results.get(&i) {
                         Some(value) => inputs.push(value.clone()),
@@ -443,7 +444,7 @@ impl<F: FieldExt + TensorType> Model<F> {
     /// * `layouter` - Halo2 Layouter.
     /// * `inputs` - The values to feed into the circuit.
     pub fn dummy_layout(&self, input_shapes: &[Vec<usize>]) -> Result<usize, Box<dyn Error>> {
-        info!("model layout");
+        info!("dummy model layout");
         let mut results = BTreeMap::<usize, ValTensor<F>>::new();
 
         let inputs: Vec<ValTensor<F>> = input_shapes
@@ -462,6 +463,7 @@ impl<F: FieldExt + TensorType> Model<F> {
 
         let mut offset: usize = 0;
         for (idx, node) in self.nodes.iter() {
+            trace!("dummy layout for {}", node.opkind.as_str());
             let values: Vec<ValTensor<F>> = node
                 .inputs
                 .iter()

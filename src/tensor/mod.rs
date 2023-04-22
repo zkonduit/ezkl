@@ -5,6 +5,7 @@ pub mod val;
 /// A wrapper around a tensor of Halo2 Value types.
 pub mod var;
 
+use rayon::prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 pub use val::*;
 pub use var::*;
@@ -371,6 +372,44 @@ impl<F: FieldExt + TensorType + Clone> From<Tensor<i128>> for Tensor<Value<F>> {
             Tensor::from((0..t.len()).map(|i| Value::known(i128_to_felt::<F>(t[i]))));
         ta.reshape(t.dims());
         ta
+    }
+}
+
+// impl<'data, T: Sync + 'data> IntoParallelIterator for &'data Vec<T> {
+//     type Item = &'data T;
+//     type Iter = Iter<'data, T>;
+
+//     fn into_par_iter(self) -> Self::Iter {
+//         <&[T]>::into_par_iter(self)
+//     }
+// }
+
+// impl<'data, T: Send + 'data> IntoParallelIterator for &'data mut Vec<T> {
+//     type Item = &'data mut T;
+//     type Iter = IterMut<'data, T>;
+
+//     fn into_par_iter(self) -> Self::Iter {
+//         <&mut [T]>::into_par_iter(self)
+//     }
+// }
+
+impl<T: Clone + TensorType + std::marker::Send + std::marker::Sync>
+    rayon::iter::IntoParallelIterator for Tensor<T>
+{
+    type Iter = rayon::vec::IntoIter<T>;
+    type Item = T;
+    fn into_par_iter(self) -> Self::Iter {
+        self.inner.into_par_iter()
+    }
+}
+
+impl<'data, T: Clone + TensorType + std::marker::Send + std::marker::Sync>
+    rayon::iter::IntoParallelRefMutIterator<'data> for Tensor<T>
+{
+    type Iter = rayon::slice::IterMut<'data, T>;
+    type Item = &'data mut T;
+    fn par_iter_mut(&'data mut self) -> Self::Iter {
+        self.inner.par_iter_mut()
     }
 }
 
@@ -788,32 +827,41 @@ impl<T: Clone + TensorType> Tensor<T> {
         num_cols: usize,
         h_stride: usize,
         w_stride: usize,
-    ) -> Result<Tensor<T>, TensorError> {
+    ) -> Result<Tensor<T>, TensorError>
+    where
+        T: std::marker::Send + std::marker::Sync,
+    {
         assert!(self.dims().len() > 2);
         let first_channels = self.dims()[0];
         let second_channels = self.dims()[1];
 
-        let mut toeplitz_tower = vec![];
-        for i in 0..first_channels {
-            let mut row = vec![
-                Tensor::new(None, &[h_blocks * num_rows, w_blocks * num_cols])?;
-                second_channels
-            ];
-            for (j, row_block) in row.iter_mut().enumerate().take(second_channels) {
-                let mut r = self.get_slice(&[i..i + 1, j..j + 1])?;
-                let dims = r.dims()[2..].to_vec();
-                r.reshape(&dims);
-                *row_block = r.doubly_blocked_toeplitz(
-                    h_blocks, w_blocks, num_rows, num_cols, h_stride, w_stride,
-                )?;
-            }
-            let mut concatenated_tensor = row[0].clone();
-            for r in row[1..].iter() {
-                concatenated_tensor = concatenated_tensor.append_to_row(r.clone())?;
-            }
+        let mut toeplitz_tower = vec![Tensor::new(None, &[0])?; first_channels];
 
-            toeplitz_tower.push(concatenated_tensor);
-        }
+        toeplitz_tower
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, tower_elem)| {
+                let mut row = vec![
+                    Tensor::new(None, &[h_blocks * num_rows, w_blocks * num_cols])
+                        .unwrap();
+                    second_channels
+                ];
+                for (j, row_block) in row.iter_mut().enumerate().take(second_channels) {
+                    let mut r = self.get_slice(&[i..i + 1, j..j + 1]).unwrap();
+                    let dims = r.dims()[2..].to_vec();
+                    r.reshape(&dims);
+                    *row_block = r
+                        .doubly_blocked_toeplitz(
+                            h_blocks, w_blocks, num_rows, num_cols, h_stride, w_stride,
+                        )
+                        .unwrap();
+                }
+                let mut concatenated_tensor = row[0].clone();
+                for r in row[1..].iter() {
+                    concatenated_tensor = concatenated_tensor.append_to_row(r.clone()).unwrap();
+                }
+                *tower_elem = concatenated_tensor;
+            });
 
         let mut toeplitz_tower =
             Tensor::new(Some(&toeplitz_tower[..]), &[toeplitz_tower.len()])?.combine()?;
@@ -1028,21 +1076,24 @@ impl<T: TensorType + Add<Output = T>> Add for Tensor<T> {
                 && self.dims() != rhs.dims()
             {
                 assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
-                let mut lhs = self.clone();
-                lhs.reshape(&[rhs.dims()[0]]);
-                lhs = self.repeat_rows(rhs.dims()[1..].iter().product::<usize>())?;
-                lhs.reshape(rhs.dims());
-                return lhs + rhs;
+                output = rhs.clone();
+                let lhs = self.clone();
+                let full_indices = rhs.dims().iter().map(|d| 0..*d);
+                for coord in full_indices.multi_cartesian_product() {
+                    let i = self.get_index(&coord);
+                    output[i] = output[i].clone() + lhs[coord[0]].clone();
+                }
             } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
                 && self.dims().len() > 1
                 && self.dims() != rhs.dims()
             {
                 assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
-                let mut rhs = rhs.clone();
-                rhs.reshape(&[self.dims()[0]]);
-                rhs = rhs.repeat_rows(self.dims()[1..].iter().product::<usize>())?;
-                rhs.reshape(self.dims());
-                return self + rhs;
+                let rhs = rhs.clone();
+                let full_indices = self.dims().iter().map(|d| 0..*d);
+                for coord in full_indices.multi_cartesian_product() {
+                    let i = self.get_index(&coord);
+                    output[i] = output[i].clone() + rhs[coord[0]].clone();
+                }
             }
             // casts a 1D addition
             else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
@@ -1127,21 +1178,24 @@ impl<T: TensorType + Sub<Output = T>> Sub for Tensor<T> {
                 && self.dims() != rhs.dims()
             {
                 assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
-                let mut lhs = self.clone();
-                lhs.reshape(&[rhs.dims()[0]]);
-                lhs = self.repeat_rows(rhs.dims()[1..].iter().product::<usize>())?;
-                lhs.reshape(rhs.dims());
-                return lhs - rhs;
+                output = rhs.clone();
+                let lhs = self.clone();
+                let full_indices = rhs.dims().iter().map(|d| 0..*d);
+                for coord in full_indices.multi_cartesian_product() {
+                    let i = self.get_index(&coord);
+                    output[i] = lhs[coord[0]].clone() - output[i].clone();
+                }
             } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
                 && self.dims().len() > 1
                 && self.dims() != rhs.dims()
             {
                 assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
-                let mut rhs = rhs.clone();
-                rhs.reshape(&[self.dims()[0]]);
-                rhs = rhs.repeat_rows(self.dims()[1..].iter().product::<usize>())?;
-                rhs.reshape(self.dims());
-                return self - rhs;
+                let rhs = rhs.clone();
+                let full_indices = self.dims().iter().map(|d| 0..*d);
+                for coord in full_indices.multi_cartesian_product() {
+                    let i = self.get_index(&coord);
+                    output[i] = output[i].clone() - rhs[coord[0]].clone();
+                }
             }
             // casts a 1D addition
             else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
@@ -1224,21 +1278,24 @@ impl<T: TensorType + Mul<Output = T>> Mul for Tensor<T> {
                 && self.dims() != rhs.dims()
             {
                 assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
-                let mut lhs = self.clone();
-                lhs.reshape(&[rhs.dims()[0]]);
-                lhs = self.repeat_rows(rhs.dims()[1..].iter().product::<usize>())?;
-                lhs.reshape(rhs.dims());
-                return lhs * rhs;
+                output = rhs.clone();
+                let lhs = self.clone();
+                let full_indices = rhs.dims().iter().map(|d| 0..*d);
+                for coord in full_indices.multi_cartesian_product() {
+                    let i = self.get_index(&coord);
+                    output[i] = lhs[coord[0]].clone() * output[i].clone();
+                }
             } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
                 && self.dims().len() > 1
                 && self.dims() != rhs.dims()
             {
                 assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
-                let mut rhs = rhs.clone();
-                rhs.reshape(&[self.dims()[0]]);
-                rhs = rhs.repeat_rows(self.dims()[1..].iter().product::<usize>())?;
-                rhs.reshape(self.dims());
-                return self * rhs;
+                let rhs = rhs.clone();
+                let full_indices = self.dims().iter().map(|d| 0..*d);
+                for coord in full_indices.multi_cartesian_product() {
+                    let i = self.get_index(&coord);
+                    output[i] = output[i].clone() * rhs[coord[0]].clone();
+                }
             }
             // cast 1D mul
             else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {

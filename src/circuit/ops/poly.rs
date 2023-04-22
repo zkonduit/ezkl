@@ -121,7 +121,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
                 if let Some(b) = bias {
                     inputs.push(Tensor::new(Some(&b.get_int_evals().unwrap()), b.dims())?);
                 }
-                tensor::ops::convolution(&inputs, *padding, *stride)
+                tensor::ops::conv(&inputs, *padding, *stride)
             }
             PolyOp::SumPool {
                 padding,

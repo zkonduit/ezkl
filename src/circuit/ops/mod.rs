@@ -2,7 +2,7 @@ use std::error::Error;
 
 use halo2_proofs::circuit::Region;
 use halo2curves::FieldExt;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor};
 
@@ -74,7 +74,7 @@ impl<F: FieldExt + TensorType> Clone for Box<dyn Op<F>> {
 }
 
 ///
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Input;
 
 impl<F: FieldExt + TensorType> Op<F> for Input {

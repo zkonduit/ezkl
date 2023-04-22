@@ -10,7 +10,7 @@ use crate::{
     fieldutils::i128_to_felt,
     tensor::{
         ops::{
-            accumulated, add, affine as non_accum_affine, convolution as non_accum_conv,
+            accumulated, add, affine as non_accum_affine, conv as non_accum_conv,
             dot as non_accum_dot, matmul as non_accum_matmul, max_pool2d as non_accum_max_pool2d,
             mult, nonlinearities::prelu as ref_prelu, pack as non_accum_pack,
             rescale as ref_rescaled, scale_and_shift as ref_scale_and_shift, sub,
@@ -698,17 +698,27 @@ pub fn conv<F: FieldExt + TensorType>(
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let has_bias = values.len() == 3;
-    let (image, kernel) = (values[0].clone(), values[1].clone());
+    let (image, mut kernel) = (values[0].clone(), values[1].clone());
 
     if (image.dims().len() != 3)
         || (kernel.dims().len() != 4)
-        || (image.dims()[0] != kernel.dims()[1])
+        || ((image.dims()[0] != kernel.dims()[1]) && (kernel.dims()[1] != 1))
     {
         return Err(Box::new(TensorError::DimMismatch("conv".to_string())));
     }
 
     let image_dims = image.dims();
-    let kernel_dims = kernel.dims();
+    let kernel_dims = values[1].dims();
+
+    if kernel_dims[1] == 1 && kernel_dims[1] != image_dims[0] {
+        kernel.repeat_rows(image_dims[0])?;
+        kernel.reshape(&[
+            kernel_dims[0],
+            image_dims[0],
+            kernel_dims[2],
+            kernel_dims[3],
+        ])?;
+    }
 
     let (output_channels, _input_channels, kernel_height, kernel_width) = (
         kernel_dims[0],

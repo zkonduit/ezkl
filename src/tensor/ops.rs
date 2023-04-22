@@ -2,6 +2,9 @@ use super::TensorError;
 use crate::tensor::{Tensor, TensorType};
 use itertools::Itertools;
 use puruspe::erf;
+use rayon::{
+    iter::IndexedParallelIterator, iter::IntoParallelRefMutIterator, iter::ParallelIterator,
+};
 pub use std::ops::{Add, Div, Mul, Sub};
 
 /// Matrix multiplies two 2D tensors (and adds an offset).
@@ -29,7 +32,9 @@ pub use std::ops::{Add, Div, Mul, Sub};
 /// let expected = Tensor::<i128>::new(Some(&[26, 7, 11, 3, 15, 3, 7, 2]), &[2, 4]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+pub fn affine<
+    T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Send + std::marker::Sync,
+>(
     inputs: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
     let (mut input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
@@ -124,7 +129,9 @@ pub fn scale_and_shift<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// let expected = Tensor::<i128>::new(Some(&[26, 7, 11, 3, 15, 3, 7, 2]), &[2, 4]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+pub fn matmul<
+    T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Send + std::marker::Sync,
+>(
     inputs: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
     let (mut a, mut b) = (inputs[0].clone(), inputs[1].clone());
@@ -149,21 +156,34 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     // calculate value of output
     let mut output: Tensor<T> = Tensor::new(None, &dims).unwrap();
 
-    let indices = dims.iter().map(|d| 0..*d).collect::<Vec<_>>();
+    let cartesian_coord = dims
+        .iter()
+        .map(|d| 0..*d)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
 
-    for coord in indices.iter().cloned().multi_cartesian_product() {
-        let row = coord[0..coord.len() - 1]
-            .iter()
-            .map(|&d| d..(d + 1))
-            .collect::<Vec<_>>();
-        let mut col = coord[0..coord.len()]
-            .iter()
-            .map(|&d| d..(d + 1))
-            .collect::<Vec<_>>();
-        col[coord.len() - 2] = 0..b.dims()[coord.len() - 2];
-        let prod = dot(&vec![&a.get_slice(&row[0..])?, &b.get_slice(&col[0..])?])?;
-        output.set(&coord, prod[0].clone());
-    }
+    output
+        .par_iter_mut()
+        .enumerate()
+        .for_each(|(flat_index, o)| {
+            let coord = &cartesian_coord[flat_index];
+            let row = coord[0..coord.len() - 1]
+                .iter()
+                .map(|&d| d..(d + 1))
+                .collect::<Vec<_>>();
+            let mut col = coord[0..coord.len()]
+                .iter()
+                .map(|&d| d..(d + 1))
+                .collect::<Vec<_>>();
+            col[coord.len() - 2] = 0..b.dims()[coord.len() - 2];
+            let prod = dot(&vec![
+                &a.get_slice(&row[0..]).unwrap(),
+                &b.get_slice(&col[0..]).unwrap(),
+            ])
+            .unwrap();
+
+            *o = prod[0].clone();
+        });
 
     Ok(output)
 }
@@ -365,7 +385,7 @@ pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, 
 /// # Examples
 /// ```
 /// use ezkl_lib::tensor::Tensor;
-/// use ezkl_lib::tensor::ops::convolution;
+/// use ezkl_lib::tensor::ops::conv;
 ///
 /// let x = Tensor::<i128>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -379,24 +399,58 @@ pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, 
 ///     Some(&[0]),
 ///     &[1],
 /// ).unwrap();
-/// let result = convolution::<i128>(&[x, k, b], (0, 0), (1, 1)).unwrap();
+/// let result = conv::<i128>(&[x, k, b], (0, 0), (1, 1)).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[31, 16, 8, 26]), &[1, 2, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// // Now test 1D conv
+///
+/// let x = Tensor::<i128>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[2, 3, 3],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///     Some(&[5, 1, 1, 1]),
+///     &[1, 1, 2, 2],
+/// ).unwrap();
+/// let b = Tensor::<i128>::new(
+///     Some(&[0]),
+///     &[1],
+/// ).unwrap();
+///
+/// let result = conv::<i128>(&[x, k, b], (0, 0), (1, 1)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[31, 16, 8, 26]), &[1, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+pub fn conv<
+    T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Sync + std::marker::Send,
+>(
     inputs: &[Tensor<T>],
     padding: (usize, usize),
     stride: (usize, usize),
 ) -> Result<Tensor<T>, TensorError> {
     let has_bias = inputs.len() == 3;
-    let (image, kernel) = (inputs[0].clone(), inputs[1].clone());
+    let (image, mut kernel) = (inputs[0].clone(), inputs[1].clone());
 
     if (image.dims().len() != 3)
         || (kernel.dims().len() != 4)
-        || (image.dims()[0] != kernel.dims()[1])
+        || ((image.dims()[0] != kernel.dims()[1]) && (kernel.dims()[1] != 1))
     {
         return Err(TensorError::DimMismatch("conv".to_string()));
     }
+
+    if kernel.dims()[1] == 1 && kernel.dims()[1] != image.dims()[0] {
+        kernel = kernel.repeat_rows(image.dims()[0])?;
+        kernel.reshape(&[
+            kernel.dims()[0],
+            image.dims()[0],
+            kernel.dims()[2],
+            kernel.dims()[3],
+        ]);
+    }
+
+    let image_dims = image.dims();
+    let kernel_dims = kernel.dims();
 
     if has_bias {
         let bias = inputs[2].clone();
@@ -404,9 +458,6 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
             return Err(TensorError::DimMismatch("conv bias".to_string()));
         }
     }
-
-    let image_dims = image.dims();
-    let kernel_dims = kernel.dims();
 
     let (output_channels, input_channels, kernel_height, kernel_width) = (
         kernel_dims[0],
@@ -426,29 +477,41 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     let mut output: Tensor<T> =
         Tensor::new(None, &[output_channels, vert_slides, horz_slides]).unwrap();
 
-    for i in 0..output_channels {
-        for j in 0..vert_slides {
+    let cartesian_coord = vec![(0..output_channels), (0..vert_slides), (0..horz_slides)]
+        .iter()
+        .cloned()
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    output
+        .par_iter_mut()
+        .enumerate()
+        .for_each(|(flat_index, o)| {
+            let coord = &cartesian_coord[flat_index];
+            let (i, j, k) = (coord[0], coord[1], coord[2]);
             let rs = j * stride.0;
-            for k in 0..horz_slides {
-                let cs = k * stride.1;
-                let mut res = dot(&vec![
-                    &kernel.get_slice(&[i..i + 1])?.clone(),
-                    &padded_image.get_slice(&[
+            let cs = k * stride.1;
+
+            let mut res = dot(&vec![
+                &kernel.get_slice(&[i..i + 1]).unwrap().clone(),
+                &padded_image
+                    .get_slice(&[
                         0..input_channels,
                         rs..(rs + kernel_height),
                         cs..(cs + kernel_width),
-                    ])?,
-                ])?;
+                    ])
+                    .unwrap(),
+            ])
+            .unwrap();
 
-                if has_bias {
-                    // increment result by the bias
-                    res[0] = res[0].clone() + inputs[2][i].clone();
-                }
-
-                output.set(&[i, j, k], res[0].clone());
+            if has_bias {
+                // increment result by the bias
+                res[0] = res[0].clone() + inputs[2][i].clone();
             }
-        }
-    }
+
+            *o = res[0].clone();
+        });
+
     Ok(output)
 }
 
@@ -475,7 +538,9 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// let expected: Tensor<i128> = Tensor::<i128>::new(Some(&[11, 8, 8, 10]), &[1, 2, 2]).unwrap();
 /// assert_eq!(pooled, expected);
 /// ```
-pub fn sumpool<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+pub fn sumpool<
+    T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Sync + std::marker::Send,
+>(
     image: &Tensor<T>,
     padding: (usize, usize),
     stride: (usize, usize),
@@ -500,20 +565,27 @@ pub fn sumpool<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     let mut output: Tensor<T> =
         Tensor::new(None, &[output_channels, vert_slides, horz_slides]).unwrap();
 
-    for i in 0..output_channels {
-        for j in 0..vert_slides {
+    let cartesian_coord = vec![(0..output_channels), (0..vert_slides), (0..horz_slides)]
+        .iter()
+        .cloned()
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    output
+        .par_iter_mut()
+        .enumerate()
+        .for_each(|(flat_index, o)| {
+            let coord = &cartesian_coord[flat_index];
+            let (i, j, k) = (coord[0], coord[1], coord[2]);
             let rs = j * stride.0;
-            for k in 0..horz_slides {
-                let cs = k * stride.1;
-                let thesum = sum(&padded_image.get_slice(&[
-                    i..i + 1,
-                    rs..(rs + kernel_height),
-                    cs..(cs + kernel_width),
-                ])?)?;
-                output.set(&[i, j, k], thesum[0].clone());
-            }
-        }
-    }
+            let cs = k * stride.1;
+            let thesum = sum(&padded_image
+                .get_slice(&[i..i + 1, rs..(rs + kernel_height), cs..(cs + kernel_width)])
+                .unwrap())
+            .unwrap();
+            *o = thesum[0].clone();
+        });
+
     Ok(output)
 }
 
@@ -540,7 +612,7 @@ pub fn sumpool<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// let expected: Tensor<i128> = Tensor::<i128>::new(Some(&[5, 4, 4, 6]), &[1, 2, 2]).unwrap();
 /// assert_eq!(pooled, expected);
 /// ```
-pub fn max_pool2d<T: TensorType>(
+pub fn max_pool2d<T: TensorType + std::marker::Sync + std::marker::Send>(
     image: &Tensor<T>,
     padding: &(usize, usize),
     stride: &(usize, usize),
@@ -569,22 +641,29 @@ pub fn max_pool2d<T: TensorType>(
         }
     };
 
-    for i in 0..input_channels {
-        for j in 0..horz_slides {
+    let cartesian_coord = vec![(0..input_channels), (0..vert_slides), (0..horz_slides)]
+        .iter()
+        .cloned()
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    output
+        .par_iter_mut()
+        .enumerate()
+        .for_each(|(flat_index, o)| {
+            let coord = &cartesian_coord[flat_index];
+            let (i, j, k) = (coord[0], coord[1], coord[2]);
             let rs = j * stride.0;
-            for k in 0..vert_slides {
-                let cs = k * stride.1;
-                output.set(
-                    &[i, j, k],
-                    padded_image
-                        .get_slice(&[i..(i + 1), rs..(rs + pool_dims.0), cs..(cs + pool_dims.1)])?
-                        .into_iter()
-                        .fold(None, fmax)
-                        .unwrap(),
-                );
-            }
-        }
-    }
+            let cs = k * stride.1;
+            let themax = padded_image
+                .get_slice(&[i..(i + 1), rs..(rs + pool_dims.0), cs..(cs + pool_dims.1)])
+                .unwrap()
+                .into_iter()
+                .fold(None, fmax)
+                .unwrap();
+            *o = themax.clone();
+        });
+
     Ok(output)
 }
 
@@ -613,6 +692,7 @@ pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     if (inputs.len() != 2) || (inputs[0].clone().len() != inputs[1].clone().len()) {
         return Err(TensorError::DimMismatch("dot".to_string()));
     }
+
     let (a, b): (Tensor<T>, Tensor<T>) = (inputs[0].clone(), inputs[1].clone());
     let res = a
         .iter()
