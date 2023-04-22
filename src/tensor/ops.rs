@@ -372,8 +372,196 @@ pub fn rescale<T: TensorType + Add<Output = T>>(
 pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut res = T::zero().unwrap();
+
     let _ = a.map(|a_i| res = res.clone() + a_i);
     Tensor::new(Some(&[res]), &[1])
+}
+
+/// Sums a tensor along specific axes.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
+/// ```
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::sum_axes;
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 15, 2, 1, 1, 0]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = sum_axes(&x, &[1]).unwrap();
+/// let expected = Tensor::<i128>::new(
+///     Some(&[19, 2]),
+///     &[2, 1],
+/// ).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn sum_axes<T: TensorType + Add<Output = T>>(
+    a: &Tensor<T>,
+    axes: &[usize],
+) -> Result<Tensor<T>, TensorError> {
+    // calculate value of output
+
+    if axes.len() == 0 {
+        return Ok(a.clone());
+    }
+
+    let mut new_dims = vec![];
+    for i in 0..a.dims().len() {
+        if !axes.contains(&i) {
+            new_dims.push(a.dims()[i]);
+        } else {
+            new_dims.push(1);
+        }
+    }
+
+    let mut res = Tensor::new(None, &new_dims)?;
+
+    let cartesian_coord = new_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    for coord in cartesian_coord.iter() {
+        let mut sum_dims = vec![];
+        for i in 0..a.dims().len() {
+            if axes.contains(&i) {
+                sum_dims.push(0..a.dims()[i]);
+            } else {
+                sum_dims.push(coord[i]..coord[i] + 1);
+            }
+        }
+
+        res.set(coord, sum(&a.get_slice(&sum_dims)?)?[0].clone());
+    }
+
+    Ok(res)
+}
+
+/// Mins a tensor along specific axes.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
+/// ```
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::min_axes;
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 15, 2, 1, 1, 0]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = min_axes(&x, &[1]).unwrap();
+/// let expected = Tensor::<i128>::new(
+///     Some(&[2, 0]),
+///     &[2, 1],
+/// ).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn min_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
+    a: &Tensor<T>,
+    axes: &[usize],
+) -> Result<Tensor<T>, TensorError> {
+    // calculate value of output
+
+    if axes.len() == 0 {
+        return Ok(a.clone());
+    }
+
+    let mut new_dims = vec![];
+    for i in 0..a.dims().len() {
+        if !axes.contains(&i) {
+            new_dims.push(a.dims()[i]);
+        } else {
+            new_dims.push(1);
+        }
+    }
+
+    let mut res = Tensor::new(None, &new_dims)?;
+
+    let cartesian_coord = new_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    for coord in cartesian_coord.iter() {
+        let mut sum_dims = vec![];
+        for i in 0..a.dims().len() {
+            if axes.contains(&i) {
+                sum_dims.push(0..a.dims()[i]);
+            } else {
+                sum_dims.push(coord[i]..coord[i] + 1);
+            }
+        }
+
+        res.set(coord, a.get_slice(&sum_dims)?.iter().min().unwrap().clone());
+    }
+
+    Ok(res)
+}
+
+/// Mins a tensor along specific axes.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
+/// ```
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::max_axes;
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 15, 2, 1, 1, 0]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = max_axes(&x, &[1]).unwrap();
+/// let expected = Tensor::<i128>::new(
+///     Some(&[15, 1]),
+///     &[2, 1],
+/// ).unwrap()
+/// assert_eq!(result, expected);
+/// ```
+pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
+    a: &Tensor<T>,
+    axes: &[usize],
+) -> Result<Tensor<T>, TensorError> {
+    // calculate value of output
+
+    if axes.len() == 0 {
+        return Ok(a.clone());
+    }
+
+    let mut new_dims = vec![];
+    for i in 0..a.dims().len() {
+        if !axes.contains(&i) {
+            new_dims.push(a.dims()[i]);
+        }
+    }
+
+    let mut res = Tensor::new(None, &new_dims)?;
+
+    let cartesian_coord = new_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    for coord in cartesian_coord.iter() {
+        let mut sum_dims = vec![];
+        for i in 0..a.dims().len() {
+            if axes.contains(&i) {
+                sum_dims.push(0..a.dims()[i]);
+            } else {
+                sum_dims.push(coord[i]..coord[i] + 1);
+            }
+        }
+
+        res.set(coord, a.get_slice(&sum_dims)?.iter().max().unwrap().clone());
+    }
+
+    Ok(res)
 }
 
 /// Applies convolution over a 3D tensor of shape C x H x W (and adds a bias).

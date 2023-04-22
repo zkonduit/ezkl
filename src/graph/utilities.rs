@@ -13,7 +13,7 @@ use log::warn;
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::binary::UnaryOp;
 use tract_onnx::tract_core::ops::matmul::MatMulUnary;
-use tract_onnx::tract_core::ops::nn::LeakyRelu;
+use tract_onnx::tract_core::ops::nn::{LeakyRelu, Reduce};
 use tract_onnx::tract_hir::internal::AxisOp;
 use tract_onnx::tract_hir::ops::cnn::ConvUnary;
 use tract_onnx::tract_hir::ops::element_wise::ElementWiseOp;
@@ -135,6 +135,22 @@ fn load_axis_op(
 ) -> Result<AxisOp, Box<dyn std::error::Error>> {
     // Extract the slope layer hyperparams
     let op: &AxisOp = match op.downcast_ref::<AxisOp>() {
+        Some(b) => b,
+        None => {
+            return Err(Box::new(GraphError::OpMismatch(idx, name)));
+        }
+    };
+    Ok(op.clone())
+}
+
+/// Extracts an axis op from an onnx node.
+fn load_reduce_op(
+    op: &dyn tract_onnx::prelude::Op,
+    idx: usize,
+    name: String,
+) -> Result<Reduce, Box<dyn std::error::Error>> {
+    // Extract the slope layer hyperparams
+    let op: &Reduce = match op.downcast_ref::<Reduce>() {
         Some(b) => b,
         None => {
             return Err(Box::new(GraphError::OpMismatch(idx, name)));
@@ -301,8 +317,11 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
             if inputs.len() != 1 {
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
             };
+            let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
+            // subtract 1 from the axes to account for the batch dimension
+            let axes = op.axes.clone().iter().map(|x| x - 1).collect();
 
-            Box::new(PolyOp::Sum)
+            Box::new(PolyOp::Sum(axes))
         }
         "Reduce<Mean>" => Box::new(HybridOp::Mean {
             scale: 1,

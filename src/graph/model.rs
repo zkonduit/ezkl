@@ -124,7 +124,7 @@ impl<F: FieldExt + TensorType> Model<F> {
                 t.reshape(&n.out_dims);
                 inputs.push(t);
             } else {
-                trace!("executing {}", n.opkind.as_str());
+                trace!("executing {}: {}", i, n.opkind.as_str());
                 for i in n.inputs.iter() {
                     match results.get(&i) {
                         Some(value) => inputs.push(value.clone()),
@@ -132,7 +132,9 @@ impl<F: FieldExt + TensorType> Model<F> {
                     }
                 }
             };
-            results.insert(i, Op::<F>::f(&*n.opkind, &inputs)?);
+
+            let res = Op::<F>::f(&*n.opkind, &inputs)?;
+            results.insert(i, res);
         }
 
         let output_nodes = model.outputs.iter();
@@ -347,7 +349,7 @@ impl<F: FieldExt + TensorType> Model<F> {
                         .map(|i| results.get(i).unwrap().clone())
                         .collect_vec();
 
-                    trace!("laying out offset {}", offset);
+                    trace!("laying out {}: {}", idx, offset);
                     let res = config
                         .base
                         .layout(
@@ -463,7 +465,8 @@ impl<F: FieldExt + TensorType> Model<F> {
 
         let mut offset: usize = 0;
         for (idx, node) in self.nodes.iter() {
-            trace!("dummy layout for {}", node.opkind.as_str());
+            trace!("dummy layout {}: {}", idx, node.opkind.as_str());
+
             let values: Vec<ValTensor<F>> = node
                 .inputs
                 .iter()

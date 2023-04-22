@@ -36,7 +36,7 @@ pub enum PolyOp<F: FieldExt + TensorType> {
     Reshape(Vec<usize>),
     Flatten(Vec<usize>),
     Pad(usize, usize),
-    Sum,
+    Sum(Vec<usize>),
     Pow(u32),
     Pack(u32, u32),
     GlobalSumPool,
@@ -53,7 +53,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
             PolyOp::Add { .. } => "ADD",
             PolyOp::Mult { .. } => "MULT",
             PolyOp::Sub => "SUB",
-            PolyOp::Sum => "SUM",
+            PolyOp::Sum { .. } => "SUM",
             PolyOp::Dot => "DOT",
             PolyOp::Pow(_) => "POW",
             PolyOp::Pack(_, _) => "PACK",
@@ -141,11 +141,11 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
                 }
                 inputs[0].pow(*u)
             }
-            PolyOp::Sum => {
+            PolyOp::Sum(axes) => {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("sum inputs".to_string()));
                 }
-                tensor::ops::sum(&inputs[0])
+                tensor::ops::sum_axes(&inputs[0], axes)
             }
             PolyOp::GlobalSumPool => unreachable!(),
             PolyOp::RangeCheck(..) => Ok(inputs[0].clone()),
@@ -163,7 +163,9 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
 
         Ok(Some(match self {
             PolyOp::Dot => layouts::dot(config, region, values[..].try_into()?, offset)?,
-            PolyOp::Sum => layouts::sum(config, region, values[..].try_into()?, offset)?,
+            PolyOp::Sum(axes) => {
+                layouts::sum_axes(config, region, values[..].try_into()?, axes, offset)?
+            }
             PolyOp::Matmul { a } => {
                 if let Some(a) = a {
                     let b = values;
@@ -251,7 +253,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
     fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
         match self {
             PolyOp::Dot => in_scales[0] + in_scales[1],
-            PolyOp::Sum => in_scales[0],
+            PolyOp::Sum { .. } => in_scales[0],
             PolyOp::Matmul { a } => {
                 let mut scale = in_scales[0];
                 if let Some(a) = a {

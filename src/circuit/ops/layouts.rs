@@ -6,7 +6,7 @@ use std::{
 
 use halo2_proofs::circuit::{Region, Value};
 use itertools::Itertools;
-use log::{error, trace};
+use log::error;
 use rayon::prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
 use crate::{
@@ -178,6 +178,65 @@ pub fn sum<F: FieldExt + TensorType>(
     *offset += assigned_len;
     // last element is the result
     Ok(last_elem)
+}
+
+/// Sum accumulated layout
+pub fn sum_axes<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    mut region: Option<&mut Region<F>>,
+    values: &[ValTensor<F>; 1],
+    axes: &[usize],
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // calculate value of output
+
+    let a = &values[0];
+
+    if axes.len() == 0 {
+        return Ok(a.clone());
+    }
+
+    let mut new_dims = vec![];
+    for i in 0..a.dims().len() {
+        if !axes.contains(&i) {
+            new_dims.push(a.dims()[i]);
+        } else {
+            new_dims.push(1);
+        }
+    }
+
+    let mut res = Tensor::new(None, &new_dims)?;
+
+    let cartesian_coord = new_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    for coord in cartesian_coord.iter() {
+        let mut sum_dims = vec![];
+        for i in 0..a.dims().len() {
+            if axes.contains(&i) {
+                sum_dims.push(0..a.dims()[i]);
+            } else {
+                sum_dims.push(coord[i]..coord[i] + 1);
+            }
+        }
+
+        res.set(
+            coord,
+            sum(
+                config,
+                region.as_deref_mut(),
+                &[a.get_slice(&sum_dims)?],
+                offset,
+            )?
+            .get_inner_tensor()?[0]
+                .clone(),
+        );
+    }
+
+    Ok(res.into())
 }
 
 /// Pairwise (elementwise) op layout
@@ -711,19 +770,17 @@ pub fn conv<F: FieldExt + TensorType + std::marker::Send + std::marker::Sync>(
         return Err(Box::new(TensorError::DimMismatch("conv".to_string())));
     }
 
-    let image_dims = image.dims();
-    let kernel_dims = values[1].dims();
-
-    if kernel_dims[1] == 1 && kernel_dims[1] != image_dims[0] {
-        kernel.repeat_rows(image_dims[0])?;
+    if kernel.dims()[1] == 1 && kernel.dims()[1] != image.dims()[0] {
+        kernel.repeat_rows(image.dims()[0])?;
         kernel.reshape(&[
-            kernel_dims[0],
-            image_dims[0],
-            kernel_dims[2],
-            kernel_dims[3],
+            kernel.dims()[0],
+            image.dims()[0],
+            kernel.dims()[2],
+            kernel.dims()[3],
         ])?;
     }
 
+    let image_dims = image.dims();
     let kernel_dims = kernel.dims();
 
     let (output_channels, input_channels, kernel_height, kernel_width) = (
@@ -878,19 +935,17 @@ pub fn conv_toeplitz<F: FieldExt + TensorType>(
         return Err(Box::new(TensorError::DimMismatch("conv".to_string())));
     }
 
-    let image_dims = image.dims();
-    let kernel_dims = values[1].dims();
-
-    if kernel_dims[1] == 1 && kernel_dims[1] != image_dims[0] {
-        kernel.repeat_rows(image_dims[0])?;
+    if kernel.dims()[1] == 1 && kernel.dims()[1] != image.dims()[0] {
+        kernel.repeat_rows(image.dims()[0])?;
         kernel.reshape(&[
-            kernel_dims[0],
-            image_dims[0],
-            kernel_dims[2],
-            kernel_dims[3],
+            kernel.dims()[0],
+            image.dims()[0],
+            kernel.dims()[2],
+            kernel.dims()[3],
         ])?;
     }
 
+    let image_dims = image.dims();
     let kernel_dims = kernel.dims();
 
     let (output_channels, _input_channels, kernel_height, kernel_width) = (
@@ -1225,11 +1280,7 @@ pub fn nonlinearity<F: FieldExt + TensorType>(
     nl: &LookupOp,
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let region_name = format!("Lookup for {:#?}", nl);
-
     let x = &values[0];
-
-    trace!("laying out {}", region_name);
 
     let w = config
         .lookup_input
