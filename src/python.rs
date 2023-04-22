@@ -75,6 +75,7 @@ fn gen_srs(params_path: PathBuf, logrows: u32) -> PyResult<()> {
         public_params: false,
         pack_base: 1,
         check_mode: CheckMode::SAFE,
+        allocated_constraints: None,
     };
     let params = ezkl_gen_srs::<KZGCommitmentScheme<Bn256>>(run_args.logrows);
     save_params::<KZGCommitmentScheme<Bn256>>(&params_path, &params)?;
