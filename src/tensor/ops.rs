@@ -403,8 +403,7 @@ pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, 
 /// let expected = Tensor::<i128>::new(Some(&[31, 16, 8, 26]), &[1, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// // Now test 1D conv
-///
+/// // Now test single channel
 /// let x = Tensor::<i128>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[2, 3, 3],
@@ -419,7 +418,7 @@ pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, 
 /// ).unwrap();
 ///
 /// let result = conv::<i128>(&[x, k, b], (0, 0), (1, 1)).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[31, 16, 8, 26]), &[1, 2, 2]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[62, 32, 16, 52]), &[1, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn conv<
