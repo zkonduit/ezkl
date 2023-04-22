@@ -1,9 +1,13 @@
 use core::panic;
-use std::error::Error;
+use std::{
+    error::Error,
+    sync::{Arc, Mutex},
+};
 
 use halo2_proofs::circuit::{Region, Value};
 use itertools::Itertools;
 use log::{error, trace};
+use rayon::prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
 use crate::{
     circuit::{ops::base::BaseOp, utils, BaseConfig, CheckMode, CircuitError},
@@ -487,7 +491,7 @@ pub fn affine<F: FieldExt + TensorType>(
         bias.reshape(&[bias.len(), 1])?;
     }
     input.pad_row_ones()?;
-    let params = kernel.append_to_row(bias)?;
+    let params = kernel.append_to_row(&bias)?;
 
     let mut last_elem = matmul(config, region, &[params, input], offset)?;
     last_elem.flatten();
@@ -689,7 +693,174 @@ pub fn max_pool2d<F: FieldExt + TensorType>(
 }
 
 /// Convolution accumulated layout
-pub fn conv<F: FieldExt + TensorType>(
+pub fn conv<F: FieldExt + TensorType + std::marker::Send + std::marker::Sync>(
+    config: &mut BaseConfig<F>,
+    mut region: Option<&mut Region<F>>,
+    values: &[ValTensor<F>],
+    padding: (usize, usize),
+    stride: (usize, usize),
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let has_bias = values.len() == 3;
+    let (image, mut kernel) = (values[0].clone(), values[1].clone());
+
+    if (image.dims().len() != 3)
+        || (kernel.dims().len() != 4)
+        || ((image.dims()[0] != kernel.dims()[1]) && (kernel.dims()[1] != 1))
+    {
+        return Err(Box::new(TensorError::DimMismatch("conv".to_string())));
+    }
+
+    let image_dims = image.dims();
+    let kernel_dims = values[1].dims();
+
+    if kernel_dims[1] == 1 && kernel_dims[1] != image_dims[0] {
+        kernel.repeat_rows(image_dims[0])?;
+        kernel.reshape(&[
+            kernel_dims[0],
+            image_dims[0],
+            kernel_dims[2],
+            kernel_dims[3],
+        ])?;
+    }
+
+    let kernel_dims = kernel.dims();
+
+    let (output_channels, input_channels, kernel_height, kernel_width) = (
+        kernel_dims[0],
+        kernel_dims[1],
+        kernel_dims[2],
+        kernel_dims[3],
+    );
+
+    let (image_height, image_width) = (image_dims[1], image_dims[2]);
+    let padded_height = image_height + 2 * padding.0;
+    let padded_width = image_width + 2 * padding.1;
+
+    let vert_slides = (padded_height - kernel_height) / stride.0 + 1;
+    let horz_slides = (padded_width - kernel_width) / stride.1 + 1;
+
+    let mut padded_image = image.clone();
+    padded_image.pad(padding)?;
+
+    // calculate value of output
+    let mut output: Tensor<ValType<F>> =
+        Tensor::new(None, &[output_channels, vert_slides, horz_slides]).unwrap();
+
+    let cartesian_coord = vec![(0..output_channels), (0..vert_slides), (0..horz_slides)]
+        .iter()
+        .cloned()
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    match region {
+        // non-parallel version
+        Some(_) => {
+            for coord in cartesian_coord.iter() {
+                let (i, j, k) = (coord[0], coord[1], coord[2]);
+                let rs = j * stride.0;
+                let cs = k * stride.1;
+
+                let local_kernel = kernel.get_slice(&[i..i + 1])?;
+                let local_image = padded_image.get_slice(&[
+                    0..input_channels,
+                    rs..(rs + kernel_height),
+                    cs..(cs + kernel_width),
+                ])?;
+
+                let res = dot(
+                    config,
+                    region.as_deref_mut(),
+                    &[local_kernel, local_image],
+                    offset,
+                )?;
+
+                output.set(&[i, j, k], res.get_inner_tensor().unwrap()[0].clone());
+            }
+        }
+        None => {
+            let offset_thread = Arc::new(Mutex::new(offset.clone()));
+            let config_thread = Arc::new(Mutex::new(config.clone()));
+            output.par_iter_mut().enumerate().for_each(|(i, x)| {
+                let (i, j, k) = (
+                    cartesian_coord[i][0],
+                    cartesian_coord[i][1],
+                    cartesian_coord[i][2],
+                );
+                let rs = j * stride.0;
+                let cs = k * stride.1;
+
+                let local_kernel = kernel.get_slice(&[i..i + 1]).unwrap();
+                let local_image = padded_image
+                    .get_slice(&[
+                        0..input_channels,
+                        rs..(rs + kernel_height),
+                        cs..(cs + kernel_width),
+                    ])
+                    .unwrap();
+
+                let mut offset_lock = offset_thread.lock().unwrap();
+                let mut config_lock = config_thread.lock().unwrap();
+                let res = dot(
+                    &mut config_lock,
+                    None,
+                    &[local_kernel, local_image],
+                    &mut offset_lock,
+                )
+                .unwrap();
+
+                *x = res.get_inner_tensor().unwrap()[0].clone();
+            });
+
+            *offset += offset_thread.lock().unwrap().clone();
+        }
+    }
+
+    let mut res: ValTensor<F> = output.into();
+
+    if has_bias {
+        let tiled_bias = values[2].clone();
+        if (tiled_bias.dims().len() != 1) || (tiled_bias.dims()[0] != kernel.dims()[0]) {
+            return Err(Box::new(TensorError::DimMismatch("conv bias".to_string())));
+        };
+
+        res = pairwise(config, region, &[res, tiled_bias], offset, BaseOp::Add)?
+    };
+
+    res.reshape(&[output_channels, vert_slides, horz_slides])?;
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(res.clone().get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let safe_conv = non_accum_conv(
+                &values
+                    .iter()
+                    .map(|x| x.get_inner().unwrap())
+                    .collect::<Vec<Tensor<_>>>(),
+                padding,
+                stride,
+            )
+            .map_err(|e| {
+                error!("{}", e);
+                halo2_proofs::plonk::Error::Synthesis
+            })?;
+
+            assert_eq!(
+                Into::<Tensor<i32>>::into(res.get_inner()?),
+                Into::<Tensor<i32>>::into(safe_conv),
+            )
+        }
+    }
+
+    Ok(res)
+}
+
+/// Convolution accumulated layout
+pub fn conv_toeplitz<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     region: Option<&mut Region<F>>,
     values: &[ValTensor<F>],
@@ -719,6 +890,8 @@ pub fn conv<F: FieldExt + TensorType>(
             kernel_dims[3],
         ])?;
     }
+
+    let kernel_dims = kernel.dims();
 
     let (output_channels, _input_channels, kernel_height, kernel_width) = (
         kernel_dims[0],

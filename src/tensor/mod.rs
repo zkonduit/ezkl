@@ -375,24 +375,6 @@ impl<F: FieldExt + TensorType + Clone> From<Tensor<i128>> for Tensor<Value<F>> {
     }
 }
 
-// impl<'data, T: Sync + 'data> IntoParallelIterator for &'data Vec<T> {
-//     type Item = &'data T;
-//     type Iter = Iter<'data, T>;
-
-//     fn into_par_iter(self) -> Self::Iter {
-//         <&[T]>::into_par_iter(self)
-//     }
-// }
-
-// impl<'data, T: Send + 'data> IntoParallelIterator for &'data mut Vec<T> {
-//     type Item = &'data mut T;
-//     type Iter = IterMut<'data, T>;
-
-//     fn into_par_iter(self) -> Self::Iter {
-//         <&mut [T]>::into_par_iter(self)
-//     }
-// }
-
 impl<T: Clone + TensorType + std::marker::Send + std::marker::Sync>
     rayon::iter::IntoParallelIterator for Tensor<T>
 {
@@ -759,19 +741,26 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// let mut expected = Tensor::<i32>::new(Some(&[0, 0, 0, 10, 0, 0, 0, 0, 0, 20, 10, 0, 0, 0, 0, 0, 20, 10, 0, 0, 0, 0, 0, 20]), &[4, 6]).unwrap();
     /// assert_eq!(c, expected);
     /// ```
-    pub fn append_to_row(&self, b: Tensor<T>) -> Result<Tensor<T>, TensorError> {
-        if self.dims()[0] != b.dims()[0] {
-            return Err(TensorError::DimMismatch("append to row".to_string()));
+    pub fn append_to_row(&self, vecs: &[&Tensor<T>]) -> Result<Tensor<T>, TensorError> {
+        for b in vecs {
+            if self.dims()[0] != b.dims()[0] {
+                return Err(TensorError::DimMismatch("append to row".to_string()));
+            }
         }
         let mut rows = Vec::new();
         for i in 0..self.dims[0] {
-            let row = vec![self.get_slice(&[i..i + 1])?, b.get_slice(&[i..i + 1])?];
-            rows.push(Tensor::new(Some(&row), &[2])?.combine()?);
+            let mut row = vec![self.get_slice(&[i..i + 1])?];
+            for b in vecs {
+                row.push(b.get_slice(&[i..i + 1])?);
+            }
+            rows.push(Tensor::new(Some(&row), &[vecs.len() + 1])?.combine()?);
         }
         let mut res = Tensor::new(Some(&rows), &[self.dims[0]])?.combine()?;
         let mut dims = self.dims().to_vec();
         let len = dims.len();
-        dims[len - 1] += b.dims()[1];
+        for b in vecs {
+            dims[len - 1] += b.dims()[1];
+        }
         res.reshape(&dims);
         Ok(res)
     }
@@ -841,11 +830,9 @@ impl<T: Clone + TensorType> Tensor<T> {
             .par_iter_mut()
             .enumerate()
             .for_each(|(i, tower_elem)| {
-                let mut row = vec![
-                    Tensor::new(None, &[h_blocks * num_rows, w_blocks * num_cols])
-                        .unwrap();
-                    second_channels
-                ];
+                println!("outer i: {}", i);
+                let zero = Tensor::new(None, &[0]).unwrap();
+                let mut row = vec![zero; second_channels];
                 for (j, row_block) in row.iter_mut().enumerate().take(second_channels) {
                     let mut r = self.get_slice(&[i..i + 1, j..j + 1]).unwrap();
                     let dims = r.dims()[2..].to_vec();
@@ -857,9 +844,9 @@ impl<T: Clone + TensorType> Tensor<T> {
                         .unwrap();
                 }
                 let mut concatenated_tensor = row[0].clone();
-                for r in row[1..].iter() {
-                    concatenated_tensor = concatenated_tensor.append_to_row(r.clone()).unwrap();
-                }
+                concatenated_tensor = concatenated_tensor
+                    .append_to_row(&row[1..].iter().map(|e| e).collect::<Vec<_>>())
+                    .unwrap();
                 *tower_elem = concatenated_tensor;
             });
 
@@ -892,29 +879,37 @@ impl<T: Clone + TensorType> Tensor<T> {
         num_rows: usize,
         num_cols: usize,
         h_stride: usize,
-        _w_stride: usize,
-    ) -> Result<Tensor<T>, TensorError> {
-        let mut t_matrices = vec![];
-        for i in 0..self.dims[0] {
-            t_matrices.push(self.toeplitz(i, num_rows, num_cols)?);
-        }
+        w_stride: usize,
+    ) -> Result<Tensor<T>, TensorError>
+    where
+        T: std::marker::Send + std::marker::Sync,
+    {
+        let mut t_matrices = vec![Tensor::new(None, &[0])?; self.dims[0]];
+        t_matrices.par_iter_mut().enumerate().for_each(|(i, t)| {
+            *t = self.toeplitz(i, num_rows, num_cols).unwrap();
+        });
 
-        let mut doubly_blocked_toeplitz: Vec<Tensor<T>> = vec![];
-        for j in (0..h_stride * h_blocks).step_by(h_stride) {
-            let mut row = vec![Tensor::new(None, t_matrices[0].dims())?; w_blocks];
-            for i in 0..t_matrices.len() {
-                if i + j < w_blocks {
-                    row[i + j] = t_matrices[i].clone();
+        let mut doubly_blocked_toeplitz: Vec<Tensor<T>> = vec![Tensor::new(None, &[0])?; h_blocks];
+
+        doubly_blocked_toeplitz
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, block)| {
+                println!("block j: {}", i);
+                let j = i * h_stride;
+                let zero_matrix = Tensor::new(None, t_matrices[0].dims()).unwrap();
+                let mut row = vec![&zero_matrix; w_blocks];
+
+                for i in 0..t_matrices.len() {
+                    if i + j < w_blocks {
+                        row[i + j] = &t_matrices[i];
+                    }
                 }
-            }
 
-            let mut concatenated_tensor = row[0].clone();
-            for r in row[1..].iter() {
-                concatenated_tensor = concatenated_tensor.append_to_row(r.clone())?;
-            }
-
-            doubly_blocked_toeplitz.push(concatenated_tensor);
-        }
+                let mut concatenated_tensor = row[0].clone();
+                concatenated_tensor = concatenated_tensor.append_to_row(&row[1..]).unwrap();
+                *block = concatenated_tensor;
+            });
 
         let mut doubly_blocked_toeplitz = Tensor::new(
             Some(&doubly_blocked_toeplitz[..]),
@@ -924,23 +919,24 @@ impl<T: Clone + TensorType> Tensor<T> {
 
         doubly_blocked_toeplitz.reshape(&[h_blocks * num_rows, w_blocks * num_cols]);
 
-        if _w_stride > 1 {
-            let mut shifted_rows = vec![];
-            for r in 0..h_blocks * num_rows {
-                let offset = r % num_rows;
-                let row = doubly_blocked_toeplitz.get_slice(&[r..r + 1])?;
+        if w_stride > 1 {
+            let mut shifted_rows = vec![Tensor::new(None, &[0])?; h_blocks * num_rows];
 
-                if offset > 0 {
-                    let mut shifted_row = Tensor::new(None, &[row.len()])?;
-                    let local_offset = offset * (_w_stride - 1);
-                    for i in 0..shifted_row.len() - local_offset {
-                        shifted_row.set(&[local_offset + i], row.get(&[0, i]).clone());
+            shifted_rows
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(r, row)| {
+                    let offset = r % num_rows;
+                    *row = doubly_blocked_toeplitz.get_slice(&[r..r + 1]).unwrap();
+                    if offset > 0 {
+                        let mut shifted_row = Tensor::new(None, &[row.len()]).unwrap();
+                        let local_offset = offset * (w_stride - 1);
+                        for i in 0..shifted_row.len() - local_offset {
+                            shifted_row.set(&[local_offset + i], row.get(&[0, i]).clone());
+                        }
+                        *row = shifted_row;
                     }
-                    shifted_rows.push(shifted_row);
-                } else {
-                    shifted_rows.push(row);
-                }
-            }
+                });
 
             let mut doubly_blocked_toeplitz =
                 Tensor::new(Some(&shifted_rows[..]), &[shifted_rows.len()])?.combine()?;
@@ -977,7 +973,10 @@ impl<T: Clone + TensorType> Tensor<T> {
         row: usize,
         num_rows: usize,
         num_cols: usize,
-    ) -> Result<Tensor<T>, TensorError> {
+    ) -> Result<Tensor<T>, TensorError>
+    where
+        T: std::marker::Send + std::marker::Sync,
+    {
         // let n = self.dims()[1..].iter().product::<usize>();
         let mut row = self.get_slice(&[row..row + 1])?;
         row.flatten();

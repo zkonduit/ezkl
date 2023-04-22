@@ -1,3 +1,4 @@
+use halo2_proofs::circuit::Region;
 use halo2curves::FieldExt;
 use itertools::Itertools;
 
@@ -92,7 +93,7 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp<F> {
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: Option<&mut halo2_proofs::circuit::Region<F>>,
+        region: Option<&mut Region<F>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn std::error::Error>> {

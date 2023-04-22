@@ -3,7 +3,7 @@ use halo2_proofs::{arithmetic::Field, plonk::Instance};
 
 #[derive(Debug, Clone)]
 ///
-pub enum ValType<F: FieldExt + TensorType> {
+pub enum ValType<F: FieldExt + TensorType + std::marker::Send + std::marker::Sync> {
     /// value
     Value(Value<F>),
     /// assigned  value
@@ -449,10 +449,10 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     }
 
     /// Pads each column
-    pub fn append_to_row(&self, b: ValTensor<F>) -> Result<ValTensor<F>, TensorError> {
+    pub fn append_to_row(&self, b: &ValTensor<F>) -> Result<ValTensor<F>, TensorError> {
         match (self, b) {
             (ValTensor::Value { inner: v, .. }, ValTensor::Value { inner: v2, .. }) => {
-                Ok(v.append_to_row(v2)?.into())
+                Ok(v.append_to_row(&[v2])?.into())
             }
             _ => Err(TensorError::WrongMethod),
         }
