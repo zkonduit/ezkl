@@ -725,19 +725,19 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// use ezkl_lib::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 4, 1, 4, 1, 4]), &[3, 2]).unwrap();
     /// let mut b = Tensor::<i32>::new(Some(&[2, 3, 2, 3, 2, 3]), &[3, 2]).unwrap();
-    /// let mut c = a.append_to_row(b).unwrap();
+    /// let mut c = a.append_to_row(&[&b]).unwrap();
     /// let mut expected = Tensor::<i32>::new(Some(&[1, 4, 2, 3, 1, 4, 2, 3, 1, 4, 2, 3]), &[3, 4]).unwrap();
     /// assert_eq!(c, expected);
     ///
     /// let mut a =Tensor::<i32>::new(Some(&[10, 0, 0, 20, 10, 0, 0, 20, 10, 0, 0, 20]), &[4, 3]).unwrap();
     /// let mut b = Tensor::<i32>::new(Some(&[30, 0, 0, 40, 30, 0, 0, 40, 30, 0, 0, 40]), &[4, 3]).unwrap();
-    /// let mut c = a.append_to_row(b).unwrap();
+    /// let mut c = a.append_to_row(&[&b]).unwrap();
     /// let mut expected = Tensor::<i32>::new(Some(&[10, 0, 0, 30, 0, 0, 20, 10, 0, 40, 30, 0, 0, 20, 10, 0, 40, 30, 0, 0, 20, 0, 0, 40]), &[4, 6]).unwrap();
     /// assert_eq!(c, expected);
     ///
     /// let mut a =Tensor::<i32>::new(Some(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), &[4, 3]).unwrap();
     /// let mut b = Tensor::<i32>::new(Some(&[10, 0, 0, 20, 10, 0, 0, 20, 10, 0, 0, 20]), &[4, 3]).unwrap();
-    /// let mut c = a.append_to_row(b).unwrap();
+    /// let mut c = a.append_to_row(&[&b]).unwrap();
     /// let mut expected = Tensor::<i32>::new(Some(&[0, 0, 0, 10, 0, 0, 0, 0, 0, 20, 10, 0, 0, 0, 0, 0, 20, 10, 0, 0, 0, 0, 0, 20]), &[4, 6]).unwrap();
     /// assert_eq!(c, expected);
     /// ```
