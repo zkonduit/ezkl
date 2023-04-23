@@ -34,6 +34,10 @@ pub fn dot<F: FieldExt + TensorType>(
     values: &[ValTensor<F>; 2],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    if values[0].len() != values[1].len() {
+        return Err(Box::new(TensorError::DimMismatch("dot".to_string())));
+    }
+
     let mut inputs = vec![];
     let mut assigned_len = 0;
     for (i, input) in values.iter().enumerate() {
@@ -194,6 +198,8 @@ pub fn sum_axes<F: FieldExt + TensorType>(
 
     if axes.len() == 0 {
         return Ok(a.clone());
+    } else if axes.len() == a.dims().len() {
+        return sum(config, region, values, offset);
     }
 
     let mut new_dims = vec![];
@@ -286,12 +292,14 @@ pub fn pairwise<F: FieldExt + TensorType>(
         lhs.tile(rhs.dims()[1..].iter().product::<usize>())?;
         lhs.reshape(rhs.dims())?;
     // 1D casting
-    } else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
+    } else if rhs.dims().iter().product::<usize>() == 1 {
+        rhs.reshape(&[1])?;
         rhs.tile(lhs.dims().iter().product::<usize>())?;
         rhs.reshape(lhs.dims())?;
     }
     // make 1D casting commutative
-    else if lhs.dims().len() == 1 && lhs.dims()[0] == 1 {
+    else if lhs.dims().iter().product::<usize>() == 1 {
+        lhs.reshape(&[1])?;
         lhs.tile(rhs.dims().iter().product::<usize>())?;
         lhs.reshape(rhs.dims())?;
     }
@@ -347,14 +355,7 @@ pub fn matmul<F: FieldExt + TensorType>(
     values: &[ValTensor<F>; 2],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    if values.len() != 2 {
-        return Err(Box::new(CircuitError::DimMismatch(
-            "accum matmul layout".to_string(),
-        )));
-    };
-
-    let mut a = values[0].clone();
-    let mut b = values[1].clone();
+    let (mut a, mut b) = (values[0].clone(), values[1].clone());
 
     if a.dims().len() == 1 {
         a.reshape(&[1, a.dims()[0]])?;
@@ -363,175 +364,110 @@ pub fn matmul<F: FieldExt + TensorType>(
         b.reshape(&[b.dims()[0], 1])?;
     }
 
-    // number of stacked matrices
-    let num_stacked_a = Vec::from(&a.dims()[0..a.dims().len() - 2])
+    if (values.len() != 2)
+        || (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])
+        || (a.dims()[0..a.dims().len() - 2] != b.dims()[0..a.dims().len() - 2])
+    {
+        return Err(Box::new(TensorError::DimMismatch("matmul".to_string())));
+    }
+
+    let mut dims = Vec::from(&a.dims()[0..a.dims().len() - 2]);
+    dims.push(a.dims()[a.dims().len() - 2]);
+    dims.push(b.dims()[a.dims().len() - 1]);
+    // calculate value of output
+    let mut output: Tensor<ValType<F>> = Tensor::new(None, &dims).unwrap();
+
+    let cartesian_coord = dims
         .iter()
-        .product::<usize>();
-    let num_stacked_b = Vec::from(&b.dims()[0..b.dims().len() - 2])
-        .iter()
-        .product::<usize>();
-    if num_stacked_a != num_stacked_b {
-        return Err(Box::new(CircuitError::DimMismatch(
-            "accum matmul layout".to_string(),
-        )));
-    };
+        .map(|d| 0..*d)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
 
-    let num_stacked = num_stacked_a;
-
-    // [m,n]
-    let mut a_stacked = a.clone();
-    a_stacked.reshape(&[
-        num_stacked,
-        a_stacked.dims()[a_stacked.dims().len() - 2],
-        a_stacked.dims()[a_stacked.dims().len() - 1],
-    ])?;
-    // [n,k]
-    let mut b_stacked = b.clone();
-    b_stacked.reshape(&[
-        num_stacked,
-        b_stacked.dims()[b_stacked.dims().len() - 2],
-        b_stacked.dims()[b_stacked.dims().len() - 1],
-    ])?;
-
-    let mut res = vec![];
-
-    for i in 0..num_stacked {
-        let mut a = a_stacked.get_slice(&[i..i + 1])?;
-        a.reshape(&[a.dims()[1], a.dims()[2]])?;
-        let mut b = b_stacked.get_slice(&[i..i + 1])?;
-        b.reshape(&[b.dims()[1], b.dims()[2]])?;
-
-        let original_a_dims = a.dims().to_vec();
-        let original_b_dims = b.dims().to_vec();
-
-        // [k,n]
-        b.transpose_2d()?;
-
-        // [k]
-        let num_a_repeats = b.dims()[0];
-        // [m]
-        let num_b_tiles = a.dims()[0];
-        let b_row_len = b.dims()[1];
-
-        a.repeat_rows(num_a_repeats)?;
-        b.tile(num_b_tiles)?;
-
-        let mut inputs = vec![];
-        let mut assigned_len = 0;
-        for (i, elem) in vec![a.clone(), b.clone()].iter().enumerate() {
-            let inp = {
-                let (res, len) = config.inputs[i].assign_with_duplication(
+    match region {
+        Some(_) => {
+            for coord in cartesian_coord.iter() {
+                let row = coord[0..coord.len() - 1]
+                    .iter()
+                    .map(|&d| d..(d + 1))
+                    .collect::<Vec<_>>();
+                let mut col = coord[0..coord.len()]
+                    .iter()
+                    .map(|&d| d..(d + 1))
+                    .collect::<Vec<_>>();
+                col[coord.len() - 2] = 0..b.dims()[coord.len() - 2];
+                let prod = dot(
+                    config,
                     region.as_deref_mut(),
-                    *offset,
-                    elem,
-                    &config.check_mode,
+                    &[
+                        a.get_slice(&row[0..]).unwrap(),
+                        b.get_slice(&col[0..]).unwrap(),
+                    ],
+                    offset,
                 )?;
-                assigned_len = len;
-                res.get_inner()?
-            };
-            inputs.push(inp);
-        }
 
-        // remove any repeats from the assignment
-        if num_a_repeats > 1 {
-            let dims = inputs[0].dims().to_vec();
-            inputs[0].reshape(&[dims[0], dims[1..].iter().product()]);
-            let mut rm_dup = vec![];
-            for i in 0..dims[0] {
-                rm_dup.push(inputs[0].get_slice(&[i..i + 1, 0..dims[1]]).unwrap());
-            }
-            inputs[0] = Tensor::new(Some(&rm_dup), &[rm_dup.len()])
-                .unwrap()
-                .combine()
-                .unwrap();
-        }
-
-        inputs[0].reshape(&original_a_dims);
-
-        // transpose it back to its normal shape
-        inputs[1] = inputs[1].get_slice(&[0..1]).unwrap();
-        inputs[1].reshape(&[original_b_dims[1], original_b_dims[0]]);
-        inputs[1].transpose_2d().unwrap();
-
-        // now perform matrix multiplication on the processed tensors
-        let accumulated_matmul = accumulated::matmul(&[inputs[0].clone(), inputs[1].clone()])
-            .expect("accum poly: matmul op failed");
-
-        let (output, output_assigned_len) = config.output.assign_with_duplication(
-            region.as_deref_mut(),
-            *offset,
-            &accumulated_matmul.into(),
-            &config.check_mode,
-        )?;
-
-        assert_eq!(assigned_len, output_assigned_len);
-
-        if let Some(region) = region.as_deref_mut() {
-            let mut idx_wo_duplicates = 0;
-            for i in 0..assigned_len {
-                let (x, y) = config.output.cartesian_coord(*offset + i);
-                // skip over duplicates at start of column
-                if y == 0 && i > 0 {
-                    continue;
-                }
-                if idx_wo_duplicates % b_row_len > 0 {
-                    config
-                        .selectors
-                        .get(&(BaseOp::Dot, x))
-                        .unwrap()
-                        .enable(region, y)?;
-                } else {
-                    config
-                        .selectors
-                        .get(&(BaseOp::Mult, x))
-                        .unwrap()
-                        .enable(region, y)?;
-                }
-                idx_wo_duplicates += 1;
+                output.set(&coord, prod.get_inner_tensor()?[0].clone());
             }
         }
+        None => {
+            let offset_thread = Arc::new(Mutex::new(offset.clone()));
+            let config_thread = Arc::new(Mutex::new(config.clone()));
+            output
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(flat_index, o)| {
+                    let coord = &cartesian_coord[flat_index];
+                    let row = coord[0..coord.len() - 1]
+                        .iter()
+                        .map(|&d| d..(d + 1))
+                        .collect::<Vec<_>>();
+                    let mut col = coord[0..coord.len()]
+                        .iter()
+                        .map(|&d| d..(d + 1))
+                        .collect::<Vec<_>>();
+                    col[coord.len() - 2] = 0..b.dims()[coord.len() - 2];
+                    let prod = dot(
+                        &mut config_thread.lock().unwrap(),
+                        None,
+                        &[
+                            a.get_slice(&row[0..]).unwrap(),
+                            b.get_slice(&col[0..]).unwrap(),
+                        ],
+                        &mut offset_thread.lock().unwrap(),
+                    )
+                    .unwrap();
 
-        let dims = output.dims();
-        let mut last_dims = vec![];
-
-        for d in &dims[0..dims.len() - 1] {
-            last_dims.push(0..*d);
+                    *o = prod.get_inner_tensor().unwrap()[0].clone();
+                });
         }
-        let script_len = dims.last().unwrap();
-        last_dims.push(script_len - 1..*script_len);
+    }
 
-        let mut last_elem = output
-            .get_slice(&last_dims)
-            .expect("accum poly: failed to fetch last elem");
-
-        last_elem.reshape(&[original_a_dims[0], original_b_dims[1]])?;
-
-        if matches!(&config.check_mode, CheckMode::SAFE) {
-            let safe_mm = non_accum_matmul(&inputs).map_err(|e| {
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(ValTensor::from(output.clone()).get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let safe_mm = non_accum_matmul(
+                &values
+                    .iter()
+                    .map(|x| x.get_inner().unwrap())
+                    .collect::<Vec<Tensor<_>>>(),
+            )
+            .map_err(|e| {
                 error!("{}", e);
                 halo2_proofs::plonk::Error::Synthesis
             })?;
 
             assert_eq!(
-                Into::<Tensor<i32>>::into(last_elem.get_inner()?),
+                Into::<Tensor<i32>>::into(ValTensor::from(output.clone()).get_inner()?),
                 Into::<Tensor<i32>>::into(safe_mm),
             )
-        }
-
-        *offset += assigned_len;
-
-        res.push(last_elem.get_inner_tensor()?);
+        };
     }
 
-    let mut res = Tensor::new(Some(&res), &[res.len()])?.combine()?;
-    let mut res_dims = Vec::from(&a.dims()[0..a.dims().len() - 2]);
-    res_dims.push(a.dims()[a.dims().len() - 2]);
-    res_dims.push(b.dims()[b.dims().len() - 1]);
-
-    res.reshape(&res_dims);
-
     // Now we can assign the matmul op
-    Ok(ValTensor::from(res))
+    Ok(output.into())
 }
 
 /// Affine operation accumulated layout

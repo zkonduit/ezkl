@@ -1433,7 +1433,9 @@ pub mod accumulated {
     /// let expected = Tensor::<i128>::new(Some(&[10, 12, 18, 5, 7, 10]), &[2, 1, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+    pub fn matmul<
+        T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Send + std::marker::Sync,
+    >(
         inputs: &[Tensor<T>; 2],
     ) -> Result<Tensor<T>, TensorError> {
         let (a, b) = (inputs[0].clone(), inputs[1].clone());
@@ -1450,20 +1452,31 @@ pub mod accumulated {
 
         let indices = dims.iter().map(|d| 0..*d).collect::<Vec<_>>();
 
-        let mut transcripts = vec![];
-        for coord in indices.iter().cloned().multi_cartesian_product() {
-            let row = coord[0..coord.len() - 1]
+        let cartesian_product = indices
+            .iter()
+            .cloned()
+            .multi_cartesian_product()
+            .collect::<Vec<_>>();
+        let mut transcripts = vec![Tensor::<T>::new(None, &[0])?; cartesian_product.len()];
+
+        transcripts.par_iter_mut().enumerate().for_each(|(i, t)| {
+            let row = cartesian_product[i][0..cartesian_product[i].len() - 1]
                 .iter()
                 .map(|&d| d..(d + 1))
                 .collect::<Vec<_>>();
-            let mut col = coord[0..coord.len()]
+            let mut col = cartesian_product[i][0..cartesian_product[i].len()]
                 .iter()
                 .map(|&d| d..(d + 1))
                 .collect::<Vec<_>>();
-            col[coord.len() - 2] = 0..b.dims()[coord.len() - 2];
-            let dot_transcript = dot(&[a.get_slice(&row[0..])?, b.get_slice(&col[0..])?])?;
-            transcripts.push(dot_transcript);
-        }
+            col[cartesian_product[i].len() - 2] = 0..b.dims()[cartesian_product[i].len() - 2];
+            let dot_transcript = dot(&[
+                a.get_slice(&row[0..]).unwrap(),
+                b.get_slice(&col[0..]).unwrap(),
+            ])
+            .unwrap();
+            *t = dot_transcript;
+        });
+
         let mut output = Tensor::new(Some(&transcripts), &[transcripts.len()])?.combine()?;
         output.reshape(&[dims.as_slice(), &[transcripts[0].len()]].concat());
 
