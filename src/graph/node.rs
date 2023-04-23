@@ -88,13 +88,6 @@ impl<F: FieldExt + TensorType> Node<F> {
 
         let mut opkind = new_op_from_onnx(idx, scale, public_params, node.clone(), &mut inputs)?; // parses the op name
 
-        // if the op requires 3d inputs, we need to make sure the input shape is consistent with that
-        if opkind.has_3d_input() {
-            let input_node = other_nodes.get_mut(&node.inputs[0].node).unwrap();
-            Self::format_3d_inputs(input_node)?;
-            inputs[0] = input_node.clone();
-        };
-
         // creates a rescaled op if the inputs are not homogenous
         if opkind.requires_homogenous_input_scales() {
             opkind = Self::homogenize_input_scales(opkind, inputs.clone())?;
@@ -183,48 +176,5 @@ impl<F: FieldExt + TensorType> Node<F> {
         } else {
             Ok(opkind)
         }
-    }
-
-    /// Formats 3d inputs if they have under or overspecified dims (casting 2D -> 3D and nD -> 3D)
-    fn format_3d_inputs(mut node: &mut Self) -> Result<(), Box<dyn Error>> {
-        // input_nodes come in all shapes and sizes we gotta homogenize, especially for 2D (single channel images)
-        if node.out_dims.len() == 2 {
-            node = Self::pad_channel_input_node(node)?;
-        } else if node.out_dims.len() > 3 {
-            node = Self::rm_redundant_3d_channels(node)?;
-        };
-
-        if node.out_dims.len() != 3 {
-            return Err(Box::new(GraphError::InvalidDims(
-                node.idx,
-                node.clone().opkind.as_str().to_string(),
-            )));
-        }
-        Ok(())
-    }
-
-    /// Adds an extra channel dim to nodes that need it.
-    fn pad_channel_input_node(node: &mut Self) -> Result<&mut Self, Box<dyn Error>> {
-        let mut dims = vec![1];
-        dims.append(&mut node.out_dims);
-        node.out_dims = dims;
-        Ok(node)
-    }
-
-    /// Removes excess channels for an image
-    fn rm_redundant_3d_channels(node: &mut Self) -> Result<&mut Self, Box<dyn Error>> {
-        let dims = &node.out_dims;
-        let last_dims = &dims[dims.len() - 3..];
-        let channel_dims = &dims[..dims.len() - 3];
-        for dim in channel_dims {
-            if *dim != 1 {
-                return Err(Box::new(GraphError::InvalidDims(
-                    node.idx,
-                    node.opkind.as_str().to_string(),
-                )));
-            }
-        }
-        node.out_dims = last_dims.to_vec();
-        Ok(node)
     }
 }

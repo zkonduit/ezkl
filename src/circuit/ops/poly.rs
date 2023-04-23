@@ -305,16 +305,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
         }
     }
 
-    fn has_3d_input(&self) -> bool {
-        matches!(
-            self,
-            PolyOp::Conv { .. }
-                | PolyOp::SumPool { .. }
-                | PolyOp::GlobalSumPool
-                | PolyOp::Pad { .. }
-        )
-    }
-
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
         Box::new(self.clone())
     }

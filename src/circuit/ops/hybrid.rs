@@ -2,8 +2,7 @@ use halo2_proofs::circuit::Region;
 use halo2curves::FieldExt;
 
 use crate::{
-    circuit::{layouts, utils},
-    graph::scale_to_multiplier,
+    circuit::layouts,
     tensor::{self, Tensor, TensorError, TensorType, ValTensor},
 };
 
@@ -13,10 +12,6 @@ use super::{lookup::LookupOp, Op};
 /// An enum representing the operations that can be used to express more complex operations via accumulation
 #[derive(Clone, Debug)]
 pub enum HybridOp {
-    Mean {
-        scale: usize,
-        num_inputs: usize,
-    },
     Max {
         axes: Vec<usize>,
     },
@@ -34,9 +29,6 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         match &self {
-            HybridOp::Mean { scale, .. } => {
-                Ok(tensor::ops::nonlinearities::mean(&inputs[0], *scale))
-            }
             HybridOp::Max { axes, .. } => Ok(tensor::ops::max_axes(&inputs[0], axes)?),
 
             HybridOp::MaxPool2d {
@@ -51,7 +43,6 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
 
     fn as_str(&self) -> &'static str {
         match &self {
-            HybridOp::Mean { .. } => "MEAN",
             HybridOp::Max { .. } => "MAX",
             HybridOp::MaxPool2d { .. } => "MAXPOOL2D",
             HybridOp::Min { .. } => "MIN",
@@ -66,13 +57,6 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn std::error::Error>> {
         Ok(match self {
-            HybridOp::Mean { scale, .. } => Some(layouts::mean(
-                config,
-                region,
-                values[..].try_into()?,
-                *scale,
-                offset,
-            )?),
             HybridOp::MaxPool2d {
                 padding,
                 stride,
@@ -107,22 +91,8 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
         in_scales[0]
     }
 
-    fn has_3d_input(&self) -> bool {
-        matches!(self, HybridOp::MaxPool2d { .. })
-    }
-
-    fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>> {
-        let mult = scale_to_multiplier(inputs_scale[0] - global_scale);
-        match self {
-            HybridOp::Mean {
-                scale: _,
-                num_inputs,
-            } => Box::new(HybridOp::Mean {
-                scale: mult as usize,
-                num_inputs: *num_inputs,
-            }),
-            _ => Box::new(self.clone()),
-        }
+    fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
+        Box::new(self.clone())
     }
 
     fn required_lookups(&self) -> Vec<LookupOp> {
@@ -130,9 +100,6 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
             HybridOp::Max { .. } | HybridOp::Min { .. } | HybridOp::MaxPool2d { .. } => {
                 Op::<F>::required_lookups(&LookupOp::ReLU { scale: 1 })
             }
-            HybridOp::Mean { scale, num_inputs } => Op::<F>::required_lookups(&LookupOp::Div {
-                denom: utils::F32((*scale * *num_inputs) as f32),
-            }),
         }
     }
 

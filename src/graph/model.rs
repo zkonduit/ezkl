@@ -119,15 +119,17 @@ impl<F: FieldExt + TensorType> Model<F> {
 
         let mut results: BTreeMap<&usize, Tensor<i128>> = BTreeMap::new();
         let mut max_lookup_inputs = 0;
+        let mut input_idx = 0;
         for (i, n) in nodes.iter() {
             let mut inputs = vec![];
             if n.opkind.is_input() {
-                let mut t = model_inputs[*i].clone();
+                let mut t = model_inputs[input_idx].clone();
+                input_idx += 1;
                 t.reshape(&n.out_dims);
                 inputs.push(t);
             } else {
-                trace!("executing {}: {}", i, n.opkind.as_str());
-                trace!("node: {:?}", n);
+                debug!("executing {}: {}", i, n.opkind.as_str());
+                trace!("dims: {:?}", n.out_dims);
                 for i in n.inputs.iter() {
                     match results.get(&i) {
                         Some(value) => inputs.push(value.clone()),
@@ -145,7 +147,6 @@ impl<F: FieldExt + TensorType> Model<F> {
             }
 
             let res = Op::<F>::f(&*n.opkind, &inputs)?;
-            trace!("res: {:?}", res);
             results.insert(i, res);
         }
 
@@ -169,8 +170,9 @@ impl<F: FieldExt + TensorType> Model<F> {
         let max_range = 2i128.pow(run_args.bits as u32 - 1);
         if max_lookup_inputs >= max_range {
             let recommended_bits = (max_lookup_inputs as f64).log2().ceil() as u32 + 1;
-            let recommended_scale =
-                run_args.scale as f64 - (max_lookup_inputs as f64 / max_range as f64).log2().ceil();
+            let recommended_scale = 1.0
+                + (max_lookup_inputs as f64 / max_range as f64).log2().ceil()
+                - run_args.scale as f64;
             warn!("At the selected lookup bits and fixed point scale, the largest input to a lookup table is too large to be represented (max: {}, bits: {}, scale: {}).",  max_lookup_inputs, run_args.bits, run_args.scale);
             if recommended_scale > 0.0 {
                 warn!("Either increase the lookup bits to [{}] or decrease the scale to [{}] (or both).", recommended_bits, recommended_scale);
@@ -384,7 +386,13 @@ impl<F: FieldExt + TensorType> Model<F> {
                         .map(|i| results.get(i).unwrap().clone())
                         .collect_vec();
 
-                    trace!("debug out {}: {}", idx, offset);
+                    debug!(
+                        "laying out {}: {}, offset:{}",
+                        idx,
+                        node.opkind.as_str(),
+                        offset
+                    );
+                    trace!("dims: {:?}", node.out_dims);
                     let res = config
                         .base
                         .layout(

@@ -9,7 +9,7 @@ use crate::tensor::{Tensor, TensorError, TensorType, ValTensor};
 use anyhow::Result;
 use halo2_proofs::circuit::Value;
 use halo2curves::FieldExt;
-use log::warn;
+use log::{trace, warn};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::binary::UnaryOp;
 use tract_onnx::tract_core::ops::matmul::MatMulUnary;
@@ -184,7 +184,7 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
     inputs: &mut Vec<Node<F>>,
 ) -> Result<Box<dyn crate::circuit::Op<F>>, Box<dyn std::error::Error>> {
-    println!("Loading node: {:?}", node);
+    trace!("Loading node: {:?}", node);
     Ok(match node.op().name().as_ref() {
         "Reduce<Min>" => {
             if inputs.len() != 1 {
@@ -233,25 +233,6 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
                 .collect();
 
             Box::new(PolyOp::Sum { axes })
-        }
-        "Reduce<Mean>" => {
-            if inputs.len() != 1 {
-                return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
-            };
-            let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
-            // subtract 1 from the axes to account for the batch dimension
-            let _axes: Vec<usize> = op
-                .axes
-                .clone()
-                .iter()
-                .filter(|x| **x != 0)
-                .map(|x| x - 1)
-                .collect();
-
-            Box::new(HybridOp::Mean {
-                scale: 1,
-                num_inputs: inputs[0].out_dims.iter().product::<usize>(),
-            })
         }
         // TODO: this is a hack to get around the fact that onnx replace ReLU with Max(0, x) -- we should probably implement
         "MaxUnary" => {
