@@ -38,11 +38,11 @@ pub fn dot<F: FieldExt + TensorType>(
         return Err(Box::new(TensorError::DimMismatch("dot".to_string())));
     }
 
-    if region.is_none() {
-        let res = non_accum_dot(&vec![&values[0].get_inner()?, &values[1].get_inner()?])?;
-        *offset += values[0].len();
-        return Ok(ValTensor::from(res));
-    }
+    // if region.is_none() {
+    //     let res = non_accum_dot(&vec![&values[0].get_inner()?, &values[1].get_inner()?])?;
+    //     *offset += values[0].len();
+    //     return Ok(ValTensor::from(res));
+    // }
 
     let mut inputs = vec![];
     let mut assigned_len = 0;
