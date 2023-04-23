@@ -520,7 +520,7 @@ pub fn min_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 /// let expected = Tensor::<i128>::new(
 ///     Some(&[15, 1]),
 ///     &[2, 1],
-/// ).unwrap()
+/// ).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
@@ -537,6 +537,8 @@ pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
     for i in 0..a.dims().len() {
         if !axes.contains(&i) {
             new_dims.push(a.dims()[i]);
+        } else {
+            new_dims.push(1);
         }
     }
 
@@ -1174,71 +1176,6 @@ pub mod nonlinearities {
         output
     }
 
-    /// Elementwise applies instance norm to a tensor of integers.
-    /// # Arguments
-    ///
-    /// * `a` - Tensor
-    /// * `gamma` - vector of scale values
-    /// * `beta` - vector of offset values
-    /// # Examples
-    /// ```
-    /// use ezkl_lib::tensor::Tensor;
-    /// use ezkl_lib::tensor::ops::nonlinearities::instance_norm;
-    /// let x = Tensor::<i128>::new(
-    ///     Some(&[4, 2, 8, 1, 1, 2, 2, 2, 3]),
-    ///     &[1, 3, 3],
-    /// ).unwrap();
-    ///
-    /// let gamma = Tensor::<i128>::new(
-    ///     Some(&[1]),
-    ///     &[1],
-    /// ).unwrap();
-    ///
-    /// let beta = Tensor::<i128>::new(
-    ///     Some(&[23]),
-    ///     &[1],
-    /// ).unwrap();
-    ///
-    /// let result = instance_norm([x, gamma, beta], 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[25, 23, 29, 22, 22, 23, 23, 23, 24]), &[1, 3, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn instance_norm(inputs: [Tensor<i128>; 3], epsilon: f32) -> Tensor<i128> {
-        let a = &inputs[0];
-        let gamma = &inputs[1];
-        let beta = &inputs[2];
-        // calculate value of output
-        assert!(a.len() > 1);
-        assert!(a.dims().len() == 3);
-        assert_eq!(gamma.len(), beta.len());
-        // assert num channels is same as num of parameters
-        assert_eq!(gamma.len(), a.dims()[0]);
-        let mut output = vec![];
-        for i in 0..gamma.len() {
-            let row = a.get_slice(&[i..i + 1]).unwrap();
-            let sum = sum(&row).unwrap();
-            let mean = sum.map(|x| (x) / (row.len() as i128));
-
-            // unbiased = false in pytorch definition. if it was unbiased we would divide by row.len() - 1
-            let var = (row.clone() - mean.clone())
-                .unwrap()
-                .map(|e| (e as f32) / (row.len() as f32));
-
-            let denom = var.map(|e| (e + epsilon).sqrt().round() as i128);
-            let numerator = (row - mean).unwrap() * vec![gamma[i]].into_iter().into();
-
-            let result =
-                ((numerator.unwrap() / denom).unwrap() + vec![beta[i]].into_iter().into()).unwrap();
-
-            output.push(result);
-        }
-
-        let mut output = Tensor::from(output.into_iter()).combine().unwrap();
-        output.reshape(a.dims());
-
-        output
-    }
-
     /// Elementwise applies prelu to a tensor of integers.
     /// # Arguments
     ///
@@ -1306,6 +1243,67 @@ pub mod nonlinearities {
         for (i, a_i) in a.iter().enumerate() {
             let d_inv_x = (*a_i as f32) / denom;
             output[i] = d_inv_x.round() as i128;
+        }
+        output
+    }
+
+    /// Elementwise divides a tensor with a const integer element.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `b` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::recip;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[2, 1, 2, 7, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let k = 2.0;
+    /// let result = recip(&x, k);
+    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 4, 1, 1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn recip(a: &Tensor<i128>, scale: u32) -> Tensor<i128> {
+        // calculate value of output
+        let mut output: Tensor<i128> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            let d_inv_x = (scale as f32) * (1_f32) / (*a_i as f32);
+            output[i] = d_inv_x.round() as i128;
+        }
+        output
+    }
+
+    /// Elementwise divides a tensor with a const integer element.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `b` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::recip;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[2, 1, 2, 7, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let k = 2.0;
+    /// let result = recip(&x, k);
+    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 4, 1, 1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn greater_than(a: &Tensor<i128>, b: f32) -> Tensor<i128> {
+        // calculate value of output
+        let mut output: Tensor<i128> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            output[i] = if (*a_i as f32 - b) < 0_f32 {
+                0_i128
+            } else {
+                1_i128
+            };
         }
         output
     }

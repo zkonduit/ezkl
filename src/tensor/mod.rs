@@ -1071,7 +1071,7 @@ impl<T: TensorType + Add<Output = T>> Add for Tensor<T> {
 
         if self.len() != rhs.len() {
             if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-                && rhs.dims().len() > 1
+                && rhs.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
                 assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
@@ -1083,7 +1083,7 @@ impl<T: TensorType + Add<Output = T>> Add for Tensor<T> {
                     output[i] = output[i].clone() + lhs[coord[0]].clone();
                 }
             } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-                && self.dims().len() > 1
+                && self.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
                 assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
@@ -1095,13 +1095,13 @@ impl<T: TensorType + Add<Output = T>> Add for Tensor<T> {
                 }
             }
             // casts a 1D addition
-            else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
+            else if rhs.dims().iter().product::<usize>() == 1 {
                 for i in 0..output.len() {
                     output[i] = output[i].clone() + rhs[0].clone();
                 }
             }
             // make 1D casting commutative
-            else if self.dims().len() == 1 && self.dims()[0] == 1 {
+            else if self.dims().iter().product::<usize>() == 1 {
                 output = rhs.clone();
                 for i in 0..rhs.len() {
                     output[i] = output[i].clone() + self[0].clone();
@@ -1173,7 +1173,7 @@ impl<T: TensorType + Sub<Output = T>> Sub for Tensor<T> {
 
         if self.len() != rhs.len() {
             if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-                && rhs.dims().len() > 1
+                && rhs.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
                 assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
@@ -1185,7 +1185,7 @@ impl<T: TensorType + Sub<Output = T>> Sub for Tensor<T> {
                     output[i] = lhs[coord[0]].clone() - output[i].clone();
                 }
             } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-                && self.dims().len() > 1
+                && self.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
                 assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
@@ -1197,13 +1197,13 @@ impl<T: TensorType + Sub<Output = T>> Sub for Tensor<T> {
                 }
             }
             // casts a 1D addition
-            else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
+            else if rhs.dims().iter().product::<usize>() == 1 {
                 for i in 0..output.len() {
                     output[i] = output[i].clone() - rhs[0].clone();
                 }
             }
             // make 1D casting commutative
-            else if self.dims().len() == 1 && self.dims()[0] == 1 {
+            else if self.dims().iter().product::<usize>() == 1 {
                 output = rhs.clone();
                 for i in 0..rhs.len() {
                     output[i] = self[0].clone() - output[i].clone();
@@ -1273,7 +1273,7 @@ impl<T: TensorType + Mul<Output = T>> Mul for Tensor<T> {
 
         if self.len() != rhs.len() {
             if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-                && rhs.dims().len() > 1
+                && rhs.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
                 assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
@@ -1285,7 +1285,7 @@ impl<T: TensorType + Mul<Output = T>> Mul for Tensor<T> {
                     output[i] = lhs[coord[0]].clone() * output[i].clone();
                 }
             } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-                && self.dims().len() > 1
+                && self.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
                 assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
@@ -1297,13 +1297,13 @@ impl<T: TensorType + Mul<Output = T>> Mul for Tensor<T> {
                 }
             }
             // cast 1D mul
-            else if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
+            else if rhs.dims().iter().product::<usize>() == 1 {
                 for i in 0..output.len() {
                     output[i] = output[i].clone() * rhs[0].clone();
                 }
             }
             // make 1D casting commutative
-            else if self.dims().len() == 1 && self.dims()[0] == 1 {
+            else if self.dims().iter().product::<usize>() == 1 {
                 output = rhs.clone();
                 for i in 0..rhs.len() {
                     output[i] = output[i].clone() * self[0].clone();

@@ -16,9 +16,9 @@ use crate::{
         ops::{
             accumulated, add, affine as non_accum_affine, conv as non_accum_conv,
             dot as non_accum_dot, matmul as non_accum_matmul, max_pool2d as non_accum_max_pool2d,
-            mult, nonlinearities::prelu as ref_prelu, pack as non_accum_pack,
-            rescale as ref_rescaled, scale_and_shift as ref_scale_and_shift, sub,
-            sum as non_accum_sum, sumpool as non_accum_sumpool,
+            mult, pack as non_accum_pack, rescale as ref_rescaled,
+            scale_and_shift as ref_scale_and_shift, sub, sum as non_accum_sum,
+            sumpool as non_accum_sumpool,
         },
         Tensor, TensorError, ValType,
     },
@@ -198,8 +198,6 @@ pub fn sum_axes<F: FieldExt + TensorType>(
 
     if axes.len() == 0 {
         return Ok(a.clone());
-    } else if axes.len() == a.dims().len() {
-        return sum(config, region, values, offset);
     }
 
     let mut new_dims = vec![];
@@ -232,6 +230,124 @@ pub fn sum_axes<F: FieldExt + TensorType>(
         res.set(
             coord,
             sum(
+                config,
+                region.as_deref_mut(),
+                &[a.get_slice(&sum_dims)?],
+                offset,
+            )?
+            .get_inner_tensor()?[0]
+                .clone(),
+        );
+    }
+
+    Ok(res.into())
+}
+
+/// Max accumulated layout
+pub fn max_axes<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    mut region: Option<&mut Region<F>>,
+    values: &[ValTensor<F>; 1],
+    axes: &[usize],
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // calculate value of output
+
+    let a = &values[0];
+
+    if axes.len() == 0 {
+        return Ok(a.clone());
+    }
+
+    let mut new_dims = vec![];
+    for i in 0..a.dims().len() {
+        if !axes.contains(&i) {
+            new_dims.push(a.dims()[i]);
+        } else {
+            new_dims.push(1);
+        }
+    }
+
+    let mut res = Tensor::new(None, &new_dims)?;
+
+    let cartesian_coord = new_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    for coord in cartesian_coord.iter() {
+        let mut sum_dims = vec![];
+        for i in 0..a.dims().len() {
+            if axes.contains(&i) {
+                sum_dims.push(0..a.dims()[i]);
+            } else {
+                sum_dims.push(coord[i]..coord[i] + 1);
+            }
+        }
+
+        res.set(
+            coord,
+            max(
+                config,
+                region.as_deref_mut(),
+                &[a.get_slice(&sum_dims)?],
+                offset,
+            )?
+            .get_inner_tensor()?[0]
+                .clone(),
+        );
+    }
+
+    Ok(res.into())
+}
+
+/// Min accumulated layout
+pub fn min_axes<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    mut region: Option<&mut Region<F>>,
+    values: &[ValTensor<F>; 1],
+    axes: &[usize],
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // calculate value of output
+
+    let a = &values[0];
+
+    if axes.len() == 0 {
+        return Ok(a.clone());
+    }
+
+    let mut new_dims = vec![];
+    for i in 0..a.dims().len() {
+        if !axes.contains(&i) {
+            new_dims.push(a.dims()[i]);
+        } else {
+            new_dims.push(1);
+        }
+    }
+
+    let mut res = Tensor::new(None, &new_dims)?;
+
+    let cartesian_coord = new_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    for coord in cartesian_coord.iter() {
+        let mut sum_dims = vec![];
+        for i in 0..a.dims().len() {
+            if axes.contains(&i) {
+                sum_dims.push(0..a.dims()[i]);
+            } else {
+                sum_dims.push(coord[i]..coord[i] + 1);
+            }
+        }
+
+        res.set(
+            coord,
+            min(
                 config,
                 region.as_deref_mut(),
                 &[a.get_slice(&sum_dims)?],
@@ -1208,7 +1324,7 @@ pub fn range_check<F: FieldExt + TensorType>(
     Ok(output)
 }
 
-///
+/// Layout for range check.
 pub fn nonlinearity<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
     mut region: Option<&mut Region<F>>,
@@ -1263,89 +1379,6 @@ pub fn nonlinearity<F: FieldExt + TensorType>(
 
     // constrain the calculated output to a column
     Ok(output)
-}
-
-/// PrElu layout
-pub fn prelu<F: FieldExt + TensorType>(
-    config: &mut BaseConfig<F>,
-    mut region: Option<&mut Region<F>>,
-    values: &[ValTensor<F>; 2],
-    scale: usize,
-    offset: &mut usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let mut slopes = values[1].clone();
-    if slopes.len() != 1 && slopes.len() != values[0].dims()[0] {
-        return Err(
-            "slope must be a scalar or a vector of length equal to the number of channels".into(),
-        );
-    }
-
-    let diff = (values[0].len()) / slopes.len();
-    slopes.repeat_rows(diff)?;
-    slopes.reshape(values[0].dims())?;
-
-    let relu = nonlinearity(
-        config,
-        region.as_deref_mut(),
-        &[values[0].clone()],
-        &LookupOp::ReLU { scale },
-        offset,
-    )?;
-    // -x
-    let neg_x = neg(config, region.as_deref_mut(), &[values[0].clone()], offset)?;
-    // relu(-x)
-    let relu_neg_x = nonlinearity(
-        config,
-        region.as_deref_mut(),
-        &[neg_x],
-        &LookupOp::ReLU { scale },
-        offset,
-    )?;
-    // relu(-x) * slope
-    let scaled_relu_neg_x = pairwise(
-        config,
-        region.as_deref_mut(),
-        &[relu_neg_x, slopes],
-        offset,
-        BaseOp::Mult,
-    )?;
-
-    let prelu = pairwise(
-        config,
-        region,
-        &[relu, scaled_relu_neg_x],
-        offset,
-        BaseOp::Sub,
-    )?;
-
-    if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
-        // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(prelu.get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
-        if is_assigned {
-            let mut int_input: Tensor<i128> = values[0].get_int_evals()?.into_iter().into();
-            int_input.reshape(values[0].dims());
-            let ref_prelu = ref_prelu(
-                &int_input,
-                scale,
-                &values[1]
-                    .get_int_evals()?
-                    .into_iter()
-                    .map(|e| e as f32)
-                    .collect_vec(),
-            )
-            .map(|e| e as i32);
-
-            assert_eq!(
-                Into::<Tensor<i32>>::into(prelu.get_inner()?),
-                Into::<Tensor<i32>>::into(ref_prelu),
-            )
-        }
-    };
-
-    Ok(prelu)
 }
 
 /// mean function layout

@@ -36,7 +36,9 @@ pub enum PolyOp<F: FieldExt + TensorType> {
     Reshape(Vec<usize>),
     Flatten(Vec<usize>),
     Pad(usize, usize),
-    Sum(Vec<usize>),
+    Sum {
+        axes: Vec<usize>,
+    },
     Pow(u32),
     Pack(u32, u32),
     GlobalSumPool,
@@ -141,7 +143,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
                 }
                 inputs[0].pow(*u)
             }
-            PolyOp::Sum(axes) => {
+            PolyOp::Sum { axes } => {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("sum inputs".to_string()));
                 }
@@ -163,7 +165,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
 
         Ok(Some(match self {
             PolyOp::Dot => layouts::dot(config, region, values[..].try_into()?, offset)?,
-            PolyOp::Sum(axes) => {
+            PolyOp::Sum { axes } => {
                 layouts::sum_axes(config, region, values[..].try_into()?, axes, offset)?
             }
             PolyOp::Matmul { a } => {

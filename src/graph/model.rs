@@ -10,6 +10,7 @@ use crate::commands::{Cli, Commands};
 use crate::graph::scale_to_multiplier;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor};
+use log::warn;
 use serde::Deserialize;
 use serde::Serialize;
 use tract_onnx::prelude::DatumExt;
@@ -117,6 +118,7 @@ impl<F: FieldExt + TensorType> Model<F> {
             Self::load_onnx_model(model_path, run_args.scale, run_args.public_params)?;
 
         let mut results: BTreeMap<&usize, Tensor<i128>> = BTreeMap::new();
+        let mut max_lookup_inputs = 0;
         for (i, n) in nodes.iter() {
             let mut inputs = vec![];
             if n.opkind.is_input() {
@@ -125,6 +127,7 @@ impl<F: FieldExt + TensorType> Model<F> {
                 inputs.push(t);
             } else {
                 trace!("executing {}: {}", i, n.opkind.as_str());
+                trace!("node: {:?}", n);
                 for i in n.inputs.iter() {
                     match results.get(&i) {
                         Some(value) => inputs.push(value.clone()),
@@ -133,7 +136,16 @@ impl<F: FieldExt + TensorType> Model<F> {
                 }
             };
 
+            if n.opkind.required_lookups().len() > 0 {
+                let mut max = 0;
+                for i in &inputs {
+                    max = max.max(i.iter().map(|x| x.abs()).max().unwrap());
+                }
+                max_lookup_inputs = max_lookup_inputs.max(max);
+            }
+
             let res = Op::<F>::f(&*n.opkind, &inputs)?;
+            trace!("res: {:?}", res);
             results.insert(i, res);
         }
 
@@ -153,6 +165,37 @@ impl<F: FieldExt + TensorType> Model<F> {
                     .map(|x| (x as f32) / scale)
             })
             .collect_vec();
+
+        let max_range = 2i128.pow(run_args.bits as u32 - 1);
+        if max_lookup_inputs >= max_range {
+            let recommended_bits = (max_lookup_inputs as f64).log2().ceil() as u32 + 1;
+            let recommended_scale =
+                run_args.scale as f64 - (max_lookup_inputs as f64 / max_range as f64).log2().ceil();
+            warn!("At the selected lookup bits and fixed point scale, the largest input to a lookup table is too large to be represented (max: {}, bits: {}, scale: {}).",  max_lookup_inputs, run_args.bits, run_args.scale);
+            if recommended_scale > 0.0 {
+                warn!("Either increase the lookup bits to [{}] or decrease the scale to [{}] (or both).", recommended_bits, recommended_scale);
+                warn!("Remember to increase the circuit logrows if you increase the bits.");
+                warn!("Remember to re-run the forward pass with the new values.");
+            } else if recommended_bits <= 27 {
+                warn!("Increase the lookup bits to [{}]. The current scale cannot be decreased enough to fit the largest lookup input. ", recommended_bits);
+                warn!("Remember to increase the circuit logrows if you increase the bits.");
+                warn!("Remember to re-run the forward pass with the new values.");
+            } else {
+                let max_range = 2i128.pow(27_u32 - 1);
+                let recommended_scale = run_args.scale as f64
+                    - (max_lookup_inputs as f64 / max_range as f64).log2().ceil();
+                if recommended_scale > 0.0 {
+                    warn!(
+                        "Increase the bits to [27] and the scale to [{}]",
+                        recommended_scale
+                    );
+                    warn!("Remember to increase the circuit logrows if you increase the bits.");
+                    warn!("Remember to re-run the forward pass with the new values.");
+                } else {
+                    warn!("No possible value of bits or scale can accomodate this value.")
+                }
+            }
+        }
 
         Ok(outputs)
     }
@@ -267,7 +310,7 @@ impl<F: FieldExt + TensorType> Model<F> {
         let lookup_ops: BTreeMap<&usize, &Node<F>> = self
             .nodes
             .iter()
-            .filter(|(_, n)| n.opkind.required_lookup().is_some())
+            .filter(|(_, n)| n.opkind.required_lookups().len() > 0)
             .collect();
 
         for node in lookup_ops.values() {
@@ -298,17 +341,9 @@ impl<F: FieldExt + TensorType> Model<F> {
         let input = &vars.advices[0];
         let output = &vars.advices[1];
 
-        let op = match &node.opkind.required_lookup() {
-            Some(nl) => nl.clone(),
-            None => {
-                return Err(Box::new(GraphError::WrongMethod(
-                    node.idx,
-                    node.opkind.as_str().to_string(),
-                )));
-            }
-        };
-
-        config.configure_lookup(meta, input, output, self.run_args.bits, &op)?;
+        for op in node.opkind.required_lookups() {
+            config.configure_lookup(meta, input, output, self.run_args.bits, &op)?;
+        }
 
         Ok(())
     }
@@ -349,7 +384,7 @@ impl<F: FieldExt + TensorType> Model<F> {
                         .map(|i| results.get(i).unwrap().clone())
                         .collect_vec();
 
-                    trace!("laying out {}: {}", idx, offset);
+                    trace!("debug out {}: {}", idx, offset);
                     let res = config
                         .base
                         .layout(
@@ -465,7 +500,7 @@ impl<F: FieldExt + TensorType> Model<F> {
 
         let mut offset: usize = 0;
         for (idx, node) in self.nodes.iter() {
-            trace!("dummy layout {}: {}", idx, node.opkind.as_str());
+            debug!("dummy layout {}: {}", idx, node.opkind.as_str());
 
             let values: Vec<ValTensor<F>> = node
                 .inputs

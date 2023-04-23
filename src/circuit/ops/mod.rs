@@ -51,8 +51,8 @@ pub trait Op<F: FieldExt + TensorType>: std::fmt::Debug + Send + Sync {
     }
 
     ///
-    fn required_lookup(&self) -> Option<LookupOp> {
-        None
+    fn required_lookups(&self) -> Vec<LookupOp> {
+        vec![]
     }
 
     ///
