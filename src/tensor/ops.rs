@@ -1247,7 +1247,7 @@ pub mod nonlinearities {
         output
     }
 
-    /// Elementwise divides a tensor with a const integer element.
+    /// Elementwise inverse.
     /// # Arguments
     ///
     /// * `a` - Tensor
@@ -1260,9 +1260,9 @@ pub mod nonlinearities {
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let k = 2.0;
+    /// let k = 2_u32;
     /// let result = recip(&x, k);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 4, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[1, 2, 1, 0, 2, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn recip(a: &Tensor<i128>, scale: u32) -> Tensor<i128> {
@@ -1276,7 +1276,7 @@ pub mod nonlinearities {
         output
     }
 
-    /// Elementwise divides a tensor with a const integer element.
+    /// Elementwise greater than
     /// # Arguments
     ///
     /// * `a` - Tensor
@@ -1284,14 +1284,14 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl_lib::tensor::Tensor;
-    /// use ezkl_lib::tensor::ops::nonlinearities::recip;
+    /// use ezkl_lib::tensor::ops::nonlinearities::greater_than;
     /// let x = Tensor::<i128>::new(
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let k = 2.0;
-    /// let result = recip(&x, k);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 4, 1, 1]), &[2, 3]).unwrap();
+    /// let result = greater_than(&x, k);
+    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 1, 0, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn greater_than(a: &Tensor<i128>, b: f32) -> Tensor<i128> {
@@ -1299,7 +1299,7 @@ pub mod nonlinearities {
         let mut output: Tensor<i128> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
-            output[i] = if (*a_i as f32 - b) < 0_f32 {
+            output[i] = if (*a_i as f32 - b) <= 0_f32 {
                 0_i128
             } else {
                 1_i128
