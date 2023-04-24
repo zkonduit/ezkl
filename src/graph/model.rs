@@ -33,6 +33,7 @@ use log::{debug, info, trace};
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
+use std::sync::Arc;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::Framework;
@@ -54,9 +55,10 @@ pub enum Mode {
 /// A circuit configuration for the entirety of a model loaded from an Onnx file.
 #[derive(Clone, Debug)]
 pub struct ModelConfig<F: FieldExt + TensorType> {
-    base: PolyConfig<F>,
+    /// The base configuration for the circuit
+    pub base: PolyConfig<F>,
     /// The model struct
-    pub model: Model<F>,
+    pub model: Arc<Model<F>>,
     /// A wrapper for holding all columns that will be assigned to by the model
     pub vars: ModelVars<F>,
 }
@@ -298,7 +300,7 @@ impl<F: FieldExt + TensorType> Model<F> {
         &self,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-    ) -> Result<ModelConfig<F>, Box<dyn Error>> {
+    ) -> Result<PolyConfig<F>, Box<dyn Error>> {
         info!("configuring model");
 
         let mut base_gate = PolyConfig::configure(
@@ -319,11 +321,7 @@ impl<F: FieldExt + TensorType> Model<F> {
             self.conf_lookup(&mut base_gate, node, meta, vars)?;
         }
 
-        Ok(ModelConfig {
-            base: base_gate,
-            model: self.clone(),
-            vars: vars.clone(),
-        })
+        Ok(base_gate)
     }
 
     /// Configures a lookup table based operation. These correspond to operations that are represented in
@@ -375,24 +373,19 @@ impl<F: FieldExt + TensorType> Model<F> {
 
         config.base.layout_tables(layouter)?;
 
-        layouter.assign_region(
-            || "model",
-            |mut region| {
-                let mut offset: usize = 0;
-                for (idx, node) in self.nodes.iter() {
-                    let values: Vec<ValTensor<F>> = node
-                        .inputs
-                        .iter()
-                        .map(|i| results.get(i).unwrap().clone())
-                        .collect_vec();
+        for (idx, node) in self.nodes.iter() {
+            let values: Vec<ValTensor<F>> = node
+                .inputs
+                .iter()
+                .map(|i| results.get(i).unwrap().clone())
+                .collect_vec();
 
-                    debug!(
-                        "laying out {}: {}, offset:{}",
-                        idx,
-                        node.opkind.as_str(),
-                        offset
-                    );
-                    trace!("dims: {:?}", node.out_dims);
+            trace!("dims: {:?}", node.out_dims);
+            layouter.assign_region(
+                || node.opkind.as_str(),
+                |mut region| {
+                    debug!("laying out {}: {}", idx, node.opkind.as_str(),);
+                    let mut offset: usize = 0;
                     let res = config
                         .base
                         .layout(
@@ -418,8 +411,14 @@ impl<F: FieldExt + TensorType> Model<F> {
                             );
                         }
                     }
-                }
+                    Ok(())
+                },
+            )?;
+        }
 
+        layouter.assign_region(
+            || "output_ops",
+            |mut region| {
                 let output_nodes = self.outputs.iter();
                 info!(
                     "model outputs are nodes: {:?}",
@@ -429,6 +428,7 @@ impl<F: FieldExt + TensorType> Model<F> {
                     .map(|o| results.get(o).unwrap().clone())
                     .collect_vec();
 
+                let mut offset: usize = 0;
                 // pack outputs if need be
                 if self.run_args.pack_base > 1 {
                     for i in 0..outputs.len() {
@@ -474,10 +474,10 @@ impl<F: FieldExt + TensorType> Model<F> {
                         })
                         .collect_vec();
                 }
-
                 Ok(())
             },
         )?;
+
         info!("computing...");
         Ok(())
     }

@@ -14,10 +14,9 @@ use crate::{
     fieldutils::i128_to_felt,
     tensor::{
         ops::{
-            accumulated, add, affine as non_accum_affine, conv as non_accum_conv,
-            dot as non_accum_dot, matmul as non_accum_matmul, max_pool2d as non_accum_max_pool2d,
-            mult, pack as non_accum_pack, rescale as ref_rescaled,
-            scale_and_shift as ref_scale_and_shift, sub, sum as non_accum_sum,
+            accumulated, add, conv as non_accum_conv, dot as non_accum_dot,
+            matmul as non_accum_matmul, max_pool2d as non_accum_max_pool2d, mult,
+            pack as non_accum_pack, rescale as ref_rescaled, sub, sum as non_accum_sum,
             sumpool as non_accum_sumpool,
         },
         Tensor, TensorError, ValType,
@@ -559,6 +558,7 @@ pub fn matmul<F: FieldExt + TensorType>(
                     )
                     .unwrap();
 
+                    // low memory cost (1D tensor)
                     *o = prod.get_inner_tensor().unwrap()[0].clone();
                 });
             *offset += offset_thread.lock().unwrap().clone();
@@ -592,54 +592,6 @@ pub fn matmul<F: FieldExt + TensorType>(
 
     // Now we can assign the matmul op
     Ok(output.into())
-}
-
-/// Affine operation accumulated layout
-pub fn affine<F: FieldExt + TensorType>(
-    config: &mut BaseConfig<F>,
-    region: Option<&mut Region<F>>,
-    values: &[ValTensor<F>; 3],
-    offset: &mut usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let (mut input, kernel, mut bias) = (values[0].clone(), values[1].clone(), values[2].clone());
-
-    if input.dims().len() == 1 {
-        input.reshape(&[input.len(), 1])?;
-    }
-    if bias.dims().len() == 1 {
-        bias.reshape(&[bias.len(), 1])?;
-    }
-    input.pad_row_ones()?;
-    let params = kernel.append_to_row(&bias)?;
-
-    let mut last_elem = matmul(config, region, &[params, input], offset)?;
-    last_elem.flatten();
-
-    if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
-        // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(last_elem.clone().get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
-        if is_assigned {
-            let safe_affine = non_accum_affine(
-                &values
-                    .iter()
-                    .map(|x| x.get_inner().unwrap())
-                    .collect::<Vec<Tensor<_>>>(),
-            )
-            .map_err(|e| {
-                error!("{}", e);
-                halo2_proofs::plonk::Error::Synthesis
-            })?;
-
-            assert_eq!(
-                Into::<Tensor<i32>>::into(last_elem.clone().get_inner()?),
-                Into::<Tensor<i32>>::into(safe_affine),
-            )
-        }
-    }
-    Ok(last_elem)
 }
 
 /// Negation operation accumulated layout
@@ -976,118 +928,6 @@ pub fn conv<F: FieldExt + TensorType + std::marker::Send + std::marker::Sync>(
     Ok(res)
 }
 
-/// Convolution accumulated layout
-pub fn conv_toeplitz<F: FieldExt + TensorType>(
-    config: &mut BaseConfig<F>,
-    region: Option<&mut Region<F>>,
-    values: &[ValTensor<F>],
-    padding: (usize, usize),
-    stride: (usize, usize),
-    offset: &mut usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let has_bias = values.len() == 3;
-    let (image, mut kernel) = (values[0].clone(), values[1].clone());
-
-    if (image.dims().len() != 3)
-        || (kernel.dims().len() != 4)
-        || ((image.dims()[0] != kernel.dims()[1]) && (kernel.dims()[1] != 1))
-    {
-        return Err(Box::new(TensorError::DimMismatch("conv".to_string())));
-    }
-
-    if kernel.dims()[1] == 1 && kernel.dims()[1] != image.dims()[0] {
-        kernel.repeat_rows(image.dims()[0])?;
-        kernel.reshape(&[
-            kernel.dims()[0],
-            image.dims()[0],
-            kernel.dims()[2],
-            kernel.dims()[3],
-        ])?;
-    }
-
-    let image_dims = image.dims();
-    let kernel_dims = kernel.dims();
-
-    let (output_channels, _input_channels, kernel_height, kernel_width) = (
-        kernel_dims[0],
-        kernel_dims[1],
-        kernel_dims[2],
-        kernel_dims[3],
-    );
-
-    let (image_height, image_width) = (image_dims[1], image_dims[2]);
-    let padded_height = image_height + 2 * padding.0;
-    let padded_width = image_width + 2 * padding.1;
-
-    let vert_slides = (padded_height - kernel_height) / stride.0 + 1;
-    let horz_slides = (padded_width - kernel_width) / stride.1 + 1;
-
-    let mut padded_image = image.clone();
-    padded_image.pad(padding)?;
-    padded_image.flatten();
-    padded_image.reshape(&[padded_image.dims()[0], 1])?;
-
-    let mut expanded_kernel = kernel.clone();
-
-    expanded_kernel.multi_ch_blocked_toeplitz(
-        vert_slides,
-        padded_height,
-        horz_slides,
-        padded_width,
-        stride.0,
-        stride.1,
-    )?;
-
-    let mut res = if has_bias {
-        let mut tiled_bias = values[2].clone();
-        if (tiled_bias.dims().len() != 1) || (tiled_bias.dims()[0] != kernel.dims()[0]) {
-            return Err(Box::new(TensorError::DimMismatch("conv bias".to_string())));
-        }
-        tiled_bias.repeat_rows(vert_slides * horz_slides)?;
-        tiled_bias.flatten();
-        tiled_bias.reshape(&[tiled_bias.dims()[0], 1])?;
-
-        affine(
-            config,
-            region,
-            &[padded_image, expanded_kernel, tiled_bias],
-            offset,
-        )?
-    } else {
-        matmul(config, region, &[expanded_kernel, padded_image], offset)?
-    };
-
-    res.reshape(&[output_channels, vert_slides, horz_slides])?;
-
-    if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
-        // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(res.clone().get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
-        if is_assigned {
-            let safe_conv = non_accum_conv(
-                &values
-                    .iter()
-                    .map(|x| x.get_inner().unwrap())
-                    .collect::<Vec<Tensor<_>>>(),
-                padding,
-                stride,
-            )
-            .map_err(|e| {
-                error!("{}", e);
-                halo2_proofs::plonk::Error::Synthesis
-            })?;
-
-            assert_eq!(
-                Into::<Tensor<i32>>::into(res.get_inner()?),
-                Into::<Tensor<i32>>::into(safe_conv),
-            )
-        }
-    }
-
-    Ok(res)
-}
 /// Power accumulated layout
 pub fn pow<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,
@@ -1255,50 +1095,6 @@ pub fn identity<F: FieldExt + TensorType>(
     *offset += output.len();
 
     Ok(output)
-}
-
-/// Scale and shift accumulated layout
-pub fn scale_and_shift<F: FieldExt + TensorType>(
-    config: &mut BaseConfig<F>,
-    mut region: Option<&mut Region<F>>,
-    values: &[ValTensor<F>; 3],
-    offset: &mut usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let (input, kernel, bias) = (values[0].clone(), values[1].clone(), values[2].clone());
-    let prod = pairwise(
-        config,
-        region.as_deref_mut(),
-        &[input, kernel],
-        offset,
-        BaseOp::Mult,
-    )?;
-    let res = pairwise(config, region, &[prod, bias], offset, BaseOp::Add)?;
-
-    if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
-        // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(res.get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
-        if is_assigned {
-            let ref_scale_and_shift = ref_scale_and_shift(
-                &values
-                    .iter()
-                    .map(|x| x.get_inner().unwrap())
-                    .collect::<Vec<Tensor<_>>>(),
-            )
-            .map_err(|e| {
-                error!("{}", e);
-                halo2_proofs::plonk::Error::Synthesis
-            })?;
-
-            assert_eq!(
-                Into::<Tensor<i32>>::into(res.get_inner()?),
-                Into::<Tensor<i32>>::into(ref_scale_and_shift),
-            )
-        }
-    };
-    Ok(res)
 }
 
 /// Layout for range check.
