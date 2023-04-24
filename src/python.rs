@@ -31,8 +31,33 @@ use tabled::Table;
 //         .render(args.logrows, &circuit, &root)?;
 // }
 
-// Table
 
+/// pyclass containing the struct used for run_args
+#[pyclass]
+struct PyRunArgs {
+    #[pyo3(get, set)]
+    pub tolerance: usize,
+    #[pyo3(get, set)]
+    pub scale: u32,
+    #[pyo3(get, set)]
+    pub bits: usize,
+    #[pyo3(get, set)]
+    pub logrows: u32,
+    #[pyo3(get, set)]
+    pub public_inputs: bool,
+    #[pyo3(get, set)]
+    pub public_outputs: bool,
+    #[pyo3(get, set)]
+    pub public_params: bool,
+    #[pyo3(get, set)]
+    pub pack_base: u32,
+    #[pyo3(get, set)]
+    pub range_check: CheckMode,
+}
+
+
+
+/// Displays the table as a string in python
 #[pyfunction]
 fn table(model: String) -> Result<String, PyErr> {
     // use default values to initialize model
@@ -63,6 +88,7 @@ fn table(model: String) -> Result<String, PyErr> {
     }
 }
 
+/// generates the srs
 #[pyfunction]
 fn gen_srs(params_path: PathBuf, logrows: u32) -> PyResult<()> {
     let run_args = RunArgs {
@@ -81,6 +107,7 @@ fn gen_srs(params_path: PathBuf, logrows: u32) -> PyResult<()> {
     Ok(())
 }
 
+/// runs the forward pass operation
 #[pyfunction(signature = (
     data,
     model,
@@ -162,6 +189,7 @@ fn forward(
     }
 }
 
+/// mocks the prover
 #[pyfunction(signature = (
     data,
     model,
