@@ -340,7 +340,7 @@ mod sum {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Sum),
+                                Box::new(PolyOp::Sum { axes: vec![0] }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -408,7 +408,7 @@ mod sum_col_overflow {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Sum),
+                                Box::new(PolyOp::Sum { axes: vec![0] }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1410,7 +1410,7 @@ mod rescaled {
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(Rescaled {
-                                    inner: Box::new(PolyOp::Sum),
+                                    inner: Box::new(PolyOp::Sum { axes: vec![0] }),
                                     scale: vec![(0, 5)],
                                 }),
                             )

@@ -2,7 +2,7 @@ use std::error::Error;
 
 use halo2_proofs::circuit::Region;
 use halo2curves::FieldExt;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor};
 
@@ -41,18 +41,13 @@ pub trait Op<F: FieldExt + TensorType>: std::fmt::Debug + Send + Sync {
     }
 
     ///
-    fn has_3d_input(&self) -> bool {
-        false
-    }
-
-    ///
     fn requires_homogenous_input_scales(&self) -> bool {
         false
     }
 
     ///
-    fn required_lookup(&self) -> Option<LookupOp> {
-        None
+    fn required_lookups(&self) -> Vec<LookupOp> {
+        vec![]
     }
 
     ///
@@ -74,7 +69,7 @@ impl<F: FieldExt + TensorType> Clone for Box<dyn Op<F>> {
 }
 
 ///
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Input;
 
 impl<F: FieldExt + TensorType> Op<F> for Input {

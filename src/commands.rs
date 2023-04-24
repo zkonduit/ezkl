@@ -59,18 +59,21 @@ pub struct RunArgs {
     #[arg(short = 'K', long, default_value = "17")]
     pub logrows: u32,
     /// Flags whether inputs are public
-    #[arg(long, default_value = "false")]
+    #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
     pub public_inputs: bool,
     /// Flags whether outputs are public
     #[arg(long, default_value = "true", action = clap::ArgAction::Set)]
     pub public_outputs: bool,
     /// Flags whether params are public
-    #[arg(long, default_value = "false")]
+    #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
     pub public_params: bool,
     /// Base used to pack the public-inputs to the circuit. (value > 1) to pack instances as a single int.
     /// Useful when verifying on the EVM. Note that this will often break for very long inputs. Use with caution, still experimental.
     #[arg(long, default_value = "1")]
     pub pack_base: u32,
+    /// the number of constraints the circuit might use. If not specified, this will be calculated using a 'dummy layout' pass.
+    #[arg(long)]
+    pub allocated_constraints: Option<usize>,
     /// run sanity checks during calculations (safe or unsafe)
     #[arg(long, default_value = "safe")]
     pub check_mode: CheckMode,

@@ -9,11 +9,11 @@ use crate::tensor::{Tensor, TensorError, TensorType, ValTensor};
 use anyhow::Result;
 use halo2_proofs::circuit::Value;
 use halo2curves::FieldExt;
-use log::warn;
+use log::{trace, warn};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::binary::UnaryOp;
 use tract_onnx::tract_core::ops::matmul::MatMulUnary;
-use tract_onnx::tract_core::ops::nn::LeakyRelu;
+use tract_onnx::tract_core::ops::nn::{LeakyRelu, Reduce};
 use tract_onnx::tract_hir::internal::AxisOp;
 use tract_onnx::tract_hir::ops::cnn::ConvUnary;
 use tract_onnx::tract_hir::ops::element_wise::ElementWiseOp;
@@ -140,6 +140,39 @@ fn load_axis_op(
             return Err(Box::new(GraphError::OpMismatch(idx, name)));
         }
     };
+
+    Ok(op.clone())
+}
+
+/// Extracts an axis op from an onnx node.
+fn load_reduce_op(
+    op: &dyn tract_onnx::prelude::Op,
+    idx: usize,
+    name: String,
+) -> Result<Reduce, Box<dyn std::error::Error>> {
+    // Extract the slope layer hyperparams
+    let op: &Reduce = match op.downcast_ref::<Reduce>() {
+        Some(b) => b,
+        None => {
+            return Err(Box::new(GraphError::OpMismatch(idx, name)));
+        }
+    };
+    Ok(op.clone())
+}
+
+/// Extracts an axis op from an onnx node.
+fn load_eltwise_op(
+    op: &dyn tract_onnx::prelude::Op,
+    idx: usize,
+    name: String,
+) -> Result<ElementWiseOp, Box<dyn std::error::Error>> {
+    // Extract the slope layer hyperparams
+    let op: &ElementWiseOp = match op.downcast_ref::<ElementWiseOp>() {
+        Some(b) => b,
+        None => {
+            return Err(Box::new(GraphError::OpMismatch(idx, name)));
+        }
+    };
     Ok(op.clone())
 }
 
@@ -151,15 +184,61 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
     inputs: &mut Vec<Node<F>>,
 ) -> Result<Box<dyn crate::circuit::Op<F>>, Box<dyn std::error::Error>> {
+    trace!("Loading node: {:?}", node);
     Ok(match node.op().name().as_ref() {
-        "Reduce<Min>" => Box::new(HybridOp::Min),
-        "Reduce<Max>" => Box::new(HybridOp::Max),
+        "Reduce<Min>" => {
+            if inputs.len() != 1 {
+                return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
+            };
+            let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
+            // subtract 1 from the axes to account for the batch dimension
+            let axes = op
+                .axes
+                .clone()
+                .iter()
+                .filter(|x| **x != 0)
+                .map(|x| x - 1)
+                .collect();
+
+            Box::new(HybridOp::Min { axes })
+        }
+        "Reduce<Max>" => {
+            if inputs.len() != 1 {
+                return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
+            };
+            let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
+            // subtract 1 from the axes to account for the batch dimension
+            let axes = op
+                .axes
+                .clone()
+                .iter()
+                .filter(|x| **x != 0)
+                .map(|x| x - 1)
+                .collect();
+
+            Box::new(HybridOp::Max { axes })
+        }
+        "Reduce<Sum>" => {
+            if inputs.len() != 1 {
+                return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
+            };
+            let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
+            // subtract 1 from the axes to account for the batch dimension
+            let axes = op
+                .axes
+                .clone()
+                .iter()
+                .filter(|x| **x != 0)
+                .map(|x| x - 1)
+                .collect();
+
+            Box::new(PolyOp::Sum { axes })
+        }
         // TODO: this is a hack to get around the fact that onnx replace ReLU with Max(0, x) -- we should probably implement
         "MaxUnary" => {
             // Extract the slope layer hyperparams
             let max_op = load_unary_op(node.op(), idx, node.op().name().to_string())?;
 
-            // this is actually better represented as a DIV op
             if max_op.a.shape().into_iter().product::<usize>() == 1
                 && max_op.a.as_slice::<f32>()?.to_vec()[0] == 0.0
             {
@@ -167,24 +246,21 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
                     scale: inputs[0].out_scale as usize,
                 })
             } else {
-                let matrix = extract_tensor_value(max_op.a.clone(), scale, public_params)?;
-                Box::new(HybridOp::EltWiseMax { a: Some(matrix) })
+                todo!()
             }
         }
         "Prelu" => {
             unreachable!("Prelu should be converted to a more complex format in Onnx");
         }
+        "Recip" => {
+            // Extract the slope layer hyperparams
+            let _recip = load_eltwise_op(node.op(), idx, node.op().name().to_string())?;
+            Box::new(LookupOp::Recip { scale: 1 })
+        }
+
         "LeakyRelu" => {
             // Extract the slope layer hyperparams
-            let leaky_op: &ElementWiseOp = match node.op().downcast_ref::<ElementWiseOp>() {
-                Some(b) => b,
-                None => {
-                    return Err(Box::new(GraphError::OpMismatch(
-                        idx,
-                        "leaky relu".to_string(),
-                    )));
-                }
-            };
+            let leaky_op = load_eltwise_op(node.op(), idx, node.op().name().to_string())?;
 
             let leaky_op: &LeakyRelu = match leaky_op.0.downcast_ref::<LeakyRelu>() {
                 Some(b) => b,
@@ -211,13 +287,19 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
         "Sub" => Box::new(PolyOp::Sub),
         "Mul" => Box::new(PolyOp::Mult { a: None }),
         "Gemm" => Box::new(PolyOp::Affine),
-        "Greater" => Box::new(HybridOp::Greater { a: None }),
+        "Greater" => {
+            todo!()
+        }
         "GreaterUnary" => {
             // Extract the slope layer hyperparams
             let greater = load_unary_op(node.op(), idx, node.op().name().to_string())?;
-            let matrix = extract_tensor_value(greater.a.clone(), scale, public_params)?;
-
-            Box::new(HybridOp::Greater { a: Some(matrix) })
+            if greater.a.len() == 1 {
+                Box::new(LookupOp::GreaterThan {
+                    a: crate::circuit::utils::F32(greater.a.as_slice::<f32>()?[0]),
+                })
+            } else {
+                todo!()
+            }
         }
         "MatMulUnary" => {
             // Extract the slope layer hyperparams
@@ -247,7 +329,7 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
 
             // this is actually better represented as a DIV op
             if mul_op.a.shape().into_iter().product::<usize>() == 1
-                && mul_op.a.as_slice::<f32>()?.to_vec()[0] < 1.0
+                && mul_op.a.as_slice::<f32>()?.to_vec()[0] < 0.1
             {
                 let denom = 1.0 / mul_op.a.as_slice::<f32>()?.to_vec()[0];
                 Box::new(LookupOp::Div {
@@ -297,17 +379,7 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
             })
         }
         "Dot" => Box::new(PolyOp::Dot),
-        "Reduce<Sum>" => {
-            if inputs.len() != 1 {
-                return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
-            };
 
-            Box::new(PolyOp::Sum)
-        }
-        "Reduce<Mean>" => Box::new(HybridOp::Mean {
-            scale: 1,
-            num_inputs: inputs[0].out_dims.iter().product::<usize>(),
-        }),
         "Square" => Box::new(PolyOp::Pow(2)),
         "ConvUnary" => {
             let conv_node: &ConvUnary = match node.op().downcast_ref::<ConvUnary>() {

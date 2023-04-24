@@ -1,10 +1,9 @@
 use super::{ops::pad, *};
 use halo2_proofs::{arithmetic::Field, plonk::Instance};
-use log::warn;
 
 #[derive(Debug, Clone)]
 ///
-pub enum ValType<F: FieldExt + TensorType> {
+pub enum ValType<F: FieldExt + TensorType + std::marker::Send + std::marker::Sync> {
     /// value
     Value(Value<F>),
     /// assigned  value
@@ -256,7 +255,6 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
 
     /// Fetches the inner tensor as a [Tensor<Value<F>>]
     pub fn get_inner_tensor(&self) -> Result<Tensor<ValType<F>>, TensorError> {
-        warn!("using 'get_inner' in constraints can create soundness issues.");
         Ok(match self {
             ValTensor::Value { inner: v, .. } => v.clone(),
             ValTensor::Instance { .. } => return Err(TensorError::WrongMethod),
@@ -265,7 +263,6 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
 
     /// Fetches the inner tensor as a [Tensor<Value<F>>]
     pub fn get_inner(&self) -> Result<Tensor<Value<F>>, TensorError> {
-        warn!("using 'get_inner' in constraints can create soundness issues.");
         Ok(match self {
             ValTensor::Value { inner: v, .. } => v.map(|x| match x {
                 ValType::Value(v) => v,
@@ -452,10 +449,10 @@ impl<F: FieldExt + TensorType> ValTensor<F> {
     }
 
     /// Pads each column
-    pub fn append_to_row(&self, b: ValTensor<F>) -> Result<ValTensor<F>, TensorError> {
+    pub fn append_to_row(&self, b: &ValTensor<F>) -> Result<ValTensor<F>, TensorError> {
         match (self, b) {
             (ValTensor::Value { inner: v, .. }, ValTensor::Value { inner: v2, .. }) => {
-                Ok(v.append_to_row(v2)?.into())
+                Ok(v.append_to_row(&[v2])?.into())
             }
             _ => Err(TensorError::WrongMethod),
         }

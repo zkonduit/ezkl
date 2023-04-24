@@ -45,6 +45,7 @@ fn table(model: String) -> Result<String, PyErr> {
         public_params: false,
         pack_base: 1,
         check_mode: CheckMode::SAFE,
+        allocated_constraints: None,
     };
 
     // use default values to initialize model
@@ -74,6 +75,7 @@ fn gen_srs(params_path: PathBuf, logrows: u32) -> PyResult<()> {
         public_params: false,
         pack_base: 1,
         check_mode: CheckMode::SAFE,
+        allocated_constraints: None,
     };
     let params = ezkl_gen_srs::<KZGCommitmentScheme<Bn256>>(run_args.logrows);
     save_params::<KZGCommitmentScheme<Bn256>>(&params_path, &params)?;
@@ -122,6 +124,7 @@ fn forward(
                 public_params: public_params,
                 pack_base: pack_base,
                 check_mode: CheckMode::from(check_mode.to_string()),
+                allocated_constraints: None,
             };
             let mut new_data = m;
             let mut model_inputs = vec![];

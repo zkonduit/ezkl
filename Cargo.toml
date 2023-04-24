@@ -37,8 +37,9 @@ env_logger = { version = "0.10.0", optional = true}
 colored_json =  { version = "3.0.1", optional = true}
 tokio = { version = "1.26.0", features = ["macros", "rt"] }
 puruspe = "0.2.0"
+rayon = "*"
+serde_traitobject = "0.2.8"
 bincode = "*"
-
 
 # python binding related deps
 pyo3 = { version = "0.18.2", features = ["extension-module", "abi3-py37"], optional = true }
