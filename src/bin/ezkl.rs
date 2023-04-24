@@ -24,6 +24,18 @@ pub fn level_color(level: &log::Level, msg: &str) -> String {
     .to_string()
 }
 
+pub fn level_text_color(level: &log::Level, msg: &str) -> String {
+    match level {
+        Level::Error => msg.red(),
+        Level::Warn => msg.yellow(),
+        Level::Info => msg.white(),
+        Level::Debug => msg.white(),
+        Level::Trace => msg.white(),
+    }
+    .bold()
+    .to_string()
+}
+
 fn level_token(level: &Level) -> &str {
     match *level {
         Level::Error => "E",
@@ -45,11 +57,12 @@ fn prefix_token(level: &Level) -> String {
 
 pub fn format(buf: &mut Formatter, record: &Record<'_>) -> Result<(), std::fmt::Error> {
     let sep = format!("\n{} ", " | ".white().bold());
+    let level = record.level();
     writeln!(
         buf,
         "{} {}",
-        prefix_token(&record.level()),
-        format!("{}", record.args()).replace('\n', &sep),
+        prefix_token(&level),
+        format!("{}", level_color(&level, record.args().as_str().unwrap())).replace('\n', &sep),
     )
 }
 
@@ -64,7 +77,11 @@ pub fn init_logger() {
             prefix_token(&record.level()),
             start.elapsed().as_secs(),
             record.metadata().target(),
-            format!("{}", record.args()).replace('\n', &format!("\n{} ", " | ".white().bold())),
+            format!(
+                "{}",
+                level_text_color(&record.level(), &format!("{}", record.args()))
+            )
+            .replace('\n', &format!("\n{} ", " | ".white().bold()))
         )
     });
     builder.target(env_logger::Target::Stdout);

@@ -2,6 +2,9 @@ use super::TensorError;
 use crate::tensor::{Tensor, TensorType};
 use itertools::Itertools;
 use puruspe::erf;
+use rayon::{
+    iter::IndexedParallelIterator, iter::IntoParallelRefMutIterator, iter::ParallelIterator,
+};
 pub use std::ops::{Add, Div, Mul, Sub};
 
 /// Matrix multiplies two 2D tensors (and adds an offset).
@@ -29,7 +32,9 @@ pub use std::ops::{Add, Div, Mul, Sub};
 /// let expected = Tensor::<i128>::new(Some(&[26, 7, 11, 3, 15, 3, 7, 2]), &[2, 4]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn affine<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+pub fn affine<
+    T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Send + std::marker::Sync,
+>(
     inputs: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
     let (mut input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
@@ -124,10 +129,19 @@ pub fn scale_and_shift<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// let expected = Tensor::<i128>::new(Some(&[26, 7, 11, 3, 15, 3, 7, 2]), &[2, 4]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+pub fn matmul<
+    T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Send + std::marker::Sync,
+>(
     inputs: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
-    let (a, b) = (inputs[0].clone(), inputs[1].clone());
+    let (mut a, mut b) = (inputs[0].clone(), inputs[1].clone());
+
+    if a.dims().len() == 1 {
+        a.reshape(&[1, a.dims()[0]]);
+    }
+    if b.dims().len() == 1 {
+        b.reshape(&[b.dims()[0], 1]);
+    }
 
     if (inputs.len() != 2)
         || (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])
@@ -142,21 +156,34 @@ pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     // calculate value of output
     let mut output: Tensor<T> = Tensor::new(None, &dims).unwrap();
 
-    let indices = dims.iter().map(|d| 0..*d).collect::<Vec<_>>();
+    let cartesian_coord = dims
+        .iter()
+        .map(|d| 0..*d)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
 
-    for coord in indices.iter().cloned().multi_cartesian_product() {
-        let row = coord[0..coord.len() - 1]
-            .iter()
-            .map(|&d| d..(d + 1))
-            .collect::<Vec<_>>();
-        let mut col = coord[0..coord.len()]
-            .iter()
-            .map(|&d| d..(d + 1))
-            .collect::<Vec<_>>();
-        col[coord.len() - 2] = 0..b.dims()[coord.len() - 2];
-        let prod = dot(&vec![&a.get_slice(&row[0..])?, &b.get_slice(&col[0..])?])?;
-        output.set(&coord, prod[0].clone());
-    }
+    output
+        .par_iter_mut()
+        .enumerate()
+        .for_each(|(flat_index, o)| {
+            let coord = &cartesian_coord[flat_index];
+            let row = coord[0..coord.len() - 1]
+                .iter()
+                .map(|&d| d..(d + 1))
+                .collect::<Vec<_>>();
+            let mut col = coord[0..coord.len()]
+                .iter()
+                .map(|&d| d..(d + 1))
+                .collect::<Vec<_>>();
+            col[coord.len() - 2] = 0..b.dims()[coord.len() - 2];
+            let prod = dot(&vec![
+                &a.get_slice(&row[0..]).unwrap(),
+                &b.get_slice(&col[0..]).unwrap(),
+            ])
+            .unwrap();
+
+            *o = prod[0].clone();
+        });
 
     Ok(output)
 }
@@ -345,8 +372,198 @@ pub fn rescale<T: TensorType + Add<Output = T>>(
 pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut res = T::zero().unwrap();
+
     let _ = a.map(|a_i| res = res.clone() + a_i);
     Tensor::new(Some(&[res]), &[1])
+}
+
+/// Sums a tensor along specific axes.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
+/// ```
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::sum_axes;
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 15, 2, 1, 1, 0]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = sum_axes(&x, &[1]).unwrap();
+/// let expected = Tensor::<i128>::new(
+///     Some(&[19, 2]),
+///     &[2, 1],
+/// ).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn sum_axes<T: TensorType + Add<Output = T>>(
+    a: &Tensor<T>,
+    axes: &[usize],
+) -> Result<Tensor<T>, TensorError> {
+    // calculate value of output
+
+    if axes.len() == 0 {
+        return Ok(a.clone());
+    }
+
+    let mut new_dims = vec![];
+    for i in 0..a.dims().len() {
+        if !axes.contains(&i) {
+            new_dims.push(a.dims()[i]);
+        } else {
+            new_dims.push(1);
+        }
+    }
+
+    let mut res = Tensor::new(None, &new_dims)?;
+
+    let cartesian_coord = new_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    for coord in cartesian_coord.iter() {
+        let mut sum_dims = vec![];
+        for i in 0..a.dims().len() {
+            if axes.contains(&i) {
+                sum_dims.push(0..a.dims()[i]);
+            } else {
+                sum_dims.push(coord[i]..coord[i] + 1);
+            }
+        }
+
+        res.set(coord, sum(&a.get_slice(&sum_dims)?)?[0].clone());
+    }
+
+    Ok(res)
+}
+
+/// Mins a tensor along specific axes.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
+/// ```
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::min_axes;
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 15, 2, 1, 1, 0]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = min_axes(&x, &[1]).unwrap();
+/// let expected = Tensor::<i128>::new(
+///     Some(&[2, 0]),
+///     &[2, 1],
+/// ).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn min_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
+    a: &Tensor<T>,
+    axes: &[usize],
+) -> Result<Tensor<T>, TensorError> {
+    // calculate value of output
+
+    if axes.len() == 0 {
+        return Ok(a.clone());
+    }
+
+    let mut new_dims = vec![];
+    for i in 0..a.dims().len() {
+        if !axes.contains(&i) {
+            new_dims.push(a.dims()[i]);
+        } else {
+            new_dims.push(1);
+        }
+    }
+
+    let mut res = Tensor::new(None, &new_dims)?;
+
+    let cartesian_coord = new_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    for coord in cartesian_coord.iter() {
+        let mut sum_dims = vec![];
+        for i in 0..a.dims().len() {
+            if axes.contains(&i) {
+                sum_dims.push(0..a.dims()[i]);
+            } else {
+                sum_dims.push(coord[i]..coord[i] + 1);
+            }
+        }
+
+        res.set(coord, a.get_slice(&sum_dims)?.iter().min().unwrap().clone());
+    }
+
+    Ok(res)
+}
+
+/// Mins a tensor along specific axes.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
+/// ```
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::max_axes;
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 15, 2, 1, 1, 0]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = max_axes(&x, &[1]).unwrap();
+/// let expected = Tensor::<i128>::new(
+///     Some(&[15, 1]),
+///     &[2, 1],
+/// ).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
+    a: &Tensor<T>,
+    axes: &[usize],
+) -> Result<Tensor<T>, TensorError> {
+    // calculate value of output
+
+    if axes.len() == 0 {
+        return Ok(a.clone());
+    }
+
+    let mut new_dims = vec![];
+    for i in 0..a.dims().len() {
+        if !axes.contains(&i) {
+            new_dims.push(a.dims()[i]);
+        } else {
+            new_dims.push(1);
+        }
+    }
+
+    let mut res = Tensor::new(None, &new_dims)?;
+
+    let cartesian_coord = new_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    for coord in cartesian_coord.iter() {
+        let mut sum_dims = vec![];
+        for i in 0..a.dims().len() {
+            if axes.contains(&i) {
+                sum_dims.push(0..a.dims()[i]);
+            } else {
+                sum_dims.push(coord[i]..coord[i] + 1);
+            }
+        }
+
+        res.set(coord, a.get_slice(&sum_dims)?.iter().max().unwrap().clone());
+    }
+
+    Ok(res)
 }
 
 /// Applies convolution over a 3D tensor of shape C x H x W (and adds a bias).
@@ -358,7 +575,7 @@ pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, 
 /// # Examples
 /// ```
 /// use ezkl_lib::tensor::Tensor;
-/// use ezkl_lib::tensor::ops::convolution;
+/// use ezkl_lib::tensor::ops::conv;
 ///
 /// let x = Tensor::<i128>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -372,24 +589,57 @@ pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, 
 ///     Some(&[0]),
 ///     &[1],
 /// ).unwrap();
-/// let result = convolution::<i128>(&[x, k, b], (0, 0), (1, 1)).unwrap();
+/// let result = conv::<i128>(&[x, k, b], (0, 0), (1, 1)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[31, 16, 8, 26]), &[1, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
+///
+/// // Now test single channel
+/// let x = Tensor::<i128>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[2, 3, 3],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///     Some(&[5, 1, 1, 1]),
+///     &[1, 1, 2, 2],
+/// ).unwrap();
+/// let b = Tensor::<i128>::new(
+///     Some(&[0]),
+///     &[1],
+/// ).unwrap();
+///
+/// let result = conv::<i128>(&[x, k, b], (0, 0), (1, 1)).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[62, 32, 16, 52]), &[1, 2, 2]).unwrap();
+/// assert_eq!(result, expected);
 /// ```
-pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+pub fn conv<
+    T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Sync + std::marker::Send,
+>(
     inputs: &[Tensor<T>],
     padding: (usize, usize),
     stride: (usize, usize),
 ) -> Result<Tensor<T>, TensorError> {
     let has_bias = inputs.len() == 3;
-    let (image, kernel) = (inputs[0].clone(), inputs[1].clone());
+    let (image, mut kernel) = (inputs[0].clone(), inputs[1].clone());
 
     if (image.dims().len() != 3)
         || (kernel.dims().len() != 4)
-        || (image.dims()[0] != kernel.dims()[1])
+        || ((image.dims()[0] != kernel.dims()[1]) && (kernel.dims()[1] != 1))
     {
         return Err(TensorError::DimMismatch("conv".to_string()));
     }
+
+    if kernel.dims()[1] == 1 && kernel.dims()[1] != image.dims()[0] {
+        kernel = kernel.repeat_rows(image.dims()[0])?;
+        kernel.reshape(&[
+            kernel.dims()[0],
+            image.dims()[0],
+            kernel.dims()[2],
+            kernel.dims()[3],
+        ]);
+    }
+
+    let image_dims = image.dims();
+    let kernel_dims = kernel.dims();
 
     if has_bias {
         let bias = inputs[2].clone();
@@ -397,9 +647,6 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
             return Err(TensorError::DimMismatch("conv bias".to_string()));
         }
     }
-
-    let image_dims = image.dims();
-    let kernel_dims = kernel.dims();
 
     let (output_channels, input_channels, kernel_height, kernel_width) = (
         kernel_dims[0],
@@ -419,29 +666,41 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     let mut output: Tensor<T> =
         Tensor::new(None, &[output_channels, vert_slides, horz_slides]).unwrap();
 
-    for i in 0..output_channels {
-        for j in 0..vert_slides {
+    let cartesian_coord = vec![(0..output_channels), (0..vert_slides), (0..horz_slides)]
+        .iter()
+        .cloned()
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    output
+        .par_iter_mut()
+        .enumerate()
+        .for_each(|(flat_index, o)| {
+            let coord = &cartesian_coord[flat_index];
+            let (i, j, k) = (coord[0], coord[1], coord[2]);
             let rs = j * stride.0;
-            for k in 0..horz_slides {
-                let cs = k * stride.1;
-                let mut res = dot(&vec![
-                    &kernel.get_slice(&[i..i + 1])?.clone(),
-                    &padded_image.get_slice(&[
+            let cs = k * stride.1;
+
+            let mut res = dot(&vec![
+                &kernel.get_slice(&[i..i + 1]).unwrap().clone(),
+                &padded_image
+                    .get_slice(&[
                         0..input_channels,
                         rs..(rs + kernel_height),
                         cs..(cs + kernel_width),
-                    ])?,
-                ])?;
+                    ])
+                    .unwrap(),
+            ])
+            .unwrap();
 
-                if has_bias {
-                    // increment result by the bias
-                    res[0] = res[0].clone() + inputs[2][i].clone();
-                }
-
-                output.set(&[i, j, k], res[0].clone());
+            if has_bias {
+                // increment result by the bias
+                res[0] = res[0].clone() + inputs[2][i].clone();
             }
-        }
-    }
+
+            *o = res[0].clone();
+        });
+
     Ok(output)
 }
 
@@ -468,7 +727,9 @@ pub fn convolution<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// let expected: Tensor<i128> = Tensor::<i128>::new(Some(&[11, 8, 8, 10]), &[1, 2, 2]).unwrap();
 /// assert_eq!(pooled, expected);
 /// ```
-pub fn sumpool<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+pub fn sumpool<
+    T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Sync + std::marker::Send,
+>(
     image: &Tensor<T>,
     padding: (usize, usize),
     stride: (usize, usize),
@@ -493,20 +754,27 @@ pub fn sumpool<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     let mut output: Tensor<T> =
         Tensor::new(None, &[output_channels, vert_slides, horz_slides]).unwrap();
 
-    for i in 0..output_channels {
-        for j in 0..vert_slides {
+    let cartesian_coord = vec![(0..output_channels), (0..vert_slides), (0..horz_slides)]
+        .iter()
+        .cloned()
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    output
+        .par_iter_mut()
+        .enumerate()
+        .for_each(|(flat_index, o)| {
+            let coord = &cartesian_coord[flat_index];
+            let (i, j, k) = (coord[0], coord[1], coord[2]);
             let rs = j * stride.0;
-            for k in 0..horz_slides {
-                let cs = k * stride.1;
-                let thesum = sum(&padded_image.get_slice(&[
-                    i..i + 1,
-                    rs..(rs + kernel_height),
-                    cs..(cs + kernel_width),
-                ])?)?;
-                output.set(&[i, j, k], thesum[0].clone());
-            }
-        }
-    }
+            let cs = k * stride.1;
+            let thesum = sum(&padded_image
+                .get_slice(&[i..i + 1, rs..(rs + kernel_height), cs..(cs + kernel_width)])
+                .unwrap())
+            .unwrap();
+            *o = thesum[0].clone();
+        });
+
     Ok(output)
 }
 
@@ -533,7 +801,7 @@ pub fn sumpool<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 /// let expected: Tensor<i128> = Tensor::<i128>::new(Some(&[5, 4, 4, 6]), &[1, 2, 2]).unwrap();
 /// assert_eq!(pooled, expected);
 /// ```
-pub fn max_pool2d<T: TensorType>(
+pub fn max_pool2d<T: TensorType + std::marker::Sync + std::marker::Send>(
     image: &Tensor<T>,
     padding: &(usize, usize),
     stride: &(usize, usize),
@@ -562,22 +830,29 @@ pub fn max_pool2d<T: TensorType>(
         }
     };
 
-    for i in 0..input_channels {
-        for j in 0..horz_slides {
+    let cartesian_coord = vec![(0..input_channels), (0..vert_slides), (0..horz_slides)]
+        .iter()
+        .cloned()
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    output
+        .par_iter_mut()
+        .enumerate()
+        .for_each(|(flat_index, o)| {
+            let coord = &cartesian_coord[flat_index];
+            let (i, j, k) = (coord[0], coord[1], coord[2]);
             let rs = j * stride.0;
-            for k in 0..vert_slides {
-                let cs = k * stride.1;
-                output.set(
-                    &[i, j, k],
-                    padded_image
-                        .get_slice(&[i..(i + 1), rs..(rs + pool_dims.0), cs..(cs + pool_dims.1)])?
-                        .into_iter()
-                        .fold(None, fmax)
-                        .unwrap(),
-                );
-            }
-        }
-    }
+            let cs = k * stride.1;
+            let themax = padded_image
+                .get_slice(&[i..(i + 1), rs..(rs + pool_dims.0), cs..(cs + pool_dims.1)])
+                .unwrap()
+                .into_iter()
+                .fold(None, fmax)
+                .unwrap();
+            *o = themax.clone();
+        });
+
     Ok(output)
 }
 
@@ -606,6 +881,7 @@ pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     if (inputs.len() != 2) || (inputs[0].clone().len() != inputs[1].clone().len()) {
         return Err(TensorError::DimMismatch("dot".to_string()));
     }
+
     let (a, b): (Tensor<T>, Tensor<T>) = (inputs[0].clone(), inputs[1].clone());
     let res = a
         .iter()
@@ -772,6 +1048,37 @@ pub mod nonlinearities {
         output
     }
 
+    /// Elementwise applies reciprocal square root to a tensor of integers.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::rsqrt;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[4, 25, 8, 1, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = rsqrt(&x, 1, 1);
+    /// let expected = Tensor::<i128>::new(Some(&[1, 0, 0, 1, 1, 1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn rsqrt(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        // calculate value of output
+        let mut output: Tensor<i128> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            let kix = (*a_i as f32) / (scale_input as f32);
+            let fout = (scale_output as f32) * (1.0 / kix.sqrt());
+            let rounded = fout.round();
+            output[i] = rounded as i128;
+        }
+        output
+    }
+
     /// Elementwise applies tanh activation to a tensor of integers.
     /// # Arguments
     ///
@@ -869,71 +1176,6 @@ pub mod nonlinearities {
         output
     }
 
-    /// Elementwise applies instance norm to a tensor of integers.
-    /// # Arguments
-    ///
-    /// * `a` - Tensor
-    /// * `gamma` - vector of scale values
-    /// * `beta` - vector of offset values
-    /// # Examples
-    /// ```
-    /// use ezkl_lib::tensor::Tensor;
-    /// use ezkl_lib::tensor::ops::nonlinearities::instance_norm;
-    /// let x = Tensor::<i128>::new(
-    ///     Some(&[4, 2, 8, 1, 1, 2, 2, 2, 3]),
-    ///     &[1, 3, 3],
-    /// ).unwrap();
-    ///
-    /// let gamma = Tensor::<i128>::new(
-    ///     Some(&[1]),
-    ///     &[1],
-    /// ).unwrap();
-    ///
-    /// let beta = Tensor::<i128>::new(
-    ///     Some(&[23]),
-    ///     &[1],
-    /// ).unwrap();
-    ///
-    /// let result = instance_norm([x, gamma, beta], 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[25, 23, 29, 22, 22, 23, 23, 23, 24]), &[1, 3, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn instance_norm(inputs: [Tensor<i128>; 3], epsilon: f32) -> Tensor<i128> {
-        let a = &inputs[0];
-        let gamma = &inputs[1];
-        let beta = &inputs[2];
-        // calculate value of output
-        assert!(a.len() > 1);
-        assert!(a.dims().len() == 3);
-        assert_eq!(gamma.len(), beta.len());
-        // assert num channels is same as num of parameters
-        assert_eq!(gamma.len(), a.dims()[0]);
-        let mut output = vec![];
-        for i in 0..gamma.len() {
-            let row = a.get_slice(&[i..i + 1]).unwrap();
-            let sum = sum(&row).unwrap();
-            let mean = sum.map(|x| (x) / (row.len() as i128));
-
-            // unbiased = false in pytorch definition. if it was unbiased we would divide by row.len() - 1
-            let var = (row.clone() - mean.clone())
-                .unwrap()
-                .map(|e| (e as f32) / (row.len() as f32));
-
-            let denom = var.map(|e| (e + epsilon).sqrt().round() as i128);
-            let numerator = (row - mean).unwrap() * vec![gamma[i]].into_iter().into();
-
-            let result =
-                ((numerator.unwrap() / denom).unwrap() + vec![beta[i]].into_iter().into()).unwrap();
-
-            output.push(result);
-        }
-
-        let mut output = Tensor::from(output.into_iter()).combine().unwrap();
-        output.reshape(a.dims());
-
-        output
-    }
-
     /// Elementwise applies prelu to a tensor of integers.
     /// # Arguments
     ///
@@ -1001,6 +1243,67 @@ pub mod nonlinearities {
         for (i, a_i) in a.iter().enumerate() {
             let d_inv_x = (*a_i as f32) / denom;
             output[i] = d_inv_x.round() as i128;
+        }
+        output
+    }
+
+    /// Elementwise inverse.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `b` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::recip;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[2, 1, 2, 7, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let k = 2_u32;
+    /// let result = recip(&x, k);
+    /// let expected = Tensor::<i128>::new(Some(&[1, 2, 1, 0, 2, 2]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn recip(a: &Tensor<i128>, scale: u32) -> Tensor<i128> {
+        // calculate value of output
+        let mut output: Tensor<i128> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            let d_inv_x = (scale as f32) * (1_f32) / (*a_i as f32);
+            output[i] = d_inv_x.round() as i128;
+        }
+        output
+    }
+
+    /// Elementwise greater than
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `b` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::greater_than;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[2, 1, 2, 7, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let k = 2.0;
+    /// let result = greater_than(&x, k);
+    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 1, 0, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn greater_than(a: &Tensor<i128>, b: f32) -> Tensor<i128> {
+        // calculate value of output
+        let mut output: Tensor<i128> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            output[i] = if (*a_i as f32 - b) <= 0_f32 {
+                0_i128
+            } else {
+                1_i128
+            };
         }
         output
     }
@@ -1128,7 +1431,9 @@ pub mod accumulated {
     /// let expected = Tensor::<i128>::new(Some(&[10, 12, 18, 5, 7, 10]), &[2, 1, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn matmul<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+    pub fn matmul<
+        T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Send + std::marker::Sync,
+    >(
         inputs: &[Tensor<T>; 2],
     ) -> Result<Tensor<T>, TensorError> {
         let (a, b) = (inputs[0].clone(), inputs[1].clone());
@@ -1145,20 +1450,31 @@ pub mod accumulated {
 
         let indices = dims.iter().map(|d| 0..*d).collect::<Vec<_>>();
 
-        let mut transcripts = vec![];
-        for coord in indices.iter().cloned().multi_cartesian_product() {
-            let row = coord[0..coord.len() - 1]
+        let cartesian_product = indices
+            .iter()
+            .cloned()
+            .multi_cartesian_product()
+            .collect::<Vec<_>>();
+        let mut transcripts = vec![Tensor::<T>::new(None, &[0])?; cartesian_product.len()];
+
+        transcripts.par_iter_mut().enumerate().for_each(|(i, t)| {
+            let row = cartesian_product[i][0..cartesian_product[i].len() - 1]
                 .iter()
                 .map(|&d| d..(d + 1))
                 .collect::<Vec<_>>();
-            let mut col = coord[0..coord.len()]
+            let mut col = cartesian_product[i][0..cartesian_product[i].len()]
                 .iter()
                 .map(|&d| d..(d + 1))
                 .collect::<Vec<_>>();
-            col[coord.len() - 2] = 0..b.dims()[coord.len() - 2];
-            let dot_transcript = dot(&[a.get_slice(&row[0..])?, b.get_slice(&col[0..])?])?;
-            transcripts.push(dot_transcript);
-        }
+            col[cartesian_product[i].len() - 2] = 0..b.dims()[cartesian_product[i].len() - 2];
+            let dot_transcript = dot(&[
+                a.get_slice(&row[0..]).unwrap(),
+                b.get_slice(&col[0..]).unwrap(),
+            ])
+            .unwrap();
+            *t = dot_transcript;
+        });
+
         let mut output = Tensor::new(Some(&transcripts), &[transcripts.len()])?.combine()?;
         output.reshape(&[dims.as_slice(), &[transcripts[0].len()]].concat());
 

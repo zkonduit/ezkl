@@ -37,7 +37,6 @@ use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
 use pyo3::ToPyObject;
 
-
 #[derive(thisError, Debug)]
 /// Errors related to pfsys
 pub enum PfSysError {
@@ -78,9 +77,11 @@ impl ToPyObject for ModelInput {
         let dict = PyDict::new(py);
         let input_data_mut = &self.input_data;
         let output_data_mut = &self.output_data;
-        dict.set_item( "input_data", truncate_nested_vector(&input_data_mut)).unwrap();
+        dict.set_item("input_data", truncate_nested_vector(&input_data_mut))
+            .unwrap();
         dict.set_item("input_shapes", &self.input_shapes).unwrap();
-        dict.set_item("output_data", truncate_nested_vector(&output_data_mut)).unwrap();
+        dict.set_item("output_data", truncate_nested_vector(&output_data_mut))
+            .unwrap();
 
         dict.to_object(py)
     }

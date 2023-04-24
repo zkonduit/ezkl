@@ -1,17 +1,1 @@
-{
-    "input_data": [
-        [
-            0.05301234
-        ]
-    ],
-    "input_shapes": [
-        [
-            1
-        ]
-    ],
-    "output_data": [
-        [
-            0.0048828125
-        ]
-    ]
-}
+{"input_data":[[0.05301234]],"input_shapes":[[1]],"output_data":[[0.005554199]]}

@@ -101,6 +101,7 @@ impl<F: FieldExt + TensorType> ModelVars<F> {
         var_len: usize,
         instance_dims: Vec<Vec<usize>>,
         visibility: VarVisibility,
+        scale: u32,
     ) -> Self {
         let advices = (0..3)
             .map(|_| VarTensor::new_advice(cs, logrows, var_len))
@@ -113,7 +114,7 @@ impl<F: FieldExt + TensorType> ModelVars<F> {
         }
         // will be empty if instances dims has len 0
         let instances = (0..instance_dims.len())
-            .map(|i| ValTensor::new_instance(cs, instance_dims[i].clone()))
+            .map(|i| ValTensor::new_instance(cs, instance_dims[i].clone(), scale))
             .collect_vec();
         ModelVars {
             advices,

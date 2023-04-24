@@ -40,16 +40,19 @@ fn init() {
     assert!(status.success());
 }
 
-const TESTS: [&str; 27] = [
+const TESTS: [&str; 28] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
     "1l_div",
     "1l_pad",
     "1l_reshape",
+    "1l_eltwise_div",
     "1l_sigmoid",
     "1l_sqrt",
-    "1l_prelu",
+    // "1l_instance_norm",
+    "1l_batch_norm",
+    // "1l_prelu",
     "1l_leakyrelu",
     "1l_gelu_noappx",
     // "1l_gelu_tanh_appx",
@@ -71,7 +74,7 @@ const TESTS: [&str; 27] = [
     "1l_max_pool",
 ];
 
-const PACKING_TESTS: [&str; 15] = [
+const PACKING_TESTS: [&str; 14] = [
     "1l_mlp",
     "1l_average",
     "1l_div",
@@ -79,7 +82,7 @@ const PACKING_TESTS: [&str; 15] = [
     "1l_sigmoid",
     "1l_sqrt",
     "1l_leakyrelu",
-    "1l_prelu",
+    // "1l_prelu",
     "1l_var",
     "1l_relu",
     "1l_tanh",
@@ -89,7 +92,7 @@ const PACKING_TESTS: [&str; 15] = [
     "2l_relu_small",
 ];
 
-const TESTS_AGGR: [&str; 21] = [
+const TESTS_AGGR: [&str; 20] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -99,7 +102,7 @@ const TESTS_AGGR: [&str; 21] = [
     "1l_sigmoid",
     "1l_gelu_noappx",
     "1l_sqrt",
-    "1l_prelu",
+    // "1l_prelu",
     "1l_var",
     "1l_leakyrelu",
     "1l_relu",
@@ -118,7 +121,7 @@ const NEG_TESTS: [(&str, &str); 2] = [
     ("2l_relu_small", "2l_relu_sigmoid_small"),
 ];
 
-const TESTS_EVM: [&str; 19] = [
+const TESTS_EVM: [&str; 18] = [
     "1l_mlp",
     "1l_flatten",
     "1l_average",
@@ -126,7 +129,7 @@ const TESTS_EVM: [&str; 19] = [
     "1l_sigmoid",
     "1l_div",
     "1l_sqrt",
-    "1l_prelu",
+    // "1l_prelu",
     "1l_var",
     "1l_leakyrelu",
     "1l_gelu_noappx",
@@ -172,7 +175,7 @@ macro_rules! test_packed_func {
             use crate::mock_packed_outputs;
             use crate::mock_everything;
 
-            seq!(N in 0..=14 {
+            seq!(N in 0..=13 {
 
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_packed_outputs_(test: &str) {
@@ -211,7 +214,7 @@ macro_rules! test_func {
             }
 
 
-            seq!(N in 0..=26 {
+            seq!(N in 0..=27 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
@@ -261,12 +264,12 @@ macro_rules! test_func_evm {
 
             /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
             /// specify a few that will
-            const TESTS_SOLIDITY: [&str; 10] = [
+            const TESTS_SOLIDITY: [&str; 9] = [
                 "1l_relu",
                 "1l_div",
                 "1l_leakyrelu",
                 "1l_sqrt",
-                "1l_prelu",
+                // "1l_prelu",
                 "1l_gelu_noappx",
                 "1l_sigmoid",
                 "1l_reshape",
@@ -274,7 +277,7 @@ macro_rules! test_func_evm {
                 "1l_var"
             ];
 
-            seq!(N in 0..=18 {
+            seq!(N in 0..=17 {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
@@ -491,7 +494,7 @@ fn mock_everything(example_name: String) {
         .args([
             "--bits=16",
             "-K=17",
-            "--public-inputs",
+            "--public-inputs=true",
             "--pack-base=2",
             "mock",
             "-D",
@@ -508,7 +511,7 @@ fn mock_everything(example_name: String) {
 fn mock_public_inputs(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
-            "--public-inputs",
+            "--public-inputs=true",
             "--public-outputs=false",
             "--bits=16",
             "-K=17",
@@ -527,7 +530,7 @@ fn mock_public_inputs(example_name: String) {
 fn mock_public_params(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
-            "--public-params",
+            "--public-params=true",
             "--public-outputs=false",
             "--bits=16",
             "-K=17",

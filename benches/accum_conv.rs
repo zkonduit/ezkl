@@ -63,9 +63,11 @@ impl Circuit<Fr> for MyCircuit {
                 config
                     .layout(
                         Some(&mut region),
-                        &[self.image.clone(), self.kernel.clone(), self.bias.clone()],
+                        &[self.image.clone()],
                         &mut 0,
                         Box::new(PolyOp::Conv {
+                            kernel: self.kernel.clone(),
+                            bias: Some(self.bias.clone()),
                             padding: (0, 0),
                             stride: (1, 1),
                         }),

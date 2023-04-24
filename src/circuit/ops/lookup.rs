@@ -20,10 +20,13 @@ pub enum LookupOp {
     Div { denom: utils::F32 },
     ReLU { scale: usize },
     Sqrt { scales: (usize, usize) },
+    Rsqrt { scales: (usize, usize) },
+    Recip { scale: usize },
     LeakyReLU { scale: usize, slope: utils::F32 },
     Sigmoid { scales: (usize, usize) },
     Tanh { scales: (usize, usize) },
     Erf { scales: (usize, usize) },
+    GreaterThan { a: utils::F32 },
 }
 
 impl LookupOp {
@@ -41,13 +44,21 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         match &self {
+            LookupOp::GreaterThan { a } => Ok(tensor::ops::nonlinearities::greater_than(
+                &x[0],
+                f32::from(*a),
+            )),
             LookupOp::Div { denom } => Ok(tensor::ops::nonlinearities::const_div(
                 &x[0],
                 f32::from(*denom),
             )),
+            LookupOp::Recip { scale } => {
+                Ok(tensor::ops::nonlinearities::recip(&x[0], *scale as u32))
+            }
             LookupOp::ReLU { scale } => {
                 Ok(tensor::ops::nonlinearities::leakyrelu(&x[0], *scale, 0_f32))
             }
+
             LookupOp::LeakyReLU { scale, slope } => Ok(tensor::ops::nonlinearities::leakyrelu(
                 &x[0], *scale, slope.0,
             )),
@@ -57,6 +68,9 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
             LookupOp::Sqrt { scales } => {
                 Ok(tensor::ops::nonlinearities::sqrt(&x[0], scales.0, scales.1))
             }
+            LookupOp::Rsqrt { scales } => Ok(tensor::ops::nonlinearities::rsqrt(
+                &x[0], scales.0, scales.1,
+            )),
             LookupOp::Tanh { scales } => {
                 Ok(tensor::ops::nonlinearities::tanh(&x[0], scales.0, scales.1))
             }
@@ -69,6 +83,8 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
     /// Returns the name of the operation
     fn as_str(&self) -> &'static str {
         match self {
+            LookupOp::GreaterThan { .. } => "GREATER_THAN",
+            LookupOp::Recip { .. } => "RECIP",
             LookupOp::Div { .. } => "DIV",
             LookupOp::ReLU { .. } => "RELU",
             LookupOp::LeakyReLU { .. } => "LEAKY_RELU",
@@ -76,6 +92,7 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
             LookupOp::Sqrt { .. } => "SQRT",
             LookupOp::Tanh { .. } => "TANH",
             LookupOp::Erf { .. } => "ERF",
+            LookupOp::Rsqrt { .. } => "RSQRT",
         }
     }
 
@@ -97,6 +114,9 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
 
     fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>> {
         match self {
+            LookupOp::Recip { .. } => Box::new(LookupOp::Recip {
+                scale: scale_to_multiplier(inputs_scale[0] + global_scale) as usize,
+            }),
             LookupOp::Div { denom } => Box::new(LookupOp::Div {
                 denom: crate::circuit::utils::F32(
                     denom.0 * scale_to_multiplier(inputs_scale[0] - global_scale),
@@ -121,6 +141,12 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
                     scale_to_multiplier(global_scale) as usize,
                 ),
             }),
+            LookupOp::Rsqrt { .. } => Box::new(LookupOp::Rsqrt {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
             LookupOp::Tanh { .. } => Box::new(LookupOp::Tanh {
                 scales: (
                     scale_to_multiplier(inputs_scale[0]) as usize,
@@ -133,11 +159,12 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
                     scale_to_multiplier(global_scale) as usize,
                 ),
             }),
+            LookupOp::GreaterThan { .. } => Box::new(self.clone()),
         }
     }
 
-    fn required_lookup(&self) -> Option<LookupOp> {
-        Some(self.clone())
+    fn required_lookups(&self) -> Vec<LookupOp> {
+        vec![self.clone()]
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {

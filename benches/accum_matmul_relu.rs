@@ -67,7 +67,7 @@ impl Circuit<Fr> for MyCircuit {
         layouter.assign_region(
             || "",
             |mut region| {
-                let op = PolyOp::Matmul;
+                let op = PolyOp::Matmul { a: None };
                 let mut offset = 0;
                 let output = config
                     .base_config

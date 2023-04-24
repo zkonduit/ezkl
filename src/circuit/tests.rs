@@ -53,7 +53,7 @@ mod matmul {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Matmul),
+                                Box::new(PolyOp::Matmul { a: None }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -126,7 +126,7 @@ mod matmul_col_overflow {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Matmul),
+                                Box::new(PolyOp::Matmul { a: None }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -340,7 +340,7 @@ mod sum {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Sum),
+                                Box::new(PolyOp::Sum { axes: vec![0] }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -408,7 +408,7 @@ mod sum_col_overflow {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Sum),
+                                Box::new(PolyOp::Sum { axes: vec![0] }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -425,81 +425,6 @@ mod sum_col_overflow {
 
         let circuit = MyCircuit::<F> {
             inputs: [ValTensor::from(a)],
-            _marker: PhantomData,
-        };
-
-        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
-    }
-}
-
-#[cfg(test)]
-mod batchnorm {
-
-    use super::*;
-
-    const K: usize = 9;
-    const LEN: usize = 3;
-
-    #[derive(Clone)]
-    struct BNCircuit<F: FieldExt + TensorType> {
-        inputs: [ValTensor<F>; 3],
-        _marker: PhantomData<F>,
-    }
-
-    impl<F: FieldExt + TensorType> Circuit<F> for BNCircuit<F> {
-        type Config = BaseConfig<F>;
-        type FloorPlanner = SimpleFloorPlanner;
-
-        fn without_witnesses(&self) -> Self {
-            self.clone()
-        }
-
-        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
-        }
-
-        fn synthesize(
-            &self,
-            mut config: Self::Config,
-            mut layouter: impl Layouter<F>,
-        ) -> Result<(), Error> {
-            layouter
-                .assign_region(
-                    || "",
-                    |mut region| {
-                        config
-                            .layout(
-                                Some(&mut region),
-                                &self.inputs.clone(),
-                                &mut 0,
-                                Box::new(PolyOp::BatchNorm),
-                            )
-                            .map_err(|_| Error::Synthesis)
-                    },
-                )
-                .unwrap();
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn batchnormcircuit() {
-        // parameters
-        let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
-        w.reshape(&[LEN]);
-
-        let mut b = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
-        b.reshape(&[LEN]);
-
-        let mut x = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
-        x.reshape(&[LEN]);
-
-        let circuit = BNCircuit::<F> {
-            inputs: [ValTensor::from(x), ValTensor::from(w), ValTensor::from(b)],
             _marker: PhantomData,
         };
 
@@ -790,9 +715,11 @@ mod conv {
                         config
                             .layout(
                                 Some(&mut region),
-                                &self.inputs.clone(),
+                                &[self.inputs[0].clone()],
                                 &mut 0,
                                 Box::new(PolyOp::Conv {
+                                    kernel: self.inputs[1].clone(),
+                                    bias: None,
                                     padding: (1, 1),
                                     stride: (2, 2),
                                 }),
@@ -996,7 +923,7 @@ mod add_w_shape_casting {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Add),
+                                Box::new(PolyOp::Add { a: None }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1066,7 +993,7 @@ mod add {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Add),
+                                Box::new(PolyOp::Add { a: None }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1136,7 +1063,7 @@ mod add_with_overflow {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Add),
+                                Box::new(PolyOp::Add { a: None }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1276,7 +1203,7 @@ mod mult {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Mult),
+                                Box::new(PolyOp::Mult { a: None }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1482,8 +1409,8 @@ mod rescaled {
                                 Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Rescaled {
-                                    inner: Box::new(PolyOp::Sum),
+                                Box::new(Rescaled {
+                                    inner: Box::new(PolyOp::Sum { axes: vec![0] }),
                                     scale: vec![(0, 5)],
                                 }),
                             )
@@ -1563,7 +1490,7 @@ mod matmul_relu {
             layouter.assign_region(
                 || "",
                 |mut region| {
-                    let op = PolyOp::Matmul;
+                    let op = PolyOp::Matmul { a: None };
                     let mut offset = 0;
                     let output = config
                         .base_config
