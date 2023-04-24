@@ -13,7 +13,6 @@ pub enum PolyOp<F: FieldExt + TensorType> {
     Matmul {
         a: Option<ValTensor<F>>,
     },
-    Affine,
     Conv {
         kernel: ValTensor<F>,
         bias: Option<ValTensor<F>>,
@@ -62,7 +61,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
             PolyOp::GlobalSumPool => "GLOBALSUMPOOL",
             PolyOp::Conv { .. } => "CONV",
             PolyOp::SumPool { .. } => "SUMPOOL",
-            PolyOp::Affine => "AFFINE",
             PolyOp::Matmul { .. } => "MATMUL",
             PolyOp::RangeCheck(..) => "RANGECHECK",
         }
@@ -102,7 +100,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
                 }
                 tensor::ops::mult(&inputs)
             }
-            PolyOp::Affine => tensor::ops::affine(&inputs),
             PolyOp::Matmul { a } => {
                 if let Some(a) = a {
                     let b = inputs;
@@ -177,7 +174,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
 
                 layouts::matmul(config, region, values[..].try_into()?, offset)?
             }
-            PolyOp::Affine => layouts::affine(config, region, values[..].try_into()?, offset)?,
             PolyOp::Conv {
                 kernel,
                 bias,
@@ -265,7 +261,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
                 }
                 scale
             }
-            PolyOp::Affine => in_scales[0] + in_scales[1],
             PolyOp::Conv { kernel, bias, .. } => {
                 let output_scale = in_scales[0] + kernel.scale();
                 if let Some(b) = bias {

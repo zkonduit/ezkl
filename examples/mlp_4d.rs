@@ -98,13 +98,24 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                         .layer_config
                         .layout(
                             Some(&mut region),
-                            &[
-                                self.input.clone(),
-                                self.l0_params[0].clone(),
-                                self.l0_params[1].clone(),
-                            ],
+                            &[self.input.clone()],
                             &mut offset,
-                            Box::new(PolyOp::Affine),
+                            Box::new(PolyOp::Matmul {
+                                a: Some(self.l0_params[0].clone()),
+                            }),
+                        )
+                        .unwrap()
+                        .unwrap();
+
+                    let x = config
+                        .layer_config
+                        .layout(
+                            Some(&mut region),
+                            &[x],
+                            &mut offset,
+                            Box::new(PolyOp::Add {
+                                a: Some(self.l0_params[1].clone()),
+                            }),
                         )
                         .unwrap()
                         .unwrap();
@@ -128,9 +139,24 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                         .layer_config
                         .layout(
                             Some(&mut region),
-                            &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
+                            &[x],
                             &mut offset,
-                            Box::new(PolyOp::Affine),
+                            Box::new(PolyOp::Matmul {
+                                a: Some(self.l2_params[0].clone()),
+                            }),
+                        )
+                        .unwrap()
+                        .unwrap();
+
+                    let x = config
+                        .layer_config
+                        .layout(
+                            Some(&mut region),
+                            &[x],
+                            &mut offset,
+                            Box::new(PolyOp::Add {
+                                a: Some(self.l2_params[1].clone()),
+                            }),
                         )
                         .unwrap()
                         .unwrap();

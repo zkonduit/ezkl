@@ -26,6 +26,7 @@ pub use node::*;
 // use std::fs::File;
 // use std::io::{BufReader, BufWriter, Read, Write};
 use std::marker::PhantomData;
+use std::sync::Arc;
 // use std::path::PathBuf;
 use thiserror::Error;
 pub use vars::*;
@@ -179,24 +180,24 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
     }
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let model: Model<F> = Model::from_arg().expect("model should load");
+        let model: Arc<Model<F>> = Arc::new(Model::from_arg().expect("model should load"));
 
         let instance_shapes = model.instance_shapes();
         // this is the total number of variables we will need to allocate
         // for the circuit
-        let var_len = if let Some(var_len) = model.run_args.allocated_constraints {
-            var_len
+        let num_constraints = if let Some(num_constraints) = model.run_args.allocated_constraints {
+            num_constraints
         } else {
             model.dummy_layout(&model.input_shapes()).unwrap()
         };
 
-        info!("total var len: {:?}", var_len);
+        info!("total num constraints: {:?}", num_constraints);
         info!("instance_shapes: {:?}", instance_shapes);
 
         let mut vars = ModelVars::new(
             cs,
             model.run_args.logrows as usize,
-            var_len,
+            num_constraints,
             instance_shapes.clone(),
             model.visibility.clone(),
             model.run_args.scale,
@@ -210,7 +211,16 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
             vars.fixed.iter().map(|a| a.num_cols()).sum::<usize>()
         );
         info!("number of instances used: {:?}", instance_shapes.len());
-        model.configure(cs, &mut vars).unwrap()
+
+        let config = model.configure(cs, &mut vars).unwrap();
+
+        info!("configured model");
+
+        ModelConfig {
+            model,
+            base: config,
+            vars,
+        }
     }
 
     fn synthesize(
@@ -224,7 +234,7 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
             .iter()
             .map(|i| ValTensor::from(<Tensor<i128> as Into<Tensor<Value<F>>>>::into(i.clone())))
             .collect::<Vec<ValTensor<F>>>();
-        trace!("Setting output in synthesize");
+        trace!("Laying out model");
         config
             .model
             .layout(config.clone(), &mut layouter, &inputs, &config.vars)

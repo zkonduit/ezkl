@@ -10,6 +10,7 @@ use anyhow::Result;
 use halo2_proofs::circuit::Value;
 use halo2curves::FieldExt;
 use log::{trace, warn};
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::binary::UnaryOp;
 use tract_onnx::tract_core::ops::matmul::MatMulUnary;
@@ -39,9 +40,10 @@ pub fn vector_to_quantized(
     scale: u32,
 ) -> Result<Tensor<i128>, TensorError> {
     let mult = scale_to_multiplier(scale);
+    // we parallelize the quantization process as it seems to be quite slow at times
     let scaled: Vec<i128> = vec
-        .iter()
-        .map(|e| (mult * e + shift).round() as i128)
+        .par_iter()
+        .map(|e| (mult * *e + shift).round() as i128)
         .collect();
     Tensor::new(Some(&scaled), dims)
 }
@@ -286,7 +288,6 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
         "Add" => Box::new(PolyOp::Add { a: None }),
         "Sub" => Box::new(PolyOp::Sub),
         "Mul" => Box::new(PolyOp::Mult { a: None }),
-        "Gemm" => Box::new(PolyOp::Affine),
         "Greater" => {
             todo!()
         }

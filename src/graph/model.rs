@@ -33,6 +33,7 @@ use log::{debug, info, trace};
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
+use std::sync::Arc;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::Framework;
@@ -54,9 +55,10 @@ pub enum Mode {
 /// A circuit configuration for the entirety of a model loaded from an Onnx file.
 #[derive(Clone, Debug)]
 pub struct ModelConfig<F: FieldExt + TensorType> {
-    base: PolyConfig<F>,
+    /// The base configuration for the circuit
+    pub base: PolyConfig<F>,
     /// The model struct
-    pub model: Model<F>,
+    pub model: Arc<Model<F>>,
     /// A wrapper for holding all columns that will be assigned to by the model
     pub vars: ModelVars<F>,
 }
@@ -298,7 +300,7 @@ impl<F: FieldExt + TensorType> Model<F> {
         &self,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-    ) -> Result<ModelConfig<F>, Box<dyn Error>> {
+    ) -> Result<PolyConfig<F>, Box<dyn Error>> {
         info!("configuring model");
 
         let mut base_gate = PolyConfig::configure(
@@ -319,11 +321,7 @@ impl<F: FieldExt + TensorType> Model<F> {
             self.conf_lookup(&mut base_gate, node, meta, vars)?;
         }
 
-        Ok(ModelConfig {
-            base: base_gate,
-            model: self.clone(),
-            vars: vars.clone(),
-        })
+        Ok(base_gate)
     }
 
     /// Configures a lookup table based operation. These correspond to operations that are represented in
@@ -508,7 +506,12 @@ impl<F: FieldExt + TensorType> Model<F> {
 
         let mut offset: usize = 0;
         for (idx, node) in self.nodes.iter() {
-            debug!("dummy layout {}: {}", idx, node.opkind.as_str());
+            debug!(
+                "dummy layout {}: {}, offset: {}",
+                idx,
+                node.opkind.as_str(),
+                offset
+            );
 
             let values: Vec<ValTensor<F>> = node
                 .inputs

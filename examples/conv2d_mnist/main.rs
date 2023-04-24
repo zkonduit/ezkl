@@ -200,21 +200,38 @@ where
                         .unwrap()
                         .unwrap();
                     x.flatten();
-                    let l2out = config
+                    // multiply by weights
+                    let x = config
                         .layer_config
                         .layout(
                             Some(&mut region),
-                            &[x, self.l2_params[0].clone(), self.l2_params[1].clone()],
+                            &[x],
                             &mut offset,
-                            Box::new(PolyOp::Affine),
+                            Box::new(PolyOp::Matmul {
+                                a: Some(self.l2_params[0].clone()),
+                            }),
                         )
+                        .unwrap()
                         .unwrap();
-                    Ok(l2out)
+                    // add bias
+                    let x: ValTensor<F> = config
+                        .layer_config
+                        .layout(
+                            Some(&mut region),
+                            &[x],
+                            &mut offset,
+                            Box::new(PolyOp::Add {
+                                a: Some(self.l2_params[1].clone()),
+                            }),
+                        )
+                        .unwrap()
+                        .unwrap();
+                    Ok(x)
                 },
             )
             .unwrap();
 
-        match x.unwrap() {
+        match x {
             ValTensor::Value {
                 inner: v, dims: _, ..
             } => v

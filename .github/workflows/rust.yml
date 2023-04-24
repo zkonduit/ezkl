@@ -73,8 +73,6 @@ jobs:
         run: cargo bench --verbose --bench relu
       - name: Bench accum dot
         run: cargo bench --verbose --bench accum_dot
-      - name: Bench accum affine
-        run: cargo bench --verbose --bench accum_affine
       - name: Bench accum conv
         run: cargo bench --verbose --bench accum_conv
       - name: Bench accum sumpool
