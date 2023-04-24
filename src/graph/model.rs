@@ -373,19 +373,24 @@ impl<F: FieldExt + TensorType> Model<F> {
 
         config.base.layout_tables(layouter)?;
 
-        for (idx, node) in self.nodes.iter() {
-            let values: Vec<ValTensor<F>> = node
-                .inputs
-                .iter()
-                .map(|i| results.get(i).unwrap().clone())
-                .collect_vec();
+        layouter.assign_region(
+            || "model",
+            |mut region| {
+                let mut offset: usize = 0;
+                for (idx, node) in self.nodes.iter() {
+                    let values: Vec<ValTensor<F>> = node
+                        .inputs
+                        .iter()
+                        .map(|i| results.get(i).unwrap().clone())
+                        .collect_vec();
 
-            trace!("dims: {:?}", node.out_dims);
-            layouter.assign_region(
-                || node.opkind.as_str(),
-                |mut region| {
-                    debug!("laying out {}: {}", idx, node.opkind.as_str(),);
-                    let mut offset: usize = 0;
+                    debug!(
+                        "laying out {}: {}, offset:{}",
+                        idx,
+                        node.opkind.as_str(),
+                        offset
+                    );
+                    trace!("dims: {:?}", node.out_dims);
                     let res = config
                         .base
                         .layout(
@@ -411,14 +416,8 @@ impl<F: FieldExt + TensorType> Model<F> {
                             );
                         }
                     }
-                    Ok(())
-                },
-            )?;
-        }
+                }
 
-        layouter.assign_region(
-            || "output_ops",
-            |mut region| {
                 let output_nodes = self.outputs.iter();
                 info!(
                     "model outputs are nodes: {:?}",
@@ -428,7 +427,6 @@ impl<F: FieldExt + TensorType> Model<F> {
                     .map(|o| results.get(o).unwrap().clone())
                     .collect_vec();
 
-                let mut offset: usize = 0;
                 // pack outputs if need be
                 if self.run_args.pack_base > 1 {
                     for i in 0..outputs.len() {
@@ -474,10 +472,10 @@ impl<F: FieldExt + TensorType> Model<F> {
                         })
                         .collect_vec();
                 }
+
                 Ok(())
             },
         )?;
-
         info!("computing...");
         Ok(())
     }
