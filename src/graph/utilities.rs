@@ -288,6 +288,7 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
         "Add" => Box::new(PolyOp::Add { a: None }),
         "Sub" => Box::new(PolyOp::Sub),
         "Mul" => Box::new(PolyOp::Mult { a: None }),
+        "Iff" => Box::new(PolyOp::Iff),
         "Greater" => {
             todo!()
         }

@@ -594,6 +594,77 @@ pub fn matmul<F: FieldExt + TensorType>(
     Ok(output.into())
 }
 
+/// Iff
+pub fn iff<F: FieldExt + TensorType>(
+    config: &mut BaseConfig<F>,
+    mut region: Option<&mut Region<F>>,
+    values: &[ValTensor<F>; 3],
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // if mask > 0 then output a else output b
+    let (mask, b, a) = (&values[0], &values[1], &values[2]);
+
+    if (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])
+        || (a.dims()[0..a.dims().len() - 2] != b.dims()[0..a.dims().len() - 2])
+    {
+        return Err(Box::new(TensorError::DimMismatch("matmul".to_string())));
+    }
+
+    let unit: ValTensor<F> = if let Some(region) = region.as_deref_mut() {
+        Tensor::from(
+            vec![config.inputs[1].assign_constant(region, *offset, F::from(1))?].into_iter(),
+        )
+        .into()
+    } else {
+        // for dummy run throughs
+        Tensor::from(vec![Value::known(F::from(1))].into_iter()).into()
+    };
+    *offset += 1;
+
+    // make sure mask is boolean
+    let assigned_mask = config.inputs[1].assign(region.as_deref_mut(), *offset, &mask)?;
+    if let Some(region) = region.as_deref_mut() {
+        for i in 0..assigned_mask.len() {
+            let (x, y) = config.inputs[1].cartesian_coord(*offset + i);
+            config
+                .selectors
+                .get(&(BaseOp::IsBoolean, x))
+                .unwrap()
+                .enable(region, y)?;
+        }
+    }
+
+    *offset += assigned_mask.len();
+
+    let one_minus_mask = pairwise(
+        config,
+        region.as_deref_mut(),
+        &[unit, assigned_mask.clone()],
+        offset,
+        BaseOp::Sub,
+    )?;
+
+    let masked_a = pairwise(
+        config,
+        region.as_deref_mut(),
+        &[a.clone(), assigned_mask],
+        offset,
+        BaseOp::Mult,
+    )?;
+    let masked_b = pairwise(
+        config,
+        region.as_deref_mut(),
+        &[b.clone(), one_minus_mask],
+        offset,
+        BaseOp::Mult,
+    )?;
+
+    let output = pairwise(config, region, &[masked_a, masked_b], offset, BaseOp::Add)?;
+
+    // Now we can assign the matmul op
+    Ok(output.into())
+}
+
 /// Negation operation accumulated layout
 pub fn neg<F: FieldExt + TensorType>(
     config: &mut BaseConfig<F>,

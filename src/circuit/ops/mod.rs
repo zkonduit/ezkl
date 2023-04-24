@@ -41,8 +41,8 @@ pub trait Op<F: FieldExt + TensorType>: std::fmt::Debug + Send + Sync {
     }
 
     ///
-    fn requires_homogenous_input_scales(&self) -> bool {
-        false
+    fn requires_homogenous_input_scales(&self) -> Vec<usize> {
+        vec![]
     }
 
     ///

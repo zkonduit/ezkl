@@ -88,10 +88,9 @@ impl<F: FieldExt + TensorType> Node<F> {
 
         let mut opkind = new_op_from_onnx(idx, scale, public_params, node.clone(), &mut inputs)?; // parses the op name
 
+        let inputs_to_scale = opkind.requires_homogenous_input_scales();
         // creates a rescaled op if the inputs are not homogenous
-        if opkind.requires_homogenous_input_scales() {
-            opkind = Self::homogenize_input_scales(opkind, inputs.clone())?;
-        }
+        opkind = Self::homogenize_input_scales(opkind, inputs.clone(), inputs_to_scale)?;
 
         // rescale the inputs if necessary to get consistent fixed points
         let in_scales: Vec<u32> = inputs.iter().map(|i| i.out_scale).collect();
@@ -143,7 +142,12 @@ impl<F: FieldExt + TensorType> Node<F> {
     fn homogenize_input_scales(
         opkind: Box<dyn Op<F>>,
         inputs: Vec<Self>,
+        inputs_to_scale: Vec<usize>,
     ) -> Result<Box<dyn Op<F>>, Box<dyn Error>> {
+        if inputs_to_scale.is_empty() {
+            return Ok(opkind);
+        }
+
         let mut multipliers = vec![1; inputs.len()];
         let out_scales = inputs.windows(1).map(|w| w[0].out_scale).collect_vec();
         if !out_scales.windows(2).all(|w| w[0] == w[1]) {
@@ -152,6 +156,9 @@ impl<F: FieldExt + TensorType> Node<F> {
                 .iter()
                 .enumerate()
                 .map(|(idx, input)| {
+                    if !inputs_to_scale.contains(&idx) {
+                        return;
+                    }
                     let scale_diff = max_scale - input.out_scale;
                     if scale_diff > 0 {
                         let mult = scale_to_multiplier(scale_diff);
