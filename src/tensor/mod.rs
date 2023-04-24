@@ -1017,7 +1017,7 @@ impl<T: Clone + TensorType> Tensor<Tensor<T>> {
     }
 }
 
-impl<T: TensorType + Add<Output = T>> Add for Tensor<T> {
+impl<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync> Add for Tensor<T> {
     type Output = Result<Tensor<T>, TensorError>;
     /// Adds tensors.
     /// # Arguments
@@ -1074,51 +1074,60 @@ impl<T: TensorType + Add<Output = T>> Add for Tensor<T> {
                 && rhs.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
-                assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
+                assert_eq!(rhs.dims()[0], self.dims()[0]);
                 output = rhs.clone();
                 let lhs = self.clone();
-                let full_indices = rhs.dims().iter().map(|d| 0..*d);
-                for coord in full_indices.multi_cartesian_product() {
-                    let i = self.get_index(&coord);
-                    output[i] = output[i].clone() + lhs[coord[0]].clone();
-                }
+                let full_indices = rhs
+                    .dims()
+                    .iter()
+                    .map(|d| 0..*d)
+                    .multi_cartesian_product()
+                    .collect::<Vec<Vec<usize>>>();
+                output.par_iter_mut().enumerate().for_each(|(i, x)| {
+                    let coord = &full_indices[i];
+                    *x = x.clone() + lhs[coord[0]].clone();
+                });
             } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
                 && self.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
-                assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
-                let rhs = rhs.clone();
-                let full_indices = self.dims().iter().map(|d| 0..*d);
-                for coord in full_indices.multi_cartesian_product() {
-                    let i = self.get_index(&coord);
-                    output[i] = output[i].clone() + rhs[coord[0]].clone();
-                }
+                assert_eq!(self.dims()[0], rhs.dims()[0]);
+                let full_indices = self
+                    .dims()
+                    .iter()
+                    .map(|d| 0..*d)
+                    .multi_cartesian_product()
+                    .collect::<Vec<Vec<usize>>>();
+                output.par_iter_mut().enumerate().for_each(|(i, x)| {
+                    let coord = &full_indices[i];
+                    *x = x.clone() + rhs[coord[0]].clone();
+                });
             }
             // casts a 1D addition
             else if rhs.dims().iter().product::<usize>() == 1 {
-                for i in 0..output.len() {
-                    output[i] = output[i].clone() + rhs[0].clone();
-                }
+                output.par_iter_mut().for_each(|o| {
+                    *o = o.clone() + rhs[0].clone();
+                });
             }
             // make 1D casting commutative
             else if self.dims().iter().product::<usize>() == 1 {
                 output = rhs.clone();
-                for i in 0..rhs.len() {
-                    output[i] = output[i].clone() + self[0].clone();
-                }
+                output.par_iter_mut().for_each(|o| {
+                    *o = o.clone() + self[0].clone();
+                });
             } else {
                 return Err(TensorError::DimMismatch("add".to_string()));
             }
         } else {
-            for (i, e_i) in rhs.iter().enumerate() {
-                output[i] = output[i].clone() + e_i.clone()
-            }
+            output.par_iter_mut().zip(rhs).for_each(|(o, r)| {
+                *o = o.clone() + r.clone();
+            });
         }
         Ok(output)
     }
 }
 
-impl<T: TensorType + Sub<Output = T>> Sub for Tensor<T> {
+impl<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync> Sub for Tensor<T> {
     type Output = Result<Tensor<T>, TensorError>;
     /// Subtracts tensors.
     /// # Arguments
@@ -1176,51 +1185,60 @@ impl<T: TensorType + Sub<Output = T>> Sub for Tensor<T> {
                 && rhs.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
-                assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
+                assert_eq!(rhs.dims()[0], self.dims()[0]);
                 output = rhs.clone();
                 let lhs = self.clone();
-                let full_indices = rhs.dims().iter().map(|d| 0..*d);
-                for coord in full_indices.multi_cartesian_product() {
-                    let i = self.get_index(&coord);
-                    output[i] = lhs[coord[0]].clone() - output[i].clone();
-                }
+                let full_indices = rhs
+                    .dims()
+                    .iter()
+                    .map(|d| 0..*d)
+                    .multi_cartesian_product()
+                    .collect::<Vec<Vec<usize>>>();
+                output.par_iter_mut().enumerate().for_each(|(i, x)| {
+                    let coord = &full_indices[i];
+                    *x = x.clone() - lhs[coord[0]].clone();
+                });
             } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
                 && self.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
-                assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
-                let rhs = rhs.clone();
-                let full_indices = self.dims().iter().map(|d| 0..*d);
-                for coord in full_indices.multi_cartesian_product() {
-                    let i = self.get_index(&coord);
-                    output[i] = output[i].clone() - rhs[coord[0]].clone();
-                }
+                assert_eq!(self.dims()[0], rhs.dims()[0]);
+                let full_indices = self
+                    .dims()
+                    .iter()
+                    .map(|d| 0..*d)
+                    .multi_cartesian_product()
+                    .collect::<Vec<Vec<usize>>>();
+                output.par_iter_mut().enumerate().for_each(|(i, x)| {
+                    let coord = &full_indices[i];
+                    *x = x.clone() - rhs[coord[0]].clone();
+                });
             }
             // casts a 1D addition
             else if rhs.dims().iter().product::<usize>() == 1 {
-                for i in 0..output.len() {
-                    output[i] = output[i].clone() - rhs[0].clone();
-                }
+                output.par_iter_mut().for_each(|o| {
+                    *o = o.clone() - rhs[0].clone();
+                });
             }
             // make 1D casting commutative
             else if self.dims().iter().product::<usize>() == 1 {
                 output = rhs.clone();
-                for i in 0..rhs.len() {
-                    output[i] = self[0].clone() - output[i].clone();
-                }
+                output.par_iter_mut().for_each(|o| {
+                    *o = self[0].clone() - o.clone();
+                });
             } else {
                 return Err(TensorError::DimMismatch("sub".to_string()));
             }
         } else {
-            for (i, e_i) in rhs.iter().enumerate() {
-                output[i] = output[i].clone() - e_i.clone()
-            }
+            output.par_iter_mut().zip(rhs).for_each(|(o, r)| {
+                *o = o.clone() - r.clone();
+            });
         }
         Ok(output)
     }
 }
 
-impl<T: TensorType + Mul<Output = T>> Mul for Tensor<T> {
+impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync> Mul for Tensor<T> {
     type Output = Result<Tensor<T>, TensorError>;
     /// Elementwise multiplies tensors.
     /// # Arguments
@@ -1276,51 +1294,60 @@ impl<T: TensorType + Mul<Output = T>> Mul for Tensor<T> {
                 && rhs.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
-                assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
+                assert_eq!(rhs.dims()[0], self.dims()[0]);
                 output = rhs.clone();
                 let lhs = self.clone();
-                let full_indices = rhs.dims().iter().map(|d| 0..*d);
-                for coord in full_indices.multi_cartesian_product() {
-                    let i = self.get_index(&coord);
-                    output[i] = lhs[coord[0]].clone() * output[i].clone();
-                }
+                let full_indices = rhs
+                    .dims()
+                    .iter()
+                    .map(|d| 0..*d)
+                    .multi_cartesian_product()
+                    .collect::<Vec<Vec<usize>>>();
+                output.par_iter_mut().enumerate().for_each(|(i, x)| {
+                    let coord = &full_indices[i];
+                    *x = x.clone() * lhs[coord[0]].clone();
+                });
             } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
                 && self.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
-                assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
-                let rhs = rhs.clone();
-                let full_indices = self.dims().iter().map(|d| 0..*d);
-                for coord in full_indices.multi_cartesian_product() {
-                    let i = self.get_index(&coord);
-                    output[i] = output[i].clone() * rhs[coord[0]].clone();
-                }
+                assert_eq!(self.dims()[0], rhs.dims()[0]);
+                let full_indices = self
+                    .dims()
+                    .iter()
+                    .map(|d| 0..*d)
+                    .multi_cartesian_product()
+                    .collect::<Vec<Vec<usize>>>();
+                output.par_iter_mut().enumerate().for_each(|(i, x)| {
+                    let coord = &full_indices[i];
+                    *x = rhs[coord[0]].clone() * x.clone();
+                });
             }
-            // cast 1D mul
+            // casts a 1D addition
             else if rhs.dims().iter().product::<usize>() == 1 {
-                for i in 0..output.len() {
-                    output[i] = output[i].clone() * rhs[0].clone();
-                }
+                output.par_iter_mut().for_each(|o| {
+                    *o = o.clone() * rhs[0].clone();
+                });
             }
             // make 1D casting commutative
             else if self.dims().iter().product::<usize>() == 1 {
                 output = rhs.clone();
-                for i in 0..rhs.len() {
-                    output[i] = output[i].clone() * self[0].clone();
-                }
+                output.par_iter_mut().for_each(|o| {
+                    *o = self[0].clone() * o.clone();
+                });
             } else {
-                return Err(TensorError::DimMismatch("mul".to_string()));
+                return Err(TensorError::DimMismatch("sub".to_string()));
             }
         } else {
-            for (i, e_i) in rhs.iter().enumerate() {
-                output[i] = output[i].clone() * e_i.clone()
-            }
+            output.par_iter_mut().zip(rhs).for_each(|(o, r)| {
+                *o = o.clone() * r.clone();
+            });
         }
         Ok(output)
     }
 }
 
-impl<T: TensorType + Mul<Output = T>> Tensor<T> {
+impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync> Tensor<T> {
     /// Elementwise raise a tensor to the nth power.
     /// # Arguments
     ///
