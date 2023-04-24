@@ -508,7 +508,12 @@ impl<F: FieldExt + TensorType> Model<F> {
 
         let mut offset: usize = 0;
         for (idx, node) in self.nodes.iter() {
-            debug!("dummy layout {}: {}", idx, node.opkind.as_str());
+            debug!(
+                "dummy layout {}: {}, offset: {}",
+                idx,
+                node.opkind.as_str(),
+                offset
+            );
 
             let values: Vec<ValTensor<F>> = node
                 .inputs

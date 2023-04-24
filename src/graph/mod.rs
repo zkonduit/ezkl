@@ -184,19 +184,19 @@ impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
         let instance_shapes = model.instance_shapes();
         // this is the total number of variables we will need to allocate
         // for the circuit
-        let var_len = if let Some(var_len) = model.run_args.allocated_constraints {
-            var_len
+        let num_constraints = if let Some(num_constraints) = model.run_args.allocated_constraints {
+            num_constraints
         } else {
             model.dummy_layout(&model.input_shapes()).unwrap()
         };
 
-        info!("total var len: {:?}", var_len);
+        info!("total num constraints: {:?}", num_constraints);
         info!("instance_shapes: {:?}", instance_shapes);
 
         let mut vars = ModelVars::new(
             cs,
             model.run_args.logrows as usize,
-            var_len,
+            num_constraints,
             instance_shapes.clone(),
             model.visibility.clone(),
             model.run_args.scale,
