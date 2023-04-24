@@ -111,7 +111,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                         .layer_config
                         .layout(
                             Some(&mut region),
-                            &[self.input.clone()],
+                            &[x],
                             &mut offset,
                             Box::new(PolyOp::Add {
                                 a: Some(self.l0_params[1].clone()),
@@ -139,7 +139,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                         .layer_config
                         .layout(
                             Some(&mut region),
-                            &[self.input.clone()],
+                            &[x],
                             &mut offset,
                             Box::new(PolyOp::Matmul {
                                 a: Some(self.l2_params[0].clone()),
@@ -152,7 +152,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                         .layer_config
                         .layout(
                             Some(&mut region),
-                            &[self.input.clone()],
+                            &[x],
                             &mut offset,
                             Box::new(PolyOp::Add {
                                 a: Some(self.l2_params[1].clone()),

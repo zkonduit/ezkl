@@ -231,7 +231,7 @@ where
             )
             .unwrap();
 
-        match x.unwrap() {
+        match x {
             ValTensor::Value {
                 inner: v, dims: _, ..
             } => v
