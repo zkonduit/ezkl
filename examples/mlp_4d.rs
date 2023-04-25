@@ -94,10 +94,11 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                 || "mlp_4d",
                 |mut region| {
                     let mut offset = 0;
+                    let region = &mut Some(&mut region);
                     let x = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[self.input.clone()],
                             &mut offset,
                             Box::new(PolyOp::Matmul {
@@ -110,7 +111,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x],
                             &mut offset,
                             Box::new(PolyOp::Add {
@@ -125,7 +126,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let mut x = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x],
                             &mut offset,
                             Box::new(LookupOp::ReLU { scale: 1 }),
@@ -138,7 +139,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x],
                             &mut offset,
                             Box::new(PolyOp::Matmul {
@@ -151,7 +152,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x],
                             &mut offset,
                             Box::new(PolyOp::Add {
@@ -165,7 +166,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x],
                             &mut offset,
                             Box::new(LookupOp::ReLU { scale: 1 }),
@@ -175,7 +176,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     Ok(config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x.unwrap()],
                             &mut offset,
                             Box::new(LookupOp::Div {

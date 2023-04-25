@@ -305,7 +305,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
     /// * `op` - The operation being represented.
     pub fn layout(
         &mut self,
-        mut region: Option<&mut Region<F>>,
+        region: &mut Option<&mut Region<F>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
         op: Box<dyn Op<F>>,
@@ -313,12 +313,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         let mut cp_values = vec![];
         for v in values.iter() {
             if let ValTensor::Instance { .. } = v {
-                cp_values.push(layouts::identity(
-                    self,
-                    region.as_deref_mut(),
-                    &[v.clone()],
-                    offset,
-                )?);
+                cp_values.push(layouts::identity(self, region, &[v.clone()], offset)?);
             } else {
                 cp_values.push(v.clone());
             }

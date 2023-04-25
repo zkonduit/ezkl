@@ -53,7 +53,7 @@ impl Circuit<Fr> for MyCircuit {
             |mut region| {
                 config
                     .layout(
-                        Some(&mut region),
+                        &mut Some(&mut region),
                         &self.inputs,
                         &mut 0,
                         Box::new(PolyOp::Pow(4)),
