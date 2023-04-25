@@ -7,107 +7,6 @@ use rayon::{
 };
 pub use std::ops::{Add, Div, Mul, Sub};
 
-/// Matrix multiplies two 2D tensors (and adds an offset).
-/// # Arguments
-///
-/// * `inputs` - A vector of tensors holding in order: input data, affine kernel, convolution bias.
-/// # Examples
-/// ```
-/// use ezkl_lib::tensor::Tensor;
-/// use ezkl_lib::tensor::ops::affine;
-///
-/// let x = Tensor::<i128>::new(
-///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 2, 1, 1]),
-///     &[3, 4],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///     Some(&[2, 1, 2, 1, 1, 1]),
-///     &[2, 3],
-/// ).unwrap();
-/// let b = Tensor::<i128>::new(
-///     Some(&[0, 0]),
-///     &[2],
-/// ).unwrap();
-/// let result = affine(&[x, k, b]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[26, 7, 11, 3, 15, 3, 7, 2]), &[2, 4]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn affine<
-    T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Send + std::marker::Sync,
->(
-    inputs: &[Tensor<T>],
-) -> Result<Tensor<T>, TensorError> {
-    let (mut input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
-    if (inputs.len() != 3)
-        || (bias.dims()[0] != kernel.dims()[0])
-        || (input.dims()[0] != kernel.dims()[1])
-    {
-        return Err(TensorError::DimMismatch("affine".to_string()));
-    }
-
-    // does matrix to vector multiplication
-    if input.dims().len() == 1 {
-        input.reshape(&[input.dims()[0], 1])
-    }
-
-    // calculate value of output
-    let mut output: Tensor<T> = matmul(&[kernel.clone(), input.clone()])?;
-
-    for i in 0..kernel.dims()[0] {
-        for j in 0..input.dims()[1] {
-            output.set(&[i, j], output.get(&[i, j]) + bias[i].clone());
-        }
-    }
-    // does matrix to vector multiplication
-    if output.dims()[1] == 1 {
-        output.flatten();
-    }
-    Ok(output)
-}
-
-/// Scales and shifts a tensor.
-/// Given inputs (x,k,b) computes k*x + b elementwise
-/// # Arguments
-///
-/// * `inputs` - Vector of tensors of length 2
-/// # Examples
-/// ```
-/// use ezkl_lib::tensor::Tensor;
-/// use ezkl_lib::tensor::ops::scale_and_shift;
-///
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 1, 2, 1, 1, 1]),
-///     &[2, 3],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///     Some(&[2, 1, 2, 1, 1, 1]),
-///     &[2, 3],
-/// ).unwrap();
-/// let b = Tensor::<i128>::new(
-///     Some(&[2, 1, 2, 1, 1, 1]),
-///     &[2, 3],
-/// ).unwrap();
-/// let result = scale_and_shift(&[x, k, b]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[6, 2, 6, 2, 2, 2]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn scale_and_shift<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-    inputs: &[Tensor<T>],
-) -> Result<Tensor<T>, TensorError> {
-    if (inputs.len() != 3)
-        || (inputs[1].dims() != inputs[2].dims())
-        || (inputs[0].dims() != inputs[1].dims())
-    {
-        return Err(TensorError::DimMismatch("scale and shift".to_string()));
-    }
-    let (input, kernel, bias) = (inputs[0].clone(), inputs[1].clone(), inputs[2].clone());
-    let mut output: Tensor<T> = input;
-    for (i, bias_i) in bias.iter().enumerate() {
-        output[i] = kernel[i].clone() * output[i].clone() + bias_i.clone()
-    }
-    Ok(output)
-}
-
 /// Matrix multiplies two 2D tensors.
 /// # Arguments
 ///
@@ -220,12 +119,14 @@ pub fn matmul<
 /// let expected = Tensor::<i128>::new(Some(&[4, 3, 4, 3, 3, 3]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn add<T: TensorType + Add<Output = T>>(t: &[Tensor<T>]) -> Result<Tensor<T>, TensorError> {
+pub fn add<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync>(
+    t: &[Tensor<T>],
+) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut output: Tensor<T> = t[0].clone();
 
     for e in t[1..].iter() {
-        output = (output + e.clone())?;
+        output = output.add(e.clone())?;
     }
 
     Ok(output)
@@ -265,7 +166,9 @@ pub fn add<T: TensorType + Add<Output = T>>(t: &[Tensor<T>]) -> Result<Tensor<T>
 /// let expected = Tensor::<i128>::new(Some(&[0, -1, 0, -1, -1, -1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn sub<T: TensorType + Sub<Output = T>>(t: &[Tensor<T>]) -> Result<Tensor<T>, TensorError> {
+pub fn sub<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync>(
+    t: &[Tensor<T>],
+) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut output: Tensor<T> = t[0].clone();
 
@@ -309,7 +212,9 @@ pub fn sub<T: TensorType + Sub<Output = T>>(t: &[Tensor<T>]) -> Result<Tensor<T>
 /// let expected = Tensor::<i128>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn mult<T: TensorType + Mul<Output = T>>(t: &[Tensor<T>]) -> Result<Tensor<T>, TensorError> {
+pub fn mult<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync>(
+    t: &[Tensor<T>],
+) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut output: Tensor<T> = t[0].clone();
 
@@ -338,17 +243,17 @@ pub fn mult<T: TensorType + Mul<Output = T>>(t: &[Tensor<T>]) -> Result<Tensor<T
 /// let expected = Tensor::<i128>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn rescale<T: TensorType + Add<Output = T>>(
+pub fn rescale<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync>(
     a: &Tensor<T>,
     mult: usize,
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut output: Tensor<T> = a.clone();
-    for (i, a_i) in a.iter().enumerate() {
+    output.par_iter_mut().enumerate().for_each(|(i, a_i)| {
         for _ in 1..mult {
-            output[i] = output[i].clone() + a_i.clone();
+            *a_i = a_i.clone() + a[i].clone();
         }
-    }
+    });
     Ok(output)
 }
 
@@ -574,6 +479,8 @@ pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 /// * `stride` - Tuple of stride values in x and y directions.
 /// # Examples
 /// ```
+/// // expected ouputs are taken from pytorch torch.nn.functional.conv2d
+///
 /// use ezkl_lib::tensor::Tensor;
 /// use ezkl_lib::tensor::ops::conv;
 ///
@@ -599,16 +506,34 @@ pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 ///     &[2, 3, 3],
 /// ).unwrap();
 /// let k = Tensor::<i128>::new(
-///     Some(&[5, 1, 1, 1]),
-///     &[1, 1, 2, 2],
+///     Some(&[5, 1, 1, 1, 5, 2, 1, 1]),
+///     &[2, 1, 2, 2],
 /// ).unwrap();
 /// let b = Tensor::<i128>::new(
-///     Some(&[0]),
-///     &[1],
+///     Some(&[1, 1]),
+///     &[2],
 /// ).unwrap();
 ///
 /// let result = conv::<i128>(&[x, k, b], (0, 0), (1, 1)).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[62, 32, 16, 52]), &[1, 2, 2]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[32, 17, 9, 27, 34, 20, 13, 26]), &[2, 2, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// // Now test multi channel
+/// let x = Tensor::<i128>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[2, 3, 3],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///     Some(&[5, 1, 1, 1, 5, 2, 1, 1, 5, 3, 1, 1, 5, 4, 1, 1, 5, 1, 1, 1, 5, 2, 1, 1, 5, 3, 1, 1, 5, 4, 1, 1]),
+///     &[4, 2, 2, 2],
+/// ).unwrap();
+/// let b = Tensor::<i128>::new(
+///     Some(&[1, 1, 1, 1]),
+///     &[4],
+/// ).unwrap();
+///
+/// let result = conv::<i128>(&[x, k, b], (0, 0), (1, 1)).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[65, 36, 21, 52, 73, 48, 37, 48, 65, 36, 21, 52, 73, 48, 37, 48]), &[4, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn conv<
@@ -619,30 +544,21 @@ pub fn conv<
     stride: (usize, usize),
 ) -> Result<Tensor<T>, TensorError> {
     let has_bias = inputs.len() == 3;
-    let (image, mut kernel) = (inputs[0].clone(), inputs[1].clone());
+    let (image, kernel) = (&inputs[0], &inputs[1]);
 
     if (image.dims().len() != 3)
         || (kernel.dims().len() != 4)
-        || ((image.dims()[0] != kernel.dims()[1]) && (kernel.dims()[1] != 1))
+        // ensure number of groups makes sense
+        || (image.dims()[0] % kernel.dims()[1] != 0)
     {
         return Err(TensorError::DimMismatch("conv".to_string()));
-    }
-
-    if kernel.dims()[1] == 1 && kernel.dims()[1] != image.dims()[0] {
-        kernel = kernel.repeat_rows(image.dims()[0])?;
-        kernel.reshape(&[
-            kernel.dims()[0],
-            image.dims()[0],
-            kernel.dims()[2],
-            kernel.dims()[3],
-        ]);
     }
 
     let image_dims = image.dims();
     let kernel_dims = kernel.dims();
 
     if has_bias {
-        let bias = inputs[2].clone();
+        let bias = &inputs[2];
         if (bias.dims().len() != 1) || (bias.dims()[0] != kernel.dims()[0]) {
             return Err(TensorError::DimMismatch("conv bias".to_string()));
         }
@@ -650,7 +566,7 @@ pub fn conv<
 
     let (output_channels, input_channels, kernel_height, kernel_width) = (
         kernel_dims[0],
-        kernel_dims[1],
+        image_dims[0],
         kernel_dims[2],
         kernel_dims[3],
     );
@@ -662,44 +578,82 @@ pub fn conv<
     let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
     let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
 
-    // calculate value of output
-    let mut output: Tensor<T> =
-        Tensor::new(None, &[output_channels, vert_slides, horz_slides]).unwrap();
+    let num_groups = image_dims[0] / kernel_dims[1];
+    let input_channels_per_group = input_channels / num_groups;
+    let output_channels_per_group = output_channels / num_groups;
 
-    let cartesian_coord = vec![(0..output_channels), (0..vert_slides), (0..horz_slides)]
-        .iter()
-        .cloned()
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
+    if output_channels_per_group == 0 {
+        return Err(TensorError::DimMismatch(format!(
+            "Given groups={}, expected kernel to be at least {} at dimension 0 but got {} instead",
+            num_groups, num_groups, output_channels_per_group
+        )));
+    }
 
-    output
+    let mut outputs_per_group = vec![Tensor::new(None, &[0])?; num_groups];
+
+    outputs_per_group
         .par_iter_mut()
         .enumerate()
-        .for_each(|(flat_index, o)| {
-            let coord = &cartesian_coord[flat_index];
-            let (i, j, k) = (coord[0], coord[1], coord[2]);
-            let rs = j * stride.0;
-            let cs = k * stride.1;
+        .for_each(|(group, o)| {
+            let start_channel = group * input_channels_per_group;
+            let end_channel = start_channel + input_channels_per_group;
+            let padded_image_per_group = &padded_image
+                .get_slice(&[start_channel..end_channel])
+                .unwrap();
 
-            let mut res = dot(&vec![
-                &kernel.get_slice(&[i..i + 1]).unwrap().clone(),
-                &padded_image
-                    .get_slice(&[
-                        0..input_channels,
-                        rs..(rs + kernel_height),
-                        cs..(cs + kernel_width),
+            let kernel_per_group = &kernel
+                .get_slice(&[
+                    group * output_channels_per_group..(group + 1) * output_channels_per_group
+                ])
+                .unwrap();
+            let mut output_per_group =
+                Tensor::new(None, &[output_channels_per_group, vert_slides, horz_slides]).unwrap();
+
+            let cartesian_coord_per_group = vec![
+                (0..output_channels_per_group),
+                (0..vert_slides),
+                (0..horz_slides),
+            ]
+            .iter()
+            .cloned()
+            .multi_cartesian_product()
+            .collect::<Vec<_>>();
+
+            output_per_group
+                .par_iter_mut()
+                .enumerate()
+                .for_each(|(flat_index, o)| {
+                    let coord = &cartesian_coord_per_group[flat_index];
+                    let (i, j, k) = (coord[0], coord[1], coord[2]);
+                    let rs = j * stride.0;
+                    let cs = k * stride.1;
+
+                    let res = dot(&vec![
+                        &kernel_per_group.get_slice(&[i..i + 1]).unwrap().clone(),
+                        &padded_image_per_group
+                            .get_slice(&[
+                                0..input_channels_per_group,
+                                rs..(rs + kernel_height),
+                                cs..(cs + kernel_width),
+                            ])
+                            .unwrap(),
                     ])
-                    .unwrap(),
-            ])
-            .unwrap();
+                    .unwrap();
 
-            if has_bias {
-                // increment result by the bias
-                res[0] = res[0].clone() + inputs[2][i].clone();
-            }
+                    *o = res[0].clone();
+                });
 
-            *o = res[0].clone();
+            *o = output_per_group;
         });
+
+    let mut output = Tensor::new(Some(&outputs_per_group), &[num_groups])?.combine()?;
+
+    output.reshape(&[output_channels, vert_slides, horz_slides]);
+
+    if has_bias {
+        // increment result by the bias
+        output = (output + inputs[2].clone())?;
+    }
 
     Ok(output)
 }
@@ -961,7 +915,11 @@ pub fn pad<T: TensorType>(
 /// ).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn pack<T: TensorType>(a: &Tensor<T>, base: T, scale: u32) -> Result<Tensor<T>, TensorError>
+pub fn pack<T: TensorType + std::marker::Send + std::marker::Sync>(
+    a: &Tensor<T>,
+    base: T,
+    scale: u32,
+) -> Result<Tensor<T>, TensorError>
 where
     T: Add<Output = T>,
     T: Mul<Output = T>,

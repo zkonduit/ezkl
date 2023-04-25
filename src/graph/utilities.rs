@@ -391,6 +391,14 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
                 }
             };
 
+            if let Some(dilations) = &conv_node.pool_spec.dilations {
+                if dilations.iter().any(|x| *x != 1) {
+                    return Err(Box::new(GraphError::MisformedParams(
+                        "non unit dilations not supported".to_string(),
+                    )));
+                }
+            }
+
             if (conv_node.pool_spec.data_format != DataFormat::NCHW)
                 || (conv_node.kernel_fmt != KernelFormat::OIHW)
             {
