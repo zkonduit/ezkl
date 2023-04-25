@@ -1072,9 +1072,10 @@ impl<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync> Ad
         if self.len() != rhs.len() {
             if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
                 && rhs.dims().iter().product::<usize>() > 1
+                && self.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
-                assert_eq!(rhs.dims()[0], self.dims()[0]);
+                assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
                 output = rhs.clone();
                 let lhs = self.clone();
                 let full_indices = rhs
@@ -1088,10 +1089,11 @@ impl<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync> Ad
                     *x = x.clone() + lhs[coord[0]].clone();
                 });
             } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+                && rhs.dims().iter().product::<usize>() > 1
                 && self.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
-                assert_eq!(self.dims()[0], rhs.dims()[0]);
+                assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
                 let full_indices = self
                     .dims()
                     .iter()
@@ -1183,9 +1185,10 @@ impl<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync> Su
         if self.len() != rhs.len() {
             if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
                 && rhs.dims().iter().product::<usize>() > 1
+                && self.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
-                assert_eq!(rhs.dims()[0], self.dims()[0]);
+                assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
                 output = rhs.clone();
                 let lhs = self.clone();
                 let full_indices = rhs
@@ -1199,10 +1202,11 @@ impl<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync> Su
                     *x = x.clone() - lhs[coord[0]].clone();
                 });
             } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+                && rhs.dims().iter().product::<usize>() > 1
                 && self.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
-                assert_eq!(self.dims()[0], rhs.dims()[0]);
+                assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
                 let full_indices = self
                     .dims()
                     .iter()
@@ -1292,9 +1296,10 @@ impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync> Mu
         if self.len() != rhs.len() {
             if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
                 && rhs.dims().iter().product::<usize>() > 1
+                && self.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
-                assert_eq!(rhs.dims()[0], self.dims()[0]);
+                assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
                 output = rhs.clone();
                 let lhs = self.clone();
                 let full_indices = rhs
@@ -1308,10 +1313,11 @@ impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync> Mu
                     *x = x.clone() * lhs[coord[0]].clone();
                 });
             } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
+                && rhs.dims().iter().product::<usize>() > 1
                 && self.dims().iter().product::<usize>() > 1
                 && self.dims() != rhs.dims()
             {
-                assert_eq!(self.dims()[0], rhs.dims()[0]);
+                assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
                 let full_indices = self
                     .dims()
                     .iter()
