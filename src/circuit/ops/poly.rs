@@ -13,7 +13,6 @@ pub enum PolyOp<F: FieldExt + TensorType> {
     Matmul {
         a: Option<ValTensor<F>>,
     },
-    Affine,
     Conv {
         kernel: ValTensor<F>,
         bias: Option<ValTensor<F>>,
@@ -42,6 +41,7 @@ pub enum PolyOp<F: FieldExt + TensorType> {
     Pow(u32),
     Pack(u32, u32),
     GlobalSumPool,
+    Iff,
     RangeCheck(i32),
 }
 
@@ -62,9 +62,9 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
             PolyOp::GlobalSumPool => "GLOBALSUMPOOL",
             PolyOp::Conv { .. } => "CONV",
             PolyOp::SumPool { .. } => "SUMPOOL",
-            PolyOp::Affine => "AFFINE",
             PolyOp::Matmul { .. } => "MATMUL",
             PolyOp::RangeCheck(..) => "RANGECHECK",
+            PolyOp::Iff => "IFF",
         }
     }
 
@@ -102,7 +102,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
                 }
                 tensor::ops::mult(&inputs)
             }
-            PolyOp::Affine => tensor::ops::affine(&inputs),
             PolyOp::Matmul { a } => {
                 if let Some(a) = a {
                     let b = inputs;
@@ -151,6 +150,17 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
             }
             PolyOp::GlobalSumPool => unreachable!(),
             PolyOp::RangeCheck(..) => Ok(inputs[0].clone()),
+            PolyOp::Iff => {
+                let mask = inputs[0].clone();
+                // if mask > 0 then output a else output b
+                let a = inputs[2].clone();
+                let b = inputs[1].clone();
+
+                let out = (mask.clone() * a.clone())?
+                    - ((Tensor::from(vec![1_i128].into_iter()) - mask.clone())? * b.clone())?;
+
+                Ok(out?)
+            }
         }
     }
 
@@ -164,6 +174,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
         let mut values = values.to_vec();
 
         Ok(Some(match self {
+            PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?, offset)?,
             PolyOp::Dot => layouts::dot(config, region, values[..].try_into()?, offset)?,
             PolyOp::Sum { axes } => {
                 layouts::sum_axes(config, region, values[..].try_into()?, axes, offset)?
@@ -177,7 +188,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
 
                 layouts::matmul(config, region, values[..].try_into()?, offset)?
             }
-            PolyOp::Affine => layouts::affine(config, region, values[..].try_into()?, offset)?,
             PolyOp::Conv {
                 kernel,
                 bias,
@@ -254,6 +264,7 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
 
     fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
         match self {
+            PolyOp::Iff => in_scales[1],
             PolyOp::Dot => in_scales[0] + in_scales[1],
             PolyOp::Sum { .. } => in_scales[0],
             PolyOp::Matmul { a } => {
@@ -265,7 +276,6 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
                 }
                 scale
             }
-            PolyOp::Affine => in_scales[0] + in_scales[1],
             PolyOp::Conv { kernel, bias, .. } => {
                 let output_scale = in_scales[0] + kernel.scale();
                 if let Some(b) = bias {
@@ -309,8 +319,14 @@ impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
         Box::new(self.clone())
     }
 
-    fn requires_homogenous_input_scales(&self) -> bool {
-        matches!(self, PolyOp::Add { .. } | PolyOp::Sub)
+    fn requires_homogenous_input_scales(&self) -> Vec<usize> {
+        if matches!(self, PolyOp::Add { .. } | PolyOp::Sub) {
+            vec![0, 1]
+        } else if matches!(self, PolyOp::Iff) {
+            vec![1, 2]
+        } else {
+            vec![]
+        }
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {

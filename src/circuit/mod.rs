@@ -277,11 +277,11 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         self.lookup_selectors.extend(selectors);
         // if we haven't previously initialized the input/output, do so now
         if let VarTensor::Empty = self.lookup_input {
-            warn!("assiging lookup input");
+            warn!("assigning lookup input");
             self.lookup_input = input.clone();
         }
         if let VarTensor::Empty = self.lookup_output {
-            warn!("assiging lookup output");
+            warn!("assigning lookup input");
             self.lookup_output = output.clone();
         }
         Ok(())

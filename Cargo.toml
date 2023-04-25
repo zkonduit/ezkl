@@ -70,11 +70,6 @@ tempdir = "0.3.7"
 
 
 [[bench]]
-name = "accum_affine"
-harness = false
-
-
-[[bench]]
 name = "accum_dot"
 harness = false
 
