@@ -589,10 +589,6 @@ pub fn matmul<F: FieldExt + TensorType>(
 
     let mut output = allocate_multi_dot(config, region, &mut matrix, &mut inputs, &mut c, offset)?;
 
-    std::thread::spawn(move || drop(matrix));
-    std::thread::spawn(move || drop(inputs));
-    std::thread::spawn(move || drop(c));
-
     output.reshape(&dims)?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
@@ -984,10 +980,6 @@ pub fn conv<F: FieldExt + TensorType + std::marker::Send + std::marker::Sync>(
         });
 
     let mut output = allocate_multi_dot(config, region, &mut a, &mut b, &mut c, offset)?;
-
-    std::thread::spawn(move || drop(a));
-    std::thread::spawn(move || drop(b));
-    std::thread::spawn(move || drop(c));
 
     output.reshape(&[output_channels, vert_slides, horz_slides])?;
 
