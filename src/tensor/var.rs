@@ -217,7 +217,7 @@ impl VarTensor {
     /// Assigns specific values [ValTensor] to the columns of the inner tensor.
     pub fn assign<F: FieldExt + TensorType>(
         &self,
-        region: Option<&mut Region<F>>,
+        region: &mut Option<&mut Region<F>>,
         offset: usize,
         values: &ValTensor<F>,
     ) -> Result<ValTensor<F>, halo2_proofs::plonk::Error> {
@@ -263,7 +263,7 @@ impl VarTensor {
                     },
                     ValType::PrevAssigned(v) => match &self {
                         VarTensor::Advice { inner: advices, .. } => {
-                            v.copy_advice(|| "k", region, advices[x], y)
+                            v.copy_advice(|| "k", *region, advices[x], y)
                         }
                         _ => {
                             error!("PrevAssigned is only supported for advice columns");
@@ -279,7 +279,7 @@ impl VarTensor {
                         _ => unimplemented!(),
                     },
                     ValType::Constant(v) => {
-                        self.assign_constant(region, offset + coord, v)
+                        self.assign_constant(*region, offset + coord, v)
                     }
                 }
             })?.into()),
@@ -294,7 +294,7 @@ impl VarTensor {
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor.
     pub fn assign_with_duplication<F: FieldExt + TensorType>(
         &self,
-        region: Option<&mut Region<F>>,
+        region: &mut Option<&mut Region<F>>,
         offset: usize,
         values: &ValTensor<F>,
         check_mode: &CheckMode
@@ -326,7 +326,7 @@ impl VarTensor {
                         },
                         ValType::PrevAssigned(v) => match &self {
                             VarTensor::Advice { inner: advices, .. } => {
-                                v.copy_advice(|| "k", region, advices[x], y)
+                                v.copy_advice(|| "k", *region, advices[x], y)
                             }
                             _ => {
                                 error!("PrevAssigned is only supported for advice columns");
@@ -343,7 +343,7 @@ impl VarTensor {
                             _ => unimplemented!(),
                         },
                         ValType::Constant(v) => {
-                            self.assign_constant(region, offset + coord, v)
+                            self.assign_constant(*region, offset + coord, v)
                         }
                     }
                 })?.into()} else {

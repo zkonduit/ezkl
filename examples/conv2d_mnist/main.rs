@@ -173,6 +173,7 @@ where
                 || "mlp_4d",
                 |mut region| {
                     let mut offset = 0;
+                    let region = &mut Some(&mut region);
                     let op = PolyOp::Conv {
                         kernel: self.l0_params[0].clone(),
                         bias: Some(self.l0_params[1].clone()),
@@ -181,18 +182,13 @@ where
                     };
                     let x = config
                         .layer_config
-                        .layout(
-                            Some(&mut region),
-                            &[self.input.clone()],
-                            &mut offset,
-                            Box::new(op),
-                        )
+                        .layout(region, &[self.input.clone()], &mut offset, Box::new(op))
                         .unwrap();
 
                     let mut x = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x.unwrap()],
                             &mut offset,
                             Box::new(LookupOp::ReLU { scale: 32 }),
@@ -204,7 +200,7 @@ where
                     let x = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x],
                             &mut offset,
                             Box::new(PolyOp::Matmul {
@@ -217,7 +213,7 @@ where
                     let x: ValTensor<F> = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x],
                             &mut offset,
                             Box::new(PolyOp::Add {

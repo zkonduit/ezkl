@@ -30,7 +30,7 @@ pub trait Op<F: FieldExt + TensorType>: std::fmt::Debug + Send + Sync {
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: Option<&mut Region<F>>,
+        region: &mut Option<&mut Region<F>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>>;
@@ -83,7 +83,7 @@ impl<F: FieldExt + TensorType> Op<F> for Input {
     fn layout(
         &self,
         _: &mut crate::circuit::BaseConfig<F>,
-        _: Option<&mut Region<F>>,
+        _: &mut Option<&mut Region<F>>,
         _: &[ValTensor<F>],
         _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
@@ -146,7 +146,7 @@ impl<F: FieldExt + TensorType> Op<F> for Rescaled<F> {
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        mut region: Option<&mut Region<F>>,
+        region: &mut Option<&mut Region<F>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
@@ -156,13 +156,8 @@ impl<F: FieldExt + TensorType> Op<F> for Rescaled<F> {
             )));
         }
 
-        let res = &layouts::rescale(
-            config,
-            region.as_deref_mut(),
-            values[..].try_into()?,
-            &self.scale,
-            offset,
-        )?[..];
+        let res =
+            &layouts::rescale(config, region, values[..].try_into()?, &self.scale, offset)?[..];
         self.inner.layout(config, region, res, offset)
     }
 
@@ -186,7 +181,7 @@ impl<F: FieldExt + TensorType> Op<F> for Unknown {
     fn layout(
         &self,
         _: &mut crate::circuit::BaseConfig<F>,
-        _: Option<&mut Region<F>>,
+        _: &mut Option<&mut Region<F>>,
         _: &[ValTensor<F>],
         _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
