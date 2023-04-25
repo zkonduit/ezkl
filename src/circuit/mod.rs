@@ -22,6 +22,13 @@ use halo2_proofs::{
 };
 use halo2curves::FieldExt;
 use log::warn;
+#[cfg(feature = "python-bindings")]
+use pyo3::{
+    exceptions::PyValueError,
+    prelude::*,
+    types::PyString,
+    conversion::{FromPyObject, PyTryFrom}
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -68,6 +75,32 @@ impl From<String> for CheckMode {
             "unsafe" => CheckMode::UNSAFE,
             _ => panic!("not a valid checkmode"),
         }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Converts CheckMode into a PyObject (Required for CheckMode to be compatible with Python)
+impl IntoPy<PyObject> for CheckMode {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            CheckMode::SAFE => "safe".to_object(py),
+            CheckMode::UNSAFE => "unsafe".to_object(py),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Obtains CheckMode from PyObject (Required for CheckMode to be compatible with Python)
+impl<'source> FromPyObject<'source> for CheckMode {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let trystr = <PyString as PyTryFrom>::try_from(ob)?;
+        let strval = trystr.to_string();
+        match strval.to_lowercase().as_str() {
+            "safe" => Ok(CheckMode::SAFE),
+            "unsafe" => Ok(CheckMode::UNSAFE),
+            _ => Err(PyValueError::new_err("Invalid value for CheckMode"))
+        }
+
     }
 }
 

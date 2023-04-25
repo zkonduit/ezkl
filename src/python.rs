@@ -2,6 +2,7 @@ use crate::circuit::CheckMode;
 use crate::commands::RunArgs;
 use crate::graph::{vector_to_quantized, Mode, Model, ModelCircuit, VarVisibility, Visibility};
 use crate::pfsys::{gen_srs as ezkl_gen_srs, prepare_data, save_params};
+use std::env;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2_proofs::dev::MockProver;
 use halo2curves::bn256::{Bn256, Fr};
@@ -31,9 +32,12 @@ use tabled::Table;
 //         .render(args.logrows, &circuit, &root)?;
 // }
 
+/// Environment variable for EZKLCONF
+const EZKLCONF: &str = "EZKLCONF";
 
 /// pyclass containing the struct used for run_args
 #[pyclass]
+#[derive(Clone)]
 struct PyRunArgs {
     #[pyo3(get, set)]
     pub tolerance: usize,
@@ -52,27 +56,56 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub pack_base: u32,
     #[pyo3(get, set)]
-    pub range_check: CheckMode,
+    pub allocated_constraints: Option<usize>,
+    #[pyo3(get, set)]
+    pub check_mode: CheckMode,
 }
 
+/// default instantiation of PyRunArgs
+#[pymethods]
+impl PyRunArgs {
+    #[new]
+    fn new() -> Self {
+        PyRunArgs {
+            tolerance: 0,
+            scale: 7,
+            bits: 16,
+            logrows: 17,
+            public_inputs: true,
+            public_outputs: true,
+            public_params: false,
+            pack_base: 1,
+            allocated_constraints: None,
+            check_mode: CheckMode::SAFE,
+        }
+    }
+}
 
+/// Conversion between PyRunArgs and RunArgs
+impl From<PyRunArgs> for RunArgs {
+    fn from(py_run_args: PyRunArgs) -> Self {
+        RunArgs {
+            tolerance: py_run_args.tolerance,
+            scale: py_run_args.scale,
+            bits: py_run_args.bits,
+            logrows: py_run_args.logrows,
+            public_inputs: py_run_args.public_inputs,
+            public_outputs: py_run_args.public_outputs,
+            public_params: py_run_args.public_params,
+            pack_base: py_run_args.pack_base,
+            allocated_constraints: py_run_args.allocated_constraints,
+            check_mode: py_run_args.check_mode,
+        }
+    }
+}
 
 /// Displays the table as a string in python
-#[pyfunction]
-fn table(model: String) -> Result<String, PyErr> {
-    // use default values to initialize model
-    let run_args = RunArgs {
-        tolerance: 0,
-        scale: 7,
-        bits: 16,
-        logrows: 17,
-        public_inputs: true,
-        public_outputs: true,
-        public_params: false,
-        pack_base: 1,
-        check_mode: CheckMode::SAFE,
-        allocated_constraints: None,
-    };
+#[pyfunction(signature = (
+    model,
+    py_run_args = None
+))]
+fn table(model: String, py_run_args: Option<PyRunArgs>) -> Result<String, PyErr> {
+    let run_args = py_run_args.unwrap_or_else(PyRunArgs::new).into();
 
     // use default values to initialize model
     let visibility = VarVisibility {
@@ -90,20 +123,12 @@ fn table(model: String) -> Result<String, PyErr> {
 }
 
 /// generates the srs
-#[pyfunction]
-fn gen_srs(params_path: PathBuf, logrows: u32) -> PyResult<()> {
-    let run_args = RunArgs {
-        tolerance: 0,
-        scale: 7,
-        bits: 16,
-        logrows: logrows,
-        public_inputs: true,
-        public_outputs: true,
-        public_params: false,
-        pack_base: 1,
-        check_mode: CheckMode::SAFE,
-        allocated_constraints: None,
-    };
+#[pyfunction(signature = (
+    params_path,
+    py_run_args = None
+))]
+fn gen_srs(params_path: PathBuf, py_run_args: Option<PyRunArgs>) -> PyResult<()> {
+    let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let params = ezkl_gen_srs::<KZGCommitmentScheme<Bn256>>(run_args.logrows);
     save_params::<KZGCommitmentScheme<Bn256>>(&params_path, &params)?;
     Ok(())
@@ -114,46 +139,19 @@ fn gen_srs(params_path: PathBuf, logrows: u32) -> PyResult<()> {
     data,
     model,
     output,
-    tolerance=0,
-    scale=7,
-    bits=16,
-    logrows=17,
-    public_inputs=true,
-    public_outputs=true,
-    public_params=false,
-    pack_base=1,
-    check_mode="safe"
+    py_run_args = None
 ))]
 fn forward(
     data: String,
     model: String,
     output: String,
-    tolerance: usize,
-    scale: u32,
-    bits: usize,
-    logrows: u32,
-    public_inputs: bool,
-    public_outputs: bool,
-    public_params: bool,
-    pack_base: u32,
-    check_mode: &str,
+    py_run_args: Option<PyRunArgs>
 ) -> PyResult<()> {
+    let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let data = prepare_data(data);
 
     match data {
         Ok(m) => {
-            let run_args = RunArgs {
-                tolerance: tolerance,
-                scale: scale,
-                bits: bits,
-                logrows: logrows,
-                public_inputs: public_inputs,
-                public_outputs: public_outputs,
-                public_params: public_params,
-                pack_base: pack_base,
-                check_mode: CheckMode::from(check_mode.to_string()),
-                allocated_constraints: None,
-            };
             let mut new_data = m;
             let mut model_inputs = vec![];
             // quantize the supplied data using the provided scale.
@@ -196,29 +194,23 @@ fn forward(
 #[pyfunction(signature = (
     data,
     model,
-    logrows=17,
+    py_run_args = None
 ))]
 fn mock(
     data: String,
     model: String,
-    logrows: u32,
+    py_run_args: Option<PyRunArgs>
 ) -> Result<bool, PyErr> {
+    let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
+    let logrow = run_args.logrows;
+
     let data = prepare_data(data);
+
+    // set EZKL
+    // env::set_var(EZKLCONF, "PYTHON");
 
     match data {
         Ok(d) => {
-            // use default values except for logrows to initialize model
-            let run_args = RunArgs {
-                tolerance: 0,
-                scale: 7,
-                bits: 16,
-                logrows: logrows,
-                public_inputs: true,
-                public_outputs: true,
-                public_params: false,
-                pack_base: 1,
-                check_mode: CheckMode::SAFE,
-            };
             // use default values to initialize model
             let visibility = VarVisibility {
                 input: Visibility::Public,
@@ -238,7 +230,7 @@ fn mock(
 
                             match public_inputs {
                                 Ok(pi) => {
-                                    let prover = MockProver::run(logrows, &c, pi); // this is putting messages in stdout
+                                    let prover = MockProver::run(logrow, &c, pi); // this is putting messages in stdout
                                     match prover {
                                         Ok(pr) => {
                                             pr.assert_satisfied();
@@ -280,9 +272,11 @@ fn mock(
 #[pymodule]
 fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     pyo3_log::init();
+    m.add_class::<PyRunArgs>()?;
     m.add_function(wrap_pyfunction!(table, m)?)?;
     m.add_function(wrap_pyfunction!(gen_srs, m)?)?;
     m.add_function(wrap_pyfunction!(forward, m)?)?;
     m.add_function(wrap_pyfunction!(mock, m)?)?;
+
     Ok(())
 }
