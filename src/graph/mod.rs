@@ -1,5 +1,6 @@
 /// Helper functions
 pub mod utilities;
+use halo2curves::ff::PrimeField;
 pub use utilities::*;
 /// Crate for defining a computational graph and building a ZK-circuit from it.
 pub mod model;
@@ -16,7 +17,6 @@ use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor};
 use anyhow::Result;
 use halo2_proofs::{
-    arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},
 };
@@ -80,16 +80,16 @@ pub enum GraphError {
 
 /// Defines the circuit for a computational graph / model loaded from a `.onnx` file.
 #[derive(Clone, Debug)]
-pub struct ModelCircuit<F: FieldExt + TensorType> {
+pub struct ModelCircuit<F: PrimeField + TensorType + PartialOrd> {
     /// Vector of input tensors to the model / graph of computations.
     pub inputs: Vec<Tensor<i128>>,
     ///
     pub model: Model<F>,
-    /// Represents the Field we are using.
+    /// Represents the PrimeField we are using.
     pub _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType> ModelCircuit<F> {
+impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
     ///
     pub fn new(
         data: &ModelInput,
@@ -171,7 +171,7 @@ impl<F: FieldExt + TensorType> ModelCircuit<F> {
     }
 }
 
-impl<F: FieldExt + TensorType> Circuit<F> for ModelCircuit<F> {
+impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
     type Config = ModelConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 

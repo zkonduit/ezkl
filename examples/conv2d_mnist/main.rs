@@ -6,7 +6,6 @@ use ezkl_lib::fieldutils::i32_to_felt;
 use ezkl_lib::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
-    arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, Column, ConstraintSystem, Error,
@@ -25,6 +24,7 @@ use halo2_proofs::{
         Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
     },
 };
+use halo2curves::ff::PrimeField;
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp as F;
 use mnist::*;
@@ -37,7 +37,7 @@ const K: usize = 20;
 
 #[derive(Clone)]
 struct Config<
-    F: FieldExt + TensorType,
+    F: PrimeField + TensorType + PartialOrd,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust stable
     const CLASSES: usize,
     const BITS: usize,
@@ -61,7 +61,7 @@ struct Config<
 
 #[derive(Clone)]
 struct MyCircuit<
-    F: FieldExt + TensorType,
+    F: PrimeField + TensorType + PartialOrd,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened
     const CLASSES: usize,
     const BITS: usize,
@@ -85,7 +85,7 @@ struct MyCircuit<
 }
 
 impl<
-        F: FieldExt + TensorType,
+        F: PrimeField + TensorType + PartialOrd,
         const LEN: usize,
         const CLASSES: usize,
         const BITS: usize,

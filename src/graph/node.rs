@@ -4,7 +4,7 @@ use crate::graph::new_op_from_onnx;
 use crate::graph::GraphError;
 use crate::tensor::TensorType;
 use anyhow::Result;
-use halo2_proofs::arithmetic::FieldExt;
+use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::{info, trace};
 use std::collections::BTreeMap;
@@ -27,7 +27,7 @@ fn display_vector<T: fmt::Debug>(v: &Vec<T>) -> String {
     }
 }
 
-fn display_opkind<F: FieldExt + TensorType>(v: &Box<dyn Op<F>>) -> String {
+fn display_opkind<F: PrimeField + TensorType + PartialOrd>(v: &Box<dyn Op<F>>) -> String {
     v.as_str().to_string()
 }
 
@@ -42,7 +42,7 @@ fn display_opkind<F: FieldExt + TensorType>(v: &Box<dyn Op<F>>) -> String {
 /// * `idx` - The node's unique identifier.
 /// * `bucket` - The execution bucket this node has been assigned to.
 #[derive(Clone, Debug, Tabled)]
-pub struct Node<F: FieldExt + TensorType> {
+pub struct Node<F: PrimeField + TensorType + PartialOrd> {
     /// [OpKind] enum, i.e what operation this node represents.
     #[tabled(display_with = "display_opkind")]
     pub opkind: Box<dyn Op<F>>,
@@ -60,7 +60,7 @@ pub struct Node<F: FieldExt + TensorType> {
     pub idx: usize,
 }
 
-impl<F: FieldExt + TensorType> Node<F> {
+impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
     /// Converts a tract [OnnxNode] into an ezkl [Node].
     /// # Arguments:
     /// * `node` - [OnnxNode]

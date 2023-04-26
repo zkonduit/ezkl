@@ -2,6 +2,7 @@ use core::panic;
 use std::error::Error;
 
 use halo2_proofs::circuit::{Region, Value};
+use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::error;
 use rayon::prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
@@ -23,7 +24,7 @@ use crate::{
 use super::*;
 use crate::circuit::ops::lookup::LookupOp;
 
-fn allocate_multi_dot<F: FieldExt + TensorType>(
+fn allocate_multi_dot<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     a: &mut [ValTensor<F>],
@@ -107,7 +108,7 @@ fn allocate_multi_dot<F: FieldExt + TensorType>(
 }
 
 /// Dot product accumulated layout
-pub fn dot<F: FieldExt + TensorType>(
+pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
@@ -189,7 +190,7 @@ pub fn dot<F: FieldExt + TensorType>(
 }
 
 /// Sum accumulated layout
-pub fn sum<F: FieldExt + TensorType>(
+pub fn sum<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
@@ -264,7 +265,7 @@ pub fn sum<F: FieldExt + TensorType>(
 }
 
 /// Sum accumulated layout
-pub fn sum_axes<F: FieldExt + TensorType>(
+pub fn sum_axes<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
@@ -316,7 +317,7 @@ pub fn sum_axes<F: FieldExt + TensorType>(
 }
 
 /// Max accumulated layout
-pub fn max_axes<F: FieldExt + TensorType>(
+pub fn max_axes<F: PrimeField + TensorType + PartialOrd + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
@@ -368,7 +369,7 @@ pub fn max_axes<F: FieldExt + TensorType>(
 }
 
 /// Min accumulated layout
-pub fn min_axes<F: FieldExt + TensorType>(
+pub fn min_axes<F: PrimeField + TensorType + PartialOrd + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
@@ -420,7 +421,7 @@ pub fn min_axes<F: FieldExt + TensorType>(
 }
 
 /// Pairwise (elementwise) op layout
-pub fn pairwise<F: FieldExt + TensorType>(
+pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
@@ -521,7 +522,7 @@ pub fn pairwise<F: FieldExt + TensorType>(
 }
 
 /// Matrix multiplication accumulated layout
-pub fn matmul<F: FieldExt + TensorType>(
+pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
@@ -621,7 +622,7 @@ pub fn matmul<F: FieldExt + TensorType>(
 }
 
 /// Iff
-pub fn iff<F: FieldExt + TensorType>(
+pub fn iff<F: PrimeField + TensorType + PartialOrd + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 3],
@@ -692,7 +693,7 @@ pub fn iff<F: FieldExt + TensorType>(
 }
 
 /// Negation operation accumulated layout
-pub fn neg<F: FieldExt + TensorType>(
+pub fn neg<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
@@ -724,7 +725,7 @@ pub fn neg<F: FieldExt + TensorType>(
 }
 
 /// Sumpool accumulated layout
-pub fn sumpool<F: FieldExt + TensorType>(
+pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>],
@@ -791,7 +792,7 @@ pub fn sumpool<F: FieldExt + TensorType>(
 }
 
 /// Convolution accumulated layout
-pub fn max_pool2d<F: FieldExt + TensorType>(
+pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
@@ -859,7 +860,7 @@ pub fn max_pool2d<F: FieldExt + TensorType>(
 }
 
 /// Convolution accumulated layout
-pub fn conv<F: FieldExt + TensorType + std::marker::Send + std::marker::Sync>(
+pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::marker::Sync>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>],
@@ -1023,7 +1024,7 @@ pub fn conv<F: FieldExt + TensorType + std::marker::Send + std::marker::Sync>(
 }
 
 /// Power accumulated layout
-pub fn pow<F: FieldExt + TensorType>(
+pub fn pow<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
@@ -1065,7 +1066,7 @@ pub fn pow<F: FieldExt + TensorType>(
 }
 
 /// Rescaled op accumulated layout
-pub fn rescale<F: FieldExt + TensorType>(
+pub fn rescale<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>],
@@ -1110,7 +1111,7 @@ pub fn rescale<F: FieldExt + TensorType>(
 }
 
 /// Pack accumulated layout
-pub fn pack<F: FieldExt + TensorType>(
+pub fn pack<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
@@ -1168,7 +1169,7 @@ pub fn pack<F: FieldExt + TensorType>(
 }
 
 /// Dummy (no contraints) reshape layout
-pub fn reshape<F: FieldExt + TensorType>(
+pub fn reshape<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 1],
     new_dims: &[usize],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
@@ -1178,7 +1179,7 @@ pub fn reshape<F: FieldExt + TensorType>(
 }
 
 /// Identity constraint. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
-pub fn identity<F: FieldExt + TensorType>(
+pub fn identity<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
@@ -1192,7 +1193,7 @@ pub fn identity<F: FieldExt + TensorType>(
 }
 
 /// Layout for range check.
-pub fn range_check<F: FieldExt + TensorType>(
+pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
@@ -1221,7 +1222,7 @@ pub fn range_check<F: FieldExt + TensorType>(
 }
 
 /// Layout for range check.
-pub fn nonlinearity<F: FieldExt + TensorType>(
+pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
@@ -1276,7 +1277,7 @@ pub fn nonlinearity<F: FieldExt + TensorType>(
 }
 
 /// mean function layout
-pub fn mean<F: FieldExt + TensorType>(
+pub fn mean<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
@@ -1293,7 +1294,7 @@ pub fn mean<F: FieldExt + TensorType>(
 }
 
 /// max layout
-pub fn max<F: FieldExt + TensorType>(
+pub fn max<F: PrimeField + TensorType + PartialOrd + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
@@ -1407,7 +1408,7 @@ pub fn max<F: FieldExt + TensorType>(
 }
 
 /// min layout
-pub fn min<F: FieldExt + TensorType>(
+pub fn min<F: PrimeField + TensorType + PartialOrd + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],

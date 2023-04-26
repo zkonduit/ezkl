@@ -5,6 +5,7 @@ pub mod val;
 /// A wrapper around a tensor of Halo2 Value types.
 pub mod var;
 
+use halo2curves::ff::PrimeField;
 use rayon::prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 pub use val::*;
@@ -16,7 +17,7 @@ use crate::{
 };
 
 use halo2_proofs::{
-    arithmetic::FieldExt,
+    arithmetic::Field,
     circuit::{AssignedCell, Region, Value},
     plonk::{Advice, Assigned, Column, ConstraintSystem, Expression, Fixed, VirtualCells},
     poly::Rotation,
@@ -133,13 +134,16 @@ impl<T: TensorType> TensorType for Value<T> {
     }
 }
 
-impl<F: FieldExt> TensorType for Assigned<F> {
+impl<F: PrimeField + PartialOrd> TensorType for Assigned<F>
+where
+    F: Field,
+{
     fn zero() -> Option<Self> {
-        Some(F::zero().into())
+        Some(F::ZERO.into())
     }
 
     fn one() -> Option<Self> {
-        Some(F::one().into())
+        Some(F::ONE.into())
     }
 
     fn tmax(&self, other: &Self) -> Option<Self> {
@@ -151,13 +155,16 @@ impl<F: FieldExt> TensorType for Assigned<F> {
     }
 }
 
-impl<F: FieldExt> TensorType for Expression<F> {
+impl<F: PrimeField> TensorType for Expression<F>
+where
+    F: Field,
+{
     fn zero() -> Option<Self> {
-        Some(Expression::Constant(F::zero()))
+        Some(Expression::Constant(F::ZERO))
     }
 
     fn one() -> Option<Self> {
-        Some(Expression::Constant(F::one()))
+        Some(Expression::Constant(F::ONE))
     }
 
     fn tmax(&self, _: &Self) -> Option<Self> {
@@ -168,7 +175,7 @@ impl<F: FieldExt> TensorType for Expression<F> {
 impl TensorType for Column<Advice> {}
 impl TensorType for Column<Fixed> {}
 
-impl<F: FieldExt> TensorType for AssignedCell<Assigned<F>, F> {
+impl<F: PrimeField + PartialOrd> TensorType for AssignedCell<Assigned<F>, F> {
     fn tmax(&self, other: &Self) -> Option<Self> {
         let mut output: Option<Self> = None;
         self.value_field().zip(other.value_field()).map(|(a, b)| {
@@ -182,7 +189,7 @@ impl<F: FieldExt> TensorType for AssignedCell<Assigned<F>, F> {
     }
 }
 
-impl<F: FieldExt> TensorType for AssignedCell<F, F> {
+impl<F: PrimeField + PartialOrd> TensorType for AssignedCell<F, F> {
     fn tmax(&self, other: &Self) -> Option<Self> {
         let mut output: Option<Self> = None;
         self.value().zip(other.value()).map(|(a, b)| {
@@ -287,7 +294,9 @@ where
     }
 }
 
-impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>> for Tensor<i32> {
+impl<F: PrimeField + Clone + TensorType + PartialOrd> From<Tensor<AssignedCell<Assigned<F>, F>>>
+    for Tensor<i32>
+{
     fn from(value: Tensor<AssignedCell<Assigned<F>, F>>) -> Tensor<i32> {
         let mut output = Vec::new();
         value.map(|x| {
@@ -301,7 +310,9 @@ impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>
     }
 }
 
-impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<F, F>>> for Tensor<i32> {
+impl<F: PrimeField + Clone + TensorType + PartialOrd> From<Tensor<AssignedCell<F, F>>>
+    for Tensor<i32>
+{
     fn from(value: Tensor<AssignedCell<F, F>>) -> Tensor<i32> {
         let mut output = Vec::new();
         value.map(|x| {
@@ -319,7 +330,7 @@ impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<F, F>>> for Tens
     }
 }
 
-impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>>
+impl<F: PrimeField + Clone + TensorType + PartialOrd> From<Tensor<AssignedCell<Assigned<F>, F>>>
     for Tensor<Value<F>>
 {
     fn from(value: Tensor<AssignedCell<Assigned<F>, F>>) -> Tensor<Value<F>> {
@@ -331,7 +342,7 @@ impl<F: FieldExt + Clone + TensorType> From<Tensor<AssignedCell<Assigned<F>, F>>
     }
 }
 
-impl<F: FieldExt + TensorType + Clone> From<Tensor<Value<F>>> for Tensor<i32> {
+impl<F: PrimeField + TensorType + Clone + PartialOrd> From<Tensor<Value<F>>> for Tensor<i32> {
     fn from(t: Tensor<Value<F>>) -> Tensor<i32> {
         let mut output = Vec::new();
         t.map(|x| {
@@ -349,7 +360,9 @@ impl<F: FieldExt + TensorType + Clone> From<Tensor<Value<F>>> for Tensor<i32> {
     }
 }
 
-impl<F: FieldExt + TensorType + Clone> From<Tensor<Value<F>>> for Tensor<Value<Assigned<F>>> {
+impl<F: PrimeField + TensorType + Clone + PartialOrd> From<Tensor<Value<F>>>
+    for Tensor<Value<Assigned<F>>>
+{
     fn from(t: Tensor<Value<F>>) -> Tensor<Value<Assigned<F>>> {
         let mut ta: Tensor<Value<Assigned<F>>> = Tensor::from((0..t.len()).map(|i| t[i].into()));
         ta.reshape(t.dims());
@@ -357,7 +370,7 @@ impl<F: FieldExt + TensorType + Clone> From<Tensor<Value<F>>> for Tensor<Value<A
     }
 }
 
-impl<F: FieldExt + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> {
+impl<F: PrimeField + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> {
     fn from(t: Tensor<i32>) -> Tensor<Value<F>> {
         let mut ta: Tensor<Value<F>> =
             Tensor::from((0..t.len()).map(|i| Value::known(i32_to_felt::<F>(t[i]))));
@@ -366,7 +379,7 @@ impl<F: FieldExt + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> {
     }
 }
 
-impl<F: FieldExt + TensorType + Clone> From<Tensor<i128>> for Tensor<Value<F>> {
+impl<F: PrimeField + TensorType + Clone> From<Tensor<i128>> for Tensor<Value<F>> {
     fn from(t: Tensor<i128>) -> Tensor<Value<F>> {
         let mut ta: Tensor<Value<F>> =
             Tensor::from((0..t.len()).map(|i| Value::known(i128_to_felt::<F>(t[i]))));

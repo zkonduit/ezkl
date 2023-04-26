@@ -8,7 +8,7 @@ use super::{base::BaseOp, *};
 #[allow(missing_docs)]
 /// An enum representing the operations that can be used to express more complex operations via accumulation
 #[derive(Clone, Debug)]
-pub enum PolyOp<F: FieldExt + TensorType> {
+pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Dot,
     Matmul {
         a: Option<ValTensor<F>>,
@@ -45,7 +45,7 @@ pub enum PolyOp<F: FieldExt + TensorType> {
     RangeCheck(i32),
 }
 
-impl<F: FieldExt + TensorType> Op<F> for PolyOp<F> {
+impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     fn as_str(&self) -> &'static str {
         match &self {
             PolyOp::Identity => "IDENTITY",

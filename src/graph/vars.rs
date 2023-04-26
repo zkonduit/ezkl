@@ -3,11 +3,12 @@ use std::error::Error;
 use crate::commands::RunArgs;
 use crate::tensor::TensorType;
 use crate::tensor::{ValTensor, VarTensor};
-use halo2_proofs::{arithmetic::FieldExt, plonk::ConstraintSystem};
+use halo2_proofs::plonk::ConstraintSystem;
+use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use super::GraphError;
+use super::*;
 
 /// Label Enum to track whether model input, model parameters, and model output are public or private
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -84,7 +85,7 @@ impl VarVisibility {
 
 /// A wrapper for holding all columns that will be assigned to by a model.
 #[derive(Clone, Debug)]
-pub struct ModelVars<F: FieldExt + TensorType> {
+pub struct ModelVars<F: PrimeField + TensorType + PartialOrd> {
     #[allow(missing_docs)]
     pub advices: Vec<VarTensor>,
     #[allow(missing_docs)]
@@ -93,7 +94,7 @@ pub struct ModelVars<F: FieldExt + TensorType> {
     pub instances: Vec<ValTensor<F>>,
 }
 
-impl<F: FieldExt + TensorType> ModelVars<F> {
+impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
     /// Allocate all columns that will be assigned to by a model.
     pub fn new(
         cs: &mut ConstraintSystem<F>,

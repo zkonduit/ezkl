@@ -1,6 +1,5 @@
 use super::*;
 use halo2_proofs::circuit::Region;
-use halo2curves::FieldExt;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 
@@ -12,6 +11,7 @@ use crate::{
 };
 
 use super::Op;
+use halo2curves::ff::PrimeField;
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be used to express more complex operations via accumulation
@@ -31,7 +31,7 @@ pub enum LookupOp {
 
 impl LookupOp {
     /// a value which is always in the table
-    pub fn default_pair<F: FieldExt + TensorType>(&self) -> (F, F) {
+    pub fn default_pair<F: PrimeField + TensorType + PartialOrd>(&self) -> (F, F) {
         let x = vec![0_i128].into_iter().into();
         (
             <F as TensorType>::zero().unwrap(),
@@ -40,7 +40,7 @@ impl LookupOp {
     }
 }
 
-impl<F: FieldExt + TensorType> Op<F> for LookupOp {
+impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         match &self {

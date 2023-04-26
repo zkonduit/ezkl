@@ -1,10 +1,10 @@
 use std::error::Error;
 
 use halo2_proofs::circuit::Region;
-use halo2curves::FieldExt;
 use serde::{Deserialize, Serialize};
 
 use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor};
+use halo2curves::ff::PrimeField;
 
 use self::lookup::LookupOp;
 
@@ -20,7 +20,7 @@ pub mod lookup;
 pub mod poly;
 
 ///
-pub trait Op<F: FieldExt + TensorType>: std::fmt::Debug + Send + Sync {
+pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + Sync {
     ///
     fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError>;
     ///
@@ -62,7 +62,7 @@ pub trait Op<F: FieldExt + TensorType>: std::fmt::Debug + Send + Sync {
     fn clone_dyn(&self) -> Box<dyn Op<F>>;
 }
 
-impl<F: FieldExt + TensorType> Clone for Box<dyn Op<F>> {
+impl<F: PrimeField + TensorType + PartialOrd> Clone for Box<dyn Op<F>> {
     fn clone(&self) -> Self {
         self.clone_dyn()
     }
@@ -72,7 +72,7 @@ impl<F: FieldExt + TensorType> Clone for Box<dyn Op<F>> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Input;
 
-impl<F: FieldExt + TensorType> Op<F> for Input {
+impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
     fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         Ok(x[0].clone())
     }
@@ -105,14 +105,14 @@ impl<F: FieldExt + TensorType> Op<F> for Input {
 
 ///
 #[derive(Clone, Debug)]
-pub struct Rescaled<F: FieldExt + TensorType> {
+pub struct Rescaled<F: PrimeField + TensorType + PartialOrd> {
     ///
     pub inner: Box<dyn Op<F>>,
     ///
     pub scale: Vec<(usize, usize)>,
 }
 
-impl<F: FieldExt + TensorType> Op<F> for Rescaled<F> {
+impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
     fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         if self.scale.len() != x.len() {
             return Err(TensorError::DimMismatch("rescaled inputs".to_string()));
@@ -170,7 +170,7 @@ impl<F: FieldExt + TensorType> Op<F> for Rescaled<F> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 pub struct Unknown;
 
-impl<F: FieldExt + TensorType> Op<F> for Unknown {
+impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
     fn f(&self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         Err(TensorError::WrongMethod)
     }
