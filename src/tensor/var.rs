@@ -51,7 +51,7 @@ impl VarTensor {
     /// * `dims` - `Vec` of dimensions of the tensor we are representing. Note that the shape of the storage and this shape can differ.
     /// * `equality` - true if we want to enable equality constraints for the columns involved.
     /// * `max_rot` - maximum number of rotations that we allow for this VarTensor. Rotations affect performance.
-    pub fn new_advice<F: FieldExt>(
+    pub fn new_advice<F: PrimeField>(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         capacity: usize,
@@ -92,7 +92,7 @@ impl VarTensor {
     /// `dims` is the `Vec` of dimensions of the tensor we are representing. Note that the shape of the storage and this shape can differ.
     /// `equality` should be true if we want to enable equality constraints for the columns involved.
     /// `max_rot` is the maximum number of rotations that we allow for this VarTensor. Rotations affect performance.
-    pub fn new_fixed<F: FieldExt>(
+    pub fn new_fixed<F: PrimeField>(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         capacity: usize,
@@ -158,7 +158,7 @@ impl VarTensor {
 impl VarTensor {
     /// Retrieve the values represented within the columns of the `VarTensor` (recall that `VarTensor`
     /// is a Tensor of Halo2 columns).
-    pub fn query_rng<F: FieldExt>(
+    pub fn query_rng<F: PrimeField>(
         &self,
         meta: &mut VirtualCells<'_, F>,
         rotation_offset: i32,
@@ -194,7 +194,7 @@ impl VarTensor {
     }
 
     ///
-    pub fn assign_constant<F: FieldExt + TensorType>(
+    pub fn assign_constant<F: PrimeField + TensorType>(
         &self, 
         region: &mut Region<F>,
         offset: usize,
@@ -215,7 +215,7 @@ impl VarTensor {
 
    
     /// Assigns specific values [ValTensor] to the columns of the inner tensor.
-    pub fn assign<F: FieldExt + TensorType>(
+    pub fn assign<F: PrimeField + TensorType + PartialOrd>(
         &self,
         region: &mut Option<&mut Region<F>>,
         offset: usize,
@@ -292,7 +292,7 @@ impl VarTensor {
     }
 
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor.
-    pub fn assign_with_duplication<F: FieldExt + TensorType>(
+    pub fn assign_with_duplication<F: PrimeField + TensorType + PartialOrd>(
         &self,
         region: &mut Option<&mut Region<F>>,
         offset: usize,

@@ -8,7 +8,7 @@ use crate::fieldutils::i128_to_felt;
 use crate::tensor::{Tensor, TensorError, TensorType, ValTensor};
 use anyhow::Result;
 use halo2_proofs::circuit::Value;
-use halo2curves::FieldExt;
+use halo2curves::ff::PrimeField;
 use log::{trace, warn};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
@@ -71,7 +71,7 @@ pub fn node_output_shapes(
     Ok(shapes)
 }
 
-fn extract_tensor_value<F: FieldExt + TensorType>(
+fn extract_tensor_value<F: PrimeField + TensorType + PartialOrd>(
     input: Arc<tract_onnx::prelude::Tensor>,
     scale: u32,
     public_params: bool,
@@ -179,7 +179,7 @@ fn load_eltwise_op(
 }
 
 /// Matches an onnx node to a [OpKind] and returns a [Node] with the corresponding [OpKind].  
-pub fn new_op_from_onnx<F: FieldExt + TensorType>(
+pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
     idx: usize,
     scale: u32,
     public_params: bool,

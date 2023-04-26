@@ -1,10 +1,11 @@
 use std::{error::Error, marker::PhantomData};
 
+use halo2curves::ff::PrimeField;
+
 use halo2_proofs::{
     circuit::{Layouter, Value},
     plonk::{ConstraintSystem, TableColumn},
 };
-use halo2curves::FieldExt;
 
 use crate::{
     circuit::CircuitError,
@@ -19,7 +20,7 @@ use super::Op;
 /// Halo2 lookup table for element wise non-linearities.
 // Table that should be reused across all lookups (so no Clone)
 #[derive(Clone, Debug)]
-pub struct Table<F: FieldExt> {
+pub struct Table<F: PrimeField> {
     /// composed operations represented by the table
     pub nonlinearity: LookupOp,
     /// Input to table.
@@ -33,7 +34,7 @@ pub struct Table<F: FieldExt> {
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType> Table<F> {
+impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
     /// Configures the table.
     pub fn configure(
         cs: &mut ConstraintSystem<F>,

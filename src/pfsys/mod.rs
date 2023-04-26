@@ -5,7 +5,6 @@ use crate::circuit::CheckMode;
 use crate::commands::data_path;
 use crate::execute::ExecutionError;
 use crate::tensor::TensorType;
-use halo2_proofs::arithmetic::FieldExt;
 use halo2_proofs::circuit::Value;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::plonk::{
@@ -14,7 +13,7 @@ use halo2_proofs::plonk::{
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params, ParamsProver, Prover, Verifier};
 use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer, TranscriptWriterBuffer};
-use halo2curves::group::ff::PrimeField;
+use halo2curves::ff::{FromUniformBytes, PrimeField, WithSmallOrderMulGroup};
 use halo2curves::serde::SerdeObject;
 use halo2curves::CurveAffine;
 use log::{debug, info, trace};
@@ -99,7 +98,7 @@ pub struct Snarkbytes {
 
 /// An application snark with proof and instance variables ready for aggregation (raw field element)
 #[derive(Debug, Clone)]
-pub struct Snark<F: FieldExt + SerdeObject, C: CurveAffine> {
+pub struct Snark<F: PrimeField + SerdeObject, C: CurveAffine> {
     protocol: Option<PlonkProtocol<C>>,
     /// public instances of the snark
     pub instances: Vec<Vec<F>>,
@@ -107,7 +106,7 @@ pub struct Snark<F: FieldExt + SerdeObject, C: CurveAffine> {
     pub proof: Vec<u8>,
 }
 
-impl<F: FieldExt + SerdeObject, C: CurveAffine> Snark<F, C> {
+impl<F: PrimeField + SerdeObject + FromUniformBytes<64>, C: CurveAffine> Snark<F, C> {
     /// Create a new application snark from proof and instance variables ready for aggregation
     pub fn new(protocol: PlonkProtocol<C>, instances: Vec<Vec<F>>, proof: Vec<u8>) -> Self {
         Self {
@@ -146,7 +145,10 @@ impl<F: FieldExt + SerdeObject, C: CurveAffine> Snark<F, C> {
         proof_path: &PathBuf,
         params: Option<&Scheme::ParamsProver>,
         vk: Option<&VerifyingKey<C>>,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Result<Self, Box<dyn Error>>
+    where
+        <C as CurveAffine>::ScalarExt: FromUniformBytes<64>,
+    {
         let mut file = File::open(proof_path).map_err(Box::<dyn Error>::from)?;
         let mut data = String::new();
         file.read_to_string(&mut data)
@@ -190,13 +192,13 @@ impl<F: FieldExt + SerdeObject, C: CurveAffine> Snark<F, C> {
 
 /// An application snark with proof and instance variables ready for aggregation (wrapped field element)
 #[derive(Clone, Debug)]
-pub struct SnarkWitness<F: FieldExt, C: CurveAffine> {
+pub struct SnarkWitness<F: PrimeField, C: CurveAffine> {
     protocol: Option<PlonkProtocol<C>>,
     instances: Vec<Vec<Value<F>>>,
     proof: Value<Vec<u8>>,
 }
 
-impl<F: FieldExt, C: CurveAffine> SnarkWitness<F, C> {
+impl<F: PrimeField, C: CurveAffine> SnarkWitness<F, C> {
     fn without_witnesses(&self) -> Self {
         SnarkWitness {
             protocol: self.protocol.clone(),
@@ -214,7 +216,7 @@ impl<F: FieldExt, C: CurveAffine> SnarkWitness<F, C> {
     }
 }
 
-impl<F: FieldExt + SerdeObject, C: CurveAffine> From<Snark<F, C>> for SnarkWitness<F, C> {
+impl<F: PrimeField + SerdeObject, C: CurveAffine> From<Snark<F, C>> for SnarkWitness<F, C> {
     fn from(snark: Snark<F, C>) -> Self {
         Self {
             protocol: snark.protocol,
@@ -243,12 +245,13 @@ pub fn gen_srs<Scheme: CommitmentScheme>(k: u32) -> Scheme::ParamsProver {
 }
 
 /// Creates a [VerifyingKey] and [ProvingKey] for a [ModelCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`).
-pub fn create_keys<Scheme: CommitmentScheme, F: FieldExt + TensorType, C: Circuit<F>>(
+pub fn create_keys<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
     circuit: &C,
     params: &'_ Scheme::ParamsProver,
 ) -> Result<ProvingKey<Scheme::Curve>, halo2_proofs::plonk::Error>
 where
     C: Circuit<Scheme::Scalar>,
+    <Scheme as CommitmentScheme>::Scalar: FromUniformBytes<64>,
 {
     //	Real proof
     let empty_circuit = <C as Circuit<F>>::without_witnesses(circuit);
@@ -268,7 +271,7 @@ where
 pub fn create_proof_circuit<
     'params,
     Scheme: CommitmentScheme,
-    F: FieldExt + TensorType,
+    F: PrimeField + TensorType,
     C: Circuit<F>,
     P: Prover<'params, Scheme>,
     V: Verifier<'params, Scheme>,
@@ -287,7 +290,8 @@ pub fn create_proof_circuit<
 where
     C: Circuit<Scheme::Scalar>,
     Scheme::ParamsVerifier: 'params,
-    Scheme::Scalar: SerdeObject,
+    Scheme::Scalar:
+        SerdeObject + PrimeField + FromUniformBytes<64> + WithSmallOrderMulGroup<3> + Ord,
 {
     // quickly mock prove as a sanity check
     if check_mode == CheckMode::SAFE {
@@ -348,7 +352,7 @@ where
 /// A wrapper around halo2's verify_proof
 pub fn verify_proof_circuit<
     'params,
-    F: FieldExt,
+    F: PrimeField,
     V: Verifier<'params, Scheme>,
     Scheme: CommitmentScheme,
     Strategy: VerificationStrategy<'params, Scheme, V>,
@@ -361,7 +365,8 @@ pub fn verify_proof_circuit<
     strategy: Strategy,
 ) -> Result<Strategy::Output, halo2_proofs::plonk::Error>
 where
-    Scheme::Scalar: SerdeObject,
+    Scheme::Scalar:
+        SerdeObject + PrimeField + FromUniformBytes<64> + WithSmallOrderMulGroup<3> + Ord,
 {
     let pi_inner = snark
         .instances
@@ -378,13 +383,13 @@ where
 }
 
 /// Loads a [VerifyingKey] at `path`.
-pub fn load_vk<Scheme: CommitmentScheme, F: FieldExt + TensorType, C: Circuit<F>>(
+pub fn load_vk<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
     path: PathBuf,
 ) -> Result<VerifyingKey<Scheme::Curve>, Box<dyn Error>>
 where
     C: Circuit<Scheme::Scalar>,
     Scheme::Curve: SerdeObject + CurveAffine,
-    Scheme::Scalar: PrimeField + SerdeObject,
+    Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {
     info!("loading verification key from {:?}", path);
     let f = File::open(path).map_err(Box::<dyn Error>::from)?;
@@ -394,13 +399,13 @@ where
 }
 
 /// Loads a [ProvingKey] at `path`.
-pub fn load_pk<Scheme: CommitmentScheme, F: FieldExt + TensorType, C: Circuit<F>>(
+pub fn load_pk<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
     path: PathBuf,
 ) -> Result<ProvingKey<Scheme::Curve>, Box<dyn Error>>
 where
     C: Circuit<Scheme::Scalar>,
     Scheme::Curve: SerdeObject + CurveAffine,
-    Scheme::Scalar: PrimeField + SerdeObject,
+    Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {
     info!("loading proving key from {:?}", path);
     let f = File::open(path).map_err(Box::<dyn Error>::from)?;
@@ -426,7 +431,7 @@ pub fn save_pk<Scheme: CommitmentScheme>(
 ) -> Result<(), io::Error>
 where
     Scheme::Curve: SerdeObject + CurveAffine,
-    Scheme::Scalar: PrimeField + SerdeObject,
+    Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {
     info!("saving proving key 💾");
     let f = File::create(path)?;
@@ -443,7 +448,7 @@ pub fn save_vk<Scheme: CommitmentScheme>(
 ) -> Result<(), io::Error>
 where
     Scheme::Curve: SerdeObject + CurveAffine,
-    Scheme::Scalar: PrimeField + SerdeObject,
+    Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {
     info!("saving verification key 💾");
     let f = File::create(path)?;

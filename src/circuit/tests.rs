@@ -1,11 +1,11 @@
 use crate::circuit::ops::poly::PolyOp;
 use crate::circuit::*;
 use halo2_proofs::{
-    arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
     dev::MockProver,
     plonk::{Circuit, ConstraintSystem, Error},
 };
+use halo2curves::ff::{Field, PrimeField};
 use halo2curves::pasta::pallas;
 use halo2curves::pasta::Fp as F;
 use rand::rngs::OsRng;
@@ -13,18 +13,19 @@ use std::marker::PhantomData;
 
 #[cfg(test)]
 mod matmul {
+
     use super::*;
 
     const K: usize = 9;
     const LEN: usize = 3;
 
     #[derive(Clone)]
-    struct MatmulCircuit<F: FieldExt + TensorType> {
+    struct MatmulCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MatmulCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MatmulCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -92,12 +93,12 @@ mod matmul_col_overflow {
     const LEN: usize = 6;
 
     #[derive(Clone)]
-    struct MatmulCircuit<F: FieldExt + TensorType> {
+    struct MatmulCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MatmulCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MatmulCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -165,12 +166,12 @@ mod dot {
     const LEN: usize = 4;
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt + TensorType> {
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -235,12 +236,12 @@ mod dot_col_overflow {
     const LEN: usize = 50;
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt + TensorType> {
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -305,12 +306,12 @@ mod sum {
     const LEN: usize = 4;
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt + TensorType> {
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 1],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -373,12 +374,12 @@ mod sum_col_overflow {
     const LEN: usize = 20;
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt + TensorType> {
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 1],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -441,12 +442,12 @@ mod composition {
     const LEN: usize = 4;
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt + TensorType> {
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -523,7 +524,6 @@ mod composition {
 
 #[cfg(test)]
 mod conv {
-    use halo2_proofs::arithmetic::Field;
 
     use super::*;
 
@@ -531,12 +531,12 @@ mod conv {
     const LEN: usize = 100;
 
     #[derive(Clone)]
-    struct ConvCircuit<F: FieldExt + TensorType> {
+    struct ConvCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: Vec<ValTensor<F>>,
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for ConvCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ConvCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -650,7 +650,6 @@ mod conv {
 
 #[cfg(test)]
 mod sumpool {
-    use halo2_proofs::arithmetic::Field;
 
     use super::*;
 
@@ -658,12 +657,12 @@ mod sumpool {
     const LEN: usize = 100;
 
     #[derive(Clone)]
-    struct ConvCircuit<F: FieldExt + TensorType> {
+    struct ConvCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: Vec<ValTensor<F>>,
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for ConvCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ConvCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -736,12 +735,12 @@ mod add_w_shape_casting {
     const LEN: usize = 4;
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt + TensorType> {
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -806,12 +805,12 @@ mod add {
     const LEN: usize = 4;
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt + TensorType> {
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -876,12 +875,12 @@ mod add_with_overflow {
     const LEN: usize = 50;
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt + TensorType> {
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -946,12 +945,12 @@ mod sub {
     const LEN: usize = 4;
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt + TensorType> {
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -1016,12 +1015,12 @@ mod mult {
     const LEN: usize = 4;
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt + TensorType> {
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -1086,12 +1085,12 @@ mod pow {
     const LEN: usize = 4;
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt + TensorType> {
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 1],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -1154,12 +1153,12 @@ mod pack {
     const LEN: usize = 4;
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt + TensorType> {
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 1],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -1222,12 +1221,12 @@ mod rescaled {
     const LEN: usize = 4;
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt + TensorType> {
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 1],
         _marker: PhantomData<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -1295,18 +1294,18 @@ mod matmul_relu {
     use crate::circuit::lookup::LookupOp;
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt + TensorType> {
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         inputs: [ValTensor<F>; 2],
         _marker: PhantomData<F>,
     }
 
     // A columnar ReLu MLP
     #[derive(Clone)]
-    struct MyConfig<F: FieldExt + TensorType> {
+    struct MyConfig<F: PrimeField + TensorType + PartialOrd> {
         base_config: BaseConfig<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = MyConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -1391,7 +1390,6 @@ mod rangecheck {
 
     use crate::tensor::Tensor;
     use halo2_proofs::{
-        arithmetic::FieldExt,
         circuit::{Layouter, SimpleFloorPlanner, Value},
         dev::MockProver,
         plonk::{Circuit, ConstraintSystem, Error},
@@ -1405,12 +1403,12 @@ mod rangecheck {
     use super::*;
 
     #[derive(Clone)]
-    struct MyCircuit<F: FieldExt + TensorType> {
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
         input: ValTensor<F>,
         output: ValTensor<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 
@@ -1491,7 +1489,6 @@ mod rangecheck {
 mod relu {
     use super::*;
     use halo2_proofs::{
-        arithmetic::FieldExt,
         circuit::{Layouter, SimpleFloorPlanner, Value},
         dev::MockProver,
         plonk::{Circuit, ConstraintSystem, Error},
@@ -1499,11 +1496,11 @@ mod relu {
     use halo2curves::pasta::Fp as F;
 
     #[derive(Clone)]
-    struct ReLUCircuit<F: FieldExt + TensorType> {
+    struct ReLUCircuit<F: PrimeField + TensorType + PartialOrd> {
         pub input: ValTensor<F>,
     }
 
-    impl<F: FieldExt + TensorType> Circuit<F> for ReLUCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ReLUCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
 

@@ -15,12 +15,10 @@ mod tests;
 use thiserror::Error;
 
 use halo2_proofs::{
-    arithmetic::Field,
     circuit::{Layouter, Region},
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
     poly::Rotation,
 };
-use halo2curves::FieldExt;
 use log::warn;
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +30,7 @@ use crate::{
 use std::{collections::BTreeMap, error::Error, marker::PhantomData};
 
 use self::{ops::lookup::LookupOp, table::Table};
+use halo2curves::ff::{Field, PrimeField};
 
 /// circuit related errors.
 #[derive(Debug, Error)]
@@ -73,7 +72,7 @@ impl From<String> for CheckMode {
 
 /// Configuration for an accumulated arg.
 #[derive(Clone, Debug, Default)]
-pub struct BaseConfig<F: FieldExt + TensorType> {
+pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     /// the inputs to the accumulated operations.
     pub inputs: Vec<VarTensor>,
     /// the VarTensor reserved for lookup operations (could be an element of inputs)
@@ -95,7 +94,7 @@ pub struct BaseConfig<F: FieldExt + TensorType> {
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType> BaseConfig<F> {
+impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     /// Returns a new [BaseConfig] with no inputs, no selectors, and no tables.
     pub fn dummy(col_size: usize) -> Self {
         Self {
@@ -225,7 +224,10 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         output: &VarTensor,
         bits: usize,
         nl: &LookupOp,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<(), Box<dyn Error>>
+    where
+        F: Field,
+    {
         let mut selectors = BTreeMap::new();
         let table =
             if let std::collections::btree_map::Entry::Vacant(e) = self.tables.entry(nl.clone()) {
@@ -240,7 +242,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             selectors.insert((nl.clone(), x), qlookup);
             let _ = cs.lookup(Op::<F>::as_str(nl), |cs| {
                 let qlookup = cs.query_selector(qlookup);
-                let not_qlookup = Expression::Constant(<F as Field>::one()) - qlookup.clone();
+                let not_qlookup = Expression::Constant(<F as Field>::ONE) - qlookup.clone();
                 let (default_x, default_y): (F, F) = nl.default_pair();
                 vec![
                     (

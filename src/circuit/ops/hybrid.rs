@@ -1,5 +1,4 @@
 use halo2_proofs::circuit::Region;
-use halo2curves::FieldExt;
 
 use crate::{
     circuit::layouts,
@@ -7,6 +6,7 @@ use crate::{
 };
 
 use super::{lookup::LookupOp, Op};
+use halo2curves::ff::PrimeField;
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be used to express more complex operations via accumulation
@@ -25,7 +25,7 @@ pub enum HybridOp {
     },
 }
 
-impl<F: FieldExt + TensorType> Op<F> for HybridOp {
+impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         match &self {

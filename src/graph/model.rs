@@ -10,6 +10,7 @@ use crate::commands::{Cli, Commands};
 use crate::graph::scale_to_multiplier;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor};
+use halo2curves::ff::PrimeField;
 use log::warn;
 use serde::Deserialize;
 use serde::Serialize;
@@ -23,7 +24,6 @@ use tract_onnx::tract_hir::internal::GenericFactoid;
 //use clap::Parser;
 use core::panic;
 use halo2_proofs::{
-    arithmetic::FieldExt,
     circuit::{Layouter, Value},
     plonk::ConstraintSystem,
 };
@@ -54,7 +54,7 @@ pub enum Mode {
 
 /// A circuit configuration for the entirety of a model loaded from an Onnx file.
 #[derive(Clone, Debug)]
-pub struct ModelConfig<F: FieldExt + TensorType> {
+pub struct ModelConfig<F: PrimeField + TensorType + PartialOrd> {
     /// The base configuration for the circuit
     pub base: PolyConfig<F>,
     /// The model struct
@@ -65,7 +65,7 @@ pub struct ModelConfig<F: FieldExt + TensorType> {
 
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
 #[derive(Clone, Debug)]
-pub struct Model<F: FieldExt + TensorType> {
+pub struct Model<F: PrimeField + TensorType + PartialOrd> {
     /// input indices
     pub inputs: Vec<usize>,
     /// output indices
@@ -80,7 +80,7 @@ pub struct Model<F: FieldExt + TensorType> {
     pub visibility: VarVisibility,
 }
 
-impl<F: FieldExt + TensorType> Model<F> {
+impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// Creates an `Model` from a specified path to an Onnx file.
     /// # Arguments
     /// * `path` - A path to an Onnx file.

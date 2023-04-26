@@ -3,7 +3,7 @@ use halo2_proofs::{arithmetic::Field, plonk::Instance};
 
 #[derive(Debug, Clone)]
 ///
-pub enum ValType<F: FieldExt + TensorType + std::marker::Send + std::marker::Sync> {
+pub enum ValType<F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd> {
     /// value
     Value(Value<F>),
     /// assigned  value
@@ -14,7 +14,7 @@ pub enum ValType<F: FieldExt + TensorType + std::marker::Send + std::marker::Syn
     Constant(F),
 }
 
-impl<F: FieldExt + TensorType> From<ValType<F>> for i32 {
+impl<F: PrimeField + TensorType + PartialOrd> From<ValType<F>> for i32 {
     fn from(val: ValType<F>) -> Self {
         match val {
             ValType::Value(v) => {
@@ -52,43 +52,46 @@ impl<F: FieldExt + TensorType> From<ValType<F>> for i32 {
     }
 }
 
-impl<F: FieldExt + TensorType> From<F> for ValType<F> {
+impl<F: PrimeField + TensorType + PartialOrd> From<F> for ValType<F> {
     fn from(t: F) -> ValType<F> {
         ValType::Constant(t)
     }
 }
 
-impl<F: FieldExt + TensorType> From<Value<F>> for ValType<F> {
+impl<F: PrimeField + TensorType + PartialOrd> From<Value<F>> for ValType<F> {
     fn from(t: Value<F>) -> ValType<F> {
         ValType::Value(t)
     }
 }
 
-impl<F: FieldExt + TensorType> From<Value<Assigned<F>>> for ValType<F> {
+impl<F: PrimeField + TensorType + PartialOrd> From<Value<Assigned<F>>> for ValType<F> {
     fn from(t: Value<Assigned<F>>) -> ValType<F> {
         ValType::AssignedValue(t)
     }
 }
 
-impl<F: FieldExt + TensorType> From<AssignedCell<F, F>> for ValType<F> {
+impl<F: PrimeField + TensorType + PartialOrd> From<AssignedCell<F, F>> for ValType<F> {
     fn from(t: AssignedCell<F, F>) -> ValType<F> {
         ValType::PrevAssigned(t)
     }
 }
 
-impl<F: FieldExt + TensorType> TensorType for ValType<F> {
+impl<F: PrimeField + TensorType + PartialOrd> TensorType for ValType<F>
+where
+    F: Field,
+{
     fn zero() -> Option<Self> {
-        Some(ValType::Value(Value::known(<F as Field>::zero())))
+        Some(ValType::Value(Value::known(<F as Field>::ZERO)))
     }
     fn one() -> Option<Self> {
-        Some(ValType::Value(Value::known(<F as Field>::one())))
+        Some(ValType::Value(Value::known(<F as Field>::ONE)))
     }
 }
 /// A wrapper around a [Tensor] where the inner type is one of Halo2's [`Value<F>`], [`Value<Assigned<F>>`], [`AssignedCell<Assigned<F>, F>`].
 /// This enum is generally used to assign values to variables / advices already configured in a Halo2 circuit (usually represented as a [VarTensor]).
 /// For instance can represent pre-trained neural network weights; or a known input to a network.
 #[derive(Debug, Clone)]
-pub enum ValTensor<F: FieldExt + TensorType> {
+pub enum ValTensor<F: PrimeField + TensorType + PartialOrd> {
     /// A tensor of [Value], each containing a field element
     Value {
         /// Underlying [Tensor].
@@ -109,7 +112,7 @@ pub enum ValTensor<F: FieldExt + TensorType> {
     },
 }
 
-impl<F: FieldExt + TensorType> From<Tensor<ValType<F>>> for ValTensor<F> {
+impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<ValType<F>>> for ValTensor<F> {
     fn from(t: Tensor<ValType<F>>) -> ValTensor<F> {
         ValTensor::Value {
             inner: t.map(|x| x),
@@ -119,7 +122,7 @@ impl<F: FieldExt + TensorType> From<Tensor<ValType<F>>> for ValTensor<F> {
     }
 }
 
-impl<F: FieldExt + TensorType> From<Tensor<F>> for ValTensor<F> {
+impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<F>> for ValTensor<F> {
     fn from(t: Tensor<F>) -> ValTensor<F> {
         ValTensor::Value {
             inner: t.map(|x| x.into()),
@@ -129,7 +132,7 @@ impl<F: FieldExt + TensorType> From<Tensor<F>> for ValTensor<F> {
     }
 }
 
-impl<F: FieldExt + TensorType> From<Tensor<Value<F>>> for ValTensor<F> {
+impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<Value<F>>> for ValTensor<F> {
     fn from(t: Tensor<Value<F>>) -> ValTensor<F> {
         ValTensor::Value {
             inner: t.map(|x| x.into()),
@@ -139,7 +142,7 @@ impl<F: FieldExt + TensorType> From<Tensor<Value<F>>> for ValTensor<F> {
     }
 }
 
-impl<F: FieldExt + TensorType> From<Tensor<Value<Assigned<F>>>> for ValTensor<F> {
+impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<Value<Assigned<F>>>> for ValTensor<F> {
     fn from(t: Tensor<Value<Assigned<F>>>) -> ValTensor<F> {
         ValTensor::Value {
             inner: t.map(|x| x.into()),
@@ -149,7 +152,7 @@ impl<F: FieldExt + TensorType> From<Tensor<Value<Assigned<F>>>> for ValTensor<F>
     }
 }
 
-impl<F: FieldExt + TensorType> From<Tensor<AssignedCell<F, F>>> for ValTensor<F> {
+impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<AssignedCell<F, F>>> for ValTensor<F> {
     fn from(t: Tensor<AssignedCell<F, F>>) -> ValTensor<F> {
         ValTensor::Value {
             inner: t.map(|x| x.into()),
@@ -159,7 +162,7 @@ impl<F: FieldExt + TensorType> From<Tensor<AssignedCell<F, F>>> for ValTensor<F>
     }
 }
 
-impl<F: FieldExt + TensorType> ValTensor<F> {
+impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
     pub fn new_instance(cs: &mut ConstraintSystem<F>, dims: Vec<usize>, scale: u32) -> Self {
         let col = cs.instance_column();
