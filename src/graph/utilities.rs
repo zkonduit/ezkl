@@ -14,7 +14,7 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::binary::UnaryOp;
 use tract_onnx::tract_core::ops::matmul::MatMulUnary;
-use tract_onnx::tract_core::ops::nn::{LeakyRelu, Reduce};
+use tract_onnx::tract_core::ops::nn::{LeakyRelu, Reduce, Softmax};
 use tract_onnx::tract_hir::internal::AxisOp;
 use tract_onnx::tract_hir::ops::cnn::ConvUnary;
 use tract_onnx::tract_hir::ops::element_wise::ElementWiseOp;
@@ -315,6 +315,24 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             let matrix = extract_tensor_value(mm_op.a.clone(), scale, public_params)?;
 
             Box::new(PolyOp::Matmul { a: Some(matrix) })
+        }
+        "Softmax" => {
+            // Extract the slope layer hyperparams
+            let softmax_op: &Softmax = match node.op().downcast_ref::<Softmax>() {
+                Some(b) => b,
+                None => {
+                    return Err(Box::new(GraphError::OpMismatch(idx, "softmax".to_string())));
+                }
+            };
+
+            if softmax_op.axes.to_vec() != vec![1] {
+                return Err(Box::new(GraphError::InvalidDims(
+                    idx,
+                    "softmax".to_string(),
+                )));
+            }
+
+            Box::new(HybridOp::Softmax { scales: (1, 1) })
         }
         "MatMul" => Box::new(PolyOp::Matmul { a: None }),
         "AddUnary" => {

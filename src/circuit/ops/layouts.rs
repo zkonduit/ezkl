@@ -1523,3 +1523,56 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     };
     Ok(assigned_min_val)
 }
+
+/// softmax func
+pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
+    config: &mut BaseConfig<F>,
+    region: &mut Option<&mut Region<F>>,
+    values: &[ValTensor<F>; 1],
+    input_scale: usize,
+    output_scale: usize,
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // we want this to be as small as possible so we set the output scale to 1
+    let scales = (input_scale, output_scale);
+    // elementwise exponential
+    let ex = nonlinearity(config, region, values, &LookupOp::Exp { scales }, offset)?;
+
+    // sum of exps
+    let denom = sum(config, region, &[ex.clone()], offset)?;
+    // get the inverse
+
+    let inv_denom = nonlinearity(
+        config,
+        region,
+        &[denom.clone()],
+        // we set to input scale + output_scale so the output scale is output)scale
+        &LookupOp::Recip {
+            scale: output_scale.pow(2),
+        },
+        offset,
+    )?;
+
+    // product of num * (1 / denom) = 2*output_scale
+    let softmax = pairwise(config, region, &[ex, inv_denom], offset, BaseOp::Mult)?;
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(softmax.get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let int_evals = Tensor::new(Some(&values[0].get_int_evals()?), &values[0].dims())?;
+            // scale is double the output
+            let ref_sofmax: Tensor<i128> =
+                tensor::ops::nonlinearities::softmax(&int_evals, input_scale, output_scale);
+
+            let output_int_evals = Tensor::new(Some(&softmax.get_int_evals()?), &values[0].dims())?;
+
+            assert_eq!(output_int_evals, ref_sofmax,)
+        }
+    };
+
+    Ok(softmax)
+}

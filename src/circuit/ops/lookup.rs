@@ -24,6 +24,7 @@ pub enum LookupOp {
     Recip { scale: usize },
     LeakyReLU { scale: usize, slope: utils::F32 },
     Sigmoid { scales: (usize, usize) },
+    Exp { scales: (usize, usize) },
     Tanh { scales: (usize, usize) },
     Erf { scales: (usize, usize) },
     GreaterThan { a: utils::F32 },
@@ -46,21 +47,23 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
         match &self {
             LookupOp::GreaterThan { a } => Ok(tensor::ops::nonlinearities::greater_than(
                 &x[0],
-                f32::from(*a),
+                f32::from(*a).into(),
             )),
             LookupOp::Div { denom } => Ok(tensor::ops::nonlinearities::const_div(
                 &x[0],
-                f32::from(*denom),
+                f32::from(*denom).into(),
             )),
             LookupOp::Recip { scale } => {
                 Ok(tensor::ops::nonlinearities::recip(&x[0], *scale as u32))
             }
             LookupOp::ReLU { scale } => {
-                Ok(tensor::ops::nonlinearities::leakyrelu(&x[0], *scale, 0_f32))
+                Ok(tensor::ops::nonlinearities::leakyrelu(&x[0], *scale, 0_f64))
             }
 
             LookupOp::LeakyReLU { scale, slope } => Ok(tensor::ops::nonlinearities::leakyrelu(
-                &x[0], *scale, slope.0,
+                &x[0],
+                *scale,
+                slope.0.into(),
             )),
             LookupOp::Sigmoid { scales } => Ok(tensor::ops::nonlinearities::sigmoid(
                 &x[0], scales.0, scales.1,
@@ -77,6 +80,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::Erf { scales } => Ok(tensor::ops::nonlinearities::erffunc(
                 &x[0], scales.0, scales.1,
             )),
+            LookupOp::Exp { scales } => {
+                Ok(tensor::ops::nonlinearities::exp(&x[0], scales.0, scales.1))
+            }
         }
     }
 
@@ -93,6 +99,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::Tanh { .. } => "TANH",
             LookupOp::Erf { .. } => "ERF",
             LookupOp::Rsqrt { .. } => "RSQRT",
+            LookupOp::Exp { .. } => "EXP",
         }
     }
 
@@ -154,6 +161,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                 ),
             }),
             LookupOp::Erf { .. } => Box::new(LookupOp::Erf {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
+            LookupOp::Exp { .. } => Box::new(LookupOp::Exp {
                 scales: (
                     scale_to_multiplier(inputs_scale[0]) as usize,
                     scale_to_multiplier(global_scale) as usize,
