@@ -40,12 +40,24 @@ pub fn vector_to_quantized(
     scale: u32,
 ) -> Result<Tensor<i128>, TensorError> {
     let mult = scale_to_multiplier(scale);
+    let max_value = (((i128::MAX as f32 - shift) / mult)).round(); // the maximum value that can be represented w/o sig bit truncation
+
     // we parallelize the quantization process as it seems to be quite slow at times
-    let scaled: Vec<i128> = vec
+    let scaled: Result<Vec<i128>, _> = vec
         .par_iter()
-        .map(|e| (mult * *e + shift).round() as i128)
-        .collect();
-    Tensor::new(Some(&scaled), dims)
+        .map(|e| {
+            if *e > max_value {
+                return Err(TensorError::SigBitTruncatioError);
+            }
+            let quantized_value = (mult * e + shift).round() as i128;
+            Ok(quantized_value)
+        })
+        .collect(); // collect() will automatically propagate the error
+
+    match scaled {
+        Ok(scaled_values) => Tensor::new(Some(&scaled_values), dims),
+        Err(e) => Err(e),
+    }
 }
 
 /// Converts a scale (log base 2) to a fixed point multiplier.
