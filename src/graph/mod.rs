@@ -225,44 +225,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
         ModelConfig { base, vars }
     }
 
-    fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let model: Arc<Model<F>> = Arc::new(Model::from_arg().expect("model should load"));
-
-        let instance_shapes = model.instance_shapes();
-        // this is the total number of variables we will need to allocate
-        // for the circuit
-        let num_constraints = if let Some(num_constraints) = model.run_args.allocated_constraints {
-            num_constraints
-        } else {
-            model.dummy_layout(&model.input_shapes()).unwrap()
-        };
-
-        info!("total num constraints: {:?}", num_constraints);
-        info!("instance_shapes: {:?}", instance_shapes);
-
-        let mut vars = ModelVars::new(
-            cs,
-            model.run_args.logrows as usize,
-            num_constraints,
-            instance_shapes.clone(),
-            model.visibility.clone(),
-            model.run_args.scale,
-        );
-        info!(
-            "number of advices used: {:?}",
-            vars.advices.iter().map(|a| a.num_cols()).sum::<usize>()
-        );
-        info!(
-            "number of fixed used: {:?}",
-            vars.fixed.iter().map(|a| a.num_cols()).sum::<usize>()
-        );
-        info!("number of instances used: {:?}", instance_shapes.len());
-
-        let config = model.configure(cs, &mut vars).unwrap();
-
-        info!("configured model");
-
-        ModelConfig { base: config, vars }
+    fn configure(_: &mut ConstraintSystem<F>) -> Self::Config {
+        unimplemented!("you should call configure_with_params instead")
     }
 
     fn synthesize(
