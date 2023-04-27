@@ -363,7 +363,7 @@ fn forward(
 
 fn mock(data: String, logrows: u32) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
-    let model = Model::from_arg()?;
+    let model = Arc::new(Model::from_arg()?);
     let circuit = ModelCircuit::<Fr>::new(&data, model)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
@@ -390,7 +390,7 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<(), Box<dyn Error>> {
 #[cfg(feature = "render")]
 fn render(data: String, output: String, logrows: u32) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data.to_string())?;
-    let model = Model::from_arg()?;
+    let model = Arc::new(Model::from_arg()?);
     let circuit = ModelCircuit::<Fr>::new(&data, model)?;
     info!("Rendering circuit");
 
@@ -418,8 +418,7 @@ fn create_evm_verifier(
     logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
-
-    let model = Model::from_arg()?;
+    let model = Arc::new(Model::from_arg()?);
     let circuit = ModelCircuit::<Fr>::new(&data, model)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
     let num_instance = public_inputs.iter().map(|x| x.len()).collect();
@@ -498,8 +497,7 @@ fn prove(
     check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
-
-    let model = Model::from_arg()?;
+    let model = Arc::new(Model::from_arg()?);
     let circuit = ModelCircuit::<Fr>::new(&data, model)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 

@@ -25,7 +25,6 @@ pub use model::*;
 pub use node::*;
 // use std::fs::File;
 // use std::io::{BufReader, BufWriter, Read, Write};
-use std::marker::PhantomData;
 use std::sync::Arc;
 // use std::path::PathBuf;
 use thiserror::Error;
@@ -95,16 +94,14 @@ pub struct ModelCircuit<F: PrimeField + TensorType + PartialOrd> {
     /// Vector of input tensors to the model / graph of computations.
     pub inputs: Vec<Tensor<i128>>,
     ///
-    pub model: Model<F>,
-    /// Represents the PrimeField we are using.
-    pub _marker: PhantomData<F>,
+    pub params: ModelParams<F>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
     ///
     pub fn new(
         data: &ModelInput,
-        model: Model<F>,
+        model: Arc<Model<F>>,
     ) -> Result<ModelCircuit<F>, Box<dyn std::error::Error>> {
         // quantize the supplied data using the provided scale.
         let mut inputs: Vec<Tensor<i128>> = vec![];
@@ -113,17 +110,28 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
             inputs.push(t);
         }
 
-        Ok(ModelCircuit::<F> {
-            inputs,
+        let instance_shapes = model.instance_shapes();
+        // this is the total number of variables we will need to allocate
+        // for the circuit
+        let num_constraints = if let Some(num_constraints) = model.run_args.allocated_constraints {
+            num_constraints
+        } else {
+            model.dummy_layout(&model.input_shapes()).unwrap()
+        };
+
+        let params = ModelParams {
             model,
-            _marker: PhantomData,
-        })
+            instance_shapes,
+            num_constraints,
+        };
+
+        Ok(ModelCircuit::<F> { inputs, params })
     }
 
     ///
     pub fn from_arg(data: &ModelInput) -> Result<Self, Box<dyn std::error::Error>> {
         let cli = Cli::create()?;
-        let model = Model::from_ezkl_conf(cli)?;
+        let model = Arc::new(Model::from_ezkl_conf(cli)?);
         Self::new(data, model)
     }
 
@@ -132,33 +140,39 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
         &self,
         data: &ModelInput,
     ) -> Result<Vec<Vec<F>>, Box<dyn std::error::Error>> {
-        let out_scales = self.model.get_output_scales();
+        let out_scales = self.params.model.get_output_scales();
 
         // quantize the supplied data using the provided scale.
         // the ordering here is important, we want the inputs to come before the outputs
         // as they are configured in that order as Column<Instances>
         let mut public_inputs = vec![];
-        if self.model.visibility.input.is_public() {
+        if self.params.model.visibility.input.is_public() {
             for v in data.input_data.iter() {
-                let t =
-                    vector_to_quantized(v, &Vec::from([v.len()]), 0.0, self.model.run_args.scale)?;
+                let t = vector_to_quantized(
+                    v,
+                    &Vec::from([v.len()]),
+                    0.0,
+                    self.params.model.run_args.scale,
+                )?;
                 public_inputs.push(t);
             }
         }
-        if self.model.visibility.output.is_public() {
+        if self.params.model.visibility.output.is_public() {
             for (idx, v) in data.output_data.iter().enumerate() {
                 let mut t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx])?;
                 let len = t.len();
-                if self.model.run_args.pack_base > 1 {
+                if self.params.model.run_args.pack_base > 1 {
                     let max_exponent =
-                        (((len - 1) as u32) * (self.model.run_args.scale + 1)) as f64;
-                    if max_exponent > (i128::MAX as f64).log(self.model.run_args.pack_base as f64) {
+                        (((len - 1) as u32) * (self.params.model.run_args.scale + 1)) as f64;
+                    if max_exponent
+                        > (i128::MAX as f64).log(self.params.model.run_args.pack_base as f64)
+                    {
                         return Err(Box::new(GraphError::PackingExponent));
                     }
                     t = pack(
                         &t,
-                        self.model.run_args.pack_base as i128,
-                        self.model.run_args.scale,
+                        self.params.model.run_args.pack_base as i128,
+                        self.params.model.run_args.scale,
                     )?;
                 }
                 public_inputs.push(t);
@@ -189,6 +203,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
 
     fn without_witnesses(&self) -> Self {
         self.clone()
+    }
+
+    fn params(&self) -> Self::Params {
+        // safe to clone because the model is Arc'd
+        self.params.clone()
     }
 
     fn configure_with_params(cs: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
