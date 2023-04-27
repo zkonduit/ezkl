@@ -222,11 +222,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
 
         let base = params.model.configure(cs, &mut vars).unwrap();
 
-        ModelConfig {
-            base,
-            vars,
-            model: params.model.clone(),
-        }
+        ModelConfig { base, vars }
     }
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
@@ -266,11 +262,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
 
         info!("configured model");
 
-        ModelConfig {
-            model,
-            base: config,
-            vars,
-        }
+        ModelConfig { base: config, vars }
     }
 
     fn synthesize(
@@ -285,7 +277,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
             .map(|i| ValTensor::from(<Tensor<i128> as Into<Tensor<Value<F>>>>::into(i.clone())))
             .collect::<Vec<ValTensor<F>>>();
         trace!("Laying out model");
-        config
+        self.params
             .model
             .layout(config.clone(), &mut layouter, &inputs, &config.vars)
             .unwrap();

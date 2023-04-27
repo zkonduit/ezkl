@@ -33,7 +33,6 @@ use log::{debug, info, trace};
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
-use std::sync::Arc;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::Framework;
@@ -58,8 +57,6 @@ pub enum Mode {
 pub struct ModelConfig<F: PrimeField + TensorType + PartialOrd> {
     /// The base configuration for the circuit
     pub base: PolyConfig<F>,
-    /// The model struct
-    pub model: Arc<Model<F>>,
     /// A wrapper for holding all columns that will be assigned to by the model
     pub vars: ModelVars<F>,
 }
