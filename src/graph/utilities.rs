@@ -40,7 +40,7 @@ pub fn vector_to_quantized(
     scale: u32,
 ) -> Result<Tensor<i128>, TensorError> {
     let mult = scale_to_multiplier(scale);
-    let max_value = (((i128::MAX as f32 - shift) / mult)).round(); // the maximum value that can be accuratly represented in the fixed point representation
+    let max_value = (((i128::MAX as f32 - shift) / mult)).round(); // the maximum value that can be represented w/o sig bit truncation
 
     // we parallelize the quantization process as it seems to be quite slow at times
     let scaled: Result<Vec<i128>, _> = vec
