@@ -33,14 +33,14 @@ use log::{debug, info, trace};
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
-use std::sync::Arc;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::Framework;
 /// Mode we're using the model in.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub enum Mode {
     /// Initialize the model and display the operations table / graph
+    #[default]
     Table,
     /// Initialize the model and generate a mock proof
     Mock,
@@ -57,14 +57,12 @@ pub enum Mode {
 pub struct ModelConfig<F: PrimeField + TensorType + PartialOrd> {
     /// The base configuration for the circuit
     pub base: PolyConfig<F>,
-    /// The model struct
-    pub model: Arc<Model<F>>,
     /// A wrapper for holding all columns that will be assigned to by the model
     pub vars: ModelVars<F>,
 }
 
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Model<F: PrimeField + TensorType + PartialOrd> {
     /// input indices
     pub inputs: Vec<usize>,

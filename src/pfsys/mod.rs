@@ -385,6 +385,7 @@ where
 /// Loads a [VerifyingKey] at `path`.
 pub fn load_vk<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
     path: PathBuf,
+    params: <C as Circuit<Scheme::Scalar>>::Params,
 ) -> Result<VerifyingKey<Scheme::Curve>, Box<dyn Error>>
 where
     C: Circuit<Scheme::Scalar>,
@@ -394,13 +395,18 @@ where
     info!("loading verification key from {:?}", path);
     let f = File::open(path).map_err(Box::<dyn Error>::from)?;
     let mut reader = BufReader::new(f);
-    VerifyingKey::<Scheme::Curve>::read::<_, C>(&mut reader, halo2_proofs::SerdeFormat::RawBytes)
-        .map_err(Box::<dyn Error>::from)
+    VerifyingKey::<Scheme::Curve>::read::<_, C>(
+        &mut reader,
+        halo2_proofs::SerdeFormat::RawBytes,
+        params,
+    )
+    .map_err(Box::<dyn Error>::from)
 }
 
 /// Loads a [ProvingKey] at `path`.
 pub fn load_pk<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
     path: PathBuf,
+    params: <C as Circuit<Scheme::Scalar>>::Params,
 ) -> Result<ProvingKey<Scheme::Curve>, Box<dyn Error>>
 where
     C: Circuit<Scheme::Scalar>,
@@ -410,8 +416,12 @@ where
     info!("loading proving key from {:?}", path);
     let f = File::open(path).map_err(Box::<dyn Error>::from)?;
     let mut reader = BufReader::new(f);
-    ProvingKey::<Scheme::Curve>::read::<_, C>(&mut reader, halo2_proofs::SerdeFormat::RawBytes)
-        .map_err(Box::<dyn Error>::from)
+    ProvingKey::<Scheme::Curve>::read::<_, C>(
+        &mut reader,
+        halo2_proofs::SerdeFormat::RawBytes,
+        params,
+    )
+    .map_err(Box::<dyn Error>::from)
 }
 
 /// Loads the [CommitmentScheme::ParamsVerifier] at `path`.

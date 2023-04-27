@@ -317,7 +317,7 @@ pub fn sum_axes<F: PrimeField + TensorType + PartialOrd>(
 }
 
 /// Max accumulated layout
-pub fn max_axes<F: PrimeField + TensorType + PartialOrd + PartialOrd>(
+pub fn max_axes<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
@@ -369,7 +369,7 @@ pub fn max_axes<F: PrimeField + TensorType + PartialOrd + PartialOrd>(
 }
 
 /// Min accumulated layout
-pub fn min_axes<F: PrimeField + TensorType + PartialOrd + PartialOrd>(
+pub fn min_axes<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
@@ -622,7 +622,7 @@ pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
 }
 
 /// Iff
-pub fn iff<F: PrimeField + TensorType + PartialOrd + PartialOrd>(
+pub fn iff<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 3],
@@ -792,7 +792,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
 }
 
 /// Convolution accumulated layout
-pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd + PartialOrd>(
+pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
@@ -1294,7 +1294,7 @@ pub fn mean<F: PrimeField + TensorType + PartialOrd>(
 }
 
 /// max layout
-pub fn max<F: PrimeField + TensorType + PartialOrd + PartialOrd>(
+pub fn max<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
@@ -1408,7 +1408,7 @@ pub fn max<F: PrimeField + TensorType + PartialOrd + PartialOrd>(
 }
 
 /// min layout
-pub fn min<F: PrimeField + TensorType + PartialOrd + PartialOrd>(
+pub fn min<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],

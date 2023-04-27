@@ -29,6 +29,7 @@ use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp as F;
 use mnist::*;
 use rand::rngs::OsRng;
+use std::marker::PhantomData;
 use std::time::Instant;
 
 mod params;
@@ -131,6 +132,7 @@ where
         PADDING,
     >;
     type FloorPlanner = SimpleFloorPlanner;
+    type Params = PhantomData<F>;
 
     fn without_witnesses(&self) -> Self {
         self.clone()

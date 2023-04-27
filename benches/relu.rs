@@ -25,6 +25,7 @@ struct NLCircuit {
 impl Circuit<Fr> for NLCircuit {
     type Config = Config<Fr>;
     type FloorPlanner = SimpleFloorPlanner;
+    type Params = ();
 
     fn without_witnesses(&self) -> Self {
         self.clone()

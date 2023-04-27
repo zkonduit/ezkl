@@ -11,6 +11,9 @@ use halo2curves::pasta::Fp as F;
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
 
+#[derive(Default)]
+struct TestParams;
+
 #[cfg(test)]
 mod matmul {
 
@@ -28,6 +31,7 @@ mod matmul {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MatmulCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -101,6 +105,7 @@ mod matmul_col_overflow {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MatmulCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -174,6 +179,7 @@ mod dot {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -244,6 +250,7 @@ mod dot_col_overflow {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -314,6 +321,7 @@ mod sum {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -382,6 +390,7 @@ mod sum_col_overflow {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -450,6 +459,7 @@ mod composition {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -539,6 +549,7 @@ mod conv {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ConvCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -665,6 +676,7 @@ mod sumpool {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ConvCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -743,6 +755,7 @@ mod add_w_shape_casting {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -813,6 +826,7 @@ mod add {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -883,6 +897,7 @@ mod add_with_overflow {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -953,6 +968,7 @@ mod sub {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -1023,6 +1039,7 @@ mod mult {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -1093,6 +1110,7 @@ mod pow {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -1161,6 +1179,7 @@ mod pack {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -1229,6 +1248,7 @@ mod rescaled {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -1308,6 +1328,7 @@ mod matmul_relu {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = MyConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -1411,6 +1432,7 @@ mod rangecheck {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()
@@ -1503,6 +1525,7 @@ mod relu {
     impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ReLUCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
             self.clone()

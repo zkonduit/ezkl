@@ -39,6 +39,7 @@ impl<F: PrimeField + TensorType + PartialOrd, const LEN: usize, const BITS: usiz
 {
     type Config = MyConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
+    type Params = PhantomData<F>;
 
     fn without_witnesses(&self) -> Self {
         self.clone()
