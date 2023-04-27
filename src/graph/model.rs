@@ -38,9 +38,10 @@ use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::Framework;
 /// Mode we're using the model in.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub enum Mode {
     /// Initialize the model and display the operations table / graph
+    #[default]
     Table,
     /// Initialize the model and generate a mock proof
     Mock,
@@ -64,7 +65,7 @@ pub struct ModelConfig<F: PrimeField + TensorType + PartialOrd> {
 }
 
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Model<F: PrimeField + TensorType + PartialOrd> {
     /// input indices
     pub inputs: Vec<usize>,

@@ -44,7 +44,7 @@ impl std::fmt::Display for StrategyType {
 }
 
 /// Parameters specific to a proving run
-#[derive(Debug, Args, Deserialize, Serialize, Clone)]
+#[derive(Debug, Args, Deserialize, Serialize, Clone, Default)]
 pub struct RunArgs {
     /// The tolerance for error on model outputs
     #[arg(short = 'T', long, default_value = "0")]

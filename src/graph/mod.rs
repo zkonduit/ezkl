@@ -78,6 +78,17 @@ pub enum GraphError {
     PackingExponent,
 }
 
+/// model parameters
+#[derive(Clone, Debug, Default)]
+pub struct ModelParams<F: PrimeField + TensorType + PartialOrd> {
+    /// An onnx model quantized and configured for zkSNARKs
+    pub model: Arc<Model<F>>,
+    /// the potential number of constraints in the circuit
+    pub num_constraints: usize,
+    /// the shape of public inputs to the circuit (in order of appearance)
+    pub instance_shapes: Vec<Vec<usize>>,
+}
+
 /// Defines the circuit for a computational graph / model loaded from a `.onnx` file.
 #[derive(Clone, Debug)]
 pub struct ModelCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -174,9 +185,29 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
 impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
     type Config = ModelConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
+    type Params = ModelParams<F>;
 
     fn without_witnesses(&self) -> Self {
         self.clone()
+    }
+
+    fn configure_with_params(cs: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
+        let mut vars = ModelVars::new(
+            cs,
+            params.model.run_args.logrows as usize,
+            params.num_constraints,
+            params.instance_shapes.clone(),
+            params.model.visibility.clone(),
+            params.model.run_args.scale,
+        );
+
+        let base = params.model.configure(cs, &mut vars).unwrap();
+
+        ModelConfig {
+            base,
+            vars,
+            model: params.model.clone(),
+        }
     }
 
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {

@@ -35,6 +35,7 @@ struct MyConfig {
 impl Circuit<Fr> for MyCircuit {
     type Config = MyConfig;
     type FloorPlanner = SimpleFloorPlanner;
+    type Params = ();
 
     fn without_witnesses(&self) -> Self {
         self.clone()

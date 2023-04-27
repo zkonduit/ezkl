@@ -247,6 +247,7 @@ impl AggregationCircuit {
 impl Circuit<Fr> for AggregationCircuit {
     type Config = AggregationConfig;
     type FloorPlanner = SimpleFloorPlanner;
+    type Params = ();
 
     fn without_witnesses(&self) -> Self {
         Self {
