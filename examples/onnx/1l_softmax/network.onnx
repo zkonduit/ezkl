@@ -1,0 +1,14 @@
+pytorch1.13.1:‰
+5
+inputoutput/layer/Softmax"Softmax*
+axis 	torch_jitZ!
+input
+
+
+batch_size
+b"
+output
+
+
+batch_size
+B

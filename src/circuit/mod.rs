@@ -283,7 +283,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             self.lookup_input = input.clone();
         }
         if let VarTensor::Empty = self.lookup_output {
-            warn!("assigning lookup input");
+            warn!("assigning lookup output");
             self.lookup_output = output.clone();
         }
         Ok(())
@@ -293,6 +293,10 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     pub fn layout_tables(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), Box<dyn Error>> {
         for table in self.tables.values_mut() {
             if !table.is_assigned {
+                warn!(
+                    "laying out table for {:?}",
+                    crate::circuit::ops::Op::<F>::as_str(&table.nonlinearity)
+                );
                 table.layout(layouter)?;
             }
         }
