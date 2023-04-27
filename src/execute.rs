@@ -363,8 +363,7 @@ fn forward(
 
 fn mock(data: String, logrows: u32) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
-    let model = Arc::new(Model::from_arg()?);
-    let circuit = ModelCircuit::<Fr>::new(&data, model)?;
+    let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     info!("Mock proof");
@@ -390,8 +389,7 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<(), Box<dyn Error>> {
 #[cfg(feature = "render")]
 fn render(data: String, output: String, logrows: u32) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data.to_string())?;
-    let model = Arc::new(Model::from_arg()?);
-    let circuit = ModelCircuit::<Fr>::new(&data, model)?;
+    let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
     info!("Rendering circuit");
 
     // Create the area we want to draw on.
@@ -418,8 +416,7 @@ fn create_evm_verifier(
     logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
-    let model = Arc::new(Model::from_arg()?);
-    let circuit = ModelCircuit::<Fr>::new(&data, model)?;
+    let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
     let num_instance = public_inputs.iter().map(|x| x.len()).collect();
     let params = load_params_cmd(params_path, logrows)?;
@@ -497,8 +494,7 @@ fn prove(
     check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
-    let model = Arc::new(Model::from_arg()?);
-    let circuit = ModelCircuit::<Fr>::new(&data, model)?;
+    let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     let params = load_params_cmd(params_path, logrows)?;
