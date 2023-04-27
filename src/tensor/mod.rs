@@ -43,8 +43,8 @@ pub enum TensorError {
     /// wrong method was called on a tensor-like struct
     #[error("wrong method called")]
     WrongMethod,
-    /// Significant bit truncation during quantization
-    #[error("Significant bit truncation")]
+    /// Significant bit truncation when instantiating
+    #[error("Significant bit truncation when instantiating")]
     SigBitTruncatioError
 }
 
