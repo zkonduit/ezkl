@@ -29,7 +29,7 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
     ///
     fn layout(
         &self,
-        config: &mut crate::circuit::BaseConfig<F>,
+        config: &crate::circuit::BaseConfig<F>,
         region: &mut Option<&mut Region<F>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
@@ -82,7 +82,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
     }
     fn layout(
         &self,
-        _: &mut crate::circuit::BaseConfig<F>,
+        _: &crate::circuit::BaseConfig<F>,
         _: &mut Option<&mut Region<F>>,
         _: &[ValTensor<F>],
         _: &mut usize,
@@ -145,7 +145,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
 
     fn layout(
         &self,
-        config: &mut crate::circuit::BaseConfig<F>,
+        config: &crate::circuit::BaseConfig<F>,
         region: &mut Option<&mut Region<F>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
@@ -180,7 +180,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
     }
     fn layout(
         &self,
-        _: &mut crate::circuit::BaseConfig<F>,
+        _: &crate::circuit::BaseConfig<F>,
         _: &mut Option<&mut Region<F>>,
         _: &[ValTensor<F>],
         _: &mut usize,

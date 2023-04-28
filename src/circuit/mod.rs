@@ -310,7 +310,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     /// * `offset` - Offset to assign.
     /// * `op` - The operation being represented.
     pub fn layout(
-        &mut self,
+        &self,
         region: &mut Option<&mut Region<F>>,
         values: &[ValTensor<F>],
         offset: &mut usize,

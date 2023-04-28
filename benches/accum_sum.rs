@@ -46,7 +46,7 @@ impl Circuit<Fr> for MyCircuit {
 
     fn synthesize(
         &self,
-        mut config: Self::Config,
+        config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
         layouter.assign_region(

@@ -166,7 +166,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
 
     fn layout(
         &self,
-        config: &mut crate::circuit::BaseConfig<F>,
+        config: &crate::circuit::BaseConfig<F>,
         region: &mut Option<&mut Region<F>>,
         values: &[ValTensor<F>],
         offset: &mut usize,

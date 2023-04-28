@@ -500,7 +500,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             results.insert(*input_idx, inputs[i].clone());
         }
 
-        let mut dummy_config = PolyConfig::dummy(self.run_args.logrows as usize);
+        let dummy_config = PolyConfig::dummy(self.run_args.logrows as usize);
 
         let mut offset: usize = 0;
         for (idx, node) in self.nodes.iter() {

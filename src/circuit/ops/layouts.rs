@@ -29,7 +29,7 @@ use crate::circuit::ops::lookup::LookupOp;
 
 /// Dot product accumulated layout
 pub fn dot<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
     offset: &mut usize,
@@ -111,7 +111,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
 
 /// Sum accumulated layout
 pub fn sum<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
@@ -186,7 +186,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd>(
 
 /// Sum accumulated layout
 pub fn sum_axes<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     axes: &[usize],
@@ -238,7 +238,7 @@ pub fn sum_axes<F: PrimeField + TensorType + PartialOrd>(
 
 /// Max accumulated layout
 pub fn max_axes<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     axes: &[usize],
@@ -290,7 +290,7 @@ pub fn max_axes<F: PrimeField + TensorType + PartialOrd>(
 
 /// Min accumulated layout
 pub fn min_axes<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     axes: &[usize],
@@ -342,7 +342,7 @@ pub fn min_axes<F: PrimeField + TensorType + PartialOrd>(
 
 /// Pairwise (elementwise) op layout
 pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
     offset: &mut usize,
@@ -443,7 +443,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
 
 /// Matrix multiplication accumulated layout
 pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
     offset: &mut usize,
@@ -476,7 +476,6 @@ pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
         .collect::<Vec<_>>();
 
     let region_thread = Arc::new(Mutex::new(region.as_deref_mut()));
-    let config_thread = Arc::new(Mutex::new(config.clone()));
 
     let mut output = Tensor::new(None, &dims)?;
 
@@ -496,12 +495,11 @@ pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
         let col_tensor = b.get_slice(&col[0..]).unwrap();
 
         let mut region_lock = region_thread.lock().unwrap();
-        let mut config_lock = config_thread.lock().unwrap();
         let assigned_len = row_tensor.len();
         let mut offset = offset.clone() + i * assigned_len;
 
         *m = dot(
-            &mut config_lock,
+            &config,
             &mut region_lock,
             &[row_tensor, col_tensor],
             &mut offset,
@@ -547,7 +545,7 @@ pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
 
 /// Iff
 pub fn iff<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 3],
     offset: &mut usize,
@@ -618,7 +616,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
 
 /// Negation operation accumulated layout
 pub fn neg<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
@@ -650,7 +648,7 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd>(
 
 /// Sumpool accumulated layout
 pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>],
     padding: (usize, usize),
@@ -717,7 +715,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
 
 /// Convolution accumulated layout
 pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     padding: (usize, usize),
@@ -785,7 +783,7 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
 
 /// Convolution accumulated layout
 pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::marker::Sync>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>],
     padding: (usize, usize),
@@ -857,7 +855,6 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     let mut output = Tensor::new(None, &[cartesian_coord.len()])?;
 
     let region_thread = Arc::new(Mutex::new(region.as_deref_mut()));
-    let config_thread = Arc::new(Mutex::new(config.clone()));
     output.par_iter_mut().enumerate().for_each(|(outer_i, a)| {
         let cartesian_coord_per_group = cartesian_coord[outer_i].clone();
         let group = cartesian_coord_per_group[0];
@@ -886,12 +883,11 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
             .unwrap();
 
         let mut region_lock = region_thread.lock().unwrap();
-        let mut config_lock = config_thread.lock().unwrap();
         let assigned_len = local_kernel.len();
         let mut offset = offset.clone() + outer_i * assigned_len;
 
         *a = dot(
-            &mut config_lock,
+            &config,
             &mut region_lock,
             &[local_kernel, local_image],
             &mut offset,
@@ -949,7 +945,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
 
 /// Power accumulated layout
 pub fn pow<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     exponent: u32,
@@ -991,7 +987,7 @@ pub fn pow<F: PrimeField + TensorType + PartialOrd>(
 
 /// Rescaled op accumulated layout
 pub fn rescale<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>],
     scales: &[(usize, usize)],
@@ -1036,7 +1032,7 @@ pub fn rescale<F: PrimeField + TensorType + PartialOrd>(
 
 /// Pack accumulated layout
 pub fn pack<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     base: u32,
@@ -1104,7 +1100,7 @@ pub fn reshape<F: PrimeField + TensorType + PartialOrd>(
 
 /// Identity constraint. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
 pub fn identity<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
@@ -1118,7 +1114,7 @@ pub fn identity<F: PrimeField + TensorType + PartialOrd>(
 
 /// Layout for range check.
 pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
     offset: &mut usize,
@@ -1147,7 +1143,7 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
 
 /// Layout for range check.
 pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     nl: &LookupOp,
@@ -1202,7 +1198,7 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
 /// mean function layout
 pub fn mean<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     scale: usize,
@@ -1219,7 +1215,7 @@ pub fn mean<F: PrimeField + TensorType + PartialOrd>(
 
 /// max layout
 pub fn max<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
@@ -1333,7 +1329,7 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
 
 /// min layout
 pub fn min<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
@@ -1450,7 +1446,7 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
 
 /// softmax func
 pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     input_scale: usize,

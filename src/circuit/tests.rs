@@ -46,7 +46,7 @@ mod matmul {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
@@ -120,7 +120,7 @@ mod matmul_col_overflow {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
@@ -195,7 +195,7 @@ mod dot {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
@@ -266,7 +266,7 @@ mod dot_col_overflow {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
@@ -337,7 +337,7 @@ mod sum {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
@@ -406,7 +406,7 @@ mod sum_col_overflow {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
@@ -475,7 +475,7 @@ mod composition {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             // lots of stacked dot products
@@ -564,7 +564,7 @@ mod conv {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
@@ -691,7 +691,7 @@ mod sumpool {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
@@ -771,7 +771,7 @@ mod add_w_shape_casting {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
@@ -842,7 +842,7 @@ mod add {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
@@ -913,7 +913,7 @@ mod add_with_overflow {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
@@ -984,7 +984,7 @@ mod sub {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
@@ -1055,7 +1055,7 @@ mod mult {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
@@ -1126,7 +1126,7 @@ mod pow {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
@@ -1195,7 +1195,7 @@ mod pack {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
@@ -1264,7 +1264,7 @@ mod rescaled {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
@@ -1448,7 +1448,7 @@ mod rangecheck {
 
         fn synthesize(
             &self,
-            mut config: Self::Config,
+            config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
             layouter
