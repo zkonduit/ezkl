@@ -11,8 +11,7 @@ use pyo3::exceptions::{PyIOError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3_log;
-use std::fs::File;
-use std::path::PathBuf;
+use std::{fs::File, path::PathBuf, sync::Arc};
 use tabled::Table;
 
 // See commands.rs and execute.rs
@@ -202,35 +201,35 @@ fn mock(
     py_run_args: Option<PyRunArgs>
 ) -> Result<bool, PyErr> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
-    let logrow = run_args.logrows;
+    let logrows = run_args.logrows;
 
     let data = prepare_data(data);
+
+    // use default values to initialize model
+    let visibility = VarVisibility {
+        input: Visibility::Public,
+        params: Visibility::Private,
+        output: Visibility::Public,
+    };
 
     // set EZKL
     // env::set_var(EZKLCONF, "PYTHON");
 
     match data {
         Ok(d) => {
-            // use default values to initialize model
-            let visibility = VarVisibility {
-                input: Visibility::Public,
-                params: Visibility::Private,
-                output: Visibility::Public,
-            };
+            let procmodel = Model::<Fr>::new(model, run_args, Mode::Mock, visibility);
 
-            let model_proc = Model::<Fr>::new(model, run_args, Mode::Mock, visibility);
-
-            match model_proc {
-                Ok(m) => {
-                    let circuit = ModelCircuit::<Fr>::new(&d, m);
+            match procmodel {
+                Ok(pm) => {
+                    let arcmodel: Arc<Model<Fr>> = Arc::new(pm);
+                    let circuit = ModelCircuit::<Fr>::new(&d, arcmodel);
 
                     match circuit {
                         Ok(c) => {
                             let public_inputs = c.prepare_public_inputs(&d);
-
                             match public_inputs {
                                 Ok(pi) => {
-                                    let prover = MockProver::run(logrow, &c, pi); // this is putting messages in stdout
+                                    let prover = MockProver::run(logrows, &c, pi); // this is putting messages in stdout
                                     match prover {
                                         Ok(pr) => {
                                             pr.assert_satisfied();
@@ -250,7 +249,7 @@ fn mock(
                         Err(_) => Err(PyRuntimeError::new_err("Failed to create circuit")),
                     }
                 }
-                Err(_) => Err(PyIOError::new_err("Failed to process model"))
+                Err(_) => Err(PyIOError::new_err("Failed to process model")),
             }
         }
         Err(_) => Err(PyIOError::new_err("Failed to import files")),
