@@ -2,7 +2,7 @@ use crate::circuit::CheckMode;
 use crate::commands::RunArgs;
 use crate::graph::{vector_to_quantized, Mode, Model, ModelCircuit, VarVisibility, Visibility};
 use crate::pfsys::{gen_srs as ezkl_gen_srs, prepare_data, save_params};
-use std::env;
+// use std::env;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2_proofs::dev::MockProver;
 use halo2curves::bn256::{Bn256, Fr};
@@ -33,7 +33,7 @@ use tabled::Table;
 // }
 
 /// Environment variable for EZKLCONF
-const EZKLCONF: &str = "EZKLCONF";
+// const EZKLCONF: &str = "EZKLCONF";
 
 /// pyclass containing the struct used for run_args
 #[pyclass]
