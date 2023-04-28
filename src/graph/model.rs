@@ -10,6 +10,7 @@ use crate::commands::{Cli, Commands};
 use crate::graph::scale_to_multiplier;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor};
+use halo2curves::ff::PrimeField;
 use log::warn;
 use serde::Deserialize;
 use serde::Serialize;
@@ -23,7 +24,6 @@ use tract_onnx::tract_hir::internal::GenericFactoid;
 //use clap::Parser;
 use core::panic;
 use halo2_proofs::{
-    arithmetic::FieldExt,
     circuit::{Layouter, Value},
     plonk::ConstraintSystem,
 };
@@ -33,14 +33,14 @@ use log::{debug, info, trace};
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
-use std::sync::Arc;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::Framework;
 /// Mode we're using the model in.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub enum Mode {
     /// Initialize the model and display the operations table / graph
+    #[default]
     Table,
     /// Initialize the model and generate a mock proof
     Mock,
@@ -54,18 +54,16 @@ pub enum Mode {
 
 /// A circuit configuration for the entirety of a model loaded from an Onnx file.
 #[derive(Clone, Debug)]
-pub struct ModelConfig<F: FieldExt + TensorType> {
+pub struct ModelConfig<F: PrimeField + TensorType + PartialOrd> {
     /// The base configuration for the circuit
     pub base: PolyConfig<F>,
-    /// The model struct
-    pub model: Arc<Model<F>>,
     /// A wrapper for holding all columns that will be assigned to by the model
     pub vars: ModelVars<F>,
 }
 
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
-#[derive(Clone, Debug)]
-pub struct Model<F: FieldExt + TensorType> {
+#[derive(Clone, Debug, Default)]
+pub struct Model<F: PrimeField + TensorType + PartialOrd> {
     /// input indices
     pub inputs: Vec<usize>,
     /// output indices
@@ -80,7 +78,7 @@ pub struct Model<F: FieldExt + TensorType> {
     pub visibility: VarVisibility,
 }
 
-impl<F: FieldExt + TensorType> Model<F> {
+impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// Creates an `Model` from a specified path to an Onnx file.
     /// # Arguments
     /// * `path` - A path to an Onnx file.
@@ -394,7 +392,7 @@ impl<F: FieldExt + TensorType> Model<F> {
                     let res = config
                         .base
                         .layout(
-                            Some(&mut region),
+                            &mut Some(&mut region),
                             &values,
                             &mut offset,
                             node.opkind.clone_dyn(),
@@ -434,7 +432,7 @@ impl<F: FieldExt + TensorType> Model<F> {
                         outputs[i] = config
                             .base
                             .layout(
-                                Some(&mut region),
+                                &mut Some(&mut region),
                                 &outputs[i..i + 1],
                                 &mut offset,
                                 Box::new(PolyOp::Pack(
@@ -464,7 +462,7 @@ impl<F: FieldExt + TensorType> Model<F> {
                                 instance_offset += inputs.len();
                             };
                             config.base.layout(
-                                Some(&mut region),
+                                &mut Some(&mut region),
                                 &[output, vars.instances[instance_offset + i].clone()],
                                 &mut offset,
                                 Box::new(PolyOp::RangeCheck(self.run_args.tolerance as i32)),
@@ -520,7 +518,7 @@ impl<F: FieldExt + TensorType> Model<F> {
                 .collect_vec();
 
             let res = dummy_config
-                .layout(None, &values, &mut offset, node.opkind.clone_dyn())
+                .layout(&mut None, &values, &mut offset, node.opkind.clone_dyn())
                 .map_err(|e| {
                     error!("{}", e);
                     halo2_proofs::plonk::Error::Synthesis
@@ -547,7 +545,7 @@ impl<F: FieldExt + TensorType> Model<F> {
                 info!("packing outputs...");
                 outputs[i] = dummy_config
                     .layout(
-                        None,
+                        &mut None,
                         &outputs[i..i + 1],
                         &mut offset,
                         Box::new(PolyOp::Pack(self.run_args.pack_base, self.run_args.scale)),
@@ -565,7 +563,7 @@ impl<F: FieldExt + TensorType> Model<F> {
                 .into_iter()
                 .map(|output| {
                     dummy_config.layout(
-                        None,
+                        &mut None,
                         &[output.clone(), output],
                         &mut offset,
                         Box::new(PolyOp::RangeCheck(self.run_args.tolerance as i32)),

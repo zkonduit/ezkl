@@ -1,12 +1,13 @@
 use halo2_proofs::circuit::Region;
-use halo2curves::FieldExt;
 
 use crate::{
     circuit::layouts,
+    graph::scale_to_multiplier,
     tensor::{self, Tensor, TensorError, TensorType, ValTensor},
 };
 
 use super::{lookup::LookupOp, Op};
+use halo2curves::ff::PrimeField;
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be used to express more complex operations via accumulation
@@ -23,9 +24,12 @@ pub enum HybridOp {
     Min {
         axes: Vec<usize>,
     },
+    Softmax {
+        scales: (usize, usize),
+    },
 }
 
-impl<F: FieldExt + TensorType> Op<F> for HybridOp {
+impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         match &self {
@@ -38,21 +42,25 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
                 ..
             } => tensor::ops::max_pool2d(&inputs[0], padding, stride, pool_dims),
             HybridOp::Min { axes, .. } => Ok(tensor::ops::min_axes(&inputs[0], axes)?),
+            HybridOp::Softmax { scales } => Ok(tensor::ops::nonlinearities::softmax(
+                &inputs[0], scales.0, scales.1,
+            )),
         }
     }
 
     fn as_str(&self) -> &'static str {
-        match &self {
+        match self {
             HybridOp::Max { .. } => "MAX",
             HybridOp::MaxPool2d { .. } => "MAXPOOL2D",
             HybridOp::Min { .. } => "MIN",
+            HybridOp::Softmax { .. } => "SOFTMAX",
         }
     }
 
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: Option<&mut Region<F>>,
+        region: &mut Option<&mut Region<F>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn std::error::Error>> {
@@ -84,21 +92,48 @@ impl<F: FieldExt + TensorType> Op<F> for HybridOp {
                 axes,
                 offset,
             )?),
+            HybridOp::Softmax { scales } => Some(layouts::softmax(
+                config,
+                region,
+                values[..].try_into()?,
+                scales.0,
+                scales.1,
+                offset,
+            )?),
         })
     }
 
-    fn out_scale(&self, in_scales: Vec<u32>, _: u32) -> u32 {
-        in_scales[0]
+    fn out_scale(&self, in_scales: Vec<u32>, global_scale: u32) -> u32 {
+        match self {
+            HybridOp::Softmax { .. } => 2 * global_scale,
+            _ => in_scales[0],
+        }
     }
 
-    fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
-        Box::new(self.clone())
+    fn rescale(&self, input_scales: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>> {
+        match self {
+            HybridOp::Softmax { .. } => Box::new(HybridOp::Softmax {
+                scales: (
+                    scale_to_multiplier(input_scales[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
+            _ => Box::new(self.clone()),
+        }
     }
 
     fn required_lookups(&self) -> Vec<LookupOp> {
         match self {
             HybridOp::Max { .. } | HybridOp::Min { .. } | HybridOp::MaxPool2d { .. } => {
                 Op::<F>::required_lookups(&LookupOp::ReLU { scale: 1 })
+            }
+            HybridOp::Softmax { scales } => {
+                vec![
+                    LookupOp::Exp { scales: *scales },
+                    LookupOp::Recip {
+                        scale: scales.1.pow(2),
+                    },
+                ]
             }
         }
     }

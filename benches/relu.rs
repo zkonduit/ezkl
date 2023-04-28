@@ -25,6 +25,7 @@ struct NLCircuit {
 impl Circuit<Fr> for NLCircuit {
     type Config = Config<Fr>;
     type FloorPlanner = SimpleFloorPlanner;
+    type Params = ();
 
     fn without_witnesses(&self) -> Self {
         self.clone()
@@ -59,7 +60,7 @@ impl Circuit<Fr> for NLCircuit {
             |mut region| {
                 config
                     .layout(
-                        Some(&mut region),
+                        &mut Some(&mut region),
                         &[self.input.clone()],
                         &mut 0,
                         Box::new(LookupOp::ReLU { scale: 128 }),

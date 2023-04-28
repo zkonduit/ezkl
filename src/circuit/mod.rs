@@ -15,12 +15,10 @@ mod tests;
 use thiserror::Error;
 
 use halo2_proofs::{
-    arithmetic::Field,
     circuit::{Layouter, Region},
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
     poly::Rotation,
 };
-use halo2curves::FieldExt;
 use log::warn;
 #[cfg(feature = "python-bindings")]
 use pyo3::{
@@ -39,6 +37,7 @@ use crate::{
 use std::{collections::BTreeMap, error::Error, marker::PhantomData};
 
 use self::{ops::lookup::LookupOp, table::Table};
+use halo2curves::ff::{Field, PrimeField};
 
 /// circuit related errors.
 #[derive(Debug, Error)]
@@ -106,7 +105,7 @@ impl<'source> FromPyObject<'source> for CheckMode {
 
 /// Configuration for an accumulated arg.
 #[derive(Clone, Debug, Default)]
-pub struct BaseConfig<F: FieldExt + TensorType> {
+pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     /// the inputs to the accumulated operations.
     pub inputs: Vec<VarTensor>,
     /// the VarTensor reserved for lookup operations (could be an element of inputs)
@@ -128,7 +127,7 @@ pub struct BaseConfig<F: FieldExt + TensorType> {
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType> BaseConfig<F> {
+impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     /// Returns a new [BaseConfig] with no inputs, no selectors, and no tables.
     pub fn dummy(col_size: usize) -> Self {
         Self {
@@ -258,7 +257,10 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         output: &VarTensor,
         bits: usize,
         nl: &LookupOp,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<(), Box<dyn Error>>
+    where
+        F: Field,
+    {
         let mut selectors = BTreeMap::new();
         let table =
             if let std::collections::btree_map::Entry::Vacant(e) = self.tables.entry(nl.clone()) {
@@ -273,7 +275,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             selectors.insert((nl.clone(), x), qlookup);
             let _ = cs.lookup(Op::<F>::as_str(nl), |cs| {
                 let qlookup = cs.query_selector(qlookup);
-                let not_qlookup = Expression::Constant(<F as Field>::one()) - qlookup.clone();
+                let not_qlookup = Expression::Constant(<F as Field>::ONE) - qlookup.clone();
                 let (default_x, default_y): (F, F) = nl.default_pair();
                 vec![
                     (
@@ -314,7 +316,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
             self.lookup_input = input.clone();
         }
         if let VarTensor::Empty = self.lookup_output {
-            warn!("assigning lookup input");
+            warn!("assigning lookup output");
             self.lookup_output = output.clone();
         }
         Ok(())
@@ -324,6 +326,10 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
     pub fn layout_tables(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), Box<dyn Error>> {
         for table in self.tables.values_mut() {
             if !table.is_assigned {
+                warn!(
+                    "laying out table for {:?}",
+                    crate::circuit::ops::Op::<F>::as_str(&table.nonlinearity)
+                );
                 table.layout(layouter)?;
             }
         }
@@ -338,7 +344,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
     /// * `op` - The operation being represented.
     pub fn layout(
         &mut self,
-        mut region: Option<&mut Region<F>>,
+        region: &mut Option<&mut Region<F>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
         op: Box<dyn Op<F>>,
@@ -346,12 +352,7 @@ impl<F: FieldExt + TensorType> BaseConfig<F> {
         let mut cp_values = vec![];
         for v in values.iter() {
             if let ValTensor::Instance { .. } = v {
-                cp_values.push(layouts::identity(
-                    self,
-                    region.as_deref_mut(),
-                    &[v.clone()],
-                    offset,
-                )?);
+                cp_values.push(layouts::identity(self, region, &[v.clone()], offset)?);
             } else {
                 cp_values.push(v.clone());
             }

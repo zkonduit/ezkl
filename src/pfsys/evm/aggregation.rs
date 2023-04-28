@@ -15,19 +15,12 @@ use halo2_wrong_ecc::{
     EccConfig,
 };
 use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine};
+use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::trace;
 use rand::rngs::OsRng;
 use snark_verifier::{
-    loader::evm::{self, EvmLoader},
-    system::halo2::transcript::evm::EvmTranscript,
-};
-use snark_verifier::{
-    loader::native::NativeLoader,
-    system::halo2::{compile, Config},
-};
-use snark_verifier::{
-    loader::{self},
+    loader,
     pcs::{
         kzg::{
             Gwc19, KzgAccumulator, KzgAs, KzgSuccinctVerifyingKey, LimbsEncoding,
@@ -36,8 +29,16 @@ use snark_verifier::{
         AccumulationScheme, AccumulationSchemeProver,
     },
     system,
-    util::arithmetic::{fe_to_limbs, FieldExt},
+    util::arithmetic::fe_to_limbs,
     verifier::{self, SnarkVerifier},
+};
+use snark_verifier::{
+    loader::evm::{self, EvmLoader},
+    system::halo2::transcript::evm::EvmTranscript,
+};
+use snark_verifier::{
+    loader::native::NativeLoader,
+    system::halo2::{compile, Config},
 };
 use std::rc::Rc;
 use thiserror::Error;
@@ -55,8 +56,7 @@ const R_F: usize = 8;
 const R_P: usize = 60;
 
 type Svk = KzgSuccinctVerifyingKey<G1Affine>;
-type BaseFieldEccChip =
-    snark_verifier::loader::halo2::halo2_wrong_ecc::BaseFieldEccChip<G1Affine, LIMBS, BITS>;
+type BaseFieldEccChip = halo2_wrong_ecc::BaseFieldEccChip<G1Affine, LIMBS, BITS>;
 /// The loader type used in the transcript definition
 type Halo2Loader<'a> = loader::halo2::Halo2Loader<'a, G1Affine, BaseFieldEccChip>;
 /// Application snark transcript
@@ -128,7 +128,7 @@ pub struct AggregationConfig {
 
 impl AggregationConfig {
     /// Configure the aggregation circuit
-    pub fn configure<F: FieldExt>(
+    pub fn configure<F: PrimeField>(
         meta: &mut ConstraintSystem<F>,
         composition_bits: Vec<usize>,
         overflow_bits: Vec<usize>,
@@ -247,6 +247,7 @@ impl AggregationCircuit {
 impl Circuit<Fr> for AggregationCircuit {
     type Config = AggregationConfig;
     type FloorPlanner = SimpleFloorPlanner;
+    type Params = ();
 
     fn without_witnesses(&self) -> Self {
         Self {

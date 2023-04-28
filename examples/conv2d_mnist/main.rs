@@ -6,7 +6,6 @@ use ezkl_lib::fieldutils::i32_to_felt;
 use ezkl_lib::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
-    arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, Column, ConstraintSystem, Error,
@@ -25,10 +24,12 @@ use halo2_proofs::{
         Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
     },
 };
+use halo2curves::ff::PrimeField;
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp as F;
 use mnist::*;
 use rand::rngs::OsRng;
+use std::marker::PhantomData;
 use std::time::Instant;
 
 mod params;
@@ -37,7 +38,7 @@ const K: usize = 20;
 
 #[derive(Clone)]
 struct Config<
-    F: FieldExt + TensorType,
+    F: PrimeField + TensorType + PartialOrd,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust stable
     const CLASSES: usize,
     const BITS: usize,
@@ -61,7 +62,7 @@ struct Config<
 
 #[derive(Clone)]
 struct MyCircuit<
-    F: FieldExt + TensorType,
+    F: PrimeField + TensorType + PartialOrd,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened
     const CLASSES: usize,
     const BITS: usize,
@@ -85,7 +86,7 @@ struct MyCircuit<
 }
 
 impl<
-        F: FieldExt + TensorType,
+        F: PrimeField + TensorType + PartialOrd,
         const LEN: usize,
         const CLASSES: usize,
         const BITS: usize,
@@ -131,6 +132,7 @@ where
         PADDING,
     >;
     type FloorPlanner = SimpleFloorPlanner;
+    type Params = PhantomData<F>;
 
     fn without_witnesses(&self) -> Self {
         self.clone()
@@ -173,6 +175,7 @@ where
                 || "mlp_4d",
                 |mut region| {
                     let mut offset = 0;
+                    let region = &mut Some(&mut region);
                     let op = PolyOp::Conv {
                         kernel: self.l0_params[0].clone(),
                         bias: Some(self.l0_params[1].clone()),
@@ -181,18 +184,13 @@ where
                     };
                     let x = config
                         .layer_config
-                        .layout(
-                            Some(&mut region),
-                            &[self.input.clone()],
-                            &mut offset,
-                            Box::new(op),
-                        )
+                        .layout(region, &[self.input.clone()], &mut offset, Box::new(op))
                         .unwrap();
 
                     let mut x = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x.unwrap()],
                             &mut offset,
                             Box::new(LookupOp::ReLU { scale: 32 }),
@@ -204,7 +202,7 @@ where
                     let x = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x],
                             &mut offset,
                             Box::new(PolyOp::Matmul {
@@ -217,7 +215,7 @@ where
                     let x: ValTensor<F> = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x],
                             &mut offset,
                             Box::new(PolyOp::Add {

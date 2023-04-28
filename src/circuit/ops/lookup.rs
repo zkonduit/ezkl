@@ -1,6 +1,5 @@
 use super::*;
 use halo2_proofs::circuit::Region;
-use halo2curves::FieldExt;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 
@@ -12,6 +11,7 @@ use crate::{
 };
 
 use super::Op;
+use halo2curves::ff::PrimeField;
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be used to express more complex operations via accumulation
@@ -24,6 +24,7 @@ pub enum LookupOp {
     Recip { scale: usize },
     LeakyReLU { scale: usize, slope: utils::F32 },
     Sigmoid { scales: (usize, usize) },
+    Exp { scales: (usize, usize) },
     Tanh { scales: (usize, usize) },
     Erf { scales: (usize, usize) },
     GreaterThan { a: utils::F32 },
@@ -31,7 +32,7 @@ pub enum LookupOp {
 
 impl LookupOp {
     /// a value which is always in the table
-    pub fn default_pair<F: FieldExt + TensorType>(&self) -> (F, F) {
+    pub fn default_pair<F: PrimeField + TensorType + PartialOrd>(&self) -> (F, F) {
         let x = vec![0_i128].into_iter().into();
         (
             <F as TensorType>::zero().unwrap(),
@@ -40,27 +41,29 @@ impl LookupOp {
     }
 }
 
-impl<F: FieldExt + TensorType> Op<F> for LookupOp {
+impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         match &self {
             LookupOp::GreaterThan { a } => Ok(tensor::ops::nonlinearities::greater_than(
                 &x[0],
-                f32::from(*a),
+                f32::from(*a).into(),
             )),
             LookupOp::Div { denom } => Ok(tensor::ops::nonlinearities::const_div(
                 &x[0],
-                f32::from(*denom),
+                f32::from(*denom).into(),
             )),
             LookupOp::Recip { scale } => {
                 Ok(tensor::ops::nonlinearities::recip(&x[0], *scale as u32))
             }
             LookupOp::ReLU { scale } => {
-                Ok(tensor::ops::nonlinearities::leakyrelu(&x[0], *scale, 0_f32))
+                Ok(tensor::ops::nonlinearities::leakyrelu(&x[0], *scale, 0_f64))
             }
 
             LookupOp::LeakyReLU { scale, slope } => Ok(tensor::ops::nonlinearities::leakyrelu(
-                &x[0], *scale, slope.0,
+                &x[0],
+                *scale,
+                slope.0.into(),
             )),
             LookupOp::Sigmoid { scales } => Ok(tensor::ops::nonlinearities::sigmoid(
                 &x[0], scales.0, scales.1,
@@ -77,6 +80,9 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
             LookupOp::Erf { scales } => Ok(tensor::ops::nonlinearities::erffunc(
                 &x[0], scales.0, scales.1,
             )),
+            LookupOp::Exp { scales } => {
+                Ok(tensor::ops::nonlinearities::exp(&x[0], scales.0, scales.1))
+            }
         }
     }
 
@@ -93,13 +99,14 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
             LookupOp::Tanh { .. } => "TANH",
             LookupOp::Erf { .. } => "ERF",
             LookupOp::Rsqrt { .. } => "RSQRT",
+            LookupOp::Exp { .. } => "EXP",
         }
     }
 
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: Option<&mut Region<F>>,
+        region: &mut Option<&mut Region<F>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
@@ -154,6 +161,12 @@ impl<F: FieldExt + TensorType> Op<F> for LookupOp {
                 ),
             }),
             LookupOp::Erf { .. } => Box::new(LookupOp::Erf {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
+            LookupOp::Exp { .. } => Box::new(LookupOp::Exp {
                 scales: (
                     scale_to_multiplier(inputs_scale[0]) as usize,
                     scale_to_multiplier(global_scale) as usize,

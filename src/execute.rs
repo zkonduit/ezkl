@@ -5,7 +5,7 @@ use crate::eth::{
     deploy_verifier, fix_verifier_sol, get_ledger_signing_provider, get_provider,
     get_wallet_signing_provider, send_proof, verify_proof_via_solidity,
 };
-use crate::graph::{vector_to_quantized, Model, ModelCircuit};
+use crate::graph::{vector_to_quantized, Model, ModelCircuit, ModelParams};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::{aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier};
@@ -42,7 +42,6 @@ use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
 use std::path::PathBuf;
-#[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 use std::time::Instant;
 use tabled::Table;
@@ -363,8 +362,7 @@ fn forward(
 
 fn mock(data: String, logrows: u32) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
-    let model = Model::from_arg()?;
-    let circuit = ModelCircuit::<Fr>::new(&data, model)?;
+    let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     info!("Mock proof");
@@ -390,8 +388,7 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<(), Box<dyn Error>> {
 #[cfg(feature = "render")]
 fn render(data: String, output: String, logrows: u32) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data.to_string())?;
-    let model = Model::from_arg()?;
-    let circuit = ModelCircuit::<Fr>::new(&data, model)?;
+    let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
     info!("Rendering circuit");
 
     // Create the area we want to draw on.
@@ -418,14 +415,14 @@ fn create_evm_verifier(
     logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
-
-    let model = Model::from_arg()?;
-    let circuit = ModelCircuit::<Fr>::new(&data, model)?;
+    let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
     let num_instance = public_inputs.iter().map(|x| x.len()).collect();
     let params = load_params_cmd(params_path, logrows)?;
+    let model_circuit_params = load_model_circuit_params();
 
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path)?;
+    let vk =
+        load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)?;
     trace!("params computed");
 
     let (deployment_code, yul_code) = gen_evm_verifier(&params, &vk, num_instance)?;
@@ -473,7 +470,7 @@ fn create_evm_aggregate_verifier(
 ) -> Result<(), Box<dyn Error>> {
     let params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
 
-    let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path)?;
+    let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
 
     let deployment_code = gen_aggregation_evm_verifier(
         &params,
@@ -496,9 +493,7 @@ fn prove(
     check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
-
-    let model = Model::from_arg()?;
-    let circuit = ModelCircuit::<Fr>::new(&data, model)?;
+    let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     let params = load_params_cmd(params_path, logrows)?;
@@ -561,9 +556,14 @@ fn aggregate(
     // the K used when generating the application snark proof. we assume K is homogenous across snarks to aggregate
     let params_app = load_params_cmd(params_path, app_logrows)?;
 
+    let model_circuit_params = load_model_circuit_params();
+
     for (proof_path, vk_path) in aggregation_snarks.iter().zip(aggregation_vk_paths) {
-        let vk =
-            load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path.to_path_buf())?;
+        let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
+            vk_path.to_path_buf(),
+            // safe to clone as the inner model is wrapped in an Arc
+            model_circuit_params.clone(),
+        )?;
         snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(
             proof_path,
             Some(&params_app),
@@ -606,9 +606,11 @@ fn verify(
     let params = load_params_cmd(params_path, logrows)?;
 
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
+    let model_circuit_params = load_model_circuit_params();
 
     let strategy = KZGSingleStrategy::new(params.verifier_params());
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path)?;
+    let vk =
+        load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)?;
     let result =
         verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, transcript, strategy);
     info!("verified: {}", result.is_ok());
@@ -627,7 +629,7 @@ fn verify_aggr(
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
 
     let strategy = AccumulatorStrategy::new(params.verifier_params());
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path)?;
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
     let result = verify_proof_circuit_kzg(&params, proof, &vk, transcript, strategy);
     info!("verified: {}", result.is_ok());
     Ok(())
@@ -640,4 +642,23 @@ fn load_params_cmd(params_path: PathBuf, logrows: u32) -> Result<ParamsKZG<Bn256
         params.downsize(logrows);
     }
     Ok(params)
+}
+
+fn load_model_circuit_params() -> ModelParams<Fr> {
+    let model: Arc<Model<Fr>> = Arc::new(Model::from_arg().expect("model should load"));
+
+    let instance_shapes = model.instance_shapes();
+    // this is the total number of variables we will need to allocate
+    // for the circuit
+    let num_constraints = if let Some(num_constraints) = model.run_args.allocated_constraints {
+        num_constraints
+    } else {
+        model.dummy_layout(&model.input_shapes()).unwrap()
+    };
+
+    ModelParams {
+        model,
+        instance_shapes,
+        num_constraints,
+    }
 }

@@ -35,6 +35,7 @@ struct MyCircuit {
 impl Circuit<Fr> for MyCircuit {
     type Config = BaseConfig<Fr>;
     type FloorPlanner = SimpleFloorPlanner;
+    type Params = ();
 
     fn without_witnesses(&self) -> Self {
         self.clone()
@@ -62,7 +63,7 @@ impl Circuit<Fr> for MyCircuit {
             |mut region| {
                 config
                     .layout(
-                        Some(&mut region),
+                        &mut Some(&mut region),
                         &[self.image.clone()],
                         &mut 0,
                         Box::new(PolyOp::Conv {

@@ -5,24 +5,24 @@ use ezkl_lib::fieldutils::i32_to_felt;
 use ezkl_lib::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
-    arithmetic::FieldExt,
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
+use halo2curves::ff::PrimeField;
 use halo2curves::pasta::Fp as F;
 use std::marker::PhantomData;
 
 const K: usize = 15;
 // A columnar ReLu MLP
 #[derive(Clone)]
-struct MyConfig<F: FieldExt + TensorType> {
+struct MyConfig<F: PrimeField + TensorType + PartialOrd> {
     layer_config: PolyConfig<F>,
     public_output: Column<Instance>,
 }
 
 #[derive(Clone)]
 struct MyCircuit<
-    F: FieldExt + TensorType,
+    F: PrimeField + TensorType + PartialOrd,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened
     const BITS: usize,
 > {
@@ -34,11 +34,12 @@ struct MyCircuit<
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
+impl<F: PrimeField + TensorType + PartialOrd, const LEN: usize, const BITS: usize> Circuit<F>
     for MyCircuit<F, LEN, BITS>
 {
     type Config = MyConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
+    type Params = PhantomData<F>;
 
     fn without_witnesses(&self) -> Self {
         self.clone()
@@ -94,10 +95,11 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                 || "mlp_4d",
                 |mut region| {
                     let mut offset = 0;
+                    let region = &mut Some(&mut region);
                     let x = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[self.input.clone()],
                             &mut offset,
                             Box::new(PolyOp::Matmul {
@@ -110,7 +112,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x],
                             &mut offset,
                             Box::new(PolyOp::Add {
@@ -125,7 +127,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let mut x = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x],
                             &mut offset,
                             Box::new(LookupOp::ReLU { scale: 1 }),
@@ -138,7 +140,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x],
                             &mut offset,
                             Box::new(PolyOp::Matmul {
@@ -151,7 +153,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x],
                             &mut offset,
                             Box::new(PolyOp::Add {
@@ -165,7 +167,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     let x = config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x],
                             &mut offset,
                             Box::new(LookupOp::ReLU { scale: 1 }),
@@ -175,7 +177,7 @@ impl<F: FieldExt + TensorType, const LEN: usize, const BITS: usize> Circuit<F>
                     Ok(config
                         .layer_config
                         .layout(
-                            Some(&mut region),
+                            region,
                             &[x.unwrap()],
                             &mut offset,
                             Box::new(LookupOp::Div {

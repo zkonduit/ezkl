@@ -51,7 +51,7 @@ impl VarTensor {
     /// * `dims` - `Vec` of dimensions of the tensor we are representing. Note that the shape of the storage and this shape can differ.
     /// * `equality` - true if we want to enable equality constraints for the columns involved.
     /// * `max_rot` - maximum number of rotations that we allow for this VarTensor. Rotations affect performance.
-    pub fn new_advice<F: FieldExt>(
+    pub fn new_advice<F: PrimeField>(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         capacity: usize,
@@ -92,7 +92,7 @@ impl VarTensor {
     /// `dims` is the `Vec` of dimensions of the tensor we are representing. Note that the shape of the storage and this shape can differ.
     /// `equality` should be true if we want to enable equality constraints for the columns involved.
     /// `max_rot` is the maximum number of rotations that we allow for this VarTensor. Rotations affect performance.
-    pub fn new_fixed<F: FieldExt>(
+    pub fn new_fixed<F: PrimeField>(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         capacity: usize,
@@ -158,7 +158,7 @@ impl VarTensor {
 impl VarTensor {
     /// Retrieve the values represented within the columns of the `VarTensor` (recall that `VarTensor`
     /// is a Tensor of Halo2 columns).
-    pub fn query_rng<F: FieldExt>(
+    pub fn query_rng<F: PrimeField>(
         &self,
         meta: &mut VirtualCells<'_, F>,
         rotation_offset: i32,
@@ -194,7 +194,7 @@ impl VarTensor {
     }
 
     ///
-    pub fn assign_constant<F: FieldExt + TensorType>(
+    pub fn assign_constant<F: PrimeField + TensorType>(
         &self, 
         region: &mut Region<F>,
         offset: usize,
@@ -215,9 +215,9 @@ impl VarTensor {
 
    
     /// Assigns specific values [ValTensor] to the columns of the inner tensor.
-    pub fn assign<F: FieldExt + TensorType>(
+    pub fn assign<F: PrimeField + TensorType + PartialOrd>(
         &self,
-        region: Option<&mut Region<F>>,
+        region: &mut Option<&mut Region<F>>,
         offset: usize,
         values: &ValTensor<F>,
     ) -> Result<ValTensor<F>, halo2_proofs::plonk::Error> {
@@ -263,7 +263,7 @@ impl VarTensor {
                     },
                     ValType::PrevAssigned(v) => match &self {
                         VarTensor::Advice { inner: advices, .. } => {
-                            v.copy_advice(|| "k", region, advices[x], y)
+                            v.copy_advice(|| "k", *region, advices[x], y)
                         }
                         _ => {
                             error!("PrevAssigned is only supported for advice columns");
@@ -279,7 +279,7 @@ impl VarTensor {
                         _ => unimplemented!(),
                     },
                     ValType::Constant(v) => {
-                        self.assign_constant(region, offset + coord, v)
+                        self.assign_constant(*region, offset + coord, v)
                     }
                 }
             })?.into()),
@@ -292,9 +292,9 @@ impl VarTensor {
     }
 
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor.
-    pub fn assign_with_duplication<F: FieldExt + TensorType>(
+    pub fn assign_with_duplication<F: PrimeField + TensorType + PartialOrd>(
         &self,
-        region: Option<&mut Region<F>>,
+        region: &mut Option<&mut Region<F>>,
         offset: usize,
         values: &ValTensor<F>,
         check_mode: &CheckMode
@@ -326,7 +326,7 @@ impl VarTensor {
                         },
                         ValType::PrevAssigned(v) => match &self {
                             VarTensor::Advice { inner: advices, .. } => {
-                                v.copy_advice(|| "k", region, advices[x], y)
+                                v.copy_advice(|| "k", *region, advices[x], y)
                             }
                             _ => {
                                 error!("PrevAssigned is only supported for advice columns");
@@ -343,7 +343,7 @@ impl VarTensor {
                             _ => unimplemented!(),
                         },
                         ValType::Constant(v) => {
-                            self.assign_constant(region, offset + coord, v)
+                            self.assign_constant(*region, offset + coord, v)
                         }
                     }
                 })?.into()} else {

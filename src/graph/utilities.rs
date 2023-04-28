@@ -8,13 +8,13 @@ use crate::fieldutils::i128_to_felt;
 use crate::tensor::{Tensor, TensorError, TensorType, ValTensor};
 use anyhow::Result;
 use halo2_proofs::circuit::Value;
-use halo2curves::FieldExt;
+use halo2curves::ff::PrimeField;
 use log::{trace, warn};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::binary::UnaryOp;
 use tract_onnx::tract_core::ops::matmul::MatMulUnary;
-use tract_onnx::tract_core::ops::nn::{LeakyRelu, Reduce};
+use tract_onnx::tract_core::ops::nn::{LeakyRelu, Reduce, Softmax};
 use tract_onnx::tract_hir::internal::AxisOp;
 use tract_onnx::tract_hir::ops::cnn::ConvUnary;
 use tract_onnx::tract_hir::ops::element_wise::ElementWiseOp;
@@ -40,12 +40,24 @@ pub fn vector_to_quantized(
     scale: u32,
 ) -> Result<Tensor<i128>, TensorError> {
     let mult = scale_to_multiplier(scale);
+    let max_value = (((i128::MAX as f32 - shift) / mult)).round(); // the maximum value that can be represented w/o sig bit truncation
+
     // we parallelize the quantization process as it seems to be quite slow at times
-    let scaled: Vec<i128> = vec
+    let scaled: Result<Vec<i128>, _> = vec
         .par_iter()
-        .map(|e| (mult * *e + shift).round() as i128)
-        .collect();
-    Tensor::new(Some(&scaled), dims)
+        .map(|e| {
+            if *e > max_value {
+                return Err(TensorError::SigBitTruncatioError);
+            }
+            let quantized_value = (mult * e + shift).round() as i128;
+            Ok(quantized_value)
+        })
+        .collect(); // collect() will automatically propagate the error
+
+    match scaled {
+        Ok(scaled_values) => Tensor::new(Some(&scaled_values), dims),
+        Err(e) => Err(e),
+    }
 }
 
 /// Converts a scale (log base 2) to a fixed point multiplier.
@@ -71,7 +83,7 @@ pub fn node_output_shapes(
     Ok(shapes)
 }
 
-fn extract_tensor_value<F: FieldExt + TensorType>(
+fn extract_tensor_value<F: PrimeField + TensorType + PartialOrd>(
     input: Arc<tract_onnx::prelude::Tensor>,
     scale: u32,
     public_params: bool,
@@ -179,7 +191,7 @@ fn load_eltwise_op(
 }
 
 /// Matches an onnx node to a [OpKind] and returns a [Node] with the corresponding [OpKind].  
-pub fn new_op_from_onnx<F: FieldExt + TensorType>(
+pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
     idx: usize,
     scale: u32,
     public_params: bool,
@@ -315,6 +327,24 @@ pub fn new_op_from_onnx<F: FieldExt + TensorType>(
             let matrix = extract_tensor_value(mm_op.a.clone(), scale, public_params)?;
 
             Box::new(PolyOp::Matmul { a: Some(matrix) })
+        }
+        "Softmax" => {
+            // Extract the slope layer hyperparams
+            let softmax_op: &Softmax = match node.op().downcast_ref::<Softmax>() {
+                Some(b) => b,
+                None => {
+                    return Err(Box::new(GraphError::OpMismatch(idx, "softmax".to_string())));
+                }
+            };
+
+            if softmax_op.axes.to_vec() != vec![1] {
+                return Err(Box::new(GraphError::InvalidDims(
+                    idx,
+                    "softmax".to_string(),
+                )));
+            }
+
+            Box::new(HybridOp::Softmax { scales: (1, 1) })
         }
         "MatMul" => Box::new(PolyOp::Matmul { a: None }),
         "AddUnary" => {
