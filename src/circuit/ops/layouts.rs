@@ -1,5 +1,8 @@
 use core::panic;
-use std::error::Error;
+use std::{
+    error::Error,
+    sync::{Arc, Mutex},
+};
 
 use halo2_proofs::circuit::{Region, Value};
 use halo2curves::ff::PrimeField;
@@ -23,89 +26,6 @@ use crate::{
 
 use super::*;
 use crate::circuit::ops::lookup::LookupOp;
-
-fn allocate_multi_dot<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
-    region: &mut Option<&mut Region<F>>,
-    a: &mut [ValTensor<F>],
-    b: &mut [ValTensor<F>],
-    c: &mut [ValTensor<F>],
-    offset: &mut usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
-    if a.len() != b.len() {
-        return Err(Box::new(TensorError::DimMismatch("dot".to_string())));
-    }
-
-    let mut res: Tensor<Tensor<ValType<F>>> = Tensor::new(None, &[a.len()])?;
-
-    let mut index = 0;
-    for ((a, b), c) in a.iter_mut().zip(b).zip(c) {
-        let mut inputs = vec![];
-        let mut assigned_len = 0;
-        for (i, input) in [&a, &b].iter().enumerate() {
-            let inp = {
-                let (res, len) = config.inputs[i].assign_with_duplication(
-                    region,
-                    *offset,
-                    input,
-                    &config.check_mode,
-                )?;
-                assigned_len = len;
-                res.get_inner()?
-            };
-            inputs.push(inp);
-        }
-
-        let (output, output_assigned_len) =
-            config
-                .output
-                .assign_with_duplication(region, *offset, c, &config.check_mode)?;
-
-        // free up
-        *a = ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?);
-        *b = ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?);
-        *c = ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?);
-
-        assert_eq!(assigned_len, output_assigned_len);
-
-        if let Some(region) = region {
-            for i in 0..assigned_len {
-                let (x, y) = config.output.cartesian_coord(*offset + i);
-                // hop over duplicates at start of column
-                if y == 0 && i > 0 {
-                    continue;
-                }
-                if i == 0 {
-                    config
-                        .selectors
-                        .get(&(BaseOp::Mult, x))
-                        .unwrap()
-                        .enable(*region, y)?;
-                } else {
-                    config
-                        .selectors
-                        .get(&(BaseOp::Dot, x))
-                        .unwrap()
-                        .enable(*region, y)?;
-                }
-            }
-        }
-
-        let last_elem = output
-            .get_slice(&[output.len() - 1..output.len()])
-            .expect("accum poly: failed to fetch last elem");
-
-        res[index] = last_elem.get_inner_tensor()?;
-
-        index += 1;
-
-        *offset += assigned_len;
-    }
-
-    let output = res.combine()?;
-
-    Ok(output.into())
-}
 
 /// Dot product accumulated layout
 pub fn dot<F: PrimeField + TensorType + PartialOrd>(
@@ -555,42 +475,46 @@ pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    let (mut matrix, mut inputs, mut c) = (
-        vec![ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?); dims.iter().product()],
-        vec![ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?); dims.iter().product()],
-        vec![ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?); dims.iter().product()],
-    );
+    let region_thread = Arc::new(Mutex::new(region.as_deref_mut()));
+    let config_thread = Arc::new(Mutex::new(config.clone()));
 
-    matrix
-        .par_iter_mut()
-        .zip(&mut inputs)
-        .zip(&mut c)
-        .enumerate()
-        .for_each(|(i, ((m, inp), c))| {
-            let coord = &cartesian_coord[i];
-            let row = coord[0..coord.len() - 1]
-                .iter()
-                .map(|&d| d..(d + 1))
-                .collect::<Vec<_>>();
-            let mut col = coord[0..coord.len()]
-                .iter()
-                .map(|&d| d..(d + 1))
-                .collect::<Vec<_>>();
-            col[coord.len() - 2] = 0..b.dims()[coord.len() - 2];
+    let mut output = Tensor::new(None, &dims)?;
 
-            *m = a.get_slice(&row[0..]).unwrap();
-            *inp = b.get_slice(&col[0..]).unwrap();
+    output.par_iter_mut().enumerate().for_each(|(i, m)| {
+        let coord = &cartesian_coord[i];
+        let row = coord[0..coord.len() - 1]
+            .iter()
+            .map(|&d| d..(d + 1))
+            .collect::<Vec<_>>();
+        let mut col = coord[0..coord.len()]
+            .iter()
+            .map(|&d| d..(d + 1))
+            .collect::<Vec<_>>();
+        col[coord.len() - 2] = 0..b.dims()[coord.len() - 2];
 
-            // low memory cost (1D tensor)
+        let row_tensor = a.get_slice(&row[0..]).unwrap();
+        let col_tensor = b.get_slice(&col[0..]).unwrap();
 
-            *c = accumulated::dot(&[m.get_inner().unwrap(), inp.get_inner().unwrap()])
-                .unwrap()
-                .into();
-        });
+        let mut region_lock = region_thread.lock().unwrap();
+        let mut config_lock = config_thread.lock().unwrap();
+        let assigned_len = row_tensor.len();
+        let mut offset = offset.clone() + i * assigned_len;
 
-    let mut output = allocate_multi_dot(config, region, &mut matrix, &mut inputs, &mut c, offset)?;
+        *m = dot(
+            &mut config_lock,
+            &mut region_lock,
+            &[row_tensor, col_tensor],
+            &mut offset,
+        )
+        .unwrap()
+        .get_inner_tensor()
+        .unwrap()[0]
+            .clone();
+    });
 
-    output.reshape(&dims)?;
+    // this is the length of the accumulated constraints * the number of dot products run
+    *offset += output.len() * a.dims().last().unwrap();
+    output.reshape(&dims);
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
@@ -919,14 +843,6 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
         ))));
     }
 
-    let num_outputs = output_channels_per_group * vert_slides * horz_slides;
-
-    let (mut a, mut b, mut c) = (
-        vec![ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?); num_outputs],
-        vec![ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?); num_outputs],
-        vec![ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?); num_outputs],
-    );
-
     let cartesian_coord = vec![
         (0..num_groups),
         (0..output_channels_per_group),
@@ -938,51 +854,59 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     .multi_cartesian_product()
     .collect::<Vec<_>>();
 
-    a.par_iter_mut()
-        .zip(&mut b)
-        .zip(&mut c)
-        .enumerate()
-        .for_each(|(i, ((a, b), c))| {
-            let cartesian_coord_per_group = cartesian_coord[i].clone();
-            let group = cartesian_coord_per_group[0];
-            let (i, j, k) = (
-                cartesian_coord_per_group[1],
-                cartesian_coord_per_group[2],
-                cartesian_coord_per_group[3],
-            );
-            let rs = j * stride.0;
-            let cs = k * stride.1;
+    let mut output = Tensor::new(None, &[cartesian_coord.len()])?;
 
-            let start_channel = group * input_channels_per_group;
-            let end_channel = start_channel + input_channels_per_group;
-            let local_image = &padded_image
-                .get_slice(&[
-                    start_channel..end_channel,
-                    rs..(rs + kernel_height),
-                    cs..(cs + kernel_width),
-                ])
-                .unwrap();
+    let region_thread = Arc::new(Mutex::new(region.as_deref_mut()));
+    let config_thread = Arc::new(Mutex::new(config.clone()));
+    output.par_iter_mut().enumerate().for_each(|(outer_i, a)| {
+        let cartesian_coord_per_group = cartesian_coord[outer_i].clone();
+        let group = cartesian_coord_per_group[0];
+        let (group_i, j, k) = (
+            cartesian_coord_per_group[1],
+            cartesian_coord_per_group[2],
+            cartesian_coord_per_group[3],
+        );
+        let rs = j * stride.0;
+        let cs = k * stride.1;
 
-            let start_kernel_index = group * output_channels_per_group + i;
-            let end_kernel_index = start_kernel_index + 1;
-            let local_kernel = &kernel
-                .get_slice(&[start_kernel_index..end_kernel_index])
-                .unwrap();
-
-            *a = local_kernel.clone();
-            *b = local_image.clone();
-
-            *c = accumulated::dot(&[
-                local_kernel.get_inner().unwrap(),
-                local_image.get_inner().unwrap(),
+        let start_channel = group * input_channels_per_group;
+        let end_channel = start_channel + input_channels_per_group;
+        let local_image = padded_image
+            .get_slice(&[
+                start_channel..end_channel,
+                rs..(rs + kernel_height),
+                cs..(cs + kernel_width),
             ])
-            .unwrap()
-            .into();
-        });
+            .unwrap();
 
-    let mut output = allocate_multi_dot(config, region, &mut a, &mut b, &mut c, offset)?;
+        let start_kernel_index = group * output_channels_per_group + group_i;
+        let end_kernel_index = start_kernel_index + 1;
+        let local_kernel = kernel
+            .get_slice(&[start_kernel_index..end_kernel_index])
+            .unwrap();
 
-    output.reshape(&[output_channels, vert_slides, horz_slides])?;
+        let mut region_lock = region_thread.lock().unwrap();
+        let mut config_lock = config_thread.lock().unwrap();
+        let assigned_len = local_kernel.len();
+        let mut offset = offset.clone() + outer_i * assigned_len;
+
+        *a = dot(
+            &mut config_lock,
+            &mut region_lock,
+            &[local_kernel, local_image],
+            &mut offset,
+        )
+        .unwrap()
+        .get_inner_tensor()
+        .unwrap()[0]
+            .clone();
+    });
+
+    // this is the size of each accumulated dot product x the total number of dot products
+    *offset += input_channels * kernel_height * kernel_width * output.len();
+
+    output.reshape(&[output_channels, vert_slides, horz_slides]);
+    let mut output = output.into();
 
     if has_bias {
         let tiled_bias = values[2].clone();
