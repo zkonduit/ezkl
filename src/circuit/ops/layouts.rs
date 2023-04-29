@@ -27,6 +27,17 @@ use crate::{
 use super::*;
 use crate::circuit::ops::lookup::LookupOp;
 
+fn num_overflowed_columns(starting_idx: usize, mut total_len: usize, column_len: usize) -> usize {
+    let mut num_overflowed_columns = 0;
+    let mut idx = starting_idx;
+    while idx < starting_idx + total_len {
+        idx += column_len;
+        num_overflowed_columns += 1;
+        total_len += 1;
+    }
+    num_overflowed_columns
+}
+
 /// Dot product accumulated layout
 pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
@@ -497,6 +508,10 @@ pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
         let mut region_lock = region_thread.lock().unwrap();
         let assigned_len = row_tensor.len();
         let mut offset = offset.clone() + i * assigned_len;
+        let num_overflowed_columns =
+            num_overflowed_columns(offset, i * assigned_len, config.output.col_size());
+
+        offset += num_overflowed_columns;
 
         *m = dot(
             &config,
@@ -510,8 +525,10 @@ pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
             .clone();
     });
 
+    let vanilla_len = output.len() * a.dims().last().unwrap();
+    let num_duplicates = num_overflowed_columns(*offset, vanilla_len, config.output.col_size());
     // this is the length of the accumulated constraints * the number of dot products run
-    *offset += output.len() * a.dims().last().unwrap();
+    *offset += num_duplicates + vanilla_len;
     output.reshape(&dims);
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
@@ -855,7 +872,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     let mut output = Tensor::new(None, &[cartesian_coord.len()])?;
 
     let region_thread = Arc::new(Mutex::new(region.as_deref_mut()));
-    output.par_iter_mut().enumerate().for_each(|(outer_i, a)| {
+    output.iter_mut().enumerate().for_each(|(outer_i, a)| {
         let cartesian_coord_per_group = cartesian_coord[outer_i].clone();
         let group = cartesian_coord_per_group[0];
         let (group_i, j, k) = (
@@ -884,7 +901,11 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
 
         let mut region_lock = region_thread.lock().unwrap();
         let assigned_len = local_kernel.len();
+
         let mut offset = offset.clone() + outer_i * assigned_len;
+        let num_overflowed_columns =
+            num_overflowed_columns(offset, outer_i * assigned_len, config.output.col_size());
+        offset += num_overflowed_columns;
 
         *a = dot(
             &config,
@@ -898,8 +919,10 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
             .clone();
     });
 
+    let vanilla_len = input_channels_per_group * kernel_height * kernel_width * output.len();
+    let num_duplicates = num_overflowed_columns(*offset, vanilla_len, config.output.col_size());
     // this is the size of each accumulated dot product x the total number of dot products
-    *offset += input_channels * kernel_height * kernel_width * output.len();
+    *offset += num_duplicates + vanilla_len;
 
     output.reshape(&[output_channels, vert_slides, horz_slides]);
     let mut output = output.into();

@@ -487,7 +487,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                 inner: v, dims: _, ..
             } => {
                 let r: Tensor<i32> = v.map(|x| x.into());
-                format!("Value {:?}", r)
+                format!("Value {:?} ...", r[..10].to_vec())
             }
             _ => "ValTensor not PrevAssigned".into(),
         }
