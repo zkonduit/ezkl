@@ -8,7 +8,7 @@ use halo2_proofs::circuit::{Region, Value};
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::error;
-// use rayon::prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rayon::prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
 use crate::{
     circuit::{ops::base::BaseOp, utils, BaseConfig, CheckMode, CircuitError},
@@ -499,7 +499,7 @@ pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
 
     let mut output = Tensor::new(None, &dims)?;
 
-    output.iter_mut().enumerate().for_each(|(i, m)| {
+    output.par_iter_mut().enumerate().for_each(|(i, m)| {
         let coord = &cartesian_coord[i];
         let row = coord[0..coord.len() - 1]
             .iter()
@@ -882,7 +882,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     let mut output = Tensor::new(None, &[cartesian_coord.len()])?;
 
     let region_thread = Arc::new(Mutex::new(region.as_deref_mut()));
-    output.iter_mut().enumerate().for_each(|(outer_i, a)| {
+    output.par_iter_mut().enumerate().for_each(|(outer_i, a)| {
         let cartesian_coord_per_group = cartesian_coord[outer_i].clone();
         let group = cartesian_coord_per_group[0];
         let (group_i, j, k) = (
