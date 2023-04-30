@@ -8,7 +8,7 @@ use halo2_proofs::circuit::{Region, Value};
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::error;
-use rayon::prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+// use rayon::prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
 use crate::{
     circuit::{ops::base::BaseOp, utils, BaseConfig, CheckMode, CircuitError},
@@ -499,7 +499,7 @@ pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
 
     let mut output = Tensor::new(None, &dims)?;
 
-    output.par_iter_mut().enumerate().for_each(|(i, m)| {
+    output.iter_mut().enumerate().for_each(|(i, m)| {
         let coord = &cartesian_coord[i];
         let row = coord[0..coord.len() - 1]
             .iter()
