@@ -519,7 +519,7 @@ pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
 
         assert_eq!(assigned_len, *a.dims().last().unwrap());
         let overflowed_len = overflowed_len(*offset, i * assigned_len, config.output.col_size());
-        let mut local_offset = offset.clone() + i * overflowed_len;
+        let mut local_offset = offset.clone() + overflowed_len;
 
         *m = dot(
             &config,
@@ -919,7 +919,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
 
         let overflowed_len =
             overflowed_len(*offset, outer_i * assigned_len, config.output.col_size());
-        let mut local_offset = offset.clone() + outer_i * overflowed_len;
+        let mut local_offset = offset.clone() + overflowed_len;
 
         *a = dot(
             &config,
