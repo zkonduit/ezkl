@@ -27,15 +27,24 @@ use crate::{
 use super::*;
 use crate::circuit::ops::lookup::LookupOp;
 
-fn num_overflowed_columns(starting_idx: usize, mut total_len: usize, column_len: usize) -> usize {
-    let mut num_overflowed_columns = 0;
+fn overflowed_len(starting_idx: usize, mut total_len: usize, column_len: usize) -> usize {
     let mut idx = starting_idx;
-    while idx < starting_idx + total_len {
+    // let x = idx / column_len;
+    let y = idx % column_len;
+    if y + total_len < column_len {
+        return total_len;
+    }
+    // fill up first column
+    idx += column_len - y;
+    total_len += 1;
+    loop {
+        if idx >= starting_idx + total_len {
+            break;
+        }
         idx += column_len;
-        num_overflowed_columns += 1;
         total_len += 1;
     }
-    num_overflowed_columns
+    total_len
 }
 
 /// Dot product accumulated layout
@@ -507,17 +516,16 @@ pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
 
         let mut region_lock = region_thread.lock().unwrap();
         let assigned_len = row_tensor.len();
-        let mut offset = offset.clone() + i * assigned_len;
-        let num_overflowed_columns =
-            num_overflowed_columns(offset, i * assigned_len, config.output.col_size());
 
-        offset += num_overflowed_columns;
+        assert_eq!(assigned_len, *a.dims().last().unwrap());
+        let overflowed_len = overflowed_len(*offset, i * assigned_len, config.output.col_size());
+        let mut local_offset = offset.clone() + i * overflowed_len;
 
         *m = dot(
             &config,
             &mut region_lock,
             &[row_tensor, col_tensor],
-            &mut offset,
+            &mut local_offset,
         )
         .unwrap()
         .get_inner_tensor()
@@ -526,10 +534,12 @@ pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
     });
 
     let vanilla_len = output.len() * a.dims().last().unwrap();
-    let num_duplicates = num_overflowed_columns(*offset, vanilla_len, config.output.col_size());
+    let overflowed_len = overflowed_len(*offset, vanilla_len, config.output.col_size());
     // this is the length of the accumulated constraints * the number of dot products run
-    *offset += num_duplicates + vanilla_len;
+    *offset += overflowed_len;
     output.reshape(&dims);
+
+    // assert_eq!(offset.clone(), offset_thread.lock().unwrap().clone());
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
@@ -900,18 +910,22 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
             .unwrap();
 
         let mut region_lock = region_thread.lock().unwrap();
-        let assigned_len = local_kernel.len();
+        let assigned_len = local_image.len();
 
-        let mut offset = offset.clone() + outer_i * assigned_len;
-        let num_overflowed_columns =
-            num_overflowed_columns(offset, outer_i * assigned_len, config.output.col_size());
-        offset += num_overflowed_columns;
+        assert_eq!(
+            assigned_len,
+            input_channels_per_group * kernel_height * kernel_width
+        );
+
+        let overflowed_len =
+            overflowed_len(*offset, outer_i * assigned_len, config.output.col_size());
+        let mut local_offset = offset.clone() + outer_i * overflowed_len;
 
         *a = dot(
             &config,
             &mut region_lock,
             &[local_kernel, local_image],
-            &mut offset,
+            &mut local_offset,
         )
         .unwrap()
         .get_inner_tensor()
@@ -920,9 +934,9 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     });
 
     let vanilla_len = input_channels_per_group * kernel_height * kernel_width * output.len();
-    let num_duplicates = num_overflowed_columns(*offset, vanilla_len, config.output.col_size());
+    let overflowed_len = overflowed_len(*offset, vanilla_len, config.output.col_size());
     // this is the size of each accumulated dot product x the total number of dot products
-    *offset += num_duplicates + vanilla_len;
+    *offset += overflowed_len;
 
     output.reshape(&[output_channels, vert_slides, horz_slides]);
     let mut output = output.into();

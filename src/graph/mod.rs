@@ -20,7 +20,7 @@ use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},
 };
-use log::{info, trace};
+use log::{info, trace, warn};
 pub use model::*;
 pub use node::*;
 // use std::fs::File;
@@ -118,6 +118,8 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
         } else {
             model.dummy_layout(&model.input_shapes()).unwrap()
         };
+
+        warn!("allocating columns for {} constraints", num_constraints);
 
         let params = ModelParams {
             model,
@@ -219,6 +221,20 @@ impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
             params.model.visibility.clone(),
             params.model.run_args.scale,
         );
+
+        warn!(
+            "using {} advice",
+            vars.advices.len() * vars.advices[0].num_cols()
+        );
+        warn!("using {} instances", vars.instances.len());
+        if vars.fixed.len() > 0 {
+            warn!(
+                "using {} fixed",
+                vars.fixed.len() * vars.fixed[0].num_cols() + 1
+            );
+        } else {
+            warn!("using 1 fixed")
+        }
 
         let base = params.model.configure(cs, &mut vars).unwrap();
 
