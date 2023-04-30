@@ -12,12 +12,14 @@ use halo2curves::ff::PrimeField;
 use log::{trace, warn};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
-use tract_onnx::tract_core::ops::binary::UnaryOp;
-use tract_onnx::tract_core::ops::matmul::MatMulUnary;
+use tract_onnx::tract_core::ops::einsum::EinSum;
+// use tract_onnx::tract_core::ops::binary::UnaryOp;
+// use tract_onnx::tract_core::ops::matmul::MatMulUnary;
+use tract_onnx::tract_core::ops::element_wise::ElementWiseOp;
 use tract_onnx::tract_core::ops::nn::{LeakyRelu, Reduce, Softmax};
 use tract_onnx::tract_hir::internal::AxisOp;
 use tract_onnx::tract_hir::ops::cnn::ConvUnary;
-use tract_onnx::tract_hir::ops::element_wise::ElementWiseOp;
+use tract_onnx::tract_hir::ops::konst::Const;
 use tract_onnx::tract_hir::{
     ops::array::{Pad, PadMode},
     ops::cnn::{MaxPool, PoolSpec, SumPool},
@@ -40,7 +42,7 @@ pub fn vector_to_quantized(
     scale: u32,
 ) -> Result<Tensor<i128>, TensorError> {
     let mult = scale_to_multiplier(scale);
-    let max_value = (((i128::MAX as f32 - shift) / mult)).round(); // the maximum value that can be represented w/o sig bit truncation
+    let max_value = ((i128::MAX as f32 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
 
     // we parallelize the quantization process as it seems to be quite slow at times
     let scaled: Result<Vec<i128>, _> = vec
@@ -125,22 +127,6 @@ fn extract_tensor_value<F: PrimeField + TensorType + PartialOrd>(
     Ok(value)
 }
 
-/// Extracts a unary op from an onnx node.
-fn load_unary_op(
-    op: &dyn tract_onnx::prelude::Op,
-    idx: usize,
-    name: String,
-) -> Result<UnaryOp, Box<dyn std::error::Error>> {
-    // Extract the slope layer hyperparams
-    let op: &UnaryOp = match op.downcast_ref::<UnaryOp>() {
-        Some(b) => b,
-        None => {
-            return Err(Box::new(GraphError::OpMismatch(idx, name)));
-        }
-    };
-    Ok(op.clone())
-}
-
 /// Extracts an axis op from an onnx node.
 fn load_axis_op(
     op: &dyn tract_onnx::prelude::Op,
@@ -149,6 +135,23 @@ fn load_axis_op(
 ) -> Result<AxisOp, Box<dyn std::error::Error>> {
     // Extract the slope layer hyperparams
     let op: &AxisOp = match op.downcast_ref::<AxisOp>() {
+        Some(b) => b,
+        None => {
+            return Err(Box::new(GraphError::OpMismatch(idx, name)));
+        }
+    };
+
+    Ok(op.clone())
+}
+
+/// Extracts an axis op from an onnx node.
+fn load_const(
+    op: &dyn tract_onnx::prelude::Op,
+    idx: usize,
+    name: String,
+) -> Result<Const, Box<dyn std::error::Error>> {
+    // Extract the slope layer hyperparams
+    let op: &Const = match op.downcast_ref::<Const>() {
         Some(b) => b,
         None => {
             return Err(Box::new(GraphError::OpMismatch(idx, name)));
@@ -181,12 +184,12 @@ fn load_eltwise_op(
     name: String,
 ) -> Result<ElementWiseOp, Box<dyn std::error::Error>> {
     // Extract the slope layer hyperparams
+
     let op: &ElementWiseOp = match op.downcast_ref::<ElementWiseOp>() {
         Some(b) => b,
-        None => {
-            return Err(Box::new(GraphError::OpMismatch(idx, name)));
-        }
+        None => return Err(Box::new(GraphError::OpMismatch(idx, name))),
     };
+
     Ok(op.clone())
 }
 
@@ -200,6 +203,11 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<Box<dyn crate::circuit::Op<F>>, Box<dyn std::error::Error>> {
     trace!("Loading node: {:?}", node);
     Ok(match node.op().name().as_ref() {
+        "Const" => {
+            let op = load_const(node.op(), idx, node.op().name().to_string())?;
+            let quantized = extract_tensor_value::<F>(op.0.clone(), scale, public_params)?;
+            Box::new(crate::circuit::ops::Constant { quantized })
+        }
         "Reduce<Min>" => {
             if inputs.len() != 1 {
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
@@ -249,13 +257,22 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             Box::new(PolyOp::Sum { axes })
         }
         // TODO: this is a hack to get around the fact that onnx replace ReLU with Max(0, x) -- we should probably implement
-        "MaxUnary" => {
+        "Max" => {
             // Extract the slope layer hyperparams
-            let max_op = load_unary_op(node.op(), idx, node.op().name().to_string())?;
 
-            if max_op.a.shape().into_iter().product::<usize>() == 1
-                && max_op.a.as_slice::<f32>()?.to_vec()[0] == 0.0
+            let boxed_op = inputs[1].clone().opkind;
+            let unit = match boxed_op
+                .as_any()
+                .downcast_ref::<crate::circuit::ops::Constant<F>>()
             {
+                Some(c) => c.quantized.get_int_evals()?[0],
+                None => {
+                    return Err(Box::new(GraphError::OpMismatch(idx, "Max".to_string())));
+                }
+            };
+
+            if inputs.len() == 2 && unit == 0 {
+                inputs.pop();
                 Box::new(LookupOp::ReLU {
                     scale: inputs[0].out_scale as usize,
                 })
@@ -263,12 +280,8 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 todo!()
             }
         }
-        "Prelu" => {
-            unreachable!("Prelu should be converted to a more complex format in Onnx");
-        }
         "Recip" => {
             // Extract the slope layer hyperparams
-            let _recip = load_eltwise_op(node.op(), idx, node.op().name().to_string())?;
             Box::new(LookupOp::Recip { scale: 1 })
         }
 
@@ -295,38 +308,60 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
         "Sqrt" => Box::new(LookupOp::Sqrt { scales: (1, 1) }),
         "Rsqrt" => Box::new(LookupOp::Rsqrt { scales: (1, 1) }),
         "Tanh" => Box::new(LookupOp::Tanh { scales: (1, 1) }),
-        "onnx.Erf" => Box::new(LookupOp::Erf { scales: (1, 1) }),
+        "Erf" => Box::new(LookupOp::Erf { scales: (1, 1) }),
         "Source" => Box::new(crate::circuit::ops::Input),
         "Add" => Box::new(PolyOp::Add { a: None }),
         "Sub" => Box::new(PolyOp::Sub),
         "Mul" => Box::new(PolyOp::Mult { a: None }),
         "Iff" => Box::new(PolyOp::Iff),
         "Greater" => {
-            todo!()
-        }
-        "GreaterUnary" => {
             // Extract the slope layer hyperparams
-            let greater = load_unary_op(node.op(), idx, node.op().name().to_string())?;
-            if greater.a.len() == 1 {
+            let boxed_op = inputs[0].clone().opkind;
+            let unit = match boxed_op
+                .as_any()
+                .downcast_ref::<crate::circuit::ops::Constant<F>>()
+            {
+                Some(c) => {
+                    if c.quantized.get_int_evals()?.len() == 1 {
+                        c.quantized.get_int_evals()?[0]
+                    } else {
+                        todo!()
+                    }
+                }
+                None => {
+                    return Err(Box::new(GraphError::OpMismatch(idx, "greater".to_string())));
+                }
+            };
+
+            if inputs.len() == 2 {
+                *inputs = vec![inputs[1].clone()];
                 Box::new(LookupOp::GreaterThan {
-                    a: crate::circuit::utils::F32(greater.a.as_slice::<f32>()?[0]),
+                    a: crate::circuit::utils::F32(unit as f32),
                 })
             } else {
                 todo!()
             }
         }
-        "MatMulUnary" => {
+        "EinSum" => {
             // Extract the slope layer hyperparams
-            let mm_op: &MatMulUnary = match node.op().downcast_ref::<MatMulUnary>() {
+            let op: &EinSum = match node.op().downcast_ref::<EinSum>() {
                 Some(b) => b,
                 None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "mm".to_string())));
+                    return Err(Box::new(GraphError::OpMismatch(idx, "einsum".to_string())));
                 }
             };
 
-            let matrix = extract_tensor_value(mm_op.a.clone(), scale, public_params)?;
-
-            Box::new(PolyOp::Matmul { a: Some(matrix) })
+            let axes = &op.axes;
+            if axes.to_string() == "mk,nk->mn"
+                || axes.to_string() == "mk,k->mn"
+                || axes.to_string() == "mk,nk->n"
+                || axes.to_string() == "k,nk->mn"
+            {
+                inputs.swap(0, 1);
+                Box::new(PolyOp::Matmul { a: None })
+            } else {
+                panic!("einsum not supported")
+            }
         }
         "Softmax" => {
             // Extract the slope layer hyperparams
@@ -345,32 +380,6 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             }
 
             Box::new(HybridOp::Softmax { scales: (1, 1) })
-        }
-        "MatMul" => Box::new(PolyOp::Matmul { a: None }),
-        "AddUnary" => {
-            // Extract the slope layer hyperparams
-            let add_op = load_unary_op(node.op(), idx, node.op().name().to_string())?;
-            let matrix =
-                extract_tensor_value(add_op.a.clone(), inputs[0].out_scale, public_params)?;
-
-            Box::new(PolyOp::Add { a: Some(matrix) })
-        }
-        "MulUnary" => {
-            // Extract the slope layer hyperparams
-            let mul_op = load_unary_op(node.op(), idx, node.op().name().to_string())?;
-
-            // this is actually better represented as a DIV op
-            if mul_op.a.shape().into_iter().product::<usize>() == 1
-                && mul_op.a.as_slice::<f32>()?.to_vec()[0] < 0.1
-            {
-                let denom = 1.0 / mul_op.a.as_slice::<f32>()?.to_vec()[0];
-                Box::new(LookupOp::Div {
-                    denom: crate::circuit::utils::F32(denom),
-                })
-            } else {
-                let matrix = extract_tensor_value(mul_op.a.clone(), scale, public_params)?;
-                Box::new(PolyOp::Mult { a: Some(matrix) })
-            }
         }
         "MaxPool" => {
             // Extract the padding and stride layer hyperparams
@@ -411,7 +420,6 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             })
         }
         "Dot" => Box::new(PolyOp::Dot),
-
         "Square" => Box::new(PolyOp::Pow(2)),
         "ConvUnary" => {
             let conv_node: &ConvUnary = match node.op().downcast_ref::<ConvUnary>() {

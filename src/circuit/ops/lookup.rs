@@ -42,6 +42,9 @@ impl LookupOp {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         match &self {

@@ -46,6 +46,9 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn as_str(&self) -> &'static str {
         match &self {
             PolyOp::Identity => "IDENTITY",

@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{any::Any, error::Error};
 
 use halo2_proofs::circuit::Region;
 use serde::{Deserialize, Serialize};
@@ -20,7 +20,7 @@ pub mod lookup;
 pub mod poly;
 
 ///
-pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + Sync {
+pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + Sync + Any {
     ///
     fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError>;
     ///
@@ -60,6 +60,9 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
 
     ///
     fn clone_dyn(&self) -> Box<dyn Op<F>>;
+
+    ///
+    fn as_any(&self) -> &dyn Any;
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Clone for Box<dyn Op<F>> {
@@ -73,6 +76,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Clone for Box<dyn Op<F>> {
 pub struct Input;
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         Ok(x[0].clone())
     }
@@ -113,6 +120,9 @@ pub struct Rescaled<F: PrimeField + TensorType + PartialOrd> {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         if self.scale.len() != x.len() {
             return Err(TensorError::DimMismatch("rescaled inputs".to_string()));
@@ -171,6 +181,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
 pub struct Unknown;
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn f(&self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         Err(TensorError::WrongMethod)
     }
@@ -186,6 +199,45 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
         _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         Err(Box::new(super::CircuitError::UnsupportedOp))
+    }
+    fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
+        Box::new(self.clone())
+    }
+
+    fn clone_dyn(&self) -> Box<dyn Op<F>> {
+        Box::new(self.clone()) // Forward to the derive(Clone) impl
+    }
+}
+
+///
+#[derive(Clone, Debug)]
+pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
+    ///
+    pub quantized: ValTensor<F>,
+}
+
+impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn f(&self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
+        let mut int_evals: Tensor<i128> =
+            self.quantized.get_int_evals().unwrap().into_iter().into();
+        int_evals.reshape(self.quantized.dims());
+        Ok(int_evals)
+    }
+
+    fn as_str(&self) -> &'static str {
+        "CONST"
+    }
+    fn layout(
+        &self,
+        _: &mut crate::circuit::BaseConfig<F>,
+        _: &mut Option<&mut Region<F>>,
+        _: &[ValTensor<F>],
+        _: &mut usize,
+    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
+        Ok(Some(self.quantized.clone()))
     }
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
         Box::new(self.clone())

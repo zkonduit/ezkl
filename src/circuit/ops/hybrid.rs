@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use halo2_proofs::circuit::Region;
 
 use crate::{
@@ -30,6 +32,9 @@ pub enum HybridOp {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         match &self {

@@ -79,6 +79,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
 
         // load the node inputs
         let mut inputs = vec![];
+
         for i in node.inputs.iter_mut() {
             match other_nodes.get(&i.node) {
                 Some(n) => inputs.push(n.clone()),
