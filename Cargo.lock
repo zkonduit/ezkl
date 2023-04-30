@@ -2259,7 +2259,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/send-sync-region#cc7a789f721f609fccf75464129cf9ef9cce0fde"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/send-sync-region#333bc77f72836e109bd8ebe30957494fec32f229"
 dependencies = [
  "blake2b_simd",
  "ff",
