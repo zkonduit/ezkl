@@ -1,3 +1,4 @@
+use std::str::FromStr;
 ///
 pub mod table;
 
@@ -66,6 +67,36 @@ impl From<String> for CheckMode {
             "safe" => CheckMode::SAFE,
             "unsafe" => CheckMode::UNSAFE,
             _ => panic!("not a valid checkmode"),
+        }
+    }
+}
+
+#[allow(missing_docs)]
+/// An enum representing the tolerance we can accept for the accumulated arguments, either absolute or percentage
+#[derive(
+    Clone, Debug, PartialEq, PartialOrd, Serialize, Deserialize, Copy
+)]
+pub enum Tolerance {
+    Abs { val: usize },
+    Percentage { val: f32 },
+}
+
+impl Default for Tolerance {
+    fn default() -> Self {
+        Tolerance::Abs { val: 0 }
+    }
+}
+
+impl FromStr for Tolerance {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(val) = s.parse::<usize>() {
+            Ok(Tolerance::Abs { val })
+        } else if let Ok(val) = s.parse::<f32>() {
+            Ok(Tolerance::Percentage { val })
+        } else {
+            Err("Invalid tolerance value provided. It should be either an absolute value (usize) or a percentage (f32).".to_string())
         }
     }
 }

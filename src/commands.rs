@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io::{stdin, stdout, Read, Write};
 use std::path::PathBuf;
 
-use crate::circuit::CheckMode;
+use crate::circuit::{CheckMode, Tolerance};
 
 #[allow(missing_docs)]
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -48,7 +48,7 @@ impl std::fmt::Display for StrategyType {
 pub struct RunArgs {
     /// The tolerance for error on model outputs
     #[arg(short = 'T', long, default_value = "0")]
-    pub tolerance: usize,
+    pub tolerance: Tolerance,
     /// The denominator in the fixed point representation used when quantizing
     #[arg(short = 'S', long, default_value = "7")]
     pub scale: u32,
