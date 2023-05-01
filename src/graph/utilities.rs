@@ -356,6 +356,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 || axes.to_string() == "mk,k->mn"
                 || axes.to_string() == "mk,nk->n"
                 || axes.to_string() == "k,nk->mn"
+                || axes.to_string() == "abmk,abkn->abmn"
             {
                 inputs.swap(0, 1);
                 Box::new(PolyOp::Matmul { a: None })
