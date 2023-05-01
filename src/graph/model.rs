@@ -212,9 +212,21 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         public_params: bool,
     ) -> Result<(Graph<TypedFact, Box<dyn TypedOp>>, BTreeMap<usize, Node<F>>), Box<dyn Error>>
     {
-        let mut model = tract_onnx::onnx()
-            .model_for_path(path)
-            .map_err(|_| GraphError::ModelLoad)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut model = tract_onnx::onnx().model_for_path(path).map_err(|e| {
+            error!("Error loading model: {}", e);
+            GraphError::ModelLoad
+        })?;
+
+        #[cfg(target_arch = "wasm32")]
+        let mut model = {
+            let mut file = std::fs::File::open(path)?;
+            tract_onnx::onnx().model_for_read(&mut file).map_err(|e| {
+                error!("Error loading model: {}", e);
+                GraphError::ModelLoad
+            })?
+        };
+
         // .into_optimized()?;
 
         for (i, id) in model.clone().inputs.iter().enumerate() {
