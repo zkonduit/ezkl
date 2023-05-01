@@ -9,6 +9,13 @@ use std::error::Error;
 use std::fs::File;
 use std::io::{stdin, stdout, Read, Write};
 use std::path::PathBuf;
+#[cfg(feature = "python-bindings")]
+use pyo3::{
+    exceptions::PyValueError,
+    prelude::*,
+    types::PyString,
+    conversion::{FromPyObject, PyTryFrom}
+};
 
 use crate::circuit::CheckMode;
 use crate::graph::{VarVisibility, Visibility};

@@ -1,9 +1,12 @@
 use crate::circuit::CheckMode;
 use crate::commands::{RunArgs, StrategyType, TranscriptType};
+use crate::execute::{create_proof_circuit_kzg, load_params_cmd};
 use crate::graph::{vector_to_quantized, Mode, Model, ModelCircuit, VarVisibility};
-use crate::pfsys::{gen_srs as ezkl_gen_srs, prepare_data, save_params};
-// use std::env;
-use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+use crate::pfsys::{gen_srs as ezkl_gen_srs, create_keys, prepare_data, save_params, save_vk};
+use halo2_proofs::poly::kzg::{
+    commitment::KZGCommitmentScheme,
+    strategy::{AccumulatorStrategy, SingleStrategy as KZGSingleStrategy},
+};
 use halo2_proofs::dev::MockProver;
 use halo2curves::bn256::{Bn256, Fr};
 use log::trace;
@@ -244,6 +247,11 @@ fn mock(
 #[pyfunction(signature = (
     data,
     model,
+    vk_path,
+    proof_path,
+    params_path,
+    transcript,
+    strategy,
     py_run_args = None
 ))]
 fn prove(
@@ -258,6 +266,7 @@ fn prove(
 ) -> Result<bool, PyErr> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let logrows = run_args.logrows;
+    let check_mode = run_args.check_mode;
     let data = prepare_data(data);
     let visibility = run_args.to_var_visibility();
 
@@ -279,19 +288,53 @@ fn prove(
                                     let params = load_params_cmd(params_path, logrows);
 
                                     match params {
-                                        Ok(par) {
+                                        Ok(par) => {
                                             let proving_key = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&c, &par);
 
                                             match proving_key {
                                                 Ok(pk) => {
                                                     let snark = match strategy {
                                                         StrategyType::Single => {
-
+                                                            let strategy = KZGSingleStrategy::new(&par);
+                                                            match create_proof_circuit_kzg(
+                                                                c,
+                                                                &par,
+                                                                pi,
+                                                                &pk,
+                                                                transcript,
+                                                                strategy,
+                                                                check_mode
+                                                            ) {
+                                                                Ok(snark) => Ok(snark),
+                                                                Err(_) => Err(PyRuntimeError::new_err("Failed to create proof circuit single strategy")),
+                                                            }
                                                         }
                                                         StrategyType::Accum => {
-
+                                                            let strategy = AccumulatorStrategy::new(&par);
+                                                            match create_proof_circuit_kzg(
+                                                                c,
+                                                                &par,
+                                                                pi,
+                                                                &pk,
+                                                                transcript,
+                                                                strategy,
+                                                                check_mode
+                                                            ) {
+                                                                Ok(snark) => Ok(snark),
+                                                                Err(_) => Err(PyRuntimeError::new_err("Failed to create proof circuit using accumulator strategy")),
+                                                            }
                                                         }
                                                     };
+
+                                                    match snark?.save(&proof_path) {
+                                                        Ok(_) => {
+                                                            match save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, pk.get_vk()) {
+                                                                Ok(_) => Ok(true),
+                                                                Err(_) => Err(PyIOError::new_err("Failed to save vk to vk_path"))
+                                                            }
+                                                        }
+                                                        Err(_) => Err(PyIOError::new_err("Failed to save to proof path"))
+                                                    }
                                                 }
                                                 Err(_) => Err(PyRuntimeError::new_err("Failed to create proving key")),
                                             }
@@ -331,7 +374,7 @@ fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(gen_srs, m)?)?;
     m.add_function(wrap_pyfunction!(forward, m)?)?;
     m.add_function(wrap_pyfunction!(mock, m)?)?;
-    // m.add_function(wrap_pyfunction!(prove, m)?)?;
+    m.add_function(wrap_pyfunction!(prove, m)?)?;
 
     Ok(())
 }
