@@ -9,8 +9,16 @@ use std::error::Error;
 use std::fs::File;
 use std::io::{stdin, stdout, Read, Write};
 use std::path::PathBuf;
+#[cfg(feature = "python-bindings")]
+use pyo3::{
+    exceptions::PyValueError,
+    prelude::*,
+    types::PyString,
+    conversion::{FromPyObject, PyTryFrom}
+};
 
 use crate::circuit::CheckMode;
+use crate::graph::{VarVisibility, Visibility};
 
 #[allow(missing_docs)]
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -27,6 +35,31 @@ impl std::fmt::Display for TranscriptType {
             .fmt(f)
     }
 }
+#[cfg(feature = "python-bindings")]
+/// Converts TranscriptType into a PyObject (Required for TranscriptType to be compatible with Python)
+impl IntoPy<PyObject> for TranscriptType {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            TranscriptType::Blake => "blake".to_object(py),
+            TranscriptType::Poseidon => "poseidon".to_object(py),
+            TranscriptType::EVM => "evm".to_object(py),
+        }
+    }
+}
+#[cfg(feature = "python-bindings")]
+/// Obtains TranscriptType from PyObject (Required for TranscriptType to be compatible with Python)
+impl<'source> FromPyObject<'source> for TranscriptType {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let trystr = <PyString as PyTryFrom>::try_from(ob)?;
+        let strval = trystr.to_string();
+        match strval.to_lowercase().as_str() {
+            "blake" => Ok(TranscriptType::Blake),
+            "poseidon" => Ok(TranscriptType::Poseidon),
+            "evm" => Ok(TranscriptType::EVM),
+            _ => Err(PyValueError::new_err("Invalid value for TranscriptType"))
+        }
+    }
+}
 
 #[allow(missing_docs)]
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -40,6 +73,29 @@ impl std::fmt::Display for StrategyType {
             .expect("no values are skipped")
             .get_name()
             .fmt(f)
+    }
+}
+#[cfg(feature = "python-bindings")]
+/// Converts StrategyType into a PyObject (Required for StrategyType to be compatible with Python)
+impl IntoPy<PyObject> for StrategyType {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            StrategyType::Single => "single".to_object(py),
+            StrategyType::Accum => "accum".to_object(py),
+        }
+    }
+}
+#[cfg(feature = "python-bindings")]
+/// Obtains StrategyType from PyObject (Required for StrategyType to be compatible with Python)
+impl<'source> FromPyObject<'source> for StrategyType {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let trystr = <PyString as PyTryFrom>::try_from(ob)?;
+        let strval = trystr.to_string();
+        match strval.to_lowercase().as_str() {
+            "single" => Ok(StrategyType::Single),
+            "accum" => Ok(StrategyType::Accum),
+            _ => Err(PyValueError::new_err("Invalid value for StrategyType"))
+        }
     }
 }
 
@@ -77,6 +133,17 @@ pub struct RunArgs {
     /// run sanity checks during calculations (safe or unsafe)
     #[arg(long, default_value = "safe")]
     pub check_mode: CheckMode,
+}
+
+#[allow(missing_docs)]
+impl RunArgs {
+    pub fn to_var_visibility(&self) -> VarVisibility {
+        VarVisibility {
+            input: if self.public_inputs { Visibility::Public } else { Visibility::Private },
+            params: if self.public_params { Visibility::Public } else { Visibility::Private },
+            output: if self.public_outputs { Visibility::Public } else { Visibility::Private },
+        }
+    }
 }
 
 const EZKLCONF: &str = "EZKLCONF";

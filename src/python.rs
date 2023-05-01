@@ -1,9 +1,12 @@
 use crate::circuit::CheckMode;
-use crate::commands::RunArgs;
-use crate::graph::{vector_to_quantized, Mode, Model, ModelCircuit, VarVisibility, Visibility};
-use crate::pfsys::{gen_srs as ezkl_gen_srs, prepare_data, save_params};
-// use std::env;
-use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+use crate::commands::{RunArgs, StrategyType, TranscriptType};
+use crate::execute::{create_proof_circuit_kzg, load_params_cmd};
+use crate::graph::{vector_to_quantized, Mode, Model, ModelCircuit, VarVisibility};
+use crate::pfsys::{gen_srs as ezkl_gen_srs, create_keys, prepare_data, save_params, save_vk};
+use halo2_proofs::poly::kzg::{
+    commitment::KZGCommitmentScheme,
+    strategy::{AccumulatorStrategy, SingleStrategy as KZGSingleStrategy},
+};
 use halo2_proofs::dev::MockProver;
 use halo2curves::bn256::{Bn256, Fr};
 use log::trace;
@@ -78,6 +81,7 @@ impl PyRunArgs {
             check_mode: CheckMode::SAFE,
         }
     }
+
 }
 
 /// Conversion between PyRunArgs and RunArgs
@@ -104,15 +108,8 @@ impl From<PyRunArgs> for RunArgs {
     py_run_args = None
 ))]
 fn table(model: String, py_run_args: Option<PyRunArgs>) -> Result<String, PyErr> {
-    let run_args = py_run_args.unwrap_or_else(PyRunArgs::new).into();
-
-    // use default values to initialize model
-    let visibility = VarVisibility {
-        input: Visibility::Public,
-        params: Visibility::Private,
-        output: Visibility::Public,
-    };
-
+    let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
+    let visibility: VarVisibility = run_args.to_var_visibility();
     let result = Model::<Fr>::new(model, run_args, Mode::Mock, visibility);
 
     match result {
@@ -202,18 +199,8 @@ fn mock(
 ) -> Result<bool, PyErr> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let logrows = run_args.logrows;
-
     let data = prepare_data(data);
-
-    // use default values to initialize model
-    let visibility = VarVisibility {
-        input: Visibility::Public,
-        params: Visibility::Private,
-        output: Visibility::Public,
-    };
-
-    // set EZKL
-    // env::set_var(EZKLCONF, "PYTHON");
+    let visibility = run_args.to_var_visibility();
 
     match data {
         Ok(d) => {
@@ -256,8 +243,119 @@ fn mock(
     }
 }
 
+/// runs the prover on a set of inputs
+#[pyfunction(signature = (
+    data,
+    model,
+    vk_path,
+    proof_path,
+    params_path,
+    transcript,
+    strategy,
+    py_run_args = None
+))]
+fn prove(
+    data: String,
+    model: String,
+    vk_path: PathBuf,
+    proof_path: PathBuf,
+    params_path: PathBuf,
+    transcript: TranscriptType,
+    strategy: StrategyType,
+    py_run_args: Option<PyRunArgs>
+) -> Result<bool, PyErr> {
+    let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
+    let logrows = run_args.logrows;
+    let check_mode = run_args.check_mode;
+    let data = prepare_data(data);
+    let visibility = run_args.to_var_visibility();
+
+    match data {
+        Ok(d) => {
+            let procmodel = Model::<Fr>::new(model, run_args, Mode::Prove, visibility);
+
+            match procmodel {
+                Ok(pm) => {
+                    let arcmodel: Arc<Model<Fr>> = Arc::new(pm);
+                    let circuit = ModelCircuit::<Fr>::new(&d, arcmodel);
+
+                    match circuit {
+                        Ok(c) => {
+                            let public_inputs = c.prepare_public_inputs(&d);
+
+                            match public_inputs {
+                                Ok(pi) => {
+                                    let params = load_params_cmd(params_path, logrows);
+
+                                    match params {
+                                        Ok(par) => {
+                                            let proving_key = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&c, &par);
+
+                                            match proving_key {
+                                                Ok(pk) => {
+                                                    let snark = match strategy {
+                                                        StrategyType::Single => {
+                                                            let strategy = KZGSingleStrategy::new(&par);
+                                                            match create_proof_circuit_kzg(
+                                                                c,
+                                                                &par,
+                                                                pi,
+                                                                &pk,
+                                                                transcript,
+                                                                strategy,
+                                                                check_mode
+                                                            ) {
+                                                                Ok(snark) => Ok(snark),
+                                                                Err(_) => Err(PyRuntimeError::new_err("Failed to create proof circuit single strategy")),
+                                                            }
+                                                        }
+                                                        StrategyType::Accum => {
+                                                            let strategy = AccumulatorStrategy::new(&par);
+                                                            match create_proof_circuit_kzg(
+                                                                c,
+                                                                &par,
+                                                                pi,
+                                                                &pk,
+                                                                transcript,
+                                                                strategy,
+                                                                check_mode
+                                                            ) {
+                                                                Ok(snark) => Ok(snark),
+                                                                Err(_) => Err(PyRuntimeError::new_err("Failed to create proof circuit using accumulator strategy")),
+                                                            }
+                                                        }
+                                                    };
+
+                                                    match snark?.save(&proof_path) {
+                                                        Ok(_) => {
+                                                            match save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, pk.get_vk()) {
+                                                                Ok(_) => Ok(true),
+                                                                Err(_) => Err(PyIOError::new_err("Failed to save vk to vk_path"))
+                                                            }
+                                                        }
+                                                        Err(_) => Err(PyIOError::new_err("Failed to save to proof path"))
+                                                    }
+                                                }
+                                                Err(_) => Err(PyRuntimeError::new_err("Failed to create proving key")),
+                                            }
+                                        }
+                                        Err(_) => Err(PyIOError::new_err("Failed to load params"))
+                                    }
+                                }
+                                Err(_) => Err(PyRuntimeError::new_err("Failed to prepare public inputs")),
+                            }
+                        }
+                        Err(_) => Err(PyRuntimeError::new_err("Failed to create circuit")),
+                    }
+                }
+                Err(_) => Err(PyIOError::new_err("Failed to process model")),
+            }
+        }
+        Err(_) => Err(PyIOError::new_err("Failed to load data")),
+    }
+}
+
 // TODO: Aggregate
-// TODO: Prove
 // TODO: CreateEVMVerifier
 // TODO: CreateEVMVerifierAggr
 // TODO: DeployVerifierEVM
@@ -276,6 +374,7 @@ fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(gen_srs, m)?)?;
     m.add_function(wrap_pyfunction!(forward, m)?)?;
     m.add_function(wrap_pyfunction!(mock, m)?)?;
+    m.add_function(wrap_pyfunction!(prove, m)?)?;
 
     Ok(())
 }
