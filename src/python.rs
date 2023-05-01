@@ -1,6 +1,6 @@
 use crate::circuit::CheckMode;
 use crate::commands::RunArgs;
-use crate::graph::{vector_to_quantized, Mode, Model, ModelCircuit, VarVisibility, Visibility};
+use crate::graph::{vector_to_quantized, Mode, Model, ModelCircuit, VarVisibility};
 use crate::pfsys::{gen_srs as ezkl_gen_srs, prepare_data, save_params};
 // use std::env;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
@@ -78,6 +78,7 @@ impl PyRunArgs {
             check_mode: CheckMode::SAFE,
         }
     }
+
 }
 
 /// Conversion between PyRunArgs and RunArgs
@@ -104,15 +105,8 @@ impl From<PyRunArgs> for RunArgs {
     py_run_args = None
 ))]
 fn table(model: String, py_run_args: Option<PyRunArgs>) -> Result<String, PyErr> {
-    let run_args = py_run_args.unwrap_or_else(PyRunArgs::new).into();
-
-    // use default values to initialize model
-    let visibility = VarVisibility {
-        input: Visibility::Public,
-        params: Visibility::Private,
-        output: Visibility::Public,
-    };
-
+    let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
+    let visibility: VarVisibility = run_args.to_var_visibility();
     let result = Model::<Fr>::new(model, run_args, Mode::Mock, visibility);
 
     match result {
@@ -202,18 +196,8 @@ fn mock(
 ) -> Result<bool, PyErr> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let logrows = run_args.logrows;
-
     let data = prepare_data(data);
-
-    // use default values to initialize model
-    let visibility = VarVisibility {
-        input: Visibility::Public,
-        params: Visibility::Private,
-        output: Visibility::Public,
-    };
-
-    // set EZKL
-    // env::set_var(EZKLCONF, "PYTHON");
+    let visibility = run_args.to_var_visibility();
 
     match data {
         Ok(d) => {
@@ -256,8 +240,37 @@ fn mock(
     }
 }
 
+/// runs the prover on a set of inputs
+// #[pyfunction(signature = (
+//     data,
+//     model,
+//     py_run_args = None
+// ))]
+// fn prove(
+//     data: String,
+//     model: String,
+//     vk_path: PathBuf,
+//     proof_path: PathBuf,
+//     params_path: PathBuf,
+//     transcript: TranscriptType,
+//     strategy: StrategyType,
+//     py_run_args: Option<PyRunArgs>
+// ) -> Result<bool, PyErr> {
+//     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
+//     let logrows = run_args.logrows;
+//     let data = prepare_data(data);
+//     let visibility = run_args.to_var_visibility();
+
+//     match data {
+//         Ok(d) => {
+
+//             let procmodel = Model::<Fr>::new(model, run_args, Mode::Mock, visibility);
+//         }
+//         Err(_) => Err(PyIOError::new_err("Failed to load data")),
+//     }
+// }
+
 // TODO: Aggregate
-// TODO: Prove
 // TODO: CreateEVMVerifier
 // TODO: CreateEVMVerifierAggr
 // TODO: DeployVerifierEVM
@@ -276,6 +289,7 @@ fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(gen_srs, m)?)?;
     m.add_function(wrap_pyfunction!(forward, m)?)?;
     m.add_function(wrap_pyfunction!(mock, m)?)?;
+    // m.add_function(wrap_pyfunction!(prove, m)?)?;
 
     Ok(())
 }

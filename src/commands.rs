@@ -11,6 +11,7 @@ use std::io::{stdin, stdout, Read, Write};
 use std::path::PathBuf;
 
 use crate::circuit::CheckMode;
+use crate::graph::{VarVisibility, Visibility};
 
 #[allow(missing_docs)]
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -77,6 +78,17 @@ pub struct RunArgs {
     /// run sanity checks during calculations (safe or unsafe)
     #[arg(long, default_value = "safe")]
     pub check_mode: CheckMode,
+}
+
+#[allow(missing_docs)]
+impl RunArgs {
+    pub fn to_var_visibility(&self) -> VarVisibility {
+        VarVisibility {
+            input: if self.public_inputs { Visibility::Public } else { Visibility::Private },
+            params: if self.public_params { Visibility::Public } else { Visibility::Private },
+            output: if self.public_outputs { Visibility::Public } else { Visibility::Private },
+        }
+    }
 }
 
 const EZKLCONF: &str = "EZKLCONF";
