@@ -1070,7 +1070,7 @@ pub fn rescale<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>],
-    scales: &[(usize, usize)],
+    scales: &[(usize, u128)],
     offset: &mut usize,
 ) -> Result<Vec<ValTensor<F>>, Box<dyn Error>> {
     let mut rescaled_inputs = vec![];
@@ -1524,6 +1524,54 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     Ok(assigned_min_val)
 }
 
+/// softmax layout
+pub fn multi_dim_softmax<F: PrimeField + TensorType + PartialOrd>(
+    config: &mut BaseConfig<F>,
+    region: &mut Option<&mut Region<F>>,
+    values: &[ValTensor<F>; 1],
+    input_scale: usize,
+    output_scale: usize,
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // we want this to be as small as possible so we set the output scale to 1
+    let dims = values[0].dims();
+
+    let cartesian_coord = dims[..dims.len() - 1]
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    let mut outputs = vec![];
+
+    for coord in cartesian_coord {
+        let mut sum_dims = vec![];
+        for i in 0..coord.len() {
+            sum_dims.push(coord[i]..coord[i] + 1);
+        }
+        sum_dims.push(0..dims[dims.len() - 1]);
+
+        let softmax_input = values[0].get_slice(&sum_dims)?;
+
+        outputs.push(
+            softmax(
+                config,
+                region,
+                &[softmax_input],
+                input_scale,
+                output_scale,
+                offset,
+            )?
+            .get_inner_tensor()?,
+        );
+    }
+
+    let mut res = Tensor::new(Some(&outputs), &[outputs.len()])?.combine()?;
+    res.reshape(dims);
+
+    Ok(res.into())
+}
+
 /// softmax func
 pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
@@ -1535,6 +1583,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // we want this to be as small as possible so we set the output scale to 1
     let scales = (input_scale, output_scale);
+
     // elementwise exponential
     let ex = nonlinearity(config, region, values, &LookupOp::Exp { scales }, offset)?;
 

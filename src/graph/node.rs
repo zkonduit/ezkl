@@ -149,7 +149,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
             return Ok(opkind);
         }
 
-        let mut multipliers = vec![1; inputs.len()];
+        let mut multipliers: Vec<u128> = vec![1; inputs.len()];
         let out_scales = inputs.windows(1).map(|w| w[0].out_scale).collect_vec();
         if !out_scales.windows(2).all(|w| w[0] == w[1]) {
             let max_scale = out_scales.iter().max().unwrap();
@@ -163,7 +163,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
                     let scale_diff = max_scale - input.out_scale;
                     if scale_diff > 0 {
                         let mult = scale_to_multiplier(scale_diff);
-                        multipliers[idx] = mult as usize;
+                        multipliers[idx] = mult as u128;
                         info!(
                             "------ scaled op node input {:?}: {:?} -> {:?}",
                             input.idx,
@@ -176,7 +176,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
         }
 
         // only rescale if need to
-        if multipliers.iter().sum::<usize>() > multipliers.len() {
+        if multipliers.iter().any(|&x| x > 1) {
             Ok(Box::new(crate::circuit::Rescaled {
                 inner: opkind,
                 scale: (0..inputs.len()).zip(multipliers).collect_vec(),

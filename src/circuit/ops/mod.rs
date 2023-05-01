@@ -116,7 +116,7 @@ pub struct Rescaled<F: PrimeField + TensorType + PartialOrd> {
     ///
     pub inner: Box<dyn Op<F>>,
     ///
-    pub scale: Vec<(usize, usize)>,
+    pub scale: Vec<(usize, u128)>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
@@ -150,6 +150,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
             .zip(self.scale.iter())
             .map(|(a, b)| a + crate::graph::mult_to_scale(b.1 as f32))
             .collect();
+
         Op::<F>::out_scale(&*self.inner, in_scales, _g)
     }
 

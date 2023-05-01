@@ -12,6 +12,7 @@ use halo2curves::ff::PrimeField;
 use log::{trace, warn};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
+use tract_onnx::tract_core::ops::array::Gather;
 use tract_onnx::tract_core::ops::einsum::EinSum;
 // use tract_onnx::tract_core::ops::binary::UnaryOp;
 // use tract_onnx::tract_core::ops::matmul::MatMulUnary;
@@ -111,6 +112,12 @@ fn extract_tensor_value<F: PrimeField + TensorType + PartialOrd>(
             let cast: Vec<i128> = vec.iter().map(|x| *x as i128).collect();
             const_value = Tensor::<i128>::new(Some(&cast), &dims)?;
         }
+        DatumType::Bool => {
+            // Generally a shape or hyperparam
+            let vec = input.as_slice::<bool>()?.to_vec();
+            let cast: Vec<i128> = vec.iter().map(|x| *x as i128).collect();
+            const_value = Tensor::<i128>::new(Some(&cast), &dims)?;
+        }
         _ => todo!(),
     }
 
@@ -135,6 +142,23 @@ fn load_axis_op(
 ) -> Result<AxisOp, Box<dyn std::error::Error>> {
     // Extract the slope layer hyperparams
     let op: &AxisOp = match op.downcast_ref::<AxisOp>() {
+        Some(b) => b,
+        None => {
+            return Err(Box::new(GraphError::OpMismatch(idx, name)));
+        }
+    };
+
+    Ok(op.clone())
+}
+
+/// Extracts a Gather op from an onnx node.
+fn load_gather_op(
+    op: &dyn tract_onnx::prelude::Op,
+    idx: usize,
+    name: String,
+) -> Result<Gather, Box<dyn std::error::Error>> {
+    // Extract the slope layer hyperparams
+    let op: &Gather = match op.downcast_ref::<Gather>() {
         Some(b) => b,
         None => {
             return Err(Box::new(GraphError::OpMismatch(idx, name)));
@@ -203,6 +227,38 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<Box<dyn crate::circuit::Op<F>>, Box<dyn std::error::Error>> {
     trace!("Loading node: {:?}", node);
     Ok(match node.op().name().as_ref() {
+        "Gather" => {
+            if inputs.len() != 2 {
+                return Err(Box::new(GraphError::InvalidDims(idx, "gather".to_string())));
+            };
+            let op = load_gather_op(node.op(), idx, node.op().name().to_string())?;
+            let axis = op.axis;
+
+            let boxed_op = inputs[1].clone().opkind;
+            let index: Tensor<usize> = match boxed_op
+                .as_any()
+                .downcast_ref::<crate::circuit::ops::Constant<F>>()
+            {
+                Some(c) => c
+                    .quantized
+                    .get_int_evals()?
+                    .iter()
+                    .map(|e| *e as usize)
+                    .into(),
+                None => {
+                    warn!("assuming the gather window is over a context variable");
+                    // offset by 1
+                    let index: Tensor<usize> =
+                        (0..node_output_shapes(&node)?[0].as_ref().unwrap().to_vec()[axis + 1])
+                            .into();
+                    index
+                }
+            };
+
+            inputs.pop();
+
+            Box::new(crate::circuit::ops::poly::PolyOp::Gather { dim: axis, index })
+        }
         "Const" => {
             let op = load_const(node.op(), idx, node.op().name().to_string())?;
             let quantized = extract_tensor_value::<F>(op.0.clone(), scale, public_params)?;
@@ -358,8 +414,19 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 || axes.to_string() == "k,nk->mn"
                 || axes.to_string() == "abmk,abkn->abmn"
                 || axes.to_string() == "k,nk->n"
+                || axes.to_string() == "amk,kn->mn"
+                || axes.to_string() == "amk,kn->bmn"
+                || axes.to_string() == "mbk,anbk->abmn"
+                || axes.to_string() == "abmk,abkn->mbn"
+                || axes.to_string() == "mk,kn->amn"
+                || axes.to_string() == "amk,kn->amn"
             {
-                inputs.swap(0, 1);
+                if inputs[0].out_dims.len() == 1
+                    || *inputs[1].out_dims.last().unwrap()
+                        == inputs[0].out_dims[inputs[0].out_dims.len() - 2]
+                {
+                    inputs.swap(0, 1);
+                }
                 Box::new(PolyOp::Matmul { a: None })
             } else {
                 panic!("einsum not supported")
@@ -374,7 +441,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 }
             };
 
-            if softmax_op.axes.to_vec() != vec![1] {
+            if softmax_op.axes.to_vec() != vec![inputs[0].out_dims.len()] {
                 return Err(Box::new(GraphError::InvalidDims(
                     idx,
                     "softmax".to_string(),
@@ -584,15 +651,13 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             let reshape = load_axis_op(node.op(), idx, node.op().name().to_string())?;
 
             let new_dims: Vec<usize> = match reshape {
-                AxisOp::Reshape(_, _shape_from, shape_to) => shape_to
-                    .iter()
-                    .map(|a| a.to_i64().unwrap() as usize)
-                    .collect(),
+                AxisOp::Reshape(_, _shape_from, _) => {
+                    node_output_shapes(&node)?[0].as_ref().unwrap().to_vec()
+                }
                 _ => {
                     return Err(Box::new(GraphError::MisformedParams("reshape".to_string())));
                 }
             };
-
             Box::new(PolyOp::Reshape(new_dims.to_vec()))
         }
         "Flatten" => {
@@ -600,7 +665,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             Box::new(PolyOp::Flatten(new_dims))
         }
         c => {
-            warn!("{:?} is not currently supported", c);
+            warn!("Unknown op: {}", c);
             Box::new(crate::circuit::ops::Unknown)
         }
     })

@@ -229,10 +229,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
 
         // .into_optimized()?;
 
+        let sequence_length = &mut None;
+
         for (i, id) in model.clone().inputs.iter().enumerate() {
             let input = model.node(id.node);
 
-            // add batch dim
             let mut dims = vec![];
             let extracted_dims: Vec<usize> = input.outputs[0]
                 .fact
@@ -244,8 +245,23 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                     Err(_e) => {
                         if x.to_string() == "batch_size" {
                             1
+                        } else if x.to_string() == "sequence_length" {
+                            // get user input as usize from std in
+                            if let Some(len) = sequence_length {
+                                *len
+                            } else {
+                                let mut input = String::new();
+                                info!("Enter sequence length: ");
+                                std::io::stdin()
+                                    .read_line(&mut input)
+                                    .expect("Failed to read line");
+                                let input: usize =
+                                    input.trim().parse().expect("Please type a number!");
+                                *sequence_length = Some(input);
+                                input
+                            }
                         } else {
-                            panic!("Unknown dimension: {}", x)
+                            panic!("Unknown dimension {}: {:?}", x.to_string(), x)
                         }
                     }
                 })
@@ -271,6 +287,22 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                     Err(_e) => {
                         if x.to_string() == "batch_size" {
                             1
+                        } else if x.to_string() == "sequence_length"
+                            || x.to_string() == "past_sequence_length + sequence_length"
+                        {
+                            if let Some(len) = sequence_length {
+                                *len
+                            } else {
+                                let mut input = String::new();
+                                info!("Enter sequence length: ");
+                                std::io::stdin()
+                                    .read_line(&mut input)
+                                    .expect("Failed to read line");
+                                let input: usize =
+                                    input.trim().parse().expect("Please type a number!");
+                                *sequence_length = Some(input);
+                                input
+                            }
                         } else {
                             panic!("Unknown dimension: {}", x)
                         }

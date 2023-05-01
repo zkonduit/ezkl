@@ -47,7 +47,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 ..
             } => tensor::ops::max_pool2d(&inputs[0], padding, stride, pool_dims),
             HybridOp::Min { axes, .. } => Ok(tensor::ops::min_axes(&inputs[0], axes)?),
-            HybridOp::Softmax { scales } => Ok(tensor::ops::nonlinearities::softmax(
+            HybridOp::Softmax { scales } => Ok(tensor::ops::nonlinearities::multi_dim_softmax(
                 &inputs[0], scales.0, scales.1,
             )),
         }
@@ -97,7 +97,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 axes,
                 offset,
             )?),
-            HybridOp::Softmax { scales } => Some(layouts::softmax(
+            HybridOp::Softmax { scales } => Some(layouts::multi_dim_softmax(
                 config,
                 region,
                 values[..].try_into()?,
