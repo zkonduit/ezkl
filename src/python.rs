@@ -1,5 +1,5 @@
 use crate::circuit::CheckMode;
-use crate::commands::RunArgs;
+use crate::commands::{RunArgs, StrategyType, TranscriptType};
 use crate::graph::{vector_to_quantized, Mode, Model, ModelCircuit, VarVisibility};
 use crate::pfsys::{gen_srs as ezkl_gen_srs, prepare_data, save_params};
 // use std::env;
@@ -241,34 +241,76 @@ fn mock(
 }
 
 /// runs the prover on a set of inputs
-// #[pyfunction(signature = (
-//     data,
-//     model,
-//     py_run_args = None
-// ))]
-// fn prove(
-//     data: String,
-//     model: String,
-//     vk_path: PathBuf,
-//     proof_path: PathBuf,
-//     params_path: PathBuf,
-//     transcript: TranscriptType,
-//     strategy: StrategyType,
-//     py_run_args: Option<PyRunArgs>
-// ) -> Result<bool, PyErr> {
-//     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
-//     let logrows = run_args.logrows;
-//     let data = prepare_data(data);
-//     let visibility = run_args.to_var_visibility();
+#[pyfunction(signature = (
+    data,
+    model,
+    py_run_args = None
+))]
+fn prove(
+    data: String,
+    model: String,
+    vk_path: PathBuf,
+    proof_path: PathBuf,
+    params_path: PathBuf,
+    transcript: TranscriptType,
+    strategy: StrategyType,
+    py_run_args: Option<PyRunArgs>
+) -> Result<bool, PyErr> {
+    let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
+    let logrows = run_args.logrows;
+    let data = prepare_data(data);
+    let visibility = run_args.to_var_visibility();
 
-//     match data {
-//         Ok(d) => {
+    match data {
+        Ok(d) => {
+            let procmodel = Model::<Fr>::new(model, run_args, Mode::Prove, visibility);
 
-//             let procmodel = Model::<Fr>::new(model, run_args, Mode::Mock, visibility);
-//         }
-//         Err(_) => Err(PyIOError::new_err("Failed to load data")),
-//     }
-// }
+            match procmodel {
+                Ok(pm) => {
+                    let arcmodel: Arc<Model<Fr>> = Arc::new(pm);
+                    let circuit = ModelCircuit::<Fr>::new(&d, arcmodel);
+
+                    match circuit {
+                        Ok(c) => {
+                            let public_inputs = c.prepare_public_inputs(&d);
+
+                            match public_inputs {
+                                Ok(pi) => {
+                                    let params = load_params_cmd(params_path, logrows);
+
+                                    match params {
+                                        Ok(par) {
+                                            let proving_key = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&c, &par);
+
+                                            match proving_key {
+                                                Ok(pk) => {
+                                                    let snark = match strategy {
+                                                        StrategyType::Single => {
+
+                                                        }
+                                                        StrategyType::Accum => {
+
+                                                        }
+                                                    };
+                                                }
+                                                Err(_) => Err(PyRuntimeError::new_err("Failed to create proving key")),
+                                            }
+                                        }
+                                        Err(_) => Err(PyIOError::new_err("Failed to load params"))
+                                    }
+                                }
+                                Err(_) => Err(PyRuntimeError::new_err("Failed to prepare public inputs")),
+                            }
+                        }
+                        Err(_) => Err(PyRuntimeError::new_err("Failed to create circuit")),
+                    }
+                }
+                Err(_) => Err(PyIOError::new_err("Failed to process model")),
+            }
+        }
+        Err(_) => Err(PyIOError::new_err("Failed to load data")),
+    }
+}
 
 // TODO: Aggregate
 // TODO: CreateEVMVerifier

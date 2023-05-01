@@ -28,6 +28,31 @@ impl std::fmt::Display for TranscriptType {
             .fmt(f)
     }
 }
+#[cfg(feature = "python-bindings")]
+/// Converts TranscriptType into a PyObject (Required for TranscriptType to be compatible with Python)
+impl IntoPy<PyObject> for TranscriptType {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            TranscriptType::Blake => "blake".to_object(py),
+            TranscriptType::Poseidon => "poseidon".to_object(py),
+            TranscriptType::EVM => "evm".to_object(py),
+        }
+    }
+}
+#[cfg(feature = "python-bindings")]
+/// Obtains TranscriptType from PyObject (Required for TranscriptType to be compatible with Python)
+impl<'source> FromPyObject<'source> for TranscriptType {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let trystr = <PyString as PyTryFrom>::try_from(ob)?;
+        let strval = trystr.to_string();
+        match strval.to_lowercase().as_str() {
+            "blake" => Ok(TranscriptType::Blake),
+            "poseidon" => Ok(TranscriptType::Poseidon),
+            "evm" => Ok(TranscriptType::EVM),
+            _ => Err(PyValueError::new_err("Invalid value for TranscriptType"))
+        }
+    }
+}
 
 #[allow(missing_docs)]
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -41,6 +66,29 @@ impl std::fmt::Display for StrategyType {
             .expect("no values are skipped")
             .get_name()
             .fmt(f)
+    }
+}
+#[cfg(feature = "python-bindings")]
+/// Converts StrategyType into a PyObject (Required for StrategyType to be compatible with Python)
+impl IntoPy<PyObject> for StrategyType {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            StrategyType::Single => "single".to_object(py),
+            StrategyType::Accum => "accum".to_object(py),
+        }
+    }
+}
+#[cfg(feature = "python-bindings")]
+/// Obtains StrategyType from PyObject (Required for StrategyType to be compatible with Python)
+impl<'source> FromPyObject<'source> for StrategyType {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let trystr = <PyString as PyTryFrom>::try_from(ob)?;
+        let strval = trystr.to_string();
+        match strval.to_lowercase().as_str() {
+            "single" => Ok(StrategyType::Single),
+            "accum" => Ok(StrategyType::Accum),
+            _ => Err(PyValueError::new_err("Invalid value for StrategyType"))
+        }
     }
 }
 
