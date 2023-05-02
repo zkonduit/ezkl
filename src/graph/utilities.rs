@@ -414,7 +414,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             {
                 Some(c) => {
                     if c.values.len() == 1 {
-                        quantize_float(&c.values[0], 0., inputs[1].out_scale)
+                        quantize_float(&c.values[0], 0., inputs[1].out_scale)? as f32
                     } else {
                         todo!()
                     }
