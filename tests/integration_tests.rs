@@ -583,7 +583,7 @@ fn kzg_aggr_prove_and_verify(example_name: String) {
             "aggregate",
             "--app-logrows=17",
             &format!(
-                "--circuit-params-path={}/{}.params",
+                "--circuit-params-paths={}/{}.params",
                 TEST_DIR.path().to_str().unwrap(),
                 example_name
             ),
@@ -685,7 +685,7 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
             "aggregate",
             "--app-logrows=17",
             &format!(
-                "--circuit-params-path={}/{}.params",
+                "--circuit-params-paths={}/{}.params",
                 TEST_DIR.path().to_str().unwrap(),
                 example_name
             ),
@@ -774,7 +774,7 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
 fn kzg_prove_and_verify(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
-            "--bits=2",
+            "--bits=16",
             "-K=17",
             "prove",
             "-D",
@@ -879,7 +879,6 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
         "create-evm-verifier",
         "-D",
         input_arg.as_str(),
-        "--circuit-params-path",
         circuit_params.as_str(),
         "--deployment-code-path",
         code_arg.as_str(),

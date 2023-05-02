@@ -128,7 +128,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             .collect();
 
         let set: HashSet<_> = lookup_ops.drain(..).collect(); // dedup
-        lookup_ops.extend(set.into_iter());
+        lookup_ops.extend(set.into_iter().sorted());
 
         Ok(ModelParams {
             run_args: self.run_args.clone(),
