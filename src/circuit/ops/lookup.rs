@@ -42,6 +42,9 @@ impl LookupOp {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         match &self {
@@ -172,7 +175,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                     scale_to_multiplier(global_scale) as usize,
                 ),
             }),
-            LookupOp::GreaterThan { .. } => Box::new(self.clone()),
+            LookupOp::GreaterThan { a } => Box::new(LookupOp::GreaterThan {
+                a: utils::F32(a.0 * scale_to_multiplier(inputs_scale[0])),
+            }),
         }
     }
 

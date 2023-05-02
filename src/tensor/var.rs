@@ -291,6 +291,8 @@ impl VarTensor {
     Ok(res)
     }
 
+    
+
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor.
     pub fn assign_with_duplication<F: PrimeField + TensorType + PartialOrd>(
         &self,
@@ -299,7 +301,8 @@ impl VarTensor {
         values: &ValTensor<F>,
         check_mode: &CheckMode
     ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
-        
+
+        let mut prev_cell = None;
 
         match values {
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
@@ -309,18 +312,21 @@ impl VarTensor {
                 let mut res: ValTensor<F> = if let Some(region) = region { 
                     v.enum_map(|coord, k| {
                     let (x, y) = self.cartesian_coord(offset + coord);
-                    if matches!(check_mode, CheckMode::SAFE) && x > 0 && y == 0 {
+                    if matches!(check_mode, CheckMode::SAFE) && coord > 0 && y == 0 {
                         // assert that duplication occurred correctly
                         assert_eq!(Into::<i32>::into(k.clone()), Into::<i32>::into(v[coord - 1].clone()));
                     };
+
                    
-                    match k {
+                    let cell = match k {
                         ValType::Value(v) => match &self {
                             VarTensor::Fixed { inner: fixed, .. } => {
                                 region.assign_fixed(|| "k", fixed[x], y, || v)
+
                             }
                             VarTensor::Advice { inner: advices, .. } => {
                                 region.assign_advice(|| "k", advices[x], y, || v)
+                                
                             }, 
                             _ => unimplemented!(),
                         },
@@ -345,7 +351,28 @@ impl VarTensor {
                         ValType::Constant(v) => {
                             self.assign_constant(*region, offset + coord, v)
                         }
+                    }; 
+                    match cell {
+                        Ok(c) => {
+                        if y == (self.col_size() - 1)   {
+                            // if we are at the end of the column, we need to copy the cell to the next column
+                            prev_cell = Some(c.clone());
+                        } else if coord > 0 && y == 0 {
+                            if let Some(prev_cell) = prev_cell.as_ref() {
+                                region.constrain_equal(prev_cell.cell(),c.cell())?;
+                            } else {
+                                error!("Error assigning copy-constraining previous value: {:?}", (x,y));
+                                return Err(halo2_proofs::plonk::Error::Synthesis);
+                            }
+                        }
+                         Ok(c) 
+                        },
+                        Err(e) => {
+                            error!("Error assigning value: {:?}", e);
+                            return Err(e);
+                        }
                     }
+              
                 })?.into()} else {
                     v.into()
                 }; 

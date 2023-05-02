@@ -1,12 +1,11 @@
-use super::utilities::{node_output_shapes, scale_to_multiplier};
+use super::utilities::node_output_shapes;
 use crate::circuit::Op;
 use crate::graph::new_op_from_onnx;
 use crate::graph::GraphError;
 use crate::tensor::TensorType;
 use anyhow::Result;
 use halo2curves::ff::PrimeField;
-use itertools::Itertools;
-use log::{info, trace};
+use log::trace;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
@@ -79,6 +78,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
 
         // load the node inputs
         let mut inputs = vec![];
+
         for i in node.inputs.iter_mut() {
             match other_nodes.get(&i.node) {
                 Some(n) => inputs.push(n.clone()),
@@ -87,10 +87,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
         }
 
         let mut opkind = new_op_from_onnx(idx, scale, public_params, node.clone(), &mut inputs)?; // parses the op name
-
-        let inputs_to_scale = opkind.requires_homogenous_input_scales();
-        // creates a rescaled op if the inputs are not homogenous
-        opkind = Self::homogenize_input_scales(opkind, inputs.clone(), inputs_to_scale)?;
 
         // rescale the inputs if necessary to get consistent fixed points
         let in_scales: Vec<u32> = inputs.iter().map(|i| i.out_scale).collect();
@@ -136,52 +132,5 @@ impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
             out_dims,
             out_scale,
         })
-    }
-
-    /// Ensures all inputs to a node have the same fixed point denominator.
-    fn homogenize_input_scales(
-        opkind: Box<dyn Op<F>>,
-        inputs: Vec<Self>,
-        inputs_to_scale: Vec<usize>,
-    ) -> Result<Box<dyn Op<F>>, Box<dyn Error>> {
-        if inputs_to_scale.is_empty() {
-            return Ok(opkind);
-        }
-
-        let mut multipliers = vec![1; inputs.len()];
-        let out_scales = inputs.windows(1).map(|w| w[0].out_scale).collect_vec();
-        if !out_scales.windows(2).all(|w| w[0] == w[1]) {
-            let max_scale = out_scales.iter().max().unwrap();
-            let _ = inputs
-                .iter()
-                .enumerate()
-                .map(|(idx, input)| {
-                    if !inputs_to_scale.contains(&idx) {
-                        return;
-                    }
-                    let scale_diff = max_scale - input.out_scale;
-                    if scale_diff > 0 {
-                        let mult = scale_to_multiplier(scale_diff);
-                        multipliers[idx] = mult as usize;
-                        info!(
-                            "------ scaled op node input {:?}: {:?} -> {:?}",
-                            input.idx,
-                            input.out_scale,
-                            input.out_scale + scale_diff
-                        );
-                    }
-                })
-                .collect_vec();
-        }
-
-        // only rescale if need to
-        if multipliers.iter().sum::<usize>() > multipliers.len() {
-            Ok(Box::new(crate::circuit::Rescaled {
-                inner: opkind,
-                scale: (0..inputs.len()).zip(multipliers).collect_vec(),
-            }))
-        } else {
-            Ok(opkind)
-        }
     }
 }

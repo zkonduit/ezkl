@@ -20,7 +20,7 @@ use tract_onnx::prelude::InferenceModelExt;
 use tract_onnx::prelude::TypedFact;
 use tract_onnx::prelude::TypedOp;
 use tract_onnx::tract_hir::internal::Factoid;
-use tract_onnx::tract_hir::internal::GenericFactoid;
+// use tract_onnx::tract_hir::internal::GenericFactoid;
 //use clap::Parser;
 use core::panic;
 use halo2_proofs::{
@@ -212,33 +212,107 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         public_params: bool,
     ) -> Result<(Graph<TypedFact, Box<dyn TypedOp>>, BTreeMap<usize, Node<F>>), Box<dyn Error>>
     {
-        let mut model = tract_onnx::onnx()
-            .model_for_path(path)
-            .map_err(|_| GraphError::ModelLoad)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut model = tract_onnx::onnx().model_for_path(path).map_err(|e| {
+            error!("Error loading model: {}", e);
+            GraphError::ModelLoad
+        })?;
+
+        #[cfg(target_arch = "wasm32")]
+        let mut model = {
+            let mut file = std::fs::File::open(path)?;
+            tract_onnx::onnx().model_for_read(&mut file).map_err(|e| {
+                error!("Error loading model: {}", e);
+                GraphError::ModelLoad
+            })?
+        };
+
         // .into_optimized()?;
+
+        let sequence_length = &mut None;
 
         for (i, id) in model.clone().inputs.iter().enumerate() {
             let input = model.node(id.node);
 
-            // add batch dim
             let mut dims = vec![];
             let extracted_dims: Vec<usize> = input.outputs[0]
                 .fact
                 .shape
                 .dims()
                 .filter_map(|x| x.concretize())
-                .map(|x| x.to_i64().unwrap() as usize)
+                .map(|x| match x.to_i64() {
+                    Ok(x) => x as usize,
+                    Err(_e) => {
+                        if x.to_string() == "batch_size" {
+                            1
+                        } else if x.to_string() == "sequence_length" {
+                            // get user input as usize from std in
+                            if let Some(len) = sequence_length {
+                                *len
+                            } else {
+                                let mut input = String::new();
+                                info!("Enter sequence length: ");
+                                std::io::stdin()
+                                    .read_line(&mut input)
+                                    .expect("Failed to read line");
+                                let input: usize =
+                                    input.trim().parse().expect("Please type a number!");
+                                *sequence_length = Some(input);
+                                input
+                            }
+                        } else {
+                            panic!("Unknown dimension {}: {:?}", x.to_string(), x)
+                        }
+                    }
+                })
                 .collect();
 
-            // if we have unknown / unspecified dims, add a batch dim of 1
-            if let GenericFactoid::Only(elem) = input.outputs[0].fact.shape.rank() {
-                if (elem as usize) > extracted_dims.len() {
-                    dims.push(1);
-                }
-            };
             dims.extend(extracted_dims);
 
             model = model.with_input_fact(i, f32::fact(dims).into())?;
+        }
+
+        for (i, id) in model.clone().outputs.iter().enumerate() {
+            let output = model.node(id.node);
+
+            // add batch dim
+            let mut dims = vec![];
+            let extracted_dims: Vec<usize> = output.outputs[0]
+                .fact
+                .shape
+                .dims()
+                .filter_map(|x| x.concretize())
+                .map(|x| match x.to_i64() {
+                    Ok(x) => x as usize,
+                    Err(_e) => {
+                        if x.to_string() == "batch_size" {
+                            1
+                        } else if x.to_string() == "sequence_length"
+                            || x.to_string() == "past_sequence_length + sequence_length"
+                        {
+                            if let Some(len) = sequence_length {
+                                *len
+                            } else {
+                                let mut input = String::new();
+                                info!("Enter sequence length: ");
+                                std::io::stdin()
+                                    .read_line(&mut input)
+                                    .expect("Failed to read line");
+                                let input: usize =
+                                    input.trim().parse().expect("Please type a number!");
+                                *sequence_length = Some(input);
+                                input
+                            }
+                        } else {
+                            panic!("Unknown dimension: {}", x)
+                        }
+                    }
+                })
+                .collect();
+
+            dims.extend(extracted_dims);
+
+            model = model.with_output_fact(i, f32::fact(dims).into())?;
         }
         // Note: do not optimize the model, as the layout will depend on underlying hardware
         let model = model.into_typed()?.into_decluttered()?;
@@ -248,6 +322,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             let n = Node::<F>::new(n.clone(), &mut nodes, scale, public_params, i)?;
             nodes.insert(i, n);
         }
+
+        nodes = nodes
+            .iter()
+            .filter(|(_, node)| {
+                node.opkind
+                    .as_any()
+                    .downcast_ref::<crate::circuit::ops::Constant<F>>()
+                    .is_none()
+            })
+            .map(|(idx, node)| (*idx, node.clone()))
+            .collect();
 
         debug!("\n {}", model);
 
