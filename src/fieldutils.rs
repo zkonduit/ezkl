@@ -1,7 +1,6 @@
 use halo2_proofs::arithmetic::Field;
 /// Utilities for converting from Halo2 PrimeField types to integers (and vice-versa).
 use halo2curves::ff::PrimeField;
-use log::warn;
 
 /// Converts an i32 to a PrimeField element.
 pub fn i32_to_felt<F: PrimeField>(x: i32) -> F {
@@ -13,18 +12,10 @@ pub fn i32_to_felt<F: PrimeField>(x: i32) -> F {
 }
 
 /// Converts an i32 to a PrimeField element.
-pub fn i128_to_felt<F: PrimeField>(mut x: i128) -> F {
+pub fn i128_to_felt<F: PrimeField>(x: i128) -> F {
     if x >= 0 {
-        if x >= i64::MAX.into() {
-            warn!("very large value for i128_to_felt, setting to 0 for stability");
-            x = 0
-        }
         F::from_u128(x as u128)
     } else {
-        if x <= i64::MIN.into() {
-            warn!("very large negative value for i128_to_felt, setting to 0 for stability");
-            x = 0;
-        }
         -F::from_u128((-x) as u128)
     }
 }

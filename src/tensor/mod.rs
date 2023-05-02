@@ -700,37 +700,6 @@ impl<T: Clone + TensorType> Tensor<T> {
         Ok(())
     }
 
-    /// Concats tensors along an axis
-    /// ```
-    /// use ezkl_lib::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 2]), &[2]).unwrap();
-    /// let mut b = Tensor::<i32>::new(Some(&[3, 4]), &[2]).unwrap();
-    /// let mut c = Tensor::<i32>::new(Some(&[5, 6]), &[2]).unwrap();
-    /// let mut expected = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
-    /// let mut d = a.concat(&[b, c], 1).unwrap();
-    /// assert_eq!(d, expected);
-    /// ```
-    pub fn concat(&self, others: &[Self], axis: usize) -> Result<Self, TensorError> {
-        let mut dims = self.dims().to_vec();
-        let mut inner = self.inner.clone();
-        for t in others {
-            if t.dims().len() != self.dims().len() {
-                return Err(TensorError::DimError);
-            }
-            for i in 0..t.dims().len() {
-                if i != axis {
-                    if t.dims()[i] != self.dims()[i] {
-                        return Err(TensorError::DimError);
-                    }
-                } else {
-                    dims[i] += t.dims()[i];
-                }
-            }
-            inner.extend(t.inner.clone());
-        }
-        Tensor::new(Some(&inner), &dims)
-    }
-
     /// Adds a row of ones
     /// ```
     /// use ezkl_lib::tensor::Tensor;

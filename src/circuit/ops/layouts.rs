@@ -529,8 +529,6 @@ pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let (mut a, mut b) = (values[0].clone(), values[1].clone());
-    println!("a: {:?}", a.dims());
-    println!("b: {:?}", b.dims());
 
     if a.dims().len() == 1 {
         a.reshape(&[1, a.dims()[0]])?;

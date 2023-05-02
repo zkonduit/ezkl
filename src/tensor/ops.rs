@@ -1073,6 +1073,10 @@ pub mod nonlinearities {
         // we want this to be as small as possible so we set the output scale to 1
         let dims = a.dims();
 
+        if dims.len() == 1 {
+            return softmax(a, scale_input, scale_output);
+        }
+
         let cartesian_coord = dims[..dims.len() - 1]
             .iter()
             .map(|x| 0..*x)
