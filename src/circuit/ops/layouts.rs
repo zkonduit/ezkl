@@ -1221,56 +1221,10 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
     Ok(output)
 }
 
-// Same constraints as the range_check layout but with a lookup table w/o BaseOp::Range
-// TODO: Add documentation
-#[allow(missing_docs)]
-pub fn range_check_abs<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
-    region: &mut Option<&mut Region<F>>,
-    values: &[ValTensor<F>; 2],
-    offset: &mut usize,
-    tol: i32,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
 
-    // calculate the difference between the values
-    let mut diff = pairwise(
-        config,
-        region,
-        &values,
-        offset,
-        BaseOp::Sub,
-    )?;
-
-    // apply the LookupOp::GreaterThan operation to check if the lower bound difference is within the tolerance
-    let _ = nonlinearity(
-        config,
-        region,
-        &[diff.clone()],
-        &LookupOp::GreaterThan { a: utils::F32((-tol - 1) as f32) },
-        offset,
-    )?;
-    
-    // negate the differences
-    diff = neg(
-        config,
-        region,
-        &[diff.clone()],
-        offset
-    )?;
-
-    // apply the LookupOp::GreaterThan operation to check if the upper bound difference is within the tolerance
-    nonlinearity(
-        config,
-        region,
-        &[diff.clone()],
-        &LookupOp::GreaterThan { a: utils::F32((-tol - 1) as f32) },
-        offset,
-    )
-}
-
-// Layout for percent error range check
-// TODO: Add documentation
-#[allow(missing_docs)]
+/// Checks that the percent error between the expected public output and the actual output value
+/// is within the percent error expressed by the `tol` input, where `tol == 1.0` means the percent
+/// error tolerance is 1 percent.
 pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
@@ -1285,7 +1239,6 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
         .map(|x| x.abs())
         .max()
         .ok_or("The expected output tensor must have at least one element")?;
-
 
     // Calculate the difference between the expected output and actual output
     let diff = pairwise(
@@ -1309,7 +1262,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     let product = pairwise(config, region, &[diff, recip], offset, BaseOp::Mult)?;
 
     // Use the greater than look up table to check if the percent error is within the tolerance for lower bound
-    let _ = nonlinearity(
+    nonlinearity(
         config,
         region,
         &[product.clone()],

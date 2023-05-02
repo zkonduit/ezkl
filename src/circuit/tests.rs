@@ -1508,7 +1508,118 @@ mod rangecheck {
     }
 }
 
-// TODO: Write tests for test_range_check_percent.
+#[cfg(test)]
+mod rangecheckpercent {
+
+    use crate::tensor::Tensor;
+    use halo2_proofs::{
+        circuit::{Layouter, SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::{Circuit, ConstraintSystem, Error},
+    };
+    use halo2curves::pasta::Fp;
+    use crate::circuit::Tolerance;
+
+    const RANGE: f32 = 0.1; // 0.1 percent error tolerance
+    const K: usize = 8;
+    const LEN: usize = 4;
+
+    use super::*;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
+        input: ValTensor<F>,
+        output: ValTensor<F>,
+    }
+
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(
+                                &mut Some(&mut region),
+                                &[self.input.clone(), self.output.clone()],
+                                &mut 0,
+                                Box::new(PolyOp::RangeCheck(Tolerance::Percentage { val: RANGE})),
+                            )
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn test_range_check_percent() {
+        let k = 4;
+
+        // Successful cases
+        {
+            let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(2500_u64))]), &[1]).unwrap();
+            let out = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(2501_u64))]), &[1]).unwrap();
+            let circuit = MyCircuit::<Fp> {
+                input: ValTensor::from(inp),
+                output: ValTensor::from(out)
+            };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            prover.assert_satisfied();
+        }
+        {
+            let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(5000_u64))]), &[1]).unwrap();
+            let out = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(5001_u64))]), &[1]).unwrap();
+            let circuit = MyCircuit::<Fp> {
+                input: ValTensor::from(inp),
+                output: ValTensor::from(out)
+            };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            prover.assert_satisfied();
+        }
+
+        // Unsuccessful cases
+        {
+            let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(1000_u64))]), &[1]).unwrap();
+            let out = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(1002_u64))]), &[1]).unwrap();
+            let circuit = MyCircuit::<Fp> {
+                input: ValTensor::from(inp),
+                output: ValTensor::from(out)
+            };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            match prover.verify() {
+                Ok(_) => {
+                    assert!(false)
+                }
+                Err(_) => {
+                    assert!(true)
+                }
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 mod relu {
