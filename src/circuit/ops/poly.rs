@@ -93,47 +93,6 @@ impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {
     }
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {
-    fn homogenize_input_scales(
-        &self,
-        input_scales: Vec<u32>,
-        inputs_to_scale: Vec<usize>,
-    ) -> Result<Box<dyn Op<F>>, Box<dyn Error>> {
-        if inputs_to_scale.is_empty() {
-            return Ok(Box::new(self.clone()));
-        }
-
-        let mut multipliers: Vec<u128> = vec![1; input_scales.len()];
-        if !input_scales.windows(2).all(|w| w[0] == w[1]) {
-            let max_scale = input_scales.iter().max().unwrap();
-            let _ = input_scales
-                .iter()
-                .enumerate()
-                .map(|(idx, input_scale)| {
-                    if !inputs_to_scale.contains(&idx) {
-                        return;
-                    }
-                    let scale_diff = max_scale - input_scale;
-                    if scale_diff > 0 {
-                        let mult = scale_to_multiplier(scale_diff);
-                        multipliers[idx] = mult as u128;
-                    }
-                })
-                .collect_vec();
-        }
-
-        // only rescale if need to
-        if multipliers.iter().any(|&x| x > 1) {
-            Ok(Box::new(crate::circuit::Rescaled {
-                inner: Box::new(self.clone()),
-                scale: (0..input_scales.len()).zip(multipliers).collect_vec(),
-            }))
-        } else {
-            Ok(Box::new(self.clone()))
-        }
-    }
-}
-
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     fn as_any(&self) -> &dyn Any {
         self
