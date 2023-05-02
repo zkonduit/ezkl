@@ -201,9 +201,9 @@ pub enum Commands {
     /// Aggregates proofs :)
     #[command(arg_required_else_help = true)]
     Aggregate {
-        /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
-        model: PathBuf,
+        /// The path to the params files.
+        #[arg(long)]
+        circuit_params_paths: Vec<PathBuf>,
         ///the logrows used when generating the snarks we're aggregating
         #[arg(long)]
         app_logrows: u32,
@@ -248,9 +248,12 @@ pub enum Commands {
         /// The path to the desired output file
         #[arg(long)]
         proof_path: PathBuf,
-        /// The transcript type
+        /// The parameter path
         #[arg(long)]
         params_path: PathBuf,
+        /// The path to save circuit params to
+        #[arg(long)]
+        circuit_params_path: PathBuf,
         #[arg(
             long,
             require_equals = true,
@@ -277,12 +280,12 @@ pub enum Commands {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long)]
         data: String,
-        /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
-        model: PathBuf,
         /// The path to load the desired params file
         #[arg(long)]
         params_path: PathBuf,
+        /// The path to save circuit params to
+        #[arg(long)]
+        circuit_params_path: PathBuf,
         /// The path to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
@@ -354,9 +357,9 @@ pub enum Commands {
     /// Verifies a proof, returning accept or reject
     #[command(arg_required_else_help = true)]
     Verify {
-        /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
-        model: PathBuf,
+        /// The path to save circuit params to
+        #[arg(long)]
+        circuit_params_path: PathBuf,
         /// The path to the proof file
         #[arg(long)]
         proof_path: PathBuf,

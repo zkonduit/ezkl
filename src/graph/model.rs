@@ -1,6 +1,8 @@
 use super::node::*;
 use super::vars::*;
 use super::GraphError;
+use super::ModelParams;
+use crate::circuit::lookup::LookupOp;
 use crate::circuit::ops::poly::PolyOp;
 use crate::circuit::BaseConfig as PolyConfig;
 use crate::circuit::Op;
@@ -31,6 +33,7 @@ use itertools::Itertools;
 use log::error;
 use log::{debug, info, trace};
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::error::Error;
 use std::path::Path;
 use tabled::Table;
@@ -103,6 +106,37 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         };
 
         Ok(om)
+    }
+
+    ///
+    pub fn gen_params(&self) -> Result<ModelParams, Box<dyn Error>> {
+        let instance_shapes = self.instance_shapes();
+        // this is the total number of variables we will need to allocate
+        // for the circuit
+        let num_constraints = if let Some(num_constraints) = self.run_args.allocated_constraints {
+            num_constraints
+        } else {
+            self.dummy_layout(&self.input_shapes()).unwrap()
+        };
+
+        // extract the requisite lookup ops from the model
+        let mut lookup_ops: Vec<LookupOp> = self
+            .nodes
+            .iter()
+            .map(|(_, n)| n.opkind.required_lookups())
+            .flatten()
+            .collect();
+
+        let set: HashSet<_> = lookup_ops.drain(..).collect(); // dedup
+        lookup_ops.extend(set.into_iter());
+
+        Ok(ModelParams {
+            run_args: self.run_args.clone(),
+            visibility: self.visibility.clone(),
+            instance_shapes,
+            num_constraints,
+            required_lookups: lookup_ops,
+        })
     }
 
     /// Runs a forward pass on sample data !
@@ -350,15 +384,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             Commands::Table { model } | Commands::Mock { model, .. } => {
                 Model::new(model, cli.args, Mode::Mock, visibility)
             }
-            Commands::Prove { model, .. }
-            | Commands::Verify { model, .. }
-            | Commands::Aggregate { model, .. } => {
-                Model::new(model, cli.args, Mode::Prove, visibility)
-            }
-            #[cfg(not(target_arch = "wasm32"))]
-            Commands::CreateEVMVerifier { model, .. } => {
-                Model::new(model, cli.args, Mode::Prove, visibility)
-            }
+            Commands::Prove { model, .. } => Model::new(model, cli.args, Mode::Prove, visibility),
             #[cfg(feature = "render")]
             Commands::RenderCircuit { model, .. } => {
                 Model::new(model, cli.args, Mode::Table, visibility)
@@ -380,9 +406,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// * `meta` - Halo2 ConstraintSystem.
     /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure all the nodes loaded in `self.nodes`.
     pub fn configure(
-        &self,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
+        run_args: RunArgs,
+        required_lookups: Vec<LookupOp>,
     ) -> Result<PolyConfig<F>, Box<dyn Error>> {
         info!("configuring model");
 
@@ -390,45 +417,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             meta,
             vars.advices[0..2].try_into()?,
             &vars.advices[2],
-            self.run_args.check_mode,
-            self.run_args.tolerance as i32,
+            run_args.check_mode,
+            run_args.tolerance as i32,
         );
 
-        let lookup_ops: BTreeMap<&usize, &Node<F>> = self
-            .nodes
-            .iter()
-            .filter(|(_, n)| n.opkind.required_lookups().len() > 0)
-            .collect();
-
-        for node in lookup_ops.values() {
-            self.conf_lookup(&mut base_gate, node, meta, vars)?;
+        for op in required_lookups {
+            let input = &vars.advices[0];
+            let output = &vars.advices[1];
+            base_gate.configure_lookup(meta, input, output, run_args.bits, &op)?;
         }
 
         Ok(base_gate)
-    }
-
-    /// Configures a lookup table based operation. These correspond to operations that are represented in
-    /// the `circuit::eltwise` module.
-    /// # Arguments
-    ///
-    /// * `node` - The [Node] must represent a lookup based op.
-    /// * `meta` - Halo2 ConstraintSystem.
-    /// * `vars` - [ModelVars] for the model.
-    fn conf_lookup(
-        &self,
-        config: &mut PolyConfig<F>,
-        node: &Node<F>,
-        meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars<F>,
-    ) -> Result<(), Box<dyn Error>> {
-        let input = &vars.advices[0];
-        let output = &vars.advices[1];
-
-        for op in node.opkind.required_lookups() {
-            config.configure_lookup(meta, input, output, self.run_args.bits, &op)?;
-        }
-
-        Ok(())
     }
 
     /// Assigns values to the regions created when calling `configure`.
