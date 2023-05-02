@@ -5,7 +5,7 @@ use crate::eth::{
     deploy_verifier, fix_verifier_sol, get_ledger_signing_provider, get_provider,
     get_wallet_signing_provider, send_proof, verify_proof_via_solidity,
 };
-use crate::graph::{vector_to_quantized, Model, ModelCircuit, ModelParams};
+use crate::graph::{quantize_float, Model, ModelCircuit, ModelParams};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::{aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier};
@@ -33,6 +33,7 @@ use log::warn;
 use log::{info, trace};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
@@ -346,8 +347,11 @@ fn forward(
     // quantize the supplied data using the provided scale.
     let mut model_inputs = vec![];
     for v in data.input_data.iter() {
-        let t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, args.scale)?;
-        model_inputs.push(t);
+        let t: Vec<i128> = v
+            .par_iter()
+            .map(|x| quantize_float(x, 0.0, args.scale).unwrap())
+            .collect();
+        model_inputs.push(t.into_iter().into());
     }
 
     let res = Model::<Fr>::forward(model, &model_inputs, args)?;

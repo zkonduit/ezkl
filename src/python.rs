@@ -1,7 +1,7 @@
 use crate::circuit::CheckMode;
 use crate::commands::{RunArgs, StrategyType, TranscriptType};
 use crate::execute::{create_proof_circuit_kzg, load_params_cmd};
-use crate::graph::{vector_to_quantized, Mode, Model, ModelCircuit, VarVisibility};
+use crate::graph::{quantize_float, Mode, Model, ModelCircuit, VarVisibility};
 use crate::pfsys::{gen_srs as ezkl_gen_srs, create_keys, prepare_data, save_params, save_vk};
 use halo2_proofs::poly::kzg::{
     commitment::KZGCommitmentScheme,
@@ -10,10 +10,11 @@ use halo2_proofs::poly::kzg::{
 use halo2_proofs::dev::MockProver;
 use halo2curves::bn256::{Bn256, Fr};
 use log::trace;
-use pyo3::exceptions::{PyIOError, PyRuntimeError, PyValueError};
+use pyo3::exceptions::{PyIOError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3_log;
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{fs::File, path::PathBuf, sync::Arc};
 use tabled::Table;
 
@@ -144,25 +145,31 @@ fn forward(
     py_run_args: Option<PyRunArgs>
 ) -> PyResult<()> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
-    let data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
+    let mut data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
 
-    let mut new_data = data;
     let mut model_inputs = vec![];
     // quantize the supplied data using the provided scale.
-    for v in new_data.input_data.iter() {
-        match vector_to_quantized(v, &Vec::from([v.len()]), 0.0, run_args.scale) {
-            Ok(t) => model_inputs.push(t),
-            Err(_) => return Err(PyValueError::new_err("Failed to quantize vector")),
-        }
+    // for v in new_data.input_data.iter() {
+    //     match vector_to_quantized(v, &Vec::from([v.len()]), 0.0, run_args.scale) {
+    //         Ok(t) => model_inputs.push(t),
+    //         Err(_) => return Err(PyValueError::new_err("Failed to quantize vector")),
+    //     }
+    // }
+    for v in data.input_data.iter() {
+        let t: Vec<i128> = v
+            .par_iter()
+            .map(|x| quantize_float(x, 0.0, run_args.scale).unwrap())
+            .collect();
+        model_inputs.push(t.into_iter().into());
     }
     let res = Model::<Fr>::forward(model, &model_inputs, run_args)
         .map_err(|_| PyRuntimeError::new_err("Failed to compute forward pass"))?;
 
     let float_res: Vec<Vec<f32>> = res.iter().map(|t| t.to_vec()).collect();
     trace!("forward pass output: {:?}", float_res);
-    new_data.output_data = float_res;
+    data.output_data = float_res;
 
-    match serde_json::to_writer(&File::create(output)?, &new_data) {
+    match serde_json::to_writer(&File::create(output)?, &data) {
         Ok(_) => {
             // TODO output a dictionary
             // obtain gil

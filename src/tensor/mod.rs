@@ -45,7 +45,7 @@ pub enum TensorError {
     WrongMethod,
     /// Significant bit truncation when instantiating
     #[error("Significant bit truncation when instantiating")]
-    SigBitTruncatioError
+    SigBitTruncatioError,
 }
 
 /// The (inner) type of tensor elements.
@@ -846,7 +846,6 @@ impl<T: Clone + TensorType> Tensor<T> {
             .par_iter_mut()
             .enumerate()
             .for_each(|(i, tower_elem)| {
-                println!("outer i: {}", i);
                 let zero = Tensor::new(None, &[0]).unwrap();
                 let mut row = vec![zero; second_channels];
                 for (j, row_block) in row.iter_mut().enumerate().take(second_channels) {
@@ -911,7 +910,6 @@ impl<T: Clone + TensorType> Tensor<T> {
             .par_iter_mut()
             .enumerate()
             .for_each(|(i, block)| {
-                println!("block j: {}", i);
                 let j = i * h_stride;
                 let zero_matrix = Tensor::new(None, t_matrices[0].dims()).unwrap();
                 let mut row = vec![&zero_matrix; w_blocks];
