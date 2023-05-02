@@ -10,7 +10,6 @@ use anyhow::Result;
 use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
 use log::{trace, warn};
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::array::Gather;
 use tract_onnx::tract_core::ops::einsum::EinSum;
@@ -36,31 +35,18 @@ use tract_onnx::tract_hir::{
 /// * `dims` - the dimensionality of the resulting [Tensor].
 /// * `shift` - offset used in the fixed point representation.
 /// * `scale` - `2^scale` used in the fixed point representation.
-pub fn vector_to_quantized(
-    vec: &[f32],
-    dims: &[usize],
-    shift: f32,
-    scale: u32,
-) -> Result<Tensor<i128>, TensorError> {
+pub fn quantize_float(elem: &f32, shift: f32, scale: u32) -> Result<i128, TensorError> {
     let mult = scale_to_multiplier(scale);
     let max_value = ((i128::MAX as f32 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
 
-    // we parallelize the quantization process as it seems to be quite slow at times
-    let scaled: Result<Vec<i128>, _> = vec
-        .par_iter()
-        .map(|e| {
-            if *e > max_value {
-                return Err(TensorError::SigBitTruncatioError);
-            }
-            let quantized_value = (mult * e + shift).round() as i128;
-            Ok(quantized_value)
-        })
-        .collect(); // collect() will automatically propagate the error
-
-    match scaled {
-        Ok(scaled_values) => Tensor::new(Some(&scaled_values), dims),
-        Err(e) => Err(e),
+    if *elem > max_value {
+        return Err(TensorError::SigBitTruncatioError);
     }
+
+    // we parallelize the quantization process as it seems to be quite slow at times
+    let scaled = (mult * *elem + shift).round() as i128;
+
+    Ok(scaled)
 }
 
 /// Converts a scale (log base 2) to a fixed point multiplier.
@@ -86,11 +72,9 @@ pub fn node_output_shapes(
     Ok(shapes)
 }
 
-fn extract_tensor_value<F: PrimeField + TensorType + PartialOrd>(
+fn extract_tensor_value(
     input: Arc<tract_onnx::prelude::Tensor>,
-    scale: u32,
-    public_params: bool,
-) -> Result<ValTensor<F>, Box<dyn std::error::Error>> {
+) -> Result<Tensor<f32>, Box<dyn std::error::Error>> {
     let dt = input.datum_type();
     let mut dims = input.shape().to_vec();
     if dims.is_empty() {
@@ -99,35 +83,53 @@ fn extract_tensor_value<F: PrimeField + TensorType + PartialOrd>(
         dims = vec![1];
     };
 
-    let const_value: Tensor<i128>;
+    let mut const_value: Tensor<f32>;
     match dt {
         DatumType::F32 => {
             let vec = input.as_slice::<f32>()?.to_vec();
-            const_value = vector_to_quantized(&vec, &dims, 0f32, scale)?;
+            const_value = vec.into_iter().into();
         }
 
         DatumType::I64 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<i64>()?.to_vec();
-            let cast: Vec<i128> = vec.iter().map(|x| *x as i128).collect();
-            const_value = Tensor::<i128>::new(Some(&cast), &dims)?;
+            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::Bool => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<bool>()?.to_vec();
-            let cast: Vec<i128> = vec.iter().map(|x| *x as i128).collect();
-            const_value = Tensor::<i128>::new(Some(&cast), &dims)?;
+            let cast: Vec<f32> = vec.iter().map(|x| *x as usize as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         _ => todo!(),
     }
+    const_value.reshape(&dims);
 
+    Ok(const_value)
+}
+
+/// Converts a tensor to a [ValTensor] with a given scale.
+pub fn tensor_to_valtensor<F: PrimeField + TensorType + PartialOrd>(
+    const_value: Tensor<f32>,
+    scale: u32,
+    public_params: bool,
+) -> Result<ValTensor<F>, Box<dyn std::error::Error>> {
     let mut value: ValTensor<F> = if public_params {
         const_value
-            .map(|x| crate::tensor::ValType::Constant(i128_to_felt::<F>(x)))
+            .map(|x| {
+                crate::tensor::ValType::Constant(i128_to_felt::<F>(
+                    quantize_float(&x, 0.0, scale).unwrap(),
+                ))
+            })
             .into()
     } else {
         const_value
-            .map(|x| crate::tensor::ValType::Value(Value::known(i128_to_felt::<F>(x))))
+            .map(|x| {
+                crate::tensor::ValType::Value(Value::known(i128_to_felt::<F>(
+                    quantize_float(&x, 0.0, scale).unwrap(),
+                )))
+            })
             .into()
     };
     value.set_scale(scale);
@@ -239,12 +241,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 .as_any()
                 .downcast_ref::<crate::circuit::ops::Constant<F>>()
             {
-                Some(c) => c
-                    .quantized
-                    .get_int_evals()?
-                    .iter()
-                    .map(|e| *e as usize)
-                    .into(),
+                Some(c) => c.values.map(|e| e as usize).into(),
                 None => {
                     warn!("assuming the gather window is over a context variable");
                     // offset by 1
@@ -260,9 +257,9 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             Box::new(crate::circuit::ops::poly::PolyOp::Gather { dim: axis, index })
         }
         "Const" => {
-            let op = load_const(node.op(), idx, node.op().name().to_string())?;
-            let quantized = extract_tensor_value::<F>(op.0.clone(), scale, public_params)?;
-            Box::new(crate::circuit::ops::Constant { quantized })
+            let op: Const = load_const(node.op(), idx, node.op().name().to_string())?;
+            let value = extract_tensor_value(op.0.clone())?;
+            Box::new(crate::circuit::ops::Constant::new(value))
         }
         "Reduce<Min>" => {
             if inputs.len() != 1 {
@@ -321,13 +318,13 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 .as_any()
                 .downcast_ref::<crate::circuit::ops::Constant<F>>()
             {
-                Some(c) => c.quantized.get_int_evals()?[0],
+                Some(c) => c.values[0],
                 None => {
                     return Err(Box::new(GraphError::OpMismatch(idx, "Max".to_string())));
                 }
             };
 
-            if inputs.len() == 2 && unit == 0 {
+            if inputs.len() == 2 && unit == 0. {
                 inputs.pop();
                 Box::new(LookupOp::ReLU {
                     scale: inputs[0].out_scale as usize,
@@ -366,9 +363,47 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
         "Tanh" => Box::new(LookupOp::Tanh { scales: (1, 1) }),
         "Erf" => Box::new(LookupOp::Erf { scales: (1, 1) }),
         "Source" => Box::new(crate::circuit::ops::Input),
-        "Add" => Box::new(PolyOp::Add { a: None }),
+        "Add" => {
+            let mut params = None;
+
+            for (idx, inp) in inputs.clone().iter().enumerate() {
+                let boxed_op = &inp.opkind;
+                if let Some(c) = boxed_op
+                    .as_any()
+                    .downcast_ref::<crate::circuit::ops::Constant<F>>()
+                {
+                    inputs.remove(idx);
+                    params = Some(tensor_to_valtensor::<F>(
+                        c.values.clone(),
+                        inputs[0].out_scale,
+                        public_params,
+                    )?);
+                }
+            }
+
+            Box::new(PolyOp::Add { a: params })
+        }
         "Sub" => Box::new(PolyOp::Sub),
-        "Mul" => Box::new(PolyOp::Mult { a: None }),
+        "Mul" => {
+            let mut params = None;
+
+            for (idx, inp) in inputs.clone().iter().enumerate() {
+                let boxed_op = &inp.opkind;
+                if let Some(c) = boxed_op
+                    .as_any()
+                    .downcast_ref::<crate::circuit::ops::Constant<F>>()
+                {
+                    inputs.remove(idx);
+                    params = Some(tensor_to_valtensor::<F>(
+                        c.values.clone(),
+                        scale,
+                        public_params,
+                    )?);
+                }
+            }
+
+            Box::new(PolyOp::Mult { a: params })
+        }
         "Iff" => Box::new(PolyOp::Iff),
         "Greater" => {
             // Extract the slope layer hyperparams
@@ -378,8 +413,8 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 .downcast_ref::<crate::circuit::ops::Constant<F>>()
             {
                 Some(c) => {
-                    if c.quantized.get_int_evals()?.len() == 1 {
-                        c.quantized.get_int_evals()?[0]
+                    if c.values.len() == 1 {
+                        c.values[0]
                     } else {
                         todo!()
                     }
@@ -392,7 +427,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             if inputs.len() == 2 {
                 *inputs = vec![inputs[1].clone()];
                 Box::new(LookupOp::GreaterThan {
-                    a: crate::circuit::utils::F32(unit as f32),
+                    a: crate::circuit::utils::F32(unit),
                 })
             } else {
                 todo!()
@@ -421,13 +456,24 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 || axes.to_string() == "mk,kn->amn"
                 || axes.to_string() == "amk,kn->amn"
             {
-                if inputs[0].out_dims.len() == 1
-                    || *inputs[1].out_dims.last().unwrap()
-                        == inputs[0].out_dims[inputs[0].out_dims.len() - 2]
-                {
-                    inputs.swap(0, 1);
+                let mut params = None;
+
+                for (idx, inp) in inputs.clone().iter().enumerate() {
+                    let boxed_op = &inp.opkind;
+                    if let Some(c) = boxed_op
+                        .as_any()
+                        .downcast_ref::<crate::circuit::ops::Constant<F>>()
+                    {
+                        inputs.remove(idx);
+                        params = Some(tensor_to_valtensor::<F>(
+                            c.values.clone(),
+                            scale,
+                            public_params,
+                        )?);
+                    }
                 }
-                Box::new(PolyOp::Matmul { a: None })
+
+                Box::new(PolyOp::Matmul { a: params })
             } else {
                 panic!("einsum not supported")
             }
@@ -530,14 +576,20 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             let (padding_h, padding_w, stride_h, stride_w) =
                 (padding[0], padding[1], stride[0], stride[1]);
 
-            let kernel = extract_tensor_value(conv_node.kernel.clone(), scale, public_params)?;
+            let kernel = extract_tensor_value(conv_node.kernel.clone())?;
+            let kernel = tensor_to_valtensor(kernel, scale, public_params)?;
 
             let bias = match conv_node.bias.clone() {
-                Some(b) => Some(extract_tensor_value(
-                    b,
-                    scale + inputs[0].out_scale,
-                    public_params,
-                )?),
+                Some(b) => {
+                    let const_value = extract_tensor_value(b)?;
+
+                    let val = tensor_to_valtensor(
+                        const_value,
+                        scale + inputs[0].out_scale,
+                        public_params,
+                    )?;
+                    Some(val)
+                }
                 None => None,
             };
 

@@ -1,4 +1,4 @@
-use std::{any::Any, error::Error};
+use std::{any::Any, error::Error, marker::PhantomData};
 
 use halo2_proofs::circuit::Region;
 use serde::{Deserialize, Serialize};
@@ -214,7 +214,18 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
 #[derive(Clone, Debug)]
 pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
     ///
-    pub quantized: ValTensor<F>,
+    pub values: Tensor<f32>,
+    _marker: PhantomData<F>,
+}
+
+impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
+    ///
+    pub fn new(values: Tensor<f32>) -> Self {
+        Self {
+            values,
+            _marker: PhantomData,
+        }
+    }
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
@@ -222,10 +233,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
         self
     }
     fn f(&self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
-        let mut int_evals: Tensor<i128> =
-            self.quantized.get_int_evals().unwrap().into_iter().into();
-        int_evals.reshape(self.quantized.dims());
-        Ok(int_evals)
+        Err(TensorError::WrongMethod)
     }
 
     fn as_str(&self) -> &'static str {
@@ -238,7 +246,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
         _: &[ValTensor<F>],
         _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        Ok(Some(self.quantized.clone()))
+        Err(Box::new(TensorError::WrongMethod))
     }
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
         Box::new(self.clone())

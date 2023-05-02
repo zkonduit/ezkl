@@ -1,6 +1,7 @@
 /// Helper functions
 pub mod utilities;
 use halo2curves::ff::PrimeField;
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 pub use utilities::*;
 /// Crate for defining a computational graph and building a ZK-circuit from it.
 pub mod model;
@@ -106,7 +107,14 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
         // quantize the supplied data using the provided scale.
         let mut inputs: Vec<Tensor<i128>> = vec![];
         for (input, shape) in data.input_data.iter().zip(data.input_shapes.clone()) {
-            let t = vector_to_quantized(input, &shape, 0.0, model.run_args.scale)?;
+            let t: Vec<i128> = input
+                .par_iter()
+                .map(|x| quantize_float(x, 0.0, model.run_args.scale).unwrap())
+                .collect();
+
+            let mut t: Tensor<i128> = t.into_iter().into();
+            t.reshape(&shape);
+
             inputs.push(t);
         }
 
@@ -148,18 +156,25 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
         let mut public_inputs = vec![];
         if self.params.model.visibility.input.is_public() {
             for v in data.input_data.iter() {
-                let t = vector_to_quantized(
-                    v,
-                    &Vec::from([v.len()]),
-                    0.0,
-                    self.params.model.run_args.scale,
-                )?;
+                let t: Vec<i128> = v
+                    .par_iter()
+                    .map(|x| quantize_float(x, 0.0, self.params.model.run_args.scale).unwrap())
+                    .collect();
+
+                let t: Tensor<i128> = t.into_iter().into();
+
                 public_inputs.push(t);
             }
         }
         if self.params.model.visibility.output.is_public() {
             for (idx, v) in data.output_data.iter().enumerate() {
-                let mut t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx])?;
+                let t: Vec<i128> = v
+                    .par_iter()
+                    .map(|x| quantize_float(x, 0.0, out_scales[idx]).unwrap())
+                    .collect();
+
+                let mut t: Tensor<i128> = t.into_iter().into();
+
                 let len = t.len();
                 if self.params.model.run_args.pack_base > 1 {
                     let max_exponent =

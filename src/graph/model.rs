@@ -323,6 +323,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             nodes.insert(i, n);
         }
 
+        nodes = nodes
+            .iter()
+            .filter(|(_, node)| {
+                node.opkind
+                    .as_any()
+                    .downcast_ref::<crate::circuit::ops::Constant<F>>()
+                    .is_none()
+            })
+            .map(|(idx, node)| (*idx, node.clone()))
+            .collect();
+
         debug!("\n {}", model);
 
         debug!("\n {}", Table::new(nodes.iter()).to_string());
