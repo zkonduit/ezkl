@@ -439,14 +439,14 @@ pub fn runconv() {
     let now = Instant::now();
     let strategy = SingleStrategy::new(&params);
     let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
-    assert!(verify_proof(
+    let verify = verify_proof(
         &params,
         pk.get_vk(),
         strategy,
         pi_for_real_prover,
-        &mut transcript
-    )
-    .is_ok());
+        &mut transcript,
+    );
+    assert!(verify.is_ok());
     println!("Verify took {}", now.elapsed().as_secs());
 }
 

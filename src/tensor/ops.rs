@@ -245,7 +245,7 @@ pub fn mult<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::S
 /// ```
 pub fn rescale<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync>(
     a: &Tensor<T>,
-    mult: usize,
+    mult: u128,
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
     let mut output: Tensor<T> = a.clone();
@@ -280,6 +280,64 @@ pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, 
 
     let _ = a.map(|a_i| res = res.clone() + a_i);
     Tensor::new(Some(&[res]), &[1])
+}
+
+/// Gathers a tensor along a dimension.
+/// # Arguments
+/// * `input` - Tensor
+/// * `dim` - Dimension to gather along
+/// * `index` - Tensor of indices to gather
+/// # Examples
+/// ```
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::gather;
+/// let x = Tensor::<i128>::new(
+///    Some(&[1, 2, 3, 4, 5, 6]),
+///   &[2, 3],
+/// ).unwrap();
+/// let index = Tensor::<usize>::new(
+///   Some(&[0, 1]),
+///  &[2],
+/// ).unwrap();
+/// let result = gather(&x, 1, &index).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 4, 5]), &[2, 2]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn gather<T: TensorType>(
+    input: &Tensor<T>,
+    dim: usize,
+    index: &Tensor<usize>,
+) -> Result<Tensor<T>, TensorError> {
+    // Calculate the output tensor size
+    let mut output_size = input.dims().to_vec();
+    output_size[dim] = index.dims()[0];
+
+    assert!(index.dims().len() == 1, "Index must be 1D for now");
+
+    // Allocate memory for the output tensor
+    let mut output = Tensor::new(None, &output_size)?;
+    let cartesian_coord = output_size
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    output = output.enum_map(|i, _: T| {
+        let coord = cartesian_coord[i].clone();
+        let index_val = index.get(&[coord[dim]]);
+        let new_coord = coord
+            .iter()
+            .enumerate()
+            .map(|(i, x)| if i == dim { index_val } else { *x })
+            .collect::<Vec<_>>();
+
+        Ok(input.get(&new_coord))
+    })?;
+
+    // Reshape the output tensor
+    output.reshape(&output_size);
+
+    Ok(output)
 }
 
 /// Sums a tensor along specific axes.
@@ -1006,6 +1064,48 @@ pub mod nonlinearities {
         output
     }
 
+    /// softmax layout
+    pub fn multi_dim_softmax(
+        a: &Tensor<i128>,
+        scale_input: usize,
+        scale_output: usize,
+    ) -> Tensor<i128> {
+        // we want this to be as small as possible so we set the output scale to 1
+        let dims = a.dims();
+
+        if dims.len() == 1 {
+            return softmax(a, scale_input, scale_output);
+        }
+
+        let cartesian_coord = dims[..dims.len() - 1]
+            .iter()
+            .map(|x| 0..*x)
+            .multi_cartesian_product()
+            .collect::<Vec<_>>();
+
+        let mut outputs = vec![];
+
+        for coord in cartesian_coord {
+            let mut sum_dims = vec![];
+            for i in 0..coord.len() {
+                sum_dims.push(coord[i]..coord[i] + 1);
+            }
+            sum_dims.push(0..dims[dims.len() - 1]);
+
+            let softmax_input = a.get_slice(&sum_dims).unwrap();
+
+            outputs.push(softmax(&softmax_input, scale_input, scale_output));
+        }
+
+        let mut res = Tensor::new(Some(&outputs), &[outputs.len()])
+            .unwrap()
+            .combine()
+            .unwrap();
+        res.reshape(dims);
+
+        res
+    }
+
     /// Applies softmax
     /// # Arguments
     ///
@@ -1473,7 +1573,15 @@ pub mod accumulated {
     >(
         inputs: &[Tensor<T>; 2],
     ) -> Result<Tensor<T>, TensorError> {
-        let (a, b) = (inputs[0].clone(), inputs[1].clone());
+        let (mut a, mut b) = (inputs[0].clone(), inputs[1].clone());
+
+        if a.dims().len() == 1 {
+            a.reshape(&[1, a.dims()[0]]);
+        }
+        if b.dims().len() == 1 {
+            b.reshape(&[b.dims()[0], 1]);
+        }
+
         if (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])
             || (a.dims()[0..a.dims().len() - 2] != b.dims()[0..a.dims().len() - 2])
         {
