@@ -144,45 +144,36 @@ fn forward(
     py_run_args: Option<PyRunArgs>
 ) -> PyResult<()> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
-    let data = prepare_data(data);
+    let data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
 
-    match data {
-        Ok(m) => {
-            let mut new_data = m;
-            let mut model_inputs = vec![];
-            // quantize the supplied data using the provided scale.
-            for v in new_data.input_data.iter() {
-                match vector_to_quantized(v, &Vec::from([v.len()]), 0.0, run_args.scale) {
-                    Ok(t) => model_inputs.push(t),
-                    Err(_) => return Err(PyValueError::new_err("Failed to quantize vector")),
-                }
-            }
-            let res = Model::<Fr>::forward(model, &model_inputs, run_args);
-
-            match res {
-                Ok(r) => {
-                    let float_res: Vec<Vec<f32>> = r.iter().map(|t| t.to_vec()).collect();
-                    trace!("forward pass output: {:?}", float_res);
-                    new_data.output_data = float_res;
-
-                    match serde_json::to_writer(&File::create(output)?, &new_data) {
-                        Ok(_) => {
-                            // TODO output a dictionary
-                            // obtain gil
-                            // TODO: Convert to Python::with_gil() when it stabilizes
-                            // let gil = Python::acquire_gil();
-                            // obtain python instance
-                            // let py = gil.python();
-                            // return Ok(new_data.to_object(py))
-                            Ok(())
-                        }
-                        Err(_) => return Err(PyIOError::new_err("Failed to create output file")),
-                    }
-                }
-                Err(_) => Err(PyRuntimeError::new_err("Failed to compute forward pass")),
-            }
+    let mut new_data = data;
+    let mut model_inputs = vec![];
+    // quantize the supplied data using the provided scale.
+    for v in new_data.input_data.iter() {
+        match vector_to_quantized(v, &Vec::from([v.len()]), 0.0, run_args.scale) {
+            Ok(t) => model_inputs.push(t),
+            Err(_) => return Err(PyValueError::new_err("Failed to quantize vector")),
         }
-        Err(_) => Err(PyIOError::new_err("Failed to import files")),
+    }
+    let res = Model::<Fr>::forward(model, &model_inputs, run_args)
+        .map_err(|_| PyRuntimeError::new_err("Failed to compute forward pass"))?;
+
+    let float_res: Vec<Vec<f32>> = res.iter().map(|t| t.to_vec()).collect();
+    trace!("forward pass output: {:?}", float_res);
+    new_data.output_data = float_res;
+
+    match serde_json::to_writer(&File::create(output)?, &new_data) {
+        Ok(_) => {
+            // TODO output a dictionary
+            // obtain gil
+            // TODO: Convert to Python::with_gil() when it stabilizes
+            // let gil = Python::acquire_gil();
+            // obtain python instance
+            // let py = gil.python();
+            // return Ok(new_data.to_object(py))
+            Ok(())
+        }
+        Err(_) => return Err(PyIOError::new_err("Failed to create output file")),
     }
 }
 
@@ -199,47 +190,27 @@ fn mock(
 ) -> Result<bool, PyErr> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let logrows = run_args.logrows;
-    let data = prepare_data(data);
+    let data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
     let visibility = run_args.to_var_visibility();
 
-    match data {
-        Ok(d) => {
-            let procmodel = Model::<Fr>::new(model, run_args, Mode::Mock, visibility);
+    let procmodel = Model::<Fr>::new(model, run_args, Mode::Mock, visibility)
+        .map_err(|_| PyIOError::new_err("Failed to process model"))?;
 
-            match procmodel {
-                Ok(pm) => {
-                    let arcmodel: Arc<Model<Fr>> = Arc::new(pm);
-                    let circuit = ModelCircuit::<Fr>::new(&d, arcmodel);
+    let arcmodel: Arc<Model<Fr>> = Arc::new(procmodel);
+    let circuit = ModelCircuit::<Fr>::new(&data, arcmodel)
+        .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
 
-                    match circuit {
-                        Ok(c) => {
-                            let public_inputs = c.prepare_public_inputs(&d);
-                            match public_inputs {
-                                Ok(pi) => {
-                                    let prover = MockProver::run(logrows, &c, pi); // this is putting messages in stdout
-                                    match prover {
-                                        Ok(pr) => {
-                                            pr.assert_satisfied();
+    let public_inputs = circuit.prepare_public_inputs(&data)
+        .map_err(|_| PyRuntimeError::new_err("Failed to prepare public inputs"))?;
+    let prover = MockProver::run(logrows, &circuit, public_inputs)
+        .map_err(|_| PyRuntimeError::new_err("Failed to run prover"))?;
 
-                                            let res = pr.verify();
-                                            match res {
-                                                Ok(_) => return Ok(true),
-                                                Err(_) => return Ok(false),
-                                            }
-                                        }
-                                        Err(_) => Err(PyRuntimeError::new_err("Failed to run prover")),
-                                    }
-                                }
-                                Err(_) => Err(PyRuntimeError::new_err("Failed to prepare public inputs")),
-                            }
-                        }
-                        Err(_) => Err(PyRuntimeError::new_err("Failed to create circuit")),
-                    }
-                }
-                Err(_) => Err(PyIOError::new_err("Failed to process model")),
-            }
-        }
-        Err(_) => Err(PyIOError::new_err("Failed to import files")),
+    prover.assert_satisfied();
+
+    let res = prover.verify();
+    match res {
+        Ok(_) => return Ok(true),
+        Err(_) => return Ok(false),
     }
 }
 
@@ -267,91 +238,66 @@ fn prove(
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let logrows = run_args.logrows;
     let check_mode = run_args.check_mode;
-    let data = prepare_data(data);
+    let data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
     let visibility = run_args.to_var_visibility();
 
-    match data {
-        Ok(d) => {
-            let procmodel = Model::<Fr>::new(model, run_args, Mode::Prove, visibility);
+    let procmodel = Model::<Fr>::new(model, run_args, Mode::Prove, visibility)
+        .map_err(|_| PyIOError::new_err("Failed to process model"))?;
 
-            match procmodel {
-                Ok(pm) => {
-                    let arcmodel: Arc<Model<Fr>> = Arc::new(pm);
-                    let circuit = ModelCircuit::<Fr>::new(&d, arcmodel);
+    let arcmodel: Arc<Model<Fr>> = Arc::new(procmodel);
+    let circuit = ModelCircuit::<Fr>::new(&data, arcmodel)
+        .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
 
-                    match circuit {
-                        Ok(c) => {
-                            let public_inputs = c.prepare_public_inputs(&d);
+    let public_inputs = circuit.prepare_public_inputs(&data)
+        .map_err(|_| PyRuntimeError::new_err("Failed to prepare public inputs"))?;
 
-                            match public_inputs {
-                                Ok(pi) => {
-                                    let params = load_params_cmd(params_path, logrows);
+    let params = load_params_cmd(params_path, logrows)
+        .map_err(|_| PyIOError::new_err("Failed to load params"))?;
 
-                                    match params {
-                                        Ok(par) => {
-                                            let proving_key = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&c, &par);
+    let proving_key = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
+        .map_err(|_| PyRuntimeError::new_err("Failed to create proving key"))?;
 
-                                            match proving_key {
-                                                Ok(pk) => {
-                                                    let snark = match strategy {
-                                                        StrategyType::Single => {
-                                                            let strategy = KZGSingleStrategy::new(&par);
-                                                            match create_proof_circuit_kzg(
-                                                                c,
-                                                                &par,
-                                                                pi,
-                                                                &pk,
-                                                                transcript,
-                                                                strategy,
-                                                                check_mode
-                                                            ) {
-                                                                Ok(snark) => Ok(snark),
-                                                                Err(_) => Err(PyRuntimeError::new_err("Failed to create proof circuit single strategy")),
-                                                            }
-                                                        }
-                                                        StrategyType::Accum => {
-                                                            let strategy = AccumulatorStrategy::new(&par);
-                                                            match create_proof_circuit_kzg(
-                                                                c,
-                                                                &par,
-                                                                pi,
-                                                                &pk,
-                                                                transcript,
-                                                                strategy,
-                                                                check_mode
-                                                            ) {
-                                                                Ok(snark) => Ok(snark),
-                                                                Err(_) => Err(PyRuntimeError::new_err("Failed to create proof circuit using accumulator strategy")),
-                                                            }
-                                                        }
-                                                    };
-
-                                                    match snark?.save(&proof_path) {
-                                                        Ok(_) => {
-                                                            match save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, pk.get_vk()) {
-                                                                Ok(_) => Ok(true),
-                                                                Err(_) => Err(PyIOError::new_err("Failed to save vk to vk_path"))
-                                                            }
-                                                        }
-                                                        Err(_) => Err(PyIOError::new_err("Failed to save to proof path"))
-                                                    }
-                                                }
-                                                Err(_) => Err(PyRuntimeError::new_err("Failed to create proving key")),
-                                            }
-                                        }
-                                        Err(_) => Err(PyIOError::new_err("Failed to load params"))
-                                    }
-                                }
-                                Err(_) => Err(PyRuntimeError::new_err("Failed to prepare public inputs")),
-                            }
-                        }
-                        Err(_) => Err(PyRuntimeError::new_err("Failed to create circuit")),
-                    }
-                }
-                Err(_) => Err(PyIOError::new_err("Failed to process model")),
+    let snark = match strategy {
+        StrategyType::Single => {
+            let strategy = KZGSingleStrategy::new(&params);
+            match create_proof_circuit_kzg(
+                circuit,
+                &params,
+                public_inputs,
+                &proving_key,
+                transcript,
+                strategy,
+                check_mode
+            ) {
+                Ok(snark) => Ok(snark),
+                Err(_) => Err(PyRuntimeError::new_err("Failed to create proof circuit single strategy")),
             }
         }
-        Err(_) => Err(PyIOError::new_err("Failed to load data")),
+        StrategyType::Accum => {
+            let strategy = AccumulatorStrategy::new(&params);
+            match create_proof_circuit_kzg(
+                circuit,
+                &params,
+                public_inputs,
+                &proving_key,
+                transcript,
+                strategy,
+                check_mode
+            ) {
+                Ok(snark) => Ok(snark),
+                Err(_) => Err(PyRuntimeError::new_err("Failed to create proof circuit using accumulator strategy")),
+            }
+        }
+    };
+
+    match snark?.save(&proof_path) {
+        Ok(_) => {
+            match save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, proving_key.get_vk()) {
+                Ok(_) => Ok(true),
+                Err(_) => Err(PyIOError::new_err("Failed to save vk to vk_path"))
+            }
+        }
+        Err(_) => Err(PyIOError::new_err("Failed to save to proof path"))
     }
 }
 
