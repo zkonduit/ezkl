@@ -1,6 +1,6 @@
 use crate::circuit::CheckMode;
 use crate::commands::RunArgs;
-use crate::graph::{vector_to_quantized, Mode, Model, VarVisibility, Visibility};
+use crate::graph::{quantize_float, Mode, Model, VarVisibility, Visibility};
 use crate::pfsys::{gen_srs as ezkl_gen_srs, prepare_data, save_params};
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2curves::bn256::{Bn256, Fr};
@@ -130,8 +130,12 @@ fn forward(
             let mut model_inputs = vec![];
             // quantize the supplied data using the provided scale.
             for v in new_data.input_data.iter() {
-                match vector_to_quantized(v, &Vec::from([v.len()]), 0.0, run_args.scale) {
-                    Ok(t) => model_inputs.push(t),
+                let t: Result<Vec<i128>, _> = v
+                    .iter()
+                    .map(|x| quantize_float(x, 0.0, run_args.scale))
+                    .collect();
+                match t {
+                    Ok(t) => model_inputs.push(t.into_iter().into()),
                     Err(_) => return Err(PyValueError::new_err("Failed to quantize vector")),
                 }
             }
