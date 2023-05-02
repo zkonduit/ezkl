@@ -975,7 +975,7 @@ pub mod nonlinearities {
         output
     }
 
-    /// Elementwise applies exponenial to a tensor of integers.
+    /// Elementwise applies exponential to a tensor of integers.
     /// # Arguments
     ///
     /// * `a` - Tensor

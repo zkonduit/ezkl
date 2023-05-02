@@ -1416,6 +1416,7 @@ mod rangecheck {
         plonk::{Circuit, ConstraintSystem, Error},
     };
     use halo2curves::pasta::Fp;
+    use crate::circuit::Tolerance;
 
     const RANGE: usize = 8; // 3-bit value
     const K: usize = 8;
@@ -1460,7 +1461,7 @@ mod rangecheck {
                                 &mut Some(&mut region),
                                 &[self.input.clone(), self.output.clone()],
                                 &mut 0,
-                                Box::new(PolyOp::RangeCheck(RANGE as i32)),
+                                Box::new(PolyOp::RangeCheck(Tolerance::Abs { val: RANGE})),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1506,6 +1507,8 @@ mod rangecheck {
         }
     }
 }
+
+// TODO: Write tests for test_range_check_percent.
 
 #[cfg(test)]
 mod relu {

@@ -1221,7 +1221,124 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
     Ok(output)
 }
 
-/// Layout for range check.
+// Same constraints as the range_check layout but with a lookup table w/o BaseOp::Range
+// TODO: Add documentation
+#[allow(missing_docs)]
+pub fn range_check_abs<F: PrimeField + TensorType + PartialOrd>(
+    config: &mut BaseConfig<F>,
+    region: &mut Option<&mut Region<F>>,
+    values: &[ValTensor<F>; 2],
+    offset: &mut usize,
+    tol: i32,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+
+    // calculate the difference between the values
+    let mut diff = pairwise(
+        config,
+        region,
+        &values,
+        offset,
+        BaseOp::Sub,
+    )?;
+
+    // apply the LookupOp::GreaterThan operation to check if the lower bound difference is within the tolerance
+    let _ = nonlinearity(
+        config,
+        region,
+        &[diff.clone()],
+        &LookupOp::GreaterThan { a: utils::F32((-tol - 1) as f32) },
+        offset,
+    )?;
+    
+    // negate the differences
+    diff = neg(
+        config,
+        region,
+        &[diff.clone()],
+        offset
+    )?;
+
+    // apply the LookupOp::GreaterThan operation to check if the upper bound difference is within the tolerance
+    nonlinearity(
+        config,
+        region,
+        &[diff.clone()],
+        &LookupOp::GreaterThan { a: utils::F32((-tol - 1) as f32) },
+        offset,
+    )
+}
+
+// Layout for percent error range check
+// TODO: Add documentation
+#[allow(missing_docs)]
+pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
+    config: &mut BaseConfig<F>,
+    region: &mut Option<&mut Region<F>>,
+    values: &[ValTensor<F>; 2],
+    offset: &mut usize,
+    tol: f32,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // Find the absolute maximum integer value of the expected output tensor
+    let max_int = values[0]
+        .get_int_evals()?
+        .iter()
+        .map(|x| x.abs())
+        .max()
+        .ok_or("The expected output tensor must have at least one element")?;
+
+
+    // Calculate the difference between the expected output and actual output
+    let diff = pairwise(
+        config,
+        region,
+        &values,
+        offset,
+        BaseOp::Sub,
+    )?;
+
+    // Calculate the reciprocal of the expected output tensor scaled by max_int
+    let recip = nonlinearity(
+        config,
+        region,
+        &[values[0].clone()],
+        &LookupOp::Recip { scale: max_int as usize },
+        offset,
+    )?;
+
+    // Multiply the difference by the recip
+    let product = pairwise(config, region, &[diff, recip], offset, BaseOp::Mult)?;
+
+    // Use the greater than look up table to check if the percent error is within the tolerance for lower bound
+    let _ = nonlinearity(
+        config,
+        region,
+        &[product.clone()],
+        &LookupOp::GreaterThan { a: utils::F32((- tol / 100.0)*max_int as f32) },
+        offset,
+    )?;
+
+    // Negate the product
+    let neg_product = neg(
+        config,
+        region,
+        &[product.clone()],
+        offset
+    )?;
+
+    // Use the greater than look up table to check if the percent error is within the tolerance for upper bound
+    nonlinearity(
+        config,
+        region,
+        &[neg_product.clone()],
+        &LookupOp::GreaterThan { a: utils::F32((- tol / 100.0)*max_int as f32) },
+        offset,
+    )
+
+}
+
+
+
+/// Layout for nonlinearity check.
 pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,

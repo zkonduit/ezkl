@@ -1,5 +1,5 @@
 use crate::{
-    circuit::layouts,
+    circuit::{layouts, Tolerance},
     tensor::{self, Tensor, TensorError},
 };
 
@@ -42,7 +42,7 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Pack(u32, u32),
     GlobalSumPool,
     Iff,
-    RangeCheck(i32),
+    RangeCheck(Tolerance),
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
@@ -256,7 +256,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 offset,
             )?,
             PolyOp::RangeCheck(tol) => {
-                layouts::range_check(config, region, values[..].try_into()?, offset, *tol)?
+                match tol {
+                    Tolerance::Abs { val } => {
+                        layouts::range_check(config, region, values[..].try_into()?, offset, *val as i32)?
+                    },
+                    Tolerance::Percentage{ val } => {
+                        layouts::range_check_percent(config, region, values[..].try_into()?, offset, *val)?
+                    },
+                }
             }
             PolyOp::GlobalSumPool => unreachable!(),
         }))

@@ -1,6 +1,7 @@
 use super::node::*;
 use super::vars::*;
 use super::GraphError;
+use crate::circuit::Tolerance;
 use crate::circuit::ops::poly::PolyOp;
 use crate::circuit::BaseConfig as PolyConfig;
 use crate::circuit::Op;
@@ -288,7 +289,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         Self::from_ezkl_conf(conf)
     }
 
-    /// Configures an `Model`. Does so one execution `bucket` at a time. Each bucket holds either:
+    /// Configures a `Model`. Does so one execution `bucket` at a time. Each bucket holds either:
     /// a) independent lookup operations (i.e operations that don't feed into one another so can be processed in parallel).
     /// b) operations that can be fused together, i.e the output of one op might feed into another.
     /// # Arguments
@@ -301,12 +302,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     ) -> Result<PolyConfig<F>, Box<dyn Error>> {
         info!("configuring model");
 
+        // Determine the tolerance value
+        let tol = match self.run_args.tolerance {
+            Tolerance::Abs { val } => val,
+            _ => 0,
+        };
         let mut base_gate = PolyConfig::configure(
             meta,
             vars.advices[0..2].try_into()?,
             &vars.advices[2],
             self.run_args.check_mode,
-            self.run_args.tolerance as i32,
+            tol as i32,
         );
 
         let lookup_ops: BTreeMap<&usize, &Node<F>> = self
@@ -465,7 +471,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                                 &mut Some(&mut region),
                                 &[output, vars.instances[instance_offset + i].clone()],
                                 &mut offset,
-                                Box::new(PolyOp::RangeCheck(self.run_args.tolerance as i32)),
+                                Box::new(PolyOp::RangeCheck(self.run_args.tolerance)),
                             )
                         })
                         .collect_vec();
@@ -566,7 +572,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                         &mut None,
                         &[output.clone(), output],
                         &mut offset,
-                        Box::new(PolyOp::RangeCheck(self.run_args.tolerance as i32)),
+                        Box::new(PolyOp::RangeCheck(self.run_args.tolerance)),
                     )
                 })
                 .collect_vec();
