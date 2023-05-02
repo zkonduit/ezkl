@@ -189,7 +189,7 @@ jobs:
 
   mock-proving-tests-wasi:
     runs-on: ubuntu-latest-32-cores
-     needs: [build, build-wasm, library-tests, docs]
+    needs: [build, build-wasm, library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -217,7 +217,14 @@ jobs:
 
   prove-and-verify-evm-tests:
     runs-on: ubuntu-latest-16-cores
-    needs: [build, build-wasm, library-tests, mock-proving-tests, mock-proving-tests-wasi]
+    needs:
+      [
+        build,
+        build-wasm,
+        library-tests,
+        mock-proving-tests,
+        mock-proving-tests-wasi,
+      ]
     steps:
       - uses: actions/checkout@v3
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -237,7 +244,14 @@ jobs:
 
   prove-and-verify-tests:
     runs-on: ubuntu-latest-32-cores
-    needs: [build, build-wasm, library-tests, mock-proving-tests, mock-proving-tests-wasi]
+    needs:
+      [
+        build,
+        build-wasm,
+        library-tests,
+        mock-proving-tests,
+        mock-proving-tests-wasi,
+      ]
     steps:
       - uses: actions/checkout@v3
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -253,7 +267,14 @@ jobs:
 
   prove-and-verify-aggr-tests:
     runs-on: self-hosted
-    needs: [build, build-wasm, library-tests, mock-proving-tests, mock-proving-tests-wasi]
+    needs:
+      [
+        build,
+        build-wasm,
+        library-tests,
+        mock-proving-tests,
+        mock-proving-tests-wasi,
+      ]
     steps:
       - uses: actions/checkout@v3
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -269,7 +290,14 @@ jobs:
 
   prove-and-verify-aggr-evm-tests:
     runs-on: self-hosted
-    needs: [build, build-wasm, library-tests, mock-proving-tests, mock-proving-tests-wasi]
+    needs:
+      [
+        build,
+        build-wasm,
+        library-tests,
+        mock-proving-tests,
+        mock-proving-tests-wasi,
+      ]
     steps:
       - uses: actions/checkout@v3
       - uses: jetli/wasm-pack-action@v0.4.0
