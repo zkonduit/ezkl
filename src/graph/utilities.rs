@@ -652,7 +652,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
 
             let new_dims: Vec<usize> = match reshape {
                 AxisOp::Reshape(_, _shape_from, _) => {
-                    node_output_shapes(&node)?[0].as_ref().unwrap().to_vec()
+                    node_output_shapes(&node)?[0].as_ref().unwrap()[1..].to_vec()
                 }
                 _ => {
                     return Err(Box::new(GraphError::MisformedParams("reshape".to_string())));

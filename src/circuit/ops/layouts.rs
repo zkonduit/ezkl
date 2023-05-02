@@ -529,6 +529,8 @@ pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let (mut a, mut b) = (values[0].clone(), values[1].clone());
+    println!("a: {:?}", a.dims());
+    println!("b: {:?}", b.dims());
 
     if a.dims().len() == 1 {
         a.reshape(&[1, a.dims()[0]])?;
@@ -1536,7 +1538,11 @@ pub fn multi_dim_softmax<F: PrimeField + TensorType + PartialOrd>(
     // we want this to be as small as possible so we set the output scale to 1
     let dims = values[0].dims();
 
-    let cartesian_coord = dims[..dims.len() - 1]
+    if dims.len() == 1 {
+        return softmax(config, region, values, input_scale, output_scale, offset);
+    }
+
+    let cartesian_coord = dims[..dims.len() - 2]
         .iter()
         .map(|x| 0..*x)
         .multi_cartesian_product()
