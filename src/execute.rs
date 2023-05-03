@@ -188,7 +188,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
 }
 
 /// helper function
-fn verify_proof_circuit_kzg<
+pub fn verify_proof_circuit_kzg<
     'params,
     Strategy: VerificationStrategy<'params, KZGCommitmentScheme<Bn256>, VerifierGWC<'params, Bn256>>,
 >(
@@ -655,7 +655,10 @@ fn verify_aggr(
 }
 
 /// helper function for load_params
-pub fn load_params_cmd(params_path: PathBuf, logrows: u32) -> Result<ParamsKZG<Bn256>, Box<dyn Error>> {
+pub fn load_params_cmd(
+    params_path: PathBuf,
+    logrows: u32,
+) -> Result<ParamsKZG<Bn256>, Box<dyn Error>> {
     let mut params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
     info!("downsizing params to {} logrows", logrows);
     if logrows < params.k() {

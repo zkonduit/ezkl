@@ -48,3 +48,6 @@ pub mod pfsys;
 pub mod python;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
+/// wasm prover and verifier
+// #[cfg(target_arch = "wasm32")]
+pub mod wasm;

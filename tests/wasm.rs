@@ -1,0 +1,23 @@
+use ezkl_lib::wasm::verify_wasm;
+use wasm_bindgen_test::*;
+
+#[wasm_bindgen_test]
+fn pass() {
+    let proof = vec![
+        0x0a, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0xc0, 0x0c, 0x00, 0x00, 0x00, 0x0a, 0x00,
+        0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0xc0, 0x0c, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00,
+        0x0a, 0x00, 0x00, 0x00, 0xc0, 0x0c, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00,
+    ];
+
+    // this breaks obviousy :0
+    let proof_js = wasm_bindgen::JsValue::from_serde(&proof).unwrap();
+    let vk = wasm_bindgen::JsValue::from_serde(&proof).unwrap();
+    let circuit_params_ser = wasm_bindgen::JsValue::from_serde(&proof).unwrap();
+    let params_ser = wasm_bindgen::JsValue::from_serde(&proof).unwrap();
+    verify_wasm(proof_js, vk, circuit_params_ser, params_ser);
+}
+
+#[wasm_bindgen_test]
+fn fail() {
+    assert_eq!(1, 2);
+}
