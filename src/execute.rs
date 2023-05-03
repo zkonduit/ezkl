@@ -639,7 +639,8 @@ fn verify_aggr(
     Ok(())
 }
 
-fn load_params_cmd(params_path: PathBuf, logrows: u32) -> Result<ParamsKZG<Bn256>, Box<dyn Error>> {
+/// helper function for load_params
+pub fn load_params_cmd(params_path: PathBuf, logrows: u32) -> Result<ParamsKZG<Bn256>, Box<dyn Error>> {
     let mut params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
     info!("downsizing params to {} logrows", logrows);
     if logrows < params.k() {
