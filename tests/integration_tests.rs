@@ -565,6 +565,11 @@ fn kzg_aggr_prove_and_verify(example_name: String) {
                 "--params-path={}/kzg23.params",
                 TEST_DIR.path().to_str().unwrap()
             ),
+            &format!(
+                "--circuit-params-path={}/{}.params",
+                TEST_DIR.path().to_str().unwrap(),
+                example_name
+            ),
             "--transcript=poseidon",
             "--strategy=accum",
         ])
@@ -577,8 +582,11 @@ fn kzg_aggr_prove_and_verify(example_name: String) {
             "-K=23",
             "aggregate",
             "--app-logrows=17",
-            "-M",
-            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+            &format!(
+                "--circuit-params-paths={}/{}.params",
+                TEST_DIR.path().to_str().unwrap(),
+                example_name
+            ),
             "--aggregation-snarks",
             &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
             "--aggregation-vk-paths",
@@ -659,6 +667,11 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
                 "--params-path={}/kzg23.params",
                 TEST_DIR.path().to_str().unwrap()
             ),
+            &format!(
+                "--circuit-params-path={}/{}.params",
+                TEST_DIR.path().to_str().unwrap(),
+                example_name
+            ),
             "--transcript=poseidon",
             "--strategy=accum",
         ])
@@ -671,8 +684,11 @@ fn kzg_evm_aggr_prove_and_verify(example_name: String) {
             "-K=23",
             "aggregate",
             "--app-logrows=17",
-            "-M",
-            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+            &format!(
+                "--circuit-params-paths={}/{}.params",
+                TEST_DIR.path().to_str().unwrap(),
+                example_name
+            ),
             "--aggregation-snarks",
             &format!(
                 "{}/{}_evm.pf",
@@ -773,6 +789,11 @@ fn kzg_prove_and_verify(example_name: String) {
                 "--params-path={}/kzg17.params",
                 TEST_DIR.path().to_str().unwrap()
             ),
+            &format!(
+                "--circuit-params-path={}/{}.params",
+                TEST_DIR.path().to_str().unwrap(),
+                example_name
+            ),
             "--transcript=blake",
             "--strategy=single",
         ])
@@ -784,8 +805,11 @@ fn kzg_prove_and_verify(example_name: String) {
             "--bits=16",
             "-K=17",
             "verify",
-            "-M",
-            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+            &format!(
+                "--circuit-params-path={}/{}.params",
+                TEST_DIR.path().to_str().unwrap(),
+                example_name
+            ),
             "--proof-path",
             &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
             "--vk-path",
@@ -820,6 +844,11 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
                 "--params-path={}/kzg17.params",
                 TEST_DIR.path().to_str().unwrap()
             ),
+            &format!(
+                "--circuit-params-path={}/{}.params",
+                TEST_DIR.path().to_str().unwrap(),
+                example_name
+            ),
             "--transcript=evm",
             "--strategy=single",
         ])
@@ -827,8 +856,11 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
         .expect("failed to execute process");
     assert!(status.success());
 
-    let input_arg = format!("./examples/onnx/{}/input.json", example_name);
-    let network_arg = format!("./examples/onnx/{}/network.onnx", example_name);
+    let circuit_params = format!(
+        "--circuit-params-path={}/{}.params",
+        TEST_DIR.path().to_str().unwrap(),
+        example_name
+    );
     let code_arg = format!(
         "{}/{}.code",
         TEST_DIR.path().to_str().unwrap(),
@@ -844,10 +876,7 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
         "--bits=16",
         "-K=17",
         "create-evm-verifier",
-        "-D",
-        input_arg.as_str(),
-        "-M",
-        network_arg.as_str(),
+        circuit_params.as_str(),
         "--deployment-code-path",
         code_arg.as_str(),
         param_arg.as_str(),
