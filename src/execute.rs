@@ -188,7 +188,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
 }
 
 /// helper function
-fn verify_proof_circuit_kzg<
+pub fn verify_proof_circuit_kzg<
     'params,
     Strategy: VerificationStrategy<'params, KZGCommitmentScheme<Bn256>, VerifierGWC<'params, Bn256>>,
 >(
