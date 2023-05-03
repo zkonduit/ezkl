@@ -19,7 +19,7 @@ pub fn init_panic_hook() {
 }
 
 use crate::execute::verify_proof_circuit_kzg;
-use crate::graph::ModelCircuit;
+use crate::graph::{ModelCircuit, ModelParams};
 use crate::pfsys::Snarkbytes;
 
 #[wasm_bindgen]
@@ -35,10 +35,11 @@ pub fn verify_wasm(
     let params: ParamsKZG<Bn256> =
         halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).unwrap();
 
-    let snark_bytes = proof_js.into_serde::<Snarkbytes>().unwrap();
-    let circuit_params = circuit_params_ser
-        .into_serde::<crate::graph::ModelParams>()
-        .unwrap();
+    let binding = circuit_params_ser.into_serde::<Vec<u8>>().unwrap();
+    let circuit_params: ModelParams = bincode::deserialize(&binding).unwrap();
+
+    let snark_bytes: Vec<u8> = proof_js.into_serde::<Vec<u8>>().unwrap();
+    let snark_bytes: Snarkbytes = serde_json::from_slice(&snark_bytes).unwrap();
 
     let instances = snark_bytes
         .instances
@@ -78,7 +79,7 @@ pub fn verify_wasm(
         params.verifier_params(),
         snark,
         &vk,
-        crate::commands::TranscriptType::Blake,
+        crate::commands::TranscriptType::EVM,
         strategy,
     );
 

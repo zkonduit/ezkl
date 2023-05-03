@@ -378,9 +378,9 @@ where
     let instances: &[&[&[Scheme::Scalar]]] = &[&pi_inner];
     trace!("instances {:?}", instances);
 
-    let now = Instant::now();
+    info!("verify start");
     let mut transcript = TranscriptReadBuffer::init(Cursor::new(snark.proof.clone()));
-    info!("verify took {}", now.elapsed().as_secs());
+    info!("verify stop");
     verify_proof::<Scheme, V, _, TR, _>(params, vk, strategy, instances, &mut transcript)
 }
 
