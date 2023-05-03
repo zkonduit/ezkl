@@ -81,7 +81,7 @@ pub enum GraphError {
 /// model parameters
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ModelParams {
-    /// log rows in the circuit
+    /// run args
     pub run_args: RunArgs,
     /// the visibility of the variables in the circuit
     pub visibility: VarVisibility,

@@ -856,7 +856,6 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
         .expect("failed to execute process");
     assert!(status.success());
 
-    let input_arg = format!("./examples/onnx/{}/input.json", example_name);
     let circuit_params = format!(
         "--circuit-params-path={}/{}.params",
         TEST_DIR.path().to_str().unwrap(),
@@ -877,8 +876,6 @@ fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
         "--bits=16",
         "-K=17",
         "create-evm-verifier",
-        "-D",
-        input_arg.as_str(),
         circuit_params.as_str(),
         "--deployment-code-path",
         code_arg.as_str(),

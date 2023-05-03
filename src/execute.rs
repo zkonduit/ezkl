@@ -91,14 +91,12 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         Commands::Mock { data, model: _ } => mock(data, cli.args.logrows),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
-            data,
             vk_path,
             params_path,
             circuit_params_path,
             deployment_code_path,
             sol_code_path,
         } => create_evm_verifier(
-            data,
             vk_path,
             params_path,
             circuit_params_path,
@@ -417,7 +415,6 @@ fn render(data: String, output: String, logrows: u32) -> Result<(), Box<dyn Erro
 
 #[cfg(not(target_arch = "wasm32"))]
 fn create_evm_verifier(
-    data: String,
     vk_path: PathBuf,
     params_path: PathBuf,
     circuit_params_path: PathBuf,
@@ -425,12 +422,13 @@ fn create_evm_verifier(
     sol_code_path: Option<PathBuf>,
     logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
-    let data = prepare_data(data)?;
-    let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
-    let public_inputs = circuit.prepare_public_inputs(&data)?;
-    let num_instance = public_inputs.iter().map(|x| x.len()).collect();
     let params = load_params_cmd(params_path, logrows)?;
     let model_circuit_params = ModelParams::load(&circuit_params_path);
+    let num_instance = model_circuit_params
+        .instance_shapes
+        .iter()
+        .map(|x| x.iter().product())
+        .collect();
 
     let vk =
         load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)?;

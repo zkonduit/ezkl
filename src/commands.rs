@@ -277,9 +277,6 @@ pub enum Commands {
     /// Creates an EVM verifier for a single proof
     #[command(name = "create-evm-verifier", arg_required_else_help = true)]
     CreateEVMVerifier {
-        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'D', long)]
-        data: String,
         /// The path to load the desired params file
         #[arg(long)]
         params_path: PathBuf,
@@ -330,7 +327,6 @@ pub enum Commands {
         /// The path to output the Solidity code (optional) supercedes deployment_code_path in priority
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
-        // todo, optionally allow supplying proving key
     },
 
     #[cfg(not(target_arch = "wasm32"))]
