@@ -128,6 +128,7 @@ def test_prove():
 
     vk_path = os.path.join(folder_path, 'test.vk')
     proof_path = os.path.join(folder_path, 'test.pf')
+    circuit_params_path = os.path.join(folder_path, 'circuit.params')
 
     res = ezkl_lib.prove(
         data_path,
@@ -135,9 +136,29 @@ def test_prove():
         vk_path,
         proof_path,
         params_path,
+        circuit_params_path,
         "poseidon",
         "single",
     )
     assert res == True
     assert os.path.isfile(vk_path)
     assert os.path.isfile(proof_path)
+
+
+def test_verify():
+    """
+    Test for verify
+    """
+
+    vk_path = os.path.join(folder_path, 'test.vk')
+    proof_path = os.path.join(folder_path, 'test.pf')
+    circuit_params_path = os.path.join(folder_path, 'circuit.params')
+
+    res = ezkl_lib.verify(
+        proof_path,
+        circuit_params_path,
+        vk_path,
+        params_path,
+        "poseidon",
+    )
+    assert res == True
