@@ -312,7 +312,30 @@ pub enum Commands {
         // todo, optionally allow supplying proving key
     },
 
-    /// Loads model and data, prepares vk and pk, and creates proof
+    /// Creates pk and vk and circuit params
+    #[command(arg_required_else_help = true)]
+    Setup {
+        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'D', long)]
+        data: String,
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: PathBuf,
+        /// The parameter path
+        #[arg(long)]
+        params_path: PathBuf,
+        /// The path to output the verfication key file
+        #[arg(long)]
+        vk_path: PathBuf,
+        /// The path to output the proving key file
+        #[arg(long)]
+        pk_path: PathBuf,
+        /// The path to save circuit params to
+        #[arg(long)]
+        circuit_params_path: PathBuf,
+    },
+
+    /// Loads model, data, and creates proof
     #[command(arg_required_else_help = true)]
     Prove {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
@@ -321,18 +344,15 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
-        /// The path to output to the desired verfication key file
+        /// The path to load the desired proving key file
         #[arg(long)]
-        vk_path: PathBuf,
+        pk_path: PathBuf,
         /// The path to the desired output file
         #[arg(long)]
         proof_path: PathBuf,
         /// The parameter path
         #[arg(long)]
         params_path: PathBuf,
-        /// The path to save circuit params to
-        #[arg(long)]
-        circuit_params_path: PathBuf,
         #[arg(
             long,
             require_equals = true,

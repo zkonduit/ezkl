@@ -3,13 +3,8 @@ use crate::commands::{RunArgs, StrategyType, TranscriptType};
 use crate::execute::{create_proof_circuit_kzg, load_params_cmd, verify_proof_circuit_kzg};
 use crate::graph::{quantize_float, Mode, Model, ModelCircuit, ModelParams, VarVisibility};
 use crate::pfsys::{
-    gen_srs as ezkl_gen_srs,
-    create_keys,
-    prepare_data,
-    save_params,
-    save_vk,
-    load_vk,
-    Snark
+    create_keys, gen_srs as ezkl_gen_srs, load_pk, load_vk, prepare_data, save_params, save_pk,
+    save_vk, Snark,
 };
 use halo2_proofs::poly::kzg::{
     commitment::KZGCommitmentScheme,
@@ -90,7 +85,6 @@ impl PyRunArgs {
             check_mode: CheckMode::SAFE,
         }
     }
-
 }
 
 /// Conversion between PyRunArgs and RunArgs
@@ -150,7 +144,7 @@ fn forward(
     data: String,
     model: String,
     output: String,
-    py_run_args: Option<PyRunArgs>
+    py_run_args: Option<PyRunArgs>,
 ) -> PyResult<()> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let mut data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
@@ -198,11 +192,7 @@ fn forward(
     model,
     py_run_args = None
 ))]
-fn mock(
-    data: String,
-    model: String,
-    py_run_args: Option<PyRunArgs>
-) -> Result<bool, PyErr> {
+fn mock(data: String, model: String, py_run_args: Option<PyRunArgs>) -> Result<bool, PyErr> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let logrows = run_args.logrows;
     let data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
@@ -215,7 +205,8 @@ fn mock(
     let circuit = ModelCircuit::<Fr>::new(&data, arcmodel)
         .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
 
-    let public_inputs = circuit.prepare_public_inputs(&data)
+    let public_inputs = circuit
+        .prepare_public_inputs(&data)
         .map_err(|_| PyRuntimeError::new_err("Failed to prepare public inputs"))?;
     let prover = MockProver::run(logrows, &circuit, public_inputs)
         .map_err(|_| PyRuntimeError::new_err("Failed to run prover"))?;
@@ -234,9 +225,62 @@ fn mock(
     data,
     model,
     vk_path,
-    proof_path,
+    pk_path,
     params_path,
     circuit_params_path,
+    py_run_args = None
+))]
+fn setup(
+    data: String,
+    model: String,
+    vk_path: PathBuf,
+    pk_path: PathBuf,
+    params_path: PathBuf,
+    circuit_params_path: PathBuf,
+    py_run_args: Option<PyRunArgs>,
+) -> Result<bool, PyErr> {
+    let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
+    let logrows = run_args.logrows;
+    let data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
+    let visibility = run_args.to_var_visibility();
+
+    let procmodel = Model::<Fr>::new(model, run_args, Mode::Prove, visibility)
+        .map_err(|_| PyIOError::new_err("Failed to process model"))?;
+
+    let arcmodel: Arc<Model<Fr>> = Arc::new(procmodel);
+    let circuit = ModelCircuit::<Fr>::new(&data, arcmodel)
+        .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
+
+    let params = load_params_cmd(params_path, logrows)
+        .map_err(|_| PyIOError::new_err("Failed to load params"))?;
+
+    let proving_key =
+        create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
+            .map_err(|_| PyRuntimeError::new_err("Failed to create proving key"))?;
+
+    let circuit_params = circuit.params.clone();
+
+    // save the verifier key
+    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, proving_key.get_vk())
+        .map_err(|_| PyIOError::new_err("Failed to save verifier key to vk_path"))?;
+
+    // save the prover key
+    save_pk::<KZGCommitmentScheme<Bn256>>(&pk_path, &proving_key)
+        .map_err(|_| PyIOError::new_err("Failed to save verifier key to vk_path"))?;
+
+    // save the circuit
+    circuit_params.save(&circuit_params_path);
+
+    Ok(true)
+}
+
+/// runs the prover on a set of inputs
+#[pyfunction(signature = (
+    data,
+    model,
+    pk_path,
+    proof_path,
+    params_path,
     transcript,
     strategy,
     py_run_args = None
@@ -244,13 +288,12 @@ fn mock(
 fn prove(
     data: String,
     model: String,
-    vk_path: PathBuf,
+    pk_path: PathBuf,
     proof_path: PathBuf,
     params_path: PathBuf,
-    circuit_params_path: PathBuf,
     transcript: TranscriptType,
     strategy: StrategyType,
-    py_run_args: Option<PyRunArgs>
+    py_run_args: Option<PyRunArgs>,
 ) -> Result<bool, PyErr> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let logrows = run_args.logrows;
@@ -265,16 +308,18 @@ fn prove(
     let circuit = ModelCircuit::<Fr>::new(&data, arcmodel)
         .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
 
-    let public_inputs = circuit.prepare_public_inputs(&data)
+    let public_inputs = circuit
+        .prepare_public_inputs(&data)
         .map_err(|_| PyRuntimeError::new_err("Failed to prepare public inputs"))?;
 
     let params = load_params_cmd(params_path, logrows)
         .map_err(|_| PyIOError::new_err("Failed to load params"))?;
 
-    let proving_key = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
-        .map_err(|_| PyRuntimeError::new_err("Failed to create proving key"))?;
-
-    let circuit_params = circuit.params.clone();
+    let proving_key = load_pk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
+        pk_path,
+        circuit.params.clone(),
+    )
+    .map_err(|_| PyRuntimeError::new_err("Failed to create proving key"))?;
 
     let snark = match strategy {
         StrategyType::Single => {
@@ -286,10 +331,12 @@ fn prove(
                 &proving_key,
                 transcript,
                 strategy,
-                check_mode
+                check_mode,
             ) {
                 Ok(snark) => Ok(snark),
-                Err(_) => Err(PyRuntimeError::new_err("Failed to create proof circuit single strategy")),
+                Err(_) => Err(PyRuntimeError::new_err(
+                    "Failed to create proof circuit single strategy",
+                )),
             }
         }
         StrategyType::Accum => {
@@ -301,24 +348,20 @@ fn prove(
                 &proving_key,
                 transcript,
                 strategy,
-                check_mode
+                check_mode,
             ) {
                 Ok(snark) => Ok(snark),
-                Err(_) => Err(PyRuntimeError::new_err("Failed to create proof circuit using accumulator strategy")),
+                Err(_) => Err(PyRuntimeError::new_err(
+                    "Failed to create proof circuit using accumulator strategy",
+                )),
             }
         }
     };
 
     // save the snark proof
-    snark?.save(&proof_path)
+    snark?
+        .save(&proof_path)
         .map_err(|_| PyIOError::new_err("Failed to save proof to proof path"))?;
-
-    // save the verifier key
-    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, proving_key.get_vk())
-        .map_err(|_| PyIOError::new_err("Failed to save verifier key to vk_path"))?;
-
-    // save the circuit
-    circuit_params.save(&circuit_params_path);
 
     Ok(true)
 }
@@ -348,9 +391,11 @@ fn verify(
         .map_err(|_| PyIOError::new_err("Failed to load proof"))?;
     let model_circuit_params = ModelParams::load(&circuit_params_path);
     let strategy = KZGSingleStrategy::new(params.verifier_params());
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)
-        .map_err(|_| PyIOError::new_err("Failed to load verifier key"))?;
-    let result = verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, transcript, strategy);
+    let vk =
+        load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)
+            .map_err(|_| PyIOError::new_err("Failed to load verifier key"))?;
+    let result =
+        verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, transcript, strategy);
     match result {
         Ok(_) => Ok(true),
         Err(_) => Ok(false),
@@ -375,6 +420,7 @@ fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(gen_srs, m)?)?;
     m.add_function(wrap_pyfunction!(forward, m)?)?;
     m.add_function(wrap_pyfunction!(mock, m)?)?;
+    m.add_function(wrap_pyfunction!(setup, m)?)?;
     m.add_function(wrap_pyfunction!(prove, m)?)?;
     m.add_function(wrap_pyfunction!(verify, m)?)?;
 

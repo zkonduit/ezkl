@@ -5,6 +5,7 @@ data
 *.sol
 *.pf
 *.vk
+*.pk
 *.code
 *.params
 *~
