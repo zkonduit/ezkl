@@ -38,7 +38,7 @@ pub fn verify_wasm(
     let circuit_params: ModelParams = bincode::deserialize(&binding).unwrap();
 
     let snark_bytes: Vec<u8> = serde_wasm_bindgen::from_value::<Vec<u8>>(proof_js).unwrap();
-    let snark_bytes: Snarkbytes = serde_json::from_slice(&snark_bytes).unwrap();
+    let snark_bytes: Snarkbytes = bincode::deserialize(&snark_bytes).unwrap();
 
     let instances = snark_bytes
         .instances
@@ -88,3 +88,9 @@ pub fn verify_wasm(
         false
     }
 }
+
+// TODO
+// #[wasm_bindgen]
+// pub fn prove_wasm(){
+
+// }
