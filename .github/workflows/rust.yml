@@ -153,7 +153,7 @@ jobs:
         run: cargo test --release --verbose tests::forward_pass_
 
   render-circuit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-32-cores
     needs: [build, build-wasm, library-tests, docs]
     steps:
       - uses: actions/checkout@v3
