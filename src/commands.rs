@@ -3,19 +3,19 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 #[cfg(not(target_arch = "wasm32"))]
 use ethereum_types::Address;
 use log::{debug, info};
+#[cfg(feature = "python-bindings")]
+use pyo3::{
+    conversion::{FromPyObject, PyTryFrom},
+    exceptions::PyValueError,
+    prelude::*,
+    types::PyString,
+};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::error::Error;
 use std::fs::File;
 use std::io::{stdin, stdout, Read, Write};
 use std::path::PathBuf;
-#[cfg(feature = "python-bindings")]
-use pyo3::{
-    exceptions::PyValueError,
-    prelude::*,
-    types::PyString,
-    conversion::{FromPyObject, PyTryFrom}
-};
 
 use crate::circuit::CheckMode;
 use crate::graph::{VarVisibility, Visibility};
@@ -56,7 +56,7 @@ impl<'source> FromPyObject<'source> for TranscriptType {
             "blake" => Ok(TranscriptType::Blake),
             "poseidon" => Ok(TranscriptType::Poseidon),
             "evm" => Ok(TranscriptType::EVM),
-            _ => Err(PyValueError::new_err("Invalid value for TranscriptType"))
+            _ => Err(PyValueError::new_err("Invalid value for TranscriptType")),
         }
     }
 }
@@ -94,7 +94,7 @@ impl<'source> FromPyObject<'source> for StrategyType {
         match strval.to_lowercase().as_str() {
             "single" => Ok(StrategyType::Single),
             "accum" => Ok(StrategyType::Accum),
-            _ => Err(PyValueError::new_err("Invalid value for StrategyType"))
+            _ => Err(PyValueError::new_err("Invalid value for StrategyType")),
         }
     }
 }
@@ -139,9 +139,21 @@ pub struct RunArgs {
 impl RunArgs {
     pub fn to_var_visibility(&self) -> VarVisibility {
         VarVisibility {
-            input: if self.public_inputs { Visibility::Public } else { Visibility::Private },
-            params: if self.public_params { Visibility::Public } else { Visibility::Private },
-            output: if self.public_outputs { Visibility::Public } else { Visibility::Private },
+            input: if self.public_inputs {
+                Visibility::Public
+            } else {
+                Visibility::Private
+            },
+            params: if self.public_params {
+                Visibility::Public
+            } else {
+                Visibility::Private
+            },
+            output: if self.public_outputs {
+                Visibility::Public
+            } else {
+                Visibility::Private
+            },
         }
     }
 }

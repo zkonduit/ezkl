@@ -8,7 +8,6 @@ use halo2curves::bn256::{Bn256, Fr, G1Affine};
 use halo2curves::serde::SerdeObject;
 use snark_verifier::system::halo2::compile;
 use wasm_bindgen::prelude::*;
-// pub use wasm_bindgen_rayon::init_thread_pool;
 
 use console_error_panic_hook;
 
@@ -30,15 +29,15 @@ pub fn verify_wasm(
     circuit_params_ser: JsValue,
     params_ser: JsValue,
 ) -> bool {
-    let binding = params_ser.into_serde::<Vec<u8>>().unwrap();
+    let binding = serde_wasm_bindgen::from_value::<Vec<u8>>(params_ser).unwrap();
     let mut reader = std::io::BufReader::new(&binding[..]);
     let params: ParamsKZG<Bn256> =
         halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).unwrap();
 
-    let binding = circuit_params_ser.into_serde::<Vec<u8>>().unwrap();
+    let binding = serde_wasm_bindgen::from_value::<Vec<u8>>(circuit_params_ser).unwrap();
     let circuit_params: ModelParams = bincode::deserialize(&binding).unwrap();
 
-    let snark_bytes: Vec<u8> = proof_js.into_serde::<Vec<u8>>().unwrap();
+    let snark_bytes: Vec<u8> = serde_wasm_bindgen::from_value::<Vec<u8>>(proof_js).unwrap();
     let snark_bytes: Snarkbytes = serde_json::from_slice(&snark_bytes).unwrap();
 
     let instances = snark_bytes
@@ -51,7 +50,7 @@ pub fn verify_wasm(
         })
         .collect::<Vec<Vec<Fr>>>();
 
-    let binding = vk.into_serde::<Vec<u8>>().unwrap();
+    let binding = serde_wasm_bindgen::from_value::<Vec<u8>>(vk).unwrap();
     let mut reader = std::io::BufReader::new(&binding[..]);
     let vk = VerifyingKey::<G1Affine>::read::<_, ModelCircuit<Fr>>(
         &mut reader,

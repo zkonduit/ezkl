@@ -163,6 +163,9 @@ jobs:
           toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
+      - uses: mwilliamson/setup-wasmtime-action@v2
+        with:
+          wasmtime-version: "3.0.1"
       - name: Install wasm32-wasi
         run: rustup target add wasm32-wasi
       - name: Circuit Render
