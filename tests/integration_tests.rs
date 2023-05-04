@@ -555,13 +555,13 @@ mod native_tests {
             .args([
                 "--bits=16",
                 "-K=17",
-                "prove",
+                "setup",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--proof-path",
-                &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
+                "--pk-path",
+                &format!("{}/{}.pk", TEST_DIR.path().to_str().unwrap(), example_name),
                 "--vk-path",
                 &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
                 &format!(
@@ -572,6 +572,27 @@ mod native_tests {
                     "--circuit-params-path={}/{}.params",
                     TEST_DIR.path().to_str().unwrap(),
                     example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "--bits=16",
+                "-K=17",
+                "prove",
+                "-D",
+                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                "-M",
+                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--proof-path",
+                &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
+                "--pk-path",
+                &format!("{}/{}.pk", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!(
+                    "--params-path={}/kzg23.params",
+                    TEST_DIR.path().to_str().unwrap()
                 ),
                 "--transcript=poseidon",
                 "--strategy=accum",
@@ -654,15 +675,15 @@ mod native_tests {
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--proof-path",
-                &format!(
-                    "{}/{}_evm.pf",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
                 "--vk-path",
                 &format!(
                     "{}/{}_evm.vk",
+                    TEST_DIR.path().to_str().unwrap(),
+                    example_name
+                ),
+                "--pk-path",
+                &format!(
+                    "{}/{}_evm.pk",
                     TEST_DIR.path().to_str().unwrap(),
                     example_name
                 ),
@@ -674,6 +695,36 @@ mod native_tests {
                     "--circuit-params-path={}/{}.params",
                     TEST_DIR.path().to_str().unwrap(),
                     example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "--bits=16",
+                "-K=17",
+                "prove",
+                "-D",
+                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                "-M",
+                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--proof-path",
+                &format!(
+                    "{}/{}_evm.pf",
+                    TEST_DIR.path().to_str().unwrap(),
+                    example_name
+                ),
+                "--pk-path",
+                &format!(
+                    "{}/{}_evm.pk",
+                    TEST_DIR.path().to_str().unwrap(),
+                    example_name
+                ),
+                &format!(
+                    "--params-path={}/kzg23.params",
+                    TEST_DIR.path().to_str().unwrap()
                 ),
                 "--transcript=poseidon",
                 "--strategy=accum",
@@ -779,13 +830,13 @@ mod native_tests {
             .args([
                 "--bits=16",
                 "-K=17",
-                "prove",
+                "setup",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--proof-path",
-                &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
+                "--pk-path",
+                &format!("{}/{}.pk", TEST_DIR.path().to_str().unwrap(), example_name),
                 "--vk-path",
                 &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
                 &format!(
@@ -796,6 +847,27 @@ mod native_tests {
                     "--circuit-params-path={}/{}.params",
                     TEST_DIR.path().to_str().unwrap(),
                     example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "--bits=16",
+                "-K=17",
+                "prove",
+                "-D",
+                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                "-M",
+                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--proof-path",
+                &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
+                "--pk-path",
+                &format!("{}/{}.pk", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!(
+                    "--params-path={}/kzg17.params",
+                    TEST_DIR.path().to_str().unwrap()
                 ),
                 "--transcript=blake",
                 "--strategy=single",
@@ -834,13 +906,13 @@ mod native_tests {
             .args([
                 "--bits=16",
                 "-K=17",
-                "prove",
+                "setup",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--proof-path",
-                &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
+                "--pk-path",
+                &format!("{}/{}.pk", TEST_DIR.path().to_str().unwrap(), example_name),
                 "--vk-path",
                 &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
                 &format!(
@@ -851,6 +923,28 @@ mod native_tests {
                     "--circuit-params-path={}/{}.params",
                     TEST_DIR.path().to_str().unwrap(),
                     example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "--bits=16",
+                "-K=17",
+                "prove",
+                "-D",
+                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                "-M",
+                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--proof-path",
+                &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
+                "--pk-path",
+                &format!("{}/{}.pk", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!(
+                    "--params-path={}/kzg17.params",
+                    TEST_DIR.path().to_str().unwrap()
                 ),
                 "--transcript=evm",
                 "--strategy=single",

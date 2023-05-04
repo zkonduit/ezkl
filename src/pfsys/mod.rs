@@ -46,7 +46,7 @@ pub enum PfSysError {
 
 /// The input tensor data and shape, and output data for the computational graph (model) as floats.
 /// For example, the input might be the image data for a neural network, and the output class scores.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct ModelInput {
     /// Inputs to the model / computational graph.
     pub input_data: Vec<Vec<f32>>,
@@ -134,12 +134,9 @@ impl<F: PrimeField + SerdeObject + FromUniformBytes<64>, C: CurveAffine> Snark<F
     /// Saves the Proof to a specified `proof_path`.
     pub fn save(&self, proof_path: &PathBuf) -> Result<(), Box<dyn Error>> {
         let self_i128 = self.to_bytes();
-
-        let serialized = serde_json::to_string(&self_i128).map_err(Box::<dyn Error>::from)?;
-
+        let serialized = bincode::serialize(&self_i128).map_err(Box::<dyn Error>::from)?;
         let mut file = std::fs::File::create(proof_path).map_err(Box::<dyn Error>::from)?;
-        file.write_all(serialized.as_bytes())
-            .map_err(Box::<dyn Error>::from)
+        file.write_all(&serialized).map_err(Box::<dyn Error>::from)
     }
 
     /// Load a json serialized proof from the provided path.
@@ -151,12 +148,9 @@ impl<F: PrimeField + SerdeObject + FromUniformBytes<64>, C: CurveAffine> Snark<F
     where
         <C as CurveAffine>::ScalarExt: FromUniformBytes<64>,
     {
-        let mut file = File::open(proof_path).map_err(Box::<dyn Error>::from)?;
-        let mut data = String::new();
-        file.read_to_string(&mut data)
-            .map_err(Box::<dyn Error>::from)?;
-        let snark_bytes: Snarkbytes =
-            serde_json::from_str(&data).map_err(Box::<dyn Error>::from)?;
+        trace!("reading proof");
+        let file = File::open(proof_path).map_err(Box::<dyn Error>::from)?;
+        let snark_bytes: Snarkbytes = bincode::deserialize_from(file).unwrap();
 
         let instances = snark_bytes
             .instances

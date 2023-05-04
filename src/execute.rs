@@ -11,7 +11,7 @@ use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 use crate::pfsys::evm::{aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::{evm_verify, DeploymentCode};
-use crate::pfsys::{create_keys, load_params, load_vk, save_params, Snark};
+use crate::pfsys::{create_keys, load_params, load_pk, load_vk, save_params, save_pk, Snark};
 use crate::pfsys::{create_proof_circuit, gen_srs, prepare_data, save_vk, verify_proof_circuit};
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::providers::Middleware;
@@ -110,21 +110,34 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             deployment_code_path,
             vk_path,
         } => create_evm_aggregate_verifier(params_path, deployment_code_path, vk_path),
+        Commands::Setup {
+            model: _,
+            data,
+            params_path,
+            circuit_params_path,
+            vk_path,
+            pk_path,
+        } => create_keys_kzg(
+            data,
+            params_path,
+            vk_path,
+            pk_path,
+            circuit_params_path,
+            cli.args.logrows,
+        ),
         Commands::Prove {
             data,
             model: _,
-            vk_path,
+            pk_path,
             proof_path,
             params_path,
-            circuit_params_path,
             transcript,
             strategy,
         } => prove(
             data,
-            vk_path,
+            pk_path,
             proof_path,
             params_path,
-            circuit_params_path,
             transcript,
             strategy,
             cli.args.logrows,
@@ -491,12 +504,33 @@ fn create_evm_aggregate_verifier(
     Ok(())
 }
 
+fn create_keys_kzg(
+    data: String,
+    params_path: PathBuf,
+    vk_path: PathBuf,
+    pk_path: PathBuf,
+    circuit_params_path: PathBuf,
+    logrows: u32,
+) -> Result<(), Box<dyn Error>> {
+    let data = prepare_data(data)?;
+    let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
+    let params = load_params_cmd(params_path, logrows)?;
+    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
+        .map_err(Box::<dyn Error>::from)?;
+    let circuit_params = circuit.params.clone();
+    trace!("params computed");
+    circuit_params.save(&circuit_params_path);
+
+    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, pk.get_vk())?;
+    save_pk::<KZGCommitmentScheme<Bn256>>(&pk_path, &pk)?;
+    Ok(())
+}
+
 fn prove(
     data: String,
-    vk_path: PathBuf,
+    pk_path: PathBuf,
     proof_path: PathBuf,
     params_path: PathBuf,
-    circuit_params_path: PathBuf,
     transcript: TranscriptType,
     strategy: StrategyType,
     logrows: u32,
@@ -505,15 +539,19 @@ fn prove(
     let data = prepare_data(data)?;
     let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
+    let circuit_params = circuit.params.clone();
 
     let params = load_params_cmd(params_path, logrows)?;
 
-    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
-        .map_err(Box::<dyn Error>::from)?;
+    let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
+        pk_path,
+        circuit_params.clone(),
+    )
+    .map_err(Box::<dyn Error>::from)?;
     trace!("params computed");
 
     let now = Instant::now();
-    let circuit_params = circuit.params.clone();
+
     // creates and verifies the proof
     let snark = match strategy {
         StrategyType::Single => {
@@ -545,9 +583,6 @@ fn prove(
     info!("proof took {}", now.elapsed().as_secs());
 
     snark.save(&proof_path)?;
-    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, pk.get_vk())?;
-
-    circuit_params.save(&circuit_params_path);
 
     Ok(())
 }

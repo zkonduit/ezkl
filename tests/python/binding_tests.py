@@ -80,9 +80,11 @@ def test_forward():
     with open(output_path, "r") as f:
         data = json.load(f)
 
-    assert data == {"input_data":[[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]],"input_shapes":[[1,5,5]],"output_data":[[0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625]]}
+    assert data == {"input_data": [[0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]], "input_shapes": [
+        [1, 5, 5]], "output_data": [[0.9140625, 0.9140625, 0.9140625, 0.9140625, 0.9140625, 0.9140625, 0.9140625, 0.9140625, 0.9140625]]}
 
     os.remove(output_path)
+
 
 def test_mock():
     """
@@ -107,6 +109,43 @@ def test_mock():
     assert res == True
 
 
+def test_setup():
+    """
+    Test for setup
+    """
+
+    data_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_average',
+        'input.json'
+    )
+
+    model_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_average',
+        'network.onnx'
+    )
+
+    pk_path = os.path.join(folder_path, 'test.pk')
+    vk_path = os.path.join(folder_path, 'test.vk')
+    circuit_params_path = os.path.join(folder_path, 'circuit.params')
+
+    res = ezkl_lib.setup(
+        data_path,
+        model_path,
+        vk_path,
+        pk_path,
+        params_path,
+        circuit_params_path,
+    )
+    assert res == True
+    assert os.path.isfile(vk_path)
+    assert os.path.isfile(pk_path)
+    assert os.path.isfile(circuit_params_path)
+
+
 def test_prove():
     """
     Test for prove
@@ -126,22 +165,20 @@ def test_prove():
         'network.onnx'
     )
 
-    vk_path = os.path.join(folder_path, 'test.vk')
+    pk_path = os.path.join(folder_path, 'test.pk')
     proof_path = os.path.join(folder_path, 'test.pf')
     circuit_params_path = os.path.join(folder_path, 'circuit.params')
 
     res = ezkl_lib.prove(
         data_path,
         model_path,
-        vk_path,
+        pk_path,
         proof_path,
         params_path,
-        circuit_params_path,
         "poseidon",
         "single",
     )
     assert res == True
-    assert os.path.isfile(vk_path)
     assert os.path.isfile(proof_path)
 
 

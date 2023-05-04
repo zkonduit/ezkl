@@ -27,7 +27,7 @@ mod wasm32 {
             num_instance: vec![1],
             instances: vec![vec![vec![0_u8; 32]]],
         };
-        let proof = serde_json::to_vec(&proof).unwrap();
+        let proof = bincode::serialize(&proof).unwrap();
         let proof_js = serde_wasm_bindgen::to_value(&proof).unwrap();
         let vk = serde_wasm_bindgen::to_value(&VK).unwrap();
         let circuit_params_ser = serde_wasm_bindgen::to_value(&CIRCUIT_PARAMS).unwrap();

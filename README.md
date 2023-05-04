@@ -105,9 +105,16 @@ Sample onnx files are also available in `./examples/onnx`. To generate a proof o
 ezkl -K=17 gen-srs --params-path=kzg.params
 ```
 
+Now setup the proving and verification keys: 
 
 ```bash
-ezkl --bits=16 -K=17 prove -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path=kzg.params --circuit-params-path=circuit.params
+ezkl --bits=16 -K=17 setup -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --pk-path 1l_relu.pk --vk-path 1l_relu.vk --params-path=kzg.params --circuit-params-path=circuit.params
+```
+
+Now generate a proof: 
+
+```bash
+ezkl --bits=16 -K=17 prove -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --pk-path 1l_relu.pk --params-path=kzg.params 
 ```
 
 This command generates a proof that the model was correctly run on private inputs (this is the default setting). It then outputs the resulting proof at the path specfifed by `--proof-path`, parameters that can be used for subsequent verification at `--params-path` and the verifier key at `--vk-path`.
@@ -127,11 +134,13 @@ cargo run --release --bin ezkl -- table -M ./examples/onnx/1l_relu/network.onnx
 
 #### verifying with the EVM ◊
 
-Note that the above prove and verify stats can also be run with an EVM verifier. This can be done by generating a verifier smart contract after generating the proof
+Note that the above prove and verify stats can also be run with an EVM verifier. This can be done by generating a verifier smart contract after generating the proof. 
+
+(run the following commands after calling `gen-params` and `setup`, as detailed above).
 
 ```bash
 # gen proof
-ezkl --bits=16 -K=17 prove -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path=kzg.params --transcript=evm --circuit-params-path=circuit.params
+ezkl --bits=16 -K=17 prove -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --pk-path 1l_relu.pk --params-path=kzg.params --transcript=evm --circuit-params-path=circuit.params
 ```
 ```bash
 # gen evm verifier
@@ -150,6 +159,12 @@ The above pipeline can also be run using [proof aggregation](https://ethresear.c
 # Generate a new 2^20 SRS
 ezkl -K=20 gen-srs --params-path=kzg.params
 ```
+
+```bash
+# setup  
+ezkl --bits=16 -K=17 setup -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --pk-path 1l_relu.pk --vk-path 1l_relu.vk --params-path=kzg.params --circuit-params-path=circuit.params
+```
+
 
 ```bash
 # Single proof -> single proof we are going to feed into aggregation circuit. (Mock)-verifies + verifies natively as sanity check

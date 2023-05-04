@@ -384,7 +384,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             Commands::Table { model } | Commands::Mock { model, .. } => {
                 Model::new(model, cli.args, Mode::Mock, visibility)
             }
-            Commands::Prove { model, .. } => Model::new(model, cli.args, Mode::Prove, visibility),
+            Commands::Prove { model, .. } | Commands::Setup { model, .. } => {
+                Model::new(model, cli.args, Mode::Prove, visibility)
+            }
             #[cfg(feature = "render")]
             Commands::RenderCircuit { model, .. } => {
                 Model::new(model, cli.args, Mode::Table, visibility)
