@@ -670,7 +670,7 @@ mod native_tests {
             .args([
                 "--bits=16",
                 "-K=17",
-                "prove",
+                "setup",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
