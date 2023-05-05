@@ -450,3 +450,5 @@ pytest
 ```
 
 The list of python functions that can be accessed are found within `src/python.rs`
+
+We also include a full run through and tutorial on using the bindings within a jupyter notebook in `examples/notebook`.
