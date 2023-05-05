@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use halo2_proofs::plonk::*;
 use halo2_proofs::poly::commitment::ParamsProver;
 use halo2_proofs::poly::kzg::{
@@ -17,28 +19,25 @@ pub fn init_panic_hook() {
     console_error_panic_hook::set_once();
 }
 
-use crate::execute::verify_proof_circuit_kzg;
+use crate::execute::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 use crate::graph::{ModelCircuit, ModelParams};
 use crate::pfsys::Snarkbytes;
 
 #[wasm_bindgen]
 /// Verify proof in browser using wasm
 pub fn verify_wasm(
-    proof_js: JsValue,
-    vk: JsValue,
-    circuit_params_ser: JsValue,
-    params_ser: JsValue,
+    proof_js: wasm_bindgen::Clamped<Vec<u8>>,
+    vk: wasm_bindgen::Clamped<Vec<u8>>,
+    circuit_params_ser: wasm_bindgen::Clamped<Vec<u8>>,
+    params_ser: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> bool {
-    let binding = serde_wasm_bindgen::from_value::<Vec<u8>>(params_ser).unwrap();
-    let mut reader = std::io::BufReader::new(&binding[..]);
+    let mut reader = std::io::BufReader::new(&params_ser[..]);
     let params: ParamsKZG<Bn256> =
         halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).unwrap();
 
-    let binding = serde_wasm_bindgen::from_value::<Vec<u8>>(circuit_params_ser).unwrap();
-    let circuit_params: ModelParams = bincode::deserialize(&binding).unwrap();
+    let circuit_params: ModelParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();
 
-    let snark_bytes: Vec<u8> = serde_wasm_bindgen::from_value::<Vec<u8>>(proof_js).unwrap();
-    let snark_bytes: Snarkbytes = bincode::deserialize(&snark_bytes).unwrap();
+    let snark_bytes: Snarkbytes = bincode::deserialize(&proof_js[..]).unwrap();
 
     let instances = snark_bytes
         .instances
@@ -50,8 +49,7 @@ pub fn verify_wasm(
         })
         .collect::<Vec<Vec<Fr>>>();
 
-    let binding = serde_wasm_bindgen::from_value::<Vec<u8>>(vk).unwrap();
-    let mut reader = std::io::BufReader::new(&binding[..]);
+    let mut reader = std::io::BufReader::new(&vk[..]);
     let vk = VerifyingKey::<G1Affine>::read::<_, ModelCircuit<Fr>>(
         &mut reader,
         halo2_proofs::SerdeFormat::RawBytes,
@@ -89,8 +87,61 @@ pub fn verify_wasm(
     }
 }
 
-// TODO
-// #[wasm_bindgen]
-// pub fn prove_wasm(){
+/// Prove proof in browser using wasm
+#[wasm_bindgen]
+pub fn prove_wasm(
+    data: wasm_bindgen::Clamped<Vec<u8>>,
+    pk: wasm_bindgen::Clamped<Vec<u8>>,
+    circuit_ser: wasm_bindgen::Clamped<Vec<u8>>,
+    circuit_params_ser: wasm_bindgen::Clamped<Vec<u8>>,
+    params_ser: wasm_bindgen::Clamped<Vec<u8>>,
+) -> Vec<u8> {
+    // read in kzg params
+    let mut reader = std::io::BufReader::new(&params_ser[..]);
+    let params: ParamsKZG<Bn256> =
+        halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).unwrap();
 
-// }
+    // read in model input
+    let data: crate::pfsys::ModelInput = serde_json::from_slice(&data[..]).unwrap();
+
+    // read in circuit params
+    let circuit_params: ModelParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();
+
+    // read in proving key
+    let mut reader = std::io::BufReader::new(&pk[..]);
+    let pk = ProvingKey::<G1Affine>::read::<_, ModelCircuit<Fr>>(
+        &mut reader,
+        halo2_proofs::SerdeFormat::RawBytes,
+        circuit_params.clone(),
+    )
+    .unwrap();
+
+    // read in circuit
+    let mut reader = std::io::BufReader::new(&circuit_ser[..]);
+    let model = crate::graph::Model::new(
+        &mut reader,
+        circuit_params.run_args,
+        crate::graph::Mode::Prove,
+        circuit_params.visibility,
+    )
+    .unwrap();
+
+    let circuit = ModelCircuit::<Fr>::new(&data, Arc::new(model)).unwrap();
+
+    // prep public inputs
+    let public_inputs = circuit.prepare_public_inputs(&data).unwrap();
+
+    let strategy = KZGSingleStrategy::new(&params);
+    let proof = create_proof_circuit_kzg(
+        circuit,
+        &params,
+        public_inputs,
+        &pk,
+        crate::commands::TranscriptType::EVM,
+        strategy,
+        crate::circuit::CheckMode::UNSAFE,
+    )
+    .unwrap();
+
+    bincode::serialize(&proof.to_bytes()).unwrap()
+}

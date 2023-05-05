@@ -33,13 +33,10 @@ fn display_opkind<F: PrimeField + TensorType + PartialOrd>(v: &Box<dyn Op<F>>) -
 /// A single operation in a Model.
 /// # Arguments:
 /// * `opkind` - [OpKind] enum, i.e what operation this node represents.
-/// * `output_max` - The inferred maximum value that can appear in the output tensor given previous quantization choices.
-/// * `in_scale, out_scale` - The denominator in the fixed point representation. Tensors of differing scales should not be combined.
-/// * `in_dims, out_dims` - The shape of the activations which enter and leave the self.
+/// * `out_scale` - The denominator in the fixed point representation. Tensors of differing scales should not be combined.
+/// * `out_dims` - The shape of the activations which enter and leave the self.
 /// * `inputs` - The indices of other nodes that feed into this self.
-/// * `const_value` - The constants potentially associated with this self.
 /// * `idx` - The node's unique identifier.
-/// * `bucket` - The execution bucket this node has been assigned to.
 #[derive(Clone, Debug, Tabled)]
 pub struct Node<F: PrimeField + TensorType + PartialOrd> {
     /// [OpKind] enum, i.e what operation this node represents.
@@ -64,7 +61,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
     /// # Arguments:
     /// * `node` - [OnnxNode]
     /// * `other_nodes` - [BTreeMap] of other previously initialized [Node]s in the computational graph.
-    /// * `scale` - The denominator in the fixed point representation. Tensors of differing scales should not be combined.
+    /// * `public_params` - flag if parameters of model are public
     /// * `idx` - The node's unique identifier.
     pub fn new(
         mut node: OnnxNode<TypedFact, Box<dyn TypedOp>>,

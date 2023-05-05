@@ -316,7 +316,7 @@ where
     let pi_inner: &[&[&[Scheme::Scalar]]] = &[&pi_inner];
     trace!("instances {:?}", instances);
 
-    let now = Instant::now();
+    info!("Proof started");
     create_proof::<Scheme, P, _, _, TW, _>(
         params,
         pk,
@@ -326,7 +326,7 @@ where
         &mut transcript,
     )?;
     let proof = transcript.finalize();
-    info!("Proof took {}", now.elapsed().as_secs());
+    info!("Proof ended");
 
     let checkable_pf = Snark::new(protocol, instances, proof);
 
