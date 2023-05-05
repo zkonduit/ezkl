@@ -1222,72 +1222,7 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
 }
 
 
-/// Checks that the percent error between the expected public output and the actual output value
-/// is within the percent error expressed by the `tol` input, where `tol == 1.0` means the percent
-/// error tolerance is 1 percent.
-pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
-    region: &mut Option<&mut Region<F>>,
-    values: &[ValTensor<F>; 2],
-    offset: &mut usize,
-    tol: f32,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
-    // Find the absolute maximum integer value of the expected output tensor
-    let max_int = values[0]
-        .get_int_evals()?
-        .iter()
-        .map(|x| x.abs())
-        .max()
-        .ok_or("The expected output tensor must have at least one element")?;
 
-    // Calculate the difference between the expected output and actual output
-    let diff = pairwise(
-        config,
-        region,
-        &values,
-        offset,
-        BaseOp::Sub,
-    )?;
-
-    // Calculate the reciprocal of the expected output tensor scaled by max_int
-    let recip = nonlinearity(
-        config,
-        region,
-        &[values[0].clone()],
-        &LookupOp::Recip { scale: max_int as usize },
-        offset,
-    )?;
-
-    // Multiply the difference by the recip
-    let product = pairwise(config, region, &[diff, recip], offset, BaseOp::Mult)?;
-
-    // Use the greater than look up table to check if the percent error is within the tolerance for lower bound
-    nonlinearity(
-        config,
-        region,
-        &[product.clone()],
-        &LookupOp::GreaterThan { a: utils::F32((- tol / 100.0)*max_int as f32) },
-        offset,
-    )?;
-
-    // Negate the product
-    let neg_product = neg(
-        config,
-        region,
-        &[product.clone()],
-        offset
-    )?;
-
-    // Use the greater than look up table to check if the percent error is within the tolerance for upper bound
-    nonlinearity(
-        config,
-        region,
-        &[neg_product.clone()],
-        &LookupOp::GreaterThan { a: utils::F32((- tol / 100.0)*max_int as f32) },
-        offset,
-    )
-
-}
 
 
 
@@ -1698,4 +1633,97 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
     };
 
     Ok(softmax)
+}
+
+/// Checks that the percent error between the expected public output and the actual output value
+/// is within the percent error expressed by the `tol` input, where `tol == 1.0` means the percent
+/// error tolerance is 1 percent.
+pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
+    config: &mut BaseConfig<F>,
+    region: &mut Option<&mut Region<F>>,
+    values: &[ValTensor<F>; 2],
+    scale: usize,
+    offset: &mut usize,
+    tol: f32,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+
+    // Calculate the difference between the expected output and actual output
+    let diff = pairwise(
+        config,
+        region,
+        &values,
+        offset,
+        BaseOp::Sub,
+    )?;
+
+    // Calculate the reciprocal of the expected output tensor, scaling by double the scaling factor
+    let scale = scale.pow(2);
+    let recip = nonlinearity(
+        config,
+        region,
+        &[values[0].clone()],
+        &LookupOp::Recip { scale },
+        offset,
+    )?;
+
+    // Multiply the difference by the recip
+    let product = pairwise(config, region, &[diff, recip], offset, BaseOp::Mult)?;
+
+    // Use the greater than look up table to check if the percent error is within the tolerance for upper bound
+    let tol = tol / 100.0;
+    let upper_bound = nonlinearity(
+        config,
+        region,
+        &[product.clone()],
+        &LookupOp::GreaterThan { a: utils::F32(tol*scale as f32) },
+        offset,
+    )?;
+
+    // Negate the product
+    let neg_product = neg(
+        config,
+        region,
+        &[product.clone()],
+        offset
+    )?;
+
+    // Use the greater than look up table to check if the percent error is within the tolerance for lower bound
+    let lower_bound = nonlinearity(
+        config,
+        region,
+        &[neg_product.clone()],
+        &LookupOp::GreaterThan { a: utils::F32( tol*scale as f32) },
+        offset,
+    )?;
+
+    // Add the lower_bound and upper_bound
+    let sum = pairwise(config, region, &[lower_bound, upper_bound], offset, BaseOp::Add)?;
+
+    // Assign the sum tensor to the inputs
+    config.inputs[1].assign(region, *offset, &sum)?;
+
+    // Constrain the sum to be all zeros
+    if let Some(region) = region {
+        let (x, y) = config.output.cartesian_coord(*offset);
+        config
+            .selectors
+            .get(&(BaseOp::IsZero, x))
+            .unwrap()
+            .enable(*region, y)?;
+    }
+    *offset += sum.len();
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        let int_evals = &[
+            Tensor::new(Some(&values[0].get_int_evals()?), &values[0].dims())?, 
+            Tensor::new(Some(&values[1].get_int_evals()?), &values[1].dims())?
+        ];
+        let ref_range_check_percent: Tensor<i128> =
+            tensor::ops::nonlinearities::range_check_percent(int_evals, scale, tol);
+
+        let output_int_evals = Tensor::new(Some(&sum.get_int_evals()?), &sum.dims())?;
+        assert_eq!(output_int_evals, ref_range_check_percent)
+    }
+    Ok(sum)
+
 }

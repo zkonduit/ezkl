@@ -1,4 +1,5 @@
 use crate::circuit::ops::poly::PolyOp;
+use crate::circuit::ops::hybrid::HybridOp;
 use crate::circuit::*;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -1461,7 +1462,7 @@ mod rangecheck {
                                 &mut Some(&mut region),
                                 &[self.input.clone(), self.output.clone()],
                                 &mut 0,
-                                Box::new(PolyOp::RangeCheck(Tolerance::Abs { val: RANGE})),
+                                Box::new(HybridOp::RangeCheck(Tolerance::Abs { val: RANGE})),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1511,7 +1512,7 @@ mod rangecheck {
 #[cfg(test)]
 mod rangecheckpercent {
 
-    use crate::tensor::Tensor;
+    use crate::{tensor::Tensor, graph::scale_to_multiplier};
     use halo2_proofs::{
         circuit::{Layouter, SimpleFloorPlanner, Value},
         dev::MockProver,
@@ -1547,6 +1548,10 @@ mod rangecheckpercent {
             let output = VarTensor::new_advice(cs, K, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
+            // set up a new GreaterThan and Recip tables
+            // base_config
+            //     .configure_lookup(cs, input, &output, bits: 16, nl: &LookupOp::Recip {})
+            //     .unwrap()
         }
 
         fn synthesize(
@@ -1563,7 +1568,7 @@ mod rangecheckpercent {
                                 &mut Some(&mut region),
                                 &[self.input.clone(), self.output.clone()],
                                 &mut 0,
-                                Box::new(PolyOp::RangeCheck(Tolerance::Percentage { val: RANGE})),
+                                Box::new(HybridOp::RangeCheck(Tolerance::Percentage { val: RANGE, scale: scale_to_multiplier(7) as usize})),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1571,6 +1576,17 @@ mod rangecheckpercent {
                 .unwrap();
             Ok(())
         }
+
+        fn params(&self) -> Self::Params {
+        Self::Params::default()
+    }
+
+        fn configure_with_params(
+        meta: &mut ConstraintSystem<F>,
+        _params: Self::Params,
+    ) -> Self::Config {
+        Self::configure(meta)
+    }
     }
 
     #[test]
