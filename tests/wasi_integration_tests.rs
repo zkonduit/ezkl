@@ -14,9 +14,7 @@ mod wasi_tests {
     fn init() {
         COMPILE.call_once(|| {
             println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
-            if !std::path::Path::new(&format!("{}/release/ezkl", *CARGO_TARGET_DIR)).is_file() {
-                build_ezkl_wasm();
-            }
+            build_ezkl_wasm();
         });
     }
 

@@ -21,9 +21,7 @@ mod native_tests {
     fn init_binary() {
         COMPILE.call_once(|| {
             println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
-            if !std::path::Path::new(&format!("{}/release/ezkl", *CARGO_TARGET_DIR)).is_file() {
-                build_ezkl();
-            }
+            build_ezkl();
         });
     }
 
