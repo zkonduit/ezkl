@@ -128,10 +128,10 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
       - name: Install wasm runner
         run: cargo install wasm-server-runner
+      - name: Add rust-src
+        run: rustup component add rust-src --toolchain nightly-2022-11-03-x86_64-unknown-linux-gnu
       - name: Run wasm verifier tests
-        run:
-          rustup component add rust-src --toolchain nightly-2022-11-03-x86_64-unknown-linux-gnu
-          wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std"
+        run: wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std"
 
   forward-pass-tests:
     runs-on: ubuntu-latest-16-cores
@@ -160,7 +160,7 @@ jobs:
         with:
           wasmtime-version: "3.0.1"
       - name: Circuit Render
-        run: cargo test --release --verbose tests::render_circuit_
+        run: cargo test --release --features render --verbose tests::render_circuit_
 
   tutorial:
     runs-on: ubuntu-latest
