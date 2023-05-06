@@ -13,6 +13,8 @@ use wasm_bindgen::prelude::*;
 
 use console_error_panic_hook;
 
+pub use wasm_bindgen_rayon::init_thread_pool;
+
 #[wasm_bindgen]
 /// Initialize panic hook for wasm
 pub fn init_panic_hook() {

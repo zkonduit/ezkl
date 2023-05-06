@@ -1,2 +1,6 @@
 [target.wasm32-unknown-unknown]
 runner = 'wasm-bindgen-test-runner'
+rustflags = ["-C", "target-feature=+atomics,+bulk-memory,+mutable-globals"]
+
+[unstable]
+build-std = ["panic_abort", "std"]
