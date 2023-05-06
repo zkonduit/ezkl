@@ -42,8 +42,6 @@ serde_traitobject = "0.2.8"
 bincode = "*"
 wasm-bindgen = { version = "0.2.81", features = ["serde-serialize"]}
 console_error_panic_hook = "0.1.7"
-serde-wasm-bindgen = "0.4"
-wasm-bindgen-rayon = "1.0"
 
 # python binding related deps
 pyo3 = { version = "0.18.3", features = ["extension-module", "abi3-py37"], optional = true }
@@ -59,6 +57,12 @@ ethers-solc = "2.0.1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2.8", features = ["js"] }
+wasm-bindgen-test = "0.3.34"
+wasm-bindgen-futures = "0.4.34"
+serde-wasm-bindgen = "0.4"
+
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+wasm-bindgen-rayon = "1.0"
 
 
 [dev-dependencies]
@@ -71,12 +75,10 @@ seq-macro = "0.3.1"
 test-case = "2.2.2"
 ctor = "0.1.26"
 tempdir = "0.3.7"
-wasm-bindgen-test = "0.3.34"
-wasm-bindgen-futures = "0.4.34"
-
 
 [target.wasm32-unknown-unknown]
 runner = 'wasm-bindgen-test-runner'
+
 
 [dependencies.web-sys]
 version = "*"
