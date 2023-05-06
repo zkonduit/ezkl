@@ -175,12 +175,21 @@ mod native_tests {
             use crate::native_tests::TESTS_AGGR;
             use test_case::test_case;
             use crate::native_tests::kzg_aggr_prove_and_verify;
+            use std::sync::Once;
+            static START: Once = Once::new();
+            //Sure to run this once
+            fn setup_tests() {
+                START.call_once(|| {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params();
+                });
+            }
+
             seq!(N in 0..=17 {
 
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_prove_and_verify_(test: &str) {
-                crate::native_tests::init_binary();
-                crate::native_tests::init_params();
+                setup_tests();
                 kzg_aggr_prove_and_verify(test.to_string());
             }
 
@@ -233,10 +242,20 @@ mod native_tests {
             use crate::native_tests::kzg_prove_and_verify;
             use crate::native_tests::render_circuit;
             use crate::native_tests::tutorial as run_tutorial;
+            use std::sync::Once;
+            static START: Once = Once::new();
 
             #[test]
             fn tutorial_() {
                 run_tutorial();
+            }
+
+            //Sure to run this once
+            fn setup_tests() {
+                START.call_once(|| {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params();
+                });
             }
 
 
@@ -274,8 +293,7 @@ mod native_tests {
 
             #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_(test: &str) {
-                crate::native_tests::init_binary();
-                crate::native_tests::init_params();
+                setup_tests();
                 kzg_prove_and_verify(test.to_string());
             }
 
@@ -310,20 +328,28 @@ mod native_tests {
                 "1l_var"
             ];
 
+            use std::sync::Once;
+            static START: Once = Once::new();
+            //Sure to run this once
+            fn setup_tests() {
+                START.call_once(|| {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params();
+                });
+            }
+
             seq!(N in 0..=17 {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
-                    crate::native_tests::init_binary();
-                    crate::native_tests::init_params();
+                    setup_tests();
                     kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test));
                 }
                 // these take a particularly long time to run
                 #(#[test_case(TESTS_EVM[N])])*
                 #[ignore]
                 fn kzg_evm_aggr_prove_and_verify_(test: &str) {
-                    crate::native_tests::init_binary();
-                    crate::native_tests::init_params();
+                    setup_tests();
                     kzg_evm_aggr_prove_and_verify(test.to_string());
                 }
 

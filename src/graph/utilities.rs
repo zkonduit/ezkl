@@ -442,10 +442,10 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 }
             };
 
-            let axes = &op.axes;
+            let _axes = &op.axes;
 
             // TODO: this is a hack to get around the fact that tract eplaces matmul with einsum pending this PR: https://github.com/sonos/tract/pull/1070
-            warn!("matching einsum axes {:?} as a matmul operation", axes);
+            warn!("matching einsum as a matmul operation");
 
             let mut params = None;
 
