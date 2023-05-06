@@ -3,6 +3,8 @@ mod wasi_tests {
     use lazy_static::lazy_static;
     use std::env::var;
     use std::process::Command;
+    use std::sync::Once;
+    static COMPILE: Once = Once::new();
 
     lazy_static! {
         static ref CARGO_TARGET_DIR: String =
@@ -10,15 +12,12 @@ mod wasi_tests {
     }
 
     fn init() {
-        println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
-        if !std::path::Path::new(&format!(
-            "{}/wasm32-wasi/release/ezkl.wasm",
-            *CARGO_TARGET_DIR
-        ))
-        .is_file()
-        {
-            build_ezkl_wasm();
-        }
+        COMPILE.call_once(|| {
+            println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
+            if !std::path::Path::new(&format!("{}/release/ezkl", *CARGO_TARGET_DIR)).is_file() {
+                build_ezkl_wasm();
+            }
+        });
     }
 
     const TESTS: [&str; 19] = [

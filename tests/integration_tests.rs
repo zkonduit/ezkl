@@ -5,7 +5,12 @@ mod native_tests {
     use lazy_static::lazy_static;
     use std::env::var;
     use std::process::Command;
+    use std::sync::Once;
     use tempdir::TempDir;
+    static COMPILE: Once = Once::new();
+    static KZG17: Once = Once::new();
+    static KZG23: Once = Once::new();
+    //Sure to run this once
 
     lazy_static! {
         static ref CARGO_TARGET_DIR: String =
@@ -14,19 +19,16 @@ mod native_tests {
     }
 
     fn init_binary() {
-        println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
-        if !std::path::Path::new(&format!("{}/release/ezkl", *CARGO_TARGET_DIR)).is_file() {
-            build_ezkl();
-        }
+        COMPILE.call_once(|| {
+            println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
+            if !std::path::Path::new(&format!("{}/release/ezkl", *CARGO_TARGET_DIR)).is_file() {
+                build_ezkl();
+            }
+        });
     }
 
-    fn init_params() {
-        if !std::path::Path::new(&format!(
-            "{}/kzg17.params",
-            TEST_DIR.path().to_str().unwrap()
-        ))
-        .is_file()
-        {
+    fn init_params_17() {
+        KZG17.call_once(|| {
             let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
                 .args([
                     "-K=17",
@@ -39,13 +41,11 @@ mod native_tests {
                 .status()
                 .expect("failed to execute process");
             assert!(status.success());
-        }
-        if !std::path::Path::new(&format!(
-            "{}/kzg23.params",
-            TEST_DIR.path().to_str().unwrap()
-        ))
-        .is_file()
-        {
+        });
+    }
+
+    fn init_params_23() {
+        KZG23.call_once(|| {
             let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
                 .args([
                     "-K=23",
@@ -58,7 +58,7 @@ mod native_tests {
                 .status()
                 .expect("failed to execute process");
             assert!(status.success());
-        }
+        })
     }
 
     const TESTS: [&str; 30] = [
@@ -175,21 +175,14 @@ mod native_tests {
             use crate::native_tests::TESTS_AGGR;
             use test_case::test_case;
             use crate::native_tests::kzg_aggr_prove_and_verify;
-            use std::sync::Once;
-            static START: Once = Once::new();
-            //Sure to run this once
-            fn setup_tests() {
-                START.call_once(|| {
-                    crate::native_tests::init_binary();
-                    crate::native_tests::init_params();
-                });
-            }
+
 
             seq!(N in 0..=17 {
 
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_prove_and_verify_(test: &str) {
-                setup_tests();
+                crate::native_tests::init_binary();
+                crate::native_tests::init_params_23();
                 kzg_aggr_prove_and_verify(test.to_string());
             }
 
@@ -242,20 +235,11 @@ mod native_tests {
             use crate::native_tests::kzg_prove_and_verify;
             use crate::native_tests::render_circuit;
             use crate::native_tests::tutorial as run_tutorial;
-            use std::sync::Once;
-            static START: Once = Once::new();
+
 
             #[test]
             fn tutorial_() {
                 run_tutorial();
-            }
-
-            //Sure to run this once
-            fn setup_tests() {
-                START.call_once(|| {
-                    crate::native_tests::init_binary();
-                    crate::native_tests::init_params();
-                });
             }
 
 
@@ -293,7 +277,8 @@ mod native_tests {
 
             #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_(test: &str) {
-                setup_tests();
+                crate::native_tests::init_binary();
+                crate::native_tests::init_params_17();
                 kzg_prove_and_verify(test.to_string());
             }
 
@@ -328,28 +313,21 @@ mod native_tests {
                 "1l_var"
             ];
 
-            use std::sync::Once;
-            static START: Once = Once::new();
-            //Sure to run this once
-            fn setup_tests() {
-                START.call_once(|| {
-                    crate::native_tests::init_binary();
-                    crate::native_tests::init_params();
-                });
-            }
 
             seq!(N in 0..=17 {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
-                    setup_tests();
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params_17();
                     kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test));
                 }
                 // these take a particularly long time to run
                 #(#[test_case(TESTS_EVM[N])])*
                 #[ignore]
                 fn kzg_evm_aggr_prove_and_verify_(test: &str) {
-                    setup_tests();
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params_23();
                     kzg_evm_aggr_prove_and_verify(test.to_string());
                 }
 
