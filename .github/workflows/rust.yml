@@ -129,15 +129,16 @@ jobs:
       - uses: mwilliamson/setup-wasmtime-action@v2
         with:
           wasmtime-version: "3.0.1"
+
+      - name: Install wasm32-unknown-unknown
+        run: rustup target add wasm32-unknown-unknown
+      - name: Install wasm runner
+        run: cargo install wasm-server-runner
       - name: Install Node
         uses: actions/setup-node@v3
         with:
           node-version: "16.13.1"
           architecture: "x64"
-      - name: Install wasm32-unknown-unknown
-        run: rustup target add wasm32-unknown-unknown
-      - name: Install wasm runner
-        run: cargo install wasm-server-runner
       - name: Run wasm verifier tests
         run: wasm-pack test --node
 
