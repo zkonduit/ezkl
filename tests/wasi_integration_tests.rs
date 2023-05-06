@@ -1,4 +1,4 @@
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(test)]
 mod wasi_tests {
     use lazy_static::lazy_static;
     use std::env::var;
@@ -9,11 +9,16 @@ mod wasi_tests {
             var("CARGO_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
     }
 
-    #[cfg(test)]
-    #[ctor::ctor]
     fn init() {
         println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
-        build_ezkl_wasm();
+        if !std::path::Path::new(&format!(
+            "{}/wasm32-wasi/release/ezkl.wasm",
+            *CARGO_TARGET_DIR
+        ))
+        .is_file()
+        {
+            build_ezkl_wasm();
+        }
     }
 
     const TESTS: [&str; 19] = [
@@ -68,13 +73,15 @@ mod wasi_tests {
             use crate::wasi_tests::mock_everything;
 
             seq!(N in 0..=10 {
-
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_packed_outputs_(test: &str) {
+                crate::wasi_tests::init();
                 mock_packed_outputs(test.to_string());
             }
+
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_everything_(test: &str) {
+                crate::wasi_tests::init();
                 mock_everything(test.to_string());
             }
 
@@ -100,21 +107,25 @@ mod wasi_tests {
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
+                crate::wasi_tests::init();
                 mock(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_inputs_(test: &str) {
+                crate::wasi_tests::init();
                 mock_public_inputs(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_params_(test: &str) {
+                crate::wasi_tests::init();
                 mock_public_params(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
             fn forward_pass_(test: &str) {
+                crate::wasi_tests::init();
                 forward_pass(test.to_string());
             }
 
@@ -135,6 +146,7 @@ mod wasi_tests {
             seq!(N in 0..=1 {
             #(#[test_case(NEG_TESTS[N])])*
             fn neg_examples_(test: (&str, &str)) {
+                crate::wasi_tests::init();
                 run(test.0.to_string(), test.1.to_string());
             }
 
@@ -323,7 +335,7 @@ mod wasi_tests {
     }
 
     fn build_ezkl_wasm() {
-        let status = Command::new("wasm-pack")
+        let status = Command::new("cargo")
             .args([
                 "build",
                 "--release",

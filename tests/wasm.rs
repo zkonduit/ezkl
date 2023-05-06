@@ -1,4 +1,5 @@
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+#[cfg(test)]
 mod wasm32 {
     use ezkl_lib::pfsys::Snarkbytes;
     use ezkl_lib::wasm::{prove_wasm, verify_wasm};

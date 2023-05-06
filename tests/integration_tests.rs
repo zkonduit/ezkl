@@ -1,4 +1,5 @@
 #[cfg(not(target_arch = "wasm32"))]
+#[cfg(test)]
 mod native_tests {
 
     use lazy_static::lazy_static;
@@ -12,35 +13,52 @@ mod native_tests {
         static ref TEST_DIR: TempDir = TempDir::new("example").unwrap();
     }
 
-    #[cfg(test)]
-    #[ctor::ctor]
-    fn init() {
+    fn init_binary() {
         println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
-        build_ezkl();
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "-K=17",
-                "gen-srs",
-                &format!(
-                    "--params-path={}/kzg17.params",
-                    TEST_DIR.path().to_str().unwrap()
-                ),
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "-K=23",
-                "gen-srs",
-                &format!(
-                    "--params-path={}/kzg23.params",
-                    TEST_DIR.path().to_str().unwrap()
-                ),
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
+        if !std::path::Path::new(&format!("{}/release/ezkl", *CARGO_TARGET_DIR)).is_file() {
+            build_ezkl();
+        }
+    }
+
+    fn init_params() {
+        if !std::path::Path::new(&format!(
+            "{}/kzg17.params",
+            TEST_DIR.path().to_str().unwrap()
+        ))
+        .is_file()
+        {
+            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                .args([
+                    "-K=17",
+                    "gen-srs",
+                    &format!(
+                        "--params-path={}/kzg17.params",
+                        TEST_DIR.path().to_str().unwrap()
+                    ),
+                ])
+                .status()
+                .expect("failed to execute process");
+            assert!(status.success());
+        }
+        if !std::path::Path::new(&format!(
+            "{}/kzg23.params",
+            TEST_DIR.path().to_str().unwrap()
+        ))
+        .is_file()
+        {
+            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                .args([
+                    "-K=23",
+                    "gen-srs",
+                    &format!(
+                        "--params-path={}/kzg23.params",
+                        TEST_DIR.path().to_str().unwrap()
+                    ),
+                ])
+                .status()
+                .expect("failed to execute process");
+            assert!(status.success());
+        }
     }
 
     const TESTS: [&str; 30] = [
@@ -161,6 +179,8 @@ mod native_tests {
 
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_prove_and_verify_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::init_params();
                 kzg_aggr_prove_and_verify(test.to_string());
             }
 
@@ -183,11 +203,13 @@ mod native_tests {
 
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_packed_outputs_(test: &str) {
+                crate::native_tests::init_binary();
                 mock_packed_outputs(test.to_string());
             }
 
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_everything_(test: &str) {
+                crate::native_tests::init_binary();
                 mock_everything(test.to_string());
             }
 
@@ -222,31 +244,38 @@ mod native_tests {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
+                crate::native_tests::init_binary();
                 render_circuit(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
+                crate::native_tests::init_binary();
                 mock(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_inputs_(test: &str) {
+                crate::native_tests::init_binary();
                 mock_public_inputs(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_params_(test: &str) {
+                crate::native_tests::init_binary();
                 mock_public_params(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
             fn forward_pass_(test: &str) {
+                crate::native_tests::init_binary();
                 forward_pass(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::init_params();
                 kzg_prove_and_verify(test.to_string());
             }
 
@@ -285,12 +314,16 @@ mod native_tests {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params();
                     kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test));
                 }
                 // these take a particularly long time to run
                 #(#[test_case(TESTS_EVM[N])])*
                 #[ignore]
                 fn kzg_evm_aggr_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params();
                     kzg_evm_aggr_prove_and_verify(test.to_string());
                 }
 
@@ -328,6 +361,7 @@ mod native_tests {
             seq!(N in 0..=1 {
             #(#[test_case(NEG_TESTS[N])])*
             fn neg_examples_(test: (&str, &str)) {
+                crate::native_tests::init_binary();
                 run(test.0.to_string(), test.1.to_string());
             }
 
