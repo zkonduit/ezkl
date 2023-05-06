@@ -114,7 +114,7 @@ jobs:
       - name: Library tests
         run: cargo test --lib --verbose
 
-  wasm-verifier:
+  wasm32-tests:
     runs-on: ubuntu-latest
     needs: [build, build-wasm, library-tests, docs]
     steps:
@@ -129,6 +129,7 @@ jobs:
       - uses: mwilliamson/setup-wasmtime-action@v2
         with:
           wasmtime-version: "3.0.1"
+
       - name: Install wasm32-unknown-unknown
         run: rustup target add wasm32-unknown-unknown
       - name: Install wasm runner

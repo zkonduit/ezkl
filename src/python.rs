@@ -113,7 +113,8 @@ impl From<PyRunArgs> for RunArgs {
 fn table(model: String, py_run_args: Option<PyRunArgs>) -> Result<String, PyErr> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let visibility: VarVisibility = run_args.to_var_visibility();
-    let result = Model::<Fr>::new(model, run_args, Mode::Mock, visibility);
+    let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
+    let result = Model::<Fr>::new(&mut reader, run_args, Mode::Mock, visibility);
 
     match result {
         Ok(m) => Ok(Table::new(m.nodes.iter()).to_string()),
@@ -164,7 +165,8 @@ fn forward(
             .collect();
         model_inputs.push(t.into_iter().into());
     }
-    let res = Model::<Fr>::forward(model, &model_inputs, run_args)
+    let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
+    let res = Model::<Fr>::forward(&mut reader, &model_inputs, run_args)
         .map_err(|_| PyRuntimeError::new_err("Failed to compute forward pass"))?;
 
     let float_res: Vec<Vec<f32>> = res.iter().map(|t| t.to_vec()).collect();
@@ -197,8 +199,8 @@ fn mock(data: String, model: String, py_run_args: Option<PyRunArgs>) -> Result<b
     let logrows = run_args.logrows;
     let data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
     let visibility = run_args.to_var_visibility();
-
-    let procmodel = Model::<Fr>::new(model, run_args, Mode::Mock, visibility)
+    let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
+    let procmodel = Model::<Fr>::new(&mut reader, run_args, Mode::Mock, visibility)
         .map_err(|_| PyIOError::new_err("Failed to process model"))?;
 
     let arcmodel: Arc<Model<Fr>> = Arc::new(procmodel);
@@ -244,7 +246,8 @@ fn setup(
     let data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
     let visibility = run_args.to_var_visibility();
 
-    let procmodel = Model::<Fr>::new(model, run_args, Mode::Prove, visibility)
+    let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
+    let procmodel = Model::<Fr>::new(&mut reader, run_args, Mode::Prove, visibility)
         .map_err(|_| PyIOError::new_err("Failed to process model"))?;
 
     let arcmodel: Arc<Model<Fr>> = Arc::new(procmodel);
@@ -301,7 +304,8 @@ fn prove(
     let data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
     let visibility = run_args.to_var_visibility();
 
-    let procmodel = Model::<Fr>::new(model, run_args, Mode::Prove, visibility)
+    let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
+    let procmodel = Model::<Fr>::new(&mut reader, run_args, Mode::Prove, visibility)
         .map_err(|_| PyIOError::new_err("Failed to process model"))?;
 
     let arcmodel: Arc<Model<Fr>> = Arc::new(procmodel);

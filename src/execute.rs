@@ -371,7 +371,7 @@ fn forward(
         model_inputs.push(t.into_iter().into());
     }
 
-    let res = Model::<Fr>::forward(model, &model_inputs, args)?;
+    let res = Model::<Fr>::forward(&mut std::fs::File::open(model)?, &model_inputs, args)?;
 
     let float_res: Vec<Vec<f32>> = res.iter().map(|t| t.to_vec()).collect();
     trace!("forward pass output: {:?}", float_res);

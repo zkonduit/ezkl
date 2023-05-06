@@ -35,7 +35,6 @@ use log::{debug, info, trace};
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::error::Error;
-use std::path::Path;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::Framework;
@@ -89,12 +88,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// * `mode` - The [Mode] we're using the model in.
     /// * `visibility` - Which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
     pub fn new(
-        path: impl AsRef<Path>,
+        reader: &mut dyn std::io::Read,
         run_args: RunArgs,
         mode: Mode,
         visibility: VarVisibility,
     ) -> Result<Self, Box<dyn Error>> {
-        let (model, nodes) = Self::load_onnx_model(path, run_args.scale, run_args.public_params)?;
+        let (model, nodes) = Self::load_onnx_model(reader, run_args.scale, run_args.public_params)?;
 
         let om = Model {
             inputs: model.inputs.iter().map(|o| o.node).collect(),
@@ -144,12 +143,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// * `path` - A path to an Onnx file.
     /// * `run_args` - [RunArgs]
     pub fn forward(
-        model_path: impl AsRef<Path>,
+        reader: &mut dyn std::io::Read,
         model_inputs: &[Tensor<i128>],
         run_args: RunArgs,
     ) -> Result<Vec<Tensor<f32>>, Box<dyn Error>> {
-        let (model, nodes) =
-            Self::load_onnx_model(model_path, run_args.scale, run_args.public_params)?;
+        let (model, nodes) = Self::load_onnx_model(reader, run_args.scale, run_args.public_params)?;
 
         let mut results: BTreeMap<&usize, Tensor<i128>> = BTreeMap::new();
         let mut max_lookup_inputs = 0;
@@ -241,27 +239,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// * `path` - A path to an Onnx file.
     /// * `scale` - The scale to use for quantization.
     fn load_onnx_model(
-        path: impl AsRef<Path>,
+        reader: &mut dyn std::io::Read,
         scale: u32,
         public_params: bool,
     ) -> Result<(Graph<TypedFact, Box<dyn TypedOp>>, BTreeMap<usize, Node<F>>), Box<dyn Error>>
     {
-        #[cfg(not(target_arch = "wasm32"))]
-        let mut model = tract_onnx::onnx().model_for_path(path).map_err(|e| {
+        let mut model = tract_onnx::onnx().model_for_read(reader).map_err(|e| {
             error!("Error loading model: {}", e);
             GraphError::ModelLoad
         })?;
-
-        #[cfg(target_arch = "wasm32")]
-        let mut model = {
-            let mut file = std::fs::File::open(path)?;
-            tract_onnx::onnx().model_for_read(&mut file).map_err(|e| {
-                error!("Error loading model: {}", e);
-                GraphError::ModelLoad
-            })?
-        };
-
-        // .into_optimized()?;
 
         let sequence_length = &mut None;
 
@@ -381,16 +367,25 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     pub fn from_ezkl_conf(cli: Cli) -> Result<Self, Box<dyn Error>> {
         let visibility = VarVisibility::from_args(cli.args.clone())?;
         match cli.command {
-            Commands::Table { model } | Commands::Mock { model, .. } => {
-                Model::new(model, cli.args, Mode::Mock, visibility)
-            }
-            Commands::Prove { model, .. } | Commands::Setup { model, .. } => {
-                Model::new(model, cli.args, Mode::Prove, visibility)
-            }
+            Commands::Table { model } | Commands::Mock { model, .. } => Model::new(
+                &mut std::fs::File::open(model)?,
+                cli.args,
+                Mode::Mock,
+                visibility,
+            ),
+            Commands::Prove { model, .. } | Commands::Setup { model, .. } => Model::new(
+                &mut std::fs::File::open(model)?,
+                cli.args,
+                Mode::Prove,
+                visibility,
+            ),
             #[cfg(feature = "render")]
-            Commands::RenderCircuit { model, .. } => {
-                Model::new(model, cli.args, Mode::Table, visibility)
-            }
+            Commands::RenderCircuit { model, .. } => Model::new(
+                &mut std::fs::File::open(model)?,
+                cli.args,
+                Mode::Table,
+                visibility,
+            ),
             _ => panic!(),
         }
     }
