@@ -1,10 +1,12 @@
 ---
 name: Bug Report
-description: Create a bug report to help improve EZKL
+about: Report a bug or problem using ezkl
 title: ''
-labels: ['bug']
+labels: bug
 assignees: ''
+
 ---
+
 <!--
 Thanks for taking the time to report an issue
 

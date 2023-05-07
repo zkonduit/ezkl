@@ -1,10 +1,12 @@
 ---
 name: Feature Requests
-description: Suggest new features or propose new ideas to help improve EZKL
+about: Propose a new feature for ezkl
 title: ''
-labels: ['enhancement']
+labels: enhancement
 assignees: ''
+
 ---
+
 <!--
 Thanks for taking the time to report an issue
 

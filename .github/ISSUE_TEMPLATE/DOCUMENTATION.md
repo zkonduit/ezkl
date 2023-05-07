@@ -1,10 +1,12 @@
 ---
 name: Documentation
-description: Suggest edits for EZKL documentation
+about: Documentation issue or request
 title: ''
-labels: ['documentation']
+labels: documentation
 assignees: ''
+
 ---
+
 <!--
 If you have a specific change you want in the documentation, feel free to edit the documentation directly and submit a pull request instead.
 -->
