@@ -1,16 +1,16 @@
 ---
 name: Feature Requests
-description: Suggest new features or propose new ideas to help improve EZKL
+about: Suggest new features or propose new ideas to help improve EZKL
 title: ''
-labels: ['enhancement']
+labels: 'enhancement'
 assignees: ''
 ---
 <!--
-Thanks for taking the time to report an issue
+  Thanks for taking the time to report an issue
 
-* For questions, ask them in [Discussions](https://github.com/zkonduit/ezkl/discussions) or the [EZKL Community Telegram Group](https://t.me/+76OjHb5CwJtkMTBh) instead
+  * For questions, ask them in [Discussions](https://github.com/zkonduit/ezkl/discussions) or the [EZKL Community Telegram Group](https://t.me/+76OjHb5CwJtkMTBh) instead
 
-* Check to make sure someone hasn't already opened a similar [issue](https://github.com/zkonduit/ezkl/issues)
+  * Check to make sure someone hasn't already opened a similar [issue](https://github.com/zkonduit/ezkl/issues)
 -->
 
 ### Is your proposal related to a problem?
