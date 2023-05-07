@@ -208,12 +208,17 @@ macro_rules! test_func {
             use crate::kzg_prove_and_verify;
             use crate::render_circuit;
             use crate::tutorial as run_tutorial;
+            use crate::percentage_tolerance as run_percentage_tolerance;
 
             #[test]
             fn tutorial_() {
                 run_tutorial();
             }
 
+            #[test]
+            fn percentage_tolerance_() {
+                run_percentage_tolerance();
+            }
 
             seq!(N in 0..=29 {
 
@@ -440,6 +445,25 @@ fn tutorial() {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
             "--tolerance=2",
+            "--scale=4",
+            "--bits=16",
+            "-K=17",
+            "mock",
+            "-D",
+            "./examples/onnx/tutorial/input.json".to_string().as_str(),
+            "-M",
+            "./examples/onnx/tutorial/network.onnx".to_string().as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+    assert!(status.success());
+}
+
+// Set tolerance as floating point (positive or negative number with a decimal point) for percent error, usize for abs error. 
+fn percentage_tolerance() {
+    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "--tolerance=1.0", // 1 % error
             "--scale=4",
             "--bits=16",
             "-K=17",

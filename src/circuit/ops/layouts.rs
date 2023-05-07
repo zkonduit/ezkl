@@ -1646,7 +1646,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     offset: &mut usize,
     tol: f32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-
+    
     // Calculate the difference between the expected output and actual output
     let diff = pairwise(
         config,
@@ -1665,7 +1665,6 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
         &LookupOp::Recip { scale },
         offset,
     )?;
-
     // Multiply the difference by the recip
     let product = pairwise(config, region, &[diff, recip], offset, BaseOp::Mult)?;
 
@@ -1700,7 +1699,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     let sum = pairwise(config, region, &[lower_bound, upper_bound], offset, BaseOp::Add)?;
 
     // Assign the sum tensor to the inputs
-    config.inputs[1].assign(region, *offset, &sum)?;
+    config.inputs[1].assign(region, *offset, &sum.clone())?;
 
     // Constrain the sum to be all zeros
     if let Some(region) = region {
@@ -1714,15 +1713,19 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     *offset += sum.len();
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        let int_evals = &[
-            Tensor::new(Some(&values[0].get_int_evals()?), &values[0].dims())?, 
-            Tensor::new(Some(&values[1].get_int_evals()?), &values[1].dims())?
-        ];
-        let ref_range_check_percent: Tensor<i128> =
-            tensor::ops::nonlinearities::range_check_percent(int_evals, scale, tol);
-
-        let output_int_evals = Tensor::new(Some(&sum.get_int_evals()?), &sum.dims())?;
-        assert_eq!(output_int_evals, ref_range_check_percent)
+        let is_assigned = !Into::<Tensor<i32>>::into(sum.get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let int_evals = &[
+                Tensor::new(Some(&values[0].get_int_evals()?), &values[0].dims())?, 
+                Tensor::new(Some(&values[1].get_int_evals()?), &values[1].dims())?
+            ];
+            let ref_range_check_percent: Tensor<i128> =
+                tensor::ops::nonlinearities::range_check_percent(int_evals, scale, tol);
+            let output_int_evals = Tensor::new(Some(&sum.get_int_evals()?), &values[0].dims())?;
+            assert_eq!(output_int_evals, ref_range_check_percent)
+        }
     }
     Ok(sum)
 

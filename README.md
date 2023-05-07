@@ -256,7 +256,8 @@ Commands:
   help                      Print this message or the help of the given subcommand(s)
 
 Options:
-  -T, --tolerance <TOLERANCE>          The tolerance for error on model outputs [default: 0]
+  -T, --tolerance <TOLERANCE>          The tolerance for error on model outputs. Set to a usize value
+      for abs tolerance, or a float for percent error tolerance [default: 0]
   -S, --scale <SCALE>                  The denominator in the fixed point representation used when quantizing [default: 7]
   -B, --bits <BITS>                    The number of bits used in lookup tables [default: 16]
   -K, --logrows <LOGROWS>              The log_2 number of rows [default: 17]
@@ -268,7 +269,7 @@ Options:
   -V, --version                        Print version
 ```
 
-`bits`, `scale`, `tolerance`, and `logrows` have default values. You can use tolerance to express a tolerance to a certain amount of quantization error on the output eg. if set to 2 the circuit will verify even if the generated output deviates by an absolute value of 2 on any dimension from the expected output. `prove` and `mock`, all require `-D` and `-M` parameters, which if not provided, the cli will query the user to manually enter the path(s).
+`bits`, `scale`, `tolerance`, and `logrows` have default values. Use the `tolerance` parameter to set the acceptable quantization error on the output. If set to a usize value, the circuit verifies even if the output deviates by the specified absolute value on any dimension. If set to a floating-point value, it represents a percentage error tolerance, and the circuit verifies if the output deviates within the specified percentage. For example, if set to 1.0, the circuit verifies even if the output deviates by 1 percent, and if set to 1, it verifies even if the output deviates by an absolute value of 1. The `prove` and `mock` commands require `-D` and `-M` parameters; if not provided, the CLI will prompt the user to manually enter the path(s).
 
 ```bash
 
