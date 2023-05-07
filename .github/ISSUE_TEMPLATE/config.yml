@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask questions on Telegram
+    url: https://t.me/+76OjHb5CwJtkMTBh
+    about: Ask general questions about EZKL and ZKML related things within the EZKL Community Telegram Group.
+  - name: Ask questions on Discussions
+    url: https://github.com/zkonduit/ezkl/discussions
+    about: For more structured and fully-formed questions about EZKL you may ask them within Discussions.
