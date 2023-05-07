@@ -41,11 +41,14 @@ If you're interested in contributing and are unsure where to start, reach out to
 
 More broadly:
 
-- Feel free to open up a discussion topic to ask questions.
+- Feel free to open up a discussion topic in [Discussions](https://github.com/zkonduit/ezkl/discussions) to ask questions. Alternatively, you may join the [EZKL Community Telegram Group](https://t.me/+76OjHb5CwJtkMTBh) to ask questions.
 
 - See currently open issues for ideas on how to contribute.
 
 - For PRs we use the [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) naming convention.
+
+- To report bugs or request new features [create a new issue within Issues](https://github.com/zkonduit/ezkl/issues) to inform the greater community.
+
 
 ----------------------
 
@@ -105,16 +108,16 @@ Sample onnx files are also available in `./examples/onnx`. To generate a proof o
 ezkl -K=17 gen-srs --params-path=kzg.params
 ```
 
-Now setup the proving and verification keys: 
+Now setup the proving and verification keys:
 
 ```bash
 ezkl --bits=16 -K=17 setup -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --pk-path 1l_relu.pk --vk-path 1l_relu.vk --params-path=kzg.params --circuit-params-path=circuit.params
 ```
 
-Now generate a proof: 
+Now generate a proof:
 
 ```bash
-ezkl --bits=16 -K=17 prove -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --pk-path 1l_relu.pk --params-path=kzg.params 
+ezkl --bits=16 -K=17 prove -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --pk-path 1l_relu.pk --params-path=kzg.params
 ```
 
 This command generates a proof that the model was correctly run on private inputs (this is the default setting). It then outputs the resulting proof at the path specfifed by `--proof-path`, parameters that can be used for subsequent verification at `--params-path` and the verifier key at `--vk-path`.
@@ -134,7 +137,7 @@ cargo run --release --bin ezkl -- table -M ./examples/onnx/1l_relu/network.onnx
 
 #### verifying with the EVM ◊
 
-Note that the above prove and verify stats can also be run with an EVM verifier. This can be done by generating a verifier smart contract after generating the proof. 
+Note that the above prove and verify stats can also be run with an EVM verifier. This can be done by generating a verifier smart contract after generating the proof.
 
 (run the following commands after calling `gen-params` and `setup`, as detailed above).
 
@@ -161,7 +164,7 @@ ezkl -K=20 gen-srs --params-path=kzg.params
 ```
 
 ```bash
-# setup  
+# setup
 ezkl --bits=16 -K=17 setup -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --pk-path 1l_relu.pk --vk-path 1l_relu.vk --params-path=kzg.params --circuit-params-path=circuit.params
 ```
 
