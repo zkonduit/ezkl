@@ -22,10 +22,10 @@ use halo2_proofs::{
 use log::warn;
 #[cfg(feature = "python-bindings")]
 use pyo3::{
+    conversion::{FromPyObject, PyTryFrom},
     exceptions::PyValueError,
     prelude::*,
     types::PyString,
-    conversion::{FromPyObject, PyTryFrom}
 };
 use serde::{Deserialize, Serialize};
 
@@ -97,9 +97,8 @@ impl<'source> FromPyObject<'source> for CheckMode {
         match strval.to_lowercase().as_str() {
             "safe" => Ok(CheckMode::SAFE),
             "unsafe" => Ok(CheckMode::UNSAFE),
-            _ => Err(PyValueError::new_err("Invalid value for CheckMode"))
+            _ => Err(PyValueError::new_err("Invalid value for CheckMode")),
         }
-
     }
 }
 
@@ -284,11 +283,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                                 qlookup.clone() * cs.query_advice(advices[x], Rotation(0))
                                     + not_qlookup.clone() * default_x
                             }
-                            VarTensor::Fixed { inner: fixed, .. } => {
-                                qlookup.clone() * cs.query_fixed(fixed[x], Rotation(0))
-                                    + not_qlookup.clone() * default_x
-                            }
-                            _ => panic!("uninitialized Vartensor"),
+                            _ => panic!("wrong input type"),
                         },
                         table.table_input,
                     ),
@@ -298,11 +293,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                                 qlookup * cs.query_advice(advices[x], Rotation(0))
                                     + not_qlookup * default_y
                             }
-                            VarTensor::Fixed { inner: fixed, .. } => {
-                                qlookup * cs.query_fixed(fixed[x], Rotation(0))
-                                    + not_qlookup * default_y
-                            }
-                            _ => panic!("uninitialized Vartensor"),
+                            _ => panic!("wrong output type"),
                         },
                         table.table_output,
                     ),

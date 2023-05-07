@@ -1,9 +1,13 @@
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+#[cfg(test)]
 mod wasm32 {
     use ezkl_lib::pfsys::Snarkbytes;
     use ezkl_lib::wasm::{prove_wasm, verify_wasm};
 
+    pub use wasm_bindgen_rayon::init_thread_pool;
     use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
 
     pub const KZG_PARAMS: &[u8] = include_bytes!("../tests/wasm/kzg");
     pub const CIRCUIT_PARAMS: &[u8] = include_bytes!("../tests/wasm/circuit");
@@ -14,7 +18,7 @@ mod wasm32 {
     pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/test.onnx");
 
     #[wasm_bindgen_test]
-    fn verify_pass() {
+    async fn verify_pass() {
         let value = verify_wasm(
             wasm_bindgen::Clamped(PROOF.to_vec()),
             wasm_bindgen::Clamped(VK.to_vec()),
@@ -25,7 +29,7 @@ mod wasm32 {
     }
 
     #[wasm_bindgen_test]
-    fn verify_fail() {
+    async fn verify_fail() {
         let proof = Snarkbytes {
             proof: vec![0; 32],
             num_instance: vec![1],
@@ -44,7 +48,7 @@ mod wasm32 {
     }
 
     #[wasm_bindgen_test]
-    fn prove_pass() {
+    async fn prove_pass() {
         // prove
         let proof = prove_wasm(
             wasm_bindgen::Clamped(INPUT.to_vec()),
