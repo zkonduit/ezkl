@@ -24,18 +24,14 @@ EZKL
 
 > "I correctly ran this publicly available neural network on some public data and it produced this output"
 
-The rust API is also sufficiently flexible to enable you to code up a computational graph and resulting circuit from scratch. For examples on how to do so see the **library examples** section below.
-
 In the backend we use [Halo2](https://github.com/privacy-scaling-explorations/halo2) as a proof system.
-
-For more details on how to use `ezkl`, see below !
 
 ### resources 📖
 
 |  |  |
 | --- | --- |
 | [docs](https://docs.ezkl.xyz ) | the official ezkl docs page |
-| [tutorial](https://github.com/zkonduit/pyezkl) | end-to-end tutorial using pytorch and ezkl |
+| [tutorial](https://github.com/zkonduit/pyezkl/tree/main/examples/tutorial) | end-to-end tutorial using pytorch and ezkl |
 | [notebook](https://github.com/zkonduit/ezkl/blob/main/examples/notebook/ezkl_demo.ipynb) | end-to-end tutorial using pytorch and ezkl in a jupyter notebook |
 | `cargo doc --open` | compile and open the docs in your default browser |
 
@@ -47,17 +43,7 @@ For more details on how to use `ezkl`, see below !
 
 
 
-
-
-
-
-
-https://user-images.githubusercontent.com/45801863/236768700-6aa4f73c-5688-4f4c-a822-d2c3f79be6e3.mov
-
-
-
-
-
+https://user-images.githubusercontent.com/45801863/236771676-5bbbbfd1-ba6f-418a-902e-20738ce0e9f0.mp4
 
 
 ### building the project 🔨
@@ -117,7 +103,7 @@ The EZKL project has several libraries and repos.
 If you're interested in contributing and are unsure where to start, reach out to one of the maintainers:
 
 * dante (alexander-camuto)
-* jason ( jasonmorton)
+* jason (jasonmorton)
 
 More broadly:
 
