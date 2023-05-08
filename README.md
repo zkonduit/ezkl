@@ -30,6 +30,16 @@ In the backend we use [Halo2](https://github.com/privacy-scaling-explorations/ha
 
 For more details on how to use `ezkl`, see below !
 
+### resources 📖
+
+|  |  |
+| --- | --- |
+| [docs](https://docs.ezkl.xyz ) | the official ezkl docs page |
+| [tutorial](https://github.com/zkonduit/pyezkl) | end-to-end tutorial using pytorch and ezkl |
+| [notebook](https://github.com/zkonduit/ezkl/blob/main/examples/notebook/ezkl_demo.ipynb) | end-to-end tutorial using pytorch and ezkl in a jupyter notebook |
+| `cargo doc --open` | compile and open the docs in your default browser |
+
+
 ----------------------
 
 ## Getting Started ⚙️
@@ -37,7 +47,13 @@ For more details on how to use `ezkl`, see below !
 
 
 
-https://user-images.githubusercontent.com/45801863/236766610-700f3c26-bc8a-44de-8790-1c2c1ba36afb.mov
+
+
+
+
+
+https://user-images.githubusercontent.com/45801863/236768700-6aa4f73c-5688-4f4c-a822-d2c3f79be6e3.mov
+
 
 
 
@@ -90,13 +106,7 @@ The EZKL project has several libraries and repos.
 
 
 
-### docs 📖
 
-Use `cargo doc --open` to compile and open the docs in your default browser. 
-
-Tutorials, run-throughs, and further details of the cli can be found [here](https://courageous-sunshine-f50329.netlify.app/).  
-
- For a tutorial on how to quickly generate Onnx files using python, check out [pyezkl](https://github.com/zkonduit/pyezkl).
 
 
 
