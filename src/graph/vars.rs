@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use super::*;
 
-/// Label Enum to track whether model input, model parameters, and model output are public or private
+/// Label enum to track whether model input, model parameters, and model output are public or private
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Visibility {
     /// Mark an item as private to the prover (not in the proof submitted for verification)
@@ -34,7 +34,7 @@ impl std::fmt::Display for Visibility {
     }
 }
 
-/// Whether the model input, model parameters, and model output are Public or Private to the prover.
+/// Represents whether the model input, model parameters, and model output are Public or Private to the prover.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct VarVisibility {
     /// Input to the model or computational graph
