@@ -31,12 +31,6 @@ fn display_opkind<F: PrimeField + TensorType + PartialOrd>(v: &Box<dyn Op<F>>) -
 }
 
 /// A single operation in a Model.
-/// # Arguments:
-/// * `opkind` - [OpKind] enum, i.e what operation this node represents.
-/// * `out_scale` - The denominator in the fixed point representation. Tensors of differing scales should not be combined.
-/// * `out_dims` - The shape of the activations which enter and leave the self.
-/// * `inputs` - The indices of other nodes that feed into this self.
-/// * `idx` - The node's unique identifier.
 #[derive(Clone, Debug, Tabled)]
 pub struct Node<F: PrimeField + TensorType + PartialOrd> {
     /// [OpKind] enum, i.e what operation this node represents.
@@ -57,11 +51,16 @@ pub struct Node<F: PrimeField + TensorType + PartialOrd> {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
-    /// Converts a tract [OnnxNode] into an ezkl [Node].
-    /// # Arguments:
-    /// * `node` - [OnnxNode]
-    /// * `other_nodes` - [BTreeMap] of other previously initialized [Node]s in the computational graph.
-    /// * `public_params` - flag if parameters of model are public
+    /// Create a new node from an [OnnxNode].
+    /// The node's inputs must already be present in the `other_nodes` map.
+    /// The node's output shape must be known.
+    /// The node's op must be supported.
+    /// The node's inputs must be consistent with the op's inputs.
+    /// # Arguments
+    /// * `node` - The [OnnxNode] to be converted into a [Node].
+    /// * `other_nodes` - A map of the other nodes in the graph.
+    /// * `scale` - The scale of the node's output.
+    /// * `public_params` - Whether the node's parameters are public.
     /// * `idx` - The node's unique identifier.
     pub fn new(
         mut node: OnnxNode<TypedFact, Box<dyn TypedOp>>,

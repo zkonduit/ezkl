@@ -19,14 +19,14 @@ pub mod lookup;
 ///
 pub mod poly;
 
-///
+/// An enum representing operations that can be represented as constraints in a circuit.
 pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + Sync + Any {
-    ///
+    /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError>;
-    ///
+    /// Returns a string representation of the operation.
     fn as_str(&self) -> &'static str;
 
-    ///
+    /// Layouts the operation in a circuit.
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
@@ -35,33 +35,33 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>>;
 
-    ///
+    /// Returns the scale of the output of the operation.
     fn out_scale(&self, _: Vec<u32>, global_scale: u32) -> u32 {
         global_scale
     }
 
-    ///
+    /// Do any of the inputs to this op require homogenous input scales?
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
         vec![]
     }
 
-    ///
+    /// Returns the lookups required by the operation.
     fn required_lookups(&self) -> Vec<LookupOp> {
         vec![]
     }
 
-    ///
+    /// Rescales the operation given a vector of input scales and a global (circuit) scale.
     fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>>;
 
-    ///
+    /// Returns true if the operation is an input.
     fn is_input(&self) -> bool {
         false
     }
 
-    ///
+    /// Boxes and clones
     fn clone_dyn(&self) -> Box<dyn Op<F>>;
 
-    ///
+    /// Returns a reference to the Any trait.
     fn as_any(&self) -> &dyn Any;
 }
 
@@ -110,12 +110,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
     }
 }
 
-///
+/// A wrapper for an operation that has been rescaled.
 #[derive(Clone, Debug)]
 pub struct Rescaled<F: PrimeField + TensorType + PartialOrd> {
-    ///
+    /// The operation to be rescaled.
     pub inner: Box<dyn Op<F>>,
-    ///
+    /// The scale of the operation's inputs.
     pub scale: Vec<(usize, u128)>,
 }
 
@@ -177,7 +177,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
     }
 }
 
-///
+/// An unknown operation.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 pub struct Unknown;
 

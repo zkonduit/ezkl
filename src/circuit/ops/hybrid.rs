@@ -14,7 +14,7 @@ use halo2curves::ff::PrimeField;
 
 
 #[allow(missing_docs)]
-/// An enum representing the operations that can be used to express more complex operations via accumulation
+/// An enum representing the operations that consist of both lookups and arithmetic operations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum HybridOp {
     Max {

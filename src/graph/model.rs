@@ -85,7 +85,7 @@ pub struct Model<F: PrimeField + TensorType + PartialOrd> {
 impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// Creates a `Model` from a specified path to an Onnx file.
     /// # Arguments
-    /// * `path` - A path to an Onnx file.
+    /// * `reader` - A reader for an Onnx file.
     /// * `run_args` - [RunArgs]
     /// * `mode` - The [Mode] we're using the model in.
     /// * `visibility` - Which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
@@ -109,7 +109,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         Ok(om)
     }
 
-    ///
+    /// Generate model parameters for the circuit
     pub fn gen_params(&self) -> Result<ModelParams, Box<dyn Error>> {
         let instance_shapes = self.instance_shapes();
         // this is the total number of variables we will need to allocate
@@ -152,7 +152,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
 
     /// Runs a forward pass on sample data !
     /// # Arguments
-    /// * `path` - A path to an Onnx file.
+    /// * `reader` - A reader for an Onnx file.
+    /// * `model_inputs` - A vector of [Tensor]s to use as inputs to the model.
     /// * `run_args` - [RunArgs]
     pub fn forward(
         reader: &mut dyn std::io::Read,
@@ -195,7 +196,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         }
 
         let output_nodes = model.outputs.iter();
-        info!(
+        debug!(
             "model outputs are nodes: {:?}",
             output_nodes.clone().map(|o| o.node).collect_vec()
         );
@@ -248,8 +249,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
 
     /// Loads an Onnx model from a specified path.
     /// # Arguments
-    /// * `path` - A path to an Onnx file.
+    /// * `reader` - A reader for an Onnx file.
     /// * `scale` - The scale to use for quantization.
+    /// * `public_params` - Whether to make the params public.
     fn load_onnx_model(
         reader: &mut dyn std::io::Read,
         scale: u32,
@@ -375,7 +377,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
 
     /// Creates a `Model` from parsed CLI arguments
     /// # Arguments
-    /// * `cli` - [Cli]
+    /// * `cli` - A [Cli] struct holding parsed CLI arguments.
     pub fn from_ezkl_conf(cli: Cli) -> Result<Self, Box<dyn Error>> {
         let visibility = VarVisibility::from_args(cli.args.clone())?;
         match cli.command {
@@ -408,12 +410,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         Self::from_ezkl_conf(conf)
     }
 
-    /// Configures a `Model`. Does so one execution `bucket` at a time. Each bucket holds either:
-    /// a) independent lookup operations (i.e operations that don't feed into one another so can be processed in parallel).
-    /// b) operations that can be fused together, i.e the output of one op might feed into another.
+    /// Configures a model for the circuit
     /// # Arguments
-    /// * `meta` - Halo2 ConstraintSystem.
-    /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure all the nodes loaded in `self.nodes`.
+    /// * `meta` - The constraint system.
+    /// * `vars` - The variables for the circuit.
+    /// * `run_args` - [RunArgs]
+    /// * `required_lookups` - The required lookup operations for the circuit.
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
@@ -421,7 +423,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         required_lookups: Vec<LookupOp>,
     ) -> Result<PolyConfig<F>, Box<dyn Error>> {
         info!("configuring model");
-
         // Extract the abs tolerance value for the baseop range check. Will be zero if percentage tolerance is used.
         let tol_abs = match run_args.tolerance {
             Tolerance::Abs { val } => val,
@@ -447,10 +448,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
 
     /// Assigns values to the regions created when calling `configure`.
     /// # Arguments
-    ///
     /// * `config` - [ModelConfig] holding all node configs.
     /// * `layouter` - Halo2 Layouter.
     /// * `inputs` - The values to feed into the circuit.
+    /// * `vars` - The variables for the circuit.
     pub fn layout(
         &self,
         mut config: ModelConfig<F>,
@@ -458,7 +459,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         inputs: &[ValTensor<F>],
         vars: &ModelVars<F>,
     ) -> Result<(), Box<dyn Error>> {
-        info!("model layout");
+        info!("model layout...");
         let mut results = BTreeMap::<usize, ValTensor<F>>::new();
         for (i, input_idx) in self.inputs.iter().enumerate() {
             if self.visibility.input.is_public() {
@@ -516,7 +517,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 }
 
                 let output_nodes = self.outputs.iter();
-                info!(
+                debug!(
                     "model outputs are nodes: {:?}",
                     output_nodes.clone().collect_vec()
                 );
@@ -527,7 +528,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 // pack outputs if need be
                 if self.run_args.pack_base > 1 {
                     for i in 0..outputs.len() {
-                        info!("packing outputs...");
+                        debug!("packing outputs...");
                         outputs[i] = config
                             .base
                             .layout(
@@ -586,14 +587,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         Ok(())
     }
 
-    /// Assigns values to the regions created when calling `configure`.
+    /// Assigns dummy values to the regions created when calling `configure`.
     /// # Arguments
-    ///
-    /// * `config` - [ModelConfig] holding all node configs.
-    /// * `layouter` - Halo2 Layouter.
-    /// * `inputs` - The values to feed into the circuit.
+    /// * `input_shapes` - The shapes of the inputs to the model.
     pub fn dummy_layout(&self, input_shapes: &[Vec<usize>]) -> Result<usize, Box<dyn Error>> {
-        info!("dummy model layout");
+        info!("calculating num of constraints using dummy model layout...");
         let mut results = BTreeMap::<usize, ValTensor<F>>::new();
 
         let inputs: Vec<ValTensor<F>> = input_shapes
@@ -639,7 +637,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         }
 
         let output_nodes = self.outputs.iter();
-        info!(
+        debug!(
             "model outputs are nodes: {:?}",
             output_nodes.clone().collect_vec()
         );
@@ -650,7 +648,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         // pack outputs if need be
         if self.run_args.pack_base > 1 {
             for i in 0..outputs.len() {
-                info!("packing outputs...");
+                debug!("packing outputs...");
                 outputs[i] = dummy_config
                     .layout(
                         &mut None,
