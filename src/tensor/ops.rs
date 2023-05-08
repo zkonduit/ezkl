@@ -1182,13 +1182,9 @@ pub mod nonlinearities {
         let _double_scale = scale.pow(2);
         let diff: Tensor<i128> = sub(t).unwrap();
         let recip = recip(&t[0], _double_scale as u32);
-        print!("recip: {:?}", recip);
         let product = mult(&[diff, recip]).unwrap();
-        print!("product: {:?}", product);
         let _tol = ((tol/100.0)*_double_scale as f32).round() as f64;
-        print!("tol: {:?}", _tol);
         let upper_bound = greater_than(&product, _tol);
-        print!("upper_bound: {:?}", upper_bound);
         let neg_product = mult(&[
             product, Tensor::<i128>::new(Some(&[-1]),&[1]).unwrap()
         ]).unwrap();
