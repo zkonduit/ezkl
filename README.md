@@ -37,7 +37,7 @@ For more details on how to use `ezkl`, see below !
 
 
 
-https://user-images.githubusercontent.com/45801863/236765587-492b49d0-2b17-49f1-b7da-1f7518b1cdf2.mov
+![ezkl-demo](https://user-images.githubusercontent.com/45801863/236766355-b4cc7916-855a-491c-8b2f-857a070b95ff.gif)
 
 
 
