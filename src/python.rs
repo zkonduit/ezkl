@@ -1,4 +1,4 @@
-use crate::circuit::CheckMode;
+use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::{RunArgs, StrategyType, TranscriptType};
 use crate::execute::{create_proof_circuit_kzg, load_params_cmd, verify_proof_circuit_kzg};
 use crate::graph::{quantize_float, Mode, Model, ModelCircuit, ModelParams, VarVisibility};
@@ -46,7 +46,7 @@ use tabled::Table;
 #[derive(Clone)]
 struct PyRunArgs {
     #[pyo3(get, set)]
-    pub tolerance: usize,
+    pub tolerance: Tolerance,
     #[pyo3(get, set)]
     pub scale: u32,
     #[pyo3(get, set)]
@@ -73,7 +73,7 @@ impl PyRunArgs {
     #[new]
     fn new() -> Self {
         PyRunArgs {
-            tolerance: 0,
+            tolerance: Tolerance::Abs { val: 0 },
             scale: 7,
             bits: 16,
             logrows: 17,
