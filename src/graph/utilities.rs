@@ -442,41 +442,29 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 }
             };
 
-            let axes = &op.axes;
-            if axes.to_string() == "mk,nk->mn"
-                || axes.to_string() == "mk,k->mn"
-                || axes.to_string() == "mk,nk->n"
-                || axes.to_string() == "k,nk->mn"
-                || axes.to_string() == "abmk,abkn->abmn"
-                || axes.to_string() == "k,nk->n"
-                || axes.to_string() == "amk,kn->mn"
-                || axes.to_string() == "amk,kn->bmn"
-                || axes.to_string() == "mbk,anbk->abmn"
-                || axes.to_string() == "abmk,abkn->mbn"
-                || axes.to_string() == "mk,kn->amn"
-                || axes.to_string() == "amk,kn->amn"
-            {
-                let mut params = None;
+            let _axes = &op.axes;
 
-                for (idx, inp) in inputs.clone().iter().enumerate() {
-                    let boxed_op = &inp.opkind;
-                    if let Some(c) = boxed_op
-                        .as_any()
-                        .downcast_ref::<crate::circuit::ops::Constant<F>>()
-                    {
-                        inputs.remove(idx);
-                        params = Some(tensor_to_valtensor::<F>(
-                            c.values.clone(),
-                            scale,
-                            public_params,
-                        )?);
-                    }
+            // TODO: this is a hack to get around the fact that tract eplaces matmul with einsum pending this PR: https://github.com/sonos/tract/pull/1070
+            warn!("matching einsum as a matmul operation");
+
+            let mut params = None;
+
+            for (idx, inp) in inputs.clone().iter().enumerate() {
+                let boxed_op = &inp.opkind;
+                if let Some(c) = boxed_op
+                    .as_any()
+                    .downcast_ref::<crate::circuit::ops::Constant<F>>()
+                {
+                    inputs.remove(idx);
+                    params = Some(tensor_to_valtensor::<F>(
+                        c.values.clone(),
+                        scale,
+                        public_params,
+                    )?);
                 }
-
-                Box::new(PolyOp::Matmul { a: params })
-            } else {
-                panic!("einsum not supported")
             }
+
+            Box::new(PolyOp::Matmul { a: params })
         }
         "Softmax" => {
             // Extract the slope layer hyperparams

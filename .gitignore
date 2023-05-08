@@ -1,10 +1,10 @@
 target
 data
 *.ipynb_checkpoints
-*.ipynb
 *.sol
 *.pf
 *.vk
+*.pk
 *.code
 *.params
 *~
@@ -30,3 +30,4 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
+.vscode/

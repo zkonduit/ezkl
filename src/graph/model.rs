@@ -3,6 +3,8 @@ use super::vars::*;
 use super::GraphError;
 use crate::circuit::Tolerance;
 use crate::circuit::hybrid::HybridOp;
+use super::ModelParams;
+use crate::circuit::lookup::LookupOp;
 use crate::circuit::ops::poly::PolyOp;
 use crate::circuit::BaseConfig as PolyConfig;
 use crate::circuit::Op;
@@ -33,8 +35,8 @@ use itertools::Itertools;
 use log::error;
 use log::{debug, info, trace};
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::error::Error;
-use std::path::Path;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::Framework;
@@ -88,12 +90,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// * `mode` - The [Mode] we're using the model in.
     /// * `visibility` - Which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
     pub fn new(
-        path: impl AsRef<Path>,
+        reader: &mut dyn std::io::Read,
         run_args: RunArgs,
         mode: Mode,
         visibility: VarVisibility,
     ) -> Result<Self, Box<dyn Error>> {
-        let (model, nodes) = Self::load_onnx_model(path, run_args.scale, run_args.public_params)?;
+        let (model, nodes) = Self::load_onnx_model(reader, run_args.scale, run_args.public_params)?;
 
         let om = Model {
             inputs: model.inputs.iter().map(|o| o.node).collect(),
@@ -107,17 +109,57 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         Ok(om)
     }
 
+    ///
+    pub fn gen_params(&self) -> Result<ModelParams, Box<dyn Error>> {
+        let instance_shapes = self.instance_shapes();
+        // this is the total number of variables we will need to allocate
+        // for the circuit
+        let num_constraints = if let Some(num_constraints) = self.run_args.allocated_constraints {
+            num_constraints
+        } else {
+            self.dummy_layout(&self.input_shapes()).unwrap()
+        };
+
+        // extract the requisite lookup ops from the model
+        let mut lookup_ops: Vec<LookupOp> = self
+            .nodes
+            .iter()
+            .map(|(_, n)| n.opkind.required_lookups())
+            .flatten()
+            .collect();
+
+        // if we're using percentage tolerance, we need to add the necessary range check ops for it.
+        if let Tolerance::Percentage { val, .. } = self.run_args.tolerance {
+            let tolerance = Tolerance::Percentage {
+                val,
+                scale: scale_to_multiplier(self.run_args.scale) as usize
+            };
+            let opkind: Box<dyn Op<F>> = Box::new(HybridOp::RangeCheck(tolerance));
+            lookup_ops.extend(opkind.required_lookups());
+        }
+
+        let set: HashSet<_> = lookup_ops.drain(..).collect(); // dedup
+        lookup_ops.extend(set.into_iter().sorted());
+
+        Ok(ModelParams {
+            run_args: self.run_args.clone(),
+            visibility: self.visibility.clone(),
+            instance_shapes,
+            num_constraints,
+            required_lookups: lookup_ops,
+        })
+    }
+
     /// Runs a forward pass on sample data !
     /// # Arguments
     /// * `path` - A path to an Onnx file.
     /// * `run_args` - [RunArgs]
     pub fn forward(
-        model_path: impl AsRef<Path>,
+        reader: &mut dyn std::io::Read,
         model_inputs: &[Tensor<i128>],
         run_args: RunArgs,
     ) -> Result<Vec<Tensor<f32>>, Box<dyn Error>> {
-        let (model, nodes) =
-            Self::load_onnx_model(model_path, run_args.scale, run_args.public_params)?;
+        let (model, nodes) = Self::load_onnx_model(reader, run_args.scale, run_args.public_params)?;
 
         let mut results: BTreeMap<&usize, Tensor<i128>> = BTreeMap::new();
         let mut max_lookup_inputs = 0;
@@ -209,27 +251,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// * `path` - A path to an Onnx file.
     /// * `scale` - The scale to use for quantization.
     fn load_onnx_model(
-        path: impl AsRef<Path>,
+        reader: &mut dyn std::io::Read,
         scale: u32,
         public_params: bool,
     ) -> Result<(Graph<TypedFact, Box<dyn TypedOp>>, BTreeMap<usize, Node<F>>), Box<dyn Error>>
     {
-        #[cfg(not(target_arch = "wasm32"))]
-        let mut model = tract_onnx::onnx().model_for_path(path).map_err(|e| {
+        let mut model = tract_onnx::onnx().model_for_read(reader).map_err(|e| {
             error!("Error loading model: {}", e);
             GraphError::ModelLoad
         })?;
-
-        #[cfg(target_arch = "wasm32")]
-        let mut model = {
-            let mut file = std::fs::File::open(path)?;
-            tract_onnx::onnx().model_for_read(&mut file).map_err(|e| {
-                error!("Error loading model: {}", e);
-                GraphError::ModelLoad
-            })?
-        };
-
-        // .into_optimized()?;
 
         let sequence_length = &mut None;
 
@@ -349,22 +379,25 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     pub fn from_ezkl_conf(cli: Cli) -> Result<Self, Box<dyn Error>> {
         let visibility = VarVisibility::from_args(cli.args.clone())?;
         match cli.command {
-            Commands::Table { model } | Commands::Mock { model, .. } => {
-                Model::new(model, cli.args, Mode::Mock, visibility)
-            }
-            Commands::Prove { model, .. }
-            | Commands::Verify { model, .. }
-            | Commands::Aggregate { model, .. } => {
-                Model::new(model, cli.args, Mode::Prove, visibility)
-            }
-            #[cfg(not(target_arch = "wasm32"))]
-            Commands::CreateEVMVerifier { model, .. } => {
-                Model::new(model, cli.args, Mode::Prove, visibility)
-            }
+            Commands::Table { model } | Commands::Mock { model, .. } => Model::new(
+                &mut std::fs::File::open(model)?,
+                cli.args,
+                Mode::Mock,
+                visibility,
+            ),
+            Commands::Prove { model, .. } | Commands::Setup { model, .. } => Model::new(
+                &mut std::fs::File::open(model)?,
+                cli.args,
+                Mode::Prove,
+                visibility,
+            ),
             #[cfg(feature = "render")]
-            Commands::RenderCircuit { model, .. } => {
-                Model::new(model, cli.args, Mode::Table, visibility)
-            }
+            Commands::RenderCircuit { model, .. } => Model::new(
+                &mut std::fs::File::open(model)?,
+                cli.args,
+                Mode::Table,
+                visibility,
+            ),
             _ => panic!(),
         }
     }
@@ -382,14 +415,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// * `meta` - Halo2 ConstraintSystem.
     /// * `advices` - A `VarTensor` holding columns of advices. Must be sufficiently large to configure all the nodes loaded in `self.nodes`.
     pub fn configure(
-        &self,
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
+        run_args: RunArgs,
+        required_lookups: Vec<LookupOp>,
     ) -> Result<PolyConfig<F>, Box<dyn Error>> {
         info!("configuring model");
 
-        // Determine the abs tolerance value
-        let tol_abs = match self.run_args.tolerance {
+        // Extract the abs tolerance value for the baseop range check. Will be zero if percentage tolerance is used.
+        let tol_abs = match run_args.tolerance {
             Tolerance::Abs { val } => val,
             _ => 0,
         };
@@ -397,61 +431,18 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             meta,
             vars.advices[0..2].try_into()?,
             &vars.advices[2],
-            self.run_args.check_mode,
+            run_args.check_mode,
             tol_abs as i32,
         );
-
-        let lookup_ops: BTreeMap<&usize, &Box<dyn Op<F>>> = self
-            .nodes
-            .iter()
-            .filter_map(|(k, n)| {
-                if n.opkind.required_lookups().len() > 0 {
-                    Some((k, &n.opkind))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
         // set scale for HybridOp::RangeCheck and call self.conf_lookup on that op for percentage tolerance case
-        if let Tolerance::Percentage { val, .. } = self.run_args.tolerance {
-            let tolerance = Tolerance::Percentage {
-                val,
-                scale: scale_to_multiplier(self.run_args.scale) as usize
-            };
-            let opkind: Box<dyn Op<F>> = Box::new(HybridOp::RangeCheck(tolerance));
-            self.conf_lookup(&mut base_gate, &opkind, meta, vars)?;
-        }
-        for opkind in lookup_ops.values() {
-            self.conf_lookup(&mut base_gate, opkind, meta, vars)?;
+        let input = &vars.advices[0];
+        let output = &vars.advices[1];
+        for op in required_lookups {
+            base_gate.configure_lookup(meta, input, output, run_args.bits, &op)?;
         }
 
         Ok(base_gate)
 
-    }
-
-    /// Configures a lookup table based operation. These correspond to operations that are represented in
-    /// the `circuit::eltwise` module.
-    /// # Arguments
-    ///
-    /// * `node` - The [Node] must represent a lookup based op.
-    /// * `meta` - Halo2 ConstraintSystem.
-    /// * `vars` - [ModelVars] for the model.
-    fn conf_lookup(
-        &self,
-        config: &mut PolyConfig<F>,
-        opkind: &Box<dyn Op<F>>,
-        meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars<F>,
-    ) -> Result<(), Box<dyn Error>> {
-        let input = &vars.advices[0];
-        let output = &vars.advices[1];
-
-        for op in opkind.required_lookups() {
-            config.configure_lookup(meta, input, output, self.run_args.bits, &op)?;
-        }
-
-        Ok(())
     }
 
     /// Assigns values to the regions created when calling `configure`.

@@ -1,6 +1,7 @@
 use std::any::Any;
 
 use halo2_proofs::circuit::Region;
+use serde::{Deserialize, Serialize};
 use crate::{
     circuit::{layouts, Tolerance, self},
     graph::scale_to_multiplier,
@@ -14,7 +15,7 @@ use halo2curves::ff::PrimeField;
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be used to express more complex operations via accumulation
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum HybridOp {
     Max {
         axes: Vec<usize>,
@@ -37,6 +38,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         match &self {
