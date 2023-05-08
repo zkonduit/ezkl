@@ -1483,7 +1483,7 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
 
 /// softmax layout
 pub fn multi_dim_softmax<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     input_scale: usize,

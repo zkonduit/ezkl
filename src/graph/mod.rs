@@ -23,7 +23,7 @@ use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},
 };
-use log::{info, trace, warn};
+use log::{info, trace};
 pub use model::*;
 pub use node::*;
 use std::io::Write;
