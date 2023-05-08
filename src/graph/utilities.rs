@@ -220,6 +220,12 @@ fn load_eltwise_op(
 }
 
 /// Matches an onnx node to a [OpKind] and returns a [Node] with the corresponding [OpKind].  
+/// Arguments
+/// * `idx` - the index of the node in the graph.
+/// * `scale` - the global (circuit) scale.
+/// * `public_params` - whether the node's parameters are public.
+/// * `node` - the [OnnxNode] to be converted into a [Node].
+/// * `inputs` - the node's inputs.
 pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
     idx: usize,
     scale: u32,

@@ -316,7 +316,7 @@ where
     let pi_inner: &[&[&[Scheme::Scalar]]] = &[&pi_inner];
     trace!("instances {:?}", instances);
 
-    info!("Proof started");
+    info!("proof started...");
     create_proof::<Scheme, P, _, _, TW, _>(
         params,
         pk,
@@ -326,7 +326,6 @@ where
         &mut transcript,
     )?;
     let proof = transcript.finalize();
-    info!("Proof ended");
 
     let checkable_pf = Snark::new(protocol, instances, proof);
 
@@ -372,9 +371,7 @@ where
     let instances: &[&[&[Scheme::Scalar]]] = &[&pi_inner];
     trace!("instances {:?}", instances);
 
-    info!("verify start");
     let mut transcript = TranscriptReadBuffer::init(Cursor::new(snark.proof.clone()));
-    info!("verify stop");
     verify_proof::<Scheme, V, _, TR, _>(params, vk, strategy, instances, &mut transcript)
 }
 
