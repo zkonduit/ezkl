@@ -35,6 +35,12 @@ For more details on how to use `ezkl`, see below !
 ## Getting Started ⚙️
 
 
+
+
+https://user-images.githubusercontent.com/45801863/236765587-492b49d0-2b17-49f1-b7da-1f7518b1cdf2.mov
+
+
+
 ### building the project 🔨
 Note that the library requires a nightly version of the rust toolchain. You can change the default toolchain by running:
 
@@ -75,9 +81,9 @@ The EZKL project has several libraries and repos.
 
 | Repo | Description |
 | --- | --- |
-| https://github.com/zkonduit/ezkl | the main ezkl repo in rust |
-| https://github.com/zkonduit/pyezkl | helper functions in python for processing onnx files |
-| https://github.com/zkonduit/ezkl-docs | official ezkl docs |
+| [@zkonduit/ezkl](https://github.com/zkonduit/ezkl) | the main ezkl repo in rust |
+| [@zkonduit/pyezkl](https://github.com/zkonduit/pyezkl) | helper functions in python for processing onnx files |
+| [@zkonduit/ezkl-docs](https://github.com/zkonduit/ezkl-docs) | official ezkl docs |
 
 
 
