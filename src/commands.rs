@@ -3,6 +3,13 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 #[cfg(not(target_arch = "wasm32"))]
 use ethereum_types::Address;
 use log::{debug, info};
+#[cfg(feature = "python-bindings")]
+use pyo3::{
+    conversion::{FromPyObject, PyTryFrom},
+    exceptions::PyValueError,
+    prelude::*,
+    types::PyString,
+};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::error::Error;
@@ -11,6 +18,7 @@ use std::io::{stdin, stdout, Read, Write};
 use std::path::PathBuf;
 
 use crate::circuit::CheckMode;
+use crate::graph::{VarVisibility, Visibility};
 
 #[allow(missing_docs)]
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -27,6 +35,31 @@ impl std::fmt::Display for TranscriptType {
             .fmt(f)
     }
 }
+#[cfg(feature = "python-bindings")]
+/// Converts TranscriptType into a PyObject (Required for TranscriptType to be compatible with Python)
+impl IntoPy<PyObject> for TranscriptType {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            TranscriptType::Blake => "blake".to_object(py),
+            TranscriptType::Poseidon => "poseidon".to_object(py),
+            TranscriptType::EVM => "evm".to_object(py),
+        }
+    }
+}
+#[cfg(feature = "python-bindings")]
+/// Obtains TranscriptType from PyObject (Required for TranscriptType to be compatible with Python)
+impl<'source> FromPyObject<'source> for TranscriptType {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let trystr = <PyString as PyTryFrom>::try_from(ob)?;
+        let strval = trystr.to_string();
+        match strval.to_lowercase().as_str() {
+            "blake" => Ok(TranscriptType::Blake),
+            "poseidon" => Ok(TranscriptType::Poseidon),
+            "evm" => Ok(TranscriptType::EVM),
+            _ => Err(PyValueError::new_err("Invalid value for TranscriptType")),
+        }
+    }
+}
 
 #[allow(missing_docs)]
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -40,6 +73,29 @@ impl std::fmt::Display for StrategyType {
             .expect("no values are skipped")
             .get_name()
             .fmt(f)
+    }
+}
+#[cfg(feature = "python-bindings")]
+/// Converts StrategyType into a PyObject (Required for StrategyType to be compatible with Python)
+impl IntoPy<PyObject> for StrategyType {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            StrategyType::Single => "single".to_object(py),
+            StrategyType::Accum => "accum".to_object(py),
+        }
+    }
+}
+#[cfg(feature = "python-bindings")]
+/// Obtains StrategyType from PyObject (Required for StrategyType to be compatible with Python)
+impl<'source> FromPyObject<'source> for StrategyType {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let trystr = <PyString as PyTryFrom>::try_from(ob)?;
+        let strval = trystr.to_string();
+        match strval.to_lowercase().as_str() {
+            "single" => Ok(StrategyType::Single),
+            "accum" => Ok(StrategyType::Accum),
+            _ => Err(PyValueError::new_err("Invalid value for StrategyType")),
+        }
     }
 }
 
@@ -77,6 +133,29 @@ pub struct RunArgs {
     /// run sanity checks during calculations (safe or unsafe)
     #[arg(long, default_value = "safe")]
     pub check_mode: CheckMode,
+}
+
+#[allow(missing_docs)]
+impl RunArgs {
+    pub fn to_var_visibility(&self) -> VarVisibility {
+        VarVisibility {
+            input: if self.public_inputs {
+                Visibility::Public
+            } else {
+                Visibility::Private
+            },
+            params: if self.public_params {
+                Visibility::Public
+            } else {
+                Visibility::Private
+            },
+            output: if self.public_outputs {
+                Visibility::Public
+            } else {
+                Visibility::Private
+            },
+        }
+    }
 }
 
 const EZKLCONF: &str = "EZKLCONF";
@@ -201,9 +280,9 @@ pub enum Commands {
     /// Aggregates proofs :)
     #[command(arg_required_else_help = true)]
     Aggregate {
-        /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
-        model: PathBuf,
+        /// The path to the params files.
+        #[arg(long)]
+        circuit_params_paths: Vec<PathBuf>,
         ///the logrows used when generating the snarks we're aggregating
         #[arg(long)]
         app_logrows: u32,
@@ -233,7 +312,30 @@ pub enum Commands {
         // todo, optionally allow supplying proving key
     },
 
-    /// Loads model and data, prepares vk and pk, and creates proof
+    /// Creates pk and vk and circuit params
+    #[command(arg_required_else_help = true)]
+    Setup {
+        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'D', long)]
+        data: String,
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: PathBuf,
+        /// The parameter path
+        #[arg(long)]
+        params_path: PathBuf,
+        /// The path to output the verfication key file
+        #[arg(long)]
+        vk_path: PathBuf,
+        /// The path to output the proving key file
+        #[arg(long)]
+        pk_path: PathBuf,
+        /// The path to save circuit params to
+        #[arg(long)]
+        circuit_params_path: PathBuf,
+    },
+
+    /// Loads model, data, and creates proof
     #[command(arg_required_else_help = true)]
     Prove {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
@@ -242,13 +344,13 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
-        /// The path to output to the desired verfication key file
+        /// The path to load the desired proving key file
         #[arg(long)]
-        vk_path: PathBuf,
+        pk_path: PathBuf,
         /// The path to the desired output file
         #[arg(long)]
         proof_path: PathBuf,
-        /// The transcript type
+        /// The parameter path
         #[arg(long)]
         params_path: PathBuf,
         #[arg(
@@ -274,15 +376,12 @@ pub enum Commands {
     /// Creates an EVM verifier for a single proof
     #[command(name = "create-evm-verifier", arg_required_else_help = true)]
     CreateEVMVerifier {
-        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'D', long)]
-        data: String,
-        /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
-        model: PathBuf,
         /// The path to load the desired params file
         #[arg(long)]
         params_path: PathBuf,
+        /// The path to save circuit params to
+        #[arg(long)]
+        circuit_params_path: PathBuf,
         /// The path to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
@@ -327,7 +426,6 @@ pub enum Commands {
         /// The path to output the Solidity code (optional) supercedes deployment_code_path in priority
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
-        // todo, optionally allow supplying proving key
     },
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -354,9 +452,9 @@ pub enum Commands {
     /// Verifies a proof, returning accept or reject
     #[command(arg_required_else_help = true)]
     Verify {
-        /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
-        model: PathBuf,
+        /// The path to save circuit params to
+        #[arg(long)]
+        circuit_params_path: PathBuf,
         /// The path to the proof file
         #[arg(long)]
         proof_path: PathBuf,

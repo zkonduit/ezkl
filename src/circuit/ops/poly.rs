@@ -1,5 +1,8 @@
+use itertools::Itertools;
+
 use crate::{
     circuit::layouts,
+    graph::scale_to_multiplier,
     tensor::{self, Tensor, TensorError},
 };
 
@@ -33,6 +36,10 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     },
     Identity,
     Reshape(Vec<usize>),
+    Gather {
+        dim: usize,
+        index: Tensor<usize>,
+    },
     Flatten(Vec<usize>),
     Pad(usize, usize),
     Sum {
@@ -45,7 +52,51 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     RangeCheck(i32),
 }
 
+impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {
+    fn homogenize_input_scales(
+        &self,
+        input_scales: Vec<u32>,
+        inputs_to_scale: Vec<usize>,
+    ) -> Result<Box<dyn Op<F>>, Box<dyn Error>> {
+        if inputs_to_scale.is_empty() {
+            return Ok(Box::new(self.clone()));
+        }
+
+        let mut multipliers: Vec<u128> = vec![1; input_scales.len()];
+        if !input_scales.windows(2).all(|w| w[0] == w[1]) {
+            let max_scale = input_scales.iter().max().unwrap();
+            let _ = input_scales
+                .iter()
+                .enumerate()
+                .map(|(idx, input_scale)| {
+                    if !inputs_to_scale.contains(&idx) {
+                        return;
+                    }
+                    let scale_diff = max_scale - input_scale;
+                    if scale_diff > 0 {
+                        let mult = scale_to_multiplier(scale_diff);
+                        multipliers[idx] = mult as u128;
+                    }
+                })
+                .collect_vec();
+        }
+
+        // only rescale if need to
+        if multipliers.iter().any(|&x| x > 1) {
+            Ok(Box::new(crate::circuit::Rescaled {
+                inner: Box::new(self.clone()),
+                scale: (0..input_scales.len()).zip(multipliers).collect_vec(),
+            }))
+        } else {
+            Ok(Box::new(self.clone()))
+        }
+    }
+}
+
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn as_str(&self) -> &'static str {
         match &self {
             PolyOp::Identity => "IDENTITY",
@@ -65,6 +116,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Matmul { .. } => "MATMUL",
             PolyOp::RangeCheck(..) => "RANGECHECK",
             PolyOp::Iff => "IFF",
+            PolyOp::Gather { .. } => "GATHER",
         }
     }
 
@@ -72,6 +124,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         let mut inputs = inputs.to_vec();
         match &self {
+            PolyOp::Gather { dim, index } => tensor::ops::gather(&inputs[0], *dim, index),
             PolyOp::Identity => Ok(inputs[0].clone()),
             PolyOp::Reshape(new_dims) => {
                 let mut t = inputs[0].clone();
@@ -174,6 +227,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
         let mut values = values.to_vec();
 
         Ok(Some(match self {
+            PolyOp::Gather { dim, index } => {
+                tensor::ops::gather(&values[0].get_inner_tensor()?, *dim, index)?.into()
+            }
             PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?, offset)?,
             PolyOp::Dot => layouts::dot(config, region, values[..].try_into()?, offset)?,
             PolyOp::Sum { axes } => {
@@ -264,6 +320,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
 
     fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
         match self {
+            PolyOp::Gather { .. } => in_scales[0],
             PolyOp::Iff => in_scales[1],
             PolyOp::Dot => in_scales[0] + in_scales[1],
             PolyOp::Sum { .. } => in_scales[0],
@@ -315,8 +372,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
         }
     }
 
-    fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
-        Box::new(self.clone())
+    fn rescale(&self, input_scales: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
+        let inputs_to_scale = self.requires_homogenous_input_scales();
+        // creates a rescaled op if the inputs are not homogenous
+        self.homogenize_input_scales(input_scales.clone(), inputs_to_scale)
+            .unwrap()
     }
 
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
@@ -328,6 +388,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             vec![]
         }
     }
+
+    /// Ensures all inputs to a node have the same fixed point denominator.
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
         Box::new(self.clone()) // Forward to the derive(Clone) impl

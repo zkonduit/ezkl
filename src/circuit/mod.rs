@@ -20,6 +20,13 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use log::warn;
+#[cfg(feature = "python-bindings")]
+use pyo3::{
+    conversion::{FromPyObject, PyTryFrom},
+    exceptions::PyValueError,
+    prelude::*,
+    types::PyString,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -66,6 +73,31 @@ impl From<String> for CheckMode {
             "safe" => CheckMode::SAFE,
             "unsafe" => CheckMode::UNSAFE,
             _ => panic!("not a valid checkmode"),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Converts CheckMode into a PyObject (Required for CheckMode to be compatible with Python)
+impl IntoPy<PyObject> for CheckMode {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            CheckMode::SAFE => "safe".to_object(py),
+            CheckMode::UNSAFE => "unsafe".to_object(py),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Obtains CheckMode from PyObject (Required for CheckMode to be compatible with Python)
+impl<'source> FromPyObject<'source> for CheckMode {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let trystr = <PyString as PyTryFrom>::try_from(ob)?;
+        let strval = trystr.to_string();
+        match strval.to_lowercase().as_str() {
+            "safe" => Ok(CheckMode::SAFE),
+            "unsafe" => Ok(CheckMode::UNSAFE),
+            _ => Err(PyValueError::new_err("Invalid value for CheckMode")),
         }
     }
 }
@@ -251,11 +283,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                                 qlookup.clone() * cs.query_advice(advices[x], Rotation(0))
                                     + not_qlookup.clone() * default_x
                             }
-                            VarTensor::Fixed { inner: fixed, .. } => {
-                                qlookup.clone() * cs.query_fixed(fixed[x], Rotation(0))
-                                    + not_qlookup.clone() * default_x
-                            }
-                            _ => panic!("uninitialized Vartensor"),
+                            _ => panic!("wrong input type"),
                         },
                         table.table_input,
                     ),
@@ -265,11 +293,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                                 qlookup * cs.query_advice(advices[x], Rotation(0))
                                     + not_qlookup * default_y
                             }
-                            VarTensor::Fixed { inner: fixed, .. } => {
-                                qlookup * cs.query_fixed(fixed[x], Rotation(0))
-                                    + not_qlookup * default_y
-                            }
-                            _ => panic!("uninitialized Vartensor"),
+                            _ => panic!("wrong output type"),
                         },
                         table.table_output,
                     ),

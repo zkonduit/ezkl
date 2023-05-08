@@ -7,7 +7,7 @@ pub fn i32_to_felt<F: PrimeField>(x: i32) -> F {
     if x >= 0 {
         F::from(x as u64)
     } else {
-        -F::from((-x) as u64)
+        -F::from(x.abs() as u64)
     }
 }
 

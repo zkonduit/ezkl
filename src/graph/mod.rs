@@ -1,6 +1,8 @@
 /// Helper functions
 pub mod utilities;
 use halo2curves::ff::PrimeField;
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
 pub use utilities::*;
 /// Crate for defining a computational graph and building a ZK-circuit from it.
 pub mod model;
@@ -9,7 +11,8 @@ pub mod node;
 /// Representations of a computational graph's variables.
 pub mod vars;
 
-use crate::commands::Cli;
+use crate::circuit::lookup::LookupOp;
+use crate::commands::{Cli, RunArgs};
 use crate::fieldutils::i128_to_felt;
 use crate::pfsys::ModelInput;
 use crate::tensor::ops::pack;
@@ -23,10 +26,8 @@ use halo2_proofs::{
 use log::{info, trace, warn};
 pub use model::*;
 pub use node::*;
-// use std::fs::File;
-// use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::Write;
 use std::sync::Arc;
-// use std::path::PathBuf;
 use thiserror::Error;
 pub use vars::*;
 
@@ -78,23 +79,44 @@ pub enum GraphError {
 }
 
 /// model parameters
-#[derive(Clone, Debug, Default)]
-pub struct ModelParams<F: PrimeField + TensorType + PartialOrd> {
-    /// An onnx model quantized and configured for zkSNARKs
-    pub model: Arc<Model<F>>,
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ModelParams {
+    /// run args
+    pub run_args: RunArgs,
+    /// the visibility of the variables in the circuit
+    pub visibility: VarVisibility,
     /// the potential number of constraints in the circuit
     pub num_constraints: usize,
     /// the shape of public inputs to the circuit (in order of appearance)
     pub instance_shapes: Vec<Vec<usize>>,
+    /// required_lookups
+    pub required_lookups: Vec<LookupOp>,
+}
+
+impl ModelParams {
+    ///
+    pub fn save(&self, path: &std::path::PathBuf) {
+        let mut file = std::fs::File::create(path).unwrap();
+        let encoded: Vec<u8> = bincode::serialize(&self).unwrap();
+        file.write_all(&encoded).unwrap();
+    }
+    ///
+    pub fn load(path: &std::path::PathBuf) -> Self {
+        let file = std::fs::File::open(path).unwrap();
+        let decoded: Self = bincode::deserialize_from(file).unwrap();
+        decoded
+    }
 }
 
 /// Defines the circuit for a computational graph / model loaded from a `.onnx` file.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ModelCircuit<F: PrimeField + TensorType + PartialOrd> {
+    /// The model / graph of computations.
+    pub model: Arc<Model<F>>,
     /// Vector of input tensors to the model / graph of computations.
     pub inputs: Vec<Tensor<i128>>,
     ///
-    pub params: ModelParams<F>,
+    pub params: ModelParams,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
@@ -106,28 +128,22 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
         // quantize the supplied data using the provided scale.
         let mut inputs: Vec<Tensor<i128>> = vec![];
         for (input, shape) in data.input_data.iter().zip(data.input_shapes.clone()) {
-            let t = vector_to_quantized(input, &shape, 0.0, model.run_args.scale)?;
+            let t: Vec<i128> = input
+                .par_iter()
+                .map(|x| quantize_float(x, 0.0, model.run_args.scale).unwrap())
+                .collect();
+
+            let mut t: Tensor<i128> = t.into_iter().into();
+            t.reshape(&shape);
+
             inputs.push(t);
         }
 
-        let instance_shapes = model.instance_shapes();
-        // this is the total number of variables we will need to allocate
-        // for the circuit
-        let num_constraints = if let Some(num_constraints) = model.run_args.allocated_constraints {
-            num_constraints
-        } else {
-            model.dummy_layout(&model.input_shapes()).unwrap()
-        };
-
-        warn!("allocating columns for {} constraints", num_constraints);
-
-        let params = ModelParams {
-            model,
-            instance_shapes,
-            num_constraints,
-        };
-
-        Ok(ModelCircuit::<F> { inputs, params })
+        Ok(ModelCircuit::<F> {
+            model: model.clone(),
+            inputs,
+            params: model.gen_params()?,
+        })
     }
 
     ///
@@ -142,39 +158,44 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
         &self,
         data: &ModelInput,
     ) -> Result<Vec<Vec<F>>, Box<dyn std::error::Error>> {
-        let out_scales = self.params.model.get_output_scales();
+        let out_scales = self.model.get_output_scales();
 
         // quantize the supplied data using the provided scale.
         // the ordering here is important, we want the inputs to come before the outputs
         // as they are configured in that order as Column<Instances>
         let mut public_inputs = vec![];
-        if self.params.model.visibility.input.is_public() {
+        if self.model.visibility.input.is_public() {
             for v in data.input_data.iter() {
-                let t = vector_to_quantized(
-                    v,
-                    &Vec::from([v.len()]),
-                    0.0,
-                    self.params.model.run_args.scale,
-                )?;
+                let t: Vec<i128> = v
+                    .par_iter()
+                    .map(|x| quantize_float(x, 0.0, self.model.run_args.scale).unwrap())
+                    .collect();
+
+                let t: Tensor<i128> = t.into_iter().into();
+
                 public_inputs.push(t);
             }
         }
-        if self.params.model.visibility.output.is_public() {
+        if self.model.visibility.output.is_public() {
             for (idx, v) in data.output_data.iter().enumerate() {
-                let mut t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, out_scales[idx])?;
+                let t: Vec<i128> = v
+                    .par_iter()
+                    .map(|x| quantize_float(x, 0.0, out_scales[idx]).unwrap())
+                    .collect();
+
+                let mut t: Tensor<i128> = t.into_iter().into();
+
                 let len = t.len();
-                if self.params.model.run_args.pack_base > 1 {
+                if self.model.run_args.pack_base > 1 {
                     let max_exponent =
-                        (((len - 1) as u32) * (self.params.model.run_args.scale + 1)) as f64;
-                    if max_exponent
-                        > (i128::MAX as f64).log(self.params.model.run_args.pack_base as f64)
-                    {
+                        (((len - 1) as u32) * (self.model.run_args.scale + 1)) as f64;
+                    if max_exponent > (i128::MAX as f64).log(self.model.run_args.pack_base as f64) {
                         return Err(Box::new(GraphError::PackingExponent));
                     }
                     t = pack(
                         &t,
-                        self.params.model.run_args.pack_base as i128,
-                        self.params.model.run_args.scale,
+                        self.model.run_args.pack_base as i128,
+                        self.model.run_args.scale,
                     )?;
                 }
                 public_inputs.push(t);
@@ -201,7 +222,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
 impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
     type Config = ModelConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
-    type Params = ModelParams<F>;
+    type Params = ModelParams;
 
     fn without_witnesses(&self) -> Self {
         self.clone()
@@ -215,28 +236,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
     fn configure_with_params(cs: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
         let mut vars = ModelVars::new(
             cs,
-            params.model.run_args.logrows as usize,
+            params.run_args.logrows as usize,
             params.num_constraints,
             params.instance_shapes.clone(),
-            params.model.visibility.clone(),
-            params.model.run_args.scale,
+            params.visibility.clone(),
+            params.run_args.scale,
         );
 
-        warn!(
-            "using {} advice",
-            vars.advices.len() * vars.advices[0].num_cols()
-        );
-        warn!("using {} instances", vars.instances.len());
-        if vars.fixed.len() > 0 {
-            warn!(
-                "using {} fixed",
-                vars.fixed.len() * vars.fixed[0].num_cols() + 1
-            );
-        } else {
-            warn!("using 1 fixed")
-        }
-
-        let base = params.model.configure(cs, &mut vars).unwrap();
+        let base =
+            Model::<F>::configure(cs, &mut vars, params.run_args, params.required_lookups).unwrap();
 
         ModelConfig { base, vars }
     }
@@ -257,8 +265,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
             .map(|i| ValTensor::from(<Tensor<i128> as Into<Tensor<Value<F>>>>::into(i.clone())))
             .collect::<Vec<ValTensor<F>>>();
         trace!("Laying out model");
-        self.params
-            .model
+        self.model
             .layout(config.clone(), &mut layouter, &inputs, &config.vars)
             .unwrap();
 

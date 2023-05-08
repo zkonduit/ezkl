@@ -5,13 +5,13 @@ use crate::eth::{
     deploy_verifier, fix_verifier_sol, get_ledger_signing_provider, get_provider,
     get_wallet_signing_provider, send_proof, verify_proof_via_solidity,
 };
-use crate::graph::{vector_to_quantized, Model, ModelCircuit, ModelParams};
+use crate::graph::{quantize_float, Model, ModelCircuit, ModelParams};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::{aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::{evm_verify, DeploymentCode};
-use crate::pfsys::{create_keys, load_params, load_vk, save_params, Snark};
+use crate::pfsys::{create_keys, load_params, load_pk, load_vk, save_params, save_pk, Snark};
 use crate::pfsys::{create_proof_circuit, gen_srs, prepare_data, save_vk, verify_proof_circuit};
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::providers::Middleware;
@@ -33,6 +33,7 @@ use log::warn;
 use log::{info, trace};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
@@ -42,6 +43,7 @@ use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
 use std::path::PathBuf;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 use std::time::Instant;
 use tabled::Table;
@@ -89,16 +91,15 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         Commands::Mock { data, model: _ } => mock(data, cli.args.logrows),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
-            data,
-            model: _,
             vk_path,
             params_path,
+            circuit_params_path,
             deployment_code_path,
             sol_code_path,
         } => create_evm_verifier(
-            data,
             vk_path,
             params_path,
+            circuit_params_path,
             deployment_code_path,
             sol_code_path,
             cli.args.logrows,
@@ -109,17 +110,32 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             deployment_code_path,
             vk_path,
         } => create_evm_aggregate_verifier(params_path, deployment_code_path, vk_path),
+        Commands::Setup {
+            model: _,
+            data,
+            params_path,
+            circuit_params_path,
+            vk_path,
+            pk_path,
+        } => create_keys_kzg(
+            data,
+            params_path,
+            vk_path,
+            pk_path,
+            circuit_params_path,
+            cli.args.logrows,
+        ),
         Commands::Prove {
             data,
             model: _,
-            vk_path,
+            pk_path,
             proof_path,
             params_path,
             transcript,
             strategy,
         } => prove(
             data,
-            vk_path,
+            pk_path,
             proof_path,
             params_path,
             transcript,
@@ -128,7 +144,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             cli.args.check_mode,
         ),
         Commands::Aggregate {
-            model: _,
+            circuit_params_paths,
             proof_path,
             aggregation_snarks,
             aggregation_vk_paths,
@@ -139,6 +155,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => aggregate(
             proof_path,
             aggregation_snarks,
+            circuit_params_paths,
             aggregation_vk_paths,
             vk_path,
             params_path,
@@ -148,13 +165,14 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             cli.args.check_mode,
         ),
         Commands::Verify {
-            model: _,
             proof_path,
+            circuit_params_path,
             vk_path,
             params_path,
             transcript,
         } => verify(
             proof_path,
+            circuit_params_path,
             vk_path,
             params_path,
             transcript,
@@ -183,7 +201,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
 }
 
 /// helper function
-fn verify_proof_circuit_kzg<
+pub fn verify_proof_circuit_kzg<
     'params,
     Strategy: VerificationStrategy<'params, KZGCommitmentScheme<Bn256>, VerifierGWC<'params, Bn256>>,
 >(
@@ -346,11 +364,14 @@ fn forward(
     // quantize the supplied data using the provided scale.
     let mut model_inputs = vec![];
     for v in data.input_data.iter() {
-        let t = vector_to_quantized(v, &Vec::from([v.len()]), 0.0, args.scale)?;
-        model_inputs.push(t);
+        let t: Vec<i128> = v
+            .par_iter()
+            .map(|x| quantize_float(x, 0.0, args.scale).unwrap())
+            .collect();
+        model_inputs.push(t.into_iter().into());
     }
 
-    let res = Model::<Fr>::forward(model, &model_inputs, args)?;
+    let res = Model::<Fr>::forward(&mut std::fs::File::open(model)?, &model_inputs, args)?;
 
     let float_res: Vec<Vec<f32>> = res.iter().map(|t| t.to_vec()).collect();
     trace!("forward pass output: {:?}", float_res);
@@ -407,19 +428,20 @@ fn render(data: String, output: String, logrows: u32) -> Result<(), Box<dyn Erro
 
 #[cfg(not(target_arch = "wasm32"))]
 fn create_evm_verifier(
-    data: String,
     vk_path: PathBuf,
     params_path: PathBuf,
+    circuit_params_path: PathBuf,
     deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
     logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
-    let data = prepare_data(data)?;
-    let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
-    let public_inputs = circuit.prepare_public_inputs(&data)?;
-    let num_instance = public_inputs.iter().map(|x| x.len()).collect();
     let params = load_params_cmd(params_path, logrows)?;
-    let model_circuit_params = load_model_circuit_params();
+    let model_circuit_params = ModelParams::load(&circuit_params_path);
+    let num_instance = model_circuit_params
+        .instance_shapes
+        .iter()
+        .map(|x| x.iter().product())
+        .collect();
 
     let vk =
         load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)?;
@@ -482,9 +504,31 @@ fn create_evm_aggregate_verifier(
     Ok(())
 }
 
+fn create_keys_kzg(
+    data: String,
+    params_path: PathBuf,
+    vk_path: PathBuf,
+    pk_path: PathBuf,
+    circuit_params_path: PathBuf,
+    logrows: u32,
+) -> Result<(), Box<dyn Error>> {
+    let data = prepare_data(data)?;
+    let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
+    let params = load_params_cmd(params_path, logrows)?;
+    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
+        .map_err(Box::<dyn Error>::from)?;
+    let circuit_params = circuit.params.clone();
+    trace!("params computed");
+    circuit_params.save(&circuit_params_path);
+
+    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, pk.get_vk())?;
+    save_pk::<KZGCommitmentScheme<Bn256>>(&pk_path, &pk)?;
+    Ok(())
+}
+
 fn prove(
     data: String,
-    vk_path: PathBuf,
+    pk_path: PathBuf,
     proof_path: PathBuf,
     params_path: PathBuf,
     transcript: TranscriptType,
@@ -495,14 +539,19 @@ fn prove(
     let data = prepare_data(data)?;
     let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
+    let circuit_params = circuit.params.clone();
 
     let params = load_params_cmd(params_path, logrows)?;
 
-    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
-        .map_err(Box::<dyn Error>::from)?;
+    let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
+        pk_path,
+        circuit_params.clone(),
+    )
+    .map_err(Box::<dyn Error>::from)?;
     trace!("params computed");
 
     let now = Instant::now();
+
     // creates and verifies the proof
     let snark = match strategy {
         StrategyType::Single => {
@@ -534,13 +583,14 @@ fn prove(
     info!("proof took {}", now.elapsed().as_secs());
 
     snark.save(&proof_path)?;
-    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, pk.get_vk())?;
+
     Ok(())
 }
 
 fn aggregate(
     proof_path: PathBuf,
     aggregation_snarks: Vec<PathBuf>,
+    circuit_params_paths: Vec<PathBuf>,
     aggregation_vk_paths: Vec<PathBuf>,
     vk_path: PathBuf,
     params_path: PathBuf,
@@ -556,9 +606,12 @@ fn aggregate(
     // the K used when generating the application snark proof. we assume K is homogenous across snarks to aggregate
     let params_app = load_params_cmd(params_path, app_logrows)?;
 
-    let model_circuit_params = load_model_circuit_params();
-
-    for (proof_path, vk_path) in aggregation_snarks.iter().zip(aggregation_vk_paths) {
+    for ((proof_path, vk_path), circuit_params_path) in aggregation_snarks
+        .iter()
+        .zip(aggregation_vk_paths)
+        .zip(circuit_params_paths)
+    {
+        let model_circuit_params = ModelParams::load(&circuit_params_path);
         let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
             vk_path.to_path_buf(),
             // safe to clone as the inner model is wrapped in an Arc
@@ -598,6 +651,7 @@ fn aggregate(
 
 fn verify(
     proof_path: PathBuf,
+    circuit_params_path: PathBuf,
     vk_path: PathBuf,
     params_path: PathBuf,
     transcript: TranscriptType,
@@ -606,7 +660,7 @@ fn verify(
     let params = load_params_cmd(params_path, logrows)?;
 
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
-    let model_circuit_params = load_model_circuit_params();
+    let model_circuit_params = ModelParams::load(&circuit_params_path);
 
     let strategy = KZGSingleStrategy::new(params.verifier_params());
     let vk =
@@ -635,30 +689,15 @@ fn verify_aggr(
     Ok(())
 }
 
-fn load_params_cmd(params_path: PathBuf, logrows: u32) -> Result<ParamsKZG<Bn256>, Box<dyn Error>> {
+/// helper function for load_params
+pub fn load_params_cmd(
+    params_path: PathBuf,
+    logrows: u32,
+) -> Result<ParamsKZG<Bn256>, Box<dyn Error>> {
     let mut params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
     info!("downsizing params to {} logrows", logrows);
     if logrows < params.k() {
         params.downsize(logrows);
     }
     Ok(params)
-}
-
-fn load_model_circuit_params() -> ModelParams<Fr> {
-    let model: Arc<Model<Fr>> = Arc::new(Model::from_arg().expect("model should load"));
-
-    let instance_shapes = model.instance_shapes();
-    // this is the total number of variables we will need to allocate
-    // for the circuit
-    let num_constraints = if let Some(num_constraints) = model.run_args.allocated_constraints {
-        num_constraints
-    } else {
-        model.dummy_layout(&model.input_shapes()).unwrap()
-    };
-
-    ModelParams {
-        model,
-        instance_shapes,
-        num_constraints,
-    }
 }

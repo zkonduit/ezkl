@@ -13,7 +13,7 @@ EZKL
 
 [![Test](https://github.com/zkonduit/ezkl/workflows/Rust/badge.svg)](https://github.com/zkonduit/ezkl/actions?query=workflow%3ARust)
 
-`ezkl` is a library and command-line tool for doing inference for deep learning models and other computational graphs in a zk-snark. It enables the following workflow:
+`ezkl` is a library and command-line tool for doing inference for deep learning models and other computational graphs in a zk-snark (ZKML). It enables the following workflow:
 
 1. Define a computational graph, for instance a neural network (but really any arbitrary set of operations), as you would normally in pytorch or tensorflow.
 2. Export the final graph of operations as an [.onnx](https://onnx.ai/) file and some sample inputs to a `.json` file.
@@ -41,11 +41,14 @@ If you're interested in contributing and are unsure where to start, reach out to
 
 More broadly:
 
-- Feel free to open up a discussion topic to ask questions.
+- Feel free to open up a discussion topic in [Discussions](https://github.com/zkonduit/ezkl/discussions) to ask questions. Alternatively, you may join the [EZKL Community Telegram Group](https://t.me/+76OjHb5CwJtkMTBh) to ask questions.
 
 - See currently open issues for ideas on how to contribute.
 
 - For PRs we use the [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) naming convention.
+
+- To report bugs or request new features [create a new issue within Issues](https://github.com/zkonduit/ezkl/issues) to inform the greater community.
+
 
 ----------------------
 
@@ -105,16 +108,23 @@ Sample onnx files are also available in `./examples/onnx`. To generate a proof o
 ezkl -K=17 gen-srs --params-path=kzg.params
 ```
 
+Now setup the proving and verification keys:
 
 ```bash
-ezkl --bits=16 -K=17 prove -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path=kzg.params
+ezkl --bits=16 -K=17 setup -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --pk-path 1l_relu.pk --vk-path 1l_relu.vk --params-path=kzg.params --circuit-params-path=circuit.params
+```
+
+Now generate a proof:
+
+```bash
+ezkl --bits=16 -K=17 prove -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --pk-path 1l_relu.pk --params-path=kzg.params
 ```
 
 This command generates a proof that the model was correctly run on private inputs (this is the default setting). It then outputs the resulting proof at the path specfifed by `--proof-path`, parameters that can be used for subsequent verification at `--params-path` and the verifier key at `--vk-path`.
 Luckily `ezkl` also provides command to verify the generated proofs:
 
 ```bash
-ezkl --bits=16 -K=17 verify -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path=kzg.params
+ezkl --bits=16 -K=17 verify  --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path=kzg.params --circuit-params-path=circuit.params
 ```
 
 To display a table of the loaded onnx nodes, their associated parameters, set `RUST_LOG=DEBUG` or run:
@@ -127,15 +137,17 @@ cargo run --release --bin ezkl -- table -M ./examples/onnx/1l_relu/network.onnx
 
 #### verifying with the EVM ◊
 
-Note that the above prove and verify stats can also be run with an EVM verifier. This can be done by generating a verifier smart contract after generating the proof
+Note that the above prove and verify stats can also be run with an EVM verifier. This can be done by generating a verifier smart contract after generating the proof.
+
+(run the following commands after calling `gen-params` and `setup`, as detailed above).
 
 ```bash
 # gen proof
-ezkl --bits=16 -K=17 prove -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --vk-path 1l_relu.vk --params-path=kzg.params --transcript=evm
+ezkl --bits=16 -K=17 prove -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --pk-path 1l_relu.pk --params-path=kzg.params --transcript=evm --circuit-params-path=circuit.params
 ```
 ```bash
 # gen evm verifier
-ezkl -K=17 --bits=16 create-evm-verifier -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --deployment-code-path 1l_relu.code --params-path=kzg.params --vk-path 1l_relu.vk --sol-code-path 1l_relu.sol
+ezkl -K=17 --bits=16 create-evm-verifier --deployment-code-path 1l_relu.code --params-path=kzg.params --vk-path 1l_relu.vk --sol-code-path 1l_relu.sol --circuit-params-path=circuit.params
 ```
 ```bash
 # Verify (EVM)
@@ -152,13 +164,19 @@ ezkl -K=20 gen-srs --params-path=kzg.params
 ```
 
 ```bash
+# setup
+ezkl --bits=16 -K=17 setup -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --pk-path 1l_relu.pk --vk-path 1l_relu.vk --params-path=kzg.params --circuit-params-path=circuit.params
+```
+
+
+```bash
 # Single proof -> single proof we are going to feed into aggregation circuit. (Mock)-verifies + verifies natively as sanity check
-ezkl -K=17 --bits=16 prove --transcript=poseidon --strategy=accum -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --params-path=kzg.params  --vk-path=1l_relu.vk
+ezkl -K=17 --bits=16 prove --transcript=poseidon --strategy=accum -D ./examples/onnx/1l_relu/input.json -M ./examples/onnx/1l_relu/network.onnx --proof-path 1l_relu.pf --params-path=kzg.params  --vk-path=1l_relu.vk --circuit-params-path=circuit.params
 ```
 
 ```bash
 # Aggregate -> generates aggregate proof and also (mock)-verifies + verifies natively as sanity check
-ezkl -K=20 --bits=16 aggregate --app-logrows=17 --transcript=evm -M ./examples/onnx/1l_relu/network.onnx --aggregation-snarks=1l_relu.pf --aggregation-vk-paths 1l_relu.vk --vk-path aggr_1l_relu.vk --proof-path aggr_1l_relu.pf --params-path=kzg.params
+ezkl -K=20 --bits=16 aggregate --app-logrows=17 --transcript=evm --circuit-params-paths=circuit.params --aggregation-snarks=1l_relu.pf --aggregation-vk-paths 1l_relu.vk --vk-path aggr_1l_relu.vk --proof-path aggr_1l_relu.pf --params-path=kzg.params
 ```
 
 ```bash
@@ -435,3 +453,5 @@ pytest
 ```
 
 The list of python functions that can be accessed are found within `src/python.rs`
+
+We also include a full run through and tutorial on using the bindings within a jupyter notebook in `examples/notebook`.
