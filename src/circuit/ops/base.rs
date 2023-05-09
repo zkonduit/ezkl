@@ -44,7 +44,7 @@ impl BaseOp {
         }
     }
 
-    ///
+    /// display func
     pub fn as_str(&self) -> &'static str {
         match self {
             BaseOp::Identity => "IDENTITY",
@@ -60,7 +60,7 @@ impl BaseOp {
         }
     }
 
-    ///
+    /// Returns the range of the query offset for this operation.
     pub fn query_offset_rng(&self) -> (i32, usize) {
         match self {
             BaseOp::Identity => (0, 1),
@@ -76,7 +76,7 @@ impl BaseOp {
         }
     }
 
-    ///
+    /// Returns the number of inputs for this operation.
     pub fn num_inputs(&self) -> usize {
         match self {
             BaseOp::Identity => 1,
@@ -92,7 +92,7 @@ impl BaseOp {
         }
     }
 
-    ///
+    /// Returns the number of outputs for this operation.
     pub fn constraint_idx(&self) -> usize {
         match self {
             BaseOp::Identity => 0,

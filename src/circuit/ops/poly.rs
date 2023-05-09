@@ -9,7 +9,7 @@ use crate::{
 use super::{base::BaseOp, *};
 
 #[allow(missing_docs)]
-/// An enum representing the operations that can be used to express more complex operations via accumulation
+/// An enum representing the operations that can be expressed as arithmetic (non lookup) operations.
 #[derive(Clone, Debug)]
 pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Dot,
@@ -383,8 +383,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             vec![]
         }
     }
-
-    /// Ensures all inputs to a node have the same fixed point denominator.
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
         Box::new(self.clone()) // Forward to the derive(Clone) impl

@@ -349,7 +349,7 @@ fn gen_srs_cmd(params_path: PathBuf, logrows: u32) -> Result<(), Box<dyn Error>>
 
 fn table(cli: Cli) -> Result<(), Box<dyn Error>> {
     let om = Model::<Fr>::from_ezkl_conf(cli)?;
-    info!("{}", Table::new(om.nodes.iter()));
+    info!("\n {}", Table::new(om.nodes.iter()));
     Ok(())
 }
 
@@ -665,8 +665,10 @@ fn verify(
     let strategy = KZGSingleStrategy::new(params.verifier_params());
     let vk =
         load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)?;
+    let now = Instant::now();
     let result =
         verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, transcript, strategy);
+    info!("verify took {}", now.elapsed().as_secs());
     info!("verified: {}", result.is_ok());
     Ok(())
 }
@@ -684,7 +686,9 @@ fn verify_aggr(
 
     let strategy = AccumulatorStrategy::new(params.verifier_params());
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
+    let now = Instant::now();
     let result = verify_proof_circuit_kzg(&params, proof, &vk, transcript, strategy);
+    info!("verify took {}", now.elapsed().as_secs());
     info!("verified: {}", result.is_ok());
     Ok(())
 }
