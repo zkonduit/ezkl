@@ -18,10 +18,9 @@ use crate::circuit::lookup::LookupOp;
 use super::Op;
 
 /// Halo2 lookup table for element wise non-linearities.
-// Table that should be reused across all lookups (so no Clone)
 #[derive(Clone, Debug)]
 pub struct Table<F: PrimeField> {
-    /// composed operations represented by the table
+    /// Non-linearity to be used in table.
     pub nonlinearity: LookupOp,
     /// Input to table.
     pub table_input: TableColumn,

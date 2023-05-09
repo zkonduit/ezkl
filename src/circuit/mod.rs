@@ -19,7 +19,7 @@ use halo2_proofs::{
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
     poly::Rotation,
 };
-use log::warn;
+use log::debug;
 #[cfg(feature = "python-bindings")]
 use pyo3::{
     conversion::{FromPyObject, PyTryFrom},
@@ -112,14 +112,14 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     pub lookup_input: VarTensor,
     /// the (currently singular) output of the accumulated operations.
     pub output: VarTensor,
-    ///  the VarTensor reserved for lookup operations (could be an element of inputs or the same as output)
+    /// the VarTensor reserved for lookup operations (could be an element of inputs or the same as output)
     /// Note that you should be careful to ensure that the lookup_output is not simultaneously assigned to by other non-lookup operations eg. in the case of composite ops.
     pub lookup_output: VarTensor,
-    /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many base gates.
+    /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure [BaseOp].
     pub selectors: BTreeMap<(BaseOp, usize), Selector>,
-    /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many lookup ops.
+    /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many lookup ops.
     pub lookup_selectors: BTreeMap<(LookupOp, usize), Selector>,
-    /// [Table]
+    ///
     pub tables: BTreeMap<LookupOp, Table<F>>,
     /// Activate sanity checks
     pub check_mode: CheckMode,
@@ -144,9 +144,11 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
     /// Configures [BaseOp]s for a given [ConstraintSystem].
     /// # Arguments
+    /// * `meta` - The [ConstraintSystem] to configure the operations in.
     /// * `inputs` - The explicit inputs to the operations.
     /// * `output` - The variable representing the (currently singular) output of the operations.
     /// * `check_mode` - The variable representing the (currently singular) output of the operations.
+    /// * `tol` - The tolerance for the range check.
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         inputs: &[VarTensor; 2],
@@ -303,11 +305,11 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         self.lookup_selectors.extend(selectors);
         // if we haven't previously initialized the input/output, do so now
         if let VarTensor::Empty = self.lookup_input {
-            warn!("assigning lookup input");
+            debug!("assigning lookup input");
             self.lookup_input = input.clone();
         }
         if let VarTensor::Empty = self.lookup_output {
-            warn!("assigning lookup output");
+            debug!("assigning lookup output");
             self.lookup_output = output.clone();
         }
         Ok(())
@@ -317,7 +319,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     pub fn layout_tables(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), Box<dyn Error>> {
         for table in self.tables.values_mut() {
             if !table.is_assigned {
-                warn!(
+                debug!(
                     "laying out table for {:?}",
                     crate::circuit::ops::Op::<F>::as_str(&table.nonlinearity)
                 );

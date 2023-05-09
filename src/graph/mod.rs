@@ -94,13 +94,13 @@ pub struct ModelParams {
 }
 
 impl ModelParams {
-    ///
+    /// save params to file
     pub fn save(&self, path: &std::path::PathBuf) {
         let mut file = std::fs::File::create(path).unwrap();
         let encoded: Vec<u8> = bincode::serialize(&self).unwrap();
         file.write_all(&encoded).unwrap();
     }
-    ///
+    /// load params from file
     pub fn load(path: &std::path::PathBuf) -> Self {
         let file = std::fs::File::open(path).unwrap();
         let decoded: Self = bincode::deserialize_from(file).unwrap();
@@ -115,7 +115,7 @@ pub struct ModelCircuit<F: PrimeField + TensorType + PartialOrd> {
     pub model: Arc<Model<F>>,
     /// Vector of input tensors to the model / graph of computations.
     pub inputs: Vec<Tensor<i128>>,
-    ///
+    /// The parameters of the model / graph of computations.
     pub params: ModelParams,
 }
 
@@ -146,14 +146,14 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
         })
     }
 
-    ///
+    /// Create a new circuit from a set of input data and cli arguments.
     pub fn from_arg(data: &ModelInput) -> Result<Self, Box<dyn std::error::Error>> {
         let cli = Cli::create()?;
         let model = Arc::new(Model::from_ezkl_conf(cli)?);
         Self::new(data, model)
     }
 
-    ///
+    /// Prepare the public inputs for the circuit.
     pub fn prepare_public_inputs(
         &self,
         data: &ModelInput,
