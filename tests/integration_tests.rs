@@ -178,6 +178,7 @@ mod native_tests {
             seq!(N in 0..=17 {
 
             #(#[test_case(TESTS_AGGR[N])])*
+            #[ignore]
             fn kzg_aggr_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::init_params_23();
@@ -231,6 +232,7 @@ mod native_tests {
             use crate::native_tests::mock_public_params;
             use crate::native_tests::forward_pass;
             use crate::native_tests::kzg_prove_and_verify;
+            use crate::native_tests::kzg_prove_and_verify_public_params;
             use crate::native_tests::render_circuit;
             use crate::native_tests::tutorial as run_tutorial;
 
@@ -278,6 +280,13 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 crate::native_tests::init_params_17();
                 kzg_prove_and_verify(test.to_string());
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn kzg_public_params_prove_and_verify_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::init_params_17();
+                kzg_prove_and_verify_public_params(test.to_string());
             }
 
             });
@@ -937,6 +946,85 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
+    fn kzg_prove_and_verify_public_params(example_name: String) {
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "--bits=16",
+                "-K=17",
+                "--public-params=true",
+                "setup",
+                "-D",
+                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                "-M",
+                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--pk-path",
+                &format!("{}/{}.pk", TEST_DIR.path().to_str().unwrap(), example_name),
+                "--vk-path",
+                &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!(
+                    "--params-path={}/kzg17.params",
+                    TEST_DIR.path().to_str().unwrap()
+                ),
+                &format!(
+                    "--circuit-params-path={}/{}.params",
+                    TEST_DIR.path().to_str().unwrap(),
+                    example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "--bits=16",
+                "-K=17",
+                "--public-params=true",
+                "prove",
+                "-D",
+                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                "-M",
+                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--proof-path",
+                &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
+                "--pk-path",
+                &format!("{}/{}.pk", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!(
+                    "--params-path={}/kzg17.params",
+                    TEST_DIR.path().to_str().unwrap()
+                ),
+                "--transcript=blake",
+                "--strategy=single",
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "--bits=16",
+                "-K=17",
+                "--public-params=true",
+                "verify",
+                &format!(
+                    "--circuit-params-path={}/{}.params",
+                    TEST_DIR.path().to_str().unwrap(),
+                    example_name
+                ),
+                "--proof-path",
+                &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
+                "--vk-path",
+                &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!(
+                    "--params-path={}/kzg17.params",
+                    TEST_DIR.path().to_str().unwrap()
+                ),
+                "--transcript=blake",
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+    }
+
+    // prove-serialize-verify, the usual full path
     fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1017,7 +1105,11 @@ mod native_tests {
             vk_arg.as_str(),
         ];
 
-        let sol_arg = format!("kzg_{}.sol", example_name);
+        let sol_arg = format!(
+            "{}/kzg_{}.sol",
+            TEST_DIR.path().to_str().unwrap(),
+            example_name
+        );
 
         if with_solidity {
             args.push("--sol-code-path");
@@ -1042,7 +1134,6 @@ mod native_tests {
         ];
         if with_solidity {
             args.push("--sol-code-path");
-            //args.push(format!("kzg_{}.sol", example_name).as_str());
             args.push(sol_arg.as_str());
         }
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))

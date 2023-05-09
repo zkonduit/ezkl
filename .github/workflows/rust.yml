@@ -265,6 +265,8 @@ jobs:
           components: rustfmt, clippy
       - name: KZG prove and verify tests
         run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 8
+      - name: KZG prove and verify tests (public params)
+        run: cargo test --release --verbose tests::kzg_public_params_prove_and_verify_ -- --test-threads 8
 
   prove-and-verify-aggr-tests:
     runs-on: self-hosted
@@ -284,7 +286,7 @@ jobs:
           override: true
           components: rustfmt, clippy
       - name: KZG prove and verify aggr tests
-        run: cargo test --release --verbose tests_aggr::kzg_aggr_prove_and_verify_ -- --test-threads 8
+        run: cargo test --release --verbose tests_aggr::kzg_aggr_prove_and_verify_ -- --include-ignored --test-threads 8
 
   prove-and-verify-aggr-evm-tests:
     runs-on: self-hosted

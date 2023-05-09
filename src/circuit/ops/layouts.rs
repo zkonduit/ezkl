@@ -468,7 +468,13 @@ pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 2],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let (mut a, mut b) = (values[0].clone(), values[1].clone());
+    let (a, b) = (values[0].clone(), values[1].clone());
+
+    // assigns a and b such that any subsequent assignments generate copy constraints !
+    let mut a = config.inputs[0].assign(region, *offset, &a)?;
+    let mut b = config.inputs[1].assign(region, *offset, &b)?;
+
+    *offset += std::cmp::max(a.len(), b.len());
 
     if a.dims().len() == 1 {
         a.reshape(&[1, a.dims()[0]])?;
@@ -762,6 +768,11 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
 
     let padded_image = pad(config, region, &[image.clone()], padding, offset)?;
 
+    // assigns image such that any subsequent assignments generate copy constraints !
+    let padded_image = config.inputs[1].assign(region, *offset, &padded_image)?;
+
+    *offset += padded_image.len();
+
     let horz_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
     let vert_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
 
@@ -853,11 +864,6 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     // assigns kernel such that any subsequent assignments generate copy constraints !
     let mut kernel = config.inputs[0].assign(region, *offset, &kernel)?;
 
-    // assigns image such that any subsequent assignments generate copy constraints !
-    let image = config.inputs[1].assign(region, *offset, &image)?;
-
-    *offset += std::cmp::max(kernel.len(), image.len());
-
     if (image.dims().len() != 3)
         || (kernel.dims().len() != 4)
         || ((image.dims()[0] != kernel.dims()[1]) && (kernel.dims()[1] != 1))
@@ -893,6 +899,11 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     let horz_slides = (padded_width - kernel_width) / stride.1 + 1;
 
     let padded_image = pad(config, region, &[image.clone()], padding, offset)?;
+
+    // assigns image such that any subsequent assignments generate copy constraints !
+    let padded_image = config.inputs[1].assign(region, *offset, &padded_image)?;
+
+    *offset += std::cmp::max(kernel.len(), padded_image.len());
 
     let num_groups = image_dims[0] / kernel_dims[1];
     let input_channels_per_group = input_channels / num_groups;
