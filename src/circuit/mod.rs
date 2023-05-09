@@ -93,6 +93,19 @@ impl Default for Tolerance {
         Tolerance::Abs { val: 0 }
     }
 }
+impl FromStr for Tolerance {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(val) = s.parse::<usize>() {
+            Ok(Tolerance::Abs { val })
+        } else if let Ok(val) = s.parse::<f32>() {
+            Ok(Tolerance::Percentage { val, scale: 1 })
+        } else {
+            Err("Invalid tolerance value provided. It should be either an absolute value (usize) or a percentage (f32).".to_string())
+        }
+    }
+}
 
 #[cfg(feature = "python-bindings")]
 /// Converts CheckMode into a PyObject (Required for CheckMode to be compatible with Python)
@@ -119,19 +132,40 @@ impl<'source> FromPyObject<'source> for CheckMode {
     }
 }
 
-impl FromStr for Tolerance {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Ok(val) = s.parse::<usize>() {
-            Ok(Tolerance::Abs { val })
-        } else if let Ok(val) = s.parse::<f32>() {
-            Ok(Tolerance::Percentage { val, scale: 1 })
-        } else {
-            Err("Invalid tolerance value provided. It should be either an absolute value (usize) or a percentage (f32).".to_string())
+#[cfg(feature = "python-bindings")]
+/// Converts Tolerance into a PyObject (Required for Tolerance to be compatible with Python)
+impl IntoPy<PyObject> for Tolerance {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            Tolerance::Abs { val } => (String::from("abs"), val).to_object(py),
+            Tolerance::Percentage { val, scale } => (String::from("percentage"), val, scale).to_object(py),
         }
     }
 }
+
+#[cfg(feature = "python-bindings")]
+/// Obtains Tolerance from PyObject (Required for Tolerance to be compatible with Python)
+impl<'source> FromPyObject<'source> for Tolerance {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        if let Ok((mode, val)) = ob.extract::<(String, usize)>() {
+            match mode.to_lowercase().as_str() {
+                "abs" => Ok(Tolerance::Abs { val }),
+                _ => Err(PyValueError::new_err("Invalid value for Tolerance")),
+            }
+        } else if let Ok((mode, val, scale)) = ob.extract::<(String, f32, usize)>() {
+            match mode.to_lowercase().as_str() {
+                "percentage" => Ok(Tolerance::Percentage { val, scale }),
+                _ => Err(PyValueError::new_err("Invalid value for Tolerance")),
+            }
+        } else {
+            Err(PyValueError::new_err(
+                "Invalid tolerance value provided. It should be either an absolute value (usize) or a percentage (f32).",
+            ))
+        }
+    }
+}
+
+
 
 
 /// Configuration for an accumulated arg.
