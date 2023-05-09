@@ -760,8 +760,7 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     let input_channels = image_dims[0];
     let (image_height, image_width) = (image_dims[1], image_dims[2]);
 
-    let mut padded_image = image.clone();
-    padded_image.pad(padding)?;
+    let padded_image = pad(config, region, &[image.clone()], padding, offset)?;
 
     let horz_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
     let vert_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
@@ -808,6 +807,29 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     Ok(res)
 }
 
+/// layout for padding
+pub fn pad<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::marker::Sync>(
+    config: &BaseConfig<F>,
+    region: &mut Option<&mut Region<F>>,
+    values: &[ValTensor<F>; 1],
+    padding: (usize, usize),
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let nil: ValType<F> = if let Some(region) = region {
+        config.inputs[1]
+            .assign_constant(*region, *offset, F::from(0))?
+            .into()
+    } else {
+        // for dummy run throughs
+        Value::known(F::from(0)).into()
+    };
+    *offset += 1;
+
+    let mut padded_image = values[0].clone();
+    padded_image.pad(padding, nil)?;
+    Ok(padded_image)
+}
+
 /// Convolution accumulated layout
 pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::marker::Sync>(
     config: &BaseConfig<F>,
@@ -818,7 +840,23 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let has_bias = values.len() == 3;
-    let (image, mut kernel) = (values[0].clone(), values[1].clone());
+    let (image, kernel) = (&mut values[0].clone(), &mut values[1].clone());
+
+    if image.dims() == &[1] {
+        image.reshape(&[1, 1, 1])?;
+    }
+
+    if kernel.dims() == &[1] {
+        kernel.reshape(&[1, 1, 1, 1])?;
+    }
+
+    // assigns kernel such that any subsequent assignments generate copy constraints !
+    let mut kernel = config.inputs[0].assign(region, *offset, &kernel)?;
+
+    // assigns image such that any subsequent assignments generate copy constraints !
+    let image = config.inputs[1].assign(region, *offset, &image)?;
+
+    *offset += std::cmp::max(kernel.len(), image.len());
 
     if (image.dims().len() != 3)
         || (kernel.dims().len() != 4)
@@ -854,8 +892,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     let vert_slides = (padded_height - kernel_height) / stride.0 + 1;
     let horz_slides = (padded_width - kernel_width) / stride.1 + 1;
 
-    let mut padded_image = image.clone();
-    padded_image.pad(padding)?;
+    let padded_image = pad(config, region, &[image.clone()], padding, offset)?;
 
     let num_groups = image_dims[0] / kernel_dims[1];
     let input_channels_per_group = input_channels / num_groups;

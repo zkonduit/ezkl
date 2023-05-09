@@ -140,7 +140,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("pad inputs".to_string()));
                 }
-                tensor::ops::pad(&inputs[0], (*dim1, *dim2))
+                tensor::ops::pad(&inputs[0], (*dim1, *dim2), 0)
             }
             PolyOp::Add { a } => {
                 if let Some(a) = a {
@@ -295,12 +295,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Identity => layouts::identity(config, region, values[..].try_into()?, offset)?,
             PolyOp::Reshape(d) | PolyOp::Flatten(d) => layouts::reshape(values[..].try_into()?, d)?,
             PolyOp::Pad(p1, p2) => {
-                if values.len() != 1 {
-                    return Err(Box::new(TensorError::DimError));
-                }
-                let mut input = values[0].clone();
-                input.pad((*p1, *p2))?;
-                input
+                layouts::pad(config, region, values[..].try_into()?, (*p1, *p2), offset)?
             }
             PolyOp::Pow(exp) => layouts::pow(config, region, values[..].try_into()?, *exp, offset)?,
             PolyOp::Pack(base, scale) => layouts::pack(

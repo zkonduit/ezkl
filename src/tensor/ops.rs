@@ -602,7 +602,15 @@ pub fn conv<
     stride: (usize, usize),
 ) -> Result<Tensor<T>, TensorError> {
     let has_bias = inputs.len() == 3;
-    let (image, kernel) = (&inputs[0], &inputs[1]);
+    let (image, kernel) = (&mut inputs[0].clone(), &mut inputs[1].clone());
+
+    if image.dims() == &[1] {
+        image.reshape(&[1, 1, 1]);
+    }
+
+    if kernel.dims() == &[1] {
+        kernel.reshape(&[1, 1, 1, 1]);
+    }
 
     if (image.dims().len() != 3)
         || (kernel.dims().len() != 4)
@@ -631,7 +639,7 @@ pub fn conv<
 
     let (image_height, image_width) = (image_dims[1], image_dims[2]);
 
-    let padded_image = pad::<T>(&image, padding)?;
+    let padded_image = pad::<T>(&image, padding, T::zero().unwrap())?;
 
     let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
     let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
@@ -757,7 +765,7 @@ pub fn sumpool<
     let (output_channels, kernel_height, kernel_width) =
         (image_channels, kernel_shape.0, kernel_shape.1);
 
-    let padded_image = pad::<T>(image, padding)?;
+    let padded_image = pad::<T>(image, padding, T::zero().unwrap())?;
 
     let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
     let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
@@ -827,7 +835,7 @@ pub fn max_pool2d<T: TensorType + std::marker::Sync + std::marker::Send>(
     let input_channels = image_dims[0];
     let (image_height, image_width) = (image_dims[1], image_dims[2]);
 
-    let padded_image = pad::<T>(image, *padding)?;
+    let padded_image = pad::<T>(image, *padding, T::zero().unwrap())?;
 
     let horz_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
     let vert_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
@@ -916,7 +924,7 @@ pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 3, 3],
 /// ).unwrap();
-/// let result = pad::<i128>(&x, (1, 1)).unwrap();
+/// let result = pad::<i128>(&x, (1, 1), 0).unwrap();
 /// let expected = Tensor::<i128>::new(
 ///     Some(&[0, 0, 0, 0, 0, 0, 5, 2, 3, 0, 0, 0, 4, -1, 0, 0, 3, 1, 6, 0, 0, 0, 0, 0, 0]),
 ///     &[1, 5, 5],
@@ -926,6 +934,7 @@ pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 pub fn pad<T: TensorType>(
     image: &Tensor<T>,
     padding: (usize, usize),
+    value: T,
 ) -> Result<Tensor<T>, TensorError> {
     if image.dims().len() != 3 {
         return Err(TensorError::DimMismatch("pad".to_string()));
@@ -934,7 +943,8 @@ pub fn pad<T: TensorType>(
     let padded_height = height + 2 * padding.0;
     let padded_width = width + 2 * padding.1;
 
-    let mut output = Tensor::<T>::new(None, &[channels, padded_height, padded_width]).unwrap();
+    let mut output = Tensor::from(vec![value; channels * padded_height * padded_width].into_iter());
+    output.reshape(&[channels, padded_height, padded_width]);
 
     for channel in 0..channels {
         for row in 0..height {

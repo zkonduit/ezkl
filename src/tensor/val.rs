@@ -81,10 +81,10 @@ where
     F: Field,
 {
     fn zero() -> Option<Self> {
-        Some(ValType::Value(Value::known(<F as Field>::ZERO)))
+        Some(ValType::Constant(<F as Field>::ZERO))
     }
     fn one() -> Option<Self> {
-        Some(ValType::Value(Value::known(<F as Field>::ONE)))
+        Some(ValType::Constant(<F as Field>::ONE))
     }
 }
 /// A wrapper around a [Tensor] where the inner type is one of Halo2's [`Value<F>`], [`Value<Assigned<F>>`], [`AssignedCell<Assigned<F>, F>`].
@@ -364,12 +364,12 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
 
     /// Calls `tile` on the inner [Tensor].
-    pub fn pad(&mut self, padding: (usize, usize)) -> Result<(), TensorError> {
+    pub fn pad(&mut self, padding: (usize, usize), val: ValType<F>) -> Result<(), TensorError> {
         match self {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                *v = pad(v, padding)?;
+                *v = pad(v, padding, val)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {

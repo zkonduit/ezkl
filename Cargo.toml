@@ -13,7 +13,7 @@ crate-type = ["cdylib", "rlib"]
 
 
 [dependencies]
-halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch = "ac/send-sync-region"}
+halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch = "ac/send-sync-region", features = ["thread-safe-region"]}
 halo2curves = { git = 'https://github.com/privacy-scaling-explorations/halo2curves', tag = "0.3.2" }
 rand = "0.8"
 itertools = "0.10.3"
