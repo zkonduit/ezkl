@@ -243,8 +243,6 @@ jobs:
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.19 && solc --version
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
-      - name: Setup upterm session
-        uses: lhotari/action-upterm@v1
       - name: KZG prove and verify tests (EVM)
         run: cargo test --release --verbose tests_evm -- --test-threads 4
 
