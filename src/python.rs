@@ -1,10 +1,10 @@
 use crate::circuit::CheckMode;
-use crate::commands::{RunArgs, StrategyType, TranscriptType};
+use crate::commands::{RunArgs, StrategyType};
 use crate::execute::{create_proof_circuit_kzg, load_params_cmd, verify_proof_circuit_kzg};
 use crate::graph::{quantize_float, Mode, Model, ModelCircuit, ModelParams, VarVisibility};
 use crate::pfsys::{
     create_keys, gen_srs as ezkl_gen_srs, load_pk, load_vk, prepare_data, save_params, save_pk,
-    save_vk, Snark,
+    save_vk, Snark, TranscriptType,
 };
 use halo2_proofs::poly::kzg::{
     commitment::KZGCommitmentScheme,
@@ -286,6 +286,7 @@ fn setup(
     params_path,
     transcript,
     strategy,
+    circuit_params_path,
     py_run_args = None
 ))]
 fn prove(
@@ -296,21 +297,19 @@ fn prove(
     params_path: PathBuf,
     transcript: TranscriptType,
     strategy: StrategyType,
+    circuit_params_path: PathBuf,
     py_run_args: Option<PyRunArgs>,
 ) -> Result<bool, PyErr> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let logrows = run_args.logrows;
     let check_mode = run_args.check_mode;
     let data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
-    let visibility = run_args.to_var_visibility();
 
-    let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
-    let procmodel = Model::<Fr>::new(&mut reader, run_args, Mode::Prove, visibility)
-        .map_err(|_| PyIOError::new_err("Failed to process model"))?;
+    let model_circuit_params = ModelParams::load(&circuit_params_path);
 
-    let arcmodel: Arc<Model<Fr>> = Arc::new(procmodel);
-    let circuit = ModelCircuit::<Fr>::new(&data, arcmodel)
-        .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
+    let circuit =
+        ModelCircuit::<Fr>::from_model_params(&data, &model_circuit_params, &model.into())
+            .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
 
     let public_inputs = circuit
         .prepare_public_inputs(&data)
@@ -376,7 +375,6 @@ fn prove(
     circuit_params_path,
     vk_path,
     params_path,
-    transcript,
     py_run_args = None
 ))]
 fn verify(
@@ -384,7 +382,6 @@ fn verify(
     circuit_params_path: PathBuf,
     vk_path: PathBuf,
     params_path: PathBuf,
-    transcript: TranscriptType,
     py_run_args: Option<PyRunArgs>,
 ) -> Result<bool, PyErr> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
@@ -398,8 +395,7 @@ fn verify(
     let vk =
         load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)
             .map_err(|_| PyIOError::new_err("Failed to load verifier key"))?;
-    let result =
-        verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, transcript, strategy);
+    let result = verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, strategy);
     match result {
         Ok(_) => Ok(true),
         Err(_) => Ok(false),

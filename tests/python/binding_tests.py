@@ -177,6 +177,7 @@ def test_prove():
         params_path,
         "poseidon",
         "single",
+        circuit_params_path
     )
     assert res == True
     assert os.path.isfile(proof_path)
@@ -196,6 +197,5 @@ def test_verify():
         circuit_params_path,
         vk_path,
         params_path,
-        "poseidon",
     )
     assert res == True
