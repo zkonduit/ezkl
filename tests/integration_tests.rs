@@ -693,7 +693,6 @@ mod native_tests {
                     "--params-path={}/kzg23.params",
                     TEST_DIR.path().to_str().unwrap()
                 ),
-                "--transcript=blake",
             ])
             .status()
             .expect("failed to execute process");
