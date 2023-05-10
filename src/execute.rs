@@ -77,8 +77,11 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             deployment_code_path,
             sol_code_path,
         } => deploy_verifier_evm(secret, rpc_url, deployment_code_path, sol_code_path).await,
-        Commands::GenSrs { params_path } => gen_srs_cmd(params_path, cli.args.logrows),
-        Commands::Table { model: _ } => table(cli),
+        Commands::GenSrs {
+            params_path,
+            logrows,
+        } => gen_srs_cmd(params_path, logrows as u32),
+        Commands::Table { model: _, .. } => table(cli),
         #[cfg(feature = "render")]
         Commands::RenderCircuit {
             data,
@@ -89,8 +92,9 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             data,
             model,
             output,
-        } => forward(data, model, output, cli.args),
-        Commands::Mock { data, model: _ } => mock(data, cli.args.logrows),
+            args,
+        } => forward(data, model, output, args),
+        Commands::Mock { data, args, .. } => mock(data, args.logrows),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
             vk_path,
@@ -104,7 +108,6 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             circuit_params_path,
             deployment_code_path,
             sol_code_path,
-            cli.args.logrows,
         ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifierAggr {
@@ -113,20 +116,13 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             vk_path,
         } => create_evm_aggregate_verifier(params_path, deployment_code_path, vk_path),
         Commands::Setup {
-            model: _,
             data,
             params_path,
             circuit_params_path,
             vk_path,
             pk_path,
-        } => create_keys_kzg(
-            data,
-            params_path,
-            vk_path,
-            pk_path,
-            circuit_params_path,
-            cli.args.logrows,
-        ),
+            ..
+        } => create_keys_kzg(data, params_path, vk_path, pk_path, circuit_params_path),
         Commands::Prove {
             data,
             model,
@@ -136,6 +132,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             transcript,
             strategy,
             circuit_params_path,
+            check_mode,
         } => prove(
             data,
             model,
@@ -145,7 +142,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             transcript,
             strategy,
             circuit_params_path,
-            cli.args.check_mode,
+            check_mode,
         ),
         Commands::Aggregate {
             circuit_params_paths,
@@ -156,6 +153,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             params_path,
             transcript,
             logrows,
+            check_mode,
         } => aggregate(
             proof_path,
             aggregation_snarks,
@@ -165,7 +163,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             params_path,
             transcript,
             logrows,
-            cli.args.check_mode,
+            check_mode,
         ),
         Commands::Verify {
             proof_path,
@@ -393,7 +391,8 @@ fn forward(
 
 fn mock(data: String, logrows: u32) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
-    let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
+    // mock should catch any issues by default so we set it to safe
+    let circuit = ModelCircuit::<Fr>::from_arg(&data, CheckMode::SAFE)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     info!("Mock proof");
@@ -443,10 +442,10 @@ fn create_evm_verifier(
     circuit_params_path: PathBuf,
     deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
-    logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
-    let params = load_params_cmd(params_path, logrows)?;
     let model_circuit_params = ModelParams::load(&circuit_params_path);
+    let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)?;
+
     let num_instance = model_circuit_params
         .instance_shapes
         .iter()
@@ -520,11 +519,11 @@ fn create_keys_kzg(
     vk_path: PathBuf,
     pk_path: PathBuf,
     circuit_params_path: PathBuf,
-    logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
-    let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
-    let params = load_params_cmd(params_path, logrows)?;
+    // these aren't real values so the sanity checks are mostly meaningless
+    let circuit = ModelCircuit::<Fr>::from_arg(&data, CheckMode::UNSAFE)?;
+    let params = load_params_cmd(params_path, circuit.model.run_args.logrows)?;
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
         .map_err(Box::<dyn Error>::from)?;
     let circuit_params = circuit.params.clone();
@@ -549,7 +548,12 @@ fn prove(
 ) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
     let model_circuit_params = ModelParams::load(&circuit_params_path);
-    let circuit = ModelCircuit::<Fr>::from_model_params(&data, &model_circuit_params, &model_path)?;
+    let circuit = ModelCircuit::<Fr>::from_model_params(
+        &data,
+        &model_circuit_params,
+        &model_path,
+        check_mode,
+    )?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
     let circuit_params = circuit.params.clone();
 
@@ -587,7 +591,7 @@ fn prove(
                 &pk,
                 transcript,
                 strategy,
-                model_circuit_params.run_args.check_mode,
+                check_mode,
             )?
         }
     };

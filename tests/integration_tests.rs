@@ -29,7 +29,6 @@ mod native_tests {
         KZG17.call_once(|| {
             let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
                 .args([
-                    "-K=17",
                     "gen-srs",
                     &format!(
                         "--params-path={}/kzg17.params",
@@ -46,12 +45,12 @@ mod native_tests {
         KZG23.call_once(|| {
             let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
                 .args([
-                    "-K=23",
                     "gen-srs",
                     &format!(
                         "--params-path={}/kzg23.params",
                         TEST_DIR.path().to_str().unwrap()
                     ),
+                    "--logrows=23",
                 ])
                 .status()
                 .expect("failed to execute process");
@@ -383,13 +382,13 @@ mod native_tests {
     fn neg_mock(example_name: String, counter_example: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "mock",
                 "-D",
                 format!("./examples/onnx/{}/input.json", counter_example).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--bits=16",
+                "-K=17",
             ])
             .status()
             .expect("failed to execute process");
@@ -409,8 +408,6 @@ mod native_tests {
     fn forward_pass(example_name: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "forward",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -423,6 +420,8 @@ mod native_tests {
                     example_name
                 )
                 .as_str(),
+                "--bits=16",
+                "-K=17",
                 // "-K",
                 // "2",  //causes failure
             ])
@@ -432,8 +431,6 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "mock",
                 "-D",
                 format!(
@@ -444,6 +441,8 @@ mod native_tests {
                 .as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--bits=16",
+                "-K=17",
             ])
             .status()
             .expect("failed to execute process");
@@ -454,8 +453,6 @@ mod native_tests {
     fn render_circuit(example_name: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "render-circuit",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -468,6 +465,8 @@ mod native_tests {
                     example_name
                 )
                 .as_str(),
+                "--bits=16",
+                "-K=17",
             ])
             .status()
             .expect("failed to execute process");
@@ -478,15 +477,15 @@ mod native_tests {
     fn tutorial() {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--tolerance=2",
-                "--scale=4",
-                "--bits=16",
-                "-K=17",
                 "mock",
                 "-D",
                 "./examples/onnx/tutorial/input.json".to_string().as_str(),
                 "-M",
                 "./examples/onnx/tutorial/network.onnx".to_string().as_str(),
+                "--tolerance=2",
+                "--scale=4",
+                "--bits=16",
+                "-K=17",
             ])
             .status()
             .expect("failed to execute process");
@@ -497,13 +496,13 @@ mod native_tests {
     fn mock(example_name: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "mock",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--bits=16",
+                "-K=17",
             ])
             .status()
             .expect("failed to execute process");
@@ -514,14 +513,14 @@ mod native_tests {
     fn mock_packed_outputs(example_name: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
-                "--pack-base=2",
                 "mock",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--bits=16",
+                "-K=17",
+                "--pack-base=2",
             ])
             .status()
             .expect("failed to execute process");
@@ -532,15 +531,15 @@ mod native_tests {
     fn mock_everything(example_name: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
-                "--public-inputs=true",
-                "--pack-base=2",
                 "mock",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--bits=16",
+                "-K=17",
+                "--public-inputs=true",
+                "--pack-base=2",
             ])
             .status()
             .expect("failed to execute process");
@@ -551,15 +550,15 @@ mod native_tests {
     fn mock_public_inputs(example_name: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--public-inputs=true",
-                "--public-outputs=false",
-                "--bits=16",
                 "-K=17",
                 "mock",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--public-inputs=true",
+                "--public-outputs=false",
+                "--bits=16",
             ])
             .status()
             .expect("failed to execute process");
@@ -570,15 +569,15 @@ mod native_tests {
     fn mock_public_params(example_name: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--public-params=true",
-                "--public-outputs=false",
-                "--bits=16",
-                "-K=17",
                 "mock",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--public-params=true",
+                "--public-outputs=false",
+                "-K=17",
+                "--bits=16",
             ])
             .status()
             .expect("failed to execute process");
@@ -589,8 +588,6 @@ mod native_tests {
     fn kzg_aggr_prove_and_verify(example_name: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "setup",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -609,6 +606,8 @@ mod native_tests {
                     TEST_DIR.path().to_str().unwrap(),
                     example_name
                 ),
+                "--bits=16",
+                "-K=17",
             ])
             .status()
             .expect("failed to execute process");
@@ -703,8 +702,6 @@ mod native_tests {
     fn kzg_evm_aggr_prove_and_verify(example_name: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "setup",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -731,6 +728,8 @@ mod native_tests {
                     TEST_DIR.path().to_str().unwrap(),
                     example_name
                 ),
+                "--bits=16",
+                "-K=17",
             ])
             .status()
             .expect("failed to execute process");
@@ -861,8 +860,6 @@ mod native_tests {
     fn kzg_prove_and_verify(example_name: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "setup",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -881,6 +878,8 @@ mod native_tests {
                     TEST_DIR.path().to_str().unwrap(),
                     example_name
                 ),
+                "--bits=16",
+                "-K=17",
             ])
             .status()
             .expect("failed to execute process");
@@ -937,8 +936,6 @@ mod native_tests {
     fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "setup",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -957,6 +954,8 @@ mod native_tests {
                     TEST_DIR.path().to_str().unwrap(),
                     example_name
                 ),
+                "--bits=16",
+                "-K=17",
             ])
             .status()
             .expect("failed to execute process");
@@ -1006,8 +1005,6 @@ mod native_tests {
         );
 
         let mut args = vec![
-            "--bits=16",
-            "-K=17",
             "create-evm-verifier",
             circuit_params.as_str(),
             "--deployment-code-path",
@@ -1032,8 +1029,6 @@ mod native_tests {
         let pf_arg = format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name);
 
         let mut args = vec![
-            "--bits=16",
-            "-K=17",
             "verify-evm",
             "--proof-path",
             pf_arg.as_str(),

@@ -63,8 +63,6 @@ struct PyRunArgs {
     pub pack_base: u32,
     #[pyo3(get, set)]
     pub allocated_constraints: Option<usize>,
-    #[pyo3(get, set)]
-    pub check_mode: CheckMode,
 }
 
 /// default instantiation of PyRunArgs
@@ -82,7 +80,6 @@ impl PyRunArgs {
             public_params: false,
             pack_base: 1,
             allocated_constraints: None,
-            check_mode: CheckMode::SAFE,
         }
     }
 }
@@ -100,7 +97,6 @@ impl From<PyRunArgs> for RunArgs {
             public_params: py_run_args.public_params,
             pack_base: py_run_args.pack_base,
             allocated_constraints: py_run_args.allocated_constraints,
-            check_mode: py_run_args.check_mode,
         }
     }
 }
@@ -125,11 +121,10 @@ fn table(model: String, py_run_args: Option<PyRunArgs>) -> Result<String, PyErr>
 /// generates the srs
 #[pyfunction(signature = (
     params_path,
-    py_run_args = None
+    logrows,
 ))]
-fn gen_srs(params_path: PathBuf, py_run_args: Option<PyRunArgs>) -> PyResult<()> {
-    let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
-    let params = ezkl_gen_srs::<KZGCommitmentScheme<Bn256>>(run_args.logrows);
+fn gen_srs(params_path: PathBuf, logrows: usize) -> PyResult<()> {
+    let params = ezkl_gen_srs::<KZGCommitmentScheme<Bn256>>(logrows as u32);
     save_params::<KZGCommitmentScheme<Bn256>>(&params_path, &params)?;
     Ok(())
 }
@@ -204,7 +199,7 @@ fn mock(data: String, model: String, py_run_args: Option<PyRunArgs>) -> Result<b
         .map_err(|_| PyIOError::new_err("Failed to process model"))?;
 
     let arcmodel: Arc<Model<Fr>> = Arc::new(procmodel);
-    let circuit = ModelCircuit::<Fr>::new(&data, arcmodel)
+    let circuit = ModelCircuit::<Fr>::new(&data, arcmodel, CheckMode::SAFE)
         .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
 
     let public_inputs = circuit
@@ -251,7 +246,7 @@ fn setup(
         .map_err(|_| PyIOError::new_err("Failed to process model"))?;
 
     let arcmodel: Arc<Model<Fr>> = Arc::new(procmodel);
-    let circuit = ModelCircuit::<Fr>::new(&data, arcmodel)
+    let circuit = ModelCircuit::<Fr>::new(&data, arcmodel, CheckMode::UNSAFE)
         .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
 
     let params = load_params_cmd(params_path, logrows)
@@ -287,7 +282,6 @@ fn setup(
     transcript,
     strategy,
     circuit_params_path,
-    py_run_args = None
 ))]
 fn prove(
     data: String,
@@ -298,24 +292,24 @@ fn prove(
     transcript: TranscriptType,
     strategy: StrategyType,
     circuit_params_path: PathBuf,
-    py_run_args: Option<PyRunArgs>,
 ) -> Result<bool, PyErr> {
-    let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
-    let logrows = run_args.logrows;
-    let check_mode = run_args.check_mode;
     let data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
 
     let model_circuit_params = ModelParams::load(&circuit_params_path);
 
-    let circuit =
-        ModelCircuit::<Fr>::from_model_params(&data, &model_circuit_params, &model.into())
-            .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
+    let circuit = ModelCircuit::<Fr>::from_model_params(
+        &data,
+        &model_circuit_params,
+        &model.into(),
+        CheckMode::SAFE,
+    )
+    .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
 
     let public_inputs = circuit
         .prepare_public_inputs(&data)
         .map_err(|_| PyRuntimeError::new_err("Failed to prepare public inputs"))?;
 
-    let params = load_params_cmd(params_path, logrows)
+    let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)
         .map_err(|_| PyIOError::new_err("Failed to load params"))?;
 
     let proving_key = load_pk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
@@ -334,7 +328,7 @@ fn prove(
                 &proving_key,
                 transcript,
                 strategy,
-                check_mode,
+                CheckMode::SAFE,
             ) {
                 Ok(snark) => Ok(snark),
                 Err(_) => Err(PyRuntimeError::new_err(
@@ -351,7 +345,7 @@ fn prove(
                 &proving_key,
                 transcript,
                 strategy,
-                check_mode,
+                CheckMode::SAFE,
             ) {
                 Ok(snark) => Ok(snark),
                 Err(_) => Err(PyRuntimeError::new_err(
@@ -375,22 +369,19 @@ fn prove(
     circuit_params_path,
     vk_path,
     params_path,
-    py_run_args = None
 ))]
 fn verify(
     proof_path: PathBuf,
     circuit_params_path: PathBuf,
     vk_path: PathBuf,
     params_path: PathBuf,
-    py_run_args: Option<PyRunArgs>,
 ) -> Result<bool, PyErr> {
-    let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
-    let logrows = run_args.logrows;
-    let params = load_params_cmd(params_path, logrows)
+    let model_circuit_params = ModelParams::load(&circuit_params_path);
+    let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)
         .map_err(|_| PyIOError::new_err("Failed to load params"))?;
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)
         .map_err(|_| PyIOError::new_err("Failed to load proof"))?;
-    let model_circuit_params = ModelParams::load(&circuit_params_path);
+
     let strategy = KZGSingleStrategy::new(params.verifier_params());
     let vk =
         load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)

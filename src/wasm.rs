@@ -123,7 +123,8 @@ pub fn prove_wasm(
     )
     .unwrap();
 
-    let circuit = ModelCircuit::<Fr>::new(&data, Arc::new(model)).unwrap();
+    let circuit =
+        ModelCircuit::<Fr>::new(&data, Arc::new(model), crate::circuit::CheckMode::UNSAFE).unwrap();
 
     // prep public inputs
     let public_inputs = circuit.prepare_public_inputs(&data).unwrap();
