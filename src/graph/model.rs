@@ -389,8 +389,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 )
             }
             #[cfg(feature = "render")]
-            Commands::RenderCircuit { model, args } => {
-                let visibility = VarVisibility::from_args(cli.args.clone())?;
+            Commands::RenderCircuit { model, args, .. } => {
+                let visibility = VarVisibility::from_args(args.clone())?;
                 Model::new(
                     &mut std::fs::File::open(model)?,
                     args,

@@ -83,18 +83,14 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => gen_srs_cmd(params_path, logrows as u32),
         Commands::Table { model: _, .. } => table(cli),
         #[cfg(feature = "render")]
-        Commands::RenderCircuit {
-            data,
-            model: _,
-            output,
-        } => render(data, output, cli.args.logrows),
+        Commands::RenderCircuit { data, output, .. } => render(data, output),
         Commands::Forward {
             data,
             model,
             output,
             args,
         } => forward(data, model, output, args),
-        Commands::Mock { data, args, .. } => mock(data, args.logrows),
+        Commands::Mock { data, .. } => mock(data),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
             vk_path,
@@ -389,7 +385,7 @@ fn forward(
     Ok(())
 }
 
-fn mock(data: String, logrows: u32) -> Result<(), Box<dyn Error>> {
+fn mock(data: String) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
     // mock should catch any issues by default so we set it to safe
     let circuit = ModelCircuit::<Fr>::from_arg(&data, CheckMode::SAFE)?;
@@ -397,8 +393,8 @@ fn mock(data: String, logrows: u32) -> Result<(), Box<dyn Error>> {
 
     info!("Mock proof");
 
-    let prover =
-        MockProver::run(logrows, &circuit, public_inputs).map_err(Box::<dyn Error>::from)?;
+    let prover = MockProver::run(circuit.model.run_args.logrows, &circuit, public_inputs)
+        .map_err(Box::<dyn Error>::from)?;
     prover.assert_satisfied();
     prover
         .verify()
@@ -416,9 +412,9 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<(), Box<dyn Error>> {
 }
 
 #[cfg(feature = "render")]
-fn render(data: String, output: String, logrows: u32) -> Result<(), Box<dyn Error>> {
+fn render(data: String, output: String) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data.to_string())?;
-    let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
+    let circuit = ModelCircuit::<Fr>::from_arg(&data, CheckMode::UNSAFE)?;
     info!("Rendering circuit");
 
     // Create the area we want to draw on.
@@ -431,7 +427,7 @@ fn render(data: String, output: String, logrows: u32) -> Result<(), Box<dyn Erro
     halo2_proofs::dev::CircuitLayout::default()
         // We hide labels, else most circuits become impossible to decipher because of overlaid text
         .show_labels(false)
-        .render(logrows, &circuit, &root)?;
+        .render(circuit.model.run_args.logrows, &circuit, &root)?;
     Ok(())
 }
 
