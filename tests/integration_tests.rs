@@ -615,8 +615,6 @@ mod native_tests {
         assert!(status.success());
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "prove",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -632,16 +630,19 @@ mod native_tests {
                 ),
                 "--transcript=poseidon",
                 "--strategy=accum",
+                &format!(
+                    "--circuit-params-path={}/{}.params",
+                    TEST_DIR.path().to_str().unwrap(),
+                    example_name
+                ),
             ])
             .status()
             .expect("failed to execute process");
         assert!(status.success());
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=23",
                 "aggregate",
-                "--app-logrows=17",
+                "--logrows=23",
                 &format!(
                     "--circuit-params-paths={}/{}.params",
                     TEST_DIR.path().to_str().unwrap(),
@@ -674,9 +675,8 @@ mod native_tests {
         assert!(status.success());
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "verify-aggr",
+                "--logrows=23",
                 "--proof-path",
                 &format!(
                     "{}/{}_aggr.pf",
@@ -739,8 +739,6 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "prove",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -762,6 +760,11 @@ mod native_tests {
                     "--params-path={}/kzg23.params",
                     TEST_DIR.path().to_str().unwrap()
                 ),
+                &format!(
+                    "--circuit-params-path={}/{}.params",
+                    TEST_DIR.path().to_str().unwrap(),
+                    example_name
+                ),
                 "--transcript=poseidon",
                 "--strategy=accum",
             ])
@@ -770,10 +773,8 @@ mod native_tests {
         assert!(status.success());
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=23",
                 "aggregate",
-                "--app-logrows=17",
+                "--logrows=23",
                 &format!(
                     "--circuit-params-paths={}/{}.params",
                     TEST_DIR.path().to_str().unwrap(),
@@ -814,8 +815,6 @@ mod native_tests {
         assert!(status.success());
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "create-evm-verifier-aggr",
                 "--deployment-code-path",
                 &format!(
@@ -839,9 +838,8 @@ mod native_tests {
         assert!(status.success());
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "verify-evm",
+                "--logrows=23",
                 "--proof-path",
                 &format!(
                     "{}/{}_evm_aggr.pf",
@@ -890,8 +888,6 @@ mod native_tests {
         assert!(status.success());
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "prove",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -907,14 +903,17 @@ mod native_tests {
                 ),
                 "--transcript=blake",
                 "--strategy=single",
+                &format!(
+                    "--circuit-params-path={}/{}.params",
+                    TEST_DIR.path().to_str().unwrap(),
+                    example_name
+                ),
             ])
             .status()
             .expect("failed to execute process");
         assert!(status.success());
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "verify",
                 &format!(
                     "--circuit-params-path={}/{}.params",
@@ -929,7 +928,6 @@ mod native_tests {
                     "--params-path={}/kzg17.params",
                     TEST_DIR.path().to_str().unwrap()
                 ),
-                "--transcript=blake",
             ])
             .status()
             .expect("failed to execute process");
@@ -967,8 +965,6 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "--bits=16",
-                "-K=17",
                 "prove",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -984,6 +980,11 @@ mod native_tests {
                 ),
                 "--transcript=evm",
                 "--strategy=single",
+                &format!(
+                    "--circuit-params-path={}/{}.params",
+                    TEST_DIR.path().to_str().unwrap(),
+                    example_name
+                ),
             ])
             .status()
             .expect("failed to execute process");

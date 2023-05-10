@@ -1,5 +1,5 @@
 use crate::circuit::CheckMode;
-use crate::commands::{Cli, Commands, RunArgs, StrategyType, TranscriptType};
+use crate::commands::{Cli, Commands, RunArgs, StrategyType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{
     deploy_verifier, fix_verifier_sol, get_ledger_signing_provider, get_provider,
@@ -11,7 +11,9 @@ use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 use crate::pfsys::evm::{aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::{evm_verify, DeploymentCode};
-use crate::pfsys::{create_keys, load_params, load_pk, load_vk, save_params, save_pk, Snark};
+use crate::pfsys::{
+    create_keys, load_params, load_pk, load_vk, save_params, save_pk, Snark, TranscriptType,
+};
 use crate::pfsys::{create_proof_circuit, gen_srs, prepare_data, save_vk, verify_proof_circuit};
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::providers::Middleware;
@@ -127,20 +129,22 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         ),
         Commands::Prove {
             data,
-            model: _,
+            model,
             pk_path,
             proof_path,
             params_path,
             transcript,
             strategy,
+            circuit_params_path,
         } => prove(
             data,
+            model,
             pk_path,
             proof_path,
             params_path,
             transcript,
             strategy,
-            cli.args.logrows,
+            circuit_params_path,
             cli.args.check_mode,
         ),
         Commands::Aggregate {
@@ -150,8 +154,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             aggregation_vk_paths,
             vk_path,
             params_path,
-            app_logrows,
             transcript,
+            logrows,
         } => aggregate(
             proof_path,
             aggregation_snarks,
@@ -159,9 +163,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             aggregation_vk_paths,
             vk_path,
             params_path,
-            app_logrows,
             transcript,
-            cli.args.logrows,
+            logrows,
             cli.args.check_mode,
         ),
         Commands::Verify {
@@ -169,27 +172,13 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             circuit_params_path,
             vk_path,
             params_path,
-            transcript,
-        } => verify(
-            proof_path,
-            circuit_params_path,
-            vk_path,
-            params_path,
-            transcript,
-            cli.args.logrows,
-        ),
+        } => verify(proof_path, circuit_params_path, vk_path, params_path),
         Commands::VerifyAggr {
             proof_path,
             vk_path,
             params_path,
-            transcript,
-        } => verify_aggr(
-            proof_path,
-            vk_path,
-            params_path,
-            transcript,
-            cli.args.logrows,
-        ),
+            logrows,
+        } => verify_aggr(proof_path, vk_path, params_path, logrows),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::VerifyEVM {
             proof_path,
@@ -208,10 +197,9 @@ pub fn verify_proof_circuit_kzg<
     params: &'params ParamsKZG<Bn256>,
     proof: Snark<Fr, G1Affine>,
     vk: &VerifyingKey<G1Affine>,
-    transcript: TranscriptType,
     strategy: Strategy,
 ) -> Result<Strategy::Output, halo2_proofs::plonk::Error> {
-    match transcript {
+    match proof.transcript_type {
         TranscriptType::Blake => verify_proof_circuit::<
             Fr,
             VerifierGWC<'_, Bn256>,
@@ -264,22 +252,36 @@ pub fn create_proof_circuit_kzg<
             _,
             EvmTranscript<G1Affine, _, _, _>,
             EvmTranscript<G1Affine, _, _, _>,
-        >(circuit, public_inputs, params, pk, strategy, check_mode)
+        >(
+            circuit,
+            public_inputs,
+            params,
+            pk,
+            strategy,
+            check_mode,
+            transcript,
+        )
         .map_err(Box::<dyn Error>::from),
-        TranscriptType::Poseidon => {
-            create_proof_circuit::<
-                KZGCommitmentScheme<_>,
-                Fr,
-                _,
-                ProverGWC<_>,
-                VerifierGWC<_>,
-                _,
-                _,
-                PoseidonTranscript<NativeLoader, _>,
-                PoseidonTranscript<NativeLoader, _>,
-            >(circuit, public_inputs, params, pk, strategy, check_mode)
-            .map_err(Box::<dyn Error>::from)
-        }
+        TranscriptType::Poseidon => create_proof_circuit::<
+            KZGCommitmentScheme<_>,
+            Fr,
+            _,
+            ProverGWC<_>,
+            VerifierGWC<_>,
+            _,
+            _,
+            PoseidonTranscript<NativeLoader, _>,
+            PoseidonTranscript<NativeLoader, _>,
+        >(
+            circuit,
+            public_inputs,
+            params,
+            pk,
+            strategy,
+            check_mode,
+            transcript,
+        )
+        .map_err(Box::<dyn Error>::from),
         TranscriptType::Blake => create_proof_circuit::<
             KZGCommitmentScheme<_>,
             Fr,
@@ -290,7 +292,15 @@ pub fn create_proof_circuit_kzg<
             Challenge255<_>,
             Blake2bWrite<_, _, _>,
             Blake2bRead<_, _, _>,
-        >(circuit, public_inputs, params, pk, strategy, check_mode)
+        >(
+            circuit,
+            public_inputs,
+            params,
+            pk,
+            strategy,
+            check_mode,
+            transcript,
+        )
         .map_err(Box::<dyn Error>::from),
     }
 }
@@ -528,20 +538,22 @@ fn create_keys_kzg(
 
 fn prove(
     data: String,
+    model_path: PathBuf,
     pk_path: PathBuf,
     proof_path: PathBuf,
     params_path: PathBuf,
     transcript: TranscriptType,
     strategy: StrategyType,
-    logrows: u32,
+    circuit_params_path: PathBuf,
     check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
-    let circuit = ModelCircuit::<Fr>::from_arg(&data)?;
+    let model_circuit_params = ModelParams::load(&circuit_params_path);
+    let circuit = ModelCircuit::<Fr>::from_model_params(&data, &model_circuit_params, &model_path)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
     let circuit_params = circuit.params.clone();
 
-    let params = load_params_cmd(params_path, logrows)?;
+    let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)?;
 
     let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
         pk_path,
@@ -575,7 +587,7 @@ fn prove(
                 &pk,
                 transcript,
                 strategy,
-                check_mode,
+                model_circuit_params.run_args.check_mode,
             )?
         }
     };
@@ -594,7 +606,6 @@ fn aggregate(
     aggregation_vk_paths: Vec<PathBuf>,
     vk_path: PathBuf,
     params_path: PathBuf,
-    app_logrows: u32,
     transcript: TranscriptType,
     logrows: u32,
     check_mode: CheckMode,
@@ -603,8 +614,6 @@ fn aggregate(
     let params = load_params_cmd(params_path.clone(), logrows)?;
 
     let mut snarks = vec![];
-    // the K used when generating the application snark proof. we assume K is homogenous across snarks to aggregate
-    let params_app = load_params_cmd(params_path, app_logrows)?;
 
     for ((proof_path, vk_path), circuit_params_path) in aggregation_snarks
         .iter()
@@ -612,6 +621,8 @@ fn aggregate(
         .zip(circuit_params_paths)
     {
         let model_circuit_params = ModelParams::load(&circuit_params_path);
+        let params_app =
+            load_params_cmd(params_path.clone(), model_circuit_params.run_args.logrows)?;
         let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
             vk_path.to_path_buf(),
             // safe to clone as the inner model is wrapped in an Arc
@@ -654,10 +665,10 @@ fn verify(
     circuit_params_path: PathBuf,
     vk_path: PathBuf,
     params_path: PathBuf,
-    transcript: TranscriptType,
-    logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
-    let params = load_params_cmd(params_path, logrows)?;
+    let model_circuit_params = ModelParams::load(&circuit_params_path);
+
+    let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)?;
 
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
     let model_circuit_params = ModelParams::load(&circuit_params_path);
@@ -666,8 +677,7 @@ fn verify(
     let vk =
         load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)?;
     let now = Instant::now();
-    let result =
-        verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, transcript, strategy);
+    let result = verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, strategy);
     info!("verify took {}", now.elapsed().as_secs());
     info!("verified: {}", result.is_ok());
     Ok(())
@@ -677,7 +687,6 @@ fn verify_aggr(
     proof_path: PathBuf,
     vk_path: PathBuf,
     params_path: PathBuf,
-    transcript: TranscriptType,
     logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
     let params = load_params_cmd(params_path, logrows)?;
@@ -687,7 +696,7 @@ fn verify_aggr(
     let strategy = AccumulatorStrategy::new(params.verifier_params());
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
     let now = Instant::now();
-    let result = verify_proof_circuit_kzg(&params, proof, &vk, transcript, strategy);
+    let result = verify_proof_circuit_kzg(&params, proof, &vk, strategy);
     info!("verify took {}", now.elapsed().as_secs());
     info!("verified: {}", result.is_ok());
     Ok(())

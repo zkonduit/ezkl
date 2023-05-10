@@ -153,6 +153,16 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
         Self::new(data, model)
     }
 
+    /// Create a new circuit from a set of input data and [ModelParams].
+    pub fn from_model_params(
+        data: &ModelInput,
+        params: &ModelParams,
+        model_path: &std::path::PathBuf,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let model = Arc::new(Model::from_model_params(params, model_path)?);
+        Self::new(data, model)
+    }
+
     /// Prepare the public inputs for the circuit.
     pub fn prepare_public_inputs(
         &self,

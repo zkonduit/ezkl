@@ -17,16 +17,9 @@ use std::fs::File;
 use std::io::{stdin, stdout, Read, Write};
 use std::path::PathBuf;
 
-use crate::circuit::CheckMode;
 use crate::graph::{VarVisibility, Visibility};
+use crate::{circuit::CheckMode, pfsys::TranscriptType};
 
-#[allow(missing_docs)]
-#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
-pub enum TranscriptType {
-    Blake,
-    Poseidon,
-    EVM,
-}
 impl std::fmt::Display for TranscriptType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.to_possible_value()
@@ -283,9 +276,6 @@ pub enum Commands {
         /// The path to the params files.
         #[arg(long)]
         circuit_params_paths: Vec<PathBuf>,
-        ///the logrows used when generating the snarks we're aggregating
-        #[arg(long)]
-        app_logrows: u32,
         /// The path to the snarks to aggregate over
         #[arg(long)]
         aggregation_snarks: Vec<PathBuf>,
@@ -309,6 +299,9 @@ pub enum Commands {
             value_enum
         )]
         transcript: TranscriptType,
+        /// logrows used for aggregation circuit
+        #[arg(long)]
+        logrows: u32,
         // todo, optionally allow supplying proving key
     },
 
@@ -370,7 +363,9 @@ pub enum Commands {
             value_enum
         )]
         strategy: StrategyType,
-        // todo, optionally allow supplying proving key
+        /// The path to load circuit params from
+        #[arg(long)]
+        circuit_params_path: PathBuf,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for a single proof
@@ -464,14 +459,6 @@ pub enum Commands {
         /// The transcript type
         #[arg(long)]
         params_path: PathBuf,
-        #[arg(
-            long,
-            require_equals = true,
-            num_args = 0..=1,
-            default_value_t = TranscriptType::Blake,
-            value_enum
-        )]
-        transcript: TranscriptType,
     },
 
     /// Verifies an aggregate proof, returning accept or reject
@@ -486,14 +473,9 @@ pub enum Commands {
         /// The path to load the desired verfication key file (optional)
         #[arg(long)]
         params_path: PathBuf,
-        #[arg(
-             long,
-             require_equals = true,
-             num_args = 0..=1,
-             default_value_t = TranscriptType::Blake,
-             value_enum
-         )]
-        transcript: TranscriptType,
+        /// logrows used for aggregation circuit
+        #[arg(long)]
+        logrows: u32,
     },
 
     #[cfg(not(target_arch = "wasm32"))]

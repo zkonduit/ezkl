@@ -375,7 +375,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 Mode::Mock,
                 visibility,
             ),
-            Commands::Prove { model, .. } | Commands::Setup { model, .. } => Model::new(
+            Commands::Setup { model, .. } => Model::new(
                 &mut std::fs::File::open(model)?,
                 cli.args,
                 Mode::Prove,
@@ -390,6 +390,22 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             ),
             _ => panic!(),
         }
+    }
+
+    /// Creates a `Model` from parsed model params
+    /// # Arguments
+    /// * `params` - A [ModelParams] struct holding parsed CLI arguments.
+    pub fn from_model_params(
+        params: &ModelParams,
+        model: &std::path::PathBuf,
+    ) -> Result<Self, Box<dyn Error>> {
+        let visibility = VarVisibility::from_args(params.run_args.clone())?;
+        Model::new(
+            &mut std::fs::File::open(model)?,
+            params.run_args.clone(),
+            Mode::Prove,
+            visibility,
+        )
     }
 
     /// Creates a `Model` based on CLI arguments
