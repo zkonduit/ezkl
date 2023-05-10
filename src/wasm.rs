@@ -70,17 +70,12 @@ pub fn verify_wasm(
         instances,
         proof: snark_bytes.proof,
         protocol: Some(protocol),
+        transcript_type: snark_bytes.transcript_type,
     };
 
     let strategy = KZGSingleStrategy::new(params.verifier_params());
 
-    let result = verify_proof_circuit_kzg(
-        params.verifier_params(),
-        snark,
-        &vk,
-        crate::commands::TranscriptType::EVM,
-        strategy,
-    );
+    let result = verify_proof_circuit_kzg(params.verifier_params(), snark, &vk, strategy);
 
     if result.is_ok() {
         true
@@ -139,7 +134,7 @@ pub fn prove_wasm(
         &params,
         public_inputs,
         &pk,
-        crate::commands::TranscriptType::EVM,
+        crate::pfsys::TranscriptType::EVM,
         strategy,
         crate::circuit::CheckMode::UNSAFE,
     )

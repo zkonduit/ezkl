@@ -34,6 +34,7 @@ mod wasm32 {
             proof: vec![0; 32],
             num_instance: vec![1],
             instances: vec![vec![vec![0_u8; 32]]],
+            transcript_type: ezkl_lib::pfsys::TranscriptType::EVM,
         };
         let proof = bincode::serialize(&proof).unwrap();
 
