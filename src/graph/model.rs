@@ -665,6 +665,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         }
 
         if self.run_args.public_outputs {
+            let tolerance = match self.run_args.tolerance {
+                Tolerance::Percentage { val, .. } => {
+                    Tolerance::Percentage {
+                         val, 
+                         scale: scale_to_multiplier(self.run_args.scale) as usize
+                    }
+                }
+                _ => self.run_args.tolerance
+            };
             let _ = outputs
                 .into_iter()
                 .map(|output| {
@@ -672,7 +681,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                         &mut None,
                         &[output.clone(), output],
                         &mut offset,
-                        Box::new(HybridOp::RangeCheck(self.run_args.tolerance)),
+                        Box::new(HybridOp::RangeCheck(tolerance)),
                     )
                 })
                 .collect_vec();
