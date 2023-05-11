@@ -34,6 +34,7 @@ mod native_tests {
                         "--params-path={}/kzg17.params",
                         TEST_DIR.path().to_str().unwrap()
                     ),
+                    "--logrows=17",
                 ])
                 .status()
                 .expect("failed to execute process");
