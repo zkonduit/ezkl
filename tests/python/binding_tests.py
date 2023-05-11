@@ -49,7 +49,7 @@ def test_gen_srs():
     Test for gen_srs() with 17 logrows.
     You may want to comment this test as it takes a long time to run
     """
-    ezkl_lib.gen_srs(params_path)
+    ezkl_lib.gen_srs(params_path, 17)
     assert os.path.isfile(params_path)
 
 
@@ -177,6 +177,7 @@ def test_prove():
         params_path,
         "poseidon",
         "single",
+        circuit_params_path,
     )
     assert res == True
     assert os.path.isfile(proof_path)
@@ -196,6 +197,5 @@ def test_verify():
         circuit_params_path,
         vk_path,
         params_path,
-        "poseidon",
     )
     assert res == True

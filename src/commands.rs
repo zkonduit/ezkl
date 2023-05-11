@@ -17,16 +17,9 @@ use std::fs::File;
 use std::io::{stdin, stdout, Read, Write};
 use std::path::PathBuf;
 
-use crate::circuit::CheckMode;
 use crate::graph::{VarVisibility, Visibility};
+use crate::{circuit::CheckMode, pfsys::TranscriptType};
 
-#[allow(missing_docs)]
-#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
-pub enum TranscriptType {
-    Blake,
-    Poseidon,
-    EVM,
-}
 impl std::fmt::Display for TranscriptType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.to_possible_value()
@@ -130,9 +123,6 @@ pub struct RunArgs {
     /// the number of constraints the circuit might use. If not specified, this will be calculated using a 'dummy layout' pass.
     #[arg(long)]
     pub allocated_constraints: Option<usize>,
-    /// run sanity checks during calculations (safe or unsafe)
-    #[arg(long, default_value = "safe")]
-    pub check_mode: CheckMode,
 }
 
 #[allow(missing_docs)]
@@ -159,7 +149,6 @@ impl RunArgs {
 }
 
 const EZKLCONF: &str = "EZKLCONF";
-const RUNARGS: &str = "RUNARGS";
 
 #[allow(missing_docs)]
 #[derive(Parser, Debug, Clone, Deserialize, Serialize)]
@@ -168,9 +157,6 @@ pub struct Cli {
     #[command(subcommand)]
     #[allow(missing_docs)]
     pub command: Commands,
-    /// The tolerance for error on model outputs
-    #[clap(flatten)]
-    pub args: RunArgs,
 }
 
 impl Cli {
@@ -199,22 +185,7 @@ impl Cli {
                     .map_err(Box::<dyn Error>::from)?;
                 Self::from_json(&data).map_err(Box::<dyn Error>::from)
             }
-            Err(_e) => match env::var(RUNARGS) {
-                Ok(path) => {
-                    debug!("loading run args from {}", path);
-                    let mut file = File::open(path).map_err(Box::<dyn Error>::from)?;
-                    let mut data = String::new();
-                    file.read_to_string(&mut data)
-                        .map_err(Box::<dyn Error>::from)?;
-                    let args: RunArgs =
-                        serde_json::from_str(&data).map_err(Box::<dyn Error>::from)?;
-                    Ok(Cli {
-                        command: Cli::parse().command,
-                        args,
-                    })
-                }
-                Err(_e) => Ok(Cli::parse()),
-            },
+            Err(_e) => Ok(Cli::parse()),
         }
     }
 }
@@ -228,6 +199,9 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: String,
+        /// proving arguments
+        #[clap(flatten)]
+        args: RunArgs,
     },
 
     #[cfg(feature = "render")]
@@ -243,6 +217,9 @@ pub enum Commands {
         /// Path to save the .png circuit render
         #[arg(short = 'O', long)]
         output: String,
+        /// proving arguments
+        #[clap(flatten)]
+        args: RunArgs,
     },
 
     /// Runs a vanilla forward pass, produces a quantized output, and saves it to a .json file
@@ -257,14 +234,20 @@ pub enum Commands {
         /// Path to the new .json file
         #[arg(short = 'O', long)]
         output: String,
+        /// proving arguments
+        #[clap(flatten)]
+        args: RunArgs,
     },
 
     /// Generates a dummy SRS
     #[command(name = "gen-srs", arg_required_else_help = true)]
     GenSrs {
-        /// The path to output to the desired params file (optional)
+        /// The path to output to the desired params file
         #[arg(long)]
         params_path: PathBuf,
+        /// number of logrows to use for srs
+        #[arg(long)]
+        logrows: usize,
     },
     /// Loads model and input and runs mock prover (for testing)
     #[command(arg_required_else_help = true)]
@@ -275,6 +258,9 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: String,
+        /// proving arguments
+        #[clap(flatten)]
+        args: RunArgs,
     },
 
     /// Aggregates proofs :)
@@ -283,9 +269,6 @@ pub enum Commands {
         /// The path to the params files.
         #[arg(long)]
         circuit_params_paths: Vec<PathBuf>,
-        ///the logrows used when generating the snarks we're aggregating
-        #[arg(long)]
-        app_logrows: u32,
         /// The path to the snarks to aggregate over
         #[arg(long)]
         aggregation_snarks: Vec<PathBuf>,
@@ -309,7 +292,12 @@ pub enum Commands {
             value_enum
         )]
         transcript: TranscriptType,
-        // todo, optionally allow supplying proving key
+        /// logrows used for aggregation circuit
+        #[arg(long)]
+        logrows: u32,
+        /// run sanity checks during calculations (safe or unsafe)
+        #[arg(long, default_value = "safe")]
+        check_mode: CheckMode,
     },
 
     /// Creates pk and vk and circuit params
@@ -333,6 +321,9 @@ pub enum Commands {
         /// The path to save circuit params to
         #[arg(long)]
         circuit_params_path: PathBuf,
+        /// proving arguments
+        #[clap(flatten)]
+        args: RunArgs,
     },
 
     /// Loads model, data, and creates proof
@@ -370,7 +361,12 @@ pub enum Commands {
             value_enum
         )]
         strategy: StrategyType,
-        // todo, optionally allow supplying proving key
+        /// The path to load circuit params from
+        #[arg(long)]
+        circuit_params_path: PathBuf,
+        /// run sanity checks during calculations (safe or unsafe)
+        #[arg(long, default_value = "safe")]
+        check_mode: CheckMode,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for a single proof
@@ -464,14 +460,6 @@ pub enum Commands {
         /// The transcript type
         #[arg(long)]
         params_path: PathBuf,
-        #[arg(
-            long,
-            require_equals = true,
-            num_args = 0..=1,
-            default_value_t = TranscriptType::Blake,
-            value_enum
-        )]
-        transcript: TranscriptType,
     },
 
     /// Verifies an aggregate proof, returning accept or reject
@@ -486,14 +474,9 @@ pub enum Commands {
         /// The path to load the desired verfication key file (optional)
         #[arg(long)]
         params_path: PathBuf,
-        #[arg(
-             long,
-             require_equals = true,
-             num_args = 0..=1,
-             default_value_t = TranscriptType::Blake,
-             value_enum
-         )]
-        transcript: TranscriptType,
+        /// logrows used for aggregation circuit
+        #[arg(long)]
+        logrows: u32,
     },
 
     #[cfg(not(target_arch = "wasm32"))]

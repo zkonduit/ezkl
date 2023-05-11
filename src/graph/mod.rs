@@ -12,6 +12,7 @@ pub mod node;
 pub mod vars;
 
 use crate::circuit::lookup::LookupOp;
+use crate::circuit::CheckMode;
 use crate::commands::{Cli, RunArgs};
 use crate::fieldutils::i128_to_felt;
 use crate::pfsys::ModelInput;
@@ -91,6 +92,8 @@ pub struct ModelParams {
     pub instance_shapes: Vec<Vec<usize>>,
     /// required_lookups
     pub required_lookups: Vec<LookupOp>,
+    /// check mode
+    pub check_mode: CheckMode,
 }
 
 impl ModelParams {
@@ -124,6 +127,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
     pub fn new(
         data: &ModelInput,
         model: Arc<Model<F>>,
+        check_mode: CheckMode,
     ) -> Result<ModelCircuit<F>, Box<dyn std::error::Error>> {
         // quantize the supplied data using the provided scale.
         let mut inputs: Vec<Tensor<i128>> = vec![];
@@ -142,15 +146,29 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
         Ok(ModelCircuit::<F> {
             model: model.clone(),
             inputs,
-            params: model.gen_params()?,
+            params: model.gen_params(check_mode)?,
         })
     }
 
     /// Create a new circuit from a set of input data and cli arguments.
-    pub fn from_arg(data: &ModelInput) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn from_arg(
+        data: &ModelInput,
+        check_mode: CheckMode,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let cli = Cli::create()?;
         let model = Arc::new(Model::from_ezkl_conf(cli)?);
-        Self::new(data, model)
+        Self::new(data, model, check_mode)
+    }
+
+    /// Create a new circuit from a set of input data and [ModelParams].
+    pub fn from_model_params(
+        data: &ModelInput,
+        params: &ModelParams,
+        model_path: &std::path::PathBuf,
+        check_mode: CheckMode,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let model = Arc::new(Model::from_model_params(params, model_path)?);
+        Self::new(data, model, check_mode)
     }
 
     /// Prepare the public inputs for the circuit.
@@ -243,8 +261,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
             params.run_args.scale,
         );
 
-        let base =
-            Model::<F>::configure(cs, &mut vars, params.run_args, params.required_lookups).unwrap();
+        let base = Model::<F>::configure(
+            cs,
+            &mut vars,
+            params.run_args.bits,
+            params.run_args.tolerance as i32,
+            params.required_lookups,
+            params.check_mode,
+        )
+        .unwrap();
 
         ModelConfig { base, vars }
     }
