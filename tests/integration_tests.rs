@@ -838,7 +838,6 @@ mod native_tests {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "verify-evm",
-                "--logrows=23",
                 "--proof-path",
                 &format!(
                     "{}/{}_evm_aggr.pf",
