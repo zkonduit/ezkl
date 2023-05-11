@@ -7,6 +7,7 @@ use super::ModelParams;
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::ops::poly::PolyOp;
 use crate::circuit::BaseConfig as PolyConfig;
+use crate::circuit::CheckMode;
 use crate::circuit::Op;
 
 use crate::commands::RunArgs;
@@ -110,7 +111,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     }
 
     /// Generate model parameters for the circuit
-    pub fn gen_params(&self) -> Result<ModelParams, Box<dyn Error>> {
+    pub fn gen_params(&self, check_mode: CheckMode) -> Result<ModelParams, Box<dyn Error>> {
         let instance_shapes = self.instance_shapes();
         // this is the total number of variables we will need to allocate
         // for the circuit
@@ -147,6 +148,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             instance_shapes,
             num_constraints,
             required_lookups: lookup_ops,
+            check_mode,
         })
     }
 
@@ -379,29 +381,53 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// # Arguments
     /// * `cli` - A [Cli] struct holding parsed CLI arguments.
     pub fn from_ezkl_conf(cli: Cli) -> Result<Self, Box<dyn Error>> {
-        let visibility = VarVisibility::from_args(cli.args.clone())?;
         match cli.command {
-            Commands::Table { model } | Commands::Mock { model, .. } => Model::new(
-                &mut std::fs::File::open(model)?,
-                cli.args,
-                Mode::Mock,
-                visibility,
-            ),
-            Commands::Prove { model, .. } | Commands::Setup { model, .. } => Model::new(
-                &mut std::fs::File::open(model)?,
-                cli.args,
-                Mode::Prove,
-                visibility,
-            ),
+            Commands::Table { model, args, .. } | Commands::Mock { model, args, .. } => {
+                let visibility = VarVisibility::from_args(args.clone())?;
+                Model::new(
+                    &mut std::fs::File::open(model)?,
+                    args,
+                    Mode::Mock,
+                    visibility,
+                )
+            }
+            Commands::Setup { model, args, .. } => {
+                let visibility = VarVisibility::from_args(args.clone())?;
+                Model::new(
+                    &mut std::fs::File::open(model)?,
+                    args,
+                    Mode::Prove,
+                    visibility,
+                )
+            }
             #[cfg(feature = "render")]
-            Commands::RenderCircuit { model, .. } => Model::new(
-                &mut std::fs::File::open(model)?,
-                cli.args,
-                Mode::Table,
-                visibility,
-            ),
+            Commands::RenderCircuit { model, args, .. } => {
+                let visibility = VarVisibility::from_args(args.clone())?;
+                Model::new(
+                    &mut std::fs::File::open(model)?,
+                    args,
+                    Mode::Table,
+                    visibility,
+                )
+            }
             _ => panic!(),
         }
+    }
+
+    /// Creates a `Model` from parsed model params
+    /// # Arguments
+    /// * `params` - A [ModelParams] struct holding parsed CLI arguments.
+    pub fn from_model_params(
+        params: &ModelParams,
+        model: &std::path::PathBuf,
+    ) -> Result<Self, Box<dyn Error>> {
+        let visibility = VarVisibility::from_args(params.run_args.clone())?;
+        Model::new(
+            &mut std::fs::File::open(model)?,
+            params.run_args.clone(),
+            Mode::Prove,
+            visibility,
+        )
     }
 
     /// Creates a `Model` based on CLI arguments
@@ -419,12 +445,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
-        run_args: RunArgs,
+        num_bits: usize,
+        tolerance: Tolerance,
         required_lookups: Vec<LookupOp>,
+        check_mode: CheckMode,
     ) -> Result<PolyConfig<F>, Box<dyn Error>> {
         info!("configuring model");
         // Extract the abs tolerance value for the baseop range check. Will be zero if percentage tolerance is used.
-        let tol_abs = match run_args.tolerance {
+        let tol_abs = match tolerance {
             Tolerance::Abs { val } => val,
             _ => 0,
         };
@@ -432,14 +460,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             meta,
             vars.advices[0..2].try_into()?,
             &vars.advices[2],
-            run_args.check_mode,
+            check_mode,
             tol_abs as i32,
         );
         // set scale for HybridOp::RangeCheck and call self.conf_lookup on that op for percentage tolerance case
         let input = &vars.advices[0];
         let output = &vars.advices[1];
         for op in required_lookups {
-            base_gate.configure_lookup(meta, input, output, run_args.bits, &op)?;
+            base_gate.configure_lookup(meta, input, output, num_bits, &op)?;
         }
 
         Ok(base_gate)

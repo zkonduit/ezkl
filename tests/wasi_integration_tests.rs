@@ -163,13 +163,13 @@ mod wasi_tests {
                 "--dir",
                 ".",
                 "--",
-                "--bits=16",
-                "-K=20",
                 "mock",
                 "-D",
                 format!("./examples/onnx/{}/input.json", counter_example).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--bits=16",
+                "-K=20",
             ])
             .status()
             .expect("failed to execute process");
@@ -184,8 +184,6 @@ mod wasi_tests {
                 "--dir",
                 ".",
                 "--",
-                "--bits=16",
-                "-K=20",
                 "forward",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -193,6 +191,8 @@ mod wasi_tests {
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
                 "-O",
                 format!("./examples/onnx/{}/input_forward.json", example_name).as_str(),
+                "--bits=16",
+                "-K=20",
                 // "-K",
                 // "2",  //causes failure
             ])
@@ -206,13 +206,13 @@ mod wasi_tests {
                 "--dir",
                 ".",
                 "--",
-                "--bits=16",
-                "-K=20",
                 "mock",
                 "-D",
                 format!("./examples/onnx/{}/input_forward.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--bits=16",
+                "-K=20",
             ])
             .status()
             .expect("failed to execute process");
@@ -227,13 +227,13 @@ mod wasi_tests {
                 "--dir",
                 ".",
                 "--",
-                "--bits=16",
-                "-K=20",
                 "mock",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--bits=16",
+                "-K=20",
             ])
             .status()
             .expect("failed to execute process");
@@ -248,14 +248,14 @@ mod wasi_tests {
                 "--dir",
                 ".",
                 "--",
-                "--bits=16",
-                "-K=20",
-                "--pack-base=2",
                 "mock",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--bits=16",
+                "-K=20",
+                "--pack-base=2",
             ])
             .status()
             .expect("failed to execute process");
@@ -270,15 +270,15 @@ mod wasi_tests {
                 "--dir",
                 ".",
                 "--",
-                "--bits=16",
-                "-K=20",
-                "--public-inputs=true",
-                "--pack-base=2",
                 "mock",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--bits=16",
+                "-K=20",
+                "--public-inputs=true",
+                "--pack-base=2",
             ])
             .status()
             .expect("failed to execute process");
@@ -293,15 +293,15 @@ mod wasi_tests {
                 "--dir",
                 ".",
                 "--",
-                "--public-inputs=true",
-                "--public-outputs=false",
-                "--bits=16",
-                "-K=20",
                 "mock",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--public-inputs=true",
+                "--public-outputs=false",
+                "--bits=16",
+                "-K=20",
             ])
             .status()
             .expect("failed to execute process");
@@ -316,15 +316,15 @@ mod wasi_tests {
                 "--dir",
                 ".",
                 "--",
-                "--public-params=true",
-                "--public-outputs=false",
-                "--bits=16",
-                "-K=20",
                 "mock",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--public-params=true",
+                "--public-outputs=false",
+                "--bits=16",
+                "-K=20",
             ])
             .status()
             .expect("failed to execute process");
