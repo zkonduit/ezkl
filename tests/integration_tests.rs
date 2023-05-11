@@ -550,7 +550,6 @@ mod native_tests {
     fn mock_public_inputs(example_name: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "-K=17",
                 "mock",
                 "-D",
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
@@ -559,6 +558,7 @@ mod native_tests {
                 "--public-inputs=true",
                 "--public-outputs=false",
                 "--bits=16",
+                "-K=17",
             ])
             .status()
             .expect("failed to execute process");
