@@ -161,7 +161,16 @@ fn forward(
         model_inputs.push(t.into_iter().into());
     }
     let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
-    let res = Model::<Fr>::forward(&mut reader, &model_inputs, run_args)
+
+    let model: Model<Fr> = Model::new(
+        &mut reader,
+        run_args,
+        crate::graph::Mode::Prove,
+        crate::graph::VarVisibility::default(),
+    )?;
+
+    let res = model
+        .forward(&model_inputs)
         .map_err(|_| PyRuntimeError::new_err("Failed to compute forward pass"))?;
 
     let float_res: Vec<Vec<f32>> = res.iter().map(|t| t.to_vec()).collect();

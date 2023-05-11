@@ -9,7 +9,7 @@ use crate::tensor::{Tensor, TensorError, TensorType, ValTensor};
 use anyhow::Result;
 use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
-use log::{trace, warn};
+use log::{debug, warn};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::array::Gather;
 use tract_onnx::tract_core::ops::einsum::EinSum;
@@ -100,6 +100,15 @@ fn extract_tensor_value(
             // Generally a shape or hyperparam
             let vec = input.as_slice::<bool>()?.to_vec();
             let cast: Vec<f32> = vec.iter().map(|x| *x as usize as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
+        }
+        DatumType::TDim => {
+            // Generally a shape or hyperparam
+            let vec = input.as_slice::<tract_onnx::prelude::TDim>()?.to_vec();
+            let cast: Vec<f32> = vec
+                .iter()
+                .map(|x| x.to_i64().map_or_else(|_| 1, |e| e) as f32)
+                .collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         _ => todo!(),
@@ -233,7 +242,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
     inputs: &mut Vec<Node<F>>,
 ) -> Result<Box<dyn crate::circuit::Op<F>>, Box<dyn std::error::Error>> {
-    trace!("Loading node: {:?}", node);
+    debug!("Loading node: {:?}", node);
     Ok(match node.op().name().as_ref() {
         "Gather" => {
             if inputs.len() != 2 {
@@ -362,6 +371,9 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 scale: 1,
                 slope: crate::circuit::utils::F32(leaky_op.alpha),
             })
+        }
+        "Scan" => {
+            panic!()
         }
         "Sigmoid" => Box::new(LookupOp::Sigmoid { scales: (1, 1) }),
         "Sqrt" => Box::new(LookupOp::Sqrt { scales: (1, 1) }),

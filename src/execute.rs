@@ -375,7 +375,14 @@ fn forward(
         model_inputs.push(t.into_iter().into());
     }
 
-    let res = Model::<Fr>::forward(&mut std::fs::File::open(model)?, &model_inputs, args)?;
+    let model: Model<Fr> = Model::new(
+        &mut std::fs::File::open(model)?,
+        args,
+        crate::graph::Mode::Prove,
+        crate::graph::VarVisibility::default(),
+    )?;
+
+    let res = model.forward(&model_inputs)?;
 
     let float_res: Vec<Vec<f32>> = res.iter().map(|t| t.to_vec()).collect();
     trace!("forward pass output: {:?}", float_res);

@@ -2,27 +2,21 @@ use super::node::*;
 use super::vars::*;
 use super::GraphError;
 use super::ModelParams;
-use crate::circuit::lookup::LookupOp;
-use crate::circuit::ops::poly::PolyOp;
-use crate::circuit::BaseConfig as PolyConfig;
-use crate::circuit::CheckMode;
-use crate::circuit::Op;
+use crate::{
+    circuit::{lookup::LookupOp, ops::poly::PolyOp, BaseConfig as PolyConfig, CheckMode, Op},
+    commands::{Cli, Commands, RunArgs},
+    graph::scale_to_multiplier,
+    tensor::{Tensor, TensorType, ValTensor},
+};
 
-use crate::commands::RunArgs;
-use crate::commands::{Cli, Commands};
-use crate::graph::scale_to_multiplier;
-use crate::tensor::TensorType;
-use crate::tensor::{Tensor, ValTensor};
 use halo2curves::ff::PrimeField;
 use log::warn;
 use serde::Deserialize;
 use serde::Serialize;
-use tract_onnx::prelude::DatumExt;
-use tract_onnx::prelude::Graph;
-use tract_onnx::prelude::InferenceModelExt;
-use tract_onnx::prelude::TypedFact;
-use tract_onnx::prelude::TypedOp;
-use tract_onnx::tract_hir::internal::Factoid;
+use tract_onnx::prelude::{
+    DatumExt, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
+};
+
 // use tract_onnx::tract_hir::internal::GenericFactoid;
 //use clap::Parser;
 use core::panic;
@@ -79,6 +73,15 @@ pub struct Model<F: PrimeField + TensorType + PartialOrd> {
     pub mode: Mode,
     /// Defines which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
     pub visibility: VarVisibility,
+}
+
+/// Enables model as subnode of other models
+#[derive(Clone, Debug)]
+pub enum NodeTypes<F: PrimeField + TensorType + PartialOrd> {
+    /// A node in the model
+    Node(Node<F>),
+    /// A submodel
+    Model(Model<F>),
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
@@ -146,16 +149,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// * `model_inputs` - A vector of [Tensor]s to use as inputs to the model.
     /// * `run_args` - [RunArgs]
     pub fn forward(
-        reader: &mut dyn std::io::Read,
+        &self,
         model_inputs: &[Tensor<i128>],
-        run_args: RunArgs,
     ) -> Result<Vec<Tensor<f32>>, Box<dyn Error>> {
-        let (model, nodes) = Self::load_onnx_model(reader, run_args.scale, run_args.public_params)?;
-
         let mut results: BTreeMap<&usize, Tensor<i128>> = BTreeMap::new();
         let mut max_lookup_inputs = 0;
         let mut input_idx = 0;
-        for (i, n) in nodes.iter() {
+        for (i, n) in self.nodes.iter() {
             let mut inputs = vec![];
             if n.opkind.is_input() {
                 let mut t = model_inputs[input_idx].clone();
@@ -185,30 +185,26 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             results.insert(i, res);
         }
 
-        let output_nodes = model.outputs.iter();
+        let output_nodes = self.outputs.iter();
         debug!(
             "model outputs are nodes: {:?}",
-            output_nodes.clone().map(|o| o.node).collect_vec()
+            output_nodes.clone().map(|o| o).collect_vec()
         );
         let outputs = output_nodes
             .map(|o| {
-                let n = nodes.get(&o.node).unwrap();
+                let n = self.nodes.get(&o).unwrap();
                 let scale = scale_to_multiplier(n.out_scale);
-                results
-                    .get(&o.node)
-                    .unwrap()
-                    .clone()
-                    .map(|x| (x as f32) / scale)
+                results.get(&o).unwrap().clone().map(|x| (x as f32) / scale)
             })
             .collect_vec();
 
-        let max_range = 2i128.pow(run_args.bits as u32 - 1);
+        let max_range = 2i128.pow(self.run_args.bits as u32 - 1);
         if max_lookup_inputs >= max_range {
             let recommended_bits = (max_lookup_inputs as f64).log2().ceil() as u32 + 1;
             let recommended_scale = 1.0
                 + (max_lookup_inputs as f64 / max_range as f64).log2().ceil()
-                - run_args.scale as f64;
-            warn!("At the selected lookup bits and fixed point scale, the largest input to a lookup table is too large to be represented (max: {}, bits: {}, scale: {}).",  max_lookup_inputs, run_args.bits, run_args.scale);
+                - self.run_args.scale as f64;
+            warn!("At the selected lookup bits and fixed point scale, the largest input to a lookup table is too large to be represented (max: {}, bits: {}, scale: {}).",  max_lookup_inputs, self.run_args.bits, self.run_args.scale);
             if recommended_scale > 0.0 {
                 warn!("Either increase the lookup bits to [{}] or decrease the scale to [{}] (or both).", recommended_bits, recommended_scale);
                 warn!("Remember to increase the circuit logrows if you increase the bits.");
@@ -219,7 +215,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 warn!("Remember to re-run the forward pass with the new values.");
             } else {
                 let max_range = 2i128.pow(27_u32 - 1);
-                let recommended_scale = run_args.scale as f64
+                let recommended_scale = self.run_args.scale as f64
                     - (max_lookup_inputs as f64 / max_range as f64).log2().ceil();
                 if recommended_scale > 0.0 {
                     warn!(
@@ -253,8 +249,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             GraphError::ModelLoad
         })?;
 
-        let sequence_length = &mut None;
-
         for (i, id) in model.clone().inputs.iter().enumerate() {
             let input = model.node(id.node);
 
@@ -263,27 +257,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 .fact
                 .shape
                 .dims()
-                .filter_map(|x| x.concretize())
+                .filter_map(|x| tract_onnx::tract_hir::internal::Factoid::concretize(x))
                 .map(|x| match x.to_i64() {
                     Ok(x) => x as usize,
                     Err(_e) => {
                         if x.to_string() == "batch_size" {
                             1
-                        } else if x.to_string() == "sequence_length" {
-                            // get user input as usize from std in
-                            if let Some(len) = sequence_length {
-                                *len
-                            } else {
-                                let mut input = String::new();
-                                info!("Enter sequence length: ");
-                                std::io::stdin()
-                                    .read_line(&mut input)
-                                    .expect("Failed to read line");
-                                let input: usize =
-                                    input.trim().parse().expect("Please type a number!");
-                                *sequence_length = Some(input);
-                                input
-                            }
                         } else {
                             panic!("Unknown dimension {}: {:?}", x.to_string(), x)
                         }
@@ -293,53 +272,19 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
 
             dims.extend(extracted_dims);
 
-            model = model.with_input_fact(i, f32::fact(dims).into())?;
+            model.set_input_fact(i, f32::fact(dims).into())?;
         }
 
-        for (i, id) in model.clone().outputs.iter().enumerate() {
-            let output = model.node(id.node);
-
-            // add batch dim
-            let mut dims = vec![];
-            let extracted_dims: Vec<usize> = output.outputs[0]
-                .fact
-                .shape
-                .dims()
-                .filter_map(|x| x.concretize())
-                .map(|x| match x.to_i64() {
-                    Ok(x) => x as usize,
-                    Err(_e) => {
-                        if x.to_string() == "batch_size" {
-                            1
-                        } else if x.to_string() == "sequence_length"
-                            || x.to_string() == "past_sequence_length + sequence_length"
-                        {
-                            if let Some(len) = sequence_length {
-                                *len
-                            } else {
-                                let mut input = String::new();
-                                info!("Enter sequence length: ");
-                                std::io::stdin()
-                                    .read_line(&mut input)
-                                    .expect("Failed to read line");
-                                let input: usize =
-                                    input.trim().parse().expect("Please type a number!");
-                                *sequence_length = Some(input);
-                                input
-                            }
-                        } else {
-                            panic!("Unknown dimension: {}", x)
-                        }
-                    }
-                })
-                .collect();
-
-            dims.extend(extracted_dims);
-
-            model = model.with_output_fact(i, f32::fact(dims).into())?;
+        for (i, _) in model.clone().outputs.iter().enumerate() {
+            model.set_output_fact(i, InferenceFact::default()).unwrap();
         }
         // Note: do not optimize the model, as the layout will depend on underlying hardware
         let model = model.into_typed()?.into_decluttered()?;
+        let batch_size = model.symbol_table.sym("batch_size");
+        let seq_len = model.symbol_table.sym("sequence_length");
+        let model = model
+            .concretize_dims(&SymbolValues::default().with(&batch_size, 1))?
+            .concretize_dims(&SymbolValues::default().with(&seq_len, 1))?;
 
         let mut nodes = BTreeMap::<usize, Node<F>>::new();
         for (i, n) in model.nodes.iter().enumerate() {
