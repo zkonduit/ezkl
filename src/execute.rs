@@ -5,7 +5,7 @@ use crate::eth::{
     deploy_verifier, fix_verifier_sol, get_ledger_signing_provider, get_provider,
     get_wallet_signing_provider, send_proof, verify_proof_via_solidity,
 };
-use crate::graph::{quantize_float, Model, ModelCircuit, ModelParams};
+use crate::graph::{quantize_float, scale_to_multiplier, Model, ModelCircuit, ModelParams};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::{aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier};
@@ -30,6 +30,7 @@ use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
+use itertools::Itertools;
 #[cfg(not(target_arch = "wasm32"))]
 use log::warn;
 use log::{info, trace};
@@ -48,7 +49,6 @@ use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 use std::time::Instant;
-use tabled::Table;
 use thiserror::Error;
 
 /// A wrapper for tensor related errors.
@@ -353,7 +353,7 @@ fn gen_srs_cmd(params_path: PathBuf, logrows: u32) -> Result<(), Box<dyn Error>>
 
 fn table(cli: Cli) -> Result<(), Box<dyn Error>> {
     let om = Model::<Fr>::from_ezkl_conf(cli)?;
-    info!("\n {}", Table::new(om.nodes.iter()));
+    info!("\n {}", om.table_nodes());
     Ok(())
 }
 
@@ -375,9 +375,25 @@ fn forward(
         model_inputs.push(t.into_iter().into());
     }
 
-    let res = Model::<Fr>::forward(&mut std::fs::File::open(model)?, &model_inputs, args)?;
+    let model: Model<Fr> = Model::new(
+        &mut std::fs::File::open(model)?,
+        args,
+        crate::graph::Mode::Prove,
+        crate::graph::VarVisibility::default(),
+    )?;
 
-    let float_res: Vec<Vec<f32>> = res.iter().map(|t| t.to_vec()).collect();
+    let res = model.forward(&model_inputs)?;
+
+    let output_scales = model.get_output_scales();
+    let output_scales = output_scales
+        .iter()
+        .map(|scale| scale_to_multiplier(*scale));
+
+    let float_res: Vec<Vec<f32>> = res
+        .iter()
+        .zip(output_scales)
+        .map(|(t, scale)| t.iter().map(|e| (*e as f32 / scale)).collect_vec())
+        .collect();
     trace!("forward pass output: {:?}", float_res);
     data.output_data = float_res;
 

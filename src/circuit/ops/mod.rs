@@ -73,9 +73,16 @@ impl<F: PrimeField + TensorType + PartialOrd> Clone for Box<dyn Op<F>> {
 
 ///
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct Input;
+pub struct Input {
+    ///
+    pub scale: u32,
+}
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
+    fn out_scale(&self, _: Vec<u32>, _: u32) -> u32 {
+        self.scale
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -87,6 +94,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
     fn as_str(&self) -> &'static str {
         "Input"
     }
+
     fn layout(
         &self,
         _: &mut crate::circuit::BaseConfig<F>,

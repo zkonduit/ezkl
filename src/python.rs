@@ -19,7 +19,6 @@ use pyo3::wrap_pyfunction;
 use pyo3_log;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{fs::File, path::PathBuf, sync::Arc};
-use tabled::Table;
 
 // See commands.rs and execute.rs
 // RenderCircuit
@@ -113,7 +112,7 @@ fn table(model: String, py_run_args: Option<PyRunArgs>) -> Result<String, PyErr>
     let result = Model::<Fr>::new(&mut reader, run_args, Mode::Mock, visibility);
 
     match result {
-        Ok(m) => Ok(Table::new(m.nodes.iter()).to_string()),
+        Ok(m) => Ok(m.table_nodes()),
         Err(_) => Err(PyIOError::new_err("Failed to import model")),
     }
 }
@@ -161,10 +160,29 @@ fn forward(
         model_inputs.push(t.into_iter().into());
     }
     let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
-    let res = Model::<Fr>::forward(&mut reader, &model_inputs, run_args)
-        .map_err(|_| PyRuntimeError::new_err("Failed to compute forward pass"))?;
 
-    let float_res: Vec<Vec<f32>> = res.iter().map(|t| t.to_vec()).collect();
+    let model: Model<Fr> = Model::new(
+        &mut reader,
+        run_args,
+        crate::graph::Mode::Prove,
+        crate::graph::VarVisibility::default(),
+    )
+    .map_err(|_| PyIOError::new_err("Failed to create new model"))?;
+
+    let res = model
+        .forward(&model_inputs)
+        .map_err(|_| PyIOError::new_err("Failed to run forward pass"))?;
+
+    let output_scales = model.get_output_scales();
+    let output_scales = output_scales
+        .iter()
+        .map(|scale| crate::graph::scale_to_multiplier(*scale));
+
+    let float_res: Vec<Vec<f32>> = res
+        .iter()
+        .zip(output_scales)
+        .map(|(t, scale)| t.iter().map(|e| (*e as f32 / scale)).collect::<Vec<f32>>())
+        .collect();
     trace!("forward pass output: {:?}", float_res);
     data.output_data = float_res;
 
