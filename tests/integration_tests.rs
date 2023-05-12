@@ -521,13 +521,13 @@ fn percentage_tolerance() {
 fn mock(example_name: String) {
     let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
         .args([
-            "--bits=16",
-            "-K=17",
             "mock",
             "-D",
             format!("./examples/onnx/{}/input.json", example_name).as_str(),
             "-M",
             format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+            "--bits=16",
+            "-K=17",
         ])
         .status()
         .expect("failed to execute process");
