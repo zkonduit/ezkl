@@ -390,13 +390,24 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             .concretize_dims(&SymbolValues::default().with(&batch_size, 1))?
             .concretize_dims(&SymbolValues::default().with(&seq_len, 1))?;
 
-        let nodes = Self::nodes_from_graph(
+        let mut nodes = Self::nodes_from_graph(
             &model,
             run_args,
             mode,
             visibility,
             model.inputs.iter().map(|_| run_args.scale).collect(),
         )?;
+
+        nodes = nodes
+            .iter()
+            .filter(|(_, node)| {
+                node.opkind()
+                    .as_any()
+                    .downcast_ref::<crate::circuit::ops::Constant<F>>()
+                    .is_none()
+            })
+            .map(|(idx, node)| (*idx, node.clone()))
+            .collect();
 
         debug!("\n {}", model);
 
