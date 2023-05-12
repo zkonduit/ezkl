@@ -498,41 +498,41 @@ mod native_tests {
         assert!(status.success());
     }
 
-// Set tolerance as floating point (positive or negative number with a decimal point) for percent error, usize for abs error. 
-fn percentage_tolerance() {
-    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "--tolerance=1.0", // 1 % error
-            "--scale=4",
-            "--bits=16",
-            "-K=17",
-            "mock",
-            "-D",
-            "./examples/onnx/tutorial/input.json".to_string().as_str(),
-            "-M",
-            "./examples/onnx/tutorial/network.onnx".to_string().as_str(),
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
-}
+    // Set tolerance as floating point (positive or negative number with a decimal point) for percent error, usize for abs error. 
+    fn percentage_tolerance() {
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "--tolerance=1.0", // 1 % error
+                "--scale=4",
+                "--bits=16",
+                "-K=17",
+                "mock",
+                "-D",
+                "./examples/onnx/tutorial/input.json".to_string().as_str(),
+                "-M",
+                "./examples/onnx/tutorial/network.onnx".to_string().as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+    }
 
-// Mock prove (fast, but does not cover some potential issues)
-fn mock(example_name: String) {
-    let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "mock",
-            "-D",
-            format!("./examples/onnx/{}/input.json", example_name).as_str(),
-            "-M",
-            format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-            "--bits=16",
-            "-K=17",
-        ])
-        .status()
-        .expect("failed to execute process");
-    assert!(status.success());
-}
+    // Mock prove (fast, but does not cover some potential issues)
+    fn mock(example_name: String) {
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "mock",
+                "-D",
+                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                "-M",
+                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                "--bits=16",
+                "-K=17",
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+    }
 
     // Mock prove (fast, but does not cover some potential issues)
     fn mock_packed_outputs(example_name: String) {
