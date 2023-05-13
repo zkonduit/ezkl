@@ -265,7 +265,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
             cs,
             &mut vars,
             params.run_args.bits,
-            params.run_args.tolerance as i32,
+            params.run_args.tolerance,
             params.required_lookups,
             params.check_mode,
         )

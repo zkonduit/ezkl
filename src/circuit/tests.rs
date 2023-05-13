@@ -1,4 +1,5 @@
 use crate::circuit::ops::poly::PolyOp;
+use crate::circuit::ops::hybrid::HybridOp;
 use crate::circuit::*;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -1416,6 +1417,7 @@ mod rangecheck {
         plonk::{Circuit, ConstraintSystem, Error},
     };
     use halo2curves::pasta::Fp;
+    use crate::circuit::Tolerance;
 
     const RANGE: usize = 8; // 3-bit value
     const K: usize = 8;
@@ -1460,7 +1462,7 @@ mod rangecheck {
                                 &mut Some(&mut region),
                                 &[self.input.clone(), self.output.clone()],
                                 &mut 0,
-                                Box::new(PolyOp::RangeCheck(RANGE as i32)),
+                                Box::new(HybridOp::RangeCheck(Tolerance::Abs { val: RANGE})),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1495,6 +1497,134 @@ mod rangecheck {
                 output: ValTensor::from(out),
             };
             let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            match prover.verify() {
+                Ok(_) => {
+                    assert!(false)
+                }
+                Err(_) => {
+                    assert!(true)
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod rangecheckpercent {
+    use crate::{tensor::Tensor, circuit};
+    use halo2_proofs::{
+        circuit::{Layouter, SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::{Circuit, ConstraintSystem, Error},
+    };
+    use halo2curves::pasta::Fp;
+    use crate::circuit::Tolerance;
+
+    const RANGE: f32 = 1.0; // 1 percent error tolerance
+    const K: usize = 18;
+    const LEN: usize = 1;
+    const SCALE: usize = i128::pow(2, 7) as usize;
+
+    use super::*;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
+        input: ValTensor<F>,
+        output: ValTensor<F>,
+        _marker: PhantomData<F>
+    }
+
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let scale = SCALE.pow(2);
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
+            let mut config =  Self::Config::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE, 0);
+            // set up a new GreaterThan and Recip tables
+            let nl = &LookupOp::GreaterThan { 
+                a: circuit::utils::F32((RANGE * scale as f32)/100.0)
+            };
+            config
+                .configure_lookup(cs, &b, &output, 16, nl)
+                .unwrap();
+            config
+                .configure_lookup(cs, &b, &output, 16, &LookupOp::Recip { scale } )
+                .unwrap();
+            config
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            config.layout_tables(&mut layouter).unwrap();
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        config
+                            .layout(
+                                &mut Some(&mut region),
+                                &[self.output.clone(), self.input.clone()],
+                                &mut 0,
+                                Box::new(HybridOp::RangeCheck(Tolerance::Percentage { val: RANGE, scale: SCALE })),
+                            )
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn test_range_check_percent() {
+
+        // Successful cases
+        {
+            let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(100_u64))]), &[1]).unwrap();
+            let out = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(101_u64))]), &[1]).unwrap();
+            let circuit = MyCircuit::<Fp> {
+                input: ValTensor::from(inp),
+                output: ValTensor::from(out),
+                _marker: PhantomData
+            };
+            let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+            prover.assert_satisfied();
+        }
+        {
+            let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(200_u64))]), &[1]).unwrap();
+            let out = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(199_u64))]), &[1]).unwrap();
+            let circuit = MyCircuit::<Fp> {
+                input: ValTensor::from(inp),
+                output: ValTensor::from(out),
+                _marker: PhantomData
+            };
+            let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+            prover.assert_satisfied();
+        }
+
+        // Unsuccessful case
+        {
+            let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(100_u64))]), &[1]).unwrap();
+            let out = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(102_u64))]), &[1]).unwrap();
+            let circuit = MyCircuit::<Fp> {
+                input: ValTensor::from(inp),
+                output: ValTensor::from(out),
+                _marker: PhantomData
+            };
+            let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
             match prover.verify() {
                 Ok(_) => {
                     assert!(false)
@@ -1582,6 +1712,94 @@ mod relu {
         };
 
         let prover = MockProver::run(4_u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
+mod softmax {
+
+    use super::*;
+    use halo2_proofs::{
+        circuit::{Layouter, SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::{Circuit, ConstraintSystem, Error},
+    };
+    use halo2curves::pasta::Fp as F;
+
+    const K: usize = 18;
+    const LEN: usize = 3;
+    const SCALE: usize = i128::pow(2, 7) as usize;
+
+    #[derive(Clone)]
+    struct SoftmaxCircuit<F: PrimeField + TensorType + PartialOrd> {
+        pub input: ValTensor<F>,
+        _marker: PhantomData<F>,
+    }
+
+    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for SoftmaxCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
+            let mut config =  Self::Config::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE, 0);
+            let advices = (0..2)
+                .map(|_| VarTensor::new_advice(cs, K, LEN))
+                .collect::<Vec<_>>();
+
+            config
+                .configure_lookup(cs, &advices[0], &advices[1], 16, &LookupOp::Exp { scales: (SCALE, SCALE) })
+                .unwrap();
+            config
+                .configure_lookup(cs, &advices[0], &advices[1], 16, &LookupOp::Recip { scale: SCALE.pow(2) })
+                .unwrap();
+            config
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            config.layout_tables(&mut layouter).unwrap();
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        let mut offset = 0;
+                        let _output = config
+                            .layout(
+                                &mut Some(&mut region),
+                                &[self.input.clone()],
+                                &mut offset,
+                                Box::new(HybridOp::Softmax { scales: ( SCALE, SCALE ) })
+                            )
+                            .unwrap();
+                        Ok(())
+                        },
+                )
+                .unwrap();
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn softmax_circuit() {
+        let input = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = SoftmaxCircuit::<F> {
+            input: ValTensor::from(input),
+            _marker: PhantomData
+        };
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
     }
 }

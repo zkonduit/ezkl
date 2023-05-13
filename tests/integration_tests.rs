@@ -233,6 +233,7 @@ mod native_tests {
             use crate::native_tests::kzg_prove_and_verify;
             use crate::native_tests::render_circuit;
             use crate::native_tests::tutorial as run_tutorial;
+            use crate::native_tests::percentage_tolerance as run_percentage_tolerance;
 
 
             #[test]
@@ -240,6 +241,10 @@ mod native_tests {
                 run_tutorial();
             }
 
+            #[test]
+            fn percentage_tolerance_() {
+                run_percentage_tolerance();
+            }
 
             seq!(N in 0..=29 {
 
@@ -487,6 +492,25 @@ mod native_tests {
                 "--scale=4",
                 "--bits=16",
                 "-K=17",
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+    }
+
+    // Set tolerance as floating point (positive or negative number with a decimal point) for percent error, usize for abs error. 
+    fn percentage_tolerance() {
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "--tolerance=1.0", // 1 % error
+                "--scale=4",
+                "--bits=16",
+                "-K=17",
+                "mock",
+                "-D",
+                "./examples/onnx/tutorial/input.json".to_string().as_str(),
+                "-M",
+                "./examples/onnx/tutorial/network.onnx".to_string().as_str(),
             ])
             .status()
             .expect("failed to execute process");

@@ -1,6 +1,9 @@
 use super::node::*;
+use super::scale_to_multiplier;
 use super::vars::*;
 use super::GraphError;
+use crate::circuit::Tolerance;
+use crate::circuit::hybrid::HybridOp;
 use super::ModelParams;
 use crate::circuit::Input;
 use crate::circuit::Unknown;
@@ -173,7 +176,7 @@ impl<F: PrimeField + TensorType + PartialOrd> NodeType<F> {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
-    ///
+
     fn required_lookups(&self) -> Vec<LookupOp> {
         self.nodes
             .iter()
@@ -182,7 +185,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             .collect_vec()
     }
 
-    /// Creates an `Model` from a specified path to an Onnx file.
+    /// Creates a `Model` from a specified path to an Onnx file.
     /// # Arguments
     /// * `reader` - A reader for an Onnx file.
     /// * `run_args` - [RunArgs]
@@ -223,6 +226,26 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
 
         // extract the requisite lookup ops from the model
         let mut lookup_ops: Vec<LookupOp> = self.required_lookups();
+
+        // if we're using percentage tolerance, we need to add the necessary range check ops for it.
+        if let Tolerance::Percentage { val, .. } = self.run_args.tolerance {
+            let tolerance = Tolerance::Percentage {
+                val,
+                scale: scale_to_multiplier(self.run_args.scale) as usize
+            };
+            let opkind: Box<dyn Op<F>> = Box::new(HybridOp::RangeCheck(tolerance));
+            lookup_ops.extend(opkind.required_lookups());
+        }
+
+        // if we're using percentage tolerance, we need to add the necessary range check ops for it.
+        if let Tolerance::Percentage { val, .. } = self.run_args.tolerance {
+            let tolerance = Tolerance::Percentage {
+                val,
+                scale: scale_to_multiplier(self.run_args.scale) as usize
+            };
+            let opkind: Box<dyn Op<F>> = Box::new(HybridOp::RangeCheck(tolerance));
+            lookup_ops.extend(opkind.required_lookups());
+        }
 
         let set: HashSet<_> = lookup_ops.drain(..).collect(); // dedup
         lookup_ops.extend(set.into_iter().sorted());
@@ -587,26 +610,32 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         meta: &mut ConstraintSystem<F>,
         vars: &mut ModelVars<F>,
         num_bits: usize,
-        tolerance: i32,
+        tolerance: Tolerance,
         required_lookups: Vec<LookupOp>,
         check_mode: CheckMode,
     ) -> Result<PolyConfig<F>, Box<dyn Error>> {
         info!("configuring model");
+        // Extract the abs tolerance value for the baseop range check. Will be zero if percentage tolerance is used.
+        let tol_abs = match tolerance {
+            Tolerance::Abs { val } => val,
+            _ => 0,
+        };
         let mut base_gate = PolyConfig::configure(
             meta,
             vars.advices[0..2].try_into()?,
             &vars.advices[2],
             check_mode,
-            tolerance,
+            tol_abs as i32,
         );
-
+        // set scale for HybridOp::RangeCheck and call self.conf_lookup on that op for percentage tolerance case
+        let input = &vars.advices[0];
+        let output = &vars.advices[1];
         for op in required_lookups {
-            let input = &vars.advices[0];
-            let output = &vars.advices[1];
             base_gate.configure_lookup(meta, input, output, num_bits, &op)?;
         }
 
         Ok(base_gate)
+
     }
 
     /// Assigns values to the regions created when calling `configure`.
@@ -680,6 +709,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 }
 
                 if self.run_args.public_outputs {
+                    let tolerance = match self.run_args.tolerance {
+                        Tolerance::Percentage { val, .. } => {
+                            Tolerance::Percentage {
+                                 val, 
+                                 scale: scale_to_multiplier(self.run_args.scale) as usize
+                            }
+                        }
+                        _ => self.run_args.tolerance
+                    };
                     let _ = outputs
                         .into_iter()
                         .enumerate()
@@ -692,7 +730,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                                 &mut Some(&mut region),
                                 &[output, vars.instances[instance_offset + i].clone()],
                                 &mut offset,
-                                Box::new(PolyOp::RangeCheck(self.run_args.tolerance as i32)),
+                                Box::new(HybridOp::RangeCheck(tolerance)),
                             )
                         })
                         .collect_vec();
@@ -810,6 +848,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         }
 
         if self.run_args.public_outputs {
+            let tolerance = match self.run_args.tolerance {
+                Tolerance::Percentage { val, .. } => {
+                    Tolerance::Percentage {
+                         val, 
+                         scale: scale_to_multiplier(self.run_args.scale) as usize
+                    }
+                }
+                _ => self.run_args.tolerance
+            };
             let _ = outputs
                 .clone()
                 .into_iter()
@@ -819,7 +866,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                             &mut None,
                             &[output.clone(), output],
                             &mut offset,
-                            Box::new(PolyOp::RangeCheck(self.run_args.tolerance as i32)),
+                            Box::new(HybridOp::RangeCheck(tolerance)),
                         )
                         .unwrap()
                 })

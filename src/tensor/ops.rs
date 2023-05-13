@@ -1033,7 +1033,7 @@ pub mod nonlinearities {
         output
     }
 
-    /// Elementwise applies exponenial to a tensor of integers.
+    /// Elementwise applies exponential to a tensor of integers.
     /// # Arguments
     ///
     /// * `a` - Tensor
@@ -1152,6 +1152,45 @@ pub mod nonlinearities {
         // assert_eq!(res.iter().fold(0.0, |acc, x| acc + x), 1.0);
 
         output
+    }
+
+    /// Applies range_check_percent
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `b` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// use ezkl_lib::tensor::ops::nonlinearities::range_check_percent;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[100, 200, 300, 400, 500, 600]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let y = Tensor::<i128>::new(
+    ///    Some(&[103, 204, 303, 404, 505, 607]),
+    ///   &[2, 3],
+    /// ).unwrap();
+    /// let result = range_check_percent(&[x, y], 1024, 1.0); // 1% tolerance
+    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 0, 0, 0, 1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn range_check_percent(t: &[Tensor<i128>], scale: usize, tol: f32) -> Tensor<i128> {
+        // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
+        let _double_scale = scale.pow(2);
+        let diff: Tensor<i128> = sub(t).unwrap();
+        let recip = recip(&t[0], _double_scale as u32);
+        let product = mult(&[diff, recip]).unwrap();
+        let _tol = ((tol/100.0)*_double_scale as f32).round() as f64;
+        let upper_bound = greater_than(&product, _tol);
+        let neg_product = mult(&[
+            product, Tensor::<i128>::new(Some(&[-1]),&[1]).unwrap()
+        ]).unwrap();
+        let lower_bound = greater_than(&neg_product, _tol);
+        let sum = add(&[upper_bound, lower_bound]).unwrap();
+        sum
     }
 
     /// Elementwise applies square root to a tensor of integers.

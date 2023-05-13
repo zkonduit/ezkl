@@ -48,8 +48,7 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Pow(u32),
     Pack(u32, u32),
     GlobalSumPool,
-    Iff,
-    RangeCheck(i32),
+    Iff
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {
@@ -114,7 +113,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Conv { .. } => "CONV",
             PolyOp::SumPool { .. } => "SUMPOOL",
             PolyOp::Matmul { .. } => "MATMUL",
-            PolyOp::RangeCheck(..) => "RANGECHECK",
             PolyOp::Iff => "IFF",
             PolyOp::Gather { .. } => "GATHER",
         }
@@ -202,7 +200,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 tensor::ops::sum_axes(&inputs[0], axes)
             }
             PolyOp::GlobalSumPool => unreachable!(),
-            PolyOp::RangeCheck(..) => Ok(inputs[0].clone()),
             PolyOp::Iff => {
                 let mask = inputs[0].clone();
                 // if mask > 0 then output a else output b
@@ -311,9 +308,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 *scale,
                 offset,
             )?,
-            PolyOp::RangeCheck(tol) => {
-                layouts::range_check(config, region, values[..].try_into()?, offset, *tol)?
-            }
             PolyOp::GlobalSumPool => unreachable!(),
         }))
     }
@@ -367,7 +361,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Pad(_, _) => in_scales[0],
             PolyOp::Pow(pow) => in_scales[0] * (*pow),
             PolyOp::Pack(_, _) => in_scales[0],
-            PolyOp::RangeCheck(_) => in_scales[0],
             PolyOp::GlobalSumPool => in_scales[0],
         }
     }
