@@ -12,12 +12,13 @@ use halo2curves::ff::PrimeField;
 use log::{debug, warn};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::array::Gather;
+use tract_onnx::tract_core::ops::array::Slice;
 use tract_onnx::tract_core::ops::einsum::EinSum;
 // use tract_onnx::tract_core::ops::binary::UnaryOp;
 // use tract_onnx::tract_core::ops::matmul::MatMulUnary;
 use tract_onnx::tract_core::ops::element_wise::ElementWiseOp;
 use tract_onnx::tract_core::ops::nn::{LeakyRelu, Reduce, Softmax};
-use tract_onnx::tract_hir::internal::AxisOp;
+use tract_onnx::tract_hir::internal::{AxisOp, DimLike};
 use tract_onnx::tract_hir::ops::cnn::ConvUnary;
 use tract_onnx::tract_hir::ops::konst::Const;
 use tract_onnx::tract_hir::{
@@ -243,6 +244,24 @@ fn load_concat_op(
     Ok(op.clone())
  } 
 
+ /// Extracts a Slice op from an onnx node.
+fn load_slice_op(
+    op: &dyn tract_onnx::prelude::Op,
+    name: String,
+ ) -> Result<Slice, Box<dyn std::error::Error>> {
+    // Extract the slope layer hyperparams
+    let op: &Slice = match op.downcast_ref::<Slice>() {
+        Some(b) => b,
+        None => {
+            return Err(Box::new(TensorError::DimMismatch(name)));
+        }
+    };
+ 
+ 
+    Ok(op.clone())
+ }
+ 
+
 /// Matches an onnx node to a [OpKind] and returns a [Node] with the corresponding [OpKind].  
 /// Arguments
 /// * `idx` - the index of the node in the graph.
@@ -285,6 +304,28 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             inputs.pop();
 
             Box::new(crate::circuit::ops::poly::PolyOp::Gather { dim: axis, index })
+        }
+        "Concat" => {
+            let op = load_concat_op(node.op(), idx, node.op().name().to_string())?;
+            let axis = op.axis;
+ 
+ 
+            Box::new(crate::circuit::ops::poly::PolyOp::Concat { axis: axis })
+        } 
+        "Slice" => {
+            let slice = load_slice_op(node.op(), node.op().name().to_string())?;
+ 
+ 
+            let axis = slice.axis;
+            let starts = slice.start.to_usize()?;
+            let ends = slice.end.to_usize()?;
+ 
+ 
+            Box::new(PolyOp::Slice {
+                axis: axis,
+                start: starts,
+                end: ends,
+            })
         }
         "Const" => {
             let op: Const = load_const(node.op(), idx, node.op().name().to_string())?;
@@ -741,12 +782,5 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             warn!("Unknown op: {}", c);
             Box::new(crate::circuit::ops::Unknown)
         }
-        "Concat" => {
-            let op = load_concat_op(node.op(), idx, node.op().name().to_string())?;
-            let axis = op.axis;
- 
- 
-            Box::new(crate::circuit::ops::poly::PolyOp::Concat { axis: axis })
-        } 
     })
 }
