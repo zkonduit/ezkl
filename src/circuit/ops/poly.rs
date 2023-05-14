@@ -48,7 +48,10 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Pow(u32),
     Pack(u32, u32),
     GlobalSumPool,
-    Iff
+    Iff,
+    Concat {
+        axis: usize,
+    }, 
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {
@@ -115,6 +118,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Matmul { .. } => "MATMUL",
             PolyOp::Iff => "IFF",
             PolyOp::Gather { .. } => "GATHER",
+            PolyOp::Concat { .. } => "CONCAT",
         }
     }
 
@@ -211,6 +215,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
 
                 Ok(out?)
             }
+            PolyOp::Concat { axis } => {
+                if inputs.len() < 2 {
+                    return Err(TensorError::DimMismatch("concat inputs".to_string()));
+                }
+                tensor::ops::concat(&inputs, *axis)
+            } 
         }
     }
 
@@ -309,6 +319,23 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 offset,
             )?,
             PolyOp::GlobalSumPool => unreachable!(),
+            PolyOp::Concat { axis: _ } => {
+                if values.is_empty() {
+                    return Err(Box::new(TensorError::WrongMethod));
+                }
+                let mut result = values[0].clone();
+                for tensor in values.iter().skip(1) {
+                    match (&result, tensor) {
+                        (ValTensor::Value { .. }, ValTensor::Value { .. }) => {
+                            result = result.concat(tensor.clone())?;
+                        },
+                        _ => {
+                            return Err(Box::new(TensorError::WrongMethod));
+                        }
+                    }
+                }
+                result
+            } 
         }))
     }
 
@@ -362,6 +389,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Pow(pow) => in_scales[0] * (*pow),
             PolyOp::Pack(_, _) => in_scales[0],
             PolyOp::GlobalSumPool => in_scales[0],
+            PolyOp::Concat { axis: _ } =>  in_scales[0],
         }
     }
 
