@@ -992,6 +992,71 @@ where
     Tensor::new(Some(&[output]), &[1])
 }
 
+/// Concatenates a list of tensors along a specified axis.
+/// # Arguments
+/// * `inputs` - A slice of tensors to concatenate.
+/// * `axis` - The axis along which to concatenate the tensors.
+///
+/// # Examples
+/// ```
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::concat;
+/// let x = Tensor::<i128>::new(Some(&[1, 2, 3]), &[3]).unwrap();
+/// let y = Tensor::<i128>::new(Some(&[4, 5, 6]), &[3]).unwrap();
+/// let result = concat(&[x, y], 0).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+///
+/// # Errors
+/// Returns a TensorError if the tensors in `inputs` have incompatible dimensions for concatenation along the specified `axis`.
+
+
+pub fn concat<T: TensorType>(
+   inputs: &[Tensor<T>],
+   axis: usize,
+) -> Result<Tensor<T>, TensorError> {
+   // Calculate the output tensor size
+   let mut output_size = inputs[0].dims().to_vec();
+   output_size[axis] = inputs.iter().map(|x| x.dims()[axis]).sum();
+
+
+   // Allocate memory for the output tensor
+   let mut output = Tensor::new(None, &output_size)?;
+   let cartesian_coord = output_size
+       .iter()
+       .map(|x| 0..*x)
+       .multi_cartesian_product()
+       .collect::<Vec<_>>();
+
+
+   output = output.enum_map(|i, _: T| {
+       let coord = cartesian_coord[i].clone();
+       let mut index = 0;
+       let mut input_index = 0;
+       let mut input_coord = coord.clone();
+       for (j, x) in coord.iter().enumerate() {
+           if j == axis {
+               input_index = *x;
+               input_coord[j] = 0;
+               break;
+           }
+           index += x;
+       }
+
+
+       Ok(inputs[input_index].get(&input_coord))
+   })?;
+
+
+   // Reshape the output tensor
+   output.reshape(&output_size);
+
+
+   Ok(output)
+}
+
+
 // ---------------------------------------------------------------------------------------------------------
 // -- nonlinear Functions ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------------------------------
