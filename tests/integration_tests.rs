@@ -302,18 +302,25 @@ mod native_tests {
             use crate::native_tests::kzg_evm_aggr_prove_and_verify;
 
             /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
-            /// specify a few that will
-            const TESTS_SOLIDITY: [&str; 9] = [
-                "1l_relu",
+            /// specify those that will
+            const TESTS_SOLIDITY: [&str; 16] = [
+                "1l_mlp",
+                "1l_average",
+                "1l_reshape",
+                "1l_sigmoid",
                 "1l_div",
-                "1l_leakyrelu",
                 "1l_sqrt",
                 // "1l_prelu",
+                "1l_var",
+                "1l_leakyrelu",
                 "1l_gelu_noappx",
-                "1l_sigmoid",
-                "1l_reshape",
+                "1l_relu",
+                "1l_tanh",
+                "2l_relu_sigmoid_small",
+                "2l_relu_small",
                 "2l_relu_fc",
-                "1l_var"
+                "min",
+                "max",
             ];
 
 
@@ -498,7 +505,7 @@ mod native_tests {
         assert!(status.success());
     }
 
-    // Set tolerance as floating point (positive or negative number with a decimal point) for percent error, usize for abs error. 
+    // Set tolerance as floating point (positive or negative number with a decimal point) for percent error, usize for abs error.
     fn percentage_tolerance() {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([

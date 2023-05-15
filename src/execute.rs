@@ -494,9 +494,7 @@ async fn verify_evm(
     evm_verify(code, proof.clone())?;
 
     if sol_code_path.is_some() {
-        let result = verify_proof_via_solidity(proof, sol_code_path.unwrap())
-            .await
-            .unwrap();
+        let result = verify_proof_via_solidity(proof, sol_code_path.unwrap()).await?;
 
         info!("Solidity verification result: {}", result);
 
