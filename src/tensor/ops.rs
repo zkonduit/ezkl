@@ -1028,7 +1028,7 @@ where
 /// // 5D example
 /// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]), &[8, 1, 1, 1, 2]).unwrap();
 /// let y = Tensor::<i128>::new(Some(&[17, 18, 19, 20, 21, 22, 23, 14]), &[4, 1, 1, 1, 2]).unwrap();
-/// let result = concat(&[x, y], 2).unwrap();
+/// let result = concat(&[x, y], 0).unwrap();
 ///
 /// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 14]), &[12, 1, 1, 1, 2]).unwrap();
 /// assert_eq!(result, expected);
