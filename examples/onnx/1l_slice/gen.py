@@ -8,8 +8,8 @@ class MyModel(nn.Module):
         super(MyModel, self).__init__()
 
     def forward(self, x):
-        return x[:,:,1:2,:,:]
+        return x[:,1:2]
 
 
 circuit = MyModel()
-export(circuit, input_shape=[3, 2, 3, 2, 2])
+export(circuit, input_shape=[3, 2])

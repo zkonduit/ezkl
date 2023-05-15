@@ -335,14 +335,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 if values.len() < 2 {
                     return Err(Box::new(TensorError::DimError));
                 }
-                let collected_inner: Result<Vec<Tensor<_>>, _> =
-                    values.iter().map(|e| e.get_inner_tensor()).collect();
-                tensor::ops::concat(&collected_inner?, *axis)?.into()
+                layouts::concat(values[..].try_into()?, axis)?
             }
-            PolyOp::Slice { axis, start, end } => {
-                // we don't actually need to create constraints for this
-                tensor::ops::slice(&values[0].get_inner_tensor()?, axis, start, end)?.into()
-            }
+            PolyOp::Slice { axis, start, end } => layouts::slice(
+                config,
+                region,
+                values[..].try_into()?,
+                axis,
+                start,
+                end,
+                offset,
+            )?,
         }))
     }
 

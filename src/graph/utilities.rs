@@ -304,13 +304,15 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
         }
         "Concat" | "InferenceConcat" => {
             let op = load_concat_op(node.op(), idx, node.op().name().to_string())?;
-            let axis = op.axis;
+            // as we remove the batch dimension, we need to subtract 1 from the axis
+            let axis = op.axis - 1;
             Box::new(crate::circuit::ops::poly::PolyOp::Concat { axis })
         }
         "Slice" => {
             let slice = load_slice_op(node.op(), node.op().name().to_string())?;
 
-            let axis = slice.axis;
+            // as we remove the batch dimension, we need to subtract 1 from the axis
+            let axis = slice.axis - 1;
             let start = slice.start.to_usize()?;
             let end = slice.end.to_usize()?;
 
@@ -319,7 +321,11 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
         "Const" => {
             let op: Const = load_const(node.op(), idx, node.op().name().to_string())?;
             let value = extract_tensor_value(op.0.clone())?;
-            Box::new(crate::circuit::ops::Constant::new(value))
+            Box::new(crate::circuit::ops::Constant::new(
+                value,
+                scale,
+                public_params,
+            ))
         }
         "Reduce<Min>" => {
             if inputs.len() != 1 {
@@ -525,6 +531,12 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                         public_params,
                     )?);
                 }
+            }
+            if params.is_none() {
+                // onnx flips order
+                let a = inputs[0].clone();
+                let b = inputs[1].clone();
+                *inputs = vec![b, a];
             }
 
             Box::new(PolyOp::Matmul { a: params })
