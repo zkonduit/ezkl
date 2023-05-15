@@ -1,6 +1,3 @@
-
-use std::ops::Range;
-
 use itertools::Itertools;
 
 use crate::{
@@ -54,12 +51,12 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Iff,
     Concat {
         axis: usize,
-    }, 
+    },
     Slice {
         axis: usize,
         start: usize,
         end: usize,
-    }, 
+    },
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {
@@ -229,15 +226,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                     return Err(TensorError::DimMismatch("concat inputs".to_string()));
                 }
                 tensor::ops::concat(&inputs, *axis)
-            } 
-            PolyOp::Slice { axis: _, start, end } => {
+            }
+            PolyOp::Slice { axis, start, end } => {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("slice inputs".to_string()));
                 }
-                let t = inputs[0].clone();
-                t.get_slice(&[Range { start: *start, end: *end }])?;
-                Ok(t)
-            } 
+                Ok(tensor::ops::slice(&inputs[0], axis, start, end)?.into())
+            }
         }
     }
 
@@ -336,28 +331,18 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 offset,
             )?,
             PolyOp::GlobalSumPool => unreachable!(),
-            PolyOp::Concat { axis: _ } => {
-                if values.is_empty() {
-                    return Err(Box::new(TensorError::WrongMethod));
+            PolyOp::Concat { axis } => {
+                if values.len() < 2 {
+                    return Err(Box::new(TensorError::DimError));
                 }
-                let mut result = values[0].clone();
-                for tensor in values.iter().skip(1) {
-                    match (&result, tensor) {
-                        (ValTensor::Value { .. }, ValTensor::Value { .. }) => {
-                            result = result.concat(tensor.clone())?;
-                        },
-                        _ => {
-                            return Err(Box::new(TensorError::WrongMethod));
-                        }
-                    }
-                }
-                result
-            } 
-            PolyOp::Slice { axis: _, start, end } => {
-                // what would be the correct index?
-                let t = values[0].clone();
-                t.get_slice(&[Range { start: *start, end: *end }])?
-            } 
+                let collected_inner: Result<Vec<Tensor<_>>, _> =
+                    values.iter().map(|e| e.get_inner_tensor()).collect();
+                tensor::ops::concat(&collected_inner?, *axis)?.into()
+            }
+            PolyOp::Slice { axis, start, end } => {
+                // we don't actually need to create constraints for this
+                tensor::ops::slice(&values[0].get_inner_tensor()?, axis, start, end)?.into()
+            }
         }))
     }
 
@@ -411,7 +396,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Pow(pow) => in_scales[0] * (*pow),
             PolyOp::Pack(_, _) => in_scales[0],
             PolyOp::GlobalSumPool => in_scales[0],
-            PolyOp::Concat { axis: _ } =>  in_scales[0],
+            PolyOp::Concat { axis: _ } => in_scales[0],
             PolyOp::Slice { .. } => in_scales[0],
         }
     }

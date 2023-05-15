@@ -1001,61 +1001,134 @@ where
 /// ```
 /// use ezkl_lib::tensor::Tensor;
 /// use ezkl_lib::tensor::ops::concat;
+/// // tested against pytorch outputs for reference :)
+///
+/// // 1D example
 /// let x = Tensor::<i128>::new(Some(&[1, 2, 3]), &[3]).unwrap();
 /// let y = Tensor::<i128>::new(Some(&[4, 5, 6]), &[3]).unwrap();
 /// let result = concat(&[x, y], 0).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
 /// assert_eq!(result, expected);
+///
+/// // 2D example
+/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
+/// let y = Tensor::<i128>::new(Some(&[7, 8, 9]), &[3, 1]).unwrap();
+/// let result = concat(&[x, y], 1).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 7, 3, 4, 8, 5, 6, 9]), &[3, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// /// 4D example
+/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]), &[2, 2, 2, 2]).unwrap();
+/// let y = Tensor::<i128>::new(Some(&[17, 18, 19, 20, 21, 22, 23, 14]), &[2, 2, 1, 2]).unwrap();
+/// let result = concat(&[x, y], 2).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 17, 18, 5, 6, 7, 8, 19, 20, 9, 10, 11, 12, 21, 22, 13, 14, 15, 16, 23, 14]), &[2, 2, 3, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+///
+/// // 5D example
+/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]), &[8, 1, 1, 1, 2]).unwrap();
+/// let y = Tensor::<i128>::new(Some(&[17, 18, 19, 20, 21, 22, 23, 14]), &[4, 1, 1, 1, 2]).unwrap();
+/// let result = concat(&[x, y], 2).unwrap();
+///
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 14]), &[12, 1, 1, 1, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
 /// ```
 ///
 /// # Errors
 /// Returns a TensorError if the tensors in `inputs` have incompatible dimensions for concatenation along the specified `axis`.
 
+pub fn concat<T: TensorType>(inputs: &[Tensor<T>], axis: usize) -> Result<Tensor<T>, TensorError> {
+    // Calculate the output tensor size
+    let mut output_size = inputs[0].dims().to_vec();
+    output_size[axis] = inputs.iter().map(|x| x.dims()[axis]).sum();
 
-pub fn concat<T: TensorType>(
-   inputs: &[Tensor<T>],
-   axis: usize,
-) -> Result<Tensor<T>, TensorError> {
-   // Calculate the output tensor size
-   let mut output_size = inputs[0].dims().to_vec();
-   output_size[axis] = inputs.iter().map(|x| x.dims()[axis]).sum();
+    // Allocate memory for the output tensor
+    let mut output = Tensor::new(None, &output_size)?;
+    let cartesian_coord = output_size
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
 
+    let get_input_index = |index_along_axis: usize| -> (usize, usize) {
+        let mut current_idx = 0;
+        let mut input_idx = 0;
+        let mut input_coord_at_idx = 0;
+        for (i, elem) in inputs.iter().enumerate() {
+            current_idx += elem.dims()[axis];
+            if index_along_axis < current_idx {
+                input_idx = i;
+                // subtract the current
+                input_coord_at_idx = index_along_axis - (current_idx - elem.dims()[axis]);
+                break;
+            }
+        }
+        (input_idx, input_coord_at_idx)
+    };
 
-   // Allocate memory for the output tensor
-   let mut output = Tensor::new(None, &output_size)?;
-   let cartesian_coord = output_size
-       .iter()
-       .map(|x| 0..*x)
-       .multi_cartesian_product()
-       .collect::<Vec<_>>();
+    output = output.enum_map(|i, _: T| {
+        let coord = cartesian_coord[i].clone();
+        let mut index = 0;
+        let mut input_index = 0;
+        let mut input_coord = coord.clone();
+        for (j, x) in coord.iter().enumerate() {
+            if j == axis {
+                (input_index, input_coord[j]) = get_input_index(*x);
+                break;
+            }
+            index += x;
+        }
 
+        Ok(inputs[input_index].get(&input_coord))
+    })?;
 
-   output = output.enum_map(|i, _: T| {
-       let coord = cartesian_coord[i].clone();
-       let mut index = 0;
-       let mut input_index = 0;
-       let mut input_coord = coord.clone();
-       for (j, x) in coord.iter().enumerate() {
-           if j == axis {
-               input_index = *x;
-               input_coord[j] = 0;
-               break;
-           }
-           index += x;
-       }
+    // Reshape the output tensor
+    output.reshape(&output_size);
 
-
-       Ok(inputs[input_index].get(&input_coord))
-   })?;
-
-
-   // Reshape the output tensor
-   output.reshape(&output_size);
-
-
-   Ok(output)
+    Ok(output)
 }
 
+/// Slices a tensor from start to end along a given axis
+///
+/// /// # Examples
+/// ```
+/// // tested against pytorch output
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::slice;
+/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
+/// let result = slice(&x, &0, &1, &2).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[3, 4]), &[1, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
+/// let result = slice(&x, &1, &1, &2).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 4, 6]), &[3, 1]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 2, 3]).unwrap();
+/// let result = slice(&x, &2, &1, &2).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 5, 8, 11]), &[2, 2, 1]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+///
+pub fn slice<T: TensorType>(
+    t: &Tensor<T>,
+    axis: &usize,
+    start: &usize,
+    end: &usize,
+) -> Result<Tensor<T>, TensorError> {
+    let mut slice = vec![];
+    for (i, d) in t.dims().iter().enumerate() {
+        if i != *axis {
+            slice.push(0..*d)
+        } else {
+            slice.push(*start..*end)
+        }
+    }
+
+    t.get_slice(&slice)
+}
 
 // ---------------------------------------------------------------------------------------------------------
 // -- nonlinear Functions ---------------------------------------------------------------------------------
@@ -1248,11 +1321,10 @@ pub mod nonlinearities {
         let diff: Tensor<i128> = sub(t).unwrap();
         let recip = recip(&t[0], _double_scale as u32);
         let product = mult(&[diff, recip]).unwrap();
-        let _tol = ((tol/100.0)*_double_scale as f32).round() as f64;
+        let _tol = ((tol / 100.0) * _double_scale as f32).round() as f64;
         let upper_bound = greater_than(&product, _tol);
-        let neg_product = mult(&[
-            product, Tensor::<i128>::new(Some(&[-1]),&[1]).unwrap()
-        ]).unwrap();
+        let neg_product =
+            mult(&[product, Tensor::<i128>::new(Some(&[-1]), &[1]).unwrap()]).unwrap();
         let lower_bound = greater_than(&neg_product, _tol);
         let sum = add(&[upper_bound, lower_bound]).unwrap();
         sum

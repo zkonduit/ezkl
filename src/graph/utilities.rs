@@ -233,22 +233,21 @@ fn load_concat_op(
     op: &dyn tract_onnx::prelude::Op,
     idx: usize,
     name: String,
- ) -> Result<tract_onnx::tract_core::ops::array::TypedConcat, Box<dyn std::error::Error>> {
+) -> Result<tract_onnx::tract_core::ops::array::TypedConcat, Box<dyn std::error::Error>> {
     let op: &tract_onnx::tract_core::ops::array::TypedConcat =
         match op.downcast_ref::<tract_onnx::tract_core::ops::array::TypedConcat>() {
             Some(b) => b,
             None => return Err(Box::new(GraphError::OpMismatch(idx, name))),
         };
- 
- 
-    Ok(op.clone())
- } 
 
- /// Extracts a Slice op from an onnx node.
+    Ok(op.clone())
+}
+
+/// Extracts a Slice op from an onnx node.
 fn load_slice_op(
     op: &dyn tract_onnx::prelude::Op,
     name: String,
- ) -> Result<Slice, Box<dyn std::error::Error>> {
+) -> Result<Slice, Box<dyn std::error::Error>> {
     // Extract the slope layer hyperparams
     let op: &Slice = match op.downcast_ref::<Slice>() {
         Some(b) => b,
@@ -256,11 +255,9 @@ fn load_slice_op(
             return Err(Box::new(TensorError::DimMismatch(name)));
         }
     };
- 
- 
+
     Ok(op.clone())
- }
- 
+}
 
 /// Matches an onnx node to a [OpKind] and returns a [Node] with the corresponding [OpKind].  
 /// Arguments
@@ -308,24 +305,16 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
         "Concat" | "InferenceConcat" => {
             let op = load_concat_op(node.op(), idx, node.op().name().to_string())?;
             let axis = op.axis;
- 
- 
-            Box::new(crate::circuit::ops::poly::PolyOp::Concat { axis: axis })
-        } 
+            Box::new(crate::circuit::ops::poly::PolyOp::Concat { axis })
+        }
         "Slice" => {
             let slice = load_slice_op(node.op(), node.op().name().to_string())?;
- 
- 
+
             let axis = slice.axis;
-            let starts = slice.start.to_usize()?;
-            let ends = slice.end.to_usize()?;
- 
- 
-            Box::new(PolyOp::Slice {
-                axis: axis,
-                start: starts,
-                end: ends,
-            })
+            let start = slice.start.to_usize()?;
+            let end = slice.end.to_usize()?;
+
+            Box::new(PolyOp::Slice { axis, start, end })
         }
         "Const" => {
             let op: Const = load_const(node.op(), idx, node.op().name().to_string())?;
