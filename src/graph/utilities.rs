@@ -305,7 +305,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
 
             Box::new(crate::circuit::ops::poly::PolyOp::Gather { dim: axis, index })
         }
-        "Concat" => {
+        "Concat" | "InferenceConcat" => {
             let op = load_concat_op(node.op(), idx, node.op().name().to_string())?;
             let axis = op.axis;
  
