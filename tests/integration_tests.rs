@@ -59,8 +59,10 @@ mod native_tests {
         })
     }
 
-    const TESTS: [&str; 30] = [
+    const TESTS: [&str; 32] = [
         "1l_mlp",
+        "1l_slice",
+        "1l_concat",
         "1l_flatten",
         "1l_average",
         "1l_div",
@@ -246,7 +248,7 @@ mod native_tests {
                 run_percentage_tolerance();
             }
 
-            seq!(N in 0..=29 {
+            seq!(N in 0..=31 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
