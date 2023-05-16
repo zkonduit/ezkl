@@ -382,9 +382,9 @@ pub enum Commands {
         /// The path to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
-        /// The path to output to the desired EVM bytecode file (optional)
+        /// The path to output to the desired EVM bytecode file
         #[arg(long)]
-        deployment_code_path: Option<PathBuf>,
+        deployment_code_path: PathBuf,
         /// The path to output the Solidity code
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
