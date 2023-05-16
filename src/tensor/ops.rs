@@ -5,11 +5,8 @@ use puruspe::erf;
 use rayon::{
     iter::IndexedParallelIterator, iter::IntoParallelRefMutIterator, iter::ParallelIterator,
 };
+use std::collections::{HashMap, HashSet};
 pub use std::ops::{Add, Div, Mul, Sub};
-use std::{
-    collections::{HashMap, HashSet},
-    ops::Range,
-};
 
 /// Matrix multiplies two 2D tensors.
 /// # Arguments
@@ -154,6 +151,63 @@ pub fn matmul<
 /// assert_eq!(result, expected);
 ///
 ///
+/// // wut ?
+/// let x = Tensor::<i128>::new(
+///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
+///  &[3, 3, 2],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///    Some(&[4, 5, 7, 8]),
+///  &[2, 2],
+/// ).unwrap();
+/// let result = einsum("anm,bm->ba", &[x, k]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[68, 80, 95, 113, 134, 158]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// // wutttttt ?
+/// let x = Tensor::<i128>::new(
+///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
+///  &[3, 3, 2],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///    Some(&[4, 5, 7, 8]),
+///  &[2, 2],
+/// ).unwrap();
+/// let z = Tensor::<i128>::new(
+///    Some(&[4, 5, 7, 8, 9, 9]),
+///  &[2, 3],
+/// ).unwrap();
+///
+/// let result = einsum("bn,anm,bm->ba", &[z, x, k]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[390,  414,  534, 994, 1153, 1384]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+///
+/// // contraction with a single common axis
+/// let x = Tensor::<i128>::new(
+///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
+///  &[3, 3, 2],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///    Some(&[4, 5, 7, 8]),
+///  &[2, 2],
+/// ).unwrap();
+/// let result = einsum("abc,cd->", &[x, k]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[648]), &[1]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// // contraction with no common axes (outer product)
+/// let x = Tensor::<i128>::new(
+///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
+///  &[3, 3, 2],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///    Some(&[4, 5, 7, 8]),
+///  &[2, 2],
+/// ).unwrap();
+/// let result = einsum("abc,ed->", &[x, k]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1296]), &[1]).unwrap();
+/// assert_eq!(result, expected);
 ///
 /// ```
 pub fn einsum<
@@ -195,42 +249,92 @@ pub fn einsum<
     }
 
     // Compute the output tensor shape
-    let output_shape: Vec<usize> = output_eq
+    let mut output_shape: Vec<usize> = output_eq
         .chars()
         .map(|c| *indices_to_size.get(&c).unwrap())
         .collect();
 
+    if output_shape.len() == 0 {
+        output_shape.push(1);
+    }
+
     // Create a new output tensor with the computed shape
     let mut output = Tensor::new(None, &output_shape)?;
 
-    // Perform the Einstein sum operation
-    let cartesian_coord = output_shape
-        .iter()
-        .map(|d| 0..*d)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
-
-    let index_for_input_given_output =
-        |input_idx: usize, output_index: Vec<usize>| -> Vec<Range<usize>> {
-            let mut index = vec![];
-            for (i, c) in inputs_eq[input_idx].chars().enumerate() {
-                if let Some(idx) = output_eq.find(c) {
-                    index.push(output_index[idx]..output_index[idx] + 1);
-                } else {
-                    index.push(0..inputs[input_idx].dims()[i]);
-                }
+    let mut seen = HashSet::new();
+    let mut common_indices_to_inputs = vec![];
+    for i in 0..inputs.len() {
+        for c in inputs_eq[i].chars() {
+            if !seen.contains(&c) {
+                seen.insert(c);
+            } else {
+                common_indices_to_inputs.push(c);
             }
-            index
-        };
-
-    for coord in cartesian_coord {
-        let mut sum_val = inputs[0].get_slice(&index_for_input_given_output(0, coord.clone()))?;
-        for (i, input) in inputs.iter().enumerate().skip(1) {
-            let input_val = input.get_slice(&index_for_input_given_output(i, coord.clone()))?;
-            sum_val = (sum_val * input_val)?;
         }
-        let sum = sum(&sum_val)?;
-        output.set(&coord, sum[0].clone());
+    }
+
+    for coord in output_shape.iter().map(|d| 0..*d).multi_cartesian_product() {
+        let inputs = (0..inputs.len())
+            .map(|idx| {
+                let mut slice = vec![];
+                for (i, c) in inputs_eq[idx].chars().enumerate() {
+                    if let Some(idx) = output_eq.find(c) {
+                        slice.push(coord[idx]..coord[idx] + 1);
+                    } else {
+                        slice.push(0..inputs[idx].dims()[i]);
+                    }
+                }
+                inputs[idx].get_slice(&slice).unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        let mut common_coord = common_indices_to_inputs
+            .iter()
+            .map(|d| {
+                if output_indices.contains(d) {
+                    0..1
+                } else {
+                    0..*indices_to_size.get(d).unwrap()
+                }
+            })
+            .multi_cartesian_product()
+            .collect::<Vec<_>>();
+
+        if common_coord.len() == 0 {
+            common_coord.push(vec![]);
+        }
+
+        let mut prod = T::zero().unwrap();
+
+        for common_dim in common_coord {
+            let inputs = (0..inputs.len())
+                .map(|idx| {
+                    let mut slice = vec![];
+                    for (i, c) in inputs_eq[idx].chars().enumerate() {
+                        if let Some(j) = common_indices_to_inputs.iter().position(|&r| r == c) {
+                            slice.push(common_dim[j]..common_dim[j] + 1);
+                        } else {
+                            slice.push(0..inputs[idx].dims()[i]);
+                        }
+                    }
+                    inputs[idx].get_slice(&slice).unwrap()
+                })
+                .collect::<Vec<_>>();
+
+            let input_pairs = inputs
+                .iter()
+                .map(|d| d.iter())
+                .multi_cartesian_product()
+                .collect::<Vec<_>>();
+
+            for pair in input_pairs {
+                prod = prod
+                    + pair
+                        .into_iter()
+                        .fold(T::one().unwrap(), |acc, x| acc * x.clone());
+            }
+        }
+        output.set(&coord, prod.clone());
     }
 
     Ok(output)
