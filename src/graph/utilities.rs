@@ -511,35 +511,10 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 }
             };
 
-            let _axes = &op.axes;
-
-            // TODO: this is a hack to get around the fact that tract eplaces matmul with einsum pending this PR: https://github.com/sonos/tract/pull/1070
-            warn!("matching einsum as a matmul operation");
-
-            let mut params = None;
-
-            for (idx, inp) in inputs.clone().iter().enumerate() {
-                let boxed_op = &inp.opkind();
-                if let Some(c) = boxed_op
-                    .as_any()
-                    .downcast_ref::<crate::circuit::ops::Constant<F>>()
-                {
-                    inputs.remove(idx);
-                    params = Some(tensor_to_valtensor::<F>(
-                        c.values.clone(),
-                        scale,
-                        public_params,
-                    )?);
-                }
-            }
-            if params.is_none() {
-                // onnx flips order
-                let a = inputs[0].clone();
-                let b = inputs[1].clone();
-                *inputs = vec![b, a];
-            }
-
-            Box::new(PolyOp::Matmul { a: params })
+            let axes = &op.axes;
+            Box::new(PolyOp::Einsum {
+                equation: axes.to_string(),
+            })
         }
         "Softmax" => {
             // Extract the slope layer hyperparams
@@ -766,8 +741,16 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             let reshape = load_axis_op(node.op(), idx, node.op().name().to_string())?;
 
             let new_dims: Vec<usize> = match reshape {
-                AxisOp::Reshape(_, _shape_from, _) => {
-                    node_output_shapes(&node)?[0].as_ref().unwrap()[1..].to_vec()
+                AxisOp::Reshape(_, _shape_from, _shape_to) => {
+                    let shapes = node_output_shapes(&node)?;
+                    let shapes = shapes[0].as_ref().unwrap();
+                    if shapes.iter().product::<usize>()
+                        == inputs[0].out_dims()[0].iter().product::<usize>()
+                    {
+                        shapes.to_vec()
+                    } else {
+                        shapes[1..].to_vec()
+                    }
                 }
                 _ => {
                     return Err(Box::new(GraphError::MisformedParams("reshape".to_string())));

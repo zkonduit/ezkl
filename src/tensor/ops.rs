@@ -6,6 +6,10 @@ use rayon::{
     iter::IndexedParallelIterator, iter::IntoParallelRefMutIterator, iter::ParallelIterator,
 };
 pub use std::ops::{Add, Div, Mul, Sub};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Range,
+};
 
 /// Matrix multiplies two 2D tensors.
 /// # Arguments
@@ -83,6 +87,151 @@ pub fn matmul<
 
             *o = prod[0].clone();
         });
+
+    Ok(output)
+}
+
+/// Computes the einstein sum of a set of tensors.
+/// # Arguments
+/// * `equation` - Einstein summation equation
+/// * `inputs` - Vector of tensors
+/// # Examples
+/// ```
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::einsum;
+///
+/// // matmul case
+/// let x = Tensor::<i128>::new(
+///    Some(&[2, 1, 2, 1, 1, 1]),
+///  &[2, 3],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///   Some(&[2, 3, 2, 1, 1, 1]),
+/// &[3, 2],
+/// ).unwrap();
+/// let result = einsum("ij,jk->ik", &[x, k]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[8, 9, 5, 5]), &[2, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// // element wise multiplication
+/// let x = Tensor::<i128>::new(
+///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
+///  &[3, 3],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
+///  &[3, 3],
+/// ).unwrap();
+/// let result = einsum("ij,ij->ij", &[x, k]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 4, 9, 2, 6, 12, 3, 8, 15]), &[3, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+///
+/// // dot product of A with the transpose of B.
+/// let x = Tensor::<i128>::new(
+///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
+///  &[3, 3],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
+///  &[3, 3],
+/// ).unwrap();
+/// let result = einsum("ik,jk->ij", &[x, k]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[14, 14, 14, 20, 20, 20, 26, 26, 26]), &[3, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// // dot product
+/// let x = Tensor::<i128>::new(
+///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
+///  &[3, 3],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
+///  &[3, 3],
+/// ).unwrap();
+/// let result = einsum("ik,ik->i", &[x, k]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[14, 20, 26]), &[3]).unwrap();
+/// assert_eq!(result, expected);
+///
+///
+///
+/// ```
+pub fn einsum<
+    T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Send + std::marker::Sync,
+>(
+    equation: &str,
+    inputs: &[Tensor<T>],
+) -> Result<Tensor<T>, TensorError> {
+    // Parse equation into an operation
+    let mut equation = equation.split("->");
+    let inputs_eq = equation.next().unwrap();
+    let output_eq = equation.next().unwrap();
+    let inputs_eq = inputs_eq.split(",").collect::<Vec<_>>();
+
+    // Check that the number of inputs matches the number of inputs in the equation
+    if inputs.len() != inputs_eq.len() {
+        return Err(TensorError::DimMismatch("einsum".to_string()));
+    }
+
+    let mut indices_to_size = HashMap::new();
+    for (i, input) in inputs.iter().enumerate() {
+        for j in 0..inputs_eq[i].len() {
+            let c = inputs_eq[i].chars().nth(j).unwrap();
+            if !indices_to_size.contains_key(&c) {
+                indices_to_size.insert(c, input.dims()[j]);
+            } else if indices_to_size[&c] != input.dims()[j] {
+                return Err(TensorError::DimMismatch("einsum".to_string()));
+            }
+        }
+    }
+
+    // Create a set of all unique indices in the equation
+    let input_indices: HashSet<_> = inputs_eq.iter().flat_map(|s| s.chars()).collect();
+    let output_indices: HashSet<_> = output_eq.chars().collect();
+
+    // ensure all the output indices can be found within the inputs
+    if !output_indices.is_subset(&input_indices) {
+        return Err(TensorError::DimMismatch("einsum".to_string()));
+    }
+
+    // Compute the output tensor shape
+    let output_shape: Vec<usize> = output_eq
+        .chars()
+        .map(|c| *indices_to_size.get(&c).unwrap())
+        .collect();
+
+    // Create a new output tensor with the computed shape
+    let mut output = Tensor::new(None, &output_shape)?;
+
+    // Perform the Einstein sum operation
+    let cartesian_coord = output_shape
+        .iter()
+        .map(|d| 0..*d)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    let index_for_input_given_output =
+        |input_idx: usize, output_index: Vec<usize>| -> Vec<Range<usize>> {
+            let mut index = vec![];
+            for (i, c) in inputs_eq[input_idx].chars().enumerate() {
+                if let Some(idx) = output_eq.find(c) {
+                    index.push(output_index[idx]..output_index[idx] + 1);
+                } else {
+                    index.push(0..inputs[input_idx].dims()[i]);
+                }
+            }
+            index
+        };
+
+    for coord in cartesian_coord {
+        let mut sum_val = inputs[0].get_slice(&index_for_input_given_output(0, coord.clone()))?;
+        for (i, input) in inputs.iter().enumerate().skip(1) {
+            let input_val = input.get_slice(&index_for_input_given_output(i, coord.clone()))?;
+            sum_val = (sum_val * input_val)?;
+        }
+        let sum = sum(&sum_val)?;
+        output.set(&coord, sum[0].clone());
+    }
 
     Ok(output)
 }

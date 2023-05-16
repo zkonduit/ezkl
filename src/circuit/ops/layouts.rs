@@ -1,5 +1,9 @@
 use core::panic;
-use std::error::Error;
+use std::{
+    collections::{HashMap, HashSet},
+    error::Error,
+    ops::Range,
+};
 
 use halo2_proofs::circuit::{Region, Value};
 use halo2curves::ff::PrimeField;
@@ -13,9 +17,9 @@ use crate::{
     tensor::{
         ops::{
             accumulated, add, conv as non_accum_conv, dot as non_accum_dot,
-            matmul as non_accum_matmul, max_pool2d as non_accum_max_pool2d, mult,
-            pack as non_accum_pack, rescale as ref_rescaled, sub, sum as non_accum_sum,
-            sumpool as non_accum_sumpool,
+            einsum as non_accum_einsum, matmul as non_accum_matmul,
+            max_pool2d as non_accum_max_pool2d, mult, pack as non_accum_pack,
+            rescale as ref_rescaled, sub, sum as non_accum_sum, sumpool as non_accum_sumpool,
         },
         Tensor, TensorError, ValType,
     },
@@ -103,6 +107,124 @@ fn allocate_multi_dot<F: PrimeField + TensorType + PartialOrd>(
     }
 
     let output = res.combine()?;
+
+    Ok(output.into())
+}
+
+/// Einsum
+pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
+    config: &mut BaseConfig<F>,
+    region: &mut Option<&mut Region<F>>,
+    inputs: &[ValTensor<F>; 2],
+    equation: &str,
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let (mut a, b) = (inputs[0].clone(), inputs[1].clone());
+
+    if a.dims().len() == 1 {
+        a.reshape(&[1, a.dims()[0]])?;
+    }
+
+    // Parse equation into an operation
+    let original_eq = equation.to_string();
+
+    println!("einsum: {}", equation);
+    println!("inputs 0: {:?}", a.dims());
+    println!("inputs 1: {:?}", b.dims());
+
+    let mut equation = equation.split("->");
+    let inputs_eq = equation.next().unwrap();
+    let output_eq = equation.next().unwrap();
+    let inputs_eq = inputs_eq.split(",").collect::<Vec<_>>();
+
+    // Check that the number of inputs matches the number of inputs in the equation
+    if inputs.len() != inputs_eq.len() {
+        return Err(Box::new(TensorError::DimMismatch("einsum".to_string())));
+    }
+
+    let mut indices_to_size = HashMap::new();
+    for (i, input) in [&a, &b].iter().enumerate() {
+        for j in 0..inputs_eq[i].len() {
+            let c = inputs_eq[i].chars().nth(j).unwrap();
+            if !indices_to_size.contains_key(&c) {
+                indices_to_size.insert(c, input.dims()[j]);
+            } else if indices_to_size[&c] != input.dims()[j] {
+                return Err(Box::new(TensorError::DimMismatch("einsum".to_string())));
+            }
+        }
+    }
+
+    // Create a set of all unique indices in the equation
+    let input_indices: HashSet<_> = inputs_eq.iter().flat_map(|s| s.chars()).collect();
+    let output_indices: HashSet<_> = output_eq.chars().collect();
+
+    // ensure all the output indices can be found within the inputs
+    if !output_indices.is_subset(&input_indices) {
+        return Err(Box::new(TensorError::DimMismatch("einsum".to_string())));
+    }
+
+    // Compute the output tensor shape
+    let output_shape: Vec<usize> = output_eq
+        .chars()
+        .map(|c| *indices_to_size.get(&c).unwrap())
+        .collect();
+
+    // Create a new output tensor with the computed shape
+    let mut output = Tensor::new(None, &output_shape)?;
+
+    // Perform the Einstein sum operation
+    let cartesian_coord = output_shape
+        .iter()
+        .map(|d| 0..*d)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    let index_for_input_given_output =
+        |input_idx: usize, output_index: Vec<usize>| -> Vec<Range<usize>> {
+            let mut index = vec![];
+            for (i, c) in inputs_eq[input_idx].chars().enumerate() {
+                if let Some(idx) = output_eq.find(c) {
+                    index.push(output_index[idx]..output_index[idx] + 1);
+                } else {
+                    index.push(0..[&a, &b][input_idx].dims()[i]);
+                }
+            }
+            index
+        };
+
+    for coord in cartesian_coord {
+        let first_input = a.get_slice(&index_for_input_given_output(0, coord.clone()))?;
+        let second_input = b.get_slice(&index_for_input_given_output(1, coord.clone()))?;
+
+        let dot = dot(config, region, &[first_input, second_input], offset)?;
+        output.set(&coord, dot.get_inner_tensor()?[0].clone());
+    }
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(ValTensor::from(output.clone()).get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let safe_einsum = non_accum_einsum(
+                &original_eq,
+                &[a, b]
+                    .iter()
+                    .map(|x| x.get_inner().unwrap())
+                    .collect::<Vec<Tensor<_>>>(),
+            )
+            .map_err(|e| {
+                error!("{}", e);
+                halo2_proofs::plonk::Error::Synthesis
+            })?;
+
+            assert_eq!(
+                Into::<Tensor<i32>>::into(ValTensor::from(output.clone()).get_inner()?),
+                Into::<Tensor<i32>>::into(safe_einsum),
+            )
+        }
+    }
 
     Ok(output.into())
 }
