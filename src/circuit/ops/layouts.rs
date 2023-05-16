@@ -2,7 +2,6 @@ use core::panic;
 use std::{
     collections::{HashMap, HashSet},
     error::Error,
-    ops::Range,
 };
 
 use halo2_proofs::circuit::{Region, Value};
@@ -124,13 +123,10 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     if a.dims().len() == 1 {
         a.reshape(&[1, a.dims()[0]])?;
     }
+    let inputs = &[a.clone(), b.clone()];
 
     // Parse equation into an operation
     let original_eq = equation.to_string();
-
-    println!("einsum: {}", equation);
-    println!("inputs 0: {:?}", a.dims());
-    println!("inputs 1: {:?}", b.dims());
 
     let mut equation = equation.split("->");
     let inputs_eq = equation.next().unwrap();
@@ -164,40 +160,131 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     }
 
     // Compute the output tensor shape
-    let output_shape: Vec<usize> = output_eq
+    let mut output_shape: Vec<usize> = output_eq
         .chars()
         .map(|c| *indices_to_size.get(&c).unwrap())
         .collect();
 
+    if output_shape.len() == 0 {
+        output_shape.push(1);
+    }
+
     // Create a new output tensor with the computed shape
     let mut output = Tensor::new(None, &output_shape)?;
 
-    // Perform the Einstein sum operation
-    let cartesian_coord = output_shape
-        .iter()
-        .map(|d| 0..*d)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
+    let mut seen = HashSet::new();
+    let mut common_indices_to_inputs = vec![];
+    for i in 0..inputs.len() {
+        for c in inputs_eq[i].chars() {
+            if !seen.contains(&c) {
+                seen.insert(c);
+            } else {
+                common_indices_to_inputs.push(c);
+            }
+        }
+    }
 
-    let index_for_input_given_output =
-        |input_idx: usize, output_index: Vec<usize>| -> Vec<Range<usize>> {
-            let mut index = vec![];
-            for (i, c) in inputs_eq[input_idx].chars().enumerate() {
-                if let Some(idx) = output_eq.find(c) {
-                    index.push(output_index[idx]..output_index[idx] + 1);
+    // Compute the cartesian product of all indices
+    for coord in output_shape.iter().map(|d| 0..*d).multi_cartesian_product() {
+        // Compute the slice of each input tensor given the current coordinate of the output tensor
+        let inputs = (0..inputs.len())
+            .map(|idx| {
+                let mut slice = vec![];
+                for (i, c) in inputs_eq[idx].chars().enumerate() {
+                    // If the current index is in the output equation, then the slice should be the current coordinate
+                    if let Some(idx) = output_eq.find(c) {
+                        slice.push(coord[idx]..coord[idx] + 1);
+                    // Otherwise, the slice should be the entire dimension of the input tensor
+                    } else {
+                        slice.push(0..inputs[idx].dims()[i]);
+                    }
+                }
+                // Get the slice of the input tensor
+                inputs[idx].get_slice(&slice).unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        // Get the indices common accross input tensors
+        let mut common_coord = common_indices_to_inputs
+            .iter()
+            .map(|d| {
+                // If the current index is in the output equation, then the slice should be the current coordinate
+                if output_indices.contains(d) {
+                    0..1
+                // Otherwise, the slice should be the entire dimension of the input tensor
                 } else {
-                    index.push(0..[&a, &b][input_idx].dims()[i]);
+                    0..*indices_to_size.get(d).unwrap()
+                }
+            })
+            .multi_cartesian_product()
+            .collect::<Vec<_>>();
+
+        // If there are no common indices, then we need to add an empty slice to force one iteration of the loop
+        if common_coord.len() == 0 {
+            common_coord.push(vec![]);
+        }
+
+        let mut prod = None;
+
+        // Compute the cartesian product of all common indices
+        for common_dim in common_coord {
+            let inputs = (0..inputs.len())
+                .map(|idx| {
+                    let mut slice = vec![];
+                    // Iterate over all indices in the input equation
+                    for (i, c) in inputs_eq[idx].chars().enumerate() {
+                        // If the current index is common to multiple inputs, then the slice should be the current coordinate
+                        if let Some(j) = common_indices_to_inputs.iter().position(|&r| r == c) {
+                            slice.push(common_dim[j]..common_dim[j] + 1);
+                        } else {
+                            slice.push(0..inputs[idx].dims()[i]);
+                        }
+                    }
+                    // Get the slice of the input tensor
+                    inputs[idx].get_slice(&slice).unwrap()
+                })
+                .collect::<Vec<_>>();
+
+            let input_pairs = inputs
+                .iter()
+                .map(|d| d.get_inner_tensor().into_iter())
+                .multi_cartesian_product()
+                .collect::<Vec<_>>();
+
+            // Compute the product of all input tensors
+            for pair in input_pairs {
+                let product_across_pair = pair[1..].into_iter().fold(pair[0].clone(), |acc, x| {
+                    pairwise(
+                        config,
+                        region,
+                        &[acc.into(), x.clone().into()],
+                        offset,
+                        BaseOp::Mult,
+                    )
+                    .unwrap()
+                    .get_inner_tensor()
+                    .unwrap()
+                });
+
+                if prod.is_none() {
+                    prod = Some(product_across_pair);
+                } else {
+                    prod = Some(
+                        pairwise(
+                            config,
+                            region,
+                            &[prod.unwrap().into(), product_across_pair.into()],
+                            offset,
+                            BaseOp::Add,
+                        )
+                        .unwrap()
+                        .get_inner_tensor()
+                        .unwrap(),
+                    );
                 }
             }
-            index
-        };
-
-    for coord in cartesian_coord {
-        let first_input = a.get_slice(&index_for_input_given_output(0, coord.clone()))?;
-        let second_input = b.get_slice(&index_for_input_given_output(1, coord.clone()))?;
-
-        let dot = dot(config, region, &[first_input, second_input], offset)?;
-        output.set(&coord, dot.get_inner_tensor()?[0].clone());
+        }
+        output.set(&coord, prod.unwrap()[0].clone());
     }
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
