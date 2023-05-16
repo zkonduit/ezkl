@@ -955,9 +955,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             .collect_vec()
     }
 
-    /// Number of instances used by the circuit
+    /// Shapes of the computational graph's public inputs (if any)
     pub fn instance_shapes(&self) -> Vec<Vec<usize>> {
-        // for now the number of instances corresponds to the number of graph / model outputs
         let mut instance_shapes = vec![];
         if self.visibility.input.is_public() {
             instance_shapes.extend(self.input_shapes());
