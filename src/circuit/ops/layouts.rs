@@ -122,7 +122,6 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     // Parse equation into an operation
     let original_eq = equation.to_string();
 
-    println!("einsum: {}", equation);
     let mut equation = equation.split("->");
     let inputs_eq = equation.next().unwrap();
     let output_eq = equation.next().unwrap();
@@ -1352,7 +1351,6 @@ pub fn reshape<F: PrimeField + TensorType + PartialOrd>(
     new_dims: &[usize],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let mut t = values[0].clone();
-    println!("Reshaping from {:?} to {:?}", t.dims(), new_dims);
     t.reshape(new_dims)?;
     Ok(t)
 }
@@ -1507,7 +1505,6 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    println!("max layout {:?}", values[0].dims());
     // this is safe because we later constrain it
     let max_int = values[0].get_int_evals()?.into_iter().max();
     let max_val: ValTensor<F> = match max_int {
@@ -1613,7 +1610,6 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
         }
     };
 
-    println!("assigned_max_val max layout {:?}", assigned_max_val.dims());
     Ok(assigned_max_val)
 }
 
@@ -1745,8 +1741,6 @@ pub fn multi_dim_softmax<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // we want this to be as small as possible so we set the output scale to 1
     let dims = values[0].dims();
-
-    println!("multi_dim_softmax {:?}", dims);
 
     if dims.len() == 1 {
         return softmax(config, region, values, input_scale, output_scale, offset);
