@@ -209,6 +209,24 @@ pub fn matmul<
 /// let expected = Tensor::<i128>::new(Some(&[1296]), &[1]).unwrap();
 /// assert_eq!(result, expected);
 ///
+/// // trivial axes mapping
+/// let x = Tensor::<i128>::new(
+///    Some(&[4, 5, 7, 8]),
+///  &[2, 2],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///    Some(&[4, 5]),
+///  &[2],
+/// ).unwrap();
+///
+/// let result = einsum("mk,k->m", &[x.clone(), k.clone()]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[41, 68]), &[2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = einsum("mk,k->mn", &[x, k]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[41, 68]), &[2, 1]).unwrap();
+/// assert_eq!(result, expected);
+///
 /// ```
 pub fn einsum<
     T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Send + std::marker::Sync,
@@ -239,13 +257,11 @@ pub fn einsum<
         }
     }
 
-    // Create a set of all unique indices in the equation
-    let input_indices: HashSet<_> = inputs_eq.iter().flat_map(|s| s.chars()).collect();
-    let output_indices: HashSet<_> = output_eq.chars().collect();
-
-    // ensure all the output indices can be found within the inputs
-    if !output_indices.is_subset(&input_indices) {
-        return Err(TensorError::DimMismatch("einsum".to_string()));
+    // maps unrepresented indices in the output to a trivial 1
+    for c in output_eq.chars() {
+        if !indices_to_size.contains_key(&c) {
+            indices_to_size.insert(c, 1);
+        }
     }
 
     // Compute the output tensor shape
@@ -298,7 +314,7 @@ pub fn einsum<
             .iter()
             .map(|d| {
                 // If the current index is in the output equation, then the slice should be the current coordinate
-                if output_indices.contains(d) {
+                if output_eq.contains(*d) {
                     0..1
                 // Otherwise, the slice should be the entire dimension of the input tensor
                 } else {

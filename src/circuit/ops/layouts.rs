@@ -114,24 +114,29 @@ fn allocate_multi_dot<F: PrimeField + TensorType + PartialOrd>(
 pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
-    inputs: &[ValTensor<F>; 2],
+    inputs: &mut [ValTensor<F>],
     equation: &str,
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let (mut a, b) = (inputs[0].clone(), inputs[1].clone());
-
-    if a.dims().len() == 1 {
-        a.reshape(&[1, a.dims()[0]])?;
-    }
-    let inputs = &[a.clone(), b.clone()];
-
     // Parse equation into an operation
     let original_eq = equation.to_string();
 
+    println!("einsum: {}", equation);
     let mut equation = equation.split("->");
     let inputs_eq = equation.next().unwrap();
     let output_eq = equation.next().unwrap();
     let inputs_eq = inputs_eq.split(",").collect::<Vec<_>>();
+
+    for (i, input) in inputs.iter_mut().enumerate() {
+        if input.dims().len() != inputs_eq[i].len()
+            && input.dims().len() == 1
+            && inputs_eq[i].len() == 2
+        {
+            input.reshape(&[1, input.dims()[0]])?;
+        } else if input.dims().len() != inputs_eq[i].len() {
+            return Err(Box::new(TensorError::DimMismatch("einsum".to_string())));
+        }
+    }
 
     // Check that the number of inputs matches the number of inputs in the equation
     if inputs.len() != inputs_eq.len() {
@@ -139,7 +144,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     }
 
     let mut indices_to_size = HashMap::new();
-    for (i, input) in [&a, &b].iter().enumerate() {
+    for (i, input) in inputs.iter().enumerate() {
         for j in 0..inputs_eq[i].len() {
             let c = inputs_eq[i].chars().nth(j).unwrap();
             if !indices_to_size.contains_key(&c) {
@@ -150,13 +155,11 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         }
     }
 
-    // Create a set of all unique indices in the equation
-    let input_indices: HashSet<_> = inputs_eq.iter().flat_map(|s| s.chars()).collect();
-    let output_indices: HashSet<_> = output_eq.chars().collect();
-
-    // ensure all the output indices can be found within the inputs
-    if !output_indices.is_subset(&input_indices) {
-        return Err(Box::new(TensorError::DimMismatch("einsum".to_string())));
+    // maps unrepresented indices in the output to a trivial 1
+    for c in output_eq.chars() {
+        if !indices_to_size.contains_key(&c) {
+            indices_to_size.insert(c, 1);
+        }
     }
 
     // Compute the output tensor shape
@@ -209,7 +212,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
             .iter()
             .map(|d| {
                 // If the current index is in the output equation, then the slice should be the current coordinate
-                if output_indices.contains(d) {
+                if output_eq.contains(*d) {
                     0..1
                 // Otherwise, the slice should be the entire dimension of the input tensor
                 } else {
@@ -296,7 +299,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         if is_assigned {
             let safe_einsum = non_accum_einsum(
                 &original_eq,
-                &[a, b]
+                &inputs
                     .iter()
                     .map(|x| x.get_inner().unwrap())
                     .collect::<Vec<Tensor<_>>>(),
