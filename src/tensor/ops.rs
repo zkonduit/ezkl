@@ -236,8 +236,6 @@ pub fn einsum<
 ) -> Result<Tensor<T>, TensorError> {
     // Parse equation into an operation
 
-    println!("equation {:?}", equation);
-
     let mut equation = equation.split("->");
     let inputs_eq = equation.next().unwrap();
     let output_eq = equation.next().unwrap();
@@ -252,9 +250,6 @@ pub fn einsum<
     for (i, input) in inputs.iter().enumerate() {
         for j in 0..inputs_eq[i].len() {
             let c = inputs_eq[i].chars().nth(j).unwrap();
-            println!("inputs_eq: {:?}", inputs_eq[i]);
-            println!("c: {:?}", c);
-            println!("input dims {:?}", input.dims());
             if !indices_to_size.contains_key(&c) {
                 indices_to_size.insert(c, input.dims()[j]);
             } else if indices_to_size[&c] != input.dims()[j] {

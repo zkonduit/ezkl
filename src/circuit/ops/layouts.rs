@@ -983,8 +983,6 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let image = values[0].clone();
 
-    println!("max_pool2d: {:?}", image.dims());
-
     if image.dims().len() != 4 {
         return Err(Box::new(TensorError::DimMismatch("max_pool2d".to_string())));
     }
