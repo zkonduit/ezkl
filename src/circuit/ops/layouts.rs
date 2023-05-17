@@ -1178,6 +1178,34 @@ pub fn reshape<F: PrimeField + TensorType + PartialOrd>(
     Ok(t)
 }
 
+/// Slice layout
+pub fn slice<F: PrimeField + TensorType + PartialOrd>(
+    config: &mut BaseConfig<F>,
+    region: &mut Option<&mut Region<F>>,
+    values: &[ValTensor<F>; 1],
+    axis: &usize,
+    start: &usize,
+    end: &usize,
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // assigns the instance to the advice.
+    let mut t = config.output.assign(region, *offset, &values[0])?;
+    *offset += t.len();
+    t.slice(axis, start, end)?;
+
+    Ok(t)
+}
+
+/// Concat layout
+pub fn concat<F: PrimeField + TensorType + PartialOrd>(
+    values: &[ValTensor<F>],
+    axis: &usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let collected_inner: Result<Vec<Tensor<_>>, _> =
+        values.iter().map(|e| e.get_inner_tensor()).collect();
+    Ok(tensor::ops::concat(&collected_inner?, *axis)?.into())
+}
+
 /// Identity constraint. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
 pub fn identity<F: PrimeField + TensorType + PartialOrd>(
     config: &mut BaseConfig<F>,
@@ -1220,11 +1248,6 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
 
     Ok(output)
 }
-
-
-
-
-
 
 /// Layout for nonlinearity check.
 pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
@@ -1646,15 +1669,8 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     offset: &mut usize,
     tol: f32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    
     // Calculate the difference between the expected output and actual output
-    let diff = pairwise(
-        config,
-        region,
-        &values,
-        offset,
-        BaseOp::Sub,
-    )?;
+    let diff = pairwise(config, region, &values, offset, BaseOp::Sub)?;
 
     // Calculate the reciprocal of the expected output tensor, scaling by double the scaling factor
     let scale = scale.pow(2);
@@ -1674,29 +1690,34 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
         config,
         region,
         &[product.clone()],
-        &LookupOp::GreaterThan { a: utils::F32(tol*scale as f32) },
+        &LookupOp::GreaterThan {
+            a: utils::F32(tol * scale as f32),
+        },
         offset,
     )?;
 
     // Negate the product
-    let neg_product = neg(
-        config,
-        region,
-        &[product.clone()],
-        offset
-    )?;
+    let neg_product = neg(config, region, &[product.clone()], offset)?;
 
     // Use the greater than look up table to check if the percent error is within the tolerance for lower bound
     let lower_bound = nonlinearity(
         config,
         region,
         &[neg_product.clone()],
-        &LookupOp::GreaterThan { a: utils::F32( tol*scale as f32) },
+        &LookupOp::GreaterThan {
+            a: utils::F32(tol * scale as f32),
+        },
         offset,
     )?;
 
     // Add the lower_bound and upper_bound
-    let sum = pairwise(config, region, &[lower_bound, upper_bound], offset, BaseOp::Add)?;
+    let sum = pairwise(
+        config,
+        region,
+        &[lower_bound, upper_bound],
+        offset,
+        BaseOp::Add,
+    )?;
 
     // Assign the sum tensor to the inputs
     config.inputs[1].assign(region, *offset, &sum.clone())?;
@@ -1718,8 +1739,8 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
             .all(|&x| x == 0);
         if is_assigned {
             let int_evals = &[
-                Tensor::new(Some(&values[0].get_int_evals()?), &values[0].dims())?, 
-                Tensor::new(Some(&values[1].get_int_evals()?), &values[1].dims())?
+                Tensor::new(Some(&values[0].get_int_evals()?), &values[0].dims())?,
+                Tensor::new(Some(&values[1].get_int_evals()?), &values[1].dims())?,
             ];
             let ref_range_check_percent: Tensor<i128> =
                 tensor::ops::nonlinearities::range_check_percent(int_evals, scale, tol);
@@ -1728,5 +1749,4 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
         }
     }
     Ok(sum)
-
 }

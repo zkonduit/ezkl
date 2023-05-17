@@ -48,7 +48,15 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Pow(u32),
     Pack(u32, u32),
     GlobalSumPool,
-    Iff
+    Iff,
+    Concat {
+        axis: usize,
+    },
+    Slice {
+        axis: usize,
+        start: usize,
+        end: usize,
+    },
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {
@@ -115,6 +123,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Matmul { .. } => "MATMUL",
             PolyOp::Iff => "IFF",
             PolyOp::Gather { .. } => "GATHER",
+            PolyOp::Concat { .. } => "CONCAT",
+            PolyOp::Slice { .. } => "SLICE",
         }
     }
 
@@ -210,6 +220,18 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                     - ((Tensor::from(vec![1_i128].into_iter()) - mask.clone())? * b.clone())?;
 
                 Ok(out?)
+            }
+            PolyOp::Concat { axis } => {
+                if inputs.len() < 2 {
+                    return Err(TensorError::DimMismatch("concat inputs".to_string()));
+                }
+                tensor::ops::concat(&inputs, *axis)
+            }
+            PolyOp::Slice { axis, start, end } => {
+                if 1 != inputs.len() {
+                    return Err(TensorError::DimMismatch("slice inputs".to_string()));
+                }
+                Ok(tensor::ops::slice(&inputs[0], axis, start, end)?.into())
             }
         }
     }
@@ -309,6 +331,21 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 offset,
             )?,
             PolyOp::GlobalSumPool => unreachable!(),
+            PolyOp::Concat { axis } => {
+                if values.len() < 2 {
+                    return Err(Box::new(TensorError::DimError));
+                }
+                layouts::concat(values[..].try_into()?, axis)?
+            }
+            PolyOp::Slice { axis, start, end } => layouts::slice(
+                config,
+                region,
+                values[..].try_into()?,
+                axis,
+                start,
+                end,
+                offset,
+            )?,
         }))
     }
 
@@ -362,6 +399,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Pow(pow) => in_scales[0] * (*pow),
             PolyOp::Pack(_, _) => in_scales[0],
             PolyOp::GlobalSumPool => in_scales[0],
+            PolyOp::Concat { axis: _ } => in_scales[0],
+            PolyOp::Slice { .. } => in_scales[0],
         }
     }
 

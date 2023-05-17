@@ -281,6 +281,27 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         Ok(())
     }
 
+    /// Sets the [ValTensor]'s shape.
+    pub fn slice(
+        &mut self,
+        axis: &usize,
+        start: &usize,
+        end: &usize,
+    ) -> Result<(), Box<dyn Error>> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                *v = crate::tensor::ops::slice(v, axis, start, end)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(Box::new(TensorError::WrongMethod));
+            }
+        };
+        Ok(())
+    }
+
     /// Calls `flatten` on the inner [Tensor].
     pub fn flatten(&mut self) {
         match self {

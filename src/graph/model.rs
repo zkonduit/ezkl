@@ -2,10 +2,10 @@ use super::node::*;
 use super::scale_to_multiplier;
 use super::vars::*;
 use super::GraphError;
-use crate::circuit::Tolerance;
-use crate::circuit::hybrid::HybridOp;
 use super::ModelParams;
+use crate::circuit::hybrid::HybridOp;
 use crate::circuit::Input;
+use crate::circuit::Tolerance;
 use crate::circuit::Unknown;
 use crate::{
     circuit::{lookup::LookupOp, ops::poly::PolyOp, BaseConfig as PolyConfig, CheckMode, Op},
@@ -176,7 +176,6 @@ impl<F: PrimeField + TensorType + PartialOrd> NodeType<F> {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
-
     fn required_lookups(&self) -> Vec<LookupOp> {
         self.nodes
             .iter()
@@ -231,7 +230,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         if let Tolerance::Percentage { val, .. } = self.run_args.tolerance {
             let tolerance = Tolerance::Percentage {
                 val,
-                scale: scale_to_multiplier(self.run_args.scale) as usize
+                scale: scale_to_multiplier(self.run_args.scale) as usize,
             };
             let opkind: Box<dyn Op<F>> = Box::new(HybridOp::RangeCheck(tolerance));
             lookup_ops.extend(opkind.required_lookups());
@@ -241,7 +240,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         if let Tolerance::Percentage { val, .. } = self.run_args.tolerance {
             let tolerance = Tolerance::Percentage {
                 val,
-                scale: scale_to_multiplier(self.run_args.scale) as usize
+                scale: scale_to_multiplier(self.run_args.scale) as usize,
             };
             let opkind: Box<dyn Op<F>> = Box::new(HybridOp::RangeCheck(tolerance));
             lookup_ops.extend(opkind.required_lookups());
@@ -272,7 +271,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         let mut results: BTreeMap<&usize, Tensor<i128>> = BTreeMap::new();
         let mut max_lookup_inputs = 0;
         let mut input_idx = 0;
-        for (i, n) in self.nodes.iter() {
+        for (idx, n) in self.nodes.iter() {
             let mut inputs = vec![];
             if n.is_input() {
                 let mut t = model_inputs[input_idx].clone();
@@ -280,7 +279,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 t.reshape(&n.out_dims()[0]);
                 inputs.push(t);
             } else {
-                debug!("executing {}: {}", i, n.as_str());
+                debug!("executing {}: {}", idx, n.as_str());
                 trace!("dims: {:?}", n.out_dims());
                 for i in n.inputs().iter() {
                     match results.get(&i) {
@@ -301,11 +300,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             match n {
                 NodeType::Node(n) => {
                     let res = Op::<F>::f(&*n.opkind, &inputs)?;
-                    results.insert(i, res);
+                    results.insert(idx, res);
                 }
                 NodeType::SubGraph { graph, .. } => {
                     let res = graph.forward(&inputs)?;
-                    results.insert(i, res[0].clone());
+                    let mut res = res.last().unwrap().clone();
+                    res.flatten();
+                    results.insert(idx, res);
                 }
             }
         }
@@ -413,24 +414,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             .concretize_dims(&SymbolValues::default().with(&batch_size, 1))?
             .concretize_dims(&SymbolValues::default().with(&seq_len, 1))?;
 
-        let mut nodes = Self::nodes_from_graph(
+        let nodes = Self::nodes_from_graph(
             &model,
             run_args,
             mode,
             visibility,
             model.inputs.iter().map(|_| run_args.scale).collect(),
         )?;
-
-        nodes = nodes
-            .iter()
-            .filter(|(_, node)| {
-                node.opkind()
-                    .as_any()
-                    .downcast_ref::<crate::circuit::ops::Constant<F>>()
-                    .is_none()
-            })
-            .map(|(idx, node)| (*idx, node.clone()))
-            .collect();
 
         debug!("\n {}", model);
 
@@ -635,7 +625,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         }
 
         Ok(base_gate)
-
     }
 
     /// Assigns values to the regions created when calling `configure`.
@@ -710,13 +699,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
 
                 if self.run_args.public_outputs {
                     let tolerance = match self.run_args.tolerance {
-                        Tolerance::Percentage { val, .. } => {
-                            Tolerance::Percentage {
-                                 val, 
-                                 scale: scale_to_multiplier(self.run_args.scale) as usize
-                            }
-                        }
-                        _ => self.run_args.tolerance
+                        Tolerance::Percentage { val, .. } => Tolerance::Percentage {
+                            val,
+                            scale: scale_to_multiplier(self.run_args.scale) as usize,
+                        },
+                        _ => self.run_args.tolerance,
                     };
                     let _ = outputs
                         .into_iter()
@@ -785,8 +772,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 }
                 NodeType::SubGraph { graph, .. } => {
                     let res = graph.layout_nodes(config, region, &graph.nodes, results, offset)?;
-                    assert_eq!(res.len(), 1);
-                    results.insert(*idx, res[0].clone());
+                    let mut res = res.last().unwrap().clone();
+                    res.flatten();
+                    results.insert(*idx, res);
                 }
             }
         }
@@ -849,13 +837,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
 
         if self.run_args.public_outputs {
             let tolerance = match self.run_args.tolerance {
-                Tolerance::Percentage { val, .. } => {
-                    Tolerance::Percentage {
-                         val, 
-                         scale: scale_to_multiplier(self.run_args.scale) as usize
-                    }
-                }
-                _ => self.run_args.tolerance
+                Tolerance::Percentage { val, .. } => Tolerance::Percentage {
+                    val,
+                    scale: scale_to_multiplier(self.run_args.scale) as usize,
+                },
+                _ => self.run_args.tolerance,
             };
             let _ = outputs
                 .clone()
@@ -891,14 +877,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 offset
             );
 
-            let values: Vec<ValTensor<F>> = node
-                .inputs()
-                .iter()
-                .map(|i| results.get(i).unwrap().clone())
-                .collect_vec();
-
             match node {
                 NodeType::Node(n) => {
+                    let values: Vec<ValTensor<F>> = node
+                        .inputs()
+                        .iter()
+                        .map(|i| results.get(i).unwrap().clone())
+                        .collect_vec();
                     let res = dummy_config
                         .layout(&mut None, &values, offset, n.opkind.clone_dyn())
                         .map_err(|e| {
@@ -907,14 +892,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                         })?;
 
                     if let Some(vt) = res {
-                        // we get the max as for fused nodes this corresponds to the node output
                         results.insert(*idx, vt);
                     }
                 }
                 NodeType::SubGraph { graph, .. } => {
-                    let values = graph.dummy_layout_nodes(dummy_config, nodes, results, offset)?;
-                    assert_eq!(values.len(), 1);
-                    results.insert(*idx, values[0].clone());
+                    let res = graph.dummy_layout_nodes(dummy_config, nodes, results, offset)?;
+                    let mut res = res.last().unwrap().clone();
+                    res.flatten();
+                    results.insert(*idx, res);
                 }
             }
         }
@@ -970,9 +955,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             .collect_vec()
     }
 
-    /// Number of instances used by the circuit
+    /// Shapes of the computational graph's public inputs (if any)
     pub fn instance_shapes(&self) -> Vec<Vec<usize>> {
-        // for now the number of instances corresponds to the number of graph / model outputs
         let mut instance_shapes = vec![];
         if self.visibility.input.is_public() {
             instance_shapes.extend(self.input_shapes());

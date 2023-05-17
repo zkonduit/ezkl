@@ -12,12 +12,13 @@ use halo2curves::ff::PrimeField;
 use log::{debug, warn};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::array::Gather;
+use tract_onnx::tract_core::ops::array::Slice;
 use tract_onnx::tract_core::ops::einsum::EinSum;
 // use tract_onnx::tract_core::ops::binary::UnaryOp;
 // use tract_onnx::tract_core::ops::matmul::MatMulUnary;
 use tract_onnx::tract_core::ops::element_wise::ElementWiseOp;
 use tract_onnx::tract_core::ops::nn::{LeakyRelu, Reduce, Softmax};
-use tract_onnx::tract_hir::internal::AxisOp;
+use tract_onnx::tract_hir::internal::{AxisOp, DimLike};
 use tract_onnx::tract_hir::ops::cnn::ConvUnary;
 use tract_onnx::tract_hir::ops::konst::Const;
 use tract_onnx::tract_hir::{
@@ -228,6 +229,36 @@ fn load_eltwise_op(
     Ok(op.clone())
 }
 
+fn load_concat_op(
+    op: &dyn tract_onnx::prelude::Op,
+    idx: usize,
+    name: String,
+) -> Result<tract_onnx::tract_core::ops::array::TypedConcat, Box<dyn std::error::Error>> {
+    let op: &tract_onnx::tract_core::ops::array::TypedConcat =
+        match op.downcast_ref::<tract_onnx::tract_core::ops::array::TypedConcat>() {
+            Some(b) => b,
+            None => return Err(Box::new(GraphError::OpMismatch(idx, name))),
+        };
+
+    Ok(op.clone())
+}
+
+/// Extracts a Slice op from an onnx node.
+fn load_slice_op(
+    op: &dyn tract_onnx::prelude::Op,
+    name: String,
+) -> Result<Slice, Box<dyn std::error::Error>> {
+    // Extract the slope layer hyperparams
+    let op: &Slice = match op.downcast_ref::<Slice>() {
+        Some(b) => b,
+        None => {
+            return Err(Box::new(TensorError::DimMismatch(name)));
+        }
+    };
+
+    Ok(op.clone())
+}
+
 /// Matches an onnx node to a [OpKind] and returns a [Node] with the corresponding [OpKind].  
 /// Arguments
 /// * `idx` - the index of the node in the graph.
@@ -271,10 +302,30 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
 
             Box::new(crate::circuit::ops::poly::PolyOp::Gather { dim: axis, index })
         }
+        "Concat" | "InferenceConcat" => {
+            let op = load_concat_op(node.op(), idx, node.op().name().to_string())?;
+            // as we remove the batch dimension, we need to subtract 1 from the axis
+            let axis = op.axis - 1;
+            Box::new(crate::circuit::ops::poly::PolyOp::Concat { axis })
+        }
+        "Slice" => {
+            let slice = load_slice_op(node.op(), node.op().name().to_string())?;
+
+            // as we remove the batch dimension, we need to subtract 1 from the axis
+            let axis = slice.axis - 1;
+            let start = slice.start.to_usize()?;
+            let end = slice.end.to_usize()?;
+
+            Box::new(PolyOp::Slice { axis, start, end })
+        }
         "Const" => {
             let op: Const = load_const(node.op(), idx, node.op().name().to_string())?;
             let value = extract_tensor_value(op.0.clone())?;
-            Box::new(crate::circuit::ops::Constant::new(value))
+            Box::new(crate::circuit::ops::Constant::new(
+                value,
+                scale,
+                public_params,
+            ))
         }
         "Reduce<Min>" => {
             if inputs.len() != 1 {
@@ -480,6 +531,12 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                         public_params,
                     )?);
                 }
+            }
+            if params.is_none() {
+                // onnx flips order
+                let a = inputs[0].clone();
+                let b = inputs[1].clone();
+                *inputs = vec![b, a];
             }
 
             Box::new(PolyOp::Matmul { a: params })

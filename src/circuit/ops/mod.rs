@@ -3,7 +3,10 @@ use std::{any::Any, error::Error, marker::PhantomData};
 use halo2_proofs::circuit::Region;
 use serde::{Deserialize, Serialize};
 
-use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor};
+use crate::{
+    graph::quantize_float,
+    tensor::{self, Tensor, TensorError, TensorType, ValTensor},
+};
 use halo2curves::ff::PrimeField;
 
 use self::lookup::LookupOp;
@@ -223,14 +226,20 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
 pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
     ///
     pub values: Tensor<f32>,
+    /// scale to quantize with
+    pub scale: u32,
+    /// is public ?
+    pub public: bool,
     _marker: PhantomData<F>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
     ///
-    pub fn new(values: Tensor<f32>) -> Self {
+    pub fn new(values: Tensor<f32>, scale: u32, public: bool) -> Self {
         Self {
             values,
+            scale,
+            public,
             _marker: PhantomData,
         }
     }
@@ -241,7 +250,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
         self
     }
     fn f(&self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
-        Err(TensorError::WrongMethod)
+        Ok(self
+            .values
+            .map(|x| quantize_float(&x, 0., self.scale).unwrap())
+            .into())
     }
 
     fn as_str(&self) -> &'static str {
@@ -254,7 +266,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
         _: &[ValTensor<F>],
         _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        Err(Box::new(TensorError::WrongMethod))
+        Ok(Some(crate::graph::tensor_to_valtensor(
+            self.values.clone(),
+            self.scale,
+            self.public,
+        )?))
     }
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
         Box::new(self.clone())

@@ -453,7 +453,7 @@ fn create_evm_verifier(
     vk_path: PathBuf,
     params_path: PathBuf,
     circuit_params_path: PathBuf,
-    deployment_code_path: Option<PathBuf>,
+    deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     let model_circuit_params = ModelParams::load(&circuit_params_path);
@@ -470,7 +470,7 @@ fn create_evm_verifier(
     trace!("params computed");
 
     let (deployment_code, yul_code) = gen_evm_verifier(&params, &vk, num_instance)?;
-    deployment_code.save(deployment_code_path.as_ref().unwrap())?;
+    deployment_code.save(&deployment_code_path)?;
 
     if sol_code_path.is_some() {
         let mut f = File::create(sol_code_path.as_ref().unwrap())?;
@@ -495,9 +495,7 @@ async fn verify_evm(
     evm_verify(code, proof.clone())?;
 
     if sol_code_path.is_some() {
-        let result = verify_proof_via_solidity(proof, sol_code_path.unwrap())
-            .await
-            .unwrap();
+        let result = verify_proof_via_solidity(proof, sol_code_path.unwrap()).await?;
 
         info!("Solidity verification result: {}", result);
 
