@@ -177,7 +177,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
 
                 tensor::ops::matmul(&inputs)
             }
-            PolyOp::Dot => tensor::ops::dot(&inputs.iter().collect()),
+            PolyOp::Dot => tensor::ops::dot(&inputs[..]),
             PolyOp::Conv {
                 kernel: a,
                 bias,

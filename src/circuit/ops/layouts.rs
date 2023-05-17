@@ -386,7 +386,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
         .expect("accum poly: failed to fetch last elem");
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        let safe_dot = non_accum_dot(&inputs.iter().collect()).map_err(|e| {
+        let safe_dot = non_accum_dot(&inputs[..]).map_err(|e| {
             error!("{}", e);
             halo2_proofs::plonk::Error::Synthesis
         })?;
@@ -946,7 +946,8 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
     kernel_shape: (usize, usize),
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let image_channels = values[0].dims()[0];
+    let batch_size = values[0].dims()[0];
+    let image_channels = values[0].dims()[1];
 
     let unit: ValType<F> = if let Some(region) = region {
         config.inputs[1]
@@ -963,21 +964,26 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
     kernel.reshape(&[1, 1, kernel_shape.0, kernel_shape.1]);
 
     let mut res = vec![];
-    for i in 0..image_channels {
-        res.push(conv(
-            config,
-            region,
-            &[values[0].get_slice(&[i..i + 1])?, kernel.clone().into()],
-            padding,
-            stride,
-            offset,
-        )?);
+    for b in 0..batch_size {
+        for i in 0..image_channels {
+            res.push(conv(
+                config,
+                region,
+                &[
+                    values[0].get_slice(&[b..b + 1, i..i + 1])?,
+                    kernel.clone().into(),
+                ],
+                padding,
+                stride,
+                offset,
+            )?);
+        }
     }
-    let shape = &res[0].dims()[1..];
+    let shape = &res[0].dims()[2..];
     let mut last_elem = res[1..].iter().fold(res[0].clone(), |acc, elem| {
         acc.concat(elem.clone()).unwrap()
     });
-    last_elem.reshape(&[&[image_channels], shape].concat())?;
+    last_elem.reshape(&[&[batch_size, image_channels], shape].concat())?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
@@ -1020,8 +1026,8 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     }
     let image_dims = image.dims();
 
-    let input_channels = image_dims[0];
-    let (image_height, image_width) = (image_dims[1], image_dims[2]);
+    let (batch_size, input_channels, image_height, image_width) =
+        (image_dims[0], image_dims[1], image_dims[2], image_dims[3]);
 
     let mut padded_image = image.clone();
     padded_image.pad(padding)?;
@@ -1029,22 +1035,27 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     let horz_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
     let vert_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
 
-    let mut output: Tensor<ValType<F>> =
-        Tensor::new(None, &[input_channels, horz_slides, vert_slides]).unwrap();
+    let mut output: Tensor<ValType<F>> = Tensor::new(
+        None,
+        &[batch_size, input_channels, horz_slides, vert_slides],
+    )?;
 
-    for i in 0..input_channels {
-        for j in 0..horz_slides {
-            let rs = j * stride.0;
-            for k in 0..vert_slides {
-                let cs = k * stride.1;
-                let slice = padded_image.get_slice(&[
-                    i..(i + 1),
-                    rs..(rs + pool_dims.0),
-                    cs..(cs + pool_dims.1),
-                ])?;
-                let max_w = max(config, region, &[slice], offset)?;
-                let max_w = &max_w.get_inner_tensor()?[0];
-                output.set(&[i, j, k], max_w.clone());
+    for b in 0..batch_size {
+        for i in 0..input_channels {
+            for j in 0..horz_slides {
+                let rs = j * stride.0;
+                for k in 0..vert_slides {
+                    let cs = k * stride.1;
+                    let slice = padded_image.get_slice(&[
+                        b..b + 1,
+                        i..(i + 1),
+                        rs..(rs + pool_dims.0),
+                        cs..(cs + pool_dims.1),
+                    ])?;
+                    let max_w = max(config, region, &[slice], offset)?;
+                    let max_w = &max_w.get_inner_tensor()?[0];
+                    output.set(&[i, j, k], max_w.clone());
+                }
             }
         }
     }
@@ -1081,46 +1092,35 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let has_bias = values.len() == 3;
-    let (image, mut kernel) = (values[0].clone(), values[1].clone());
+    let (image, kernel) = (values[0].clone(), values[1].clone());
 
-    if (image.dims().len() != 3)
+    if (image.dims().len() != 4)
         || (kernel.dims().len() != 4)
-        || ((image.dims()[0] != kernel.dims()[1]) && (kernel.dims()[1] != 1))
+        || ((image.dims()[1] != kernel.dims()[1]) && (kernel.dims()[1] != 1))
     {
         return Err(Box::new(TensorError::DimMismatch("conv".to_string())));
-    }
-
-    if kernel.dims()[1] == 1 && kernel.dims()[1] != image.dims()[0] {
-        kernel.repeat_rows(image.dims()[0])?;
-        kernel.reshape(&[
-            kernel.dims()[0],
-            image.dims()[0],
-            kernel.dims()[2],
-            kernel.dims()[3],
-        ])?;
     }
 
     let image_dims = image.dims();
     let kernel_dims = kernel.dims();
 
-    let (output_channels, input_channels, kernel_height, kernel_width) = (
+    let mut padded_image = image.clone();
+    padded_image.pad(padding)?;
+
+    let (batch_size, output_channels, input_channels, kernel_height, kernel_width) = (
+        image_dims[0],
         kernel_dims[0],
-        kernel_dims[1],
+        image_dims[1],
         kernel_dims[2],
         kernel_dims[3],
     );
 
-    let (image_height, image_width) = (image_dims[1], image_dims[2]);
-    let padded_height = image_height + 2 * padding.0;
-    let padded_width = image_width + 2 * padding.1;
+    let (image_height, image_width) = (image_dims[2], image_dims[3]);
 
-    let vert_slides = (padded_height - kernel_height) / stride.0 + 1;
-    let horz_slides = (padded_width - kernel_width) / stride.1 + 1;
+    let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
+    let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
 
-    let mut padded_image = image.clone();
-    padded_image.pad(padding)?;
-
-    let num_groups = image_dims[0] / kernel_dims[1];
+    let num_groups = input_channels / kernel_dims[1];
     let input_channels_per_group = input_channels / num_groups;
     let output_channels_per_group = output_channels / num_groups;
 
@@ -1131,15 +1131,13 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
         ))));
     }
 
-    let num_outputs = output_channels_per_group * vert_slides * horz_slides;
+    let num_outputs =
+        batch_size * num_groups * output_channels_per_group * vert_slides * horz_slides;
 
-    let (mut a, mut b, mut c) = (
-        vec![ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?); num_outputs],
-        vec![ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?); num_outputs],
-        vec![ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?); num_outputs],
-    );
+    let mut output = Tensor::new(None, &[num_outputs])?;
 
     let cartesian_coord = vec![
+        (0..batch_size),
         (0..num_groups),
         (0..output_channels_per_group),
         (0..vert_slides),
@@ -1150,65 +1148,70 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     .multi_cartesian_product()
     .collect::<Vec<_>>();
 
-    a.par_iter_mut()
-        .zip(&mut b)
-        .zip(&mut c)
-        .enumerate()
-        .for_each(|(i, ((a, b), c))| {
-            let cartesian_coord_per_group = cartesian_coord[i].clone();
-            let group = cartesian_coord_per_group[0];
-            let (i, j, k) = (
-                cartesian_coord_per_group[1],
-                cartesian_coord_per_group[2],
-                cartesian_coord_per_group[3],
-            );
-            let rs = j * stride.0;
-            let cs = k * stride.1;
+    output.iter_mut().enumerate().for_each(|(i, o)| {
+        let cartesian_coord_per_group = &cartesian_coord[i];
+        let (batch, group, i, j, k) = (
+            cartesian_coord_per_group[0],
+            cartesian_coord_per_group[1],
+            cartesian_coord_per_group[2],
+            cartesian_coord_per_group[3],
+            cartesian_coord_per_group[4],
+        );
+        let rs = j * stride.0;
+        let cs = k * stride.1;
 
-            let start_channel = group * input_channels_per_group;
-            let end_channel = start_channel + input_channels_per_group;
-            let local_image = &padded_image
-                .get_slice(&[
-                    start_channel..end_channel,
-                    rs..(rs + kernel_height),
-                    cs..(cs + kernel_width),
-                ])
-                .unwrap();
+        let start_channel = group * input_channels_per_group;
+        let end_channel = start_channel + input_channels_per_group;
 
-            let start_kernel_index = group * output_channels_per_group + i;
-            let end_kernel_index = start_kernel_index + 1;
-            let local_kernel = &kernel
-                .get_slice(&[start_kernel_index..end_kernel_index])
-                .unwrap();
-
-            *a = local_kernel.clone();
-            *b = local_image.clone();
-
-            *c = accumulated::dot(&[
-                local_kernel.get_inner().unwrap(),
-                local_image.get_inner().unwrap(),
+        let local_image = padded_image
+            .get_slice(&[
+                batch..batch + 1,
+                start_channel..end_channel,
+                rs..(rs + kernel_height),
+                cs..(cs + kernel_width),
             ])
+            .unwrap();
+
+        println!("local_image: {:?}", local_image.dims());
+
+        let start_kernel_index = group * output_channels_per_group + i;
+        let end_kernel_index = start_kernel_index + 1;
+        let local_kernel = kernel
+            .get_slice(&[start_kernel_index..end_kernel_index])
+            .unwrap();
+
+        let mut res = dot(config, region, &[local_image, local_kernel], offset).unwrap();
+
+        if has_bias {
+            res = pairwise(
+                config,
+                region,
+                &[
+                    res,
+                    values[2]
+                        .get_inner_tensor()
+                        .unwrap()
+                        .get_slice(&[start_kernel_index..end_kernel_index])
+                        .unwrap()
+                        .into(),
+                ],
+                offset,
+                BaseOp::Add,
+            )
             .unwrap()
-            .into();
-        });
+        }
 
-    let mut output = allocate_multi_dot(config, region, &mut a, &mut b, &mut c, offset)?;
+        *o = res.get_inner_tensor().unwrap()[0].clone();
+    });
 
-    output.reshape(&[output_channels, vert_slides, horz_slides])?;
+    output.reshape(&[batch_size, output_channels, vert_slides, horz_slides]);
 
-    if has_bias {
-        let tiled_bias = values[2].clone();
-        if (tiled_bias.dims().len() != 1) || (tiled_bias.dims()[0] != kernel.dims()[0]) {
-            return Err(Box::new(TensorError::DimMismatch("conv bias".to_string())));
-        };
-
-        output = pairwise(config, region, &[output, tiled_bias], offset, BaseOp::Add)?
-    };
+    let output: ValTensor<_> = output.into();
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(output.clone().get_inner()?)
+        let is_assigned = !Into::<Tensor<i32>>::into(output.get_inner()?)
             .iter()
             .all(|&x| x == 0);
         if is_assigned {
