@@ -1137,8 +1137,6 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
             ])
             .unwrap();
 
-        println!("local_image: {:?}", local_image.dims());
-
         let start_kernel_index = group * output_channels_per_group + i;
         let end_kernel_index = start_kernel_index + 1;
         let local_kernel = kernel
