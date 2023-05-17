@@ -14,6 +14,7 @@ use crate::{
     circuit::{ops::base::BaseOp, utils, BaseConfig, CheckMode, CircuitError},
     fieldutils::i128_to_felt,
     tensor::{
+        get_broadcasted_shape,
         ops::{
             accumulated, add, conv as non_accum_conv, dot as non_accum_dot,
             einsum as non_accum_einsum, matmul as non_accum_matmul,
@@ -649,47 +650,9 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
 
     let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
 
-    // casts ND
-    if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-        && lhs.dims().len() > 1
-        && lhs.dims() != rhs.dims()
-    {
-        if lhs.dims()[0] != rhs.dims().iter().product::<usize>() {
-            return Err(Box::new(CircuitError::DimMismatch(format!(
-                "pairwise {} layout",
-                op.as_str()
-            ))));
-        }
-        rhs.reshape(&[lhs.dims()[0]])?;
-        rhs.repeat_rows(lhs.dims()[1..].iter().product::<usize>())?;
-        rhs.reshape(lhs.dims())?;
-    }
-    // make ND commutative
-    else if lhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-        && rhs.dims().len() > 1
-        && lhs.dims() != rhs.dims()
-    {
-        if rhs.dims()[0] != lhs.dims().iter().product::<usize>() {
-            return Err(Box::new(CircuitError::DimMismatch(format!(
-                "pairwise {} layout",
-                op.as_str()
-            ))));
-        }
-        lhs.reshape(&[rhs.dims()[0]])?;
-        lhs.tile(rhs.dims()[1..].iter().product::<usize>())?;
-        lhs.reshape(rhs.dims())?;
-    // 1D casting
-    } else if rhs.dims().iter().product::<usize>() == 1 {
-        rhs.reshape(&[1])?;
-        rhs.tile(lhs.dims().iter().product::<usize>())?;
-        rhs.reshape(lhs.dims())?;
-    }
-    // make 1D casting commutative
-    else if lhs.dims().iter().product::<usize>() == 1 {
-        lhs.reshape(&[1])?;
-        lhs.tile(rhs.dims().iter().product::<usize>())?;
-        lhs.reshape(rhs.dims())?;
-    }
+    let broadcasted_shape = get_broadcasted_shape(&lhs.dims(), &rhs.dims())?;
+    lhs.expand(&broadcasted_shape)?;
+    rhs.expand(&broadcasted_shape)?;
 
     let mut inputs = vec![];
 
@@ -1021,7 +984,9 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let image = values[0].clone();
 
-    if image.dims().len() != 3 {
+    println!("max_pool2d: {:?}", image.dims());
+
+    if image.dims().len() != 4 {
         return Err(Box::new(TensorError::DimMismatch("max_pool2d".to_string())));
     }
     let image_dims = image.dims();
@@ -1054,7 +1019,7 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
                     ])?;
                     let max_w = max(config, region, &[slice], offset)?;
                     let max_w = &max_w.get_inner_tensor()?[0];
-                    output.set(&[i, j, k], max_w.clone());
+                    output.set(&[b, i, j, k], max_w.clone());
                 }
             }
         }
@@ -1389,6 +1354,7 @@ pub fn reshape<F: PrimeField + TensorType + PartialOrd>(
     new_dims: &[usize],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let mut t = values[0].clone();
+    println!("Reshaping from {:?} to {:?}", t.dims(), new_dims);
     t.reshape(new_dims)?;
     Ok(t)
 }
@@ -1543,6 +1509,7 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    println!("max layout {:?}", values[0].dims());
     // this is safe because we later constrain it
     let max_int = values[0].get_int_evals()?.into_iter().max();
     let max_val: ValTensor<F> = match max_int {
@@ -1647,6 +1614,8 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
             assert_eq!(Into::<Tensor<i32>>::into(max_val.get_inner()?), ref_max,)
         }
     };
+
+    println!("assigned_max_val max layout {:?}", assigned_max_val.dims());
     Ok(assigned_max_val)
 }
 
@@ -1779,11 +1748,13 @@ pub fn multi_dim_softmax<F: PrimeField + TensorType + PartialOrd>(
     // we want this to be as small as possible so we set the output scale to 1
     let dims = values[0].dims();
 
+    println!("multi_dim_softmax {:?}", dims);
+
     if dims.len() == 1 {
         return softmax(config, region, values, input_scale, output_scale, offset);
     }
 
-    let cartesian_coord = dims[..dims.len() - 2]
+    let cartesian_coord = dims[..dims.len() - 1]
         .iter()
         .map(|x| 0..*x)
         .multi_cartesian_product()
