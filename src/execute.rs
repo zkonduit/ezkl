@@ -107,10 +107,11 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifierAggr {
+            vk_path,
             params_path,
             deployment_code_path,
-            vk_path,
-        } => create_evm_aggregate_verifier(params_path, deployment_code_path, vk_path),
+            sol_code_path,
+        } => create_evm_aggregate_verifier(vk_path, params_path, deployment_code_path, sol_code_path),
         Commands::Setup {
             data,
             params_path,
@@ -507,21 +508,33 @@ async fn verify_evm(
 
 #[cfg(not(target_arch = "wasm32"))]
 fn create_evm_aggregate_verifier(
-    params_path: PathBuf,
-    deployment_code_path: PathBuf,
     vk_path: PathBuf,
+    params_path: PathBuf,
+    deployment_code_path: Option<PathBuf>,
+    sol_code_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     let params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
 
-    let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
+    let agg_vk =
+        load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
 
-    let deployment_code = gen_aggregation_evm_verifier(
+    let (deployment_code, yul_code) = gen_aggregation_evm_verifier(
         &params,
         &agg_vk,
         AggregationCircuit::num_instance(),
         AggregationCircuit::accumulator_indices(),
     )?;
-    deployment_code.save(&deployment_code_path)?;
+    deployment_code.save(deployment_code_path.as_ref().unwrap())?;
+
+    if sol_code_path.is_some() {
+        let mut f = File::create(sol_code_path.as_ref().unwrap())?;
+        let _ = f.write(yul_code.as_bytes());
+
+        let output = fix_verifier_sol(sol_code_path.as_ref().unwrap().clone())?;
+
+        let mut f = File::create(sol_code_path.as_ref().unwrap())?;
+        let _ = f.write(output.as_bytes());
+    }
     Ok(())
 }
 

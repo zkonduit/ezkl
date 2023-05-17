@@ -25,7 +25,7 @@ use ethers::{
     prelude::{HDPath::LedgerLive, Ledger, LocalWallet, Wallet},
     utils::{Anvil, AnvilInstance},
 };
-use ethers_solc::Solc;
+use ethers_solc::{Solc, CompilerInput};
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
 use log::{debug, info};
@@ -72,7 +72,9 @@ pub async fn verify_proof_via_solidity(
 ) -> Result<bool, Box<dyn Error>> {
     let (anvil, client) = setup_eth_backend().await?;
 
-    let compiled = Solc::default().compile_source(sol_code_path)?;
+    // Creater the compiler input, setting the optimzer run setting to 1 to optimize the bytecode deployment size.
+    let input = CompilerInput::new(sol_code_path)?[0].clone().optimizer(1);
+    let compiled = Solc::default().compile(&input)?;
     let (abi, bytecode, _runtime_bytecode) = compiled
         .find("Verifier")
         .expect("could not find contract")
@@ -205,7 +207,9 @@ pub async fn deploy_verifier<M: 'static + Middleware>(
     // sol code supercedes deployment code
     let factory = match sol_code_path {
         Some(path) => {
-            let compiled = Solc::default().compile_source(path).unwrap();
+            // Creater the compiler input, setting the optimzer run setting to 1 to optimize the bytecode deployment size.
+            let input = CompilerInput::new(path)?[0].clone().optimizer(1);
+            let compiled = Solc::default().compile(&input).unwrap();
             let (abi, bytecode, _runtime_bytecode) = compiled
                 .find("Verifier")
                 .expect("could not find contract")

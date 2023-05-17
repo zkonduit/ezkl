@@ -403,7 +403,10 @@ pub enum Commands {
         vk_path: PathBuf,
         /// The path to the deployment code
         #[arg(long)]
-        deployment_code_path: PathBuf,
+        deployment_code_path: Option<PathBuf>,
+        /// The path to the Solidity code
+        #[arg(long)]
+        sol_code_path: Option<PathBuf>,
         // todo, optionally allow supplying proving key
     },
 
