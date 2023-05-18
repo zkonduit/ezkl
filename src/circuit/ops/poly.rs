@@ -221,10 +221,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 let a = inputs[2].clone();
                 let b = inputs[1].clone();
 
-                let out = (mask.clone() * a.clone())?
-                    - ((Tensor::from(vec![1_i128].into_iter()) - mask.clone())? * b.clone())?;
+                let masked_a = (mask.clone() * a.clone())?;
+                let masked_b =
+                    ((Tensor::from(vec![1_i128].into_iter()) - mask.clone())? * b.clone())?;
 
-                Ok(out?)
+                masked_a + masked_b
             }
             PolyOp::Concat { axis } => {
                 if inputs.len() < 2 {
