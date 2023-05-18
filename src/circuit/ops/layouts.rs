@@ -805,12 +805,6 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
     // if mask > 0 then output a else output b
     let (mask, b, a) = (&values[0], &values[1], &values[2]);
 
-    if (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])
-        || (a.dims()[0..a.dims().len() - 2] != b.dims()[0..a.dims().len() - 2])
-    {
-        return Err(Box::new(TensorError::DimMismatch("matmul".to_string())));
-    }
-
     let unit: ValTensor<F> = if let Some(region) = region {
         Tensor::from(
             vec![config.inputs[1].assign_constant(*region, *offset, F::from(1))?].into_iter(),

@@ -4,6 +4,7 @@ use itertools::Itertools;
 use puruspe::erf;
 use rayon::{
     iter::IndexedParallelIterator, iter::IntoParallelRefMutIterator, iter::ParallelIterator,
+    prelude::IntoParallelRefIterator,
 };
 use std::collections::{HashMap, HashSet};
 pub use std::ops::{Add, Div, Mul, Sub};
@@ -275,9 +276,6 @@ pub fn einsum<
         output_shape.push(1);
     }
 
-    // Create a new output tensor with the computed shape
-    let mut output = Tensor::new(None, &output_shape)?;
-
     let mut seen = HashSet::new();
     let mut common_indices_to_inputs = vec![];
     for i in 0..inputs.len() {
@@ -290,58 +288,25 @@ pub fn einsum<
         }
     }
 
+    let cartesian_coord = output_shape
+        .iter()
+        .map(|d| 0..*d)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
     // Compute the cartesian product of all indices
-    for coord in output_shape.iter().map(|d| 0..*d).multi_cartesian_product() {
-        // Compute the slice of each input tensor given the current coordinate of the output tensor
-        let inputs = (0..inputs.len())
-            .map(|idx| {
-                let mut slice = vec![];
-                for (i, c) in inputs_eq[idx].chars().enumerate() {
-                    // If the current index is in the output equation, then the slice should be the current coordinate
-                    if let Some(idx) = output_eq.find(c) {
-                        slice.push(coord[idx]..coord[idx] + 1);
-                    // Otherwise, the slice should be the entire dimension of the input tensor
-                    } else {
-                        slice.push(0..inputs[idx].dims()[i]);
-                    }
-                }
-                // Get the slice of the input tensor
-                inputs[idx].get_slice(&slice).unwrap()
-            })
-            .collect::<Vec<_>>();
-
-        // Get the indices common accross input tensors
-        let mut common_coord = common_indices_to_inputs
-            .iter()
-            .map(|d| {
-                // If the current index is in the output equation, then the slice should be the current coordinate
-                if output_eq.contains(*d) {
-                    0..1
-                // Otherwise, the slice should be the entire dimension of the input tensor
-                } else {
-                    0..*indices_to_size.get(d).unwrap()
-                }
-            })
-            .multi_cartesian_product()
-            .collect::<Vec<_>>();
-
-        // If there are no common indices, then we need to add an empty slice to force one iteration of the loop
-        if common_coord.len() == 0 {
-            common_coord.push(vec![]);
-        }
-
-        let mut prod = T::zero().unwrap();
-
-        // Compute the cartesian product of all common indices
-        for common_dim in common_coord {
+    let output: Vec<T> = cartesian_coord
+        .par_iter()
+        .map(|coord| {
+            // Compute the slice of each input tensor given the current coordinate of the output tensor
             let inputs = (0..inputs.len())
                 .map(|idx| {
                     let mut slice = vec![];
-                    // Iterate over all indices in the input equation
                     for (i, c) in inputs_eq[idx].chars().enumerate() {
-                        // If the current index is common to multiple inputs, then the slice should be the current coordinate
-                        if let Some(j) = common_indices_to_inputs.iter().position(|&r| r == c) {
-                            slice.push(common_dim[j]..common_dim[j] + 1);
+                        // If the current index is in the output equation, then the slice should be the current coordinate
+                        if let Some(idx) = output_eq.find(c) {
+                            slice.push(coord[idx]..coord[idx] + 1);
+                        // Otherwise, the slice should be the entire dimension of the input tensor
                         } else {
                             slice.push(0..inputs[idx].dims()[i]);
                         }
@@ -351,22 +316,67 @@ pub fn einsum<
                 })
                 .collect::<Vec<_>>();
 
-            let input_pairs = inputs
+            // Get the indices common accross input tensors
+            let mut common_coord = common_indices_to_inputs
                 .iter()
-                .map(|d| d.iter())
+                .map(|d| {
+                    // If the current index is in the output equation, then the slice should be the current coordinate
+                    if output_eq.contains(*d) {
+                        0..1
+                    // Otherwise, the slice should be the entire dimension of the input tensor
+                    } else {
+                        0..*indices_to_size.get(d).unwrap()
+                    }
+                })
                 .multi_cartesian_product()
                 .collect::<Vec<_>>();
 
-            // Compute the product of all input tensors
-            for pair in input_pairs {
-                prod = prod
-                    + pair
-                        .into_iter()
-                        .fold(T::one().unwrap(), |acc, x| acc * x.clone());
+            // If there are no common indices, then we need to add an empty slice to force one iteration of the loop
+            if common_coord.len() == 0 {
+                common_coord.push(vec![]);
             }
-        }
-        output.set(&coord, prod.clone());
-    }
+
+            let mut prod = T::zero().unwrap();
+
+            // Compute the cartesian product of all common indices
+            for common_dim in common_coord {
+                let inputs = (0..inputs.len())
+                    .map(|idx| {
+                        let mut slice = vec![];
+                        // Iterate over all indices in the input equation
+                        for (i, c) in inputs_eq[idx].chars().enumerate() {
+                            // If the current index is common to multiple inputs, then the slice should be the current coordinate
+                            if let Some(j) = common_indices_to_inputs.iter().position(|&r| r == c) {
+                                slice.push(common_dim[j]..common_dim[j] + 1);
+                            } else {
+                                slice.push(0..inputs[idx].dims()[i]);
+                            }
+                        }
+                        // Get the slice of the input tensor
+                        inputs[idx].get_slice(&slice).unwrap()
+                    })
+                    .collect::<Vec<_>>();
+
+                let input_pairs = inputs
+                    .iter()
+                    .map(|d| d.iter())
+                    .multi_cartesian_product()
+                    .collect::<Vec<_>>();
+
+                // Compute the product of all input tensors
+                for pair in input_pairs {
+                    prod = prod
+                        + pair
+                            .into_iter()
+                            .fold(T::one().unwrap(), |acc, x| acc * x.clone());
+                }
+            }
+            prod
+        })
+        .collect();
+
+    let mut output: Tensor<T> = output.into_iter().into();
+    output.reshape(&output_shape);
 
     Ok(output)
 }
