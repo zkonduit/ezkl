@@ -59,8 +59,6 @@ pub enum TranscriptType {
 pub struct ModelInput {
     /// Inputs to the model / computational graph.
     pub input_data: Vec<Vec<f32>>,
-    /// The shape of said inputs.
-    pub input_shapes: Vec<Vec<usize>>,
     /// The expected output of the model (can be empty vectors if outputs are not being constrained).
     pub output_data: Vec<Vec<f32>>,
 }
@@ -87,7 +85,6 @@ impl ToPyObject for ModelInput {
         let output_data_mut = &self.output_data;
         dict.set_item("input_data", truncate_nested_vector(&input_data_mut))
             .unwrap();
-        dict.set_item("input_shapes", &self.input_shapes).unwrap();
         dict.set_item("output_data", truncate_nested_vector(&output_data_mut))
             .unwrap();
 

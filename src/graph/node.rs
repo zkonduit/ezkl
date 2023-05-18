@@ -91,7 +91,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
         };
 
         // get the output shape
-        let mut out_dims = {
+        let out_dims = {
             let output_shapes = match node_output_shapes(&node) {
                 Ok(s) => Some(s),
                 _ => None,
@@ -100,23 +100,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
             if let Some([Some(v)]) = output_shapes.as_deref() {
                 v.to_vec()
             } else {
-                // Turn  `outputs: [?,3,32,32,F32 >3/0]` into `vec![3,32,32]`  in two steps
-                node.outputs[0]
-                    .fact
-                    .shape
-                    .iter()
-                    // .filter_map(|x| x.concretize())
-                    .map(|x| x.to_i64().unwrap() as usize)
-                    .collect()
+                panic!("Could not get output shape for node {:?}", node);
             }
-        };
-
-        // rm batch
-        if !out_dims.is_empty() && out_dims[0] == 1 && out_dims.len() > 1 {
-            out_dims = out_dims[1..].to_vec();
-        }
-        if out_dims.iter().product::<usize>() == 1 {
-            out_dims = vec![1];
         };
 
         Ok(Node {

@@ -99,7 +99,7 @@ fn runcnvrl(c: &mut Criterion) {
                 (0..IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH)
                     .map(|_| Value::known(Fr::random(OsRng))),
             );
-            image.reshape(&[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH]);
+            image.reshape(&[1, IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH]);
             let mut kernels = Tensor::from(
                 (0..{ OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH })
                     .map(|_| Value::known(Fr::random(OsRng))),
