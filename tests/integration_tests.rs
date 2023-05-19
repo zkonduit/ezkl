@@ -881,6 +881,26 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+
+        let pf_arg = format!("{}/{}_evm.pf", TEST_DIR.path().to_str().unwrap(), example_name);
+
+        let mut args = vec![
+            "verify-evm",
+            "--proof-path",
+            pf_arg.as_str(),
+            "--deployment-code-path",
+            code_arg.as_str(),
+            "--optimizer-runs=1"
+        ];
+        if with_solidity {
+            args.push("--sol-code-path");
+            args.push(sol_arg.as_str());
+        }
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(args)
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
     }
 
     // prove-serialize-verify, the usual full path

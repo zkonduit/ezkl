@@ -132,9 +132,11 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
     runs: Option<usize>
 ) -> Result<ContractFactory<M>, Box<dyn Error>> {
     const MAX_RUNTIME_BYTECODE_SIZE: usize = 24_577; // Smart contract size limit
-    // Creater the compiler input, setting the optimzer run setting to 1 to optimize the bytecode deployment size.
-    let input = if let Some(r) = runs {
-        CompilerInput::new(sol_code_path)?[0].clone().optimizer(r)
+    // Create the compiler input, enabling the optimizer and setting the optimzer runs.
+    let input: CompilerInput = if let Some(r) = runs {
+        let mut i = CompilerInput::new(sol_code_path)?[0].clone().optimizer(r);
+        i.settings.optimizer.enable();
+        i
     } else {
         CompilerInput::new(sol_code_path)?[0].clone()
     };
