@@ -882,7 +882,7 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let pf_arg = format!("{}/{}_evm.pf", TEST_DIR.path().to_str().unwrap(), example_name);
+        let pf_arg = format!("{}/{}_evm_aggr.pf", TEST_DIR.path().to_str().unwrap(), example_name);
 
         let mut args = vec![
             "verify-evm",
