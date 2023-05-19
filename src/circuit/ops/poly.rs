@@ -16,6 +16,9 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Matmul {
         a: Option<ValTensor<F>>,
     },
+    Einsum {
+        equation: String,
+    },
     Conv {
         kernel: ValTensor<F>,
         bias: Option<ValTensor<F>>,
@@ -106,6 +109,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     }
     fn as_str(&self) -> &'static str {
         match &self {
+            PolyOp::Einsum { .. } => "EINSUM",
             PolyOp::Identity => "IDENTITY",
             PolyOp::Reshape(_) => "RESHAPE",
             PolyOp::Flatten(_) => "FLATTEN",
@@ -132,6 +136,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         let mut inputs = inputs.to_vec();
         match &self {
+            PolyOp::Einsum { equation } => tensor::ops::einsum(equation, &inputs),
             PolyOp::Gather { dim, index } => tensor::ops::gather(&inputs[0], *dim, index),
             PolyOp::Identity => Ok(inputs[0].clone()),
             PolyOp::Reshape(new_dims) => {
@@ -172,7 +177,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
 
                 tensor::ops::matmul(&inputs)
             }
-            PolyOp::Dot => tensor::ops::dot(&inputs.iter().collect()),
+            PolyOp::Dot => tensor::ops::dot(&inputs[..]),
             PolyOp::Conv {
                 kernel: a,
                 bias,
@@ -216,10 +221,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 let a = inputs[2].clone();
                 let b = inputs[1].clone();
 
-                let out = (mask.clone() * a.clone())?
-                    - ((Tensor::from(vec![1_i128].into_iter()) - mask.clone())? * b.clone())?;
+                let masked_a = (mask.clone() * a.clone())?;
+                let masked_b =
+                    ((Tensor::from(vec![1_i128].into_iter()) - mask.clone())? * b.clone())?;
 
-                Ok(out?)
+                masked_a + masked_b
             }
             PolyOp::Concat { axis } => {
                 if inputs.len() < 2 {
@@ -246,6 +252,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
         let mut values = values.to_vec();
 
         Ok(Some(match self {
+            PolyOp::Einsum { equation } => {
+                let out = layouts::einsum(config, region, &mut values, equation, offset)?;
+                out.into()
+            }
             PolyOp::Gather { dim, index } => {
                 tensor::ops::gather(&values[0].get_inner_tensor()?, *dim, index)?.into()
             }
@@ -351,6 +361,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
 
     fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
         match self {
+            PolyOp::Einsum { .. } => {
+                let mut scale = in_scales[0];
+                for s in in_scales.iter().skip(1) {
+                    scale += *s;
+                }
+                scale
+            }
             PolyOp::Gather { .. } => in_scales[0],
             PolyOp::Iff => in_scales[1],
             PolyOp::Dot => in_scales[0] + in_scales[1],

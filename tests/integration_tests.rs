@@ -165,7 +165,7 @@ mod native_tests {
         "1l_max_pool",
     ];
 
-    const EXAMPLES: [&str; 2] = ["mlp_4d", "conv2d_mnist"];
+    const EXAMPLES: [&str; 3] = ["mlp_4d", "mlp_4d_einsum", "conv2d_mnist"];
 
     macro_rules! test_func_aggr {
     () => {
@@ -356,7 +356,7 @@ mod native_tests {
             use crate::native_tests::EXAMPLES;
             use test_case::test_case;
             use crate::native_tests::run_example as run;
-            seq!(N in 0..=1 {
+            seq!(N in 0..=2 {
             #(#[test_case(EXAMPLES[N])])*
             fn example_(test: &str) {
                 run(test.to_string());

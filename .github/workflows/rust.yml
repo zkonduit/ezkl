@@ -63,6 +63,8 @@ jobs:
           components: rustfmt, clippy
       - name: Bench accum matmul
         run: cargo bench --verbose --bench accum_matmul
+      - name: Bench einsum accum matmul
+        run: cargo bench --verbose --bench accum_einsum_matmul
       - name: Bench accum matmul relu
         run: cargo bench --verbose --bench accum_matmul_relu
       - name: Bench relu

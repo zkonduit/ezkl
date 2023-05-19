@@ -114,6 +114,10 @@ harness = false
 name = "accum_matmul"
 harness = false
 
+[[bench]]
+name = "accum_einsum_matmul"
+harness = false
+
 
 [[bench]]
 name = "accum_conv"

@@ -131,7 +131,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
     ) -> Result<ModelCircuit<F>, Box<dyn std::error::Error>> {
         // quantize the supplied data using the provided scale.
         let mut inputs: Vec<Tensor<i128>> = vec![];
-        for (input, shape) in data.input_data.iter().zip(data.input_shapes.clone()) {
+        for (input, shape) in data.input_data.iter().zip(model.input_shapes().clone()) {
             let t: Vec<i128> = input
                 .par_iter()
                 .map(|x| quantize_float(x, 0.0, model.run_args.scale).unwrap())

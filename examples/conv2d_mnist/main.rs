@@ -294,7 +294,7 @@ pub fn runconv() {
         .map(Value::known)
         .into();
 
-    input.reshape(&[1, 28, 28]).unwrap();
+    input.reshape(&[1, 1, 28, 28]).unwrap();
 
     let myparams = params::Params::new();
     let mut l0_kernels: ValTensor<F> = Tensor::<Value<F>>::from(
