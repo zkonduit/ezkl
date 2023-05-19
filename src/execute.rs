@@ -76,7 +76,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             rpc_url,
             deployment_code_path,
             sol_code_path,
-        } => deploy_verifier_evm(secret, rpc_url, deployment_code_path, sol_code_path).await,
+            optimizer_runs,
+        } => deploy_verifier_evm(secret, rpc_url, deployment_code_path, sol_code_path, optimizer_runs).await,
         Commands::GenSrs {
             params_path,
             logrows,
@@ -179,7 +180,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             proof_path,
             deployment_code_path,
             sol_code_path,
-        } => verify_evm(proof_path, deployment_code_path, sol_code_path).await,
+            optimizer_runs
+        } => verify_evm(proof_path, deployment_code_path, sol_code_path, optimizer_runs).await,
         Commands::PrintProofHex { proof_path } => print_proof_hex(proof_path),
     }
 }
@@ -330,6 +332,7 @@ async fn deploy_verifier_evm(
     rpc_url: String,
     deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
+    runs: Option<usize>
 ) -> Result<(), Box<dyn Error>> {
     let provider = get_provider(&rpc_url)?;
     let chain_id = provider.get_chainid().await?;
@@ -337,11 +340,11 @@ async fn deploy_verifier_evm(
     if let Some(secret) = secret {
         let mnemonic = read_to_string(secret)?;
         let client = Arc::new(get_wallet_signing_provider(provider, &mnemonic).await?);
-        deploy_verifier(client, deployment_code_path, sol_code_path).await?;
+        deploy_verifier(client, deployment_code_path, sol_code_path, runs).await?;
     } else {
         warn!("connect your Ledger and open the Ethereum app");
         let client = Arc::new(get_ledger_signing_provider(provider, chain_id.as_u64()).await?);
-        deploy_verifier(client, deployment_code_path, sol_code_path).await?;
+        deploy_verifier(client, deployment_code_path, sol_code_path, runs).await?;
     };
     Ok(())
 }
@@ -489,13 +492,18 @@ async fn verify_evm(
     proof_path: PathBuf,
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
+    runs: Option<usize>
 ) -> Result<(), Box<dyn Error>> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
     let code = DeploymentCode::load(&deployment_code_path)?;
     evm_verify(code, proof.clone())?;
 
     if sol_code_path.is_some() {
-        let result = verify_proof_via_solidity(proof, sol_code_path.unwrap()).await?;
+        let result = verify_proof_via_solidity(
+            proof, 
+            sol_code_path.unwrap(), 
+            runs
+        ).await?;
 
         info!("Solidity verification result: {}", result);
 

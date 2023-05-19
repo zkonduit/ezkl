@@ -426,6 +426,11 @@ pub enum Commands {
         /// The path to output the Solidity code (optional) supercedes deployment_code_path in priority
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
+        /// The number of runs set to the SOLC optimizer.
+        /// Lower values optimze for deployment size while higher values optimize for execution cost.
+        /// If not set will just use the default unoptimized SOLC configuration.
+        #[arg(long)]
+        optimizer_runs: Option<usize>
     },
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -496,6 +501,11 @@ pub enum Commands {
         /// The path to the Solidity code
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
+        /// The number of runs set to the SOLC optimizer.
+        /// Lower values optimze for deployment size while higher values optimize for execution cost.
+        /// If not set will just use the default unoptimized SOLC configuration.
+        #[arg(long)]
+        optimizer_runs: Option<usize>
     },
 
     /// Print the proof in hexadecimal

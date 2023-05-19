@@ -69,17 +69,17 @@ pub async fn setup_eth_backend() -> Result<(AnvilInstance, EthersClient), Box<dy
 pub async fn verify_proof_via_solidity(
     proof: Snark<Fr, G1Affine>,
     sol_code_path: PathBuf,
+    runs: Option<usize>
 ) -> Result<bool, Box<dyn Error>> {
+
     let (anvil, client) = setup_eth_backend().await?;
 
-    // Creater the compiler input, setting the optimzer run setting to 1 to optimize the bytecode deployment size.
-    let input = CompilerInput::new(sol_code_path)?[0].clone().optimizer(1);
-    let compiled = Solc::default().compile(&input)?;
-    let (abi, bytecode, _runtime_bytecode) = compiled
-        .find("Verifier")
-        .expect("could not find contract")
-        .into_parts_or_default();
-    let factory = ContractFactory::new(abi, bytecode, client.clone());
+    let factory = get_sol_contract_factory(
+        sol_code_path,
+        client.clone(),
+        runs
+    ).unwrap();
+    
     let contract = factory.deploy(())?.send().await?;
     let addr = contract.address();
 
@@ -123,6 +123,37 @@ pub async fn verify_proof_via_solidity(
 
     drop(anvil);
     Ok(result)
+}
+
+/// Generates the contract factory for a solidity verifier, optionally compiling the code with optimizer runs set on the Solc compiler.
+fn get_sol_contract_factory<M: 'static + Middleware>(
+    sol_code_path: PathBuf,
+    client: Arc<M>,
+    runs: Option<usize>
+) -> Result<ContractFactory<M>, Box<dyn Error>> {
+    const MAX_RUNTIME_BYTECODE_SIZE: usize = 24_577; // Smart contract size limit
+    // Creater the compiler input, setting the optimzer run setting to 1 to optimize the bytecode deployment size.
+    let input = if let Some(r) = runs {
+        CompilerInput::new(sol_code_path)?[0].clone().optimizer(r)
+    } else {
+        CompilerInput::new(sol_code_path)?[0].clone()
+    };
+    let compiled = Solc::default().compile(&input).unwrap();
+    let (abi, bytecode, _runtime_bytecode) = compiled
+        .find("Verifier")
+        .expect("could not find contract")
+        .into_parts_or_default();
+    let size = _runtime_bytecode.len();
+    if size > MAX_RUNTIME_BYTECODE_SIZE {
+        // `_runtime_bytecode` exceeds the limit
+        panic!(
+            "Solidity runtime bytecode size is: {:#?}, 
+            which exceeds 24577 bytes limit.
+            Try setting '--optimzer-runs 1' 
+            so SOLC can optimize for the smallest deployment", size
+        );                
+    } 
+    Ok(ContractFactory::new(abi, bytecode, client.clone()))
 }
 
 /// Parses a private key into a [SigningKey]  
@@ -198,6 +229,7 @@ pub async fn deploy_verifier<M: 'static + Middleware>(
     client: Arc<M>,
     deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
+    runs: Option<usize>
 ) -> Result<(), Box<dyn Error>> {
     // comment the following two lines if want to deploy to anvil
 
@@ -206,16 +238,11 @@ pub async fn deploy_verifier<M: 'static + Middleware>(
 
     // sol code supercedes deployment code
     let factory = match sol_code_path {
-        Some(path) => {
-            // Creater the compiler input, setting the optimzer run setting to 1 to optimize the bytecode deployment size.
-            let input = CompilerInput::new(path)?[0].clone().optimizer(1);
-            let compiled = Solc::default().compile(&input).unwrap();
-            let (abi, bytecode, _runtime_bytecode) = compiled
-                .find("Verifier")
-                .expect("could not find contract")
-                .into_parts_or_default();
-            ContractFactory::new(abi, bytecode, client.clone())
-        }
+        Some(path) => get_sol_contract_factory(
+            path,
+            client.clone(),
+            runs
+        ).unwrap(),
         None => match deployment_code_path {
             Some(path) => {
                 let bytecode = DeploymentCode::load(&path)?;
