@@ -225,7 +225,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
 #[derive(Clone, Debug)]
 pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
     ///
-    pub values: Tensor<f64>,
+    pub values: Tensor<f32>,
     /// scale to quantize with
     pub scale: u32,
     /// is public ?
@@ -235,7 +235,7 @@ pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
 
 impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
     ///
-    pub fn new(values: Tensor<f64>, scale: u32, public: bool) -> Self {
+    pub fn new(values: Tensor<f32>, scale: u32, public: bool) -> Self {
         Self {
             values,
             scale,

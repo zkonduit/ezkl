@@ -389,10 +389,10 @@ fn forward(
         .iter()
         .map(|scale| scale_to_multiplier(*scale));
 
-    let float_res: Vec<Vec<f64>> = res
+    let float_res: Vec<Vec<f32>> = res
         .iter()
         .zip(output_scales)
-        .map(|(t, scale)| t.iter().map(|e| (*e as f64 / scale)).collect_vec())
+        .map(|(t, scale)| t.iter().map(|e| ((*e as f64 / scale) as f32)).collect_vec())
         .collect();
     trace!("forward pass output: {:?}", float_res);
     data.output_data = float_res;

@@ -36,9 +36,9 @@ use tract_onnx::tract_hir::{
 /// * `dims` - the dimensionality of the resulting [Tensor].
 /// * `shift` - offset used in the fixed point representation.
 /// * `scale` - `2^scale` used in the fixed point representation.
-pub fn quantize_float(elem: &f64, shift: f64, scale: u32) -> Result<i128, TensorError> {
-    let mult = scale_to_multiplier(scale);
-    let max_value = ((i128::MAX as f64 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
+pub fn quantize_float(elem: &f32, shift: f32, scale: u32) -> Result<i128, TensorError> {
+    let mult = scale_to_multiplier(scale) as f32;
+    let max_value = ((i128::MAX as f32 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
 
     if *elem > max_value {
         return Err(TensorError::SigBitTruncatioError);
@@ -75,7 +75,7 @@ pub fn node_output_shapes(
 
 fn extract_tensor_value(
     input: Arc<tract_onnx::prelude::Tensor>,
-) -> Result<Tensor<f64>, Box<dyn std::error::Error>> {
+) -> Result<Tensor<f32>, Box<dyn std::error::Error>> {
     let dt = input.datum_type();
     let mut dims = input.shape().to_vec();
     if dims.is_empty() {
@@ -84,34 +84,33 @@ fn extract_tensor_value(
         dims = vec![1];
     };
 
-    let mut const_value: Tensor<f64>;
+    let mut const_value: Tensor<f32>;
     match dt {
         DatumType::F32 => {
             let vec = input.as_slice::<f32>()?.to_vec();
-            let cast: Vec<f64> = vec.iter().map(|x| *x as f64).collect();
-            const_value = Tensor::<f64>::new(Some(&cast), &dims)?;
+            const_value = vec.into_iter().into();
         }
 
         DatumType::I64 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<i64>()?.to_vec();
-            let cast: Vec<f64> = vec.iter().map(|x| *x as f64).collect();
-            const_value = Tensor::<f64>::new(Some(&cast), &dims)?;
+            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::Bool => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<bool>()?.to_vec();
-            let cast: Vec<f64> = vec.iter().map(|x| *x as usize as f64).collect();
-            const_value = Tensor::<f64>::new(Some(&cast), &dims)?;
+            let cast: Vec<f32> = vec.iter().map(|x| *x as usize as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::TDim => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<tract_onnx::prelude::TDim>()?.to_vec();
-            let cast: Vec<f64> = vec
+            let cast: Vec<f32> = vec
                 .iter()
-                .map(|x| x.to_i64().map_or_else(|_| 1, |e| e) as f64)
+                .map(|x| x.to_i64().map_or_else(|_| 1, |e| e) as f32)
                 .collect();
-            const_value = Tensor::<f64>::new(Some(&cast), &dims)?;
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         _ => todo!(),
     }
@@ -122,7 +121,7 @@ fn extract_tensor_value(
 
 /// Converts a tensor to a [ValTensor] with a given scale.
 pub fn tensor_to_valtensor<F: PrimeField + TensorType + PartialOrd>(
-    const_value: Tensor<f64>,
+    const_value: Tensor<f32>,
     scale: u32,
     public_params: bool,
 ) -> Result<ValTensor<F>, Box<dyn std::error::Error>> {
@@ -498,7 +497,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             if inputs.len() == 2 {
                 *inputs = vec![inputs[1].clone()];
                 Box::new(LookupOp::GreaterThan {
-                    a: crate::circuit::utils::F32(unit as f32),
+                    a: crate::circuit::utils::F32(unit),
                 })
             } else {
                 todo!()
