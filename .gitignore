@@ -31,3 +31,4 @@ var/
 .installed.cfg
 *.egg
 .vscode/
+*.whl
