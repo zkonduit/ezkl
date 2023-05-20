@@ -58,9 +58,9 @@ pub enum TranscriptType {
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct ModelInput {
     /// Inputs to the model / computational graph.
-    pub input_data: Vec<Vec<f32>>,
+    pub input_data: Vec<Vec<f64>>,
     /// The expected output of the model (can be empty vectors if outputs are not being constrained).
-    pub output_data: Vec<Vec<f32>>,
+    pub output_data: Vec<Vec<f64>>,
 }
 
 /// Truncates nested vector due to omit junk floating point values in python

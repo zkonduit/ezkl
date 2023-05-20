@@ -8,7 +8,6 @@ use halo2_proofs::circuit::{Region, Value};
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::error;
-use rayon::prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
 use crate::{
     circuit::{ops::base::BaseOp, utils, BaseConfig, CheckMode, CircuitError},
@@ -17,9 +16,9 @@ use crate::{
         get_broadcasted_shape,
         ops::{
             accumulated, add, conv as non_accum_conv, dot as non_accum_dot,
-            einsum as non_accum_einsum, matmul as non_accum_matmul,
-            max_pool2d as non_accum_max_pool2d, mult, pack as non_accum_pack,
-            rescale as ref_rescaled, sub, sum as non_accum_sum, sumpool as non_accum_sumpool,
+            einsum as non_accum_einsum, max_pool2d as non_accum_max_pool2d, mult,
+            pack as non_accum_pack, rescale as ref_rescaled, sub, sum as non_accum_sum,
+            sumpool as non_accum_sumpool,
         },
         Tensor, TensorError, ValType,
     },
@@ -28,92 +27,9 @@ use crate::{
 use super::*;
 use crate::circuit::ops::lookup::LookupOp;
 
-fn allocate_multi_dot<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
-    region: &mut Option<&mut Region<F>>,
-    a: &mut [ValTensor<F>],
-    b: &mut [ValTensor<F>],
-    c: &mut [ValTensor<F>],
-    offset: &mut usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
-    if a.len() != b.len() {
-        return Err(Box::new(TensorError::DimMismatch("dot".to_string())));
-    }
-
-    let mut res: Tensor<Tensor<ValType<F>>> = Tensor::new(None, &[a.len()])?;
-
-    let mut index = 0;
-    for ((a, b), c) in a.iter_mut().zip(b).zip(c) {
-        let mut inputs = vec![];
-        let mut assigned_len = 0;
-        for (i, input) in [&a, &b].iter().enumerate() {
-            let inp = {
-                let (res, len) = config.inputs[i].assign_with_duplication(
-                    region,
-                    *offset,
-                    input,
-                    &config.check_mode,
-                )?;
-                assigned_len = len;
-                res.get_inner()?
-            };
-            inputs.push(inp);
-        }
-
-        let (output, output_assigned_len) =
-            config
-                .output
-                .assign_with_duplication(region, *offset, c, &config.check_mode)?;
-
-        // free up
-        *a = ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?);
-        *b = ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?);
-        *c = ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?);
-
-        assert_eq!(assigned_len, output_assigned_len);
-
-        if let Some(region) = region {
-            for i in 0..assigned_len {
-                let (x, y) = config.output.cartesian_coord(*offset + i);
-                // hop over duplicates at start of column
-                if y == 0 && i > 0 {
-                    continue;
-                }
-                if i == 0 {
-                    config
-                        .selectors
-                        .get(&(BaseOp::Mult, x))
-                        .unwrap()
-                        .enable(*region, y)?;
-                } else {
-                    config
-                        .selectors
-                        .get(&(BaseOp::Dot, x))
-                        .unwrap()
-                        .enable(*region, y)?;
-                }
-            }
-        }
-
-        let last_elem = output
-            .get_slice(&[output.len() - 1..output.len()])
-            .expect("accum poly: failed to fetch last elem");
-
-        res[index] = last_elem.get_inner_tensor()?;
-
-        index += 1;
-
-        *offset += assigned_len;
-    }
-
-    let output = res.combine()?;
-
-    Ok(output.into())
-}
-
 /// Einsum
 pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     inputs: &mut [ValTensor<F>],
     equation: &str,
@@ -173,7 +89,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     }
 
     // Create a new output tensor with the computed shape
-    let mut output = Tensor::new(None, &output_shape)?;
+    let mut output: Tensor<ValType<F>> = Tensor::new(None, &output_shape)?;
 
     let mut seen = HashSet::new();
     let mut common_indices_to_inputs = vec![];
@@ -187,8 +103,14 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         }
     }
 
-    // Compute the cartesian product of all indices
-    for coord in output_shape.iter().map(|d| 0..*d).multi_cartesian_product() {
+    let cartesian_coord = output_shape
+        .iter()
+        .map(|d| 0..*d)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    output.iter_mut().enumerate().for_each(|(i, o)| {
+        let coord = cartesian_coord[i].clone();
         // Compute the slice of each input tensor given the current coordinate of the output tensor
         let inputs = (0..inputs.len())
             .map(|idx| {
@@ -287,8 +209,8 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
                 }
             }
         }
-        output.set(&coord, prod.unwrap()[0].clone());
-    }
+        *o = prod.unwrap()[0].clone();
+    });
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
@@ -321,7 +243,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
 
 /// Dot product accumulated layout
 pub fn dot<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
     offset: &mut usize,
@@ -403,7 +325,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
 
 /// Sum accumulated layout
 pub fn sum<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
@@ -478,7 +400,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd>(
 
 /// Sum accumulated layout
 pub fn sum_axes<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     axes: &[usize],
@@ -530,7 +452,7 @@ pub fn sum_axes<F: PrimeField + TensorType + PartialOrd>(
 
 /// Max accumulated layout
 pub fn max_axes<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     axes: &[usize],
@@ -582,7 +504,7 @@ pub fn max_axes<F: PrimeField + TensorType + PartialOrd>(
 
 /// Min accumulated layout
 pub fn min_axes<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     axes: &[usize],
@@ -634,7 +556,7 @@ pub fn min_axes<F: PrimeField + TensorType + PartialOrd>(
 
 /// Pairwise (elementwise) op layout
 pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
     offset: &mut usize,
@@ -695,109 +617,9 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     Ok(output)
 }
 
-/// Matrix multiplication accumulated layout
-pub fn matmul<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
-    region: &mut Option<&mut Region<F>>,
-    values: &[ValTensor<F>; 2],
-    offset: &mut usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let (mut a, mut b) = (values[0].clone(), values[1].clone());
-
-    if a.dims().len() == 1 {
-        a.reshape(&[1, a.dims()[0]])?;
-    }
-    if b.dims().len() == 1 {
-        b.reshape(&[b.dims()[0], 1])?;
-    }
-
-    if (values.len() != 2)
-        || (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])
-        || (a.dims()[0..a.dims().len() - 2] != b.dims()[0..a.dims().len() - 2])
-    {
-        return Err(Box::new(TensorError::DimMismatch("matmul".to_string())));
-    }
-
-    let mut dims = Vec::from(&a.dims()[0..a.dims().len() - 2]);
-    dims.push(a.dims()[a.dims().len() - 2]);
-    dims.push(b.dims()[a.dims().len() - 1]);
-    // calculate value of output
-
-    let cartesian_coord = dims
-        .iter()
-        .map(|d| 0..*d)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
-
-    let (mut matrix, mut inputs, mut c) = (
-        vec![ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?); dims.iter().product()],
-        vec![ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?); dims.iter().product()],
-        vec![ValTensor::from(Tensor::<Value<F>>::new(None, &[0])?); dims.iter().product()],
-    );
-
-    matrix
-        .par_iter_mut()
-        .zip(&mut inputs)
-        .zip(&mut c)
-        .enumerate()
-        .for_each(|(i, ((m, inp), c))| {
-            let coord = &cartesian_coord[i];
-            let row = coord[0..coord.len() - 1]
-                .iter()
-                .map(|&d| d..(d + 1))
-                .collect::<Vec<_>>();
-            let mut col = coord[0..coord.len()]
-                .iter()
-                .map(|&d| d..(d + 1))
-                .collect::<Vec<_>>();
-            col[coord.len() - 2] = 0..b.dims()[coord.len() - 2];
-
-            *m = a.get_slice(&row[0..]).unwrap();
-            *inp = b.get_slice(&col[0..]).unwrap();
-
-            // low memory cost (1D tensor)
-
-            *c = accumulated::dot(&[m.get_inner().unwrap(), inp.get_inner().unwrap()])
-                .unwrap()
-                .into();
-        });
-
-    let mut output = allocate_multi_dot(config, region, &mut matrix, &mut inputs, &mut c, offset)?;
-
-    output.reshape(&dims)?;
-
-    if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
-        // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(ValTensor::from(output.clone()).get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
-        if is_assigned {
-            let safe_mm = non_accum_matmul(
-                &values
-                    .iter()
-                    .map(|x| x.get_inner().unwrap())
-                    .collect::<Vec<Tensor<_>>>(),
-            )
-            .map_err(|e| {
-                error!("{}", e);
-                halo2_proofs::plonk::Error::Synthesis
-            })?;
-
-            assert_eq!(
-                Into::<Tensor<i32>>::into(ValTensor::from(output.clone()).get_inner()?),
-                Into::<Tensor<i32>>::into(safe_mm),
-            )
-        };
-    }
-
-    // Now we can assign the matmul op
-    Ok(output.into())
-}
-
 /// Iff
 pub fn iff<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 3],
     offset: &mut usize,
@@ -862,7 +684,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
 
 /// Negation operation accumulated layout
 pub fn neg<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
@@ -894,7 +716,7 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd>(
 
 /// Sumpool accumulated layout
 pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>],
     padding: (usize, usize),
@@ -967,7 +789,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
 
 /// Convolution accumulated layout
 pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     padding: (usize, usize),
@@ -1040,7 +862,7 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
 
 /// Convolution accumulated layout
 pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::marker::Sync>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>],
     padding: (usize, usize),
@@ -1194,7 +1016,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
 
 /// Power accumulated layout
 pub fn pow<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     exponent: u32,
@@ -1236,7 +1058,7 @@ pub fn pow<F: PrimeField + TensorType + PartialOrd>(
 
 /// Rescaled op accumulated layout
 pub fn rescale<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>],
     scales: &[(usize, u128)],
@@ -1281,7 +1103,7 @@ pub fn rescale<F: PrimeField + TensorType + PartialOrd>(
 
 /// Pack accumulated layout
 pub fn pack<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     base: u32,
@@ -1349,7 +1171,7 @@ pub fn reshape<F: PrimeField + TensorType + PartialOrd>(
 
 /// Slice layout
 pub fn slice<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     axis: &usize,
@@ -1377,7 +1199,7 @@ pub fn concat<F: PrimeField + TensorType + PartialOrd>(
 
 /// Identity constraint. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
 pub fn identity<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
@@ -1391,7 +1213,7 @@ pub fn identity<F: PrimeField + TensorType + PartialOrd>(
 
 /// Layout for range check.
 pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
     offset: &mut usize,
@@ -1420,7 +1242,7 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
 
 /// Layout for nonlinearity check.
 pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     nl: &LookupOp,
@@ -1475,7 +1297,7 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
 /// mean function layout
 pub fn mean<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     scale: usize,
@@ -1492,7 +1314,7 @@ pub fn mean<F: PrimeField + TensorType + PartialOrd>(
 
 /// max layout
 pub fn max<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
@@ -1607,7 +1429,7 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
 
 /// min layout
 pub fn min<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     offset: &mut usize,
@@ -1724,7 +1546,7 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
 
 /// softmax layout
 pub fn multi_dim_softmax<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     input_scale: usize,
@@ -1776,7 +1598,7 @@ pub fn multi_dim_softmax<F: PrimeField + TensorType + PartialOrd>(
 
 /// softmax func
 pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 1],
     input_scale: usize,
@@ -1832,7 +1654,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
 /// is within the percent error expressed by the `tol` input, where `tol == 1.0` means the percent
 /// error tolerance is 1 percent.
 pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
-    config: &mut BaseConfig<F>,
+    config: &BaseConfig<F>,
     region: &mut Option<&mut Region<F>>,
     values: &[ValTensor<F>; 2],
     scale: usize,

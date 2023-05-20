@@ -159,7 +159,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
         let in_scales = in_scales
             .into_iter()
             .zip(self.scale.iter())
-            .map(|(a, b)| a + crate::graph::mult_to_scale(b.1 as f32))
+            .map(|(a, b)| a + crate::graph::mult_to_scale(b.1 as f64))
             .collect();
 
         Op::<F>::out_scale(&*self.inner, in_scales, _g)
@@ -225,7 +225,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
 #[derive(Clone, Debug)]
 pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
     ///
-    pub values: Tensor<f32>,
+    pub values: Tensor<f64>,
     /// scale to quantize with
     pub scale: u32,
     /// is public ?
@@ -235,7 +235,7 @@ pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
 
 impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
     ///
-    pub fn new(values: Tensor<f32>, scale: u32, public: bool) -> Self {
+    pub fn new(values: Tensor<f64>, scale: u32, public: bool) -> Self {
         Self {
             values,
             scale,

@@ -129,7 +129,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             }),
             LookupOp::Div { denom } => Box::new(LookupOp::Div {
                 denom: crate::circuit::utils::F32(
-                    denom.0 * scale_to_multiplier(inputs_scale[0] - global_scale),
+                    ((denom.0 as f64) * scale_to_multiplier(inputs_scale[0] - global_scale)) as f32,
                 ),
             }),
             LookupOp::ReLU { .. } => Box::new(LookupOp::ReLU {
@@ -176,7 +176,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                 ),
             }),
             LookupOp::GreaterThan { a } => Box::new(LookupOp::GreaterThan {
-                a: utils::F32(a.0 * scale_to_multiplier(inputs_scale[0])),
+                a: utils::F32(((a.0 as f64) * scale_to_multiplier(inputs_scale[0])) as f32),
             }),
         }
     }

@@ -68,7 +68,9 @@ impl Circuit<Fr> for MyCircuit {
         layouter.assign_region(
             || "",
             |mut region| {
-                let op = PolyOp::Matmul { a: None };
+                let op = PolyOp::Einsum {
+                    equation: "ij,jk->ik".to_string(),
+                };
                 let mut offset = 0;
                 let output = config
                     .base_config

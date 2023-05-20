@@ -104,6 +104,29 @@ impl TensorType for f32 {
     }
 }
 
+impl TensorType for f64 {
+    fn zero() -> Option<Self> {
+        Some(0.0)
+    }
+
+    // f32 doesnt impl Ord so we cant just use max like we can for i32, usize.
+    // A comparison between f32s needs to handle NAN values.
+    fn tmax(&self, other: &Self) -> Option<Self> {
+        match (self.is_nan(), other.is_nan()) {
+            (true, true) => Some(f64::NAN),
+            (true, false) => Some(*other),
+            (false, true) => Some(*self),
+            (false, false) => {
+                if self >= other {
+                    Some(*self)
+                } else {
+                    Some(*other)
+                }
+            }
+        }
+    }
+}
+
 tensor_type!(i128, Int128, 0, 1);
 tensor_type!(i32, Int32, 0, 1);
 tensor_type!(usize, USize, 0, 1);
