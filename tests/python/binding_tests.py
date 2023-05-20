@@ -20,6 +20,7 @@ examples_path = os.path.abspath(
 )
 
 params_path = os.path.join(folder_path, 'kzg_test.params')
+params_k20_path = os.path.join(folder_path, 'kzg_test_k20.params')
 
 
 def test_table_1l_average():
@@ -48,11 +49,14 @@ def test_table_1l_average():
 
 # def test_gen_srs():
 #     """
-#     Test for gen_srs() with 17 logrows.
+#     test for gen_srs() with 17 logrows and 20 logrows.
 #     You may want to comment this test as it takes a long time to run
 #     """
 #     ezkl_lib.gen_srs(params_path, 17)
 #     assert os.path.isfile(params_path)
+
+#     ezkl_lib.gen_srs(params_k20_path, 20)
+#     assert os.path.isfile(params_k20_path)
 
 
 def test_forward():
@@ -147,6 +151,43 @@ def test_setup():
     assert os.path.isfile(circuit_params_path)
 
 
+def test_setup_evm():
+    """
+    Test for setup
+    """
+
+    data_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_average',
+        'input.json'
+    )
+
+    model_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_average',
+        'network.onnx'
+    )
+
+    pk_path = os.path.join(folder_path, 'test_evm.pk')
+    vk_path = os.path.join(folder_path, 'test_evm.vk')
+    circuit_params_path = os.path.join(folder_path, 'circuit.params')
+
+    res = ezkl_lib.setup(
+        data_path,
+        model_path,
+        vk_path,
+        pk_path,
+        params_path,
+        circuit_params_path,
+    )
+    assert res == True
+    assert os.path.isfile(vk_path)
+    assert os.path.isfile(pk_path)
+    assert os.path.isfile(circuit_params_path)
+
+
 def test_prove():
     """
     Test for prove
@@ -184,6 +225,43 @@ def test_prove():
     assert os.path.isfile(proof_path)
 
 
+def test_prove_evm():
+    """
+    Test for prove using evm transcript
+    """
+
+    data_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_average',
+        'input.json'
+    )
+
+    model_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_average',
+        'network.onnx'
+    )
+
+    pk_path = os.path.join(folder_path, 'test_evm.pk')
+    proof_path = os.path.join(folder_path, 'test_evm.pf')
+    circuit_params_path = os.path.join(folder_path, 'circuit.params')
+
+    res = ezkl_lib.prove(
+        data_path,
+        model_path,
+        pk_path,
+        proof_path,
+        params_path,
+        "evm",
+        "single",
+        circuit_params_path,
+    )
+    assert res == True
+    assert os.path.isfile(proof_path)
+
+
 def test_verify():
     """
     Test for verify
@@ -204,37 +282,12 @@ def test_verify():
 
 def test_create_evm_verifier():
     """
-    Create EVM verifier without solidity code
-    In order to run this test you will need to install solc in the environment
-    """
-    vk_path = os.path.join(folder_path, 'test.vk')
-    proof_path = os.path.join(folder_path, 'test.pf')
-    circuit_params_path = os.path.join(folder_path, 'circuit.params')
-    deployment_code_path = os.path.join(folder_path, 'deploy')
-    # sol_code_path = os.path.join(folder_path, 'test.sol')
-
-    res = ezkl_lib.create_evm_verifier(
-        vk_path,
-        params_path,
-        circuit_params_path,
-        deployment_code_path,
-        # sol_code_path
-    )
-
-    assert res == True
-    assert os.path.isfile(deployment_code_path)
-    # assert os.path.isfile(sol_code_path)
-
-
-def test_create_evm_verifier_solidity():
-    """
     Create EVM verifier with solidity code
-    In order to run this test you will need to install solc in the environment
+    In order to run this test you will need to install solc in your environment
     """
-    vk_path = os.path.join(folder_path, 'test.vk')
-    proof_path = os.path.join(folder_path, 'test.pf')
+    vk_path = os.path.join(folder_path, 'test_evm.vk')
     circuit_params_path = os.path.join(folder_path, 'circuit.params')
-    deployment_code_path = os.path.join(folder_path, 'deploy.params')
+    deployment_code_path = os.path.join(folder_path, 'deploy.code')
     sol_code_path = os.path.join(folder_path, 'test.sol')
 
     res = ezkl_lib.create_evm_verifier(
@@ -248,3 +301,23 @@ def test_create_evm_verifier_solidity():
     assert res == True
     assert os.path.isfile(deployment_code_path)
     assert os.path.isfile(sol_code_path)
+
+
+def test_verify_evm():
+    """
+    Verifies an evm proof
+    In order to run this you will need to install solc in your environment
+    """
+    proof_path = os.path.join(folder_path, 'test_evm.pf')
+    deployment_code_path = os.path.join(folder_path, 'deploy.code')
+
+    # TODO: without optimization there will be out of gas errors
+    # sol_code_path = os.path.join(folder_path, 'test.sol')
+
+    res = ezkl_lib.verify_evm(
+        proof_path,
+        deployment_code_path,
+        # sol_code_path
+    )
+
+    assert res == True

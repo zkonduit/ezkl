@@ -14,7 +14,7 @@ use halo2_proofs::poly::kzg::{
 };
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
 use halo2curves::bn256::{Bn256, Fr};
-use log::{trace, info};
+use log::trace;
 use pyo3::exceptions::{PyIOError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -40,8 +40,6 @@ use tokio::runtime::Runtime;
 //         .render(args.logrows, &circuit, &root)?;
 // }
 
-/// Environment variable for EZKLCONF
-// const EZKLCONF: &str = "EZKLCONF";
 
 /// pyclass containing the struct used for run_args
 #[pyclass]
@@ -285,7 +283,7 @@ fn setup(
 
     // save the prover key
     save_pk::<KZGCommitmentScheme<Bn256>>(&pk_path, &proving_key)
-        .map_err(|_| PyIOError::new_err("Failed to save verifier key to vk_path"))?;
+        .map_err(|_| PyIOError::new_err("Failed to save proving key to pk_path"))?;
 
     // save the circuit
     circuit_params.save(&circuit_params_path);
@@ -414,7 +412,7 @@ fn verify(
     }
 }
 
-/// creates an EVM compatible verifier
+/// creates an EVM compatible verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
     vk_path,
     params_path,
@@ -464,35 +462,35 @@ fn create_evm_verifier(
     Ok(true)
 }
 
-// verifies an evm compatible proof
-// #[pyfunction(signature = (
-//     proof_path,
-//     deployment_code_path,
-//     sol_code_path,
-// ))]
-// fn verify_evm(
-//     proof_path: PathBuf,
-//     deployment_code_path: PathBuf,
-//     sol_code_path: Option<PathBuf>,
-// ) -> Result<bool, PyErr> {
-//     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)
-//         .map_err(|_| PyIOError::new_err("Failed to load proof"));
-//     let code = DeploymentCode::load(&deployment_code_path)
-//         .map_err(|_| PyIOError::new_err("Failed to load deployment code path"));
-//     evm_verify(code, proof?.clone())
-//         .map_err(|_| PyRuntimeError::new_err("Failed to verify with evm"));
+// verifies an evm compatible proof, you will need solc installed in your environment to run this
+#[pyfunction(signature = (
+    proof_path,
+    deployment_code_path,
+    sol_code_path=None,
+))]
+fn verify_evm(
+    proof_path: PathBuf,
+    deployment_code_path: PathBuf,
+    sol_code_path: Option<PathBuf>,
+) -> Result<bool, PyErr> {
+    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)
+        .map_err(|_| PyIOError::new_err("Failed to load proof"))?;
+    let code = DeploymentCode::load(&deployment_code_path)
+        .map_err(|_| PyIOError::new_err("Failed to load deployment code path"))?;
+    evm_verify(code, proof.clone())
+        .map_err(|_| PyRuntimeError::new_err("Failed to verify with evm"))?;
 
-//     if sol_code_path.is_some() {
-//         let result = Runtime::new().unwrap().block_on(
-//             verify_proof_via_solidity(proof, sol_code_path.unwrap())
-//         ).map_err(|_| PyRuntimeError::new_err("Failed to verify proof via solidity"));
+    if sol_code_path.is_some() {
+        let result = Runtime::new().unwrap().block_on(
+            verify_proof_via_solidity(proof, sol_code_path.unwrap())
+        ).map_err(|_| PyRuntimeError::new_err("Failed to verify proof via solidity"))?;
 
-//         // info!("Solidity verification result: {}", result);
+        trace!("Solidity verification result: {}", result);
 
-//         assert!(result);
-//     }
-//     Ok(true)
-// }
+        assert!(result);
+    }
+    Ok(true)
+}
 
 // TODO: CreateEVMVerifierAggr
 // TODO: DeployVerifierEVM (To be done in pyezkl)
@@ -514,7 +512,7 @@ fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(prove, m)?)?;
     m.add_function(wrap_pyfunction!(verify, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
-    // m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
+    m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
 
     Ok(())
 }
