@@ -3,7 +3,10 @@ use std::{any::Any, error::Error, marker::PhantomData};
 use halo2_proofs::circuit::Region;
 use serde::{Deserialize, Serialize};
 
-use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor};
+use crate::{
+    graph::quantize_float,
+    tensor::{self, Tensor, TensorError, TensorType, ValTensor},
+};
 use halo2curves::ff::PrimeField;
 
 use self::lookup::LookupOp;
@@ -19,14 +22,14 @@ pub mod lookup;
 ///
 pub mod poly;
 
-///
+/// An enum representing operations that can be represented as constraints in a circuit.
 pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + Sync + Any {
-    ///
+    /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError>;
-    ///
+    /// Returns a string representation of the operation.
     fn as_str(&self) -> &'static str;
 
-    ///
+    /// Layouts the operation in a circuit.
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
@@ -35,33 +38,33 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>>;
 
-    ///
+    /// Returns the scale of the output of the operation.
     fn out_scale(&self, _: Vec<u32>, global_scale: u32) -> u32 {
         global_scale
     }
 
-    ///
+    /// Do any of the inputs to this op require homogenous input scales?
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
         vec![]
     }
 
-    ///
+    /// Returns the lookups required by the operation.
     fn required_lookups(&self) -> Vec<LookupOp> {
         vec![]
     }
 
-    ///
+    /// Rescales the operation given a vector of input scales and a global (circuit) scale.
     fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>>;
 
-    ///
+    /// Returns true if the operation is an input.
     fn is_input(&self) -> bool {
         false
     }
 
-    ///
+    /// Boxes and clones
     fn clone_dyn(&self) -> Box<dyn Op<F>>;
 
-    ///
+    /// Returns a reference to the Any trait.
     fn as_any(&self) -> &dyn Any;
 }
 
@@ -73,9 +76,16 @@ impl<F: PrimeField + TensorType + PartialOrd> Clone for Box<dyn Op<F>> {
 
 ///
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct Input;
+pub struct Input {
+    ///
+    pub scale: u32,
+}
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
+    fn out_scale(&self, _: Vec<u32>, _: u32) -> u32 {
+        self.scale
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -87,6 +97,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
     fn as_str(&self) -> &'static str {
         "Input"
     }
+
     fn layout(
         &self,
         _: &mut crate::circuit::BaseConfig<F>,
@@ -110,12 +121,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
     }
 }
 
-///
+/// A wrapper for an operation that has been rescaled.
 #[derive(Clone, Debug)]
 pub struct Rescaled<F: PrimeField + TensorType + PartialOrd> {
-    ///
+    /// The operation to be rescaled.
     pub inner: Box<dyn Op<F>>,
-    ///
+    /// The scale of the operation's inputs.
     pub scale: Vec<(usize, u128)>,
 }
 
@@ -177,7 +188,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
     }
 }
 
-///
+/// An unknown operation.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 pub struct Unknown;
 
@@ -215,14 +226,20 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
 pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
     ///
     pub values: Tensor<f32>,
+    /// scale to quantize with
+    pub scale: u32,
+    /// is public ?
+    pub public: bool,
     _marker: PhantomData<F>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
     ///
-    pub fn new(values: Tensor<f32>) -> Self {
+    pub fn new(values: Tensor<f32>, scale: u32, public: bool) -> Self {
         Self {
             values,
+            scale,
+            public,
             _marker: PhantomData,
         }
     }
@@ -233,7 +250,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
         self
     }
     fn f(&self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
-        Err(TensorError::WrongMethod)
+        Ok(self
+            .values
+            .map(|x| quantize_float(&x, 0., self.scale).unwrap())
+            .into())
     }
 
     fn as_str(&self) -> &'static str {
@@ -246,7 +266,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
         _: &[ValTensor<F>],
         _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        Err(Box::new(TensorError::WrongMethod))
+        Ok(Some(crate::graph::tensor_to_valtensor(
+            self.values.clone(),
+            self.scale,
+            self.public,
+        )?))
     }
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
         Box::new(self.clone())

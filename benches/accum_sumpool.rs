@@ -1,10 +1,10 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use ezkl_lib::circuit::poly::PolyOp;
 use ezkl_lib::circuit::*;
-use ezkl_lib::commands::TranscriptType;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::create_keys;
 use ezkl_lib::pfsys::gen_srs;
+use ezkl_lib::pfsys::TranscriptType;
 use ezkl_lib::tensor::*;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2_proofs::poly::kzg::strategy::SingleStrategy;
@@ -89,7 +89,7 @@ fn runsumpool(c: &mut Criterion) {
                 (0..IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH)
                     .map(|_| Value::known(Fr::random(OsRng))),
             );
-            image.reshape(&[IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH]);
+            image.reshape(&[1, IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH]);
 
             let circuit = MyCircuit {
                 image: ValTensor::from(image),

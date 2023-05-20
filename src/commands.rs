@@ -3,30 +3,24 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 #[cfg(not(target_arch = "wasm32"))]
 use ethereum_types::Address;
 use log::{debug, info};
+#[cfg(feature = "python-bindings")]
+use pyo3::{
+    conversion::{FromPyObject, PyTryFrom},
+    exceptions::PyValueError,
+    prelude::*,
+    types::PyString,
+};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::error::Error;
 use std::fs::File;
 use std::io::{stdin, stdout, Read, Write};
 use std::path::PathBuf;
-#[cfg(feature = "python-bindings")]
-use pyo3::{
-    exceptions::PyValueError,
-    prelude::*,
-    types::PyString,
-    conversion::{FromPyObject, PyTryFrom}
-};
 
-use crate::circuit::CheckMode;
+use crate::circuit::{CheckMode, Tolerance};
 use crate::graph::{VarVisibility, Visibility};
+use crate::pfsys::TranscriptType;
 
-#[allow(missing_docs)]
-#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
-pub enum TranscriptType {
-    Blake,
-    Poseidon,
-    EVM,
-}
 impl std::fmt::Display for TranscriptType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.to_possible_value()
@@ -56,7 +50,7 @@ impl<'source> FromPyObject<'source> for TranscriptType {
             "blake" => Ok(TranscriptType::Blake),
             "poseidon" => Ok(TranscriptType::Poseidon),
             "evm" => Ok(TranscriptType::EVM),
-            _ => Err(PyValueError::new_err("Invalid value for TranscriptType"))
+            _ => Err(PyValueError::new_err("Invalid value for TranscriptType")),
         }
     }
 }
@@ -94,7 +88,7 @@ impl<'source> FromPyObject<'source> for StrategyType {
         match strval.to_lowercase().as_str() {
             "single" => Ok(StrategyType::Single),
             "accum" => Ok(StrategyType::Accum),
-            _ => Err(PyValueError::new_err("Invalid value for StrategyType"))
+            _ => Err(PyValueError::new_err("Invalid value for StrategyType")),
         }
     }
 }
@@ -104,7 +98,7 @@ impl<'source> FromPyObject<'source> for StrategyType {
 pub struct RunArgs {
     /// The tolerance for error on model outputs
     #[arg(short = 'T', long, default_value = "0")]
-    pub tolerance: usize,
+    pub tolerance: Tolerance,
     /// The denominator in the fixed point representation used when quantizing
     #[arg(short = 'S', long, default_value = "7")]
     pub scale: u32,
@@ -130,24 +124,32 @@ pub struct RunArgs {
     /// the number of constraints the circuit might use. If not specified, this will be calculated using a 'dummy layout' pass.
     #[arg(long)]
     pub allocated_constraints: Option<usize>,
-    /// run sanity checks during calculations (safe or unsafe)
-    #[arg(long, default_value = "safe")]
-    pub check_mode: CheckMode,
 }
 
 #[allow(missing_docs)]
 impl RunArgs {
     pub fn to_var_visibility(&self) -> VarVisibility {
         VarVisibility {
-            input: if self.public_inputs { Visibility::Public } else { Visibility::Private },
-            params: if self.public_params { Visibility::Public } else { Visibility::Private },
-            output: if self.public_outputs { Visibility::Public } else { Visibility::Private },
+            input: if self.public_inputs {
+                Visibility::Public
+            } else {
+                Visibility::Private
+            },
+            params: if self.public_params {
+                Visibility::Public
+            } else {
+                Visibility::Private
+            },
+            output: if self.public_outputs {
+                Visibility::Public
+            } else {
+                Visibility::Private
+            },
         }
     }
 }
 
 const EZKLCONF: &str = "EZKLCONF";
-const RUNARGS: &str = "RUNARGS";
 
 #[allow(missing_docs)]
 #[derive(Parser, Debug, Clone, Deserialize, Serialize)]
@@ -156,9 +158,6 @@ pub struct Cli {
     #[command(subcommand)]
     #[allow(missing_docs)]
     pub command: Commands,
-    /// The tolerance for error on model outputs
-    #[clap(flatten)]
-    pub args: RunArgs,
 }
 
 impl Cli {
@@ -187,22 +186,7 @@ impl Cli {
                     .map_err(Box::<dyn Error>::from)?;
                 Self::from_json(&data).map_err(Box::<dyn Error>::from)
             }
-            Err(_e) => match env::var(RUNARGS) {
-                Ok(path) => {
-                    debug!("loading run args from {}", path);
-                    let mut file = File::open(path).map_err(Box::<dyn Error>::from)?;
-                    let mut data = String::new();
-                    file.read_to_string(&mut data)
-                        .map_err(Box::<dyn Error>::from)?;
-                    let args: RunArgs =
-                        serde_json::from_str(&data).map_err(Box::<dyn Error>::from)?;
-                    Ok(Cli {
-                        command: Cli::parse().command,
-                        args,
-                    })
-                }
-                Err(_e) => Ok(Cli::parse()),
-            },
+            Err(_e) => Ok(Cli::parse()),
         }
     }
 }
@@ -216,6 +200,9 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: String,
+        /// proving arguments
+        #[clap(flatten)]
+        args: RunArgs,
     },
 
     #[cfg(feature = "render")]
@@ -231,6 +218,9 @@ pub enum Commands {
         /// Path to save the .png circuit render
         #[arg(short = 'O', long)]
         output: String,
+        /// proving arguments
+        #[clap(flatten)]
+        args: RunArgs,
     },
 
     /// Runs a vanilla forward pass, produces a quantized output, and saves it to a .json file
@@ -245,14 +235,20 @@ pub enum Commands {
         /// Path to the new .json file
         #[arg(short = 'O', long)]
         output: String,
+        /// proving arguments
+        #[clap(flatten)]
+        args: RunArgs,
     },
 
     /// Generates a dummy SRS
     #[command(name = "gen-srs", arg_required_else_help = true)]
     GenSrs {
-        /// The path to output to the desired params file (optional)
+        /// The path to output to the desired params file
         #[arg(long)]
         params_path: PathBuf,
+        /// number of logrows to use for srs
+        #[arg(long)]
+        logrows: usize,
     },
     /// Loads model and input and runs mock prover (for testing)
     #[command(arg_required_else_help = true)]
@@ -263,6 +259,9 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: String,
+        /// proving arguments
+        #[clap(flatten)]
+        args: RunArgs,
     },
 
     /// Aggregates proofs :)
@@ -271,9 +270,6 @@ pub enum Commands {
         /// The path to the params files.
         #[arg(long)]
         circuit_params_paths: Vec<PathBuf>,
-        ///the logrows used when generating the snarks we're aggregating
-        #[arg(long)]
-        app_logrows: u32,
         /// The path to the snarks to aggregate over
         #[arg(long)]
         aggregation_snarks: Vec<PathBuf>,
@@ -297,10 +293,41 @@ pub enum Commands {
             value_enum
         )]
         transcript: TranscriptType,
-        // todo, optionally allow supplying proving key
+        /// logrows used for aggregation circuit
+        #[arg(long)]
+        logrows: u32,
+        /// run sanity checks during calculations (safe or unsafe)
+        #[arg(long, default_value = "safe")]
+        check_mode: CheckMode,
     },
 
-    /// Loads model and data, prepares vk and pk, and creates proof
+    /// Creates pk and vk and circuit params
+    #[command(arg_required_else_help = true)]
+    Setup {
+        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'D', long)]
+        data: String,
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: PathBuf,
+        /// The parameter path
+        #[arg(long)]
+        params_path: PathBuf,
+        /// The path to output the verfication key file
+        #[arg(long)]
+        vk_path: PathBuf,
+        /// The path to output the proving key file
+        #[arg(long)]
+        pk_path: PathBuf,
+        /// The path to save circuit params to
+        #[arg(long)]
+        circuit_params_path: PathBuf,
+        /// proving arguments
+        #[clap(flatten)]
+        args: RunArgs,
+    },
+
+    /// Loads model, data, and creates proof
     #[command(arg_required_else_help = true)]
     Prove {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
@@ -309,18 +336,15 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
-        /// The path to output to the desired verfication key file
+        /// The path to load the desired proving key file
         #[arg(long)]
-        vk_path: PathBuf,
+        pk_path: PathBuf,
         /// The path to the desired output file
         #[arg(long)]
         proof_path: PathBuf,
         /// The parameter path
         #[arg(long)]
         params_path: PathBuf,
-        /// The path to save circuit params to
-        #[arg(long)]
-        circuit_params_path: PathBuf,
         #[arg(
             long,
             require_equals = true,
@@ -338,7 +362,12 @@ pub enum Commands {
             value_enum
         )]
         strategy: StrategyType,
-        // todo, optionally allow supplying proving key
+        /// The path to load circuit params from
+        #[arg(long)]
+        circuit_params_path: PathBuf,
+        /// run sanity checks during calculations (safe or unsafe)
+        #[arg(long, default_value = "safe")]
+        check_mode: CheckMode,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for a single proof
@@ -353,9 +382,9 @@ pub enum Commands {
         /// The path to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
-        /// The path to output to the desired EVM bytecode file (optional)
+        /// The path to output to the desired EVM bytecode file
         #[arg(long)]
-        deployment_code_path: Option<PathBuf>,
+        deployment_code_path: PathBuf,
         /// The path to output the Solidity code
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
@@ -432,14 +461,6 @@ pub enum Commands {
         /// The transcript type
         #[arg(long)]
         params_path: PathBuf,
-        #[arg(
-            long,
-            require_equals = true,
-            num_args = 0..=1,
-            default_value_t = TranscriptType::Blake,
-            value_enum
-        )]
-        transcript: TranscriptType,
     },
 
     /// Verifies an aggregate proof, returning accept or reject
@@ -454,14 +475,9 @@ pub enum Commands {
         /// The path to load the desired verfication key file (optional)
         #[arg(long)]
         params_path: PathBuf,
-        #[arg(
-             long,
-             require_equals = true,
-             num_args = 0..=1,
-             default_value_t = TranscriptType::Blake,
-             value_enum
-         )]
-        transcript: TranscriptType,
+        /// logrows used for aggregation circuit
+        #[arg(long)]
+        logrows: u32,
     },
 
     #[cfg(not(target_arch = "wasm32"))]

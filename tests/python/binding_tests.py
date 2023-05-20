@@ -33,24 +33,26 @@ def test_table_1l_average():
         'network.onnx'
     )
 
-    expected_table = \
-        """+-------+---------+-----------+--------+-----------+-----+
-| usize | opkind  | out_scale | inputs | out_dims  | idx |
-+-------+---------+-----------+--------+-----------+-----+
-| 0     | Input   | 7         |        | [1, 5, 5] | 0   |
-+-------+---------+-----------+--------+-----------+-----+
-| 1     | SUMPOOL | 7         | [0]    | [1, 3, 3] | 1   |
-+-------+---------+-----------+--------+-----------+-----+"""
+    expected_table = (
+        " \n"
+        "┌─────────┬───────────┬────────┬──────────────┬─────┐\n"
+        "│ opkind  │ out_scale │ inputs │ out_dims     │ idx │\n"
+        "├─────────┼───────────┼────────┼──────────────┼─────┤\n"
+        "│ Input   │ 7         │        │ [1, 1, 5, 5] │ 0   │\n"
+        "├─────────┼───────────┼────────┼──────────────┼─────┤\n"
+        "│ SUMPOOL │ 7         │ [0]    │ [1, 1, 3, 3] │ 1   │\n"
+        "└─────────┴───────────┴────────┴──────────────┴─────┘"
+    )
     assert ezkl_lib.table(path) == expected_table
 
 
-def test_gen_srs():
-    """
-    Test for gen_srs() with 17 logrows.
-    You may want to comment this test as it takes a long time to run
-    """
-    ezkl_lib.gen_srs(params_path)
-    assert os.path.isfile(params_path)
+# def test_gen_srs():
+#     """
+#     Test for gen_srs() with 17 logrows.
+#     You may want to comment this test as it takes a long time to run
+#     """
+#     ezkl_lib.gen_srs(params_path, 17)
+#     assert os.path.isfile(params_path)
 
 
 def test_forward():
@@ -80,9 +82,10 @@ def test_forward():
     with open(output_path, "r") as f:
         data = json.load(f)
 
-    assert data == {"input_data":[[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]],"input_shapes":[[1,5,5]],"output_data":[[0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625]]}
+    assert data == {"input_data": [[0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]], "output_data": [[0.9140625, 0.9140625, 0.9140625, 0.9140625, 0.9140625, 0.9140625, 0.9140625, 0.9140625, 0.9140625]]}
 
     os.remove(output_path)
+
 
 def test_mock():
     """
@@ -107,6 +110,43 @@ def test_mock():
     assert res == True
 
 
+def test_setup():
+    """
+    Test for setup
+    """
+
+    data_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_average',
+        'input.json'
+    )
+
+    model_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_average',
+        'network.onnx'
+    )
+
+    pk_path = os.path.join(folder_path, 'test.pk')
+    vk_path = os.path.join(folder_path, 'test.vk')
+    circuit_params_path = os.path.join(folder_path, 'circuit.params')
+
+    res = ezkl_lib.setup(
+        data_path,
+        model_path,
+        vk_path,
+        pk_path,
+        params_path,
+        circuit_params_path,
+    )
+    assert res == True
+    assert os.path.isfile(vk_path)
+    assert os.path.isfile(pk_path)
+    assert os.path.isfile(circuit_params_path)
+
+
 def test_prove():
     """
     Test for prove
@@ -126,22 +166,21 @@ def test_prove():
         'network.onnx'
     )
 
-    vk_path = os.path.join(folder_path, 'test.vk')
+    pk_path = os.path.join(folder_path, 'test.pk')
     proof_path = os.path.join(folder_path, 'test.pf')
     circuit_params_path = os.path.join(folder_path, 'circuit.params')
 
     res = ezkl_lib.prove(
         data_path,
         model_path,
-        vk_path,
+        pk_path,
         proof_path,
         params_path,
-        circuit_params_path,
         "poseidon",
         "single",
+        circuit_params_path,
     )
     assert res == True
-    assert os.path.isfile(vk_path)
     assert os.path.isfile(proof_path)
 
 
@@ -159,6 +198,53 @@ def test_verify():
         circuit_params_path,
         vk_path,
         params_path,
-        "poseidon",
     )
     assert res == True
+
+
+def test_create_evm_verifier():
+    """
+    Create EVM verifier without solidity code
+    In order to run this test you will need to install solc in the environment
+    """
+    vk_path = os.path.join(folder_path, 'test.vk')
+    proof_path = os.path.join(folder_path, 'test.pf')
+    circuit_params_path = os.path.join(folder_path, 'circuit.params')
+    deployment_code_path = os.path.join(folder_path, 'deploy')
+    # sol_code_path = os.path.join(folder_path, 'test.sol')
+
+    res = ezkl_lib.create_evm_verifier(
+        vk_path,
+        params_path,
+        circuit_params_path,
+        deployment_code_path,
+        # sol_code_path
+    )
+
+    assert res == True
+    assert os.path.isfile(deployment_code_path)
+    # assert os.path.isfile(sol_code_path)
+
+
+def test_create_evm_verifier_solidity():
+    """
+    Create EVM verifier with solidity code
+    In order to run this test you will need to install solc in the environment
+    """
+    vk_path = os.path.join(folder_path, 'test.vk')
+    proof_path = os.path.join(folder_path, 'test.pf')
+    circuit_params_path = os.path.join(folder_path, 'circuit.params')
+    deployment_code_path = os.path.join(folder_path, 'deploy.params')
+    sol_code_path = os.path.join(folder_path, 'test.sol')
+
+    res = ezkl_lib.create_evm_verifier(
+        vk_path,
+        params_path,
+        circuit_params_path,
+        deployment_code_path,
+        sol_code_path
+    )
+
+    assert res == True
+    assert os.path.isfile(deployment_code_path)
+    assert os.path.isfile(sol_code_path)

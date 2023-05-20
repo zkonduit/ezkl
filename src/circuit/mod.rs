@@ -1,3 +1,4 @@
+use std::str::FromStr;
 ///
 pub mod table;
 
@@ -19,13 +20,13 @@ use halo2_proofs::{
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
     poly::Rotation,
 };
-use log::warn;
+use log::debug;
 #[cfg(feature = "python-bindings")]
 use pyo3::{
+    conversion::{FromPyObject, PyTryFrom},
     exceptions::PyValueError,
     prelude::*,
     types::PyString,
-    conversion::{FromPyObject, PyTryFrom}
 };
 use serde::{Deserialize, Serialize};
 
@@ -77,6 +78,35 @@ impl From<String> for CheckMode {
     }
 }
 
+#[allow(missing_docs)]
+/// An enum representing the tolerance we can accept for the accumulated arguments, either absolute or percentage
+#[derive(
+    Clone, Debug, PartialEq, PartialOrd, Serialize, Deserialize, Copy
+)]
+pub enum Tolerance {
+    Abs { val: usize },
+    Percentage { val: f32, scale: usize }
+}
+
+impl Default for Tolerance {
+    fn default() -> Self {
+        Tolerance::Abs { val: 0 }
+    }
+}
+impl FromStr for Tolerance {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(val) = s.parse::<usize>() {
+            Ok(Tolerance::Abs { val })
+        } else if let Ok(val) = s.parse::<f32>() {
+            Ok(Tolerance::Percentage { val, scale: 1 })
+        } else {
+            Err("Invalid tolerance value provided. It should be either an absolute value (usize) or a percentage (f32).".to_string())
+        }
+    }
+}
+
 #[cfg(feature = "python-bindings")]
 /// Converts CheckMode into a PyObject (Required for CheckMode to be compatible with Python)
 impl IntoPy<PyObject> for CheckMode {
@@ -97,11 +127,46 @@ impl<'source> FromPyObject<'source> for CheckMode {
         match strval.to_lowercase().as_str() {
             "safe" => Ok(CheckMode::SAFE),
             "unsafe" => Ok(CheckMode::UNSAFE),
-            _ => Err(PyValueError::new_err("Invalid value for CheckMode"))
+            _ => Err(PyValueError::new_err("Invalid value for CheckMode")),
         }
-
     }
 }
+
+#[cfg(feature = "python-bindings")]
+/// Converts Tolerance into a PyObject (Required for Tolerance to be compatible with Python)
+impl IntoPy<PyObject> for Tolerance {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            Tolerance::Abs { val } => (String::from("abs"), val).to_object(py),
+            Tolerance::Percentage { val, scale } => (String::from("percentage"), val, scale).to_object(py),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Obtains Tolerance from PyObject (Required for Tolerance to be compatible with Python)
+impl<'source> FromPyObject<'source> for Tolerance {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        if let Ok((mode, val)) = ob.extract::<(String, usize)>() {
+            match mode.to_lowercase().as_str() {
+                "abs" => Ok(Tolerance::Abs { val }),
+                _ => Err(PyValueError::new_err("Invalid value for Tolerance")),
+            }
+        } else if let Ok((mode, val, scale)) = ob.extract::<(String, f32, usize)>() {
+            match mode.to_lowercase().as_str() {
+                "percentage" => Ok(Tolerance::Percentage { val, scale }),
+                _ => Err(PyValueError::new_err("Invalid value for Tolerance")),
+            }
+        } else {
+            Err(PyValueError::new_err(
+                "Invalid tolerance value provided. It should be either an absolute value (usize) or a percentage (f32).",
+            ))
+        }
+    }
+}
+
+
+
 
 /// Configuration for an accumulated arg.
 #[derive(Clone, Debug, Default)]
@@ -113,14 +178,14 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     pub lookup_input: VarTensor,
     /// the (currently singular) output of the accumulated operations.
     pub output: VarTensor,
-    ///  the VarTensor reserved for lookup operations (could be an element of inputs or the same as output)
+    /// the VarTensor reserved for lookup operations (could be an element of inputs or the same as output)
     /// Note that you should be careful to ensure that the lookup_output is not simultaneously assigned to by other non-lookup operations eg. in the case of composite ops.
     pub lookup_output: VarTensor,
-    /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many base gates.
+    /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure [BaseOp].
     pub selectors: BTreeMap<(BaseOp, usize), Selector>,
-    /// [Selectors] generated when configuring the layer. We use a BTreeMap as we expect to configure many lookup ops.
+    /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many lookup ops.
     pub lookup_selectors: BTreeMap<(LookupOp, usize), Selector>,
-    /// [Table]
+    ///
     pub tables: BTreeMap<LookupOp, Table<F>>,
     /// Activate sanity checks
     pub check_mode: CheckMode,
@@ -145,9 +210,11 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
     /// Configures [BaseOp]s for a given [ConstraintSystem].
     /// # Arguments
+    /// * `meta` - The [ConstraintSystem] to configure the operations in.
     /// * `inputs` - The explicit inputs to the operations.
     /// * `output` - The variable representing the (currently singular) output of the operations.
     /// * `check_mode` - The variable representing the (currently singular) output of the operations.
+    /// * `tol` - The tolerance for the range check.
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         inputs: &[VarTensor; 2],
@@ -284,11 +351,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                                 qlookup.clone() * cs.query_advice(advices[x], Rotation(0))
                                     + not_qlookup.clone() * default_x
                             }
-                            VarTensor::Fixed { inner: fixed, .. } => {
-                                qlookup.clone() * cs.query_fixed(fixed[x], Rotation(0))
-                                    + not_qlookup.clone() * default_x
-                            }
-                            _ => panic!("uninitialized Vartensor"),
+                            _ => panic!("wrong input type"),
                         },
                         table.table_input,
                     ),
@@ -298,11 +361,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                                 qlookup * cs.query_advice(advices[x], Rotation(0))
                                     + not_qlookup * default_y
                             }
-                            VarTensor::Fixed { inner: fixed, .. } => {
-                                qlookup * cs.query_fixed(fixed[x], Rotation(0))
-                                    + not_qlookup * default_y
-                            }
-                            _ => panic!("uninitialized Vartensor"),
+                            _ => panic!("wrong output type"),
                         },
                         table.table_output,
                     ),
@@ -312,11 +371,11 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         self.lookup_selectors.extend(selectors);
         // if we haven't previously initialized the input/output, do so now
         if let VarTensor::Empty = self.lookup_input {
-            warn!("assigning lookup input");
+            debug!("assigning lookup input");
             self.lookup_input = input.clone();
         }
         if let VarTensor::Empty = self.lookup_output {
-            warn!("assigning lookup output");
+            debug!("assigning lookup output");
             self.lookup_output = output.clone();
         }
         Ok(())
@@ -326,7 +385,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     pub fn layout_tables(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), Box<dyn Error>> {
         for table in self.tables.values_mut() {
             if !table.is_assigned {
-                warn!(
+                debug!(
                     "laying out table for {:?}",
                     crate::circuit::ops::Op::<F>::as_str(&table.nonlinearity)
                 );

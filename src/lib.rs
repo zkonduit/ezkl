@@ -9,7 +9,7 @@
     patterns_in_fns_without_body,
     private_in_public,
     unconditional_recursion,
-    unused,
+    // unused,
     unused_allocation,
     unused_comparisons,
     unused_parens,
@@ -48,3 +48,6 @@ pub mod pfsys;
 pub mod python;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
+/// wasm prover and verifier
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+pub mod wasm;

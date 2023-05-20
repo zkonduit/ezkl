@@ -4,13 +4,7 @@ use crate::circuit::CheckMode;
 
 use super::*;
 /// A wrapper around Halo2's `Column<Fixed>` or `Column<Advice>`.
-/// The wrapper allows for `VarTensor`'s dimensions to differ from that of the inner (wrapped) columns.
-/// The inner vector might, for instance, contain 3 Advice Columns. Each of those columns in turn
-/// might be representing 3 elements laid out in the circuit. As such, though the inner tensor might
-/// only be of dimension `[3]` we can set the VarTensor's dimension to `[3,3]` to capture information
-/// about the column layout. This enum is generally used to configure and layout circuit variables / advices.
-/// For instance can be used to represent neural network parameters within a circuit that we later assign to
-/// using the `assign` method called on a [ValTensor].
+/// Typically assign [ValTensor]s to [VarTensor]s when laying out a circuit. 
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub enum VarTensor {
     /// A VarTensor for holding Advice values, which are assigned at proving time.
@@ -44,13 +38,9 @@ pub enum VarTensor {
 impl VarTensor {
     /// Create a new VarTensor::Advice
     /// Arguments
-    ///
-    /// * `cs` - `ConstraintSystem` from which the columns will be allocated.
-    /// * `k` - log2 number of rows in the matrix, including any system and blinding rows.
-    /// * `capacity` - number of advice cells for this tensor
-    /// * `dims` - `Vec` of dimensions of the tensor we are representing. Note that the shape of the storage and this shape can differ.
-    /// * `equality` - true if we want to enable equality constraints for the columns involved.
-    /// * `max_rot` - maximum number of rotations that we allow for this VarTensor. Rotations affect performance.
+    /// * `cs` - The constraint system
+    /// * `logrows` - log2 number of rows in the matrix, including any system and blinding rows.
+    /// * `capacity` - The number of advice cells to allocate
     pub fn new_advice<F: PrimeField>(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
@@ -86,12 +76,10 @@ impl VarTensor {
     }
 
     /// Create a new VarTensor::Fixed
-    /// `cs` is the `ConstraintSystem` from which the columns will be allocated.
-    /// `k` is the log2 number of rows in the matrix, including any system and blinding rows.
-    /// `capacity` is the number of fixed cells for this tensor
-    /// `dims` is the `Vec` of dimensions of the tensor we are representing. Note that the shape of the storage and this shape can differ.
-    /// `equality` should be true if we want to enable equality constraints for the columns involved.
-    /// `max_rot` is the maximum number of rotations that we allow for this VarTensor. Rotations affect performance.
+    /// Arguments
+    /// * `cs` - `ConstraintSystem` from which the columns will be allocated.
+    /// * `logrows` - log2 number of rows in the matrix, including any system and blinding rows.
+    /// * `capacity` - number of advice cells for this tensor
     pub fn new_fixed<F: PrimeField>(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
@@ -156,8 +144,7 @@ impl VarTensor {
 }
 
 impl VarTensor {
-    /// Retrieve the values represented within the columns of the `VarTensor` (recall that `VarTensor`
-    /// is a Tensor of Halo2 columns).
+    /// Retrieve the value of a specific cell in the tensor.
     pub fn query_rng<F: PrimeField>(
         &self,
         meta: &mut VirtualCells<'_, F>,
@@ -193,7 +180,7 @@ impl VarTensor {
         }
     }
 
-    ///
+    /// Assigns a constant value to a specific cell in the tensor.
     pub fn assign_constant<F: PrimeField + TensorType>(
         &self, 
         region: &mut Region<F>,
@@ -214,7 +201,7 @@ impl VarTensor {
     }}
 
    
-    /// Assigns specific values [ValTensor] to the columns of the inner tensor.
+    /// Assigns [ValTensor] to the columns of the inner tensor.
     pub fn assign<F: PrimeField + TensorType + PartialOrd>(
         &self,
         region: &mut Option<&mut Region<F>>,
@@ -293,7 +280,8 @@ impl VarTensor {
 
     
 
-    /// Assigns specific values (`ValTensor`) to the columns of the inner tensor.
+    /// Assigns specific values (`ValTensor`) to the columns of the inner tensor but allows for column wrapping for accumulated operations. 
+    /// Duplication occurs by copying the last cell of the column to the first cell next column and creating a copy constraint between the two. 
     pub fn assign_with_duplication<F: PrimeField + TensorType + PartialOrd>(
         &self,
         region: &mut Option<&mut Region<F>>,

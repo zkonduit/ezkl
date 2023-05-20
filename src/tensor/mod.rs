@@ -607,6 +607,51 @@ impl<T: Clone + TensorType> Tensor<T> {
         self.dims = Vec::from(new_dims);
     }
 
+    /// Broadcasts the tensor to a given shape
+    /// ```
+    /// use ezkl_lib::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3, 1]).unwrap();
+    ///
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 1, 1, 2, 2, 2, 3, 3, 3]), &[3, 3]).unwrap();
+    /// assert_eq!(a.expand(&[3, 3]).unwrap(), expected);
+    ///
+    /// ```
+    pub fn expand(&self, shape: &[usize]) -> Result<Self, TensorError> {
+        assert!(self.dims().len() <= shape.len());
+
+        if shape == self.dims() {
+            return Ok(self.clone());
+        }
+
+        for d in self.dims() {
+            assert!(shape.contains(d) || *d == 1);
+        }
+
+        let cartesian_coords = shape
+            .iter()
+            .map(|d| 0..*d)
+            .multi_cartesian_product()
+            .collect::<Vec<Vec<usize>>>();
+
+        let mut output = Tensor::new(None, shape)?;
+
+        for coord in cartesian_coords {
+            let mut new_coord = Vec::with_capacity(self.dims().len());
+            for (i, c) in coord.iter().enumerate() {
+                if i < self.dims().len() && self.dims()[i] == 1 {
+                    new_coord.push(0);
+                } else if i >= self.dims().len() {
+                    // do nothing at this point does not exist in the original tensor
+                } else {
+                    new_coord.push(*c);
+                }
+            }
+            output.set(&coord, self.get(&new_coord));
+        }
+
+        Ok(output)
+    }
+
     ///Flatten the tensor shape
     /// ```
     /// use ezkl_lib::tensor::Tensor;
@@ -1080,66 +1125,15 @@ impl<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync> Ad
     /// assert_eq!(result, expected);
     /// ```
     fn add(self, rhs: Self) -> Self::Output {
-        // calculate value of output
-        let mut output: Tensor<T> = self.clone();
+        let broadcasted_shape = get_broadcasted_shape(&self.dims(), &rhs.dims()).unwrap();
+        let mut lhs = self.clone().expand(&broadcasted_shape).unwrap();
+        let rhs = rhs.expand(&broadcasted_shape).unwrap();
 
-        if self.len() != rhs.len() {
-            if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-                && rhs.dims().iter().product::<usize>() > 1
-                && self.dims().iter().product::<usize>() > 1
-                && self.dims() != rhs.dims()
-            {
-                assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
-                output = rhs.clone();
-                let lhs = self.clone();
-                let full_indices = rhs
-                    .dims()
-                    .iter()
-                    .map(|d| 0..*d)
-                    .multi_cartesian_product()
-                    .collect::<Vec<Vec<usize>>>();
-                output.par_iter_mut().enumerate().for_each(|(i, x)| {
-                    let coord = &full_indices[i];
-                    *x = x.clone() + lhs[coord[0]].clone();
-                });
-            } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-                && rhs.dims().iter().product::<usize>() > 1
-                && self.dims().iter().product::<usize>() > 1
-                && self.dims() != rhs.dims()
-            {
-                assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
-                let full_indices = self
-                    .dims()
-                    .iter()
-                    .map(|d| 0..*d)
-                    .multi_cartesian_product()
-                    .collect::<Vec<Vec<usize>>>();
-                output.par_iter_mut().enumerate().for_each(|(i, x)| {
-                    let coord = &full_indices[i];
-                    *x = x.clone() + rhs[coord[0]].clone();
-                });
-            }
-            // casts a 1D addition
-            else if rhs.dims().iter().product::<usize>() == 1 {
-                output.par_iter_mut().for_each(|o| {
-                    *o = o.clone() + rhs[0].clone();
-                });
-            }
-            // make 1D casting commutative
-            else if self.dims().iter().product::<usize>() == 1 {
-                output = rhs.clone();
-                output.par_iter_mut().for_each(|o| {
-                    *o = o.clone() + self[0].clone();
-                });
-            } else {
-                return Err(TensorError::DimMismatch("add".to_string()));
-            }
-        } else {
-            output.par_iter_mut().zip(rhs).for_each(|(o, r)| {
-                *o = o.clone() + r.clone();
-            });
-        }
-        Ok(output)
+        lhs.par_iter_mut().zip(rhs).for_each(|(o, r)| {
+            *o = o.clone() + r.clone();
+        });
+
+        Ok(lhs)
     }
 }
 
@@ -1193,66 +1187,15 @@ impl<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync> Su
     /// assert_eq!(result, expected);
     /// ```
     fn sub(self, rhs: Self) -> Self::Output {
-        // calculate value of output
-        let mut output: Tensor<T> = self.clone();
+        let broadcasted_shape = get_broadcasted_shape(&self.dims(), &rhs.dims()).unwrap();
+        let mut lhs = self.clone().expand(&broadcasted_shape).unwrap();
+        let rhs = rhs.expand(&broadcasted_shape).unwrap();
 
-        if self.len() != rhs.len() {
-            if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-                && rhs.dims().iter().product::<usize>() > 1
-                && self.dims().iter().product::<usize>() > 1
-                && self.dims() != rhs.dims()
-            {
-                assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
-                output = rhs.clone();
-                let lhs = self.clone();
-                let full_indices = rhs
-                    .dims()
-                    .iter()
-                    .map(|d| 0..*d)
-                    .multi_cartesian_product()
-                    .collect::<Vec<Vec<usize>>>();
-                output.par_iter_mut().enumerate().for_each(|(i, x)| {
-                    let coord = &full_indices[i];
-                    *x = x.clone() - lhs[coord[0]].clone();
-                });
-            } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-                && rhs.dims().iter().product::<usize>() > 1
-                && self.dims().iter().product::<usize>() > 1
-                && self.dims() != rhs.dims()
-            {
-                assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
-                let full_indices = self
-                    .dims()
-                    .iter()
-                    .map(|d| 0..*d)
-                    .multi_cartesian_product()
-                    .collect::<Vec<Vec<usize>>>();
-                output.par_iter_mut().enumerate().for_each(|(i, x)| {
-                    let coord = &full_indices[i];
-                    *x = x.clone() - rhs[coord[0]].clone();
-                });
-            }
-            // casts a 1D addition
-            else if rhs.dims().iter().product::<usize>() == 1 {
-                output.par_iter_mut().for_each(|o| {
-                    *o = o.clone() - rhs[0].clone();
-                });
-            }
-            // make 1D casting commutative
-            else if self.dims().iter().product::<usize>() == 1 {
-                output = rhs.clone();
-                output.par_iter_mut().for_each(|o| {
-                    *o = self[0].clone() - o.clone();
-                });
-            } else {
-                return Err(TensorError::DimMismatch("sub".to_string()));
-            }
-        } else {
-            output.par_iter_mut().zip(rhs).for_each(|(o, r)| {
-                *o = o.clone() - r.clone();
-            });
-        }
-        Ok(output)
+        lhs.par_iter_mut().zip(rhs).for_each(|(o, r)| {
+            *o = o.clone() - r.clone();
+        });
+
+        Ok(lhs)
     }
 }
 
@@ -1304,66 +1247,15 @@ impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync> Mu
     /// assert_eq!(result, expected);
     /// ```
     fn mul(self, rhs: Self) -> Self::Output {
-        // calculate value of output
-        let mut output: Tensor<T> = self.clone();
+        let broadcasted_shape = get_broadcasted_shape(&self.dims(), &rhs.dims()).unwrap();
+        let mut lhs = self.clone().expand(&broadcasted_shape).unwrap();
+        let rhs = rhs.expand(&broadcasted_shape).unwrap();
 
-        if self.len() != rhs.len() {
-            if self.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-                && rhs.dims().iter().product::<usize>() > 1
-                && self.dims().iter().product::<usize>() > 1
-                && self.dims() != rhs.dims()
-            {
-                assert_eq!(rhs.dims()[0], self.dims().iter().product::<usize>());
-                output = rhs.clone();
-                let lhs = self.clone();
-                let full_indices = rhs
-                    .dims()
-                    .iter()
-                    .map(|d| 0..*d)
-                    .multi_cartesian_product()
-                    .collect::<Vec<Vec<usize>>>();
-                output.par_iter_mut().enumerate().for_each(|(i, x)| {
-                    let coord = &full_indices[i];
-                    *x = x.clone() * lhs[coord[0]].clone();
-                });
-            } else if rhs.dims().iter().map(|x| (x > &1) as usize).sum::<usize>() == 1
-                && rhs.dims().iter().product::<usize>() > 1
-                && self.dims().iter().product::<usize>() > 1
-                && self.dims() != rhs.dims()
-            {
-                assert_eq!(self.dims()[0], rhs.dims().iter().product::<usize>());
-                let full_indices = self
-                    .dims()
-                    .iter()
-                    .map(|d| 0..*d)
-                    .multi_cartesian_product()
-                    .collect::<Vec<Vec<usize>>>();
-                output.par_iter_mut().enumerate().for_each(|(i, x)| {
-                    let coord = &full_indices[i];
-                    *x = rhs[coord[0]].clone() * x.clone();
-                });
-            }
-            // casts a 1D addition
-            else if rhs.dims().iter().product::<usize>() == 1 {
-                output.par_iter_mut().for_each(|o| {
-                    *o = o.clone() * rhs[0].clone();
-                });
-            }
-            // make 1D casting commutative
-            else if self.dims().iter().product::<usize>() == 1 {
-                output = rhs.clone();
-                output.par_iter_mut().for_each(|o| {
-                    *o = self[0].clone() * o.clone();
-                });
-            } else {
-                return Err(TensorError::DimMismatch("sub".to_string()));
-            }
-        } else {
-            output.par_iter_mut().zip(rhs).for_each(|(o, r)| {
-                *o = o.clone() * r.clone();
-            });
-        }
-        Ok(output)
+        lhs.par_iter_mut().zip(rhs).for_each(|(o, r)| {
+            *o = o.clone() * r.clone();
+        });
+
+        Ok(lhs)
     }
 }
 
@@ -1406,7 +1298,7 @@ impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync> Te
     }
 }
 
-impl<T: TensorType + Div<Output = T>> Div for Tensor<T> {
+impl<T: TensorType + Div<Output = T> + std::marker::Send + std::marker::Sync> Div for Tensor<T> {
     type Output = Result<Tensor<T>, TensorError>;
     /// Elementwise divide a tensor with another tensor.
     /// # Arguments
@@ -1443,32 +1335,68 @@ impl<T: TensorType + Div<Output = T>> Div for Tensor<T> {
     /// assert_eq!(result, expected);
     /// ```
     fn div(self, rhs: Self) -> Self::Output {
-        // calculate value of output
-        let mut output: Tensor<T> = self.clone();
+        let broadcasted_shape = get_broadcasted_shape(&self.dims(), &rhs.dims()).unwrap();
+        let mut lhs = self.clone().expand(&broadcasted_shape).unwrap();
+        let rhs = rhs.expand(&broadcasted_shape).unwrap();
 
-        // casts a 1D multiplication
-        if rhs.dims().len() == 1 && rhs.dims()[0] == 1 {
-            for i in 0..output.len() {
-                output[i] = output[i].clone() / rhs[0].clone();
-            }
-        } else if self.dims().len() == 1 && self.dims()[0] == 1 {
-            output = rhs.clone();
-            for i in 0..rhs.len() {
-                output[i] = self[0].clone() / output[i].clone();
-            }
-        } else {
-            if self.dims() != rhs.dims() {
-                return Err(TensorError::DimMismatch("div".to_string()));
-            }
+        lhs.par_iter_mut().zip(rhs).for_each(|(o, r)| {
+            *o = o.clone() / r.clone();
+        });
 
-            for (i, e_i) in rhs.iter().enumerate() {
-                output[i] = output[i].clone() / e_i.clone()
-            }
-        }
-        Ok(output)
+        Ok(lhs)
     }
 }
 
+/// Returns the broadcasted shape of two tensors
+/// ```
+/// use ezkl_lib::tensor::get_broadcasted_shape;
+/// let a = vec![2, 3];
+/// let b = vec![2, 3];
+/// let c = get_broadcasted_shape(&a, &b).unwrap();
+/// assert_eq!(c, vec![2, 3]);
+///
+/// let a = vec![2, 3];
+/// let b = vec![3];
+/// let c = get_broadcasted_shape(&a, &b).unwrap();
+/// assert_eq!(c, vec![2, 3]);
+///
+/// let a = vec![2, 3];
+/// let b = vec![2, 1];
+/// let c = get_broadcasted_shape(&a, &b).unwrap();
+/// assert_eq!(c, vec![2, 3]);
+///
+/// let a = vec![2, 3];
+/// let b = vec![1, 3];
+/// let c = get_broadcasted_shape(&a, &b).unwrap();
+/// assert_eq!(c, vec![2, 3]);
+///
+/// let a = vec![2, 3];
+/// let b = vec![1, 1];
+/// let c = get_broadcasted_shape(&a, &b).unwrap();
+/// assert_eq!(c, vec![2, 3]);
+///
+/// ```
+
+pub fn get_broadcasted_shape(
+    shape_a: &[usize],
+    shape_b: &[usize],
+) -> Result<Vec<usize>, Box<dyn Error>> {
+    let num_dims_a = shape_a.len();
+    let num_dims_b = shape_b.len();
+
+    if num_dims_a == num_dims_b {
+        let mut broadcasted_shape = Vec::with_capacity(num_dims_a);
+        for (dim_a, dim_b) in shape_a.iter().zip(shape_b.iter()) {
+            let max_dim = dim_a.max(dim_b);
+            broadcasted_shape.push(*max_dim);
+        }
+        Ok(broadcasted_shape)
+    } else if num_dims_a < num_dims_b {
+        Ok(shape_b.to_vec())
+    } else {
+        Ok(shape_a.to_vec())
+    }
+}
 ////////////////////////
 
 #[cfg(test)]

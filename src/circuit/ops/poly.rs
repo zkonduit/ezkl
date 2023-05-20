@@ -9,12 +9,15 @@ use crate::{
 use super::{base::BaseOp, *};
 
 #[allow(missing_docs)]
-/// An enum representing the operations that can be used to express more complex operations via accumulation
+/// An enum representing the operations that can be expressed as arithmetic (non lookup) operations.
 #[derive(Clone, Debug)]
 pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Dot,
     Matmul {
         a: Option<ValTensor<F>>,
+    },
+    Einsum {
+        equation: String,
     },
     Conv {
         kernel: ValTensor<F>,
@@ -49,7 +52,14 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Pack(u32, u32),
     GlobalSumPool,
     Iff,
-    RangeCheck(i32),
+    Concat {
+        axis: usize,
+    },
+    Slice {
+        axis: usize,
+        start: usize,
+        end: usize,
+    },
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {
@@ -99,6 +109,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     }
     fn as_str(&self) -> &'static str {
         match &self {
+            PolyOp::Einsum { .. } => "EINSUM",
             PolyOp::Identity => "IDENTITY",
             PolyOp::Reshape(_) => "RESHAPE",
             PolyOp::Flatten(_) => "FLATTEN",
@@ -114,9 +125,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Conv { .. } => "CONV",
             PolyOp::SumPool { .. } => "SUMPOOL",
             PolyOp::Matmul { .. } => "MATMUL",
-            PolyOp::RangeCheck(..) => "RANGECHECK",
             PolyOp::Iff => "IFF",
             PolyOp::Gather { .. } => "GATHER",
+            PolyOp::Concat { .. } => "CONCAT",
+            PolyOp::Slice { .. } => "SLICE",
         }
     }
 
@@ -124,6 +136,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         let mut inputs = inputs.to_vec();
         match &self {
+            PolyOp::Einsum { equation } => tensor::ops::einsum(equation, &inputs),
             PolyOp::Gather { dim, index } => tensor::ops::gather(&inputs[0], *dim, index),
             PolyOp::Identity => Ok(inputs[0].clone()),
             PolyOp::Reshape(new_dims) => {
@@ -164,7 +177,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
 
                 tensor::ops::matmul(&inputs)
             }
-            PolyOp::Dot => tensor::ops::dot(&inputs.iter().collect()),
+            PolyOp::Dot => tensor::ops::dot(&inputs[..]),
             PolyOp::Conv {
                 kernel: a,
                 bias,
@@ -202,17 +215,29 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 tensor::ops::sum_axes(&inputs[0], axes)
             }
             PolyOp::GlobalSumPool => unreachable!(),
-            PolyOp::RangeCheck(..) => Ok(inputs[0].clone()),
             PolyOp::Iff => {
                 let mask = inputs[0].clone();
                 // if mask > 0 then output a else output b
                 let a = inputs[2].clone();
                 let b = inputs[1].clone();
 
-                let out = (mask.clone() * a.clone())?
-                    - ((Tensor::from(vec![1_i128].into_iter()) - mask.clone())? * b.clone())?;
+                let masked_a = (mask.clone() * a.clone())?;
+                let masked_b =
+                    ((Tensor::from(vec![1_i128].into_iter()) - mask.clone())? * b.clone())?;
 
-                Ok(out?)
+                masked_a + masked_b
+            }
+            PolyOp::Concat { axis } => {
+                if inputs.len() < 2 {
+                    return Err(TensorError::DimMismatch("concat inputs".to_string()));
+                }
+                tensor::ops::concat(&inputs, *axis)
+            }
+            PolyOp::Slice { axis, start, end } => {
+                if 1 != inputs.len() {
+                    return Err(TensorError::DimMismatch("slice inputs".to_string()));
+                }
+                Ok(tensor::ops::slice(&inputs[0], axis, start, end)?.into())
             }
         }
     }
@@ -227,6 +252,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
         let mut values = values.to_vec();
 
         Ok(Some(match self {
+            PolyOp::Einsum { equation } => {
+                let out = layouts::einsum(config, region, &mut values, equation, offset)?;
+                out.into()
+            }
             PolyOp::Gather { dim, index } => {
                 tensor::ops::gather(&values[0].get_inner_tensor()?, *dim, index)?.into()
             }
@@ -311,15 +340,34 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 *scale,
                 offset,
             )?,
-            PolyOp::RangeCheck(tol) => {
-                layouts::range_check(config, region, values[..].try_into()?, offset, *tol)?
-            }
             PolyOp::GlobalSumPool => unreachable!(),
+            PolyOp::Concat { axis } => {
+                if values.len() < 2 {
+                    return Err(Box::new(TensorError::DimError));
+                }
+                layouts::concat(values[..].try_into()?, axis)?
+            }
+            PolyOp::Slice { axis, start, end } => layouts::slice(
+                config,
+                region,
+                values[..].try_into()?,
+                axis,
+                start,
+                end,
+                offset,
+            )?,
         }))
     }
 
     fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
         match self {
+            PolyOp::Einsum { .. } => {
+                let mut scale = in_scales[0];
+                for s in in_scales.iter().skip(1) {
+                    scale += *s;
+                }
+                scale
+            }
             PolyOp::Gather { .. } => in_scales[0],
             PolyOp::Iff => in_scales[1],
             PolyOp::Dot => in_scales[0] + in_scales[1],
@@ -367,8 +415,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Pad(_, _) => in_scales[0],
             PolyOp::Pow(pow) => in_scales[0] * (*pow),
             PolyOp::Pack(_, _) => in_scales[0],
-            PolyOp::RangeCheck(_) => in_scales[0],
             PolyOp::GlobalSumPool => in_scales[0],
+            PolyOp::Concat { axis: _ } => in_scales[0],
+            PolyOp::Slice { .. } => in_scales[0],
         }
     }
 
@@ -388,8 +437,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             vec![]
         }
     }
-
-    /// Ensures all inputs to a node have the same fixed point denominator.
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
         Box::new(self.clone()) // Forward to the derive(Clone) impl

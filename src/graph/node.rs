@@ -15,9 +15,6 @@ use tract_onnx::prelude::Node as OnnxNode;
 use tract_onnx::prelude::TypedFact;
 use tract_onnx::prelude::TypedOp;
 
-/// Representation of an execution graph divided into execution 'buckets'.
-pub type NodeGraph<F> = BTreeMap<usize, Node<F>>;
-
 fn display_vector<T: fmt::Debug>(v: &Vec<T>) -> String {
     if !v.is_empty() {
         format!("{:?}", v)
@@ -33,13 +30,10 @@ fn display_opkind<F: PrimeField + TensorType + PartialOrd>(v: &Box<dyn Op<F>>) -
 /// A single operation in a Model.
 /// # Arguments:
 /// * `opkind` - [OpKind] enum, i.e what operation this node represents.
-/// * `output_max` - The inferred maximum value that can appear in the output tensor given previous quantization choices.
-/// * `in_scale, out_scale` - The denominator in the fixed point representation. Tensors of differing scales should not be combined.
-/// * `in_dims, out_dims` - The shape of the activations which enter and leave the self.
+/// * `out_scale` - The denominator in the fixed point representation. Tensors of differing scales should not be combined.
+/// * `out_dims` - The shape of the activations which enter and leave the self.
 /// * `inputs` - The indices of other nodes that feed into this self.
-/// * `const_value` - The constants potentially associated with this self.
 /// * `idx` - The node's unique identifier.
-/// * `bucket` - The execution bucket this node has been assigned to.
 #[derive(Clone, Debug, Tabled)]
 pub struct Node<F: PrimeField + TensorType + PartialOrd> {
     /// [OpKind] enum, i.e what operation this node represents.
@@ -64,11 +58,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
     /// # Arguments:
     /// * `node` - [OnnxNode]
     /// * `other_nodes` - [BTreeMap] of other previously initialized [Node]s in the computational graph.
-    /// * `scale` - The denominator in the fixed point representation. Tensors of differing scales should not be combined.
+    /// * `public_params` - flag if parameters of model are public
     /// * `idx` - The node's unique identifier.
     pub fn new(
         mut node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
-        other_nodes: &mut BTreeMap<usize, Node<F>>,
+        other_nodes: &mut BTreeMap<usize, super::NodeType<F>>,
         scale: u32,
         public_params: bool,
         idx: usize,
@@ -89,7 +83,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
         let mut opkind = new_op_from_onnx(idx, scale, public_params, node.clone(), &mut inputs)?; // parses the op name
 
         // rescale the inputs if necessary to get consistent fixed points
-        let in_scales: Vec<u32> = inputs.iter().map(|i| i.out_scale).collect();
+        let in_scales: Vec<u32> = inputs.iter().map(|n| n.out_scales()[0]).collect();
         opkind = opkind.rescale(in_scales.clone(), scale);
         let out_scale = match in_scales.len() {
             0 => scale,
@@ -97,7 +91,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
         };
 
         // get the output shape
-        let mut out_dims = {
+        let out_dims = {
             let output_shapes = match node_output_shapes(&node) {
                 Ok(s) => Some(s),
                 _ => None,
@@ -106,29 +100,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
             if let Some([Some(v)]) = output_shapes.as_deref() {
                 v.to_vec()
             } else {
-                // Turn  `outputs: [?,3,32,32,F32 >3/0]` into `vec![3,32,32]`  in two steps
-                node.outputs[0]
-                    .fact
-                    .shape
-                    .iter()
-                    // .filter_map(|x| x.concretize())
-                    .map(|x| x.to_i64().unwrap() as usize)
-                    .collect()
+                panic!("Could not get output shape for node {:?}", node);
             }
-        };
-
-        // rm batch
-        if !out_dims.is_empty() && out_dims[0] == 1 && out_dims.len() > 1 {
-            out_dims = out_dims[1..].to_vec();
-        }
-        if out_dims.iter().product::<usize>() == 1 {
-            out_dims = vec![1];
         };
 
         Ok(Node {
             idx,
             opkind,
-            inputs: inputs.iter().map(|i| i.idx).collect(),
+            inputs: inputs.iter().map(|i| i.idx()).collect(),
             out_dims,
             out_scale,
         })

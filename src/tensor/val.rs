@@ -2,7 +2,7 @@ use super::{ops::pad, *};
 use halo2_proofs::{arithmetic::Field, plonk::Instance};
 
 #[derive(Debug, Clone)]
-///
+/// A [ValType] is a wrapper around Halo2 value(s).
 pub enum ValType<F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd> {
     /// value
     Value(Value<F>),
@@ -87,9 +87,10 @@ where
         Some(ValType::Value(Value::known(<F as Field>::ONE)))
     }
 }
-/// A wrapper around a [Tensor] where the inner type is one of Halo2's [`Value<F>`], [`Value<Assigned<F>>`], [`AssignedCell<Assigned<F>, F>`].
-/// This enum is generally used to assign values to variables / advices already configured in a Halo2 circuit (usually represented as a [VarTensor]).
-/// For instance can represent pre-trained neural network weights; or a known input to a network.
+/// A [ValTensor] is a wrapper around a [Tensor] of [ValType].
+/// or a column of an [Instance].
+/// This is the type used for all intermediate values in a circuit.
+/// It is also the type used for the inputs and outputs of a circuit.
 #[derive(Debug, Clone)]
 pub enum ValTensor<F: PrimeField + TensorType + PartialOrd> {
     /// A tensor of [Value], each containing a field element
@@ -174,7 +175,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         }
     }
 
-    ///
+    /// Set the [ValTensor]'s scale.
     pub fn set_scale(&mut self, scale: u32) {
         match self {
             ValTensor::Value { scale: s, .. } => *s = scale,
@@ -182,7 +183,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         }
     }
 
-    ///
+    /// Returns the [ValTensor]'s scale.
     pub fn scale(&self) -> u32 {
         match self {
             ValTensor::Value { scale, .. } => *scale,
@@ -240,22 +241,6 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         Ok(slice)
     }
 
-    /// Transposes the inner tensor
-    pub fn transpose_2d(&mut self) -> Result<(), Box<dyn Error>> {
-        match self {
-            ValTensor::Value {
-                inner: v, dims: d, ..
-            } => {
-                v.transpose_2d()?;
-                *d = v.dims().to_vec();
-            }
-            ValTensor::Instance { dims: d, .. } => {
-                *d = vec![d.iter().product()];
-            }
-        }
-        Ok(())
-    }
-
     /// Fetches the inner tensor as a [Tensor<Value<F>>]
     pub fn get_inner_tensor(&self) -> Result<Tensor<ValType<F>>, TensorError> {
         Ok(match self {
@@ -276,6 +261,21 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             ValTensor::Instance { .. } => return Err(TensorError::WrongMethod),
         })
     }
+    /// Calls `expand` on the inner tensor.
+    pub fn expand(&mut self, dims: &[usize]) -> Result<(), Box<dyn Error>> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                *v = v.expand(dims)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(Box::new(TensorError::WrongMethod));
+            }
+        };
+        Ok(())
+    }
 
     /// Sets the [ValTensor]'s shape.
     pub fn reshape(&mut self, new_dims: &[usize]) -> Result<(), Box<dyn Error>> {
@@ -291,6 +291,27 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                     return Err(Box::new(TensorError::DimError));
                 }
                 *d = new_dims.to_vec();
+            }
+        };
+        Ok(())
+    }
+
+    /// Sets the [ValTensor]'s shape.
+    pub fn slice(
+        &mut self,
+        axis: &usize,
+        start: &usize,
+        end: &usize,
+    ) -> Result<(), Box<dyn Error>> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                *v = crate::tensor::ops::slice(v, axis, start, end)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(Box::new(TensorError::WrongMethod));
             }
         };
         Ok(())
@@ -363,7 +384,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         Ok(())
     }
 
-    /// Calls `tile` on the inner [Tensor].
+    /// Calls `pad` on the inner [Tensor].
     pub fn pad(&mut self, padding: (usize, usize)) -> Result<(), TensorError> {
         match self {
             ValTensor::Value {
@@ -416,32 +437,6 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                 inner: v, dims: d, ..
             } => {
                 *v = v.pad_row_ones()?;
-                *d = v.dims().to_vec();
-            }
-            ValTensor::Instance { .. } => {
-                return Err(TensorError::WrongMethod);
-            }
-        }
-        Ok(())
-    }
-
-    /// Calls `multi_ch_doubly_blocked_toeplitz` on the inner [Tensor].
-    pub fn multi_ch_blocked_toeplitz(
-        &mut self,
-        h_blocks: usize,
-        w_blocks: usize,
-        num_rows: usize,
-        num_cols: usize,
-        h_stride: usize,
-        w_stride: usize,
-    ) -> Result<(), TensorError> {
-        match self {
-            ValTensor::Value {
-                inner: v, dims: d, ..
-            } => {
-                *v = v.multi_ch_doubly_blocked_toeplitz(
-                    h_blocks, w_blocks, num_rows, num_cols, h_stride, w_stride,
-                )?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
