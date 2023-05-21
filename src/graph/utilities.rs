@@ -574,7 +574,6 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 pool_dims: (kernel_height, kernel_width),
             })
         }
-        "Dot" => Box::new(PolyOp::Dot),
         "Square" => Box::new(PolyOp::Pow(2)),
         "ConvUnary" => {
             let conv_node: &ConvUnary = match node.op().downcast_ref::<ConvUnary>() {

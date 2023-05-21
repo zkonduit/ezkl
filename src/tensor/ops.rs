@@ -152,6 +152,20 @@ pub fn matmul<
 /// assert_eq!(result, expected);
 ///
 ///
+/// // dot product
+/// let x = Tensor::<i128>::new(
+///    Some(&[1, 2, 3]),
+///  &[3],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///    Some(&[1, 2, 3]),
+///  &[3],
+/// ).unwrap();
+/// let result = einsum("i,i->", &[x, k]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[14]), &[1]).unwrap();
+/// assert_eq!(result, expected);
+///
+///
 /// // wut ?
 /// let x = Tensor::<i128>::new(
 ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),

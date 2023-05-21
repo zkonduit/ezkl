@@ -37,6 +37,8 @@ use log::{debug, info, trace};
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::error::Error;
+use std::sync::Arc;
+use std::sync::Mutex;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::Framework;
@@ -657,10 +659,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             |mut region| {
                 let mut offset: usize = 0;
 
+                let thread_safe_region = Arc::new(Mutex::new(Some(&mut region)));
+
                 let mut outputs = self
                     .layout_nodes(
                         &mut config,
-                        &mut region,
+                        thread_safe_region.clone(),
                         &self.nodes,
                         &mut results,
                         &mut offset,
@@ -677,7 +681,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                         outputs[i] = config
                             .base
                             .layout(
-                                &mut Some(&mut region),
+                                thread_safe_region.clone(),
                                 &outputs[i..i + 1],
                                 &mut offset,
                                 Box::new(PolyOp::Pack(
@@ -714,7 +718,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                                 instance_offset += inputs.len();
                             };
                             config.base.layout(
-                                &mut Some(&mut region),
+                                thread_safe_region.clone(),
                                 &[output, vars.instances[instance_offset + i].clone()],
                                 &mut offset,
                                 Box::new(HybridOp::RangeCheck(tolerance)),
@@ -733,7 +737,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     fn layout_nodes(
         &self,
         config: &mut ModelConfig<F>,
-        region: &mut Region<F>,
+        region: Arc<Mutex<Option<&mut Region<F>>>>,
         nodes: &NodeGraph<F>,
         results: &mut BTreeMap<usize, ValTensor<F>>,
         offset: &mut usize,
@@ -751,7 +755,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 NodeType::Node(n) => {
                     let res = config
                         .base
-                        .layout(&mut Some(region), &values, offset, n.opkind.clone_dyn())
+                        .layout(region.clone(), &values, offset, n.opkind.clone_dyn())
                         .map_err(|e| {
                             error!("{}", e);
                             halo2_proofs::plonk::Error::Synthesis
@@ -771,7 +775,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                     }
                 }
                 NodeType::SubGraph { graph, .. } => {
-                    let res = graph.layout_nodes(config, region, &graph.nodes, results, offset)?;
+                    let res = graph.layout_nodes(
+                        config,
+                        region.clone(),
+                        &graph.nodes,
+                        results,
+                        offset,
+                    )?;
                     let mut res = res.last().unwrap().clone();
                     res.flatten();
                     results.insert(*idx, res);
@@ -822,7 +832,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 debug!("packing outputs...");
                 outputs[i] = dummy_config
                     .layout(
-                        &mut None,
+                        Arc::new(Mutex::new(None)),
                         &outputs[i..i + 1],
                         &mut offset,
                         Box::new(PolyOp::Pack(self.run_args.pack_base, self.run_args.scale)),
@@ -849,7 +859,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 .map(|output| {
                     dummy_config
                         .layout(
-                            &mut None,
+                            Arc::new(Mutex::new(None)),
                             &[output.clone(), output],
                             &mut offset,
                             Box::new(HybridOp::RangeCheck(tolerance)),
@@ -885,7 +895,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                         .map(|i| results.get(i).unwrap().clone())
                         .collect_vec();
                     let res = dummy_config
-                        .layout(&mut None, &values, offset, n.opkind.clone_dyn())
+                        .layout(
+                            Arc::new(Mutex::new(None)),
+                            &values,
+                            offset,
+                            n.opkind.clone_dyn(),
+                        )
                         .map_err(|e| {
                             error!("{}", e);
                             halo2_proofs::plonk::Error::Synthesis

@@ -87,6 +87,7 @@ where
         Some(ValType::Value(Value::known(<F as Field>::ONE)))
     }
 }
+
 /// A [ValTensor] is a wrapper around a [Tensor] of [ValType].
 /// or a column of an [Instance].
 /// This is the type used for all intermediate values in a circuit.

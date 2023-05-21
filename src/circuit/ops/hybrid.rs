@@ -1,4 +1,7 @@
-use std::any::Any;
+use std::{
+    any::Any,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
     circuit::{self, layouts, Tolerance},
@@ -70,7 +73,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: &mut Option<&mut Region<F>>,
+        region: Arc<Mutex<Option<&mut Region<F>>>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn std::error::Error>> {
