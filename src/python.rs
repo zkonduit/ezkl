@@ -1,13 +1,13 @@
 use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::{RunArgs, StrategyType};
-use crate::execute::{create_proof_circuit_kzg, load_params_cmd, verify_proof_circuit_kzg};
 use crate::eth::{fix_verifier_sol, verify_proof_via_solidity};
+use crate::execute::{create_proof_circuit_kzg, load_params_cmd, verify_proof_circuit_kzg};
 use crate::graph::{quantize_float, Mode, Model, ModelCircuit, ModelParams, VarVisibility};
+use crate::pfsys::evm::{evm_verify, single::gen_evm_verifier, DeploymentCode};
 use crate::pfsys::{
     create_keys, gen_srs as ezkl_gen_srs, load_pk, load_vk, prepare_data, save_params, save_pk,
     save_vk, Snark, TranscriptType,
 };
-use crate::pfsys::evm::{evm_verify, DeploymentCode, single::gen_evm_verifier};
 use halo2_proofs::poly::kzg::{
     commitment::KZGCommitmentScheme,
     strategy::{AccumulatorStrategy, SingleStrategy as KZGSingleStrategy},
@@ -39,7 +39,6 @@ use tokio::runtime::Runtime;
 //         .show_labels(false)
 //         .render(args.logrows, &circuit, &root)?;
 // }
-
 
 /// pyclass containing the struct used for run_args
 #[pyclass]
@@ -174,7 +173,7 @@ fn forward(
         .forward(&model_inputs)
         .map_err(|_| PyIOError::new_err("Failed to run forward pass"))?;
 
-    let output_scales = model.get_output_scales();
+    let output_scales = model.graph.get_output_scales();
     let output_scales = output_scales
         .iter()
         .map(|scale| crate::graph::scale_to_multiplier(*scale));
@@ -257,7 +256,7 @@ fn setup(
     pk_path: PathBuf,
     params_path: PathBuf,
     circuit_params_path: PathBuf,
-    py_run_args: Option<PyRunArgs>
+    py_run_args: Option<PyRunArgs>,
 ) -> Result<bool, PyErr> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let logrows = run_args.logrows;
@@ -443,12 +442,13 @@ fn create_evm_verifier(
 
     let vk =
         load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)
-        .map_err(|_| PyIOError::new_err("Failed to load verifier key"))?;
+            .map_err(|_| PyIOError::new_err("Failed to load verifier key"))?;
 
     let (deployment_code, yul_code) = gen_evm_verifier(&params, &vk, num_instance)
         .map_err(|_| PyRuntimeError::new_err("Failed to generatee evm verifier"))?;
 
-    deployment_code.save(&deployment_code_path)
+    deployment_code
+        .save(&deployment_code_path)
         .map_err(|_| PyIOError::new_err("Failed to save deployment code"))?;
 
     if sol_code_path.is_some() {
@@ -485,9 +485,10 @@ fn verify_evm(
         .map_err(|_| PyRuntimeError::new_err("Failed to verify with evm"))?;
 
     if sol_code_path.is_some() {
-        let result = Runtime::new().unwrap().block_on(
-            verify_proof_via_solidity(proof, sol_code_path.unwrap())
-        ).map_err(|_| PyRuntimeError::new_err("Failed to verify proof via solidity"))?;
+        let result = Runtime::new()
+            .unwrap()
+            .block_on(verify_proof_via_solidity(proof, sol_code_path.unwrap()))
+            .map_err(|_| PyRuntimeError::new_err("Failed to verify proof via solidity"))?;
 
         trace!("Solidity verification result: {}", result);
 
