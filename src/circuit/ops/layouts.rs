@@ -17,9 +17,10 @@ use crate::{
     tensor::{
         get_broadcasted_shape,
         ops::{
-            accumulated, add, conv as non_accum_conv, einsum as non_accum_einsum,
-            max_pool2d as non_accum_max_pool2d, mult, pack as non_accum_pack,
-            rescale as ref_rescaled, sub, sum as non_accum_sum, sumpool as non_accum_sumpool,
+            accumulated, add, conv as non_accum_conv, dot as non_accum_dot,
+            einsum as non_accum_einsum, max_pool2d as non_accum_max_pool2d, mult,
+            pack as non_accum_pack, rescale as ref_rescaled, sub, sum as non_accum_sum,
+            sumpool as non_accum_sumpool,
         },
         Tensor, TensorError, ValType,
     },
@@ -27,6 +28,112 @@ use crate::{
 
 use super::*;
 use crate::circuit::ops::lookup::LookupOp;
+
+fn overflowed_len(starting_idx: usize, mut total_len: usize, column_len: usize) -> usize {
+    let mut idx = starting_idx;
+    // let x = idx / column_len;
+    let y = idx % column_len;
+    if y + total_len < column_len {
+        return total_len;
+    }
+    // fill up first column
+    idx += column_len - y;
+    total_len += 1;
+    loop {
+        if idx >= starting_idx + total_len {
+            break;
+        }
+        idx += column_len;
+        total_len += 1;
+    }
+    total_len
+}
+
+/// Dot product accumulated layout
+pub fn dot<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: Arc<Mutex<Option<&mut Region<F>>>>,
+    values: &[ValTensor<F>; 2],
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    if values[0].len() != values[1].len() {
+        return Err(Box::new(TensorError::DimMismatch("dot".to_string())));
+    }
+
+    let mut inputs = vec![];
+    let mut assigned_len = 0;
+    for (i, input) in values.iter().enumerate() {
+        let mut lock = region.lock().unwrap();
+        let inp = {
+            let (res, len) = config.inputs[i].assign_with_duplication(
+                &mut lock,
+                *offset,
+                input,
+                &config.check_mode,
+            )?;
+            assigned_len = len;
+            res.get_inner()?
+        };
+        inputs.push(inp);
+    }
+
+    // Now we can assign the dot product
+    let accumulated_dot = accumulated::dot(&[inputs[0].clone(), inputs[1].clone()])
+        .expect("accum poly: dot op failed");
+
+    let mut lock = region.lock().unwrap();
+
+    let (output, output_assigned_len) = config.output.assign_with_duplication(
+        &mut lock,
+        *offset,
+        &accumulated_dot.into(),
+        &config.check_mode,
+    )?;
+
+    assert_eq!(assigned_len, output_assigned_len);
+
+    if let Some(region) = lock.as_mut() {
+        for i in 0..assigned_len {
+            let (x, y) = config.output.cartesian_coord(*offset + i);
+            // hop over duplicates at start of column
+            if y == 0 && i > 0 {
+                continue;
+            }
+            if i == 0 {
+                config
+                    .selectors
+                    .get(&(BaseOp::Mult, x))
+                    .unwrap()
+                    .enable(*region, y)?;
+            } else {
+                config
+                    .selectors
+                    .get(&(BaseOp::Dot, x))
+                    .unwrap()
+                    .enable(*region, y)?;
+            }
+        }
+    }
+
+    let last_elem = output
+        .get_slice(&[output.len() - 1..output.len()])
+        .expect("accum poly: failed to fetch last elem");
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        let safe_dot = non_accum_dot(&inputs[..]).map_err(|e| {
+            error!("{}", e);
+            halo2_proofs::plonk::Error::Synthesis
+        })?;
+
+        assert_eq!(
+            Into::<Tensor<i32>>::into(last_elem.get_inner()?),
+            Into::<Tensor<i32>>::into(safe_dot),
+        );
+    }
+    *offset += assigned_len;
+    // last element is the result
+    Ok(last_elem)
+}
 
 /// Einsum
 pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
@@ -42,7 +149,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     let mut equation = equation.split("->");
     let inputs_eq = equation.next().unwrap();
     let output_eq = equation.next().unwrap();
-    let inputs_eq = inputs_eq.split(",").collect::<Vec<_>>();
+    let inputs_eq = inputs_eq.split(',').collect::<Vec<_>>();
 
     for (i, input) in inputs.iter_mut().enumerate() {
         if input.dims().len() != inputs_eq[i].len()
@@ -64,8 +171,8 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     for (i, input) in inputs.iter().enumerate() {
         for j in 0..inputs_eq[i].len() {
             let c = inputs_eq[i].chars().nth(j).unwrap();
-            if !indices_to_size.contains_key(&c) {
-                indices_to_size.insert(c, input.dims()[j]);
+            if let std::collections::hash_map::Entry::Vacant(e) = indices_to_size.entry(c) {
+                e.insert(input.dims()[j]);
             } else if indices_to_size[&c] != input.dims()[j] {
                 return Err(Box::new(TensorError::DimMismatch("einsum".to_string())));
             }
@@ -74,9 +181,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
 
     // maps unrepresented indices in the output to a trivial 1
     for c in output_eq.chars() {
-        if !indices_to_size.contains_key(&c) {
-            indices_to_size.insert(c, 1);
-        }
+        indices_to_size.entry(c).or_insert(1);
     }
 
     // Compute the output tensor shape
@@ -85,7 +190,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         .map(|c| *indices_to_size.get(&c).unwrap())
         .collect();
 
-    if output_shape.len() == 0 {
+    if output_shape.is_empty() {
         output_shape.push(1);
     }
 
@@ -94,8 +199,8 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
 
     let mut seen = HashSet::new();
     let mut common_indices_to_inputs = vec![];
-    for i in 0..inputs.len() {
-        for c in inputs_eq[i].chars() {
+    for input in inputs_eq.iter().take(inputs.len()) {
+        for c in input.chars() {
             if !seen.contains(&c) {
                 seen.insert(c);
             } else {
@@ -114,6 +219,39 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         .map(|d| 0..*d)
         .multi_cartesian_product()
         .collect::<Vec<_>>();
+
+    // Get the indices common accross input tensors
+    let mut common_coord = common_indices_to_inputs
+        .iter()
+        .map(|d| {
+            // If the current index is in the output equation, then the slice should be the current coordinate
+            if output_eq.contains(*d) {
+                0..1
+            // Otherwise, the slice should be the entire dimension of the input tensor
+            } else {
+                0..*indices_to_size.get(d).unwrap()
+            }
+        })
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    // If there are no common indices, then we need to add an empty slice to force one iteration of the loop
+    if common_coord.is_empty() {
+        common_coord.push(vec![]);
+    }
+
+    let non_common_coord_size = non_common_indices
+        .iter()
+        .map(|d| {
+            // If the current index is in the output equation, then the slice should be the current coordinate
+            if output_eq.contains(**d) {
+                1
+            // Otherwise, the slice should be the entire dimension of the input tensor
+            } else {
+                *indices_to_size.get(d).unwrap()
+            }
+        })
+        .product::<usize>();
 
     output.par_iter_mut().enumerate().for_each(|(i, o)| {
         let coord = cartesian_coord[i].clone();
@@ -135,115 +273,117 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
             })
             .collect::<Vec<_>>();
 
-        // Get the indices common accross input tensors
-        let mut common_coord = common_indices_to_inputs
-            .iter()
-            .map(|d| {
-                // If the current index is in the output equation, then the slice should be the current coordinate
-                if output_eq.contains(*d) {
-                    0..1
-                // Otherwise, the slice should be the entire dimension of the input tensor
-                } else {
-                    0..*indices_to_size.get(d).unwrap()
-                }
-            })
-            .multi_cartesian_product()
-            .collect::<Vec<_>>();
+        // in this case its just a dot product :)
+        if non_common_coord_size == 1 && inputs.len() == 2 {
+            let overflowed_len =
+                overflowed_len(*offset, i * common_coord.len(), config.output.col_size());
+            let mut local_offset = offset.clone() + overflowed_len;
 
-        // If there are no common indices, then we need to add an empty slice to force one iteration of the loop
-        if common_coord.len() == 0 {
-            common_coord.push(vec![]);
-        }
+            *o = dot(
+                config,
+                region.clone(),
+                inputs[..].try_into().unwrap(),
+                &mut local_offset,
+            )
+            .unwrap()
+            .get_inner_tensor()
+            .unwrap()[0]
+                .clone();
+        } else {
+            // index * the number of elements that are multiplied together during the inner loop of an einsum operation
+            let mut local_offset =
+                // we subtract 1 because we don't need to add for the first loop
+                *offset + i * (common_coord.len() * 2 * (non_common_coord_size) - 1); // we have non_common_coord_size multiplies and adds per inner loop
 
-        let mut prod = None;
+            let mut prod = None;
 
-        let non_common_coord_size = non_common_indices
-            .iter()
-            .map(|d| {
-                // If the current index is in the output equation, then the slice should be the current coordinate
-                if output_eq.contains(**d) {
-                    1
-                // Otherwise, the slice should be the entire dimension of the input tensor
-                } else {
-                    *indices_to_size.get(d).unwrap()
-                }
-            })
-            .product::<usize>();
-
-       
-        // index * the number of elements that are multiplied together during the inner loop of an einsum operation
-        let mut local_offset = offset.clone()
-            + i * (common_coord.len() * 
-                // we have non_common_coord_size multiplies and adds per inner loop
-                2 * (non_common_coord_size)
-            // we subtract 1 because we don't need to add for the first loop
-            - 1 );
-    
-        // Compute the cartesian product of all common indices
-        for common_dim in common_coord {
-            let inputs = (0..inputs.len())
-                .map(|idx| {
-                    let mut slice = vec![];
-                    // Iterate over all indices in the input equation
-                    for (i, c) in inputs_eq[idx].chars().enumerate() {
-                        // If the current index is common to multiple inputs, then the slice should be the current coordinate
-                        if let Some(j) = common_indices_to_inputs.iter().position(|&r| r == c) {
-                            slice.push(common_dim[j]..common_dim[j] + 1);
-                        } else {
-                            slice.push(0..inputs[idx].dims()[i]);
+            // Compute the cartesian product of all common indices
+            for common_dim in &common_coord {
+                let inputs = (0..inputs.len())
+                    .map(|idx| {
+                        let mut slice = vec![];
+                        // Iterate over all indices in the input equation
+                        for (i, c) in inputs_eq[idx].chars().enumerate() {
+                            // If the current index is common to multiple inputs, then the slice should be the current coordinate
+                            if let Some(j) = common_indices_to_inputs.iter().position(|&r| r == c) {
+                                slice.push(common_dim[j]..common_dim[j] + 1);
+                            } else {
+                                slice.push(0..inputs[idx].dims()[i]);
+                            }
                         }
-                    }
-                    // Get the slice of the input tensor
-                    inputs[idx].get_slice(&slice).unwrap()
-                })
-                .collect::<Vec<_>>();
+                        // Get the slice of the input tensor
+                        inputs[idx].get_slice(&slice).unwrap()
+                    })
+                    .collect::<Vec<_>>();
 
-            let input_pairs = inputs
-                .iter()
-                .map(|d| d.get_inner_tensor().into_iter())
-                .multi_cartesian_product()
-                .collect::<Vec<_>>();
+                let input_pairs = inputs
+                    .iter()
+                    .map(|d| d.get_inner_tensor().into_iter())
+                    .multi_cartesian_product()
+                    .collect::<Vec<_>>();
 
-            // Compute the product of all input tensors
-            for pair in input_pairs {
-                let product_across_pair =
-                    pair[1..]
-                        .iter()
-                        .fold(ValTensor::from(pair[0].clone()), |acc, x| {
+                // Compute the product of all input tensors
+                for pair in input_pairs {
+                    let product_across_pair =
+                        pair[1..]
+                            .iter()
+                            .fold(ValTensor::from(pair[0].clone()), |acc, x| {
+                                pairwise(
+                                    config,
+                                    region.clone(),
+                                    &[acc, x.clone().into()],
+                                    &mut local_offset,
+                                    BaseOp::Mult,
+                                )
+                                .unwrap()
+                            });
+
+                    if prod.is_none() {
+                        prod = Some(product_across_pair);
+                    } else {
+                        prod = Some(
                             pairwise(
                                 config,
                                 region.clone(),
-                                &[acc.clone(), x.clone().into()],
+                                &[prod.unwrap(), product_across_pair],
                                 &mut local_offset,
-                                BaseOp::Mult,
+                                BaseOp::Add,
                             )
-                            .unwrap()
-                        });
-
-                if prod.is_none() {
-                    prod = Some(product_across_pair);
-                } else {
-                    prod = Some(
-                        pairwise(
-                            config,
-                            region.clone(),
-                            &[prod.unwrap().into(), product_across_pair],
-                            &mut local_offset,
-                            BaseOp::Add,
-                        )
-                        .unwrap(),
-                    );
+                            .unwrap(),
+                        );
+                    }
                 }
             }
-        }
 
-        *o = prod.unwrap().get_inner_tensor().unwrap()[0].clone();
-       
+            *o = prod.unwrap().get_inner_tensor().unwrap()[0].clone();
+        }
     });
 
-    *offset += output_shape.iter().product::<usize>() * (2 * common_indices_to_inputs.into_iter().filter(|c| !output_eq.contains(*c)).map(|c| indices_to_size[&c]).product::<usize>() 
-                                                         * non_common_indices.into_iter().filter(|c| !output_eq.contains(**c)).map(|c| indices_to_size[&c]).product::<usize>() 
-                                                         - 1);
+    let non_common_indices_size = non_common_indices
+        .into_iter()
+        .filter(|c| !output_eq.contains(**c))
+        .map(|c| indices_to_size[c])
+        .product::<usize>();
+
+    if non_common_indices_size > 1 {
+        *offset += output_shape.iter().product::<usize>()
+            * (2 * common_indices_to_inputs
+                .into_iter()
+                .filter(|c| !output_eq.contains(*c))
+                .map(|c| indices_to_size[&c])
+                .product::<usize>()
+                * non_common_indices_size
+                - 1);
+    } else {
+        let vanilla_len = output_shape.iter().product::<usize>()
+            * (common_indices_to_inputs
+                .into_iter()
+                .filter(|c| !output_eq.contains(*c))
+                .map(|c| indices_to_size[&c])
+                .product::<usize>());
+        let overflowed_len = overflowed_len(*offset, vanilla_len, config.output.col_size());
+        *offset += overflowed_len;
+    }
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
@@ -363,7 +503,7 @@ pub fn sum_axes<F: PrimeField + TensorType + PartialOrd>(
 
     let a = &values[0];
 
-    if axes.len() == 0 {
+    if axes.is_empty() {
         return Ok(a.clone());
     }
 
@@ -386,14 +526,13 @@ pub fn sum_axes<F: PrimeField + TensorType + PartialOrd>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for i in 0..a.dims().len() {
+        for (i, c) in coord.iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {
-                sum_dims.push(coord[i]..coord[i] + 1);
+                sum_dims.push(*c..*c + 1);
             }
         }
-
         res.set(
             coord,
             sum(config, region.clone(), &[a.get_slice(&sum_dims)?], offset)?.get_inner_tensor()?[0]
@@ -416,7 +555,7 @@ pub fn max_axes<F: PrimeField + TensorType + PartialOrd>(
 
     let a = &values[0];
 
-    if axes.len() == 0 {
+    if axes.is_empty() {
         return Ok(a.clone());
     }
 
@@ -439,14 +578,13 @@ pub fn max_axes<F: PrimeField + TensorType + PartialOrd>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for i in 0..a.dims().len() {
+        for (i, c) in coord.iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {
-                sum_dims.push(coord[i]..coord[i] + 1);
+                sum_dims.push(*c..*c + 1);
             }
         }
-
         res.set(
             coord,
             max(config, region.clone(), &[a.get_slice(&sum_dims)?], offset)?.get_inner_tensor()?[0]
@@ -469,7 +607,7 @@ pub fn min_axes<F: PrimeField + TensorType + PartialOrd>(
 
     let a = &values[0];
 
-    if axes.len() == 0 {
+    if axes.is_empty() {
         return Ok(a.clone());
     }
 
@@ -492,11 +630,11 @@ pub fn min_axes<F: PrimeField + TensorType + PartialOrd>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for i in 0..a.dims().len() {
+        for (i, c) in coord.iter().enumerate().take(a.dims().len()) {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {
-                sum_dims.push(coord[i]..coord[i] + 1);
+                sum_dims.push(*c..*c + 1);
             }
         }
 
@@ -527,7 +665,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
 
     let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
 
-    let broadcasted_shape = get_broadcasted_shape(&lhs.dims(), &rhs.dims())?;
+    let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
     lhs.expand(&broadcasted_shape)?;
     rhs.expand(&broadcasted_shape)?;
 
@@ -600,7 +738,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
     *offset += 1;
 
     // make sure mask is boolean
-    let assigned_mask = config.inputs[1].assign(&mut lock, *offset, &mask)?;
+    let assigned_mask = config.inputs[1].assign(&mut lock, *offset, mask)?;
     if let Some(region) = lock.as_mut() {
         for i in 0..assigned_mask.len() {
             let (x, y) = config.inputs[1].cartesian_coord(*offset + i);
@@ -648,7 +786,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
     )?;
 
     // Now we can assign the matmul op
-    Ok(output.into())
+    Ok(output)
 }
 
 /// Negation operation accumulated layout
@@ -900,7 +1038,6 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     .multi_cartesian_product()
     .collect::<Vec<_>>();
 
-
     output.par_iter_mut().enumerate().for_each(|(idx, o)| {
         let cartesian_coord_per_group = &cartesian_coord[idx];
         let (batch, group, i, j, k) = (
@@ -935,11 +1072,10 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
 
         local_kernel.flatten();
 
-        let mut local_offset = offset.clone() + idx * (2 * local_image.len() - 1);
+        let mut local_offset = *offset + idx * local_image.len();
         if has_bias {
-            local_offset += idx * 1;
+            local_offset += idx;
         }
-
 
         let mut res = einsum(
             config,
@@ -972,7 +1108,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
         *o = res.get_inner_tensor().unwrap()[0].clone();
     });
 
-    *offset += output.len() * (2 * kernel_height * kernel_width * input_channels_per_group - 1);
+    *offset += output.len() * kernel_height * kernel_width * input_channels_per_group;
     // add bias
     if has_bias {
         *offset += output.len();
@@ -1601,8 +1737,8 @@ pub fn multi_dim_softmax<F: PrimeField + TensorType + PartialOrd>(
 
     for coord in cartesian_coord {
         let mut sum_dims = vec![];
-        for i in 0..coord.len() {
-            sum_dims.push(coord[i]..coord[i] + 1);
+        for c in coord {
+            sum_dims.push(c..c + 1);
         }
         sum_dims.push(0..dims[dims.len() - 1]);
 
@@ -1655,7 +1791,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
     let inv_denom = nonlinearity(
         config,
         region.clone(),
-        &[denom.clone()],
+        &[denom],
         // we set to input scale + output_scale so the output scale is output)scale
         &LookupOp::Recip {
             scale: output_scale.pow(2),
@@ -1679,12 +1815,12 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
             .iter()
             .all(|&x| x == 0);
         if is_assigned {
-            let int_evals = Tensor::new(Some(&values[0].get_int_evals()?), &values[0].dims())?;
+            let int_evals = Tensor::new(Some(&values[0].get_int_evals()?), values[0].dims())?;
             // scale is double the output
             let ref_sofmax: Tensor<i128> =
                 tensor::ops::nonlinearities::softmax(&int_evals, input_scale, output_scale);
 
-            let output_int_evals = Tensor::new(Some(&softmax.get_int_evals()?), &values[0].dims())?;
+            let output_int_evals = Tensor::new(Some(&softmax.get_int_evals()?), values[0].dims())?;
 
             assert_eq!(output_int_evals, ref_sofmax,)
         }
@@ -1705,7 +1841,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     tol: f32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // Calculate the difference between the expected output and actual output
-    let diff = pairwise(config, region.clone(), &values, offset, BaseOp::Sub)?;
+    let diff = pairwise(config, region.clone(), values, offset, BaseOp::Sub)?;
 
     // Calculate the reciprocal of the expected output tensor, scaling by double the scaling factor
     let scale = scale.pow(2);
@@ -1732,13 +1868,13 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     )?;
 
     // Negate the product
-    let neg_product = neg(config, region.clone(), &[product.clone()], offset)?;
+    let neg_product = neg(config, region.clone(), &[product], offset)?;
 
     // Use the greater than look up table to check if the percent error is within the tolerance for lower bound
     let lower_bound = nonlinearity(
         config,
         region.clone(),
-        &[neg_product.clone()],
+        &[neg_product],
         &LookupOp::GreaterThan {
             a: utils::F32(tol * scale as f32),
         },
@@ -1756,7 +1892,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
 
     let mut lock = region.lock().unwrap();
     // Assign the sum tensor to the inputs
-    config.inputs[1].assign(&mut lock, *offset, &sum.clone())?;
+    config.inputs[1].assign(&mut lock, *offset, &sum)?;
 
     // Constrain the sum to be all zeros
     if let Some(region) = lock.as_mut() {
@@ -1775,12 +1911,12 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
             .all(|&x| x == 0);
         if is_assigned {
             let int_evals = &[
-                Tensor::new(Some(&values[0].get_int_evals()?), &values[0].dims())?,
-                Tensor::new(Some(&values[1].get_int_evals()?), &values[1].dims())?,
+                Tensor::new(Some(&values[0].get_int_evals()?), values[0].dims())?,
+                Tensor::new(Some(&values[1].get_int_evals()?), values[1].dims())?,
             ];
             let ref_range_check_percent: Tensor<i128> =
                 tensor::ops::nonlinearities::range_check_percent(int_evals, scale, tol);
-            let output_int_evals = Tensor::new(Some(&sum.get_int_evals()?), &values[0].dims())?;
+            let output_int_evals = Tensor::new(Some(&sum.get_int_evals()?), values[0].dims())?;
             assert_eq!(output_int_evals, ref_range_check_percent)
         }
     }

@@ -149,7 +149,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
         for (i, ri) in inputs.iter_mut().enumerate() {
             rescaled_inputs.push(tensor::ops::rescale(ri, self.scale[i].1)?);
         }
-        Ok(Op::<F>::f(&*self.inner, &rescaled_inputs)?)
+        Op::<F>::f(&*self.inner, &rescaled_inputs)
     }
 
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
@@ -262,8 +262,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
     fn f(&self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         Ok(self
             .values
-            .map(|x| quantize_float(&x, 0., self.scale).unwrap())
-            .into())
+            .map(|x| quantize_float(&x, 0., self.scale).unwrap()))
     }
 
     fn as_str(&self) -> &'static str {

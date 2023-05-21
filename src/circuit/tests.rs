@@ -1767,7 +1767,7 @@ mod softmax {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
             let mut config =
-                Self::Config::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE, 0);
+                Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0);
             let advices = (0..2)
                 .map(|_| VarTensor::new_advice(cs, K, LEN))
                 .collect::<Vec<_>>();

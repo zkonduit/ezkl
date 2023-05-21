@@ -207,9 +207,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 let a = inputs[2].clone();
                 let b = inputs[1].clone();
 
-                let masked_a = (mask.clone() * a.clone())?;
+                let masked_a = (mask.clone() * a)?;
                 let masked_b =
-                    ((Tensor::from(vec![1_i128].into_iter()) - mask.clone())? * b.clone())?;
+                    ((Tensor::from(vec![1_i128].into_iter()) - mask)? * b)?;
 
                 masked_a + masked_b
             }
@@ -223,7 +223,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("slice inputs".to_string()));
                 }
-                Ok(tensor::ops::slice(&inputs[0], axis, start, end)?.into())
+                Ok(tensor::ops::slice(&inputs[0], axis, start, end)?)
             }
         }
     }
@@ -240,7 +240,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
         Ok(Some(match self {
             PolyOp::Einsum { equation } => {
                 let out = layouts::einsum(config, region, &mut values, equation, offset)?;
-                out.into()
+                out
             }
             PolyOp::Gather { dim, index } => {
                 tensor::ops::gather(&values[0].get_inner_tensor()?, *dim, index)?.into()
@@ -390,7 +390,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     fn rescale(&self, input_scales: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
         let inputs_to_scale = self.requires_homogenous_input_scales();
         // creates a rescaled op if the inputs are not homogenous
-        self.homogenize_input_scales(input_scales.clone(), inputs_to_scale)
+        self.homogenize_input_scales(input_scales, inputs_to_scale)
             .unwrap()
     }
 

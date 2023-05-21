@@ -167,7 +167,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                         },
                     ]
                 }
-                __ => vec![],
+                _ => vec![],
             },
         }
     }
