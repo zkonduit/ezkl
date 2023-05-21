@@ -181,7 +181,11 @@ fn forward(
     let float_res: Vec<Vec<f32>> = res
         .iter()
         .zip(output_scales)
-        .map(|(t, scale)| t.iter().map(|e| (*e as f32 / scale)).collect::<Vec<f32>>())
+        .map(|(t, scale)| {
+            t.iter()
+                .map(|e| ((*e as f64) / scale) as f32)
+                .collect::<Vec<f32>>()
+        })
         .collect();
     trace!("forward pass output: {:?}", float_res);
     data.output_data = float_res;

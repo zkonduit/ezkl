@@ -159,7 +159,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
         let in_scales = in_scales
             .into_iter()
             .zip(self.scale.iter())
-            .map(|(a, b)| a + crate::graph::mult_to_scale(b.1 as f32))
+            .map(|(a, b)| a + crate::graph::mult_to_scale(b.1 as f64))
             .collect();
 
         Op::<F>::out_scale(&*self.inner, in_scales, _g)

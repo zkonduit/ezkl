@@ -37,7 +37,7 @@ use tract_onnx::tract_hir::{
 /// * `shift` - offset used in the fixed point representation.
 /// * `scale` - `2^scale` used in the fixed point representation.
 pub fn quantize_float(elem: &f32, shift: f32, scale: u32) -> Result<i128, TensorError> {
-    let mult = scale_to_multiplier(scale);
+    let mult = scale_to_multiplier(scale) as f32;
     let max_value = ((i128::MAX as f32 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
 
     if *elem > max_value {
@@ -51,12 +51,12 @@ pub fn quantize_float(elem: &f32, shift: f32, scale: u32) -> Result<i128, Tensor
 }
 
 /// Converts a scale (log base 2) to a fixed point multiplier.
-pub fn scale_to_multiplier(scale: u32) -> f32 {
-    i128::pow(2, scale) as f32
+pub fn scale_to_multiplier(scale: u32) -> f64 {
+    f64::powf(2., scale as f64)
 }
 
 /// Converts a scale (log base 2) to a fixed point multiplier.
-pub fn mult_to_scale(mult: f32) -> u32 {
+pub fn mult_to_scale(mult: f64) -> u32 {
     mult.log2().round() as u32
 }
 
@@ -430,6 +430,12 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
         "Add" => {
             let mut params = None;
 
+            let max_scale = inputs
+                .iter()
+                .map(|x| x.out_scales()[0])
+                .max()
+                .ok_or_else(|| Box::new(GraphError::MissingParams("add".to_string())))?;
+
             for (idx, inp) in inputs.clone().iter().enumerate() {
                 let boxed_op = &inp.opkind();
                 if let Some(c) = boxed_op
@@ -439,7 +445,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                     inputs.remove(idx);
                     params = Some(tensor_to_valtensor::<F>(
                         c.values.clone(),
-                        inputs[0].out_scales()[0],
+                        max_scale,
                         public_params,
                     )?);
                 }

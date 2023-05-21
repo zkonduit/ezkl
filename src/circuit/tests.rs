@@ -59,7 +59,9 @@ mod matmul {
                                 &mut Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Matmul { a: None }),
+                                Box::new(PolyOp::Einsum {
+                                    equation: "ij,jk->ik".to_string(),
+                                }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -133,7 +135,9 @@ mod matmul_col_overflow {
                                 &mut Some(&mut region),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Matmul { a: None }),
+                                Box::new(PolyOp::Einsum {
+                                    equation: "ij,jk->ik".to_string(),
+                                }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -1359,7 +1363,9 @@ mod matmul_relu {
             layouter.assign_region(
                 || "",
                 |mut region| {
-                    let op = PolyOp::Matmul { a: None };
+                    let op = PolyOp::Einsum {
+                        equation: "ij,jk->ik".to_string(),
+                    };
                     let mut offset = 0;
                     let output = config
                         .base_config

@@ -13,9 +13,6 @@ use super::{base::BaseOp, *};
 #[derive(Clone, Debug)]
 pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Dot,
-    Matmul {
-        a: Option<ValTensor<F>>,
-    },
     Einsum {
         equation: String,
     },
@@ -124,7 +121,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::GlobalSumPool => "GLOBALSUMPOOL",
             PolyOp::Conv { .. } => "CONV",
             PolyOp::SumPool { .. } => "SUMPOOL",
-            PolyOp::Matmul { .. } => "MATMUL",
             PolyOp::Iff => "IFF",
             PolyOp::Gather { .. } => "GATHER",
             PolyOp::Concat { .. } => "CONCAT",
@@ -167,15 +163,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                     inputs.push(Tensor::new(Some(&a.get_int_evals().unwrap()), a.dims())?);
                 }
                 tensor::ops::mult(&inputs)
-            }
-            PolyOp::Matmul { a } => {
-                if let Some(a) = a {
-                    let b = inputs;
-                    inputs = vec![Tensor::new(Some(&a.get_int_evals().unwrap()), a.dims())?];
-                    inputs.extend(b);
-                }
-
-                tensor::ops::matmul(&inputs)
             }
             PolyOp::Dot => tensor::ops::dot(&inputs[..]),
             PolyOp::Conv {
@@ -263,15 +250,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Dot => layouts::dot(config, region, values[..].try_into()?, offset)?,
             PolyOp::Sum { axes } => {
                 layouts::sum_axes(config, region, values[..].try_into()?, axes, offset)?
-            }
-            PolyOp::Matmul { a } => {
-                if let Some(a) = a {
-                    let b = values;
-                    values = vec![a.clone()];
-                    values.extend(b);
-                }
-
-                layouts::matmul(config, region, values[..].try_into()?, offset)?
             }
             PolyOp::Conv {
                 kernel,
@@ -372,15 +350,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Iff => in_scales[1],
             PolyOp::Dot => in_scales[0] + in_scales[1],
             PolyOp::Sum { .. } => in_scales[0],
-            PolyOp::Matmul { a } => {
-                let mut scale = in_scales[0];
-                if let Some(a) = a {
-                    scale += a.scale();
-                } else {
-                    scale += in_scales[1];
-                }
-                scale
-            }
             PolyOp::Conv { kernel, bias, .. } => {
                 let output_scale = in_scales[0] + kernel.scale();
                 if let Some(b) = bias {

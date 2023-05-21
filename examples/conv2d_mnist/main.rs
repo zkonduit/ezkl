@@ -203,10 +203,10 @@ where
                         .layer_config
                         .layout(
                             region,
-                            &[x],
+                            &[self.l2_params[0].clone(), x],
                             &mut offset,
-                            Box::new(PolyOp::Matmul {
-                                a: Some(self.l2_params[0].clone()),
+                            Box::new(PolyOp::Einsum {
+                                equation: "ij,j->ik".to_string(),
                             }),
                         )
                         .unwrap()
