@@ -6,6 +6,7 @@ use std::{
 };
 
 use halo2_proofs::circuit::Region;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -302,5 +303,44 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
         Box::new(self.clone()) // Forward to the derive(Clone) impl
+    }
+}
+
+fn homogenize_input_scales<F: PrimeField + TensorType + PartialOrd>(
+    op: impl Op<F> + Clone,
+    input_scales: Vec<u32>,
+    inputs_to_scale: Vec<usize>,
+) -> Result<Box<dyn Op<F>>, Box<dyn Error>> {
+    if inputs_to_scale.is_empty() {
+        return Ok(Box::new(op.clone()));
+    }
+
+    let mut dividers: Vec<u128> = vec![1; input_scales.len()];
+    if !input_scales.windows(2).all(|w| w[0] == w[1]) {
+        let min_scale = input_scales.iter().min().unwrap();
+        let _ = input_scales
+            .iter()
+            .enumerate()
+            .map(|(idx, input_scale)| {
+                if !inputs_to_scale.contains(&idx) {
+                    return;
+                }
+                let scale_diff = input_scale - min_scale;
+                if scale_diff > 0 {
+                    let mult = crate::graph::scale_to_multiplier(scale_diff);
+                    dividers[idx] = mult as u128;
+                }
+            })
+            .collect_vec();
+    }
+
+    // only rescale if need to
+    if dividers.iter().any(|&x| x > 1) {
+        Ok(Box::new(crate::circuit::Rescaled {
+            inner: Box::new(op.clone()),
+            scale: (0..input_scales.len()).zip(dividers).collect_vec(),
+        }))
+    } else {
+        Ok(Box::new(op.clone()))
     }
 }

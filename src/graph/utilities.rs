@@ -330,12 +330,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
             };
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
-            let axes = op
-                .axes
-                
-                .iter()
-                .filter(|x| **x != 0).copied()
-                .collect();
+            let axes = op.axes.iter().filter(|x| **x != 0).copied().collect();
 
             Box::new(HybridOp::Min { axes })
         }
@@ -344,12 +339,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
             };
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
-            let axes = op
-                .axes
-                
-                .iter()
-                .filter(|x| **x != 0).copied()
-                .collect();
+            let axes = op.axes.iter().filter(|x| **x != 0).copied().collect();
 
             Box::new(HybridOp::Max { axes })
         }
@@ -358,12 +348,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
             };
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
-            let axes = op
-                .axes
-                
-                .iter()
-                .filter(|x| **x != 0).copied()
-                .collect();
+            let axes = op.axes.iter().filter(|x| **x != 0).copied().collect();
 
             Box::new(PolyOp::Sum { axes })
         }
@@ -471,7 +456,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
 
             Box::new(PolyOp::Mult { a: params })
         }
-        "Iff" => Box::new(PolyOp::Iff),
+        "Iff" => Box::new(HybridOp::Iff),
         "Greater" => {
             // Extract the slope layer hyperparams
             let boxed_op = inputs[0].clone().opkind();
