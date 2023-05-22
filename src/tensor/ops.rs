@@ -152,6 +152,20 @@ pub fn matmul<
 /// assert_eq!(result, expected);
 ///
 ///
+/// // dot product
+/// let x = Tensor::<i128>::new(
+///    Some(&[1, 2, 3]),
+///  &[3],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///    Some(&[1, 2, 3]),
+///  &[3],
+/// ).unwrap();
+/// let result = einsum("i,i->", &[x, k]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[14]), &[1]).unwrap();
+/// assert_eq!(result, expected);
+///
+///
 /// // wut ?
 /// let x = Tensor::<i128>::new(
 ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
@@ -240,7 +254,7 @@ pub fn einsum<
     let mut equation = equation.split("->");
     let inputs_eq = equation.next().unwrap();
     let output_eq = equation.next().unwrap();
-    let inputs_eq = inputs_eq.split(",").collect::<Vec<_>>();
+    let inputs_eq = inputs_eq.split(',').collect::<Vec<_>>();
 
     // Check that the number of inputs matches the number of inputs in the equation
     if inputs.len() != inputs_eq.len() {
@@ -251,8 +265,8 @@ pub fn einsum<
     for (i, input) in inputs.iter().enumerate() {
         for j in 0..inputs_eq[i].len() {
             let c = inputs_eq[i].chars().nth(j).unwrap();
-            if !indices_to_size.contains_key(&c) {
-                indices_to_size.insert(c, input.dims()[j]);
+            if let std::collections::hash_map::Entry::Vacant(e) = indices_to_size.entry(c) {
+                e.insert(input.dims()[j]);
             } else if indices_to_size[&c] != input.dims()[j] {
                 return Err(TensorError::DimMismatch("einsum".to_string()));
             }
@@ -261,9 +275,7 @@ pub fn einsum<
 
     // maps unrepresented indices in the output to a trivial 1
     for c in output_eq.chars() {
-        if !indices_to_size.contains_key(&c) {
-            indices_to_size.insert(c, 1);
-        }
+        indices_to_size.entry(c).or_insert(1);
     }
 
     // Compute the output tensor shape
@@ -272,14 +284,14 @@ pub fn einsum<
         .map(|c| *indices_to_size.get(&c).unwrap())
         .collect();
 
-    if output_shape.len() == 0 {
+    if output_shape.is_empty() {
         output_shape.push(1);
     }
 
     let mut seen = HashSet::new();
     let mut common_indices_to_inputs = vec![];
-    for i in 0..inputs.len() {
-        for c in inputs_eq[i].chars() {
+    for input in &inputs_eq {
+        for c in input.chars() {
             if !seen.contains(&c) {
                 seen.insert(c);
             } else {
@@ -332,7 +344,7 @@ pub fn einsum<
                 .collect::<Vec<_>>();
 
             // If there are no common indices, then we need to add an empty slice to force one iteration of the loop
-            if common_coord.len() == 0 {
+            if common_coord.is_empty() {
                 common_coord.push(vec![]);
             }
 
@@ -660,7 +672,7 @@ pub fn sum_axes<T: TensorType + Add<Output = T>>(
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
 
-    if axes.len() == 0 {
+    if axes.is_empty() {
         return Ok(a.clone());
     }
 
@@ -683,11 +695,11 @@ pub fn sum_axes<T: TensorType + Add<Output = T>>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for i in 0..a.dims().len() {
+        for (i, c) in coord.iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {
-                sum_dims.push(coord[i]..coord[i] + 1);
+                sum_dims.push(*c..*c + 1);
             }
         }
 
@@ -723,7 +735,7 @@ pub fn min_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
 
-    if axes.len() == 0 {
+    if axes.is_empty() {
         return Ok(a.clone());
     }
 
@@ -746,11 +758,11 @@ pub fn min_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for i in 0..a.dims().len() {
+        for (i, c) in coord.iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {
-                sum_dims.push(coord[i]..coord[i] + 1);
+                sum_dims.push(*c..*c + 1);
             }
         }
 
@@ -786,7 +798,7 @@ pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
 
-    if axes.len() == 0 {
+    if axes.is_empty() {
         return Ok(a.clone());
     }
 
@@ -809,11 +821,11 @@ pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for i in 0..a.dims().len() {
+        for (i, c) in coord.iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {
-                sum_dims.push(coord[i]..coord[i] + 1);
+                sum_dims.push(*c..*c + 1);
             }
         }
 
@@ -926,7 +938,7 @@ pub fn conv<
 
     let (image_height, image_width) = (image_dims[2], image_dims[3]);
 
-    let padded_image = pad::<T>(&image, padding)?;
+    let padded_image = pad::<T>(image, padding)?;
 
     let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
     let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
@@ -1169,7 +1181,7 @@ pub fn max_pool2d<T: TensorType + std::marker::Sync + std::marker::Send>(
                 .into_iter()
                 .fold(None, fmax)
                 .unwrap();
-            *o = themax.clone();
+            *o = themax;
         });
 
     Ok(output)
@@ -1540,8 +1552,8 @@ pub mod nonlinearities {
 
         for coord in cartesian_coord {
             let mut sum_dims = vec![];
-            for i in 0..coord.len() {
-                sum_dims.push(coord[i]..coord[i] + 1);
+            for c in coord {
+                sum_dims.push(c..c + 1);
             }
             sum_dims.push(0..dims[dims.len() - 1]);
 
@@ -1583,7 +1595,6 @@ pub mod nonlinearities {
         let exp = exp(a, scale_input, scale_output);
         let sum = sum(&exp).unwrap();
         let inv_denom = recip(&sum, scale_output.pow(2) as u32);
-        let output = (exp * inv_denom).unwrap();
 
         // let mut output = a.clone();
 
@@ -1604,7 +1615,7 @@ pub mod nonlinearities {
 
         // assert_eq!(res.iter().fold(0.0, |acc, x| acc + x), 1.0);
 
-        output
+        (exp * inv_denom).unwrap()
     }
 
     /// Applies range_check_percent
@@ -1641,8 +1652,8 @@ pub mod nonlinearities {
         let neg_product =
             mult(&[product, Tensor::<i128>::new(Some(&[-1]), &[1]).unwrap()]).unwrap();
         let lower_bound = greater_than(&neg_product, _tol);
-        let sum = add(&[upper_bound, lower_bound]).unwrap();
-        sum
+
+        add(&[upper_bound, lower_bound]).unwrap()
     }
 
     /// Elementwise applies square root to a tensor of integers.
@@ -1927,11 +1938,7 @@ pub mod nonlinearities {
         let mut output: Tensor<i128> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
-            output[i] = if (*a_i as f64 - b) <= 0_f64 {
-                0_i128
-            } else {
-                1_i128
-            };
+            output[i] = i128::from((*a_i as f64 - b) > 0_f64);
         }
         output
     }

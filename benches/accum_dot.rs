@@ -15,6 +15,7 @@ use halo2_proofs::{
 use halo2curves::bn256::{Bn256, Fr};
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
+use std::sync::{Arc, Mutex};
 
 static mut LEN: usize = 4;
 const K: usize = 16;
@@ -54,10 +55,12 @@ impl Circuit<Fr> for MyCircuit {
             |mut region| {
                 config
                     .layout(
-                        &mut Some(&mut region),
+                        Arc::new(Mutex::new(Some(&mut region))),
                         &self.inputs,
                         &mut 0,
-                        Box::new(PolyOp::Dot),
+                        Box::new(PolyOp::Einsum {
+                            equation: "i,i->".to_string(),
+                        }),
                     )
                     .unwrap();
                 Ok(())

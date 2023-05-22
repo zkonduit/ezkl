@@ -30,6 +30,7 @@ use halo2curves::pasta::Fp as F;
 use mnist::*;
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 mod params;
@@ -175,7 +176,7 @@ where
                 || "mlp_4d",
                 |mut region| {
                     let mut offset = 0;
-                    let region = &mut Some(&mut region);
+                    let region = Arc::new(Mutex::new(Some(&mut region)));
                     let op = PolyOp::Conv {
                         kernel: self.l0_params[0].clone(),
                         bias: Some(self.l0_params[1].clone()),
@@ -184,13 +185,18 @@ where
                     };
                     let x = config
                         .layer_config
-                        .layout(region, &[self.input.clone()], &mut offset, Box::new(op))
+                        .layout(
+                            region.clone(),
+                            &[self.input.clone()],
+                            &mut offset,
+                            Box::new(op),
+                        )
                         .unwrap();
 
                     let mut x = config
                         .layer_config
                         .layout(
-                            region,
+                            region.clone(),
                             &[x.unwrap()],
                             &mut offset,
                             Box::new(LookupOp::ReLU { scale: 32 }),
@@ -202,7 +208,7 @@ where
                     let x = config
                         .layer_config
                         .layout(
-                            region,
+                            region.clone(),
                             &[self.l2_params[0].clone(), x],
                             &mut offset,
                             Box::new(PolyOp::Einsum {

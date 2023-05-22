@@ -15,6 +15,7 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::{Bn256, Fr};
 use rand::rngs::OsRng;
+use std::sync::{Arc, Mutex};
 
 static mut IMAGE_HEIGHT: usize = 2;
 static mut IMAGE_WIDTH: usize = 2;
@@ -58,7 +59,7 @@ impl Circuit<Fr> for MyCircuit {
             |mut region| {
                 config
                     .layout(
-                        &mut Some(&mut region),
+                        Arc::new(Mutex::new(Some(&mut region))),
                         &[self.image.clone()],
                         &mut 0,
                         Box::new(PolyOp::SumPool {

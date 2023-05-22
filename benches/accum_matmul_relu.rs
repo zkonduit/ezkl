@@ -15,6 +15,7 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::{Bn256, Fr};
 use std::marker::PhantomData;
+use std::sync::{Arc, Mutex};
 
 const BITS: usize = 8;
 static mut LEN: usize = 4;
@@ -75,7 +76,7 @@ impl Circuit<Fr> for MyCircuit {
                 let output = config
                     .base_config
                     .layout(
-                        &mut Some(&mut region),
+                        Arc::new(Mutex::new(Some(&mut region))),
                         &self.inputs,
                         &mut offset,
                         Box::new(op),
@@ -84,7 +85,7 @@ impl Circuit<Fr> for MyCircuit {
                 let _output = config
                     .base_config
                     .layout(
-                        &mut Some(&mut region),
+                        Arc::new(Mutex::new(Some(&mut region))),
                         &[output.unwrap()],
                         &mut offset,
                         Box::new(LookupOp::ReLU { scale: 1 }),

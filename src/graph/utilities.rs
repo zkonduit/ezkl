@@ -287,7 +287,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 .as_any()
                 .downcast_ref::<crate::circuit::ops::Constant<F>>()
             {
-                Some(c) => c.values.map(|e| e as usize).into(),
+                Some(c) => c.values.map(|e| e as usize),
                 None => {
                     warn!("assuming the gather window is over a context variable");
                     // offset by 1
@@ -318,7 +318,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
         }
         "Const" => {
             let op: Const = load_const(node.op(), idx, node.op().name().to_string())?;
-            let value = extract_tensor_value(op.0.clone())?;
+            let value = extract_tensor_value(op.0)?;
             Box::new(crate::circuit::ops::Constant::new(
                 value,
                 scale,
@@ -332,10 +332,9 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
             let axes = op
                 .axes
-                .clone()
+                
                 .iter()
-                .filter(|x| **x != 0)
-                .map(|x| *x)
+                .filter(|x| **x != 0).copied()
                 .collect();
 
             Box::new(HybridOp::Min { axes })
@@ -347,10 +346,9 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
             let axes = op
                 .axes
-                .clone()
+                
                 .iter()
-                .filter(|x| **x != 0)
-                .map(|x| *x)
+                .filter(|x| **x != 0).copied()
                 .collect();
 
             Box::new(HybridOp::Max { axes })
@@ -362,10 +360,9 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
             let axes = op
                 .axes
-                .clone()
+                
                 .iter()
-                .filter(|x| **x != 0)
-                .map(|x| *x)
+                .filter(|x| **x != 0).copied()
                 .collect();
 
             Box::new(PolyOp::Sum { axes })
@@ -574,7 +571,6 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 pool_dims: (kernel_height, kernel_width),
             })
         }
-        "Dot" => Box::new(PolyOp::Dot),
         "Square" => Box::new(PolyOp::Pow(2)),
         "ConvUnary" => {
             let conv_node: &ConvUnary = match node.op().downcast_ref::<ConvUnary>() {

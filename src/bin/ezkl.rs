@@ -62,7 +62,7 @@ pub fn format(buf: &mut Formatter, record: &Record<'_>) -> Result<(), std::fmt::
         buf,
         "{} {}",
         prefix_token(&level),
-        format!("{}", level_color(&level, record.args().as_str().unwrap())).replace('\n', &sep),
+        level_color(&level, record.args().as_str().unwrap()).replace('\n', &sep),
     )
 }
 
@@ -77,10 +77,7 @@ pub fn init_logger() {
             prefix_token(&record.level()),
             start.elapsed().as_secs(),
             record.metadata().target(),
-            format!(
-                "{}",
-                level_text_color(&record.level(), &format!("{}", record.args()))
-            )
+            level_text_color(&record.level(), &format!("{}", record.args()))
             .replace('\n', &format!("\n{} ", " | ".white().bold()))
         )
     });
