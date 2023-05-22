@@ -147,7 +147,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
         let mut rescaled_inputs = vec![];
         let inputs = &mut x.to_vec();
         for (i, ri) in inputs.iter_mut().enumerate() {
-            rescaled_inputs.push(tensor::ops::rescale(ri, self.scale[i].1)?);
+            rescaled_inputs.push(tensor::ops::nonlinearities::const_div(
+                ri,
+                self.scale[i].1 as f64,
+            ));
         }
         Op::<F>::f(&*self.inner, &rescaled_inputs)
     }
@@ -164,10 +167,22 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
         let in_scales = in_scales
             .into_iter()
             .zip(self.scale.iter())
-            .map(|(a, b)| a + crate::graph::mult_to_scale(b.1 as f64))
+            .map(|(a, b)| a - crate::graph::mult_to_scale(b.1 as f64))
             .collect();
 
         Op::<F>::out_scale(&*self.inner, in_scales, _g)
+    }
+
+    fn required_lookups(&self) -> Vec<LookupOp> {
+        let mut required_lookups = vec![];
+        for scale in &self.scale {
+            if scale.1 != 0 {
+                required_lookups.push(LookupOp::Div {
+                    denom: (scale.1 as f32).into(),
+                });
+            }
+        }
+        required_lookups
     }
 
     fn layout(

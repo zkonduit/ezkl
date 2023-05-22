@@ -342,6 +342,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             match n {
                 NodeType::Node(n) => {
                     let res = Op::<F>::f(&*n.opkind, &inputs)?;
+                    println!("res max: {:?}", res.iter().max());
                     results.insert(idx, res);
                 }
                 NodeType::SubGraph { model, .. } => {

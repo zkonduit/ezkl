@@ -70,9 +70,9 @@ impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {
             return Ok(Box::new(self.clone()));
         }
 
-        let mut multipliers: Vec<u128> = vec![1; input_scales.len()];
+        let mut dividers: Vec<u128> = vec![1; input_scales.len()];
         if !input_scales.windows(2).all(|w| w[0] == w[1]) {
-            let max_scale = input_scales.iter().max().unwrap();
+            let min_scale = input_scales.iter().min().unwrap();
             let _ = input_scales
                 .iter()
                 .enumerate()
@@ -80,20 +80,20 @@ impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {
                     if !inputs_to_scale.contains(&idx) {
                         return;
                     }
-                    let scale_diff = max_scale - input_scale;
+                    let scale_diff = input_scale - min_scale;
                     if scale_diff > 0 {
                         let mult = scale_to_multiplier(scale_diff);
-                        multipliers[idx] = mult as u128;
+                        dividers[idx] = mult as u128;
                     }
                 })
                 .collect_vec();
         }
 
         // only rescale if need to
-        if multipliers.iter().any(|&x| x > 1) {
+        if dividers.iter().any(|&x| x > 1) {
             Ok(Box::new(crate::circuit::Rescaled {
                 inner: Box::new(self.clone()),
-                scale: (0..input_scales.len()).zip(multipliers).collect_vec(),
+                scale: (0..input_scales.len()).zip(dividers).collect_vec(),
             }))
         } else {
             Ok(Box::new(self.clone()))
@@ -208,8 +208,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 let b = inputs[1].clone();
 
                 let masked_a = (mask.clone() * a)?;
-                let masked_b =
-                    ((Tensor::from(vec![1_i128].into_iter()) - mask)? * b)?;
+                let masked_b = ((Tensor::from(vec![1_i128].into_iter()) - mask)? * b)?;
 
                 masked_a + masked_b
             }
@@ -395,7 +394,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     }
 
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
-        if matches!(self, PolyOp::Add { .. } | PolyOp::Sub) {
+        if matches!(
+            self,
+            PolyOp::Add { .. } | PolyOp::Sub | PolyOp::Mult { .. } | PolyOp::Einsum { .. }
+        ) {
             vec![0, 1]
         } else if matches!(self, PolyOp::Iff) {
             vec![1, 2]

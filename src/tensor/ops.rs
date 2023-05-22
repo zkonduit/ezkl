@@ -695,7 +695,7 @@ pub fn sum_axes<T: TensorType + Add<Output = T>>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for (i, c) in coord.iter().enumerate() {
+        for (i, c) in coord.into_iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {
@@ -758,7 +758,7 @@ pub fn min_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for (i, c) in coord.iter().enumerate() {
+        for (i, c) in coord.into_iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {
@@ -821,7 +821,7 @@ pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for (i, c) in coord.iter().enumerate() {
+        for (i, c) in coord.into_iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {

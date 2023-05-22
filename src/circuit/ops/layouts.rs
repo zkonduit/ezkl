@@ -19,8 +19,7 @@ use crate::{
         ops::{
             accumulated, add, conv as non_accum_conv, dot as non_accum_dot,
             einsum as non_accum_einsum, max_pool2d as non_accum_max_pool2d, mult,
-            pack as non_accum_pack, rescale as ref_rescaled, sub, sum as non_accum_sum,
-            sumpool as non_accum_sumpool,
+            pack as non_accum_pack, sub, sum as non_accum_sum, sumpool as non_accum_sumpool,
         },
         Tensor, TensorError, ValType,
     },
@@ -1200,35 +1199,20 @@ pub fn rescale<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<Vec<ValTensor<F>>, Box<dyn Error>> {
     let mut rescaled_inputs = vec![];
     for (i, ri) in values.iter().enumerate() {
-        let num_elems = ri.dims().iter().product::<usize>();
-        let mult = ValType::Constant(F::from(scales[i].1 as u64));
-        let mult_tensor = Tensor::new(Some(&vec![mult; num_elems]), ri.dims())?;
-        let scaled_input = pairwise(
+        if scales[i].1 == 1 {
+            rescaled_inputs.push(ri.clone());
+            continue;
+        }
+        let scaled_input = nonlinearity(
             config,
             region.clone(),
-            &[ri.clone(), mult_tensor.into()],
+            &[ri.clone()],
+            &LookupOp::Div {
+                denom: (scales[i].1 as f32).into(),
+            },
             offset,
-            BaseOp::Mult,
         )?;
-        if matches!(&config.check_mode, CheckMode::SAFE) {
-            // during key generation this will be 0 so we use this as a flag to check
-            // TODO: this isn't very safe and would be better to get the phase directly
-            let is_assigned = !Into::<Tensor<i32>>::into(scaled_input.clone().get_inner()?)
-                .iter()
-                .all(|&x| x == 0);
-            if is_assigned {
-                let safe_rescale =
-                    ref_rescaled(&ri.get_inner().unwrap(), scales[i].1).map_err(|e| {
-                        error!("{}", e);
-                        halo2_proofs::plonk::Error::Synthesis
-                    })?;
 
-                assert_eq!(
-                    Into::<Tensor<i32>>::into(scaled_input.get_inner()?),
-                    Into::<Tensor<i32>>::into(safe_rescale),
-                )
-            }
-        }
         rescaled_inputs.push(scaled_input);
     }
 
