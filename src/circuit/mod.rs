@@ -329,6 +329,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         F: Field,
     {
         let mut selectors = BTreeMap::new();
+
         let table =
             if let std::collections::btree_map::Entry::Vacant(e) = self.tables.entry(nl.clone()) {
                 let table = Table::<F>::configure(cs, bits, nl);
@@ -337,6 +338,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             } else {
                 return Ok(());
             };
+
         for x in 0..input.num_cols() {
             let qlookup = cs.complex_selector();
             selectors.insert((nl.clone(), x), qlookup);
