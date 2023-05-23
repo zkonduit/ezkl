@@ -318,6 +318,7 @@ def test_verify_evm():
         proof_path,
         deployment_code_path,
         # sol_code_path
+        # optimizer_runs 
     )
 
     assert res == True

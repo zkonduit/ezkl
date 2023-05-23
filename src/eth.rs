@@ -74,6 +74,11 @@ pub async fn verify_proof_via_solidity(
 
     let (anvil, client) = setup_eth_backend().await?;
 
+    info!(
+        "sol_code_path: {:#?}",
+        sol_code_path.as_os_str().to_str().unwrap()
+    );
+
     let factory = get_sol_contract_factory(
         sol_code_path,
         client.clone(),
@@ -93,6 +98,15 @@ pub async fn verify_proof_via_solidity(
         public_inputs.push(u);
     }
 
+    info!(
+        "pub_inputs: {:#?}",
+        public_inputs.clone()
+    );
+    info!(
+        "proof: {:#?}",
+        ethers::types::Bytes::from(proof.proof.to_vec())
+    );
+    
     let tx = contract
         .verify(
             public_inputs.clone(),
@@ -637,25 +651,25 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
     // free memory pointer initialization  
     let mut offset = 128;
     
-    // replace all mload(add(pubInputs(0x...))) with mload(0x...
+    // replace all mload(add(pubInputs, 0x...))) with mload(0x...
     contract = replace_vars_with_offset(
         &contract, 
         r"add\(pubInputs, (0x[0-9a-fA-F]+)\)",
-         offset
+        offset
     );
 
     offset += 32 * num_pubinputs + 32;
 
-    // replace all mload(add(proof(0x...))) with mload(0x...
+    // replace all mload(add(proof, 0x...))) with mload(0x...
     contract = replace_vars_with_offset(
         &contract, 
         r"add\(proof, (0x[0-9a-fA-F]+)\)",
-         offset
+        offset
     );
 
     offset += 32 * proof_size + 32;
 
-    // replace all (add(transcript(0x...))) with (0x...)
+    // replace all (add(transcript, 0x...))) with (0x...)
     contract = replace_vars_with_offset(
         &contract, 
         r"add\(transcript, (0x[0-9a-fA-F]+)\)",

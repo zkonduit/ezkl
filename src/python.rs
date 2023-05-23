@@ -471,11 +471,13 @@ fn create_evm_verifier(
     proof_path,
     deployment_code_path,
     sol_code_path=None,
+    runs=None
 ))]
 fn verify_evm(
     proof_path: PathBuf,
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
+    runs: Option<usize>
 ) -> Result<bool, PyErr> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)
         .map_err(|_| PyIOError::new_err("Failed to load proof"))?;
@@ -487,7 +489,7 @@ fn verify_evm(
     if sol_code_path.is_some() {
         let result = Runtime::new()
             .unwrap()
-            .block_on(verify_proof_via_solidity(proof, sol_code_path.unwrap()))
+            .block_on(verify_proof_via_solidity(proof, sol_code_path.unwrap(), runs))
             .map_err(|_| PyRuntimeError::new_err("Failed to verify proof via solidity"))?;
 
         trace!("Solidity verification result: {}", result);
