@@ -1,5 +1,7 @@
 
-# as seen in https://github.com/karpathy/nanoGPT :) 
+"""
+Reference: https://github.com/karpathy/nanoGPT :)
+"""
 
 import torch
 import json

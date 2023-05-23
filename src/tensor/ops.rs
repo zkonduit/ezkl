@@ -31,7 +31,7 @@ pub use std::ops::{Add, Div, Mul, Sub};
 /// &[2, 3],
 /// ).unwrap();
 /// let result = iff(&mask, &a, &b).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 3, 2, 1, 1, 1]), &[2, 3]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 1, 2, 1, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn iff<

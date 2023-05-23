@@ -60,7 +60,7 @@ mod native_tests {
         })
     }
 
-    fn init_params_24() {
+    fn init_params_25() {
         KZG24.call_once(|| {
             let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
                 .args([
@@ -69,7 +69,7 @@ mod native_tests {
                         "--params-path={}/kzg24.params",
                         TEST_DIR.path().to_str().unwrap()
                     ),
-                    "--logrows=24",
+                    "--logrows=25",
                 ])
                 .status()
                 .expect("failed to execute process");
@@ -77,7 +77,7 @@ mod native_tests {
         })
     }
 
-    const LARGE_TESTS: [&str; 1] = ["self_attention"];
+    const LARGE_TESTS: [&str; 2] = ["self_attention", "nanoGPT"];
 
     const TESTS: [&str; 32] = [
         "1l_mlp",
@@ -280,7 +280,7 @@ mod native_tests {
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
                 crate::native_tests::init_binary();
-                mock(test.to_string(), 16, 17);
+                mock(test.to_string(), 7, 16, 17);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -305,24 +305,24 @@ mod native_tests {
             fn kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::init_params_17();
-                kzg_prove_and_verify(test.to_string(), 16, 17);
+                kzg_prove_and_verify(test.to_string(), 7, 16, 17);
             }
 
             });
 
 
-            seq!(N in 0..1 {
+            seq!(N in 0..=1 {
             #(#[test_case(LARGE_TESTS[N])])*
             fn large_kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::init_params_24();
-                kzg_prove_and_verify(test.to_string(), 23, 24);
+                crate::native_tests::init_params_25();
+                kzg_prove_and_verify(test.to_string(), 5, 24, 25);
             }
 
             #(#[test_case(LARGE_TESTS[N])])*
             fn large_mock_(test: &str) {
                 crate::native_tests::init_binary();
-                mock(test.to_string(), 23, 24);
+                mock(test.to_string(), 5, 24, 25);
             }
         });
     }
@@ -563,7 +563,7 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
-    fn mock(example_name: String, bits: usize, logrows: usize) {
+    fn mock(example_name: String, scale: usize, bits: usize, logrows: usize) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "mock",
@@ -573,6 +573,7 @@ mod native_tests {
                 &format!("./examples/onnx/{}/network.onnx", example_name),
                 &format!("--bits={}", bits),
                 &format!("--logrows={}", logrows),
+                &format!("--scale={}", scale),
             ])
             .status()
             .expect("failed to execute process");
@@ -926,7 +927,7 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_prove_and_verify(example_name: String, bits: usize, logrows: usize) {
+    fn kzg_prove_and_verify(example_name: String, scale: usize, bits: usize, logrows: usize) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup",
@@ -950,6 +951,7 @@ mod native_tests {
                 ),
                 &format!("--bits={}", bits),
                 &format!("--logrows={}", logrows),
+                &format!("--scale={}", scale),
             ])
             .status()
             .expect("failed to execute process");
