@@ -60,7 +60,7 @@ mod native_tests {
         })
     }
 
-    fn init_params_25() {
+    fn init_params_24() {
         KZG24.call_once(|| {
             let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
                 .args([
@@ -69,7 +69,7 @@ mod native_tests {
                         "--params-path={}/kzg24.params",
                         TEST_DIR.path().to_str().unwrap()
                     ),
-                    "--logrows=25",
+                    "--logrows=24",
                 ])
                 .status()
                 .expect("failed to execute process");
@@ -315,14 +315,14 @@ mod native_tests {
             #(#[test_case(LARGE_TESTS[N])])*
             fn large_kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::init_params_25();
-                kzg_prove_and_verify(test.to_string(), 5, 24, 25);
+                crate::native_tests::init_params_24();
+                kzg_prove_and_verify(test.to_string(), 5, 23, 24);
             }
 
             #(#[test_case(LARGE_TESTS[N])])*
             fn large_mock_(test: &str) {
                 crate::native_tests::init_binary();
-                mock(test.to_string(), 5, 24, 25);
+                mock(test.to_string(), 5, 23, 24);
             }
         });
     }
