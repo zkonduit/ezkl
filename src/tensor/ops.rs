@@ -9,6 +9,52 @@ use rayon::{
 use std::collections::{HashMap, HashSet};
 pub use std::ops::{Add, Div, Mul, Sub};
 
+/// IFF operation.
+/// # Arguments
+/// * `mask` - Tensor of 0s and 1s
+/// * `a` - Tensor
+/// * `b` - Tensor
+/// # Examples
+/// ```
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::iff;
+/// let mask = Tensor::<i128>::new(
+///    Some(&[1, 0, 1, 0, 1, 0]),
+/// &[2, 3],
+/// ).unwrap();
+/// let a = Tensor::<i128>::new(
+///   Some(&[2, 1, 2, 1, 1, 1]),
+/// &[2, 3],
+/// ).unwrap();
+/// let b = Tensor::<i128>::new(
+///   Some(&[2, 3, 2, 1, 1, 1]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = iff(&mask, &a, &b).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 1, 2, 1, 1, 1]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn iff<
+    T: TensorType
+        + Add<Output = T>
+        + Mul<Output = T>
+        + Sub<Output = T>
+        + std::marker::Send
+        + std::marker::Sync,
+>(
+    mask: &Tensor<T>,
+    b: &Tensor<T>,
+    a: &Tensor<T>,
+) -> Result<Tensor<T>, TensorError> {
+    let masked_a = (mask.clone() * a.clone())?;
+    let masked_b =
+        ((Tensor::from(vec![T::one().ok_or_else(|| TensorError::DimError)?].into_iter())
+            - mask.clone())?
+            * b.clone())?;
+
+    masked_a + masked_b
+}
+
 /// Matrix multiplies two 2D tensors.
 /// # Arguments
 ///
@@ -695,7 +741,7 @@ pub fn sum_axes<T: TensorType + Add<Output = T>>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for (i, c) in coord.iter().enumerate() {
+        for (i, c) in coord.into_iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {
@@ -758,7 +804,7 @@ pub fn min_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for (i, c) in coord.iter().enumerate() {
+        for (i, c) in coord.into_iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {
@@ -821,7 +867,7 @@ pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for (i, c) in coord.iter().enumerate() {
+        for (i, c) in coord.into_iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {

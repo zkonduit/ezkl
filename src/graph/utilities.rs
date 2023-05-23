@@ -318,10 +318,12 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
         }
         "Const" => {
             let op: Const = load_const(node.op(), idx, node.op().name().to_string())?;
+            let dt = op.clone().0.datum_type();
             let value = extract_tensor_value(op.0)?;
+            let constant_scale = if dt == DatumType::Bool { 0 } else { scale };
             Box::new(crate::circuit::ops::Constant::new(
                 value,
-                scale,
+                constant_scale,
                 public_params,
             ))
         }
@@ -330,12 +332,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
             };
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
-            let axes = op
-                .axes
-                
-                .iter()
-                .filter(|x| **x != 0).copied()
-                .collect();
+            let axes = op.axes.iter().filter(|x| **x != 0).copied().collect();
 
             Box::new(HybridOp::Min { axes })
         }
@@ -344,12 +341,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
             };
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
-            let axes = op
-                .axes
-                
-                .iter()
-                .filter(|x| **x != 0).copied()
-                .collect();
+            let axes = op.axes.iter().filter(|x| **x != 0).copied().collect();
 
             Box::new(HybridOp::Max { axes })
         }
@@ -358,12 +350,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
             };
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
-            let axes = op
-                .axes
-                
-                .iter()
-                .filter(|x| **x != 0).copied()
-                .collect();
+            let axes = op.axes.iter().filter(|x| **x != 0).copied().collect();
 
             Box::new(PolyOp::Sum { axes })
         }

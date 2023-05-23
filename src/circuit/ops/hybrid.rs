@@ -45,7 +45,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         match &self {
             HybridOp::Max { axes, .. } => Ok(tensor::ops::max_axes(&inputs[0], axes)?),
-
             HybridOp::MaxPool2d {
                 padding,
                 stride,
@@ -60,14 +59,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
         }
     }
 
-    fn as_str(&self) -> &'static str {
-        match self {
+    fn as_string(&self) -> String {
+        let name = match self {
             HybridOp::Max { .. } => "MAX",
             HybridOp::MaxPool2d { .. } => "MAXPOOL2D",
             HybridOp::Min { .. } => "MIN",
             HybridOp::Softmax { .. } => "SOFTMAX",
             HybridOp::RangeCheck(..) => "RANGECHECK",
-        }
+        };
+        name.into()
     }
 
     fn layout(

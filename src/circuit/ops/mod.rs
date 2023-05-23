@@ -6,6 +6,7 @@ use std::{
 };
 
 use halo2_proofs::circuit::Region;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -32,7 +33,7 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError>;
     /// Returns a string representation of the operation.
-    fn as_str(&self) -> &'static str;
+    fn as_string(&self) -> String;
 
     /// Layouts the operation in a circuit.
     fn layout(
@@ -99,8 +100,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
         Ok(x[0].clone())
     }
 
-    fn as_str(&self) -> &'static str {
-        "Input"
+    fn as_string(&self) -> String {
+        "Input".into()
     }
 
     fn layout(
@@ -147,7 +148,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
         let mut rescaled_inputs = vec![];
         let inputs = &mut x.to_vec();
         for (i, ri) in inputs.iter_mut().enumerate() {
-            rescaled_inputs.push(tensor::ops::rescale(ri, self.scale[i].1)?);
+            rescaled_inputs.push(tensor::ops::nonlinearities::const_div(
+                ri,
+                self.scale[i].1 as f64,
+            ));
         }
         Op::<F>::f(&*self.inner, &rescaled_inputs)
     }
@@ -156,18 +160,30 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
         Box::new(self.clone())
     }
 
-    fn as_str(&self) -> &'static str {
-        self.inner.as_str()
+    fn as_string(&self) -> String {
+        format!("RESCALED {}", self.inner.as_string())
     }
 
     fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
         let in_scales = in_scales
             .into_iter()
             .zip(self.scale.iter())
-            .map(|(a, b)| a + crate::graph::mult_to_scale(b.1 as f64))
+            .map(|(a, b)| a - crate::graph::mult_to_scale(b.1 as f64))
             .collect();
 
         Op::<F>::out_scale(&*self.inner, in_scales, _g)
+    }
+
+    fn required_lookups(&self) -> Vec<LookupOp> {
+        let mut required_lookups = vec![];
+        for scale in &self.scale {
+            if scale.1 != 0 {
+                required_lookups.push(LookupOp::Div {
+                    denom: (scale.1 as f32).into(),
+                });
+            }
+        }
+        required_lookups
     }
 
     fn layout(
@@ -210,8 +226,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
         Err(TensorError::WrongMethod)
     }
 
-    fn as_str(&self) -> &'static str {
-        "Unknown"
+    fn as_string(&self) -> String {
+        "Unknown".into()
     }
     fn layout(
         &self,
@@ -265,8 +281,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
             .map(|x| quantize_float(&x, 0., self.scale).unwrap()))
     }
 
-    fn as_str(&self) -> &'static str {
-        "CONST"
+    fn as_string(&self) -> String {
+        "CONST".into()
     }
     fn layout(
         &self,
@@ -287,5 +303,44 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
         Box::new(self.clone()) // Forward to the derive(Clone) impl
+    }
+}
+
+fn homogenize_input_scales<F: PrimeField + TensorType + PartialOrd>(
+    op: impl Op<F> + Clone,
+    input_scales: Vec<u32>,
+    inputs_to_scale: Vec<usize>,
+) -> Result<Box<dyn Op<F>>, Box<dyn Error>> {
+    if inputs_to_scale.is_empty() {
+        return Ok(Box::new(op.clone()));
+    }
+
+    let mut dividers: Vec<u128> = vec![1; input_scales.len()];
+    if !input_scales.windows(2).all(|w| w[0] == w[1]) {
+        let min_scale = input_scales.iter().min().unwrap();
+        let _ = input_scales
+            .iter()
+            .enumerate()
+            .map(|(idx, input_scale)| {
+                if !inputs_to_scale.contains(&idx) {
+                    return;
+                }
+                let scale_diff = input_scale - min_scale;
+                if scale_diff > 0 {
+                    let mult = crate::graph::scale_to_multiplier(scale_diff);
+                    dividers[idx] = mult as u128;
+                }
+            })
+            .collect_vec();
+    }
+
+    // only rescale if need to
+    if dividers.iter().any(|&x| x > 1) {
+        Ok(Box::new(crate::circuit::Rescaled {
+            inner: Box::new(op.clone()),
+            scale: (0..input_scales.len()).zip(dividers).collect_vec(),
+        }))
+    } else {
+        Ok(Box::new(op.clone()))
     }
 }

@@ -142,10 +142,10 @@ impl<F: PrimeField + TensorType + PartialOrd> NodeType<F> {
         }
     }
     /// Returns a string representation of the operation.
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> String {
         match self {
-            NodeType::Node(n) => n.opkind.as_str(),
-            NodeType::SubGraph { .. } => "SUBGRAPH",
+            NodeType::Node(n) => n.opkind.as_string(),
+            NodeType::SubGraph { .. } => "SUBGRAPH".into(),
         }
     }
 
