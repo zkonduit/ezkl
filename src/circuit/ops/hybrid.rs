@@ -34,7 +34,6 @@ pub enum HybridOp {
         scales: (usize, usize),
     },
     RangeCheck(Tolerance),
-    Iff,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
@@ -46,17 +45,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         match &self {
             HybridOp::Max { axes, .. } => Ok(tensor::ops::max_axes(&inputs[0], axes)?),
-            HybridOp::Iff => {
-                let mask = inputs[0].clone();
-                // if mask > 0 then output a else output b
-                let a = inputs[2].clone();
-                let b = inputs[1].clone();
-
-                let masked_a = (mask.clone() * a)?;
-                let masked_b = ((Tensor::from(vec![1_i128].into_iter()) - mask)? * b)?;
-
-                masked_a + masked_b
-            }
             HybridOp::MaxPool2d {
                 padding,
                 stride,
@@ -71,15 +59,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
         }
     }
 
-    fn as_str(&self) -> &'static str {
-        match self {
+    fn as_string(&self) -> String {
+        let name = match self {
             HybridOp::Max { .. } => "MAX",
             HybridOp::MaxPool2d { .. } => "MAXPOOL2D",
             HybridOp::Min { .. } => "MIN",
-            HybridOp::Iff => "IFF",
             HybridOp::Softmax { .. } => "SOFTMAX",
             HybridOp::RangeCheck(..) => "RANGECHECK",
-        }
+        };
+        name.into()
     }
 
     fn layout(
@@ -90,7 +78,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn std::error::Error>> {
         Ok(Some(match self {
-            HybridOp::Iff => layouts::iff(config, region, values[..].try_into()?, offset)?,
             HybridOp::MaxPool2d {
                 padding,
                 stride,
@@ -141,7 +128,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     fn out_scale(&self, in_scales: Vec<u32>, global_scale: u32) -> u32 {
         match self {
             HybridOp::Softmax { .. } => 2 * global_scale,
-            HybridOp::Iff => in_scales[1],
             _ => in_scales[0],
         }
     }
@@ -160,9 +146,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
 
     fn required_lookups(&self) -> Vec<LookupOp> {
         match self {
-            HybridOp::Iff => vec![LookupOp::GreaterThan {
-                a: circuit::utils::F32(0.0),
-            }],
             HybridOp::Max { .. } | HybridOp::Min { .. } | HybridOp::MaxPool2d { .. } => {
                 Op::<F>::required_lookups(&LookupOp::ReLU { scale: 1 })
             }
@@ -186,14 +169,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 }
                 _ => vec![],
             },
-        }
-    }
-
-    fn requires_homogenous_input_scales(&self) -> Vec<usize> {
-        if matches!(self, HybridOp::Iff) {
-            vec![1, 2]
-        } else {
-            vec![]
         }
     }
 

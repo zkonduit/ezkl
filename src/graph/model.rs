@@ -142,10 +142,10 @@ impl<F: PrimeField + TensorType + PartialOrd> NodeType<F> {
         }
     }
     /// Returns a string representation of the operation.
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> String {
         match self {
-            NodeType::Node(n) => n.opkind.as_str(),
-            NodeType::SubGraph { .. } => "SUBGRAPH",
+            NodeType::Node(n) => n.opkind.as_string(),
+            NodeType::SubGraph { .. } => "SUBGRAPH".into(),
         }
     }
 
@@ -342,7 +342,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             match n {
                 NodeType::Node(n) => {
                     let res = Op::<F>::f(&*n.opkind, &inputs)?;
-                    println!("res max: {:?}", res.iter().max());
                     results.insert(idx, res);
                 }
                 NodeType::SubGraph { model, .. } => {

@@ -24,7 +24,7 @@ fn display_vector<T: fmt::Debug>(v: &Vec<T>) -> String {
 }
 
 fn display_opkind<F: PrimeField + TensorType + PartialOrd>(v: &Box<dyn Op<F>>) -> String {
-    v.as_str().to_string()
+    v.as_string()
 }
 
 /// A single operation in a Model.

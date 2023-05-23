@@ -33,7 +33,7 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError>;
     /// Returns a string representation of the operation.
-    fn as_str(&self) -> &'static str;
+    fn as_string(&self) -> String;
 
     /// Layouts the operation in a circuit.
     fn layout(
@@ -100,8 +100,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
         Ok(x[0].clone())
     }
 
-    fn as_str(&self) -> &'static str {
-        "Input"
+    fn as_string(&self) -> String {
+        "Input".into()
     }
 
     fn layout(
@@ -160,8 +160,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
         Box::new(self.clone())
     }
 
-    fn as_str(&self) -> &'static str {
-        self.inner.as_str()
+    fn as_string(&self) -> String {
+        format!("RESCALED {}", self.inner.as_string())
     }
 
     fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
@@ -226,8 +226,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
         Err(TensorError::WrongMethod)
     }
 
-    fn as_str(&self) -> &'static str {
-        "Unknown"
+    fn as_string(&self) -> String {
+        "Unknown".into()
     }
     fn layout(
         &self,
@@ -281,8 +281,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
             .map(|x| quantize_float(&x, 0., self.scale).unwrap()))
     }
 
-    fn as_str(&self) -> &'static str {
-        "CONST"
+    fn as_string(&self) -> String {
+        "CONST".into()
     }
     fn layout(
         &self,

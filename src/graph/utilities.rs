@@ -318,10 +318,12 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
         }
         "Const" => {
             let op: Const = load_const(node.op(), idx, node.op().name().to_string())?;
+            let dt = op.clone().0.datum_type();
             let value = extract_tensor_value(op.0)?;
+            let constant_scale = if dt == DatumType::Bool { 0 } else { scale };
             Box::new(crate::circuit::ops::Constant::new(
                 value,
-                scale,
+                constant_scale,
                 public_params,
             ))
         }
@@ -456,7 +458,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
 
             Box::new(PolyOp::Mult { a: params })
         }
-        "Iff" => Box::new(HybridOp::Iff),
+        "Iff" => Box::new(PolyOp::Iff),
         "Greater" => {
             // Extract the slope layer hyperparams
             let boxed_op = inputs[0].clone().opkind();

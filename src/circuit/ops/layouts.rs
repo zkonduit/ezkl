@@ -724,14 +724,6 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
     // if mask > 0 then output a else output b
     let (mask, b, a) = (&values[0], &values[1], &values[2]);
 
-    let mask = nonlinearity(
-        config,
-        region.clone(),
-        &[mask.clone()],
-        &LookupOp::GreaterThan { a: 0.0.into() },
-        offset,
-    )?;
-
     let mut lock = region.lock().unwrap();
     let unit: ValTensor<F> = if let Some(region) = lock.as_mut() {
         Tensor::from(

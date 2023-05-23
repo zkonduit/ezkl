@@ -53,6 +53,7 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
         start: usize,
         end: usize,
     },
+    Iff,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {}
@@ -61,8 +62,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn as_str(&self) -> &'static str {
-        match &self {
+    fn as_string(&self) -> String {
+        let name = match &self {
+            PolyOp::Iff => "IFF",
             PolyOp::Einsum { .. } => "EINSUM",
             PolyOp::Identity => "IDENTITY",
             PolyOp::Reshape(_) => "RESHAPE",
@@ -80,13 +82,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Gather { .. } => "GATHER",
             PolyOp::Concat { .. } => "CONCAT",
             PolyOp::Slice { .. } => "SLICE",
-        }
+        };
+        name.into()
     }
 
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         let mut inputs = inputs.to_vec();
         match &self {
+            PolyOp::Iff => tensor::ops::iff(&inputs[0], &inputs[1], &inputs[2]),
             PolyOp::Einsum { equation } => tensor::ops::einsum(equation, &inputs),
             PolyOp::Gather { dim, index } => tensor::ops::gather(&inputs[0], *dim, index),
             PolyOp::Identity => Ok(inputs[0].clone()),
@@ -181,6 +185,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
         let mut values = values.to_vec();
 
         Ok(Some(match self {
+            PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?, offset)?,
             PolyOp::Einsum { equation } => {
                 let out = layouts::einsum(config, region, &mut values, equation, offset)?;
                 out
@@ -279,6 +284,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
 
     fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
         match self {
+            PolyOp::Iff => in_scales[1],
             PolyOp::Einsum { .. } => {
                 let mut scale = in_scales[0];
                 for s in in_scales.iter().skip(1) {
@@ -341,6 +347,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Add { .. } | PolyOp::Sub | PolyOp::Mult { .. } | PolyOp::Einsum { .. }
         ) {
             vec![0, 1]
+        } else if matches!(self, PolyOp::Iff) {
+            vec![1, 2]
         } else {
             vec![]
         }
