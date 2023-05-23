@@ -10,6 +10,7 @@ mod native_tests {
     static COMPILE: Once = Once::new();
     static KZG17: Once = Once::new();
     static KZG23: Once = Once::new();
+    static KZG24: Once = Once::new();
     //Sure to run this once
 
     lazy_static! {
@@ -58,6 +59,25 @@ mod native_tests {
             assert!(status.success());
         })
     }
+
+    fn init_params_24() {
+        KZG24.call_once(|| {
+            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                .args([
+                    "gen-srs",
+                    &format!(
+                        "--params-path={}/kzg24.params",
+                        TEST_DIR.path().to_str().unwrap()
+                    ),
+                    "--logrows=24",
+                ])
+                .status()
+                .expect("failed to execute process");
+            assert!(status.success());
+        })
+    }
+
+    const LARGE_TESTS: [&str; 1] = ["self_attention"];
 
     const TESTS: [&str; 32] = [
         "1l_mlp",
@@ -227,6 +247,7 @@ mod native_tests {
         mod tests {
             use seq_macro::seq;
             use crate::native_tests::TESTS;
+            use crate::native_tests::LARGE_TESTS;
             use test_case::test_case;
             use crate::native_tests::mock;
             use crate::native_tests::mock_public_inputs;
@@ -259,7 +280,7 @@ mod native_tests {
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
                 crate::native_tests::init_binary();
-                mock(test.to_string());
+                mock(test.to_string(), 16, 17);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -284,11 +305,26 @@ mod native_tests {
             fn kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::init_params_17();
-                kzg_prove_and_verify(test.to_string());
+                kzg_prove_and_verify(test.to_string(), 16, 17);
             }
 
             });
 
+
+            seq!(N in 0..1 {
+            #(#[test_case(LARGE_TESTS[N])])*
+            fn large_kzg_prove_and_verify_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::init_params_24();
+                kzg_prove_and_verify(test.to_string(), 23, 24);
+            }
+
+            #(#[test_case(LARGE_TESTS[N])])*
+            fn large_mock_(test: &str) {
+                crate::native_tests::init_binary();
+                mock(test.to_string(), 23, 24);
+            }
+        });
     }
     };
 }
@@ -527,16 +563,16 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
-    fn mock(example_name: String) {
+    fn mock(example_name: String, bits: usize, logrows: usize) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "mock",
                 "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                &format!("./examples/onnx/{}/input.json", example_name),
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--bits=16",
-                "-K=17",
+                &format!("./examples/onnx/{}/network.onnx", example_name),
+                &format!("--bits={}", bits),
+                &format!("--logrows={}", logrows),
             ])
             .status()
             .expect("failed to execute process");
@@ -890,7 +926,7 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_prove_and_verify(example_name: String) {
+    fn kzg_prove_and_verify(example_name: String, bits: usize, logrows: usize) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup",
@@ -903,16 +939,17 @@ mod native_tests {
                 "--vk-path",
                 &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
                 &format!(
-                    "--params-path={}/kzg17.params",
-                    TEST_DIR.path().to_str().unwrap()
+                    "--params-path={}/kzg{}.params",
+                    TEST_DIR.path().to_str().unwrap(),
+                    logrows
                 ),
                 &format!(
                     "--circuit-params-path={}/{}.params",
                     TEST_DIR.path().to_str().unwrap(),
                     example_name
                 ),
-                "--bits=16",
-                "-K=17",
+                &format!("--bits={}", bits),
+                &format!("--logrows={}", logrows),
             ])
             .status()
             .expect("failed to execute process");
@@ -929,8 +966,9 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}.pk", TEST_DIR.path().to_str().unwrap(), example_name),
                 &format!(
-                    "--params-path={}/kzg17.params",
-                    TEST_DIR.path().to_str().unwrap()
+                    "--params-path={}/kzg{}.params",
+                    TEST_DIR.path().to_str().unwrap(),
+                    logrows
                 ),
                 "--transcript=blake",
                 "--strategy=single",
@@ -956,8 +994,9 @@ mod native_tests {
                 "--vk-path",
                 &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
                 &format!(
-                    "--params-path={}/kzg17.params",
-                    TEST_DIR.path().to_str().unwrap()
+                    "--params-path={}/kzg{}.params",
+                    TEST_DIR.path().to_str().unwrap(),
+                    logrows
                 ),
             ])
             .status()
