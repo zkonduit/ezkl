@@ -37,6 +37,8 @@ use log::{debug, info, trace};
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::error::Error;
+use std::sync::Arc;
+use std::sync::Mutex;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::Framework;
@@ -72,11 +74,7 @@ pub type NodeGraph<F> = BTreeMap<usize, NodeType<F>>;
 #[derive(Clone, Debug, Default)]
 pub struct Model<F: PrimeField + TensorType + PartialOrd> {
     /// input indices
-    pub inputs: Vec<usize>,
-    /// output indices
-    pub outputs: Vec<usize>,
-    /// Graph of nodes we are loading from Onnx.
-    pub nodes: NodeGraph<F>, // Wrapped nodes with additional methods and data (e.g. inferred shape, quantization)
+    pub graph: ParsedNodes<F>,
     /// The [RunArgs] being used
     pub run_args: RunArgs,
     /// The [Mode] we're using the model in.
@@ -93,7 +91,7 @@ pub enum NodeType<F: PrimeField + TensorType + PartialOrd> {
     /// A submodel
     SubGraph {
         /// The subgraph
-        graph: Model<F>,
+        model: Model<F>,
         /// The subgraph's inputs
         inputs: Vec<usize>,
         /// the subgraph's idx within the parent graph
@@ -114,21 +112,21 @@ impl<F: PrimeField + TensorType + PartialOrd> NodeType<F> {
     pub fn out_dims(&self) -> Vec<Vec<usize>> {
         match self {
             NodeType::Node(n) => vec![n.out_dims.clone()],
-            NodeType::SubGraph { graph, .. } => graph.output_shapes().clone(),
+            NodeType::SubGraph { model, .. } => model.graph.output_shapes(),
         }
     }
     /// Returns the lookups required by a graph
     pub fn required_lookups(&self) -> Vec<LookupOp> {
         match self {
             NodeType::Node(n) => n.opkind.required_lookups(),
-            NodeType::SubGraph { graph, .. } => graph.required_lookups(),
+            NodeType::SubGraph { model, .. } => model.required_lookups(),
         }
     }
     /// Returns the scales of the node's output.
     pub fn out_scales(&self) -> Vec<u32> {
         match self {
             NodeType::Node(n) => vec![n.out_scale],
-            NodeType::SubGraph { graph, .. } => graph.get_output_scales().clone(),
+            NodeType::SubGraph { model, .. } => model.graph.get_output_scales(),
         }
     }
 
@@ -136,8 +134,8 @@ impl<F: PrimeField + TensorType + PartialOrd> NodeType<F> {
     pub fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, Box<dyn Error>> {
         match self {
             NodeType::Node(n) => n.opkind.f(inputs).map_err(|e| e.into()),
-            NodeType::SubGraph { graph, .. } => {
-                let res = graph.forward(inputs)?;
+            NodeType::SubGraph { model, .. } => {
+                let res = model.forward(inputs)?;
                 assert_eq!(res.len(), 1);
                 Ok(res[0].clone())
             }
@@ -175,12 +173,58 @@ impl<F: PrimeField + TensorType + PartialOrd> NodeType<F> {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+/// A set of EZKL nodes that represent a computational graph.
+pub struct ParsedNodes<F: PrimeField + TensorType + PartialOrd> {
+    nodes: BTreeMap<usize, NodeType<F>>,
+    inputs: Vec<usize>,
+    outputs: Vec<usize>,
+}
+
+impl<F: PrimeField + TensorType + PartialOrd> ParsedNodes<F> {
+    /// Returns the number of the computational graph's inputs
+    pub fn num_inputs(&self) -> usize {
+        let input_nodes = self.inputs.iter();
+        input_nodes.len()
+    }
+
+    ///  Returns shapes of the computational graph's inputs
+    pub fn input_shapes(&self) -> Vec<Vec<usize>> {
+        self.inputs
+            .iter()
+            .flat_map(|o| self.nodes.get(o).unwrap().out_dims())
+            .collect_vec()
+    }
+
+    /// Returns the number of the computational graph's outputs
+    pub fn num_outputs(&self) -> usize {
+        let output_nodes = self.outputs.iter();
+        output_nodes.len()
+    }
+
+    /// Returns shapes of the computational graph's outputs
+    pub fn output_shapes(&self) -> Vec<Vec<usize>> {
+        self.outputs
+            .iter()
+            .flat_map(|o| self.nodes.get(o).unwrap().out_dims())
+            .collect_vec()
+    }
+
+    /// Returns the fixed point scale of the computational graph's outputs
+    pub fn get_output_scales(&self) -> Vec<u32> {
+        let output_nodes = self.outputs.iter();
+        output_nodes
+            .flat_map(|o| self.nodes.get(o).unwrap().out_scales())
+            .collect_vec()
+    }
+}
+
 impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     fn required_lookups(&self) -> Vec<LookupOp> {
-        self.nodes
-            .iter()
-            .map(|(_, n)| n.required_lookups())
-            .flatten()
+        self.graph
+            .nodes
+            .values()
+            .flat_map(|n| n.required_lookups())
             .collect_vec()
     }
 
@@ -196,13 +240,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         mode: Mode,
         visibility: VarVisibility,
     ) -> Result<Self, Box<dyn Error>> {
-        let (model, nodes) = Self::load_onnx_model(reader, &run_args, &mode, &visibility)?;
+        let graph = Self::load_onnx_model(reader, &run_args, &mode, &visibility)?;
 
         let om = Model {
-            inputs: model.inputs.iter().map(|o| o.node).collect(),
-            outputs: model.outputs.iter().map(|o| o.node).collect(),
             run_args,
-            nodes,
+            graph,
             mode,
             visibility,
         };
@@ -220,7 +262,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         let num_constraints = if let Some(num_constraints) = self.run_args.allocated_constraints {
             num_constraints
         } else {
-            self.dummy_layout(&self.input_shapes()).unwrap()
+            self.dummy_layout(&self.graph.input_shapes()).unwrap()
         };
 
         // extract the requisite lookup ops from the model
@@ -271,7 +313,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         let mut results: BTreeMap<&usize, Tensor<i128>> = BTreeMap::new();
         let mut max_lookup_inputs = 0;
         let mut input_idx = 0;
-        for (idx, n) in self.nodes.iter() {
+        for (idx, n) in self.graph.nodes.iter() {
             let mut inputs = vec![];
             if n.is_input() {
                 let mut t = model_inputs[input_idx].clone();
@@ -289,7 +331,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 }
             };
 
-            if n.required_lookups().len() > 0 {
+            if !n.required_lookups().is_empty() {
                 let mut max = 0;
                 for i in &inputs {
                     max = max.max(i.iter().map(|x| x.abs()).max().unwrap());
@@ -302,8 +344,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                     let res = Op::<F>::f(&*n.opkind, &inputs)?;
                     results.insert(idx, res);
                 }
-                NodeType::SubGraph { graph, .. } => {
-                    let res = graph.forward(&inputs)?;
+                NodeType::SubGraph { model, .. } => {
+                    let res = model.forward(&inputs)?;
                     let mut res = res.last().unwrap().clone();
                     res.flatten();
                     results.insert(idx, res);
@@ -311,10 +353,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             }
         }
 
-        let output_nodes = self.outputs.iter();
+        let output_nodes = self.graph.outputs.iter();
         debug!(
             "model outputs are nodes: {:?}",
-            output_nodes.clone().map(|o| o).collect_vec()
+            output_nodes.clone().collect_vec()
         );
         let outputs = output_nodes
             .map(|o| results.get(&o).unwrap().clone().map(|x| x))
@@ -365,13 +407,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         run_args: &RunArgs,
         mode: &Mode,
         visibility: &VarVisibility,
-    ) -> Result<
-        (
-            Graph<TypedFact, Box<dyn TypedOp>>,
-            BTreeMap<usize, NodeType<F>>,
-        ),
-        Box<dyn Error>,
-    > {
+    ) -> Result<ParsedNodes<F>, Box<dyn Error>> {
         let mut model = tract_onnx::onnx().model_for_read(reader).map_err(|e| {
             error!("Error loading model: {}", e);
             GraphError::ModelLoad
@@ -385,7 +421,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 .fact
                 .shape
                 .dims()
-                .filter_map(|x| tract_onnx::tract_hir::internal::Factoid::concretize(x))
+                .filter_map(tract_onnx::tract_hir::internal::Factoid::concretize)
                 .map(|x| match x.to_i64() {
                     Ok(x) => x as usize,
                     Err(_e) => {
@@ -424,19 +460,25 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
 
         debug!("\n {}", model);
 
-        Ok((model, nodes))
+        let parsed_nodes = ParsedNodes {
+            nodes,
+            inputs: model.inputs.iter().map(|o| o.node).collect(),
+            outputs: model.outputs.iter().map(|o| o.node).collect(),
+        };
+
+        Ok(parsed_nodes)
     }
 
     /// Formats nodes (including subgraphs) into tables !
     pub fn table_nodes(&self) -> String {
         let mut node_accumulator = vec![];
         let mut string = String::new();
-        for (idx, node) in &self.nodes {
+        for (idx, node) in &self.graph.nodes {
             match node {
                 NodeType::Node(n) => {
                     node_accumulator.push(n);
                 }
-                NodeType::SubGraph { graph, inputs, .. } => {
+                NodeType::SubGraph { model, inputs, .. } => {
                     let mut table = Table::new(node_accumulator.iter());
                     table.with(tabled::settings::Style::modern());
                     table.with(tabled::settings::Shadow::new(1));
@@ -444,14 +486,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                         tabled::settings::style::BorderColor::default()
                             .top(tabled::settings::Color::BG_YELLOW),
                     );
-                    string = format!("{} \n\n  MAIN GRAPH \n\n{}", string, table.to_string());
+                    string = format!("{} \n\n  MAIN GRAPH \n\n{}", string, table);
                     node_accumulator = vec![];
                     string = format!(
                         "{}\n\n SUBGRAPH AT IDX {} WITH INPUTS {:?}\n{}",
                         string,
                         idx,
                         inputs,
-                        graph.table_nodes().cyan(),
+                        model.table_nodes().cyan(),
                     );
                 }
             }
@@ -490,18 +532,22 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                     let subgraph_nodes =
                         Self::nodes_from_graph(&model, run_args, mode, visibility, input_scales)?;
 
-                    let om = Model {
+                    let subgraph = ParsedNodes {
+                        nodes: subgraph_nodes,
                         inputs: model.inputs.iter().map(|o| o.node).collect(),
                         outputs: model.outputs.iter().map(|o| o.node).collect(),
+                    };
+
+                    let om = Model {
+                        graph: subgraph,
                         run_args: run_args.clone(),
-                        nodes: subgraph_nodes,
                         mode: mode.clone(),
                         visibility: visibility.clone(),
                     };
                     nodes.insert(
                         i,
                         NodeType::SubGraph {
-                            graph: om,
+                            model: om,
                             inputs: n.inputs.iter().map(|i| i.node).collect_vec(),
 
                             idx: i,
@@ -642,7 +688,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     ) -> Result<(), Box<dyn Error>> {
         info!("model layout...");
         let mut results = BTreeMap::<usize, ValTensor<F>>::new();
-        for (i, input_idx) in self.inputs.iter().enumerate() {
+        for (i, input_idx) in self.graph.inputs.iter().enumerate() {
             if self.visibility.input.is_public() {
                 results.insert(*input_idx, vars.instances[i].clone());
             } else {
@@ -657,11 +703,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             |mut region| {
                 let mut offset: usize = 0;
 
+                let thread_safe_region = Arc::new(Mutex::new(Some(&mut region)));
+
                 let mut outputs = self
                     .layout_nodes(
                         &mut config,
-                        &mut region,
-                        &self.nodes,
+                        thread_safe_region.clone(),
                         &mut results,
                         &mut offset,
                     )
@@ -677,7 +724,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                         outputs[i] = config
                             .base
                             .layout(
-                                &mut Some(&mut region),
+                                thread_safe_region.clone(),
                                 &outputs[i..i + 1],
                                 &mut offset,
                                 Box::new(PolyOp::Pack(
@@ -714,7 +761,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                                 instance_offset += inputs.len();
                             };
                             config.base.layout(
-                                &mut Some(&mut region),
+                                thread_safe_region.clone(),
                                 &[output, vars.instances[instance_offset + i].clone()],
                                 &mut offset,
                                 Box::new(HybridOp::RangeCheck(tolerance)),
@@ -733,12 +780,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     fn layout_nodes(
         &self,
         config: &mut ModelConfig<F>,
-        region: &mut Region<F>,
-        nodes: &NodeGraph<F>,
+        region: Arc<Mutex<Option<&mut Region<F>>>>,
         results: &mut BTreeMap<usize, ValTensor<F>>,
         offset: &mut usize,
     ) -> Result<Vec<ValTensor<F>>, Box<dyn Error>> {
-        for (idx, node) in nodes.iter() {
+        for (idx, node) in self.graph.nodes.iter() {
             let values: Vec<ValTensor<F>> = node
                 .inputs()
                 .iter()
@@ -751,7 +797,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 NodeType::Node(n) => {
                     let res = config
                         .base
-                        .layout(&mut Some(region), &values, offset, n.opkind.clone_dyn())
+                        .layout(region.clone(), &values, offset, n.opkind.clone_dyn())
                         .map_err(|e| {
                             error!("{}", e);
                             halo2_proofs::plonk::Error::Synthesis
@@ -770,15 +816,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                         }
                     }
                 }
-                NodeType::SubGraph { graph, .. } => {
-                    let res = graph.layout_nodes(config, region, &graph.nodes, results, offset)?;
+                NodeType::SubGraph { model, .. } => {
+                    let res = model.layout_nodes(config, region.clone(), results, offset)?;
                     let mut res = res.last().unwrap().clone();
                     res.flatten();
                     results.insert(*idx, res);
                 }
             }
         }
-        let output_nodes = self.outputs.iter();
+        let output_nodes = self.graph.outputs.iter();
         debug!(
             "model outputs are nodes: {:?}",
             output_nodes.clone().collect_vec()
@@ -805,7 +851,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             })
             .collect_vec();
 
-        for (i, input_idx) in self.inputs.iter().enumerate() {
+        for (i, input_idx) in self.graph.inputs.iter().enumerate() {
             results.insert(*input_idx, inputs[i].clone());
         }
 
@@ -813,8 +859,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
 
         let mut offset: usize = 0;
 
-        let mut outputs =
-            self.dummy_layout_nodes(&mut dummy_config, &self.nodes, &mut results, &mut offset)?;
+        let mut outputs = self.dummy_layout_nodes(
+            &mut dummy_config,
+            &self.graph.nodes,
+            &mut results,
+            &mut offset,
+        )?;
 
         // pack outputs if need be
         if self.run_args.pack_base > 1 {
@@ -822,7 +872,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 debug!("packing outputs...");
                 outputs[i] = dummy_config
                     .layout(
-                        &mut None,
+                        Arc::new(Mutex::new(None)),
                         &outputs[i..i + 1],
                         &mut offset,
                         Box::new(PolyOp::Pack(self.run_args.pack_base, self.run_args.scale)),
@@ -849,7 +899,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 .map(|output| {
                     dummy_config
                         .layout(
-                            &mut None,
+                            Arc::new(Mutex::new(None)),
                             &[output.clone(), output],
                             &mut offset,
                             Box::new(HybridOp::RangeCheck(tolerance)),
@@ -865,11 +915,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     fn dummy_layout_nodes(
         &self,
         dummy_config: &mut PolyConfig<F>,
-        nodes: &NodeGraph<F>,
+        _nodes: &NodeGraph<F>,
         results: &mut BTreeMap<usize, ValTensor<F>>,
         offset: &mut usize,
     ) -> Result<Vec<ValTensor<F>>, Box<dyn Error>> {
-        for (idx, node) in self.nodes.iter() {
+        for (idx, node) in self.graph.nodes.iter() {
             debug!(
                 "dummy layout {}: {}, offset: {}",
                 idx,
@@ -885,7 +935,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                         .map(|i| results.get(i).unwrap().clone())
                         .collect_vec();
                     let res = dummy_config
-                        .layout(&mut None, &values, offset, n.opkind.clone_dyn())
+                        .layout(
+                            Arc::new(Mutex::new(None)),
+                            &values,
+                            offset,
+                            n.opkind.clone_dyn(),
+                        )
                         .map_err(|e| {
                             error!("{}", e);
                             halo2_proofs::plonk::Error::Synthesis
@@ -895,8 +950,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                         results.insert(*idx, vt);
                     }
                 }
-                NodeType::SubGraph { graph, .. } => {
-                    let res = graph.dummy_layout_nodes(dummy_config, nodes, results, offset)?;
+                NodeType::SubGraph { model, .. } => {
+                    let res = model.dummy_layout_nodes(dummy_config, _nodes, results, offset)?;
                     let mut res = res.last().unwrap().clone();
                     res.flatten();
                     results.insert(*idx, res);
@@ -904,7 +959,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             }
         }
 
-        let output_nodes = self.outputs.iter();
+        let output_nodes = self.graph.outputs.iter();
         debug!(
             "model outputs are nodes: {:?}",
             output_nodes.clone().collect_vec()
@@ -916,53 +971,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         Ok(outputs)
     }
 
-    /// Returns the number of the computational graph's inputs
-    pub fn num_inputs(&self) -> usize {
-        let input_nodes = self.inputs.iter();
-        input_nodes.len()
-    }
-
-    ///  Returns shapes of the computational graph's inputs
-    pub fn input_shapes(&self) -> Vec<Vec<usize>> {
-        self.inputs
-            .iter()
-            .map(|o| self.nodes.get(o).unwrap().out_dims().clone())
-            .flatten()
-            .collect_vec()
-    }
-
-    /// Returns the number of the computational graph's outputs
-    pub fn num_outputs(&self) -> usize {
-        let output_nodes = self.outputs.iter();
-        output_nodes.len()
-    }
-
-    /// Returns shapes of the computational graph's outputs
-    pub fn output_shapes(&self) -> Vec<Vec<usize>> {
-        self.outputs
-            .iter()
-            .map(|o| self.nodes.get(o).unwrap().out_dims().clone())
-            .flatten()
-            .collect_vec()
-    }
-
-    /// Returns the fixed point scale of the computational graph's outputs
-    pub fn get_output_scales(&self) -> Vec<u32> {
-        let output_nodes = self.outputs.iter();
-        output_nodes
-            .map(|o| self.nodes.get(o).unwrap().out_scales())
-            .flatten()
-            .collect_vec()
-    }
-
     /// Shapes of the computational graph's public inputs (if any)
     pub fn instance_shapes(&self) -> Vec<Vec<usize>> {
         let mut instance_shapes = vec![];
         if self.visibility.input.is_public() {
-            instance_shapes.extend(self.input_shapes());
+            instance_shapes.extend(self.graph.input_shapes());
         }
         if self.visibility.output.is_public() {
-            instance_shapes.extend(self.output_shapes());
+            instance_shapes.extend(self.graph.output_shapes());
         }
         instance_shapes
     }

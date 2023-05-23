@@ -56,10 +56,12 @@ mod matmul {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Matmul { a: None }),
+                                Box::new(PolyOp::Einsum {
+                                    equation: "ij,jk->ik".to_string(),
+                                }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -130,10 +132,12 @@ mod matmul_col_overflow {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Matmul { a: None }),
+                                Box::new(PolyOp::Einsum {
+                                    equation: "ij,jk->ik".to_string(),
+                                }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -205,10 +209,12 @@ mod dot {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Dot),
+                                Box::new(PolyOp::Einsum {
+                                    equation: "i,i->".to_string(),
+                                }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -276,10 +282,12 @@ mod dot_col_overflow {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut 0,
-                                Box::new(PolyOp::Dot),
+                                Box::new(PolyOp::Einsum {
+                                    equation: "i,i->".to_string(),
+                                }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -347,7 +355,7 @@ mod sum {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Sum { axes: vec![0] }),
@@ -416,7 +424,7 @@ mod sum_col_overflow {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Sum { axes: vec![0] }),
@@ -487,26 +495,32 @@ mod composition {
                         let mut offset = 0;
                         let _ = config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut offset,
-                                Box::new(PolyOp::Dot),
+                                Box::new(PolyOp::Einsum {
+                                    equation: "i,i->".to_string(),
+                                }),
                             )
                             .unwrap();
                         let _ = config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut offset,
-                                Box::new(PolyOp::Dot),
+                                Box::new(PolyOp::Einsum {
+                                    equation: "i,i->".to_string(),
+                                }),
                             )
                             .unwrap();
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut offset,
-                                Box::new(PolyOp::Dot),
+                                Box::new(PolyOp::Einsum {
+                                    equation: "i,i->".to_string(),
+                                }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -574,7 +588,7 @@ mod conv {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &[self.inputs[0].clone()],
                                 &mut 0,
                                 Box::new(PolyOp::Conv {
@@ -701,7 +715,7 @@ mod sumpool {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::SumPool {
@@ -781,7 +795,7 @@ mod add_w_shape_casting {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Add { a: None }),
@@ -852,7 +866,7 @@ mod add {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Add { a: None }),
@@ -923,7 +937,7 @@ mod add_with_overflow {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Add { a: None }),
@@ -994,7 +1008,7 @@ mod sub {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Sub),
@@ -1065,7 +1079,7 @@ mod mult {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Mult { a: None }),
@@ -1136,7 +1150,7 @@ mod pow {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Pow(5)),
@@ -1205,7 +1219,7 @@ mod pack {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(PolyOp::Pack(2, 1)),
@@ -1274,7 +1288,7 @@ mod rescaled {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &self.inputs.clone(),
                                 &mut 0,
                                 Box::new(Rescaled {
@@ -1359,12 +1373,14 @@ mod matmul_relu {
             layouter.assign_region(
                 || "",
                 |mut region| {
-                    let op = PolyOp::Matmul { a: None };
+                    let op = PolyOp::Einsum {
+                        equation: "ij,jk->ik".to_string(),
+                    };
                     let mut offset = 0;
                     let output = config
                         .base_config
                         .layout(
-                            &mut Some(&mut region),
+                            Arc::new(Mutex::new(Some(&mut region))),
                             &self.inputs,
                             &mut offset,
                             Box::new(op),
@@ -1373,7 +1389,7 @@ mod matmul_relu {
                     let _output = config
                         .base_config
                         .layout(
-                            &mut Some(&mut region),
+                            Arc::new(Mutex::new(Some(&mut region))),
                             &[output.unwrap()],
                             &mut offset,
                             Box::new(LookupOp::ReLU { scale: 1 }),
@@ -1459,7 +1475,7 @@ mod rangecheck {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &[self.input.clone(), self.output.clone()],
                                 &mut 0,
                                 Box::new(HybridOp::RangeCheck(Tolerance::Abs { val: RANGE })),
@@ -1573,7 +1589,7 @@ mod rangecheckpercent {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &[self.output.clone(), self.input.clone()],
                                 &mut 0,
                                 Box::new(HybridOp::RangeCheck(Tolerance::Percentage {
@@ -1689,7 +1705,7 @@ mod relu {
                     |mut region| {
                         config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &[self.input.clone()],
                                 &mut 0,
                                 Box::new(LookupOp::ReLU { scale: 1 }),
@@ -1751,7 +1767,7 @@ mod softmax {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
             let mut config =
-                Self::Config::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE, 0);
+                Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0);
             let advices = (0..2)
                 .map(|_| VarTensor::new_advice(cs, K, LEN))
                 .collect::<Vec<_>>();
@@ -1794,7 +1810,7 @@ mod softmax {
                         let mut offset = 0;
                         let _output = config
                             .layout(
-                                &mut Some(&mut region),
+                                Arc::new(Mutex::new(Some(&mut region))),
                                 &[self.input.clone()],
                                 &mut offset,
                                 Box::new(HybridOp::Softmax {

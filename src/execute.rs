@@ -388,7 +388,7 @@ fn forward(
 
     let res = model.forward(&model_inputs)?;
 
-    let output_scales = model.get_output_scales();
+    let output_scales = model.graph.get_output_scales();
     let output_scales = output_scales
         .iter()
         .map(|scale| scale_to_multiplier(*scale));
@@ -396,7 +396,7 @@ fn forward(
     let float_res: Vec<Vec<f32>> = res
         .iter()
         .zip(output_scales)
-        .map(|(t, scale)| t.iter().map(|e| (*e as f32 / scale)).collect_vec())
+        .map(|(t, scale)| t.iter().map(|e| ((*e as f64 / scale) as f32)).collect_vec())
         .collect();
     trace!("forward pass output: {:?}", float_res);
     data.output_data = float_res;
@@ -557,7 +557,7 @@ fn create_keys_kzg(
     let params = load_params_cmd(params_path, circuit.model.run_args.logrows)?;
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
         .map_err(Box::<dyn Error>::from)?;
-    let circuit_params = circuit.params.clone();
+    let circuit_params = circuit.params;
     trace!("params computed");
     circuit_params.save(&circuit_params_path);
 
@@ -590,11 +590,8 @@ fn prove(
 
     let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)?;
 
-    let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
-        pk_path,
-        circuit_params.clone(),
-    )
-    .map_err(Box::<dyn Error>::from)?;
+    let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(pk_path, circuit_params)
+        .map_err(Box::<dyn Error>::from)?;
     trace!("params computed");
 
     let now = Instant::now();

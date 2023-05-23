@@ -357,7 +357,7 @@ impl VarTensor {
                         },
                         Err(e) => {
                             error!("Error assigning value: {:?}", e);
-                            return Err(e);
+                            Err(e)
                         }
                     }
               

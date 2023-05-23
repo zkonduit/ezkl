@@ -11,6 +11,7 @@ use halo2_proofs::{
 use halo2curves::ff::PrimeField;
 use halo2curves::pasta::Fp as F;
 use std::marker::PhantomData;
+use std::sync::{Arc, Mutex};
 
 const K: usize = 15;
 // A columnar ReLu MLP
@@ -95,11 +96,11 @@ impl<F: PrimeField + TensorType + PartialOrd, const LEN: usize, const BITS: usiz
                 || "mlp_4d",
                 |mut region| {
                     let mut offset = 0;
-                    let region = &mut Some(&mut region);
+                    let region = Arc::new(Mutex::new(Some(&mut region)));
                     let x = config
                         .layer_config
                         .layout(
-                            region,
+                            region.clone(),
                             &[self.l0_params[0].clone(), self.input.clone()],
                             &mut offset,
                             Box::new(PolyOp::Einsum {
@@ -108,11 +109,14 @@ impl<F: PrimeField + TensorType + PartialOrd, const LEN: usize, const BITS: usiz
                         )
                         .unwrap()
                         .unwrap();
+                    println!("1");
+                    println!("offset: {}", offset);
+                    println!("x shape: {:?}", x.dims());
 
                     let x = config
                         .layer_config
                         .layout(
-                            region,
+                            region.clone(),
                             &[x],
                             &mut offset,
                             Box::new(PolyOp::Add {
@@ -121,26 +125,27 @@ impl<F: PrimeField + TensorType + PartialOrd, const LEN: usize, const BITS: usiz
                         )
                         .unwrap()
                         .unwrap();
-
+                    println!("2");
                     println!("offset: {}", offset);
                     println!("x shape: {:?}", x.dims());
                     let mut x = config
                         .layer_config
                         .layout(
-                            region,
+                            region.clone(),
                             &[x],
                             &mut offset,
                             Box::new(LookupOp::ReLU { scale: 1 }),
                         )
                         .unwrap()
                         .unwrap();
+                    println!("3");
                     println!("offset: {}", offset);
                     println!("x shape: {:?}", x.dims());
                     x.reshape(&[x.dims()[0], 1]).unwrap();
                     let x = config
                         .layer_config
                         .layout(
-                            region,
+                            region.clone(),
                             &[self.l2_params[0].clone(), x],
                             &mut offset,
                             Box::new(PolyOp::Einsum {
@@ -149,11 +154,14 @@ impl<F: PrimeField + TensorType + PartialOrd, const LEN: usize, const BITS: usiz
                         )
                         .unwrap()
                         .unwrap();
+                    println!("4");
+                    println!("offset: {}", offset);
+                    println!("x shape: {:?}", x.dims());
 
                     let x = config
                         .layer_config
                         .layout(
-                            region,
+                            region.clone(),
                             &[x],
                             &mut offset,
                             Box::new(PolyOp::Add {
@@ -162,22 +170,24 @@ impl<F: PrimeField + TensorType + PartialOrd, const LEN: usize, const BITS: usiz
                         )
                         .unwrap()
                         .unwrap();
+                    println!("5");
                     println!("offset: {}", offset);
                     println!("x shape: {:?}", x.dims());
                     let x = config
                         .layer_config
                         .layout(
-                            region,
+                            region.clone(),
                             &[x],
                             &mut offset,
                             Box::new(LookupOp::ReLU { scale: 1 }),
                         )
                         .unwrap();
+                    println!("6");
                     println!("offset: {}", offset);
                     Ok(config
                         .layer_config
                         .layout(
-                            region,
+                            region.clone(),
                             &[x.unwrap()],
                             &mut offset,
                             Box::new(LookupOp::Div {

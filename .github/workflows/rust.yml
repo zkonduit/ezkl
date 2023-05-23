@@ -61,8 +61,6 @@ jobs:
           toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
-      - name: Bench accum matmul
-        run: cargo bench --verbose --bench accum_matmul
       - name: Bench einsum accum matmul
         run: cargo bench --verbose --bench accum_einsum_matmul
       - name: Bench accum matmul relu

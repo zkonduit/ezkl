@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use itertools::Itertools;
 
 use crate::{
@@ -12,10 +14,6 @@ use super::{base::BaseOp, *};
 /// An enum representing the operations that can be expressed as arithmetic (non lookup) operations.
 #[derive(Clone, Debug)]
 pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
-    Dot,
-    Matmul {
-        a: Option<ValTensor<F>>,
-    },
     Einsum {
         equation: String,
     },
@@ -118,13 +116,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Mult { .. } => "MULT",
             PolyOp::Sub => "SUB",
             PolyOp::Sum { .. } => "SUM",
-            PolyOp::Dot => "DOT",
             PolyOp::Pow(_) => "POW",
             PolyOp::Pack(_, _) => "PACK",
             PolyOp::GlobalSumPool => "GLOBALSUMPOOL",
             PolyOp::Conv { .. } => "CONV",
             PolyOp::SumPool { .. } => "SUMPOOL",
-            PolyOp::Matmul { .. } => "MATMUL",
             PolyOp::Iff => "IFF",
             PolyOp::Gather { .. } => "GATHER",
             PolyOp::Concat { .. } => "CONCAT",
@@ -168,16 +164,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 }
                 tensor::ops::mult(&inputs)
             }
-            PolyOp::Matmul { a } => {
-                if let Some(a) = a {
-                    let b = inputs;
-                    inputs = vec![Tensor::new(Some(&a.get_int_evals().unwrap()), a.dims())?];
-                    inputs.extend(b);
-                }
-
-                tensor::ops::matmul(&inputs)
-            }
-            PolyOp::Dot => tensor::ops::dot(&inputs[..]),
             PolyOp::Conv {
                 kernel: a,
                 bias,
@@ -221,9 +207,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 let a = inputs[2].clone();
                 let b = inputs[1].clone();
 
-                let masked_a = (mask.clone() * a.clone())?;
+                let masked_a = (mask.clone() * a)?;
                 let masked_b =
-                    ((Tensor::from(vec![1_i128].into_iter()) - mask.clone())? * b.clone())?;
+                    ((Tensor::from(vec![1_i128].into_iter()) - mask)? * b)?;
 
                 masked_a + masked_b
             }
@@ -237,7 +223,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("slice inputs".to_string()));
                 }
-                Ok(tensor::ops::slice(&inputs[0], axis, start, end)?.into())
+                Ok(tensor::ops::slice(&inputs[0], axis, start, end)?)
             }
         }
     }
@@ -245,7 +231,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: &mut Option<&mut Region<F>>,
+        region: Arc<Mutex<Option<&mut Region<F>>>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
@@ -254,24 +240,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
         Ok(Some(match self {
             PolyOp::Einsum { equation } => {
                 let out = layouts::einsum(config, region, &mut values, equation, offset)?;
-                out.into()
+                out
             }
             PolyOp::Gather { dim, index } => {
                 tensor::ops::gather(&values[0].get_inner_tensor()?, *dim, index)?.into()
             }
             PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?, offset)?,
-            PolyOp::Dot => layouts::dot(config, region, values[..].try_into()?, offset)?,
             PolyOp::Sum { axes } => {
                 layouts::sum_axes(config, region, values[..].try_into()?, axes, offset)?
-            }
-            PolyOp::Matmul { a } => {
-                if let Some(a) = a {
-                    let b = values;
-                    values = vec![a.clone()];
-                    values.extend(b);
-                }
-
-                layouts::matmul(config, region, values[..].try_into()?, offset)?
             }
             PolyOp::Conv {
                 kernel,
@@ -370,17 +346,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             }
             PolyOp::Gather { .. } => in_scales[0],
             PolyOp::Iff => in_scales[1],
-            PolyOp::Dot => in_scales[0] + in_scales[1],
             PolyOp::Sum { .. } => in_scales[0],
-            PolyOp::Matmul { a } => {
-                let mut scale = in_scales[0];
-                if let Some(a) = a {
-                    scale += a.scale();
-                } else {
-                    scale += in_scales[1];
-                }
-                scale
-            }
             PolyOp::Conv { kernel, bias, .. } => {
                 let output_scale = in_scales[0] + kernel.scale();
                 if let Some(b) = bias {
@@ -424,7 +390,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     fn rescale(&self, input_scales: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
         let inputs_to_scale = self.requires_homogenous_input_scales();
         // creates a rescaled op if the inputs are not homogenous
-        self.homogenize_input_scales(input_scales.clone(), inputs_to_scale)
+        self.homogenize_input_scales(input_scales, inputs_to_scale)
             .unwrap()
     }
 

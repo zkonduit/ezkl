@@ -1,4 +1,9 @@
-use std::{any::Any, error::Error, marker::PhantomData};
+use std::{
+    any::Any,
+    error::Error,
+    marker::PhantomData,
+    sync::{Arc, Mutex},
+};
 
 use halo2_proofs::circuit::Region;
 use serde::{Deserialize, Serialize};
@@ -33,7 +38,7 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: &mut Option<&mut Region<F>>,
+        region: Arc<Mutex<Option<&mut Region<F>>>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>>;
@@ -101,7 +106,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
     fn layout(
         &self,
         _: &mut crate::circuit::BaseConfig<F>,
-        _: &mut Option<&mut Region<F>>,
+        _: Arc<Mutex<Option<&mut Region<F>>>>,
         _: &[ValTensor<F>],
         _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
@@ -144,7 +149,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
         for (i, ri) in inputs.iter_mut().enumerate() {
             rescaled_inputs.push(tensor::ops::rescale(ri, self.scale[i].1)?);
         }
-        Ok(Op::<F>::f(&*self.inner, &rescaled_inputs)?)
+        Op::<F>::f(&*self.inner, &rescaled_inputs)
     }
 
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
@@ -159,7 +164,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
         let in_scales = in_scales
             .into_iter()
             .zip(self.scale.iter())
-            .map(|(a, b)| a + crate::graph::mult_to_scale(b.1 as f32))
+            .map(|(a, b)| a + crate::graph::mult_to_scale(b.1 as f64))
             .collect();
 
         Op::<F>::out_scale(&*self.inner, in_scales, _g)
@@ -168,7 +173,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: &mut Option<&mut Region<F>>,
+        region: Arc<Mutex<Option<&mut Region<F>>>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
@@ -178,8 +183,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
             )));
         }
 
-        let res =
-            &layouts::rescale(config, region, values[..].try_into()?, &self.scale, offset)?[..];
+        let res = &layouts::rescale(
+            config,
+            region.clone(),
+            values[..].try_into()?,
+            &self.scale,
+            offset,
+        )?[..];
         self.inner.layout(config, region, res, offset)
     }
 
@@ -206,7 +216,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
     fn layout(
         &self,
         _: &mut crate::circuit::BaseConfig<F>,
-        _: &mut Option<&mut Region<F>>,
+        _: Arc<Mutex<Option<&mut Region<F>>>>,
         _: &[ValTensor<F>],
         _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
@@ -252,8 +262,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
     fn f(&self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         Ok(self
             .values
-            .map(|x| quantize_float(&x, 0., self.scale).unwrap())
-            .into())
+            .map(|x| quantize_float(&x, 0., self.scale).unwrap()))
     }
 
     fn as_str(&self) -> &'static str {
@@ -262,7 +271,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
     fn layout(
         &self,
         _: &mut crate::circuit::BaseConfig<F>,
-        _: &mut Option<&mut Region<F>>,
+        _: Arc<Mutex<Option<&mut Region<F>>>>,
         _: &[ValTensor<F>],
         _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {

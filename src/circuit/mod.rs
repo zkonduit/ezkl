@@ -1,4 +1,7 @@
-use std::str::FromStr;
+use std::{
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
 ///
 pub mod table;
 
@@ -80,12 +83,10 @@ impl From<String> for CheckMode {
 
 #[allow(missing_docs)]
 /// An enum representing the tolerance we can accept for the accumulated arguments, either absolute or percentage
-#[derive(
-    Clone, Debug, PartialEq, PartialOrd, Serialize, Deserialize, Copy
-)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, Serialize, Deserialize, Copy)]
 pub enum Tolerance {
     Abs { val: usize },
-    Percentage { val: f32, scale: usize }
+    Percentage { val: f32, scale: usize },
 }
 
 impl Default for Tolerance {
@@ -138,7 +139,9 @@ impl IntoPy<PyObject> for Tolerance {
     fn into_py(self, py: Python) -> PyObject {
         match self {
             Tolerance::Abs { val } => (String::from("abs"), val).to_object(py),
-            Tolerance::Percentage { val, scale } => (String::from("percentage"), val, scale).to_object(py),
+            Tolerance::Percentage { val, scale } => {
+                (String::from("percentage"), val, scale).to_object(py)
+            }
         }
     }
 }
@@ -164,9 +167,6 @@ impl<'source> FromPyObject<'source> for Tolerance {
         }
     }
 }
-
-
-
 
 /// Configuration for an accumulated arg.
 #[derive(Clone, Debug, Default)]
@@ -403,7 +403,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     /// * `op` - The operation being represented.
     pub fn layout(
         &mut self,
-        region: &mut Option<&mut Region<F>>,
+        region: Arc<Mutex<Option<&mut Region<F>>>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
         op: Box<dyn Op<F>>,
@@ -411,7 +411,12 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         let mut cp_values = vec![];
         for v in values.iter() {
             if let ValTensor::Instance { .. } = v {
-                cp_values.push(layouts::identity(self, region, &[v.clone()], offset)?);
+                cp_values.push(layouts::identity(
+                    self,
+                    region.clone(),
+                    &[v.clone()],
+                    offset,
+                )?);
             } else {
                 cp_values.push(v.clone());
             }

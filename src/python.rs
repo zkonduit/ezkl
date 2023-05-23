@@ -1,7 +1,9 @@
 use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::{RunArgs, StrategyType};
+use crate::eth::{fix_verifier_sol, verify_proof_via_solidity};
 use crate::execute::{create_proof_circuit_kzg, load_params_cmd, verify_proof_circuit_kzg};
 use crate::graph::{quantize_float, Mode, Model, ModelCircuit, ModelParams, VarVisibility};
+use crate::pfsys::evm::{evm_verify, single::gen_evm_verifier, DeploymentCode};
 use crate::pfsys::{
     create_keys, gen_srs as ezkl_gen_srs, load_pk, load_vk, prepare_data, save_params, save_pk,
     save_vk, Snark, TranscriptType,
@@ -18,7 +20,8 @@ use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3_log;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use std::{fs::File, path::PathBuf, sync::Arc};
+use std::{fs::File, io::Write, path::PathBuf, sync::Arc};
+use tokio::runtime::Runtime;
 
 // See commands.rs and execute.rs
 // RenderCircuit
@@ -36,9 +39,6 @@ use std::{fs::File, path::PathBuf, sync::Arc};
 //         .show_labels(false)
 //         .render(args.logrows, &circuit, &root)?;
 // }
-
-/// Environment variable for EZKLCONF
-// const EZKLCONF: &str = "EZKLCONF";
 
 /// pyclass containing the struct used for run_args
 #[pyclass]
@@ -173,7 +173,7 @@ fn forward(
         .forward(&model_inputs)
         .map_err(|_| PyIOError::new_err("Failed to run forward pass"))?;
 
-    let output_scales = model.get_output_scales();
+    let output_scales = model.graph.get_output_scales();
     let output_scales = output_scales
         .iter()
         .map(|scale| crate::graph::scale_to_multiplier(*scale));
@@ -181,7 +181,11 @@ fn forward(
     let float_res: Vec<Vec<f32>> = res
         .iter()
         .zip(output_scales)
-        .map(|(t, scale)| t.iter().map(|e| (*e as f32 / scale)).collect::<Vec<f32>>())
+        .map(|(t, scale)| {
+            t.iter()
+                .map(|e| ((*e as f64) / scale) as f32)
+                .collect::<Vec<f32>>()
+        })
         .collect();
     trace!("forward pass output: {:?}", float_res);
     data.output_data = float_res;
@@ -282,7 +286,7 @@ fn setup(
 
     // save the prover key
     save_pk::<KZGCommitmentScheme<Bn256>>(&pk_path, &proving_key)
-        .map_err(|_| PyIOError::new_err("Failed to save verifier key to vk_path"))?;
+        .map_err(|_| PyIOError::new_err("Failed to save proving key to pk_path"))?;
 
     // save the circuit
     circuit_params.save(&circuit_params_path);
@@ -411,13 +415,93 @@ fn verify(
     }
 }
 
-// TODO: Aggregate
-// TODO: CreateEVMVerifier
+/// creates an EVM compatible verifier, you will need solc installed in your environment to run this
+#[pyfunction(signature = (
+    vk_path,
+    params_path,
+    circuit_params_path,
+    deployment_code_path,
+    sol_code_path=None,
+))]
+fn create_evm_verifier(
+    vk_path: PathBuf,
+    params_path: PathBuf,
+    circuit_params_path: PathBuf,
+    deployment_code_path: PathBuf,
+    sol_code_path: Option<PathBuf>,
+) -> Result<bool, PyErr> {
+    let model_circuit_params = ModelParams::load(&circuit_params_path);
+    let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)
+        .map_err(|_| PyIOError::new_err("Failed to load model circuit parameters"))?;
+
+    let num_instance = model_circuit_params
+        .instance_shapes
+        .iter()
+        .map(|x| x.iter().product())
+        .collect();
+
+    let vk =
+        load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)
+            .map_err(|_| PyIOError::new_err("Failed to load verifier key"))?;
+
+    let (deployment_code, yul_code) = gen_evm_verifier(&params, &vk, num_instance)
+        .map_err(|_| PyRuntimeError::new_err("Failed to generatee evm verifier"))?;
+
+    deployment_code
+        .save(&deployment_code_path)
+        .map_err(|_| PyIOError::new_err("Failed to save deployment code"))?;
+
+    if sol_code_path.is_some() {
+        let mut f = File::create(sol_code_path.as_ref().unwrap())
+            .map_err(|_| PyIOError::new_err("Failed to create file"))?;
+        let _ = f.write(yul_code.as_bytes());
+
+        let output = fix_verifier_sol(sol_code_path.as_ref().unwrap().clone())
+            .map_err(|_| PyRuntimeError::new_err("Failed to fix solidity verifier"))?;
+
+        let mut f = File::create(sol_code_path.as_ref().unwrap())
+            .map_err(|_| PyIOError::new_err("Failed to write solidity code into file"))?;
+        let _ = f.write(output.as_bytes());
+    }
+    Ok(true)
+}
+
+// verifies an evm compatible proof, you will need solc installed in your environment to run this
+#[pyfunction(signature = (
+    proof_path,
+    deployment_code_path,
+    sol_code_path=None,
+))]
+fn verify_evm(
+    proof_path: PathBuf,
+    deployment_code_path: PathBuf,
+    sol_code_path: Option<PathBuf>,
+) -> Result<bool, PyErr> {
+    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)
+        .map_err(|_| PyIOError::new_err("Failed to load proof"))?;
+    let code = DeploymentCode::load(&deployment_code_path)
+        .map_err(|_| PyIOError::new_err("Failed to load deployment code path"))?;
+    evm_verify(code, proof.clone())
+        .map_err(|_| PyRuntimeError::new_err("Failed to verify with evm"))?;
+
+    if sol_code_path.is_some() {
+        let result = Runtime::new()
+            .unwrap()
+            .block_on(verify_proof_via_solidity(proof, sol_code_path.unwrap()))
+            .map_err(|_| PyRuntimeError::new_err("Failed to verify proof via solidity"))?;
+
+        trace!("Solidity verification result: {}", result);
+
+        assert!(result);
+    }
+    Ok(true)
+}
+
 // TODO: CreateEVMVerifierAggr
-// TODO: DeployVerifierEVM
+// TODO: DeployVerifierEVM (To be done in pyezkl)
+// TODO: Aggregate
 // TODO: SendProofEVM
 // TODO: VerifyAggr
-// TODO: VerifyEVM
 // TODO: PrintProofHex
 
 // Python Module
@@ -432,6 +516,8 @@ fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(setup, m)?)?;
     m.add_function(wrap_pyfunction!(prove, m)?)?;
     m.add_function(wrap_pyfunction!(verify, m)?)?;
+    m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
+    m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
 
     Ok(())
 }
