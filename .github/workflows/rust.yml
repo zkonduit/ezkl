@@ -53,7 +53,15 @@ jobs:
 
   benchmarks:
     runs-on: self-hosted
-    needs: [build, build-wasm, library-tests, docs]
+    needs:
+      [
+        build,
+        build-wasm,
+        library-tests,
+        mock-proving-tests,
+        mock-proving-tests-wasi,
+        python-tests,
+      ]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -270,15 +278,15 @@ jobs:
 
   large-tests:
     runs-on: self-hosted
-    # needs:
-    #   [
-    #     build,
-    #     build-wasm,
-    #     library-tests,
-    #     mock-proving-tests,
-    #     mock-proving-tests-wasi,
-    #     python-tests,
-    #   ]
+    needs:
+      [
+        build,
+        build-wasm,
+        library-tests,
+        mock-proving-tests,
+        mock-proving-tests-wasi,
+        python-tests,
+      ]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
