@@ -146,6 +146,7 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
         .expect("could not find contract")
         .into_parts_or_default();
     let size = _runtime_bytecode.len();
+    debug!("runtime bytecode size: {:#?}", size);
     if size > MAX_RUNTIME_BYTECODE_SIZE {
         // `_runtime_bytecode` exceeds the limit
         panic!(
@@ -358,15 +359,16 @@ use std::io::{BufRead, BufReader};
 
 /// Reads in raw bytes code and generates equivalent .sol file
 pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
-//    let file = File::open(input_file.clone())?;
-//   let reader = BufReader::new(file);
+    let file = File::open(input_file.clone())?;
+    let reader = BufReader::new(file);
 
     let mut transcript_addrs: Vec<u32> = Vec::new();
     let mut modified_lines: Vec<String> = Vec::new();
+    let mut proof_size: u32 = 0;
 
     // convert calldataload 0x0 to 0x40 to read from pubInputs, and the rest
     // from proof
-    // let calldata_pattern = Regex::new(r"^.*(calldataload\((0x[a-f0-9]+)\)).*$")?;
+    let calldata_pattern = Regex::new(r"^.*(calldataload\((0x[a-f0-9]+)\)).*$")?;
     let mstore_pattern = Regex::new(r"^\s*(mstore\(0x([0-9a-fA-F]+)+),.+\)")?;
     let mstore8_pattern = Regex::new(r"^\s*(mstore8\((\d+)+),.+\)")?;
     let mstoren_pattern = Regex::new(r"^\s*(mstore\((\d+)+),.+\)")?;
@@ -383,30 +385,30 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
     let bool_pattern = Regex::new(r":bool")?;
 
     // Count the number of pub inputs
-    // let mut start = None;
-    // let mut end = None;
-    // for (i, line) in reader.lines().enumerate() {
-    //     let line = line?;
-    //     if line.trim().starts_with("mstore(0x20") {
-    //         start = Some(i as u32);
-    //     }
+    let mut start = None;
+    let mut end = None;
+    for (i, line) in reader.lines().enumerate() {
+        let line = line?;
+        if line.trim().starts_with("mstore(0x20") {
+            start = Some(i as u32);
+        }
 
-    //     if line.trim().starts_with("mstore(0x0") {
-    //         end = Some(i as u32);
-    //         break;
-    //     }
-    // }
+        if line.trim().starts_with("mstore(0x0") {
+            end = Some(i as u32);
+            break;
+        }
+    }
 
-    // let num_pubinputs = if let Some(s) = start {
-    //     end.unwrap() - s
-    // } else {
-    //     0
-    // };
+    let num_pubinputs = if let Some(s) = start {
+        end.unwrap() - s
+    } else {
+        0
+    };
 
-    // let mut max_pubinputs_addr = 0;
-    // if num_pubinputs > 0 {
-    //     max_pubinputs_addr = num_pubinputs * 32 - 32;
-    // }
+    let mut max_pubinputs_addr = 0;
+    if num_pubinputs > 0 {
+        max_pubinputs_addr = num_pubinputs * 32 - 32;
+    }
 
     let file = File::open(input_file)?;
     let reader = BufReader::new(file);
@@ -418,26 +420,26 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
             line = line.replace(":bool", "");
         }
 
-        // let m = calldata_pattern.captures(&line);
-        // if let Some(m) = m {
-        //     let calldata_and_addr = m.get(1).unwrap().as_str();
-        //     let addr = m.get(2).unwrap().as_str();
-        //     let addr_as_num = u32::from_str_radix(addr.strip_prefix("0x").unwrap(), 16)?;
-
-        //     if addr_as_num <= max_pubinputs_addr {
-        //         let pub_addr = format!("{:#x}", addr_as_num + 32);
-        //         line = line.replace(
-        //             calldata_and_addr,
-        //             &format!("mload(add(pubInputs, {}))", pub_addr),
-        //         );
-        //     } else {
-        //         let proof_addr = format!("{:#x}", addr_as_num - max_pubinputs_addr);
-        //         line = line.replace(
-        //             calldata_and_addr,
-        //             &format!("mload(add(proof, {}))", proof_addr),
-        //         );
-        //     }
-        // }
+        let m = calldata_pattern.captures(&line);
+        if let Some(m) = m {
+            let calldata_and_addr = m.get(1).unwrap().as_str();
+            let addr = m.get(2).unwrap().as_str();
+            let addr_as_num = u32::from_str_radix(addr.strip_prefix("0x").unwrap(), 16)?;
+            if addr_as_num <= max_pubinputs_addr {
+                let pub_addr = format!("{:#x}", addr_as_num + 32);
+                line = line.replace(
+                    calldata_and_addr,
+                    &format!("mload(add(pubInputs, {}))", pub_addr),
+                );
+            } else {
+                proof_size += 1;
+                let proof_addr = format!("{:#x}", addr_as_num - max_pubinputs_addr);
+                line = line.replace(
+                    calldata_and_addr,
+                    &format!("mload(add(proof, {}))", proof_addr),
+                );
+            }
+        }
 
         let m = mstore8_pattern.captures(&line);
         if let Some(m) = m {
@@ -611,8 +613,8 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
     
     contract Verifier {{
         function verify(
-            uint256[] calldata pubInputs,
-            bytes calldata proof
+            uint256[] memory pubInputs,
+            bytes memory proof
         ) public view returns (bool) {{
             bool success = true;
             bytes32[{}] memory transcript;
@@ -631,5 +633,44 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         write!(write, "{}", line).unwrap();
     }
     writeln!(write, "}} return success; }} }}")?;
+
+    // free memory pointer initialization  
+    let mut offset = 128;
+    
+    // replace all mload(add(pubInputs(0x...))) with mload(0x...
+    contract = replace_vars_with_offset(
+        &contract, 
+        r"add\(pubInputs, (0x[0-9a-fA-F]+)\)",
+         offset
+    );
+
+    offset += 32 * num_pubinputs + 32;
+
+    // replace all mload(add(proof(0x...))) with mload(0x...
+    contract = replace_vars_with_offset(
+        &contract, 
+        r"add\(proof, (0x[0-9a-fA-F]+)\)",
+         offset
+    );
+
+    offset += 32 * proof_size + 32;
+
+    // replace all (add(transcript(0x...))) with (0x...)
+    contract = replace_vars_with_offset(
+        &contract, 
+        r"add\(transcript, (0x[0-9a-fA-F]+)\)",
+         offset
+    );
+
     Ok(contract)
+}
+
+fn replace_vars_with_offset(contract: &str, regex_pattern: &str, offset: u32) -> String {
+    let re = Regex::new(regex_pattern).unwrap();
+    let replaced = re.replace_all(contract, |caps: &regex::Captures| {
+        let addr_as_num = u32::from_str_radix(&caps[1].strip_prefix("0x").unwrap(), 16).unwrap();
+        let new_addr = addr_as_num + offset;
+        format!("{:#x}", new_addr)
+    });
+    replaced.into_owned()
 }
