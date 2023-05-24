@@ -186,8 +186,9 @@ class GPT(nn.Module):
         return idx
 
 
-gptconf = GPTConfig(block_size = 64, vocab_size = 65, n_layer = 4, n_head = 4, n_embd = 64,dropout = 0.0, bias = False) 
+gptconf = GPTConfig(block_size = 64, vocab_size = 65, n_layer = 20, n_head = 4, n_embd = 64,dropout = 0.0, bias = False) 
 model = GPT(gptconf)
+model.get_num_params()
 
 
 shape = [1, 64]

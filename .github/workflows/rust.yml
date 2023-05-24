@@ -296,10 +296,10 @@ jobs:
           components: rustfmt, clippy
       - name: nanoGPT Mock
         run: cargo test --release --verbose tests::large_mock_::large_tests_1_expects
-      - name: Self Attention Mock
-        run: cargo test --release --verbose tests::large_mock_::large_tests_0_expects
       - name: nanoGPT KZG prove and verify large tests
         run: cargo test --release --verbose tests::large_kzg_prove_and_verify_::large_tests_1_expects
+      - name: Self Attention Mock
+        run: cargo test --release --verbose tests::large_mock_::large_tests_0_expects
       - name: Self Attention KZG prove and verify large tests
         run: cargo test --release --verbose tests::large_kzg_prove_and_verify_::large_tests_0_expects
 
