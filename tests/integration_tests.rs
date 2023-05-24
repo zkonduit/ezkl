@@ -958,7 +958,6 @@ mod native_tests {
                 &format!("--bits={}", bits),
                 &format!("--logrows={}", logrows),
                 &format!("--scale={}", scale),
-                &format!("--check-mode={}", checkmode),
             ])
             .status()
             .expect("failed to execute process");
@@ -986,6 +985,7 @@ mod native_tests {
                     TEST_DIR.path().to_str().unwrap(),
                     example_name
                 ),
+                &format!("--check-mode={}", checkmode),
             ])
             .status()
             .expect("failed to execute process");
