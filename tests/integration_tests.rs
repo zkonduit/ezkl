@@ -60,16 +60,16 @@ mod native_tests {
         })
     }
 
-    fn init_params_24() {
+    fn init_params_26() {
         KZG24.call_once(|| {
             let status = Command::new(format!("curl"))
                 .args([
                     "-o",
                     &format!(
-                        "{}/kzg24.params",
+                        "{}/kzg26.params",
                         TEST_DIR.path().to_str().unwrap()
                     ),
-                    "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/perpetual-powers-of-tau-raw-24",
+                    "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/perpetual-powers-of-tau-raw-26",
                 ])
                 .status()
                 .expect("failed to execute process");
@@ -315,8 +315,8 @@ mod native_tests {
             #(#[test_case(LARGE_TESTS[N])])*
             fn large_kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::init_params_24();
-                kzg_prove_and_verify(test.to_string(), 5, 23, 24, "unsafe");
+                crate::native_tests::init_params_26();
+                kzg_prove_and_verify(test.to_string(), 5, 25, 26, "unsafe");
             }
 
             #(#[test_case(LARGE_TESTS[N])])*
