@@ -45,14 +45,14 @@ mod native_tests {
 
     fn init_params_23() {
         KZG23.call_once(|| {
-            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            let status = Command::new(format!("curl"))
                 .args([
-                    "gen-srs",
+                    "-o",
                     &format!(
-                        "--params-path={}/kzg23.params",
+                        "{}/kzg23.params",
                         TEST_DIR.path().to_str().unwrap()
                     ),
-                    "--logrows=23",
+                    "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/perpetual-powers-of-tau-raw-23",
                 ])
                 .status()
                 .expect("failed to execute process");
@@ -62,14 +62,14 @@ mod native_tests {
 
     fn init_params_24() {
         KZG24.call_once(|| {
-            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            let status = Command::new(format!("curl"))
                 .args([
-                    "gen-srs",
+                    "-o",
                     &format!(
-                        "--params-path={}/kzg24.params",
+                        "{}/kzg24.params",
                         TEST_DIR.path().to_str().unwrap()
                     ),
-                    "--logrows=24",
+                    "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/perpetual-powers-of-tau-raw-24",
                 ])
                 .status()
                 .expect("failed to execute process");
@@ -305,7 +305,7 @@ mod native_tests {
             fn kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::init_params_17();
-                kzg_prove_and_verify(test.to_string(), 7, 16, 17);
+                kzg_prove_and_verify(test.to_string(), 7, 16, 17, "safe");
             }
 
             });
@@ -316,7 +316,7 @@ mod native_tests {
             fn large_kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::init_params_24();
-                kzg_prove_and_verify(test.to_string(), 5, 23, 24);
+                kzg_prove_and_verify(test.to_string(), 5, 23, 24, "unsafe");
             }
 
             #(#[test_case(LARGE_TESTS[N])])*
@@ -927,7 +927,13 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_prove_and_verify(example_name: String, scale: usize, bits: usize, logrows: usize) {
+    fn kzg_prove_and_verify(
+        example_name: String,
+        scale: usize,
+        bits: usize,
+        logrows: usize,
+        checkmode: &str,
+    ) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup",
@@ -952,6 +958,7 @@ mod native_tests {
                 &format!("--bits={}", bits),
                 &format!("--logrows={}", logrows),
                 &format!("--scale={}", scale),
+                &format!("--check-mode={}", checkmode),
             ])
             .status()
             .expect("failed to execute process");
