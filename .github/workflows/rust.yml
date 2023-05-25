@@ -1,5 +1,29 @@
-name: Rust
+name: Large Tests 
+on: 
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: 'Test scenario tags'
+jobs: 
+  large-tests:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2022-11-03
+          override: true
+          components: rustfmt, clippy
+      - name: nanoGPT Mock
+        run: cargo test --release --verbose tests::large_mock_::large_tests_1_expects
+      - name: nanoGPT KZG prove and verify large tests
+        run: cargo test --release --verbose tests::large_kzg_prove_and_verify_::large_tests_1_expects
+      - name: Self Attention Mock
+        run: cargo test --release --verbose tests::large_mock_::large_tests_0_expects
+      - name: Self Attention KZG prove and verify large tests
+        run: cargo test --release --verbose tests::large_kzg_prove_and_verify_::large_tests_0_expects
 
+name: Rust
 on:
   push:
     branches: ["main"]
@@ -276,32 +300,7 @@ jobs:
       - name: KZG prove and verify tests
         run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 8
 
-  large-tests:
-    runs-on: self-hosted
-    # needs:
-    #   [
-    #     build,
-    #     build-wasm,
-    #     library-tests,
-    #     mock-proving-tests,
-    #     mock-proving-tests-wasi,
-    #     python-tests,
-    #   ]
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2022-11-03
-          override: true
-          components: rustfmt, clippy
-      - name: nanoGPT KZG prove and verify large tests
-        run: cargo test --release --verbose tests::large_kzg_prove_and_verify_::large_tests_1_expects
-      - name: nanoGPT Mock
-        run: cargo test --release --verbose tests::large_mock_::large_tests_1_expects
-      - name: Self Attention Mock
-        run: cargo test --release --verbose tests::large_mock_::large_tests_0_expects
-      - name: Self Attention KZG prove and verify large tests
-        run: cargo test --release --verbose tests::large_kzg_prove_and_verify_::large_tests_0_expects
+  
 
   prove-and-verify-aggr-tests:
     runs-on: self-hosted
