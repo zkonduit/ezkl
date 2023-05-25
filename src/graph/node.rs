@@ -3,7 +3,6 @@ use crate::circuit::Op;
 use crate::graph::new_op_from_onnx;
 use crate::graph::GraphError;
 use crate::tensor::TensorType;
-use anyhow::Result;
 use halo2curves::ff::PrimeField;
 use log::trace;
 use std::collections::BTreeMap;

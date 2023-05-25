@@ -17,10 +17,8 @@ halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch = "ac/send-sy
 halo2curves = { git = 'https://github.com/privacy-scaling-explorations/halo2curves', tag = "0.3.2" }
 rand = "0.8"
 itertools = "0.10.3"
-tensorflow = {version = "0.18.0", features = ["eager"], optional = true }
 plotters = { version = "0.3.0", optional = true }
 tract-onnx = { git = "https://github.com/sonos/tract/", rev= "d7bfa9a", optional = true }
-anyhow = "1.0.65"
 clap = { version = "4.0.32", features = ["derive"] }
 serde = { version = "1.0.126", features = ["derive"], optional = true  }
 serde_json = { version = "1.0.64", optional = true }
@@ -36,9 +34,7 @@ colored = { version = "2.0.0", optional = true}
 env_logger = { version = "0.10.0", optional = true}
 colored_json =  { version = "3.0.1", optional = true}
 tokio = { version = "1.26.0", features = ["macros", "rt"] }
-puruspe = "0.2.0"
 rayon = "*"
-serde_traitobject = "0.2.8"
 bincode = "*"
 
 # python binding related deps
@@ -74,16 +70,10 @@ mnist = "0.5"
 seq-macro = "0.3.1"
 test-case = "2.2.2"
 tempdir = "0.3.7"
-wasm-bindgen-futures = "0.4.34"
+
 
 [target.wasm32-unknown-unknown]
 runner = 'wasm-bindgen-test-runner'
-
-
-[dependencies.web-sys]
-version = "*"
-features = ["console", "Window", "Navigator"]
-
 
 
 [[bench]]
@@ -142,7 +132,6 @@ required-features = ["ezkl"]
 [features]
 default = ["ezkl"]
 render = ["halo2_proofs/dev-graph", "plotters"]
-tensorflow = ["dep:tensorflow"]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log"]
 ezkl = ["onnx", "serde", "serde_json", "log", "colored", "env_logger", "tabled/color", "colored_json",  "halo2_proofs/circuit-params"]
