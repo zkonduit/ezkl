@@ -2208,7 +2208,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/send-sync-region#1d9c8c6381a72e967af23c7fa33763fbbef156f6"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/send-sync-region#da218ca59aa210db9649dbfa45697be3a6fca8f6"
 dependencies = [
  "blake2b_simd",
  "ff",
@@ -5608,7 +5608,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if 0.1.10",
  "static_assertions",
 ]
 
