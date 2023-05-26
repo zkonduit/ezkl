@@ -3,13 +3,18 @@ use crate::commands::{RunArgs, StrategyType};
 use crate::eth::{fix_verifier_sol, verify_proof_via_solidity};
 use crate::execute::{create_proof_circuit_kzg, load_params_cmd, verify_proof_circuit_kzg};
 use crate::graph::{quantize_float, Mode, Model, ModelCircuit, ModelParams, VarVisibility};
-use crate::pfsys::evm::{evm_verify, single::gen_evm_verifier, DeploymentCode, aggregation::AggregationCircuit};
+use crate::pfsys::evm::{
+    evm_verify,
+    single::gen_evm_verifier,
+    aggregation::{gen_aggregation_evm_verifier, AggregationCircuit},
+    DeploymentCode,
+};
 use crate::pfsys::{
-    create_keys, gen_srs as ezkl_gen_srs, load_pk, load_vk, prepare_data, save_params, save_pk,
-    save_vk, Snark, TranscriptType,
+    create_keys, gen_srs as ezkl_gen_srs, load_pk, load_vk, prepare_data, load_params, save_params,
+    save_pk, save_vk, Snark, TranscriptType,
 };
 use halo2_proofs::poly::kzg::{
-    commitment::KZGCommitmentScheme,
+    commitment::{KZGCommitmentScheme, ParamsKZG},
     strategy::{AccumulatorStrategy, SingleStrategy as KZGSingleStrategy},
 };
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
@@ -491,6 +496,32 @@ fn aggregate(
     Ok(true)
 }
 
+/// verifies and aggregate proof
+#[pyfunction(signature = (
+    proof_path,
+    vk_path,
+    params_path,
+    logrows
+))]
+fn verify_aggr(
+    proof_path: PathBuf,
+    vk_path: PathBuf,
+    params_path: PathBuf,
+    logrows: u32
+) -> Result<bool, PyErr> {
+    let params = load_params_cmd(params_path, logrows)
+        .map_err(|_| PyIOError::new_err("Failed to load params"))?;
+
+    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)
+        .map_err(|_| PyIOError::new_err("Failed to load proof"))?;
+
+    let strategy = AccumulatorStrategy::new(params.verifier_params());
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())
+        .map_err(|_| PyIOError::new_err("Failed to load vk"))?;
+    let result = verify_proof_circuit_kzg(&params, proof, &vk, strategy);
+    Ok(result.is_ok())
+}
+
 /// creates an EVM compatible verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
     vk_path,
@@ -542,7 +573,7 @@ fn create_evm_verifier(
     Ok(true)
 }
 
-// verifies an evm compatible proof, you will need solc installed in your environment to run this
+/// verifies an evm compatible proof, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
     proof_path,
     deployment_code_path,
@@ -573,16 +604,55 @@ fn verify_evm(
     Ok(true)
 }
 
+/// creates an evm compatible aggregate verifier, you will need solc installed in your environment to run this
+#[pyfunction(signature = (
+    params_path,
+    deployment_code_path,
+    vk_path,
+))]
+fn create_evm_verifier_aggr(
+    params_path: PathBuf,
+    deployment_code_path: PathBuf,
+    vk_path: PathBuf,
+) -> Result<bool, PyErr> {
+    let params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(params_path)
+        .map_err(|_| PyIOError::new_err("Failed to load params"))?;
 
-// TODO: CreateEVMVerifierAggr
-// TODO: DeployVerifierEVM (To be done in pyezkl)
-// TODO: SendProofEVM
-// TODO: VerifyAggr
-// TODO: PrintProofHex
+    let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())
+        .map_err(|_| PyIOError::new_err("Failed to load vk"))?;
+
+    let deployment_code = gen_aggregation_evm_verifier(
+        &params,
+        &agg_vk,
+        AggregationCircuit::num_instance(),
+        AggregationCircuit::accumulator_indices(),
+    ).map_err(|_| PyRuntimeError::new_err("Failed to create aggregation evm verifier"))?;
+    deployment_code.save(&deployment_code_path)
+        .map_err(|_| PyIOError::new_err("Failed to save to deployment code path"))?;
+    Ok(true)
+}
+
+/// print hex representation of a proof
+#[pyfunction(signature = (proof_path))]
+fn print_proof_hex(proof_path: PathBuf) -> Result<String, PyErr> {
+    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)
+        .map_err(|_| PyIOError::new_err("Failed to load proof"))?;
+
+    // let mut return_string: String = "";
+    // for instance in proof.instances {
+    //     return_string.push_str(instance + "\n");
+    // }
+    // return_string = hex::encode(proof.proof);
+
+    // return proof for now
+    Ok(hex::encode(proof.proof))
+}
+
 
 // Python Module
 #[pymodule]
 fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+    // NOTE: DeployVerifierEVM and SendProofEVM will be implemented in python in pyezkl
     pyo3_log::init();
     m.add_class::<PyRunArgs>()?;
     m.add_function(wrap_pyfunction!(table, m)?)?;
@@ -593,8 +663,11 @@ fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(prove, m)?)?;
     m.add_function(wrap_pyfunction!(verify, m)?)?;
     m.add_function(wrap_pyfunction!(aggregate, m)?)?;
+    m.add_function(wrap_pyfunction!(verify_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
     m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
+    m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
+    m.add_function(wrap_pyfunction!(print_proof_hex, m)?)?;
 
     Ok(())
 }
