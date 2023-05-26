@@ -3,7 +3,7 @@ use crate::commands::{RunArgs, StrategyType};
 use crate::eth::{fix_verifier_sol, verify_proof_via_solidity};
 use crate::execute::{create_proof_circuit_kzg, load_params_cmd, verify_proof_circuit_kzg};
 use crate::graph::{quantize_float, Mode, Model, ModelCircuit, ModelParams, VarVisibility};
-use crate::pfsys::evm::{evm_verify, single::gen_evm_verifier, DeploymentCode};
+use crate::pfsys::evm::{evm_verify, single::gen_evm_verifier, DeploymentCode, aggregation::AggregationCircuit};
 use crate::pfsys::{
     create_keys, gen_srs as ezkl_gen_srs, load_pk, load_vk, prepare_data, save_params, save_pk,
     save_vk, Snark, TranscriptType,
@@ -415,6 +415,82 @@ fn verify(
     }
 }
 
+/// creates an aggregated proof
+#[pyfunction(signature = (
+    proof_path,
+    aggregation_snarks,
+    circuit_params_paths,
+    aggregation_vk_paths,
+    vk_path,
+    params_path,
+    transcript,
+    logrows,
+    check_mode,
+))]
+fn aggregate(
+    proof_path: PathBuf,
+    aggregation_snarks: Vec<PathBuf>,
+    circuit_params_paths: Vec<PathBuf>,
+    aggregation_vk_paths: Vec<PathBuf>,
+    vk_path: PathBuf,
+    params_path: PathBuf,
+    transcript: TranscriptType,
+    logrows: u32,
+    check_mode: CheckMode,
+) -> Result<bool, PyErr> {
+    // the K used for the aggregation circuit
+    let params = load_params_cmd(params_path.clone(), logrows)
+        .map_err(|_| PyIOError::new_err("Failed to load params"))?;
+
+    let mut snarks = vec![];
+
+    for ((proof_path, vk_path), circuit_params_path) in aggregation_snarks
+        .iter()
+        .zip(aggregation_vk_paths)
+        .zip(circuit_params_paths)
+    {
+        let model_circuit_params = ModelParams::load(&circuit_params_path);
+        let params_app =
+            load_params_cmd(params_path.clone(), model_circuit_params.run_args.logrows)
+                .map_err(|_| PyIOError::new_err("Failed to load model circuit params"))?;
+        let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
+            vk_path.to_path_buf(),
+            // safe to clone as the inner model is wrapped in an Arc
+            model_circuit_params.clone(),
+        ).map_err(|_| PyIOError::new_err("Failed to load vk_path"))?;
+        snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(
+            proof_path,
+            Some(&params_app),
+            Some(&vk),
+        ).map_err(|_| PyIOError::new_err("Failed to load proof_path"))?);
+    }
+    // proof aggregation
+    {
+        let agg_circuit = AggregationCircuit::new(&params, snarks)
+            .map_err(|_| PyRuntimeError::new_err("Failed to create aggreggation circuit"))?;
+        let agg_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
+            &agg_circuit,
+            &params,
+        ).map_err(|_| PyRuntimeError::new_err("Failed to create keys"))?;
+
+        let snark = create_proof_circuit_kzg(
+            agg_circuit.clone(),
+            &params,
+            agg_circuit.instances(),
+            &agg_pk,
+            transcript,
+            AccumulatorStrategy::new(&params),
+            check_mode,
+        ).map_err(|_| PyRuntimeError::new_err("Failed to create proof circuit"))?;
+
+        snark.save(&proof_path)
+            .map_err(|_| PyIOError::new_err("Failed to save to proof_path"))?;
+        save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, agg_pk.get_vk())
+            .map_err(|_| PyIOError::new_err("Failed to save to vk_path"))?;
+    }
+    Ok(true)
+}
+
 /// creates an EVM compatible verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
     vk_path,
@@ -497,9 +573,9 @@ fn verify_evm(
     Ok(true)
 }
 
+
 // TODO: CreateEVMVerifierAggr
 // TODO: DeployVerifierEVM (To be done in pyezkl)
-// TODO: Aggregate
 // TODO: SendProofEVM
 // TODO: VerifyAggr
 // TODO: PrintProofHex
@@ -516,6 +592,7 @@ fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(setup, m)?)?;
     m.add_function(wrap_pyfunction!(prove, m)?)?;
     m.add_function(wrap_pyfunction!(verify, m)?)?;
+    m.add_function(wrap_pyfunction!(aggregate, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
     m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
 
