@@ -74,11 +74,6 @@ pub async fn verify_proof_via_solidity(
 
     let (anvil, client) = setup_eth_backend().await?;
 
-    info!(
-        "sol_code_path: {:#?}",
-        sol_code_path.as_os_str().to_str().unwrap()
-    );
-
     let factory = get_sol_contract_factory(
         sol_code_path,
         client.clone(),
@@ -97,15 +92,6 @@ pub async fn verify_proof_via_solidity(
         let u = U256::from_little_endian(bytes.as_slice());
         public_inputs.push(u);
     }
-
-    info!(
-        "pub_inputs: {:#?}",
-        public_inputs.clone()
-    );
-    info!(
-        "proof: {:#?}",
-        ethers::types::Bytes::from(proof.proof.to_vec())
-    );
     
     let tx = contract
         .verify(
@@ -403,7 +389,7 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
     let mut end = None;
     for (i, line) in reader.lines().enumerate() {
         let line = line?;
-        if line.trim().starts_with("mstore(0x20") {
+        if line.trim().starts_with("mstore(0x20") && start.is_none() {
             start = Some(i as u32);
         }
 

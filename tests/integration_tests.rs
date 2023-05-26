@@ -144,9 +144,9 @@ mod native_tests {
     ];
 
     const TESTS_EVM: [&str; 1] = [
-        "1l_mlp",
+        // "1l_mlp",
         // "1l_flatten",
-        // "1l_average",
+        "1l_average",
         // "1l_reshape",
         // "1l_sigmoid",
         // "1l_div",
@@ -182,7 +182,7 @@ mod native_tests {
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::init_params_23();
+                //crate::native_tests::init_params_23();
                 kzg_aggr_prove_and_verify(test.to_string());
             }
 
