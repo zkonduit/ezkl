@@ -87,6 +87,7 @@ where
         Some(ValType::Value(Value::known(<F as Field>::ONE)))
     }
 }
+
 /// A [ValTensor] is a wrapper around a [Tensor] of [ValType].
 /// or a column of an [Instance].
 /// This is the type used for all intermediate values in a circuit.
@@ -261,6 +262,21 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             ValTensor::Instance { .. } => return Err(TensorError::WrongMethod),
         })
     }
+    /// Calls `expand` on the inner tensor.
+    pub fn expand(&mut self, dims: &[usize]) -> Result<(), Box<dyn Error>> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                *v = v.expand(dims)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(Box::new(TensorError::WrongMethod));
+            }
+        };
+        Ok(())
+    }
 
     /// Sets the [ValTensor]'s shape.
     pub fn reshape(&mut self, new_dims: &[usize]) -> Result<(), Box<dyn Error>> {
@@ -281,6 +297,27 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         Ok(())
     }
 
+    /// Sets the [ValTensor]'s shape.
+    pub fn slice(
+        &mut self,
+        axis: &usize,
+        start: &usize,
+        end: &usize,
+    ) -> Result<(), Box<dyn Error>> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                *v = crate::tensor::ops::slice(v, axis, start, end)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(Box::new(TensorError::WrongMethod));
+            }
+        };
+        Ok(())
+    }
+
     /// Calls `flatten` on the inner [Tensor].
     pub fn flatten(&mut self) {
         match self {
@@ -294,22 +331,6 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                 *d = vec![d.iter().product()];
             }
         }
-    }
-
-    /// Calls `tile` on the inner [Tensor].
-    pub fn tile(&mut self, n: usize) -> Result<(), TensorError> {
-        match self {
-            ValTensor::Value {
-                inner: v, dims: d, ..
-            } => {
-                *v = v.tile(n)?;
-                *d = v.dims().to_vec();
-            }
-            ValTensor::Instance { .. } => {
-                return Err(TensorError::WrongMethod);
-            }
-        }
-        Ok(())
     }
 
     /// Calls `duplicate_every_n` on the inner [Tensor].
@@ -364,22 +385,6 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         Ok(())
     }
 
-    /// Calls `repeat_rows` on the inner [Tensor].
-    pub fn repeat_rows(&mut self, n: usize) -> Result<(), TensorError> {
-        match self {
-            ValTensor::Value {
-                inner: v, dims: d, ..
-            } => {
-                *v = v.repeat_rows(n)?;
-                *d = v.dims().to_vec();
-            }
-            ValTensor::Instance { .. } => {
-                return Err(TensorError::WrongMethod);
-            }
-        }
-        Ok(())
-    }
-
     /// Calls `len` on the inner [Tensor].
     pub fn len(&self) -> usize {
         match self {
@@ -392,32 +397,6 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     ///
     pub fn is_empty(&self) -> bool {
         self.len() == 0
-    }
-
-    /// Calls `pad_row_ones` on the inner [Tensor].
-    pub fn pad_row_ones(&mut self) -> Result<(), TensorError> {
-        match self {
-            ValTensor::Value {
-                inner: v, dims: d, ..
-            } => {
-                *v = v.pad_row_ones()?;
-                *d = v.dims().to_vec();
-            }
-            ValTensor::Instance { .. } => {
-                return Err(TensorError::WrongMethod);
-            }
-        }
-        Ok(())
-    }
-
-    /// Pads each column
-    pub fn append_to_row(&self, b: &ValTensor<F>) -> Result<ValTensor<F>, TensorError> {
-        match (self, b) {
-            (ValTensor::Value { inner: v, .. }, ValTensor::Value { inner: v2, .. }) => {
-                Ok(v.append_to_row(&[v2])?.into())
-            }
-            _ => Err(TensorError::WrongMethod),
-        }
     }
 
     /// Calls `concats` on the inner [Tensor].

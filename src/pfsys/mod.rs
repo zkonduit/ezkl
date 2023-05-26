@@ -5,6 +5,7 @@ use crate::circuit::CheckMode;
 use crate::commands::data_path;
 use crate::execute::ExecutionError;
 use crate::tensor::TensorType;
+use clap::ValueEnum;
 use halo2_proofs::circuit::Value;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::plonk::{
@@ -44,14 +45,20 @@ pub enum PfSysError {
     PackingExponent,
 }
 
+#[allow(missing_docs)]
+#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub enum TranscriptType {
+    Blake,
+    Poseidon,
+    EVM,
+}
+
 /// The input tensor data and shape, and output data for the computational graph (model) as floats.
 /// For example, the input might be the image data for a neural network, and the output class scores.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct ModelInput {
     /// Inputs to the model / computational graph.
     pub input_data: Vec<Vec<f32>>,
-    /// The shape of said inputs.
-    pub input_shapes: Vec<Vec<usize>>,
     /// The expected output of the model (can be empty vectors if outputs are not being constrained).
     pub output_data: Vec<Vec<f32>>,
 }
@@ -78,7 +85,6 @@ impl ToPyObject for ModelInput {
         let output_data_mut = &self.output_data;
         dict.set_item("input_data", truncate_nested_vector(&input_data_mut))
             .unwrap();
-        dict.set_item("input_shapes", &self.input_shapes).unwrap();
         dict.set_item("output_data", truncate_nested_vector(&output_data_mut))
             .unwrap();
 
@@ -95,6 +101,8 @@ pub struct Snarkbytes {
     pub instances: Vec<Vec<Vec<u8>>>,
     /// The generated proof, as a vector of bytes.
     pub proof: Vec<u8>,
+    /// transcript type
+    pub transcript_type: TranscriptType,
 }
 
 /// An application snark with proof and instance variables ready for aggregation (raw field element)
@@ -106,15 +114,23 @@ pub struct Snark<F: PrimeField + SerdeObject, C: CurveAffine> {
     pub instances: Vec<Vec<F>>,
     /// the proof
     pub proof: Vec<u8>,
+    /// transcript type
+    pub transcript_type: TranscriptType,
 }
 
 impl<F: PrimeField + SerdeObject + FromUniformBytes<64>, C: CurveAffine> Snark<F, C> {
     /// Create a new application snark from proof and instance variables ready for aggregation
-    pub fn new(protocol: PlonkProtocol<C>, instances: Vec<Vec<F>>, proof: Vec<u8>) -> Self {
+    pub fn new(
+        protocol: PlonkProtocol<C>,
+        instances: Vec<Vec<F>>,
+        proof: Vec<u8>,
+        transcript_type: TranscriptType,
+    ) -> Self {
         Self {
             protocol: Some(protocol),
             instances,
             proof,
+            transcript_type,
         }
     }
 
@@ -128,6 +144,7 @@ impl<F: PrimeField + SerdeObject + FromUniformBytes<64>, C: CurveAffine> Snark<F
                 .map(|i| i.iter().map(|e| e.to_raw_bytes()).collect::<Vec<Vec<u8>>>())
                 .collect::<Vec<Vec<Vec<u8>>>>(),
             proof: self.proof.clone(),
+            transcript_type: self.transcript_type,
         }
     }
 
@@ -169,6 +186,7 @@ impl<F: PrimeField + SerdeObject + FromUniformBytes<64>, C: CurveAffine> Snark<F
                 protocol: None,
                 instances,
                 proof: snark_bytes.proof,
+                transcript_type: snark_bytes.transcript_type,
             })
         } else {
             let protocol = compile(
@@ -181,6 +199,7 @@ impl<F: PrimeField + SerdeObject + FromUniformBytes<64>, C: CurveAffine> Snark<F
                 protocol: Some(protocol),
                 instances,
                 proof: snark_bytes.proof,
+                transcript_type: snark_bytes.transcript_type,
             })
         }
     }
@@ -282,6 +301,7 @@ pub fn create_proof_circuit<
     pk: &ProvingKey<Scheme::Curve>,
     strategy: Strategy,
     check_mode: CheckMode,
+    transcript_type: TranscriptType,
 ) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, Box<dyn Error>>
 where
     C: Circuit<Scheme::Scalar>,
@@ -327,7 +347,7 @@ where
     )?;
     let proof = transcript.finalize();
 
-    let checkable_pf = Snark::new(protocol, instances, proof);
+    let checkable_pf = Snark::new(protocol, instances, proof, transcript_type);
 
     // sanity check that the generated proof is valid
     if check_mode == CheckMode::SAFE {

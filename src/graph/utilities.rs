@@ -1,23 +1,23 @@
 use std::sync::Arc;
 
-use super::{node::*, GraphError};
+use super::GraphError;
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::poly::PolyOp;
 use crate::fieldutils::i128_to_felt;
 use crate::tensor::{Tensor, TensorError, TensorType, ValTensor};
-use anyhow::Result;
 use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
-use log::{trace, warn};
+use log::{debug, warn};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::array::Gather;
+use tract_onnx::tract_core::ops::array::Slice;
 use tract_onnx::tract_core::ops::einsum::EinSum;
 // use tract_onnx::tract_core::ops::binary::UnaryOp;
 // use tract_onnx::tract_core::ops::matmul::MatMulUnary;
 use tract_onnx::tract_core::ops::element_wise::ElementWiseOp;
 use tract_onnx::tract_core::ops::nn::{LeakyRelu, Reduce, Softmax};
-use tract_onnx::tract_hir::internal::AxisOp;
+use tract_onnx::tract_hir::internal::{AxisOp, DimLike};
 use tract_onnx::tract_hir::ops::cnn::ConvUnary;
 use tract_onnx::tract_hir::ops::konst::Const;
 use tract_onnx::tract_hir::{
@@ -36,7 +36,7 @@ use tract_onnx::tract_hir::{
 /// * `shift` - offset used in the fixed point representation.
 /// * `scale` - `2^scale` used in the fixed point representation.
 pub fn quantize_float(elem: &f32, shift: f32, scale: u32) -> Result<i128, TensorError> {
-    let mult = scale_to_multiplier(scale);
+    let mult = scale_to_multiplier(scale) as f32;
     let max_value = ((i128::MAX as f32 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
 
     if *elem > max_value {
@@ -50,19 +50,19 @@ pub fn quantize_float(elem: &f32, shift: f32, scale: u32) -> Result<i128, Tensor
 }
 
 /// Converts a scale (log base 2) to a fixed point multiplier.
-pub fn scale_to_multiplier(scale: u32) -> f32 {
-    i128::pow(2, scale) as f32
+pub fn scale_to_multiplier(scale: u32) -> f64 {
+    f64::powf(2., scale as f64)
 }
 
 /// Converts a scale (log base 2) to a fixed point multiplier.
-pub fn mult_to_scale(mult: f32) -> u32 {
+pub fn mult_to_scale(mult: f64) -> u32 {
     mult.log2().round() as u32
 }
 
 /// Gets the shape of a onnx node's outlets.
 pub fn node_output_shapes(
     node: &OnnxNode<TypedFact, Box<dyn TypedOp>>,
-) -> Result<Vec<Option<Vec<usize>>>> {
+) -> Result<Vec<Option<Vec<usize>>>, Box<dyn std::error::Error>> {
     let mut shapes = Vec::new();
     let outputs = node.outputs.to_vec();
     for output in outputs {
@@ -100,6 +100,15 @@ fn extract_tensor_value(
             // Generally a shape or hyperparam
             let vec = input.as_slice::<bool>()?.to_vec();
             let cast: Vec<f32> = vec.iter().map(|x| *x as usize as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
+        }
+        DatumType::TDim => {
+            // Generally a shape or hyperparam
+            let vec = input.as_slice::<tract_onnx::prelude::TDim>()?.to_vec();
+            let cast: Vec<f32> = vec
+                .iter()
+                .map(|x| x.to_i64().map_or_else(|_| 1, |e| e) as f32)
+                .collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         _ => todo!(),
@@ -219,6 +228,36 @@ fn load_eltwise_op(
     Ok(op.clone())
 }
 
+fn load_concat_op(
+    op: &dyn tract_onnx::prelude::Op,
+    idx: usize,
+    name: String,
+) -> Result<tract_onnx::tract_core::ops::array::TypedConcat, Box<dyn std::error::Error>> {
+    let op: &tract_onnx::tract_core::ops::array::TypedConcat =
+        match op.downcast_ref::<tract_onnx::tract_core::ops::array::TypedConcat>() {
+            Some(b) => b,
+            None => return Err(Box::new(GraphError::OpMismatch(idx, name))),
+        };
+
+    Ok(op.clone())
+}
+
+/// Extracts a Slice op from an onnx node.
+fn load_slice_op(
+    op: &dyn tract_onnx::prelude::Op,
+    name: String,
+) -> Result<Slice, Box<dyn std::error::Error>> {
+    // Extract the slope layer hyperparams
+    let op: &Slice = match op.downcast_ref::<Slice>() {
+        Some(b) => b,
+        None => {
+            return Err(Box::new(TensorError::DimMismatch(name)));
+        }
+    };
+
+    Ok(op.clone())
+}
+
 /// Matches an onnx node to a [OpKind] and returns a [Node] with the corresponding [OpKind].  
 /// Arguments
 /// * `idx` - the index of the node in the graph.
@@ -231,9 +270,9 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
     scale: u32,
     public_params: bool,
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
-    inputs: &mut Vec<Node<F>>,
+    inputs: &mut Vec<super::NodeType<F>>,
 ) -> Result<Box<dyn crate::circuit::Op<F>>, Box<dyn std::error::Error>> {
-    trace!("Loading node: {:?}", node);
+    debug!("Loading node: {:?}", node);
     Ok(match node.op().name().as_ref() {
         "Gather" => {
             if inputs.len() != 2 {
@@ -242,12 +281,12 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             let op = load_gather_op(node.op(), idx, node.op().name().to_string())?;
             let axis = op.axis;
 
-            let boxed_op = inputs[1].clone().opkind;
+            let boxed_op = inputs[1].clone().opkind();
             let index: Tensor<usize> = match boxed_op
                 .as_any()
                 .downcast_ref::<crate::circuit::ops::Constant<F>>()
             {
-                Some(c) => c.values.map(|e| e as usize).into(),
+                Some(c) => c.values.map(|e| e as usize),
                 None => {
                     warn!("assuming the gather window is over a context variable");
                     // offset by 1
@@ -262,24 +301,37 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
 
             Box::new(crate::circuit::ops::poly::PolyOp::Gather { dim: axis, index })
         }
+        "Concat" | "InferenceConcat" => {
+            let op = load_concat_op(node.op(), idx, node.op().name().to_string())?;
+            let axis = op.axis;
+            Box::new(crate::circuit::ops::poly::PolyOp::Concat { axis })
+        }
+        "Slice" => {
+            let slice = load_slice_op(node.op(), node.op().name().to_string())?;
+
+            let axis = slice.axis;
+            let start = slice.start.to_usize()?;
+            let end = slice.end.to_usize()?;
+
+            Box::new(PolyOp::Slice { axis, start, end })
+        }
         "Const" => {
             let op: Const = load_const(node.op(), idx, node.op().name().to_string())?;
-            let value = extract_tensor_value(op.0.clone())?;
-            Box::new(crate::circuit::ops::Constant::new(value))
+            let dt = op.clone().0.datum_type();
+            let value = extract_tensor_value(op.0)?;
+            let constant_scale = if dt == DatumType::Bool { 0 } else { scale };
+            Box::new(crate::circuit::ops::Constant::new(
+                value,
+                constant_scale,
+                public_params,
+            ))
         }
         "Reduce<Min>" => {
             if inputs.len() != 1 {
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
             };
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
-            // subtract 1 from the axes to account for the batch dimension
-            let axes = op
-                .axes
-                .clone()
-                .iter()
-                .filter(|x| **x != 0)
-                .map(|x| x - 1)
-                .collect();
+            let axes = op.axes.iter().filter(|x| **x != 0).copied().collect();
 
             Box::new(HybridOp::Min { axes })
         }
@@ -288,14 +340,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
             };
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
-            // subtract 1 from the axes to account for the batch dimension
-            let axes = op
-                .axes
-                .clone()
-                .iter()
-                .filter(|x| **x != 0)
-                .map(|x| x - 1)
-                .collect();
+            let axes = op.axes.iter().filter(|x| **x != 0).copied().collect();
 
             Box::new(HybridOp::Max { axes })
         }
@@ -304,14 +349,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
             };
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
-            // subtract 1 from the axes to account for the batch dimension
-            let axes = op
-                .axes
-                .clone()
-                .iter()
-                .filter(|x| **x != 0)
-                .map(|x| x - 1)
-                .collect();
+            let axes = op.axes.iter().filter(|x| **x != 0).copied().collect();
 
             Box::new(PolyOp::Sum { axes })
         }
@@ -319,7 +357,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
         "Max" => {
             // Extract the slope layer hyperparams
 
-            let boxed_op = inputs[1].clone().opkind;
+            let boxed_op = inputs[1].clone().opkind();
             let unit = match boxed_op
                 .as_any()
                 .downcast_ref::<crate::circuit::ops::Constant<F>>()
@@ -333,7 +371,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             if inputs.len() == 2 && unit == 0. {
                 inputs.pop();
                 Box::new(LookupOp::ReLU {
-                    scale: inputs[0].out_scale as usize,
+                    scale: inputs[0].out_scales()[0] as usize,
                 })
             } else {
                 todo!()
@@ -363,17 +401,26 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 slope: crate::circuit::utils::F32(leaky_op.alpha),
             })
         }
+        "Scan" => {
+            panic!("should never reach here")
+        }
         "Sigmoid" => Box::new(LookupOp::Sigmoid { scales: (1, 1) }),
         "Sqrt" => Box::new(LookupOp::Sqrt { scales: (1, 1) }),
         "Rsqrt" => Box::new(LookupOp::Rsqrt { scales: (1, 1) }),
         "Tanh" => Box::new(LookupOp::Tanh { scales: (1, 1) }),
         "Erf" => Box::new(LookupOp::Erf { scales: (1, 1) }),
-        "Source" => Box::new(crate::circuit::ops::Input),
+        "Source" => Box::new(crate::circuit::ops::Input { scale }),
         "Add" => {
             let mut params = None;
 
+            let max_scale = inputs
+                .iter()
+                .map(|x| x.out_scales()[0])
+                .max()
+                .ok_or_else(|| Box::new(GraphError::MissingParams("add".to_string())))?;
+
             for (idx, inp) in inputs.clone().iter().enumerate() {
-                let boxed_op = &inp.opkind;
+                let boxed_op = &inp.opkind();
                 if let Some(c) = boxed_op
                     .as_any()
                     .downcast_ref::<crate::circuit::ops::Constant<F>>()
@@ -381,7 +428,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                     inputs.remove(idx);
                     params = Some(tensor_to_valtensor::<F>(
                         c.values.clone(),
-                        inputs[0].out_scale,
+                        max_scale,
                         public_params,
                     )?);
                 }
@@ -394,7 +441,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             let mut params = None;
 
             for (idx, inp) in inputs.clone().iter().enumerate() {
-                let boxed_op = &inp.opkind;
+                let boxed_op = &inp.opkind();
                 if let Some(c) = boxed_op
                     .as_any()
                     .downcast_ref::<crate::circuit::ops::Constant<F>>()
@@ -413,7 +460,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
         "Iff" => Box::new(PolyOp::Iff),
         "Greater" => {
             // Extract the slope layer hyperparams
-            let boxed_op = inputs[0].clone().opkind;
+            let boxed_op = inputs[0].clone().opkind();
             let unit = match boxed_op
                 .as_any()
                 .downcast_ref::<crate::circuit::ops::Constant<F>>()
@@ -448,29 +495,10 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 }
             };
 
-            let _axes = &op.axes;
-
-            // TODO: this is a hack to get around the fact that tract eplaces matmul with einsum pending this PR: https://github.com/sonos/tract/pull/1070
-            warn!("matching einsum as a matmul operation");
-
-            let mut params = None;
-
-            for (idx, inp) in inputs.clone().iter().enumerate() {
-                let boxed_op = &inp.opkind;
-                if let Some(c) = boxed_op
-                    .as_any()
-                    .downcast_ref::<crate::circuit::ops::Constant<F>>()
-                {
-                    inputs.remove(idx);
-                    params = Some(tensor_to_valtensor::<F>(
-                        c.values.clone(),
-                        scale,
-                        public_params,
-                    )?);
-                }
-            }
-
-            Box::new(PolyOp::Matmul { a: params })
+            let axes = &op.axes;
+            Box::new(PolyOp::Einsum {
+                equation: axes.to_string(),
+            })
         }
         "Softmax" => {
             // Extract the slope layer hyperparams
@@ -481,7 +509,8 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 }
             };
 
-            if softmax_op.axes.to_vec() != vec![inputs[0].out_dims.len()] {
+            // if its not the last dim then we don't support it
+            if softmax_op.axes.to_vec() != vec![inputs[0].out_dims()[0].len() - 1] {
                 return Err(Box::new(GraphError::InvalidDims(
                     idx,
                     "softmax".to_string(),
@@ -528,7 +557,6 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 pool_dims: (kernel_height, kernel_width),
             })
         }
-        "Dot" => Box::new(PolyOp::Dot),
         "Square" => Box::new(PolyOp::Pow(2)),
         "ConvUnary" => {
             let conv_node: &ConvUnary = match node.op().downcast_ref::<ConvUnary>() {
@@ -579,7 +607,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
 
                     let val = tensor_to_valtensor(
                         const_value,
-                        scale + inputs[0].out_scale,
+                        scale + inputs[0].out_scales()[0],
                         public_params,
                     )?;
                     Some(val)
@@ -636,7 +664,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
         "GlobalAvgPool" => Box::new(PolyOp::SumPool {
             padding: (0, 0),
             stride: (1, 1),
-            kernel_shape: (inputs[0].out_dims[1], inputs[0].out_dims[2]),
+            kernel_shape: (inputs[0].out_dims()[0][1], inputs[0].out_dims()[0][2]),
         }),
         "Pad" => {
             let pad_node: &Pad = match node.op().downcast_ref::<Pad>() {
@@ -684,7 +712,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             let reshape = load_axis_op(node.op(), idx, node.op().name().to_string())?;
 
             let new_dims: Vec<usize> = match reshape {
-                AxisOp::Rm(_) => inputs[0].out_dims.clone(),
+                AxisOp::Rm(_) => inputs[0].out_dims()[0].clone(),
                 _ => {
                     return Err(Box::new(GraphError::MisformedParams("reshape".to_string())));
                 }
@@ -697,8 +725,9 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             let reshape = load_axis_op(node.op(), idx, node.op().name().to_string())?;
 
             let new_dims: Vec<usize> = match reshape {
-                AxisOp::Reshape(_, _shape_from, _) => {
-                    node_output_shapes(&node)?[0].as_ref().unwrap()[1..].to_vec()
+                AxisOp::Reshape(_, _shape_from, _shape_to) => {
+                    let shapes = node_output_shapes(&node)?;
+                    shapes[0].as_ref().unwrap().clone()
                 }
                 _ => {
                     return Err(Box::new(GraphError::MisformedParams("reshape".to_string())));
@@ -707,7 +736,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             Box::new(PolyOp::Reshape(new_dims.to_vec()))
         }
         "Flatten" => {
-            let new_dims: Vec<usize> = vec![inputs[0].out_dims.iter().product::<usize>()];
+            let new_dims: Vec<usize> = vec![inputs[0].out_dims()[0].iter().product::<usize>()];
             Box::new(PolyOp::Flatten(new_dims))
         }
         c => {

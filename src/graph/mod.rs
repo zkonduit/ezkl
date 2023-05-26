@@ -12,13 +12,13 @@ pub mod node;
 pub mod vars;
 
 use crate::circuit::lookup::LookupOp;
+use crate::circuit::CheckMode;
 use crate::commands::{Cli, RunArgs};
 use crate::fieldutils::i128_to_felt;
 use crate::pfsys::ModelInput;
 use crate::tensor::ops::pack;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor};
-use anyhow::Result;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},
@@ -91,6 +91,8 @@ pub struct ModelParams {
     pub instance_shapes: Vec<Vec<usize>>,
     /// required_lookups
     pub required_lookups: Vec<LookupOp>,
+    /// check mode
+    pub check_mode: CheckMode,
 }
 
 impl ModelParams {
@@ -124,10 +126,11 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
     pub fn new(
         data: &ModelInput,
         model: Arc<Model<F>>,
+        check_mode: CheckMode,
     ) -> Result<ModelCircuit<F>, Box<dyn std::error::Error>> {
         // quantize the supplied data using the provided scale.
         let mut inputs: Vec<Tensor<i128>> = vec![];
-        for (input, shape) in data.input_data.iter().zip(data.input_shapes.clone()) {
+        for (input, shape) in data.input_data.iter().zip(model.graph.input_shapes()) {
             let t: Vec<i128> = input
                 .par_iter()
                 .map(|x| quantize_float(x, 0.0, model.run_args.scale).unwrap())
@@ -142,15 +145,29 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
         Ok(ModelCircuit::<F> {
             model: model.clone(),
             inputs,
-            params: model.gen_params()?,
+            params: model.gen_params(check_mode)?,
         })
     }
 
     /// Create a new circuit from a set of input data and cli arguments.
-    pub fn from_arg(data: &ModelInput) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn from_arg(
+        data: &ModelInput,
+        check_mode: CheckMode,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let cli = Cli::create()?;
         let model = Arc::new(Model::from_ezkl_conf(cli)?);
-        Self::new(data, model)
+        Self::new(data, model, check_mode)
+    }
+
+    /// Create a new circuit from a set of input data and [ModelParams].
+    pub fn from_model_params(
+        data: &ModelInput,
+        params: &ModelParams,
+        model_path: &std::path::PathBuf,
+        check_mode: CheckMode,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let model = Arc::new(Model::from_model_params(params, model_path)?);
+        Self::new(data, model, check_mode)
     }
 
     /// Prepare the public inputs for the circuit.
@@ -158,7 +175,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
         &self,
         data: &ModelInput,
     ) -> Result<Vec<Vec<F>>, Box<dyn std::error::Error>> {
-        let out_scales = self.model.get_output_scales();
+        let out_scales = self.model.graph.get_output_scales();
 
         // quantize the supplied data using the provided scale.
         // the ordering here is important, we want the inputs to come before the outputs
@@ -243,8 +260,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
             params.run_args.scale,
         );
 
-        let base =
-            Model::<F>::configure(cs, &mut vars, params.run_args, params.required_lookups).unwrap();
+        let base = Model::<F>::configure(
+            cs,
+            &mut vars,
+            params.run_args.bits,
+            params.run_args.tolerance,
+            params.required_lookups,
+            params.check_mode,
+        )
+        .unwrap();
 
         ModelConfig { base, vars }
     }

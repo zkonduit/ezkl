@@ -1,3 +1,9 @@
+"""
+This is meant to be used locally for development.
+Generating the SRS is costly so we run this instead of creating a new SRS each
+time we run tests.
+"""
+
 import ezkl_lib
 import os
 

@@ -1,3 +1,7 @@
+use std::{
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
 ///
 pub mod table;
 
@@ -77,6 +81,33 @@ impl From<String> for CheckMode {
     }
 }
 
+#[allow(missing_docs)]
+/// An enum representing the tolerance we can accept for the accumulated arguments, either absolute or percentage
+#[derive(Clone, Debug, PartialEq, PartialOrd, Serialize, Deserialize, Copy)]
+pub enum Tolerance {
+    Abs { val: usize },
+    Percentage { val: f32, scale: usize },
+}
+
+impl Default for Tolerance {
+    fn default() -> Self {
+        Tolerance::Abs { val: 0 }
+    }
+}
+impl FromStr for Tolerance {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(val) = s.parse::<usize>() {
+            Ok(Tolerance::Abs { val })
+        } else if let Ok(val) = s.parse::<f32>() {
+            Ok(Tolerance::Percentage { val, scale: 1 })
+        } else {
+            Err("Invalid tolerance value provided. It should be either an absolute value (usize) or a percentage (f32).".to_string())
+        }
+    }
+}
+
 #[cfg(feature = "python-bindings")]
 /// Converts CheckMode into a PyObject (Required for CheckMode to be compatible with Python)
 impl IntoPy<PyObject> for CheckMode {
@@ -98,6 +129,41 @@ impl<'source> FromPyObject<'source> for CheckMode {
             "safe" => Ok(CheckMode::SAFE),
             "unsafe" => Ok(CheckMode::UNSAFE),
             _ => Err(PyValueError::new_err("Invalid value for CheckMode")),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Converts Tolerance into a PyObject (Required for Tolerance to be compatible with Python)
+impl IntoPy<PyObject> for Tolerance {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            Tolerance::Abs { val } => (String::from("abs"), val).to_object(py),
+            Tolerance::Percentage { val, scale } => {
+                (String::from("percentage"), val, scale).to_object(py)
+            }
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Obtains Tolerance from PyObject (Required for Tolerance to be compatible with Python)
+impl<'source> FromPyObject<'source> for Tolerance {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        if let Ok((mode, val)) = ob.extract::<(String, usize)>() {
+            match mode.to_lowercase().as_str() {
+                "abs" => Ok(Tolerance::Abs { val }),
+                _ => Err(PyValueError::new_err("Invalid value for Tolerance")),
+            }
+        } else if let Ok((mode, val, scale)) = ob.extract::<(String, f32, usize)>() {
+            match mode.to_lowercase().as_str() {
+                "percentage" => Ok(Tolerance::Percentage { val, scale }),
+                _ => Err(PyValueError::new_err("Invalid value for Tolerance")),
+            }
+        } else {
+            Err(PyValueError::new_err(
+                "Invalid tolerance value provided. It should be either an absolute value (usize) or a percentage (f32).",
+            ))
         }
     }
 }
@@ -263,6 +329,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         F: Field,
     {
         let mut selectors = BTreeMap::new();
+
         let table =
             if let std::collections::btree_map::Entry::Vacant(e) = self.tables.entry(nl.clone()) {
                 let table = Table::<F>::configure(cs, bits, nl);
@@ -271,10 +338,11 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             } else {
                 return Ok(());
             };
+
         for x in 0..input.num_cols() {
             let qlookup = cs.complex_selector();
             selectors.insert((nl.clone(), x), qlookup);
-            let _ = cs.lookup(Op::<F>::as_str(nl), |cs| {
+            let _ = cs.lookup(Op::<F>::as_string(nl), |cs| {
                 let qlookup = cs.query_selector(qlookup);
                 let not_qlookup = Expression::Constant(<F as Field>::ONE) - qlookup.clone();
                 let (default_x, default_y): (F, F) = nl.default_pair();
@@ -320,8 +388,8 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         for table in self.tables.values_mut() {
             if !table.is_assigned {
                 debug!(
-                    "laying out table for {:?}",
-                    crate::circuit::ops::Op::<F>::as_str(&table.nonlinearity)
+                    "laying out table for {}",
+                    crate::circuit::ops::Op::<F>::as_string(&table.nonlinearity)
                 );
                 table.layout(layouter)?;
             }
@@ -337,7 +405,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     /// * `op` - The operation being represented.
     pub fn layout(
         &mut self,
-        region: &mut Option<&mut Region<F>>,
+        region: Arc<Mutex<Option<&mut Region<F>>>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
         op: Box<dyn Op<F>>,
@@ -345,7 +413,12 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         let mut cp_values = vec![];
         for v in values.iter() {
             if let ValTensor::Instance { .. } = v {
-                cp_values.push(layouts::identity(self, region, &[v.clone()], offset)?);
+                cp_values.push(layouts::identity(
+                    self,
+                    region.clone(),
+                    &[v.clone()],
+                    offset,
+                )?);
             } else {
                 cp_values.push(v.clone());
             }

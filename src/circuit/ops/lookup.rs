@@ -1,7 +1,10 @@
 use super::*;
 use halo2_proofs::circuit::Region;
 use serde::{Deserialize, Serialize};
-use std::error::Error;
+use std::{
+    error::Error,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
     circuit::{layouts, utils},
@@ -90,8 +93,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     }
 
     /// Returns the name of the operation
-    fn as_str(&self) -> &'static str {
-        match self {
+    fn as_string(&self) -> String {
+        let name = match self {
             LookupOp::GreaterThan { .. } => "GREATER_THAN",
             LookupOp::Recip { .. } => "RECIP",
             LookupOp::Div { .. } => "DIV",
@@ -103,13 +106,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::Erf { .. } => "ERF",
             LookupOp::Rsqrt { .. } => "RSQRT",
             LookupOp::Exp { .. } => "EXP",
-        }
+        };
+        name.into()
     }
 
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: &mut Option<&mut Region<F>>,
+        region: Arc<Mutex<Option<&mut Region<F>>>>,
         values: &[ValTensor<F>],
         offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
@@ -129,7 +133,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             }),
             LookupOp::Div { denom } => Box::new(LookupOp::Div {
                 denom: crate::circuit::utils::F32(
-                    denom.0 * scale_to_multiplier(inputs_scale[0] - global_scale),
+                    ((denom.0 as f64) * scale_to_multiplier(inputs_scale[0] - global_scale)) as f32,
                 ),
             }),
             LookupOp::ReLU { .. } => Box::new(LookupOp::ReLU {
@@ -176,7 +180,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                 ),
             }),
             LookupOp::GreaterThan { a } => Box::new(LookupOp::GreaterThan {
-                a: utils::F32(a.0 * scale_to_multiplier(inputs_scale[0])),
+                a: utils::F32(((a.0 as f64) * scale_to_multiplier(inputs_scale[0])) as f32),
             }),
         }
     }

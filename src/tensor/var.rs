@@ -208,8 +208,10 @@ impl VarTensor {
         offset: usize,
         values: &ValTensor<F>,
     ) -> Result<ValTensor<F>, halo2_proofs::plonk::Error> {
+   
         let mut res = match region {
             Some(region) => {
+
         match values {
             ValTensor::Instance {
                 inner: instance,
@@ -237,7 +239,6 @@ impl VarTensor {
             },
             ValTensor::Value { inner: v, .. } => Ok(v.enum_map(|coord, k| {
                 let (x, y) = self.cartesian_coord(offset + coord);
-                
                 match k {
                     ValType::Value(v) => match &self {
                         VarTensor::Fixed { inner: fixed, .. } => {
@@ -357,7 +358,7 @@ impl VarTensor {
                         },
                         Err(e) => {
                             error!("Error assigning value: {:?}", e);
-                            return Err(e);
+                            Err(e)
                         }
                     }
               
