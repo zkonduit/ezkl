@@ -13,7 +13,6 @@ use crate::{
     tensor::{Tensor, TensorType, ValTensor},
 };
 
-use colored::Colorize;
 use halo2_proofs::circuit::Region;
 use halo2curves::ff::PrimeField;
 use log::warn;
@@ -142,10 +141,10 @@ impl<F: PrimeField + TensorType + PartialOrd> NodeType<F> {
         }
     }
     /// Returns a string representation of the operation.
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> String {
         match self {
-            NodeType::Node(n) => n.opkind.as_str(),
-            NodeType::SubGraph { .. } => "SUBGRAPH",
+            NodeType::Node(n) => n.opkind.as_string(),
+            NodeType::SubGraph { .. } => "SUBGRAPH".into(),
         }
     }
 
@@ -493,7 +492,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                         string,
                         idx,
                         inputs,
-                        model.table_nodes().cyan(),
+                        model.table_nodes(),
                     );
                 }
             }

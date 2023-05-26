@@ -6,7 +6,6 @@ use crate::circuit::lookup::LookupOp;
 use crate::circuit::poly::PolyOp;
 use crate::fieldutils::i128_to_felt;
 use crate::tensor::{Tensor, TensorError, TensorType, ValTensor};
-use anyhow::Result;
 use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
 use log::{debug, warn};
@@ -63,7 +62,7 @@ pub fn mult_to_scale(mult: f64) -> u32 {
 /// Gets the shape of a onnx node's outlets.
 pub fn node_output_shapes(
     node: &OnnxNode<TypedFact, Box<dyn TypedOp>>,
-) -> Result<Vec<Option<Vec<usize>>>> {
+) -> Result<Vec<Option<Vec<usize>>>, Box<dyn std::error::Error>> {
     let mut shapes = Vec::new();
     let outputs = node.outputs.to_vec();
     for output in outputs {
@@ -318,10 +317,12 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
         }
         "Const" => {
             let op: Const = load_const(node.op(), idx, node.op().name().to_string())?;
+            let dt = op.clone().0.datum_type();
             let value = extract_tensor_value(op.0)?;
+            let constant_scale = if dt == DatumType::Bool { 0 } else { scale };
             Box::new(crate::circuit::ops::Constant::new(
                 value,
-                scale,
+                constant_scale,
                 public_params,
             ))
         }
@@ -330,12 +331,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
             };
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
-            let axes = op
-                .axes
-                
-                .iter()
-                .filter(|x| **x != 0).copied()
-                .collect();
+            let axes = op.axes.iter().filter(|x| **x != 0).copied().collect();
 
             Box::new(HybridOp::Min { axes })
         }
@@ -344,12 +340,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
             };
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
-            let axes = op
-                .axes
-                
-                .iter()
-                .filter(|x| **x != 0).copied()
-                .collect();
+            let axes = op.axes.iter().filter(|x| **x != 0).copied().collect();
 
             Box::new(HybridOp::Max { axes })
         }
@@ -358,12 +349,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
             };
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
-            let axes = op
-                .axes
-                
-                .iter()
-                .filter(|x| **x != 0).copied()
-                .collect();
+            let axes = op.axes.iter().filter(|x| **x != 0).copied().collect();
 
             Box::new(PolyOp::Sum { axes })
         }

@@ -19,7 +19,6 @@ use crate::pfsys::ModelInput;
 use crate::tensor::ops::pack;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor};
-use anyhow::Result;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},

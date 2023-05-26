@@ -1,13 +1,58 @@
 use super::TensorError;
 use crate::tensor::{Tensor, TensorType};
 use itertools::Itertools;
-use puruspe::erf;
 use rayon::{
     iter::IndexedParallelIterator, iter::IntoParallelRefMutIterator, iter::ParallelIterator,
     prelude::IntoParallelRefIterator,
 };
 use std::collections::{HashMap, HashSet};
 pub use std::ops::{Add, Div, Mul, Sub};
+
+/// IFF operation.
+/// # Arguments
+/// * `mask` - Tensor of 0s and 1s
+/// * `a` - Tensor
+/// * `b` - Tensor
+/// # Examples
+/// ```
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::iff;
+/// let mask = Tensor::<i128>::new(
+///    Some(&[1, 0, 1, 0, 1, 0]),
+/// &[2, 3],
+/// ).unwrap();
+/// let a = Tensor::<i128>::new(
+///   Some(&[2, 1, 2, 1, 1, 1]),
+/// &[2, 3],
+/// ).unwrap();
+/// let b = Tensor::<i128>::new(
+///   Some(&[2, 3, 2, 1, 1, 1]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = iff(&mask, &a, &b).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 1, 2, 1, 1, 1]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn iff<
+    T: TensorType
+        + Add<Output = T>
+        + Mul<Output = T>
+        + Sub<Output = T>
+        + std::marker::Send
+        + std::marker::Sync,
+>(
+    mask: &Tensor<T>,
+    b: &Tensor<T>,
+    a: &Tensor<T>,
+) -> Result<Tensor<T>, TensorError> {
+    let masked_a = (mask.clone() * a.clone())?;
+    let masked_b =
+        ((Tensor::from(vec![T::one().ok_or_else(|| TensorError::DimError)?].into_iter())
+            - mask.clone())?
+            * b.clone())?;
+
+    masked_a + masked_b
+}
 
 /// Matrix multiplies two 2D tensors.
 /// # Arguments
@@ -695,7 +740,7 @@ pub fn sum_axes<T: TensorType + Add<Output = T>>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for (i, c) in coord.iter().enumerate() {
+        for (i, c) in coord.into_iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {
@@ -758,7 +803,7 @@ pub fn min_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for (i, c) in coord.iter().enumerate() {
+        for (i, c) in coord.into_iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {
@@ -821,7 +866,7 @@ pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for (i, c) in coord.iter().enumerate() {
+        for (i, c) in coord.into_iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {
@@ -1769,9 +1814,64 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[0, 1, 1, 0, 0, 0]), &[2, 3]).unwrap(); // TODO
     /// assert_eq!(result, expected);
     /// ```
-
     pub fn erffunc(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
         let mut output = a.clone();
+
+        const NCOEF: usize = 28;
+        const COF: [f64; 28] = [
+            -1.3026537197817094,
+            6.4196979235649026e-1,
+            1.9476473204185836e-2,
+            -9.561514786808631e-3,
+            -9.46595344482036e-4,
+            3.66839497852761e-4,
+            4.2523324806907e-5,
+            -2.0278578112534e-5,
+            -1.624290004647e-6,
+            1.303655835580e-6,
+            1.5626441722e-8,
+            -8.5238095915e-8,
+            6.529054439e-9,
+            5.059343495e-9,
+            -9.91364156e-10,
+            -2.27365122e-10,
+            9.6467911e-11,
+            2.394038e-12,
+            -6.886027e-12,
+            8.94487e-13,
+            3.13092e-13,
+            -1.12708e-13,
+            3.81e-16,
+            7.106e-15,
+            -1.523e-15,
+            -9.4e-17,
+            1.21e-16,
+            -2.8e-17,
+        ];
+
+        /// Chebyshev coefficients
+        fn erfccheb(z: f64) -> f64 {
+            let mut d = 0f64;
+            let mut dd = 0f64;
+
+            assert!(z >= 0f64, "erfccheb requires nonnegative argument");
+            let t = 2f64 / (2f64 + z);
+            let ty = 4f64 * t - 2f64;
+            for j in (1..NCOEF - 1).rev() {
+                let tmp = d;
+                d = ty * d - dd + COF[j];
+                dd = tmp;
+            }
+            t * (-z.powi(2) + 0.5 * (COF[0] + ty * d) - dd).exp()
+        }
+
+        pub fn erf(x: f64) -> f64 {
+            if x >= 0f64 {
+                1.0 - erfccheb(x)
+            } else {
+                erfccheb(-x) - 1f64
+            }
+        }
 
         for i in 0..a.len() {
             let mut z = a[i] as f64 / (scale_input as f64);

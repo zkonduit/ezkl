@@ -1274,7 +1274,22 @@ mod rescaled {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
+            let mut config =
+                Self::Config::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE, 0);
+
+            config
+                .configure_lookup(
+                    cs,
+                    &b,
+                    &output,
+                    7,
+                    &LookupOp::Div {
+                        denom: (5.0).into(),
+                    },
+                )
+                .unwrap();
+
+            config
         }
 
         fn synthesize(
@@ -1282,6 +1297,8 @@ mod rescaled {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
+            config.layout_tables(&mut layouter).unwrap();
+
             layouter
                 .assign_region(
                     || "",
@@ -1307,7 +1324,7 @@ mod rescaled {
     #[test]
     fn rescaledcircuit() {
         // parameters
-        let mut a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+        let mut a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64))));
         a.reshape(&[LEN, 1]);
 
         let circuit = MyCircuit::<F> {
@@ -1766,8 +1783,7 @@ mod softmax {
             let a = VarTensor::new_advice(cs, K, LEN);
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
-            let mut config =
-                Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0);
+            let mut config = Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0);
             let advices = (0..2)
                 .map(|_| VarTensor::new_advice(cs, K, LEN))
                 .collect::<Vec<_>>();

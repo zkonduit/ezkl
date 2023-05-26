@@ -93,8 +93,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     }
 
     /// Returns the name of the operation
-    fn as_str(&self) -> &'static str {
-        match self {
+    fn as_string(&self) -> String {
+        let name = match self {
             LookupOp::GreaterThan { .. } => "GREATER_THAN",
             LookupOp::Recip { .. } => "RECIP",
             LookupOp::Div { .. } => "DIV",
@@ -106,7 +106,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::Erf { .. } => "ERF",
             LookupOp::Rsqrt { .. } => "RSQRT",
             LookupOp::Exp { .. } => "EXP",
-        }
+        };
+        name.into()
     }
 
     fn layout(
