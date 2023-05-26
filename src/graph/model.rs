@@ -13,7 +13,6 @@ use crate::{
     tensor::{Tensor, TensorType, ValTensor},
 };
 
-use colored::Colorize;
 use halo2_proofs::circuit::Region;
 use halo2curves::ff::PrimeField;
 use log::warn;
@@ -493,7 +492,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                         string,
                         idx,
                         inputs,
-                        model.table_nodes().cyan(),
+                        model.table_nodes(),
                     );
                 }
             }

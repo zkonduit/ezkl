@@ -50,45 +50,6 @@ jobs:
       - name: Run help
         run: wasmtime run './target/wasm32-wasi/release/ezkl.wasm' -- --help
 
-  benchmarks:
-    runs-on: self-hosted
-    needs:
-      [
-        build,
-        build-wasm,
-        library-tests,
-        mock-proving-tests,
-        mock-proving-tests-wasi,
-        python-tests,
-      ]
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2022-11-03
-          override: true
-          components: rustfmt, clippy
-      - name: Bench einsum accum matmul
-        run: cargo bench --verbose --bench accum_einsum_matmul
-      - name: Bench accum matmul relu
-        run: cargo bench --verbose --bench accum_matmul_relu
-      - name: Bench relu
-        run: cargo bench --verbose --bench relu
-      - name: Bench accum dot
-        run: cargo bench --verbose --bench accum_dot
-      - name: Bench accum conv
-        run: cargo bench --verbose --bench accum_conv
-      - name: Bench accum sumpool
-        run: cargo bench --verbose --bench accum_sumpool
-      - name: Bench pairwise add
-        run: cargo bench --verbose --bench pairwise_add
-      - name: Bench accum sum
-        run: cargo bench --verbose --bench accum_sum
-      - name: Bench pairwise pow
-        run: cargo bench --verbose --bench pairwise_pow
-      - name: Bench accum pack
-        run: cargo bench --verbose --bench accum_pack
-
   docs:
     runs-on: ubuntu-latest
     steps:
