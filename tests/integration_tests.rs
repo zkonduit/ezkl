@@ -77,6 +77,8 @@ mod native_tests {
         })
     }
 
+    const PF_FAILURE: &str = "examples/test_failure.proof";
+
     const LARGE_TESTS: [&str; 2] = ["self_attention", "nanoGPT"];
 
     const TESTS: [&str; 32] = [
@@ -163,26 +165,26 @@ mod native_tests {
         ("2l_relu_small", "2l_relu_sigmoid_small"),
     ];
 
-    const TESTS_EVM: [&str; 1] = [
-        // "1l_mlp",
-        // "1l_flatten",
+    const TESTS_EVM: [&str; 18] = [
+        "1l_mlp",
+        "1l_flatten",
         "1l_average",
-        // "1l_reshape",
-        // "1l_sigmoid",
-        // "1l_div",
-        // "1l_sqrt",
-        // // "1l_prelu",
-        // "1l_var",
-        // "1l_leakyrelu",
-        // "1l_gelu_noappx",
-        // "1l_relu",
-        // "1l_tanh",
-        // "2l_relu_sigmoid_small",
-        // "2l_relu_small",
-        // "2l_relu_fc",
-        // "min",
-        // "max",
-        // "1l_max_pool",
+        "1l_reshape",
+        "1l_sigmoid",
+        "1l_div",
+        "1l_sqrt",
+        // "1l_prelu",
+        "1l_var",
+        "1l_leakyrelu",
+        "1l_gelu_noappx",
+        "1l_relu",
+        "1l_tanh",
+        "2l_relu_sigmoid_small",
+        "2l_relu_small",
+        "2l_relu_fc",
+        "min",
+        "max",
+        "1l_max_pool",
     ];
 
     const EXAMPLES: [&str; 2] = ["mlp_4d_einsum", "conv2d_mnist"];
@@ -341,28 +343,28 @@ mod native_tests {
 
             /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
             /// specify those that will
-            const TESTS_SOLIDITY: [&str; 1] = [
+            const TESTS_SOLIDITY: [&str; 16] = [
                 "1l_mlp",
-                // "1l_average",
-                // "1l_reshape",
-                // "1l_sigmoid",
-                // "1l_div",
-                // "1l_sqrt",
-                // // "1l_prelu",
-                // "1l_var",
-                // "1l_leakyrelu",
-                // "1l_gelu_noappx",
-                // "1l_relu",
-                // "1l_tanh",
-                // "2l_relu_sigmoid_small",
-                // "2l_relu_small",
-                // "2l_relu_fc",
-                // "min",
-                // "max",
+                "1l_average",
+                "1l_reshape",
+                "1l_sigmoid",
+                "1l_div",
+                "1l_sqrt",
+                // "1l_prelu",
+                "1l_var",
+                "1l_leakyrelu",
+                "1l_gelu_noappx",
+                "1l_relu",
+                "1l_tanh",
+                "2l_relu_sigmoid_small",
+                "2l_relu_small",
+                "2l_relu_fc",
+                "min",
+                "max",
             ];
 
 
-            seq!(N in 0..=0 {
+            seq!(N in 0..=17 {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
@@ -933,10 +935,17 @@ mod native_tests {
             args.push(sol_arg.as_str());
         }
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args(args)
+            .args(&args)
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+        // As sanity check, add example that should fail.
+        args[2] = PF_FAILURE;
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(args)
+            .status()
+            .expect("failed to execute process");
+        assert!(!status.success());  
     }
 
     // prove-serialize-verify, the usual full path
@@ -1135,10 +1144,17 @@ mod native_tests {
             args.push(sol_arg.as_str());
         }
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args(args)
+            .args(&args)
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+        // As sanity check, add example that should fail.
+        args[2] = PF_FAILURE;
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(args)
+            .status()
+            .expect("failed to execute process");
+        assert!(!status.success());       
     }
 
     fn build_ezkl() {
