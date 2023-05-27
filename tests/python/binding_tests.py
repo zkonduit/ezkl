@@ -188,9 +188,9 @@ def test_setup_evm():
     assert os.path.isfile(circuit_params_path)
 
 
-def test_prove():
+def test_prove_and_verify():
     """
-    Test for prove
+    Test for prove and verify
     """
 
     data_path = os.path.join(
@@ -223,6 +223,11 @@ def test_prove():
     )
     assert res == True
     assert os.path.isfile(proof_path)
+
+    vk_path = os.path.join(folder_path, 'test.vk')
+    res = ezkl_lib.verify(proof_path, circuit_params_path, vk_path, params_path)
+    assert res == True
+    assert os.path.isfile(vk_path)
 
 
 def test_prove_evm():
@@ -261,23 +266,9 @@ def test_prove_evm():
     assert res == True
     assert os.path.isfile(proof_path)
 
-
-def test_verify():
-    """
-    Test for verify
-    """
-
-    vk_path = os.path.join(folder_path, 'test.vk')
-    proof_path = os.path.join(folder_path, 'test.pf')
-    circuit_params_path = os.path.join(folder_path, 'circuit.params')
-
-    res = ezkl_lib.verify(
-        proof_path,
-        circuit_params_path,
-        vk_path,
-        params_path,
-    )
-    assert res == True
+    res = ezkl_lib.print_proof_hex(proof_path)
+    # to figure out a better way of testing print_proof_hex
+    assert type(res) == str
 
 
 def test_create_evm_verifier():
@@ -321,4 +312,159 @@ def test_verify_evm():
         # optimizer_runs 
     )
 
+    assert res == True
+
+
+def test_aggregate_and_verify_aggr():
+    """
+    Tests for aggregated proof and verifying aggregate proof
+    """
+    data_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_relu',
+        'input.json'
+    )
+
+    model_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_relu',
+        'network.onnx'
+    )
+
+    pk_path = os.path.join(folder_path, '1l_relu.pk')
+    vk_path = os.path.join(folder_path, '1l_relu.vk')
+    circuit_params_path = os.path.join(folder_path, '1l_relu_circuit.params')
+
+    ezkl_lib.setup(
+        data_path,
+        model_path,
+        vk_path,
+        pk_path,
+        params_path,
+        circuit_params_path,
+    )
+
+    proof_path = os.path.join(folder_path, '1l_relu.pf')
+
+    ezkl_lib.prove(
+        data_path,
+        model_path,
+        pk_path,
+        proof_path,
+        params_path,
+        "poseidon",
+        "accum",
+        circuit_params_path,
+    )
+
+    aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')
+    aggregate_vk_path = os.path.join(folder_path, 'aggr_1l_relu.vk')
+
+    res = ezkl_lib.aggregate(
+        aggregate_proof_path,
+        [proof_path],
+        [circuit_params_path],
+        [vk_path],
+        aggregate_vk_path,
+        params_k20_path,
+        "poseidon",
+        20,
+        "unsafe"
+    )
+
+    assert res == True
+    assert os.path.isfile(aggregate_proof_path)
+    assert os.path.isfile(aggregate_vk_path)
+
+    res = ezkl_lib.verify_aggr(
+        aggregate_proof_path,
+        aggregate_vk_path,
+        params_k20_path,
+        20,
+    )
+    assert res == True
+
+
+def test_evm_aggregate_and_verify_aggr():
+    """
+    Tests for EVM aggregated proof and verifying aggregate proof
+    """
+    data_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_relu',
+        'input.json'
+    )
+
+    model_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_relu',
+        'network.onnx'
+    )
+
+    pk_path = os.path.join(folder_path, '1l_relu.pk')
+    vk_path = os.path.join(folder_path, '1l_relu.vk')
+    circuit_params_path = os.path.join(folder_path, '1l_relu_circuit.params')
+
+    ezkl_lib.setup(
+        data_path,
+        model_path,
+        vk_path,
+        pk_path,
+        params_path,
+        circuit_params_path,
+    )
+
+    proof_path = os.path.join(folder_path, '1l_relu.pf')
+
+    ezkl_lib.prove(
+        data_path,
+        model_path,
+        pk_path,
+        proof_path,
+        params_path,
+        "poseidon",
+        "accum",
+        circuit_params_path,
+    )
+
+    aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')
+    aggregate_vk_path = os.path.join(folder_path, 'aggr_1l_relu.vk')
+
+    res = ezkl_lib.aggregate(
+        aggregate_proof_path,
+        [proof_path],
+        [circuit_params_path],
+        [vk_path],
+        aggregate_vk_path,
+        params_k20_path,
+        "evm",
+        20,
+        "unsafe"
+    )
+
+    assert res == True
+    assert os.path.isfile(aggregate_proof_path)
+    assert os.path.isfile(aggregate_vk_path)
+
+    aggregate_deploy_path = os.path.join(folder_path, 'aggr_1l_relu.code')
+
+    res = ezkl_lib.create_evm_verifier_aggr(
+        params_k20_path,
+        aggregate_deploy_path,
+        aggregate_vk_path
+    )
+
+    assert res == True
+    assert os.path.isfile(aggregate_deploy_path)
+
+    res = ezkl_lib.verify_aggr(
+        aggregate_proof_path,
+        aggregate_vk_path,
+        params_k20_path,
+        20,
+    )
     assert res == True
