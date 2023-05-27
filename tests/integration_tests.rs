@@ -79,6 +79,8 @@ mod native_tests {
 
     const PF_FAILURE: &str = "examples/test_failure.proof";
 
+    const PF_FAILURE_AGGR: &str = "examples/test_failure_aggr.proof";
+
     const LARGE_TESTS: [&str; 2] = ["self_attention", "nanoGPT"];
 
     const TESTS: [&str; 32] = [
@@ -204,7 +206,7 @@ mod native_tests {
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
-                //crate::native_tests::init_params_23();
+                crate::native_tests::init_params_23();
                 kzg_aggr_prove_and_verify(test.to_string());
             }
 
@@ -940,7 +942,7 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
         // As sanity check, add example that should fail.
-        args[2] = PF_FAILURE;
+        args[2] = PF_FAILURE_AGGR;
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(args)
             .status()
