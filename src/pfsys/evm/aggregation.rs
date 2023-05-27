@@ -1,4 +1,4 @@
-use crate::pfsys::evm::DeploymentCode;
+use crate::pfsys::evm::YulCode;
 use crate::pfsys::{Snark, SnarkWitness};
 use halo2_proofs::plonk::{self, VerifyingKey};
 use halo2_proofs::{
@@ -33,7 +33,7 @@ use snark_verifier::{
     verifier::{self, SnarkVerifier},
 };
 use snark_verifier::{
-    loader::evm::{self, EvmLoader},
+    loader::evm::EvmLoader,
     system::halo2::transcript::evm::EvmTranscript,
 };
 use snark_verifier::{
@@ -318,7 +318,7 @@ pub fn gen_aggregation_evm_verifier(
     vk: &VerifyingKey<G1Affine>,
     num_instance: Vec<usize>,
     accumulator_indices: Vec<(usize, usize)>,
-) -> Result<(DeploymentCode, String), AggregationError> {
+) -> Result<YulCode, AggregationError> {
     let protocol = compile(
         params,
         vk,
@@ -338,10 +338,7 @@ pub fn gen_aggregation_evm_verifier(
     PlonkVerifier::verify(&vk, &protocol, &instances, &proof)
         .map_err(|_| AggregationError::ProofVerify)?;
     let yul_code = &loader.yul_code();
-    Ok((
-        DeploymentCode {
-            code: evm::compile_yul(yul_code),
-        },
+    Ok(
         yul_code.clone(),
-    ))
+    )
 }

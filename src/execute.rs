@@ -10,7 +10,7 @@ use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::{aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::pfsys::evm::{evm_verify, DeploymentCode};
+use crate::pfsys::evm::{evm_verify, DeploymentCode, YulCode};
 use crate::pfsys::{
     create_keys, load_params, load_pk, load_vk, save_params, save_pk, Snark, TranscriptType,
 };
@@ -37,6 +37,7 @@ use log::{info, trace};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
@@ -430,6 +431,12 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<(), Box<dyn Error>> {
     info!("{}", hex::encode(proof.proof));
     Ok(())
 }
+/// helper function to generate the deployment code from yul code
+pub fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, Box<dyn Error>> {
+    Ok(DeploymentCode {
+            code: evm::compile_yul(&yul_code)
+    })
+}
 
 #[cfg(feature = "render")]
 fn render(data: String, output: String) -> Result<(), Box<dyn Error>> {
@@ -472,7 +479,8 @@ fn create_evm_verifier(
         load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)?;
     trace!("params computed");
 
-    let (deployment_code, yul_code) = gen_evm_verifier(&params, &vk, num_instance)?;
+    let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
+    let deployment_code = gen_deployment_code(yul_code.clone()).unwrap();
     deployment_code.save(&deployment_code_path)?;
 
     if sol_code_path.is_some() {
@@ -524,12 +532,13 @@ fn create_evm_aggregate_verifier(
     let agg_vk =
         load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
 
-    let (deployment_code, yul_code) = gen_aggregation_evm_verifier(
+    let yul_code = gen_aggregation_evm_verifier(
         &params,
         &agg_vk,
         AggregationCircuit::num_instance(),
         AggregationCircuit::accumulator_indices(),
     )?;
+    let deployment_code = gen_deployment_code(yul_code.clone()).unwrap();
     deployment_code.save(deployment_code_path.as_ref().unwrap())?;
 
     if sol_code_path.is_some() {

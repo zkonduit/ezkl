@@ -1,9 +1,9 @@
-use crate::pfsys::evm::DeploymentCode;
+use crate::pfsys::evm::YulCode;
 use halo2_proofs::poly::commitment::ParamsProver;
 use halo2_proofs::{plonk::VerifyingKey, poly::kzg::commitment::ParamsKZG};
 use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine};
 use snark_verifier::{
-    loader::evm::{self, EvmLoader},
+    loader::evm::EvmLoader,
     pcs::kzg::{Gwc19, KzgAs},
     system::halo2::{compile, transcript::evm::EvmTranscript, Config},
     verifier::{self, SnarkVerifier},
@@ -24,12 +24,13 @@ pub enum SimpleError {
     ProofVerify,
 }
 
-/// Create EVM verifier bytecode
+
+/// Create EVM verifier yulcode
 pub fn gen_evm_verifier(
     params: &ParamsKZG<Bn256>,
     vk: &VerifyingKey<G1Affine>,
     num_instance: Vec<usize>,
-) -> Result<(DeploymentCode, String), SimpleError> {
+) -> Result<YulCode, SimpleError> {
     let protocol = compile(
         params,
         vk,
@@ -49,7 +50,5 @@ pub fn gen_evm_verifier(
 
     let yul_code = &loader.yul_code();
 
-    Ok((DeploymentCode {
-        code: evm::compile_yul(yul_code),
-    }, yul_code.clone()))
+    Ok(yul_code.clone())
 }

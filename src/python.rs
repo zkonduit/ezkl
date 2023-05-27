@@ -1,7 +1,7 @@
 use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::{RunArgs, StrategyType};
 use crate::eth::{fix_verifier_sol, verify_proof_via_solidity};
-use crate::execute::{create_proof_circuit_kzg, load_params_cmd, verify_proof_circuit_kzg};
+use crate::execute::{create_proof_circuit_kzg, load_params_cmd, verify_proof_circuit_kzg, gen_deployment_code};
 use crate::graph::{quantize_float, Mode, Model, ModelCircuit, ModelParams, VarVisibility};
 use crate::pfsys::evm::{
     evm_verify,
@@ -551,8 +551,10 @@ fn create_evm_verifier(
         load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)
             .map_err(|_| PyIOError::new_err("Failed to load verifier key"))?;
 
-    let (deployment_code, yul_code) = gen_evm_verifier(&params, &vk, num_instance)
+    let yul_code = gen_evm_verifier(&params, &vk, num_instance)
         .map_err(|_| PyRuntimeError::new_err("Failed to generatee evm verifier"))?;
+
+    let deployment_code = gen_deployment_code(yul_code.clone()).unwrap();
 
     deployment_code
         .save(&deployment_code_path)
@@ -608,14 +610,16 @@ fn verify_evm(
 
 /// creates an evm compatible aggregate verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
+    vk_path,
     params_path,
     deployment_code_path,
-    vk_path,
+    sol_code_path=None,
 ))]
 fn create_evm_verifier_aggr(
+    vk_path: PathBuf,
     params_path: PathBuf,
     deployment_code_path: PathBuf,
-    vk_path: PathBuf,
+    sol_code_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     let params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(params_path)
         .map_err(|_| PyIOError::new_err("Failed to load params"))?;
@@ -623,14 +627,29 @@ fn create_evm_verifier_aggr(
     let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())
         .map_err(|_| PyIOError::new_err("Failed to load vk"))?;
 
-    let deployment_code = gen_aggregation_evm_verifier(
+    let yul_code = gen_aggregation_evm_verifier(
         &params,
         &agg_vk,
         AggregationCircuit::num_instance(),
         AggregationCircuit::accumulator_indices(),
     ).map_err(|_| PyRuntimeError::new_err("Failed to create aggregation evm verifier"))?;
+
+    let deployment_code = gen_deployment_code(yul_code.clone()).unwrap();
+
     deployment_code.save(&deployment_code_path)
         .map_err(|_| PyIOError::new_err("Failed to save to deployment code path"))?;
+    if sol_code_path.is_some() {
+        let mut f = File::create(sol_code_path.as_ref().unwrap())
+            .map_err(|_| PyIOError::new_err("Failed to create file"))?;
+        let _ = f.write(yul_code.as_bytes());
+
+        let output = fix_verifier_sol(sol_code_path.as_ref().unwrap().clone())
+            .map_err(|_| PyRuntimeError::new_err("Failed to fix solidity verifier"))?;
+
+        let mut f = File::create(sol_code_path.as_ref().unwrap())
+            .map_err(|_| PyIOError::new_err("Failed to write solidity code into file"))?;
+        let _ = f.write(output.as_bytes());
+    }
     Ok(true)
 }
 
