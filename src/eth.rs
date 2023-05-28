@@ -25,7 +25,7 @@ use ethers::{
     prelude::{HDPath::LedgerLive, Ledger, LocalWallet, Wallet},
     utils::{Anvil, AnvilInstance},
 };
-use ethers_solc::Solc;
+use ethers_solc::{Solc, CompilerInput};
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
 use log::{debug, info};
@@ -69,15 +69,17 @@ pub async fn setup_eth_backend() -> Result<(AnvilInstance, EthersClient), Box<dy
 pub async fn verify_proof_via_solidity(
     proof: Snark<Fr, G1Affine>,
     sol_code_path: PathBuf,
+    runs: Option<usize>
 ) -> Result<bool, Box<dyn Error>> {
+
     let (anvil, client) = setup_eth_backend().await?;
 
-    let compiled = Solc::default().compile_source(sol_code_path)?;
-    let (abi, bytecode, _runtime_bytecode) = compiled
-        .find("Verifier")
-        .expect("could not find contract")
-        .into_parts_or_default();
-    let factory = ContractFactory::new(abi, bytecode, client.clone());
+    let factory = get_sol_contract_factory(
+        sol_code_path,
+        client.clone(),
+        runs
+    ).unwrap();
+    
     let contract = factory.deploy(())?.send().await?;
     let addr = contract.address();
 
@@ -90,7 +92,7 @@ pub async fn verify_proof_via_solidity(
         let u = U256::from_little_endian(bytes.as_slice());
         public_inputs.push(u);
     }
-
+    
     let tx = contract
         .verify(
             public_inputs.clone(),
@@ -121,6 +123,40 @@ pub async fn verify_proof_via_solidity(
 
     drop(anvil);
     Ok(result)
+}
+
+/// Generates the contract factory for a solidity verifier, optionally compiling the code with optimizer runs set on the Solc compiler.
+fn get_sol_contract_factory<M: 'static + Middleware>(
+    sol_code_path: PathBuf,
+    client: Arc<M>,
+    runs: Option<usize>
+) -> Result<ContractFactory<M>, Box<dyn Error>> {
+    const MAX_RUNTIME_BYTECODE_SIZE: usize = 24_577; // Smart contract size limit
+    // Create the compiler input, enabling the optimizer and setting the optimzer runs.
+    let input: CompilerInput = if let Some(r) = runs {
+        let mut i = CompilerInput::new(sol_code_path)?[0].clone().optimizer(r);
+        i.settings.optimizer.enable();
+        i
+    } else {
+        CompilerInput::new(sol_code_path)?[0].clone()
+    };
+    let compiled = Solc::default().compile(&input).unwrap();
+    let (abi, bytecode, _runtime_bytecode) = compiled
+        .find("Verifier")
+        .expect("could not find contract")
+        .into_parts_or_default();
+    let size = _runtime_bytecode.len();
+    debug!("runtime bytecode size: {:#?}", size);
+    if size > MAX_RUNTIME_BYTECODE_SIZE {
+        // `_runtime_bytecode` exceeds the limit
+        panic!(
+            "Solidity runtime bytecode size is: {:#?}, 
+            which exceeds 24577 bytes limit.
+            Try setting '--optimzer-runs 1' 
+            so SOLC can optimize for the smallest deployment", size
+        );                
+    } 
+    Ok(ContractFactory::new(abi, bytecode, client.clone()))
 }
 
 /// Parses a private key into a [SigningKey]  
@@ -196,6 +232,7 @@ pub async fn deploy_verifier<M: 'static + Middleware>(
     client: Arc<M>,
     deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
+    runs: Option<usize>
 ) -> Result<(), Box<dyn Error>> {
     // comment the following two lines if want to deploy to anvil
 
@@ -204,14 +241,11 @@ pub async fn deploy_verifier<M: 'static + Middleware>(
 
     // sol code supercedes deployment code
     let factory = match sol_code_path {
-        Some(path) => {
-            let compiled = Solc::default().compile_source(path).unwrap();
-            let (abi, bytecode, _runtime_bytecode) = compiled
-                .find("Verifier")
-                .expect("could not find contract")
-                .into_parts_or_default();
-            ContractFactory::new(abi, bytecode, client.clone())
-        }
+        Some(path) => get_sol_contract_factory(
+            path,
+            client.clone(),
+            runs
+        ).unwrap(),
         None => match deployment_code_path {
             Some(path) => {
                 let bytecode = DeploymentCode::load(&path)?;
@@ -330,6 +364,7 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
 
     let mut transcript_addrs: Vec<u32> = Vec::new();
     let mut modified_lines: Vec<String> = Vec::new();
+    let mut proof_size: u32 = 0;
 
     // convert calldataload 0x0 to 0x40 to read from pubInputs, and the rest
     // from proof
@@ -354,7 +389,7 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
     let mut end = None;
     for (i, line) in reader.lines().enumerate() {
         let line = line?;
-        if line.trim().starts_with("mstore(0x20") {
+        if line.trim().starts_with("mstore(0x20") && start.is_none() {
             start = Some(i as u32);
         }
 
@@ -390,7 +425,6 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
             let calldata_and_addr = m.get(1).unwrap().as_str();
             let addr = m.get(2).unwrap().as_str();
             let addr_as_num = u32::from_str_radix(addr.strip_prefix("0x").unwrap(), 16)?;
-
             if addr_as_num <= max_pubinputs_addr {
                 let pub_addr = format!("{:#x}", addr_as_num + 32);
                 line = line.replace(
@@ -398,6 +432,7 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
                     &format!("mload(add(pubInputs, {}))", pub_addr),
                 );
             } else {
+                proof_size += 1;
                 let proof_addr = format!("{:#x}", addr_as_num - max_pubinputs_addr);
                 line = line.replace(
                     calldata_and_addr,
@@ -598,5 +633,44 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
         write!(write, "{}", line).unwrap();
     }
     writeln!(write, "}} return success; }} }}")?;
+
+    // free memory pointer initialization  
+    let mut offset = 128;
+    
+    // replace all mload(add(pubInputs, 0x...))) with mload(0x...
+    contract = replace_vars_with_offset(
+        &contract, 
+        r"add\(pubInputs, (0x[0-9a-fA-F]+)\)",
+        offset
+    );
+
+    offset += 32 * num_pubinputs + 32;
+
+    // replace all mload(add(proof, 0x...))) with mload(0x...
+    contract = replace_vars_with_offset(
+        &contract, 
+        r"add\(proof, (0x[0-9a-fA-F]+)\)",
+        offset
+    );
+
+    offset += 32 * proof_size + 32;
+
+    // replace all (add(transcript, 0x...))) with (0x...)
+    contract = replace_vars_with_offset(
+        &contract, 
+        r"add\(transcript, (0x[0-9a-fA-F]+)\)",
+         offset
+    );
+
     Ok(contract)
+}
+
+fn replace_vars_with_offset(contract: &str, regex_pattern: &str, offset: u32) -> String {
+    let re = Regex::new(regex_pattern).unwrap();
+    let replaced = re.replace_all(contract, |caps: &regex::Captures| {
+        let addr_as_num = u32::from_str_radix(&caps[1].strip_prefix("0x").unwrap(), 16).unwrap();
+        let new_addr = addr_as_num + offset;
+        format!("{:#x}", new_addr)
+    });
+    replaced.into_owned()
 }

@@ -309,6 +309,7 @@ def test_verify_evm():
         proof_path,
         deployment_code_path,
         # sol_code_path
+        # optimizer_runs 
     )
 
     assert res == True
@@ -450,11 +451,13 @@ def test_evm_aggregate_and_verify_aggr():
     assert os.path.isfile(aggregate_vk_path)
 
     aggregate_deploy_path = os.path.join(folder_path, 'aggr_1l_relu.code')
+    sol_code_path = os.path.join(folder_path, 'aggr_1l_relu.sol')
 
     res = ezkl_lib.create_evm_verifier_aggr(
+        aggregate_vk_path,
         params_k20_path,
         aggregate_deploy_path,
-        aggregate_vk_path
+        sol_code_path
     )
 
     assert res == True
