@@ -1,5 +1,6 @@
 use crate::circuit::CheckMode;
 use crate::commands::{Cli, Commands, RunArgs, StrategyType};
+use crate::pfsys::evm::{DeploymentCode,YulCode};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{
     deploy_verifier, fix_verifier_sol, get_ledger_signing_provider, get_provider,
@@ -10,7 +11,7 @@ use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::{aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::pfsys::evm::{evm_verify, DeploymentCode, YulCode};
+use crate::pfsys::evm::evm_verify;
 use crate::pfsys::{
     create_keys, load_params, load_pk, load_vk, save_params, save_pk, Snark, TranscriptType,
 };
