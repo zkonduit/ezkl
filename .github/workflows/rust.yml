@@ -277,6 +277,8 @@ jobs:
           components: rustfmt, clippy
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.17 && solc --version
+      - name: Install Anvil
+        run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil   
       - name: KZG prove and verify aggr tests
         run: cargo test --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ -- --include-ignored --test-threads 8
 

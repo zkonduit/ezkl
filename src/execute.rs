@@ -1,5 +1,6 @@
 use crate::circuit::CheckMode;
 use crate::commands::{Cli, Commands, RunArgs, StrategyType};
+use crate::pfsys::evm::{DeploymentCode,YulCode};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{
     deploy_verifier, fix_verifier_sol, get_ledger_signing_provider, get_provider,
@@ -10,7 +11,7 @@ use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::{aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::pfsys::evm::{evm_verify, DeploymentCode};
+use crate::pfsys::evm::evm_verify;
 use crate::pfsys::{
     create_keys, load_params, load_pk, load_vk, save_params, save_pk, Snark, TranscriptType,
 };
@@ -37,6 +38,7 @@ use log::{info, trace};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
@@ -76,7 +78,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             rpc_url,
             deployment_code_path,
             sol_code_path,
-        } => deploy_verifier_evm(secret, rpc_url, deployment_code_path, sol_code_path).await,
+            optimizer_runs,
+        } => deploy_verifier_evm(secret, rpc_url, deployment_code_path, sol_code_path, optimizer_runs).await,
         Commands::GenSrs {
             params_path,
             logrows,
@@ -107,10 +110,11 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifierAggr {
+            vk_path,
             params_path,
             deployment_code_path,
-            vk_path,
-        } => create_evm_aggregate_verifier(params_path, deployment_code_path, vk_path),
+            sol_code_path,
+        } => create_evm_aggregate_verifier(vk_path, params_path, deployment_code_path, sol_code_path),
         Commands::Setup {
             data,
             params_path,
@@ -178,7 +182,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             proof_path,
             deployment_code_path,
             sol_code_path,
-        } => verify_evm(proof_path, deployment_code_path, sol_code_path).await,
+            optimizer_runs
+        } => verify_evm(proof_path, deployment_code_path, sol_code_path, optimizer_runs).await,
         Commands::PrintProofHex { proof_path } => print_proof_hex(proof_path),
     }
 }
@@ -329,6 +334,7 @@ async fn deploy_verifier_evm(
     rpc_url: String,
     deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
+    runs: Option<usize>
 ) -> Result<(), Box<dyn Error>> {
     let provider = get_provider(&rpc_url)?;
     let chain_id = provider.get_chainid().await?;
@@ -336,11 +342,11 @@ async fn deploy_verifier_evm(
     if let Some(secret) = secret {
         let mnemonic = read_to_string(secret)?;
         let client = Arc::new(get_wallet_signing_provider(provider, &mnemonic).await?);
-        deploy_verifier(client, deployment_code_path, sol_code_path).await?;
+        deploy_verifier(client, deployment_code_path, sol_code_path, runs).await?;
     } else {
         warn!("connect your Ledger and open the Ethereum app");
         let client = Arc::new(get_ledger_signing_provider(provider, chain_id.as_u64()).await?);
-        deploy_verifier(client, deployment_code_path, sol_code_path).await?;
+        deploy_verifier(client, deployment_code_path, sol_code_path, runs).await?;
     };
     Ok(())
 }
@@ -426,6 +432,12 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<(), Box<dyn Error>> {
     info!("{}", hex::encode(proof.proof));
     Ok(())
 }
+/// helper function to generate the deployment code from yul code
+pub fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, Box<dyn Error>> {
+    Ok(DeploymentCode {
+            code: evm::compile_yul(&yul_code)
+    })
+}
 
 #[cfg(feature = "render")]
 fn render(data: String, output: String) -> Result<(), Box<dyn Error>> {
@@ -468,7 +480,8 @@ fn create_evm_verifier(
         load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)?;
     trace!("params computed");
 
-    let (deployment_code, yul_code) = gen_evm_verifier(&params, &vk, num_instance)?;
+    let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
+    let deployment_code = gen_deployment_code(yul_code.clone()).unwrap();
     deployment_code.save(&deployment_code_path)?;
 
     if sol_code_path.is_some() {
@@ -488,13 +501,18 @@ async fn verify_evm(
     proof_path: PathBuf,
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
+    runs: Option<usize>
 ) -> Result<(), Box<dyn Error>> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
     let code = DeploymentCode::load(&deployment_code_path)?;
     evm_verify(code, proof.clone())?;
 
     if sol_code_path.is_some() {
-        let result = verify_proof_via_solidity(proof, sol_code_path.unwrap()).await?;
+        let result = verify_proof_via_solidity(
+            proof, 
+            sol_code_path.unwrap(), 
+            runs
+        ).await?;
 
         info!("Solidity verification result: {}", result);
 
@@ -505,21 +523,34 @@ async fn verify_evm(
 
 #[cfg(not(target_arch = "wasm32"))]
 fn create_evm_aggregate_verifier(
-    params_path: PathBuf,
-    deployment_code_path: PathBuf,
     vk_path: PathBuf,
+    params_path: PathBuf,
+    deployment_code_path: Option<PathBuf>,
+    sol_code_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     let params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
 
-    let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
+    let agg_vk =
+        load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
 
-    let deployment_code = gen_aggregation_evm_verifier(
+    let yul_code = gen_aggregation_evm_verifier(
         &params,
         &agg_vk,
         AggregationCircuit::num_instance(),
         AggregationCircuit::accumulator_indices(),
     )?;
-    deployment_code.save(&deployment_code_path)?;
+    let deployment_code = gen_deployment_code(yul_code.clone()).unwrap();
+    deployment_code.save(deployment_code_path.as_ref().unwrap())?;
+
+    if sol_code_path.is_some() {
+        let mut f = File::create(sol_code_path.as_ref().unwrap())?;
+        let _ = f.write(yul_code.as_bytes());
+
+        let output = fix_verifier_sol(sol_code_path.as_ref().unwrap().clone())?;
+
+        let mut f = File::create(sol_code_path.as_ref().unwrap())?;
+        let _ = f.write(output.as_bytes());
+    }
     Ok(())
 }
 

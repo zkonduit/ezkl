@@ -77,6 +77,10 @@ mod native_tests {
         })
     }
 
+    const PF_FAILURE: &str = "examples/test_failure.proof";
+
+    const PF_FAILURE_AGGR: &str = "examples/test_failure_aggr.proof";
+
     const LARGE_TESTS: [&str; 2] = ["self_attention", "nanoGPT"];
 
     const TESTS: [&str; 32] = [
@@ -376,7 +380,7 @@ mod native_tests {
                 fn kzg_evm_aggr_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_23();
-                    kzg_evm_aggr_prove_and_verify(test.to_string());
+                    kzg_evm_aggr_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test));
                 }
 
             });
@@ -770,7 +774,7 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_evm_aggr_prove_and_verify(example_name: String) {
+    fn kzg_evm_aggr_prove_and_verify(example_name: String, with_solidity: bool) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup",
@@ -882,48 +886,68 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+
+        let code_arg = format!(
+            "{}/{}_evm_aggr.code",
+            TEST_DIR.path().to_str().unwrap(),
+            example_name
+        );
+        let param_arg = format!(
+            "--params-path={}/kzg23.params",
+            TEST_DIR.path().to_str().unwrap()
+        );
+        let vk_arg = format!(
+            "{}/{}_evm_aggr.vk",
+            TEST_DIR.path().to_str().unwrap(),
+            example_name
+        );
+
+        let mut args = vec![
+            "create-evm-verifier-aggr",
+            "--deployment-code-path",
+            code_arg.as_str(),
+            param_arg.as_str(),
+            "--vk-path",
+            vk_arg.as_str(),
+        ];
+
+        let sol_arg = format!("kzg_aggr{}.sol", example_name);
+
+        if with_solidity {
+            args.push("--sol-code-path");
+            args.push(sol_arg.as_str());
+        }
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "create-evm-verifier-aggr",
-                "--deployment-code-path",
-                &format!(
-                    "{}/{}_evm_aggr.code",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
-                &format!(
-                    "--params-path={}/kzg23.params",
-                    TEST_DIR.path().to_str().unwrap()
-                ),
-                "--vk-path",
-                &format!(
-                    "{}/{}_evm_aggr.vk",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
-            ])
+            .args(args)
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+
+        let pf_arg = format!("{}/{}_evm_aggr.pf", TEST_DIR.path().to_str().unwrap(), example_name);
+
+        let mut args = vec![
+            "verify-evm",
+            "--proof-path",
+            pf_arg.as_str(),
+            "--deployment-code-path",
+            code_arg.as_str()
+        ];
+        if with_solidity {
+            args.push("--sol-code-path");
+            args.push(sol_arg.as_str());
+        }
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "verify-evm",
-                "--proof-path",
-                &format!(
-                    "{}/{}_evm_aggr.pf",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
-                "--deployment-code-path",
-                &format!(
-                    "{}/{}_evm_aggr.code",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
-            ])
+            .args(&args)
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+        // As sanity check, add example that should fail.
+        args[2] = PF_FAILURE_AGGR;
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(args)
+            .status()
+            .expect("failed to execute process");
+        assert!(!status.success());  
     }
 
     // prove-serialize-verify, the usual full path
@@ -1115,17 +1139,24 @@ mod native_tests {
             pf_arg.as_str(),
             "--deployment-code-path",
             code_arg.as_str(),
+            "--optimizer-runs=1"
         ];
         if with_solidity {
             args.push("--sol-code-path");
-            //args.push(format!("kzg_{}.sol", example_name).as_str());
             args.push(sol_arg.as_str());
         }
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(&args)
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+        // As sanity check, add example that should fail.
+        args[2] = PF_FAILURE;
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(args)
             .status()
             .expect("failed to execute process");
-        assert!(status.success());
+        assert!(!status.success());       
     }
 
     fn build_ezkl() {
