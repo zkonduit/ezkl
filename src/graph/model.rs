@@ -590,7 +590,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                     visibility,
                 )
             }
-            Commands::Setup { model, args, .. } => {
+            Commands::Setup { model, args, .. } | Commands::Fuzz { model, args, .. } => {
                 let visibility = VarVisibility::from_args(args.clone())?;
                 Model::new(
                     &mut std::fs::File::open(model)?,

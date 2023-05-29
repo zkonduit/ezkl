@@ -36,6 +36,8 @@ colored_json =  { version = "3.0.1", optional = true}
 tokio = { version = "1.26.0", features = ["macros", "rt"] }
 rayon = "*"
 bincode = "*"
+indicatif = {version = "0.17.4", features = ["rayon"]}
+gag = "1.0.0"
 
 # python binding related deps
 pyo3 = { version = "0.18.3", features = ["extension-module", "abi3-py37"], optional = true }
