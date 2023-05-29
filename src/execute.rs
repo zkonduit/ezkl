@@ -793,7 +793,7 @@ fn fuzz(
     )?;
 
     (0..num_runs).into_par_iter().progress().for_each(|_| {
-        let new_params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows - 1);
+        let new_params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
 
         let bad_pk =
             create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &new_params)
