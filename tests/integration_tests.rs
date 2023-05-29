@@ -258,6 +258,7 @@ mod native_tests {
             use crate::native_tests::mock_public_params;
             use crate::native_tests::forward_pass;
             use crate::native_tests::kzg_prove_and_verify;
+            use crate::native_tests::kzg_fuzz;
             use crate::native_tests::render_circuit;
             use crate::native_tests::tutorial as run_tutorial;
             use crate::native_tests::percentage_tolerance as run_percentage_tolerance;
@@ -312,6 +313,12 @@ mod native_tests {
                 kzg_prove_and_verify(test.to_string(), 7, 16, 17, "safe");
             }
 
+            #(#[test_case(TESTS[N])])*
+            fn kzg_fuzz_(test: &str) {
+                crate::native_tests::init_binary();
+                kzg_fuzz(test.to_string(), 7, 16, 17, "blake");
+            }
+
             });
 
 
@@ -342,6 +349,7 @@ mod native_tests {
             use test_case::test_case;
             use crate::native_tests::kzg_evm_prove_and_verify;
             use crate::native_tests::kzg_evm_aggr_prove_and_verify;
+            use crate::native_tests::kzg_fuzz;
 
             /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
             /// specify those that will
@@ -374,6 +382,13 @@ mod native_tests {
                     crate::native_tests::init_params_17();
                     kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test));
                 }
+
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_fuzz_(test: &str) {
+                    crate::native_tests::init_binary();
+                    kzg_fuzz(test.to_string(), 7, 16, 17, "evm");
+                }
+
                 // these take a particularly long time to run
                 #(#[test_case(TESTS_EVM[N])])*
                 #[ignore]
@@ -923,14 +938,18 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let pf_arg = format!("{}/{}_evm_aggr.pf", TEST_DIR.path().to_str().unwrap(), example_name);
+        let pf_arg = format!(
+            "{}/{}_evm_aggr.pf",
+            TEST_DIR.path().to_str().unwrap(),
+            example_name
+        );
 
         let mut args = vec![
             "verify-evm",
             "--proof-path",
             pf_arg.as_str(),
             "--deployment-code-path",
-            code_arg.as_str()
+            code_arg.as_str(),
         ];
         if with_solidity {
             args.push("--sol-code-path");
@@ -947,7 +966,7 @@ mod native_tests {
             .args(args)
             .status()
             .expect("failed to execute process");
-        assert!(!status.success());  
+        assert!(!status.success());
     }
 
     // prove-serialize-verify, the usual full path
@@ -1031,6 +1050,26 @@ mod native_tests {
                     TEST_DIR.path().to_str().unwrap(),
                     logrows
                 ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+    }
+
+    // prove-serialize-verify, the usual full path
+    fn kzg_fuzz(example_name: String, scale: usize, bits: usize, logrows: usize, transcript: &str) {
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "fuzz",
+                "-D",
+                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                "-M",
+                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                &format!("--bits={}", bits),
+                &format!("--logrows={}", logrows),
+                &format!("--scale={}", scale),
+                &format!("--num-runs={}", 5),
+                &format!("--transcript={}", transcript),
             ])
             .status()
             .expect("failed to execute process");
@@ -1139,7 +1178,7 @@ mod native_tests {
             pf_arg.as_str(),
             "--deployment-code-path",
             code_arg.as_str(),
-            "--optimizer-runs=1"
+            "--optimizer-runs=1",
         ];
         if with_solidity {
             args.push("--sol-code-path");
@@ -1156,7 +1195,7 @@ mod native_tests {
             .args(args)
             .status()
             .expect("failed to execute process");
-        assert!(!status.success());       
+        assert!(!status.success());
     }
 
     fn build_ezkl() {
