@@ -18,6 +18,7 @@ use crate::pfsys::{
 use crate::pfsys::{create_proof_circuit, gen_srs, prepare_data, save_vk, verify_proof_circuit};
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::providers::Middleware;
+#[cfg(not(target_arch = "wasm32"))]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::plonk::{Circuit, ProvingKey, VerifyingKey};
@@ -32,7 +33,9 @@ use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
+#[cfg(not(target_arch = "wasm32"))]
 use halo2curves::ff::Field;
+#[cfg(not(target_arch = "wasm32"))]
 use indicatif::ParallelProgressIterator;
 use itertools::Itertools;
 #[cfg(not(target_arch = "wasm32"))]
@@ -40,8 +43,11 @@ use log::warn;
 use log::{info, trace};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
+#[cfg(not(target_arch = "wasm32"))]
 use rand::Rng;
-use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+#[cfg(not(target_arch = "wasm32"))]
+use rayon::prelude::IntoParallelIterator;
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
@@ -52,6 +58,7 @@ use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
 use std::path::PathBuf;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
@@ -69,6 +76,7 @@ pub enum ExecutionError {
 /// Run an ezkl command with given args
 pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     match cli.command {
+        #[cfg(not(target_arch = "wasm32"))]
         Commands::Fuzz {
             data,
             model: _,
