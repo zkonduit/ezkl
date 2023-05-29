@@ -254,10 +254,12 @@ jobs:
           toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
-      - name: fuzz tests
-        run: cargo test --release --verbose tests::kzg_fuzz_ -- --test-threads 6
+      - name: Install Anvil
+        run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
       - name: fuzz tests (EVM)
         run: cargo test --release --verbose tests_evm::kzg_evm_fuzz_ -- --test-threads 6
+      - name: fuzz tests
+        run: cargo test --release --verbose tests::kzg_fuzz_ -- --test-threads 6
 
   prove-and-verify-aggr-tests:
     runs-on: self-hosted
