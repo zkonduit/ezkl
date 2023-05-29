@@ -1060,6 +1060,7 @@ mod native_tests {
                 &format!("--bits={}", bits),
                 &format!("--logrows={}", logrows),
                 &format!("--scale={}", scale),
+                &format!("--num-runs={}", 5),
             ])
             .status()
             .expect("failed to execute process");
