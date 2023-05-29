@@ -32,7 +32,7 @@ In the backend we use [Halo2](https://github.com/privacy-scaling-explorations/ha
 | --- | --- |
 | [docs](https://docs.ezkl.xyz ) | the official ezkl docs page |
 | [tutorial](https://github.com/zkonduit/pyezkl/tree/main/examples/tutorial) | end-to-end tutorial using pytorch and ezkl |
-| [notebook](https://github.com/zkonduit/ezkl/blob/main/examples/notebook/ezkl_demo.ipynb) | end-to-end tutorial using pytorch and ezkl in a jupyter notebook |
+| [notebook](https://github.com/zkonduit/pyezkl/blob/main/examples/ezkl_demo.ipynb) | end-to-end tutorial using pytorch and ezkl in a jupyter notebook |
 | `cargo doc --open` | compile and open the docs in your default browser |
 
 
