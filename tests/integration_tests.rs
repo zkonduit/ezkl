@@ -2,7 +2,6 @@
 #[cfg(test)]
 mod native_tests {
 
-    use halo2_proofs::transcript;
     use lazy_static::lazy_static;
     use std::env::var;
     use std::process::Command;
