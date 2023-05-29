@@ -2,6 +2,7 @@
 #[cfg(test)]
 mod native_tests {
 
+    use halo2_proofs::transcript;
     use lazy_static::lazy_static;
     use std::env::var;
     use std::process::Command;
@@ -316,7 +317,7 @@ mod native_tests {
             #(#[test_case(TESTS[N])])*
             fn kzg_fuzz_(test: &str) {
                 crate::native_tests::init_binary();
-                kzg_fuzz(test.to_string(), 7, 16, 17);
+                kzg_fuzz(test.to_string(), 7, 16, 17, "blake");
             }
 
             });
@@ -349,6 +350,7 @@ mod native_tests {
             use test_case::test_case;
             use crate::native_tests::kzg_evm_prove_and_verify;
             use crate::native_tests::kzg_evm_aggr_prove_and_verify;
+            use crate::native_tests::kzg_fuzz;
 
             /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
             /// specify those that will
@@ -381,6 +383,13 @@ mod native_tests {
                     crate::native_tests::init_params_17();
                     kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test));
                 }
+
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_fuzz_(test: &str) {
+                    crate::native_tests::init_binary();
+                    kzg_fuzz(test.to_string(), 7, 16, 17, "evm");
+                }
+
                 // these take a particularly long time to run
                 #(#[test_case(TESTS_EVM[N])])*
                 #[ignore]
@@ -1049,7 +1058,7 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_fuzz(example_name: String, scale: usize, bits: usize, logrows: usize) {
+    fn kzg_fuzz(example_name: String, scale: usize, bits: usize, logrows: usize, transcript: &str) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "fuzz",
@@ -1061,6 +1070,7 @@ mod native_tests {
                 &format!("--logrows={}", logrows),
                 &format!("--scale={}", scale),
                 &format!("--num-runs={}", 5),
+                &format!("--transcript={}", transcript),
             ])
             .status()
             .expect("failed to execute process");

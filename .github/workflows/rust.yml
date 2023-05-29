@@ -255,7 +255,9 @@ jobs:
           override: true
           components: rustfmt, clippy
       - name: fuzz tests
-        run: cargo test --release --verbose tests::kzg_fuzz_ -- --test-threads 2
+        run: cargo test --release --verbose tests::kzg_fuzz_ -- --test-threads 4
+      - name: fuzz tests (EVM)
+        run: cargo test --release --verbose tests::kzg_evm_fuzz_ -- --test-threads 4
 
   prove-and-verify-aggr-tests:
     runs-on: self-hosted

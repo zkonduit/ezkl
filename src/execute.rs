@@ -667,6 +667,7 @@ fn prove(
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn fuzz(
     logrows: u32,
     data: String,
@@ -694,10 +695,8 @@ fn fuzz(
     info!("starting fuzzing");
 
     info!("fuzzing pk");
-    let num_failures = AtomicI64::new(0);
-    let _r = Gag::stdout().unwrap();
 
-    (0..num_runs).into_par_iter().progress().for_each(|_| {
+    let fuzz_pk = || {
         let new_params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
 
         let bad_pk =
@@ -715,32 +714,20 @@ fn fuzz(
         )
         .unwrap();
 
-        let result = verify_proof_circuit_kzg(
+        verify_proof_circuit_kzg(
             params.verifier_params(),
             bad_proof.clone(),
             &pk.get_vk(),
             strategy.clone(),
-        );
+        )
+        .map_err(|_| ())
+    };
 
-        if result.is_ok() {
-            log::error!("proof succeeded with bad pk");
-            passed.swap(false, Ordering::Relaxed);
-            num_failures.fetch_add(1, Ordering::Relaxed);
-        }
-    });
-
-    std::mem::drop(_r);
-    info!(
-        "num failures: {} out of {}",
-        num_failures.load(Ordering::Relaxed),
-        num_runs
-    );
+    run_fuzz_fn(num_runs, fuzz_pk, &passed);
 
     info!("fuzzing public inputs");
-    let num_failures = AtomicI64::new(0);
-    let _r = Gag::stdout().unwrap();
 
-    (0..num_runs).into_par_iter().progress().for_each(|_| {
+    let fuzz_public_inputs = || {
         let mut bad_inputs = vec![];
         for l in &public_inputs {
             bad_inputs.push(vec![Fr::random(rand::rngs::OsRng); l.len()]);
@@ -757,30 +744,18 @@ fn fuzz(
         )
         .unwrap();
 
-        let result = verify_proof_circuit_kzg(
+        verify_proof_circuit_kzg(
             params.verifier_params(),
             bad_proof.clone(),
             &pk.get_vk(),
             strategy.clone(),
-        );
+        )
+        .map_err(|_| ())
+    };
 
-        if result.is_ok() {
-            log::error!("proof succeeded with bad public inputs {:?}", bad_inputs);
-            passed.swap(false, Ordering::Relaxed);
-            num_failures.fetch_add(1, Ordering::Relaxed);
-        }
-    });
-
-    std::mem::drop(_r);
-    info!(
-        "num failures: {} out of {}",
-        num_failures.load(Ordering::Relaxed),
-        num_runs
-    );
+    run_fuzz_fn(num_runs, fuzz_public_inputs, &passed);
 
     info!("fuzzing vk");
-    let num_failures = AtomicI64::new(0);
-    let _r = Gag::stdout().unwrap();
 
     let proof = create_proof_circuit_kzg(
         circuit.clone(),
@@ -792,7 +767,7 @@ fn fuzz(
         CheckMode::SAFE,
     )?;
 
-    (0..num_runs).into_par_iter().progress().for_each(|_| {
+    let fuzz_vk = || {
         let new_params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
 
         let bad_pk =
@@ -801,32 +776,20 @@ fn fuzz(
 
         let bad_vk = bad_pk.get_vk();
 
-        let result = verify_proof_circuit_kzg(
+        verify_proof_circuit_kzg(
             params.verifier_params(),
             proof.clone(),
             &bad_vk,
             strategy.clone(),
-        );
+        )
+        .map_err(|_| ())
+    };
 
-        if result.is_ok() {
-            log::error!("proof succeeded with bad vk");
-            passed.swap(false, Ordering::Relaxed);
-            num_failures.fetch_add(1, Ordering::Relaxed);
-        }
-    });
-
-    std::mem::drop(_r);
-    info!(
-        "num failures: {} out of {}",
-        num_failures.load(Ordering::Relaxed),
-        num_runs
-    );
+    run_fuzz_fn(num_runs, fuzz_vk, &passed);
 
     info!("fuzzing proof bytes");
-    let num_failures = AtomicI64::new(0);
-    let _r = Gag::stdout().unwrap();
 
-    (0..num_runs).into_par_iter().progress().for_each(|_| {
+    let fuzz_proof_bytes = || {
         let mut rng = rand::thread_rng();
 
         let bad_proof_bytes: Vec<u8> = (0..proof.proof.len())
@@ -840,32 +803,20 @@ fn fuzz(
             transcript_type: transcript,
         };
 
-        let result = verify_proof_circuit_kzg(
+        verify_proof_circuit_kzg(
             params.verifier_params(),
             bad_proof.clone(),
             &pk.get_vk(),
             strategy.clone(),
-        );
+        )
+        .map_err(|_| ())
+    };
 
-        if result.is_ok() {
-            log::error!("verify succeeded with bad proof bytes");
-            passed.swap(false, Ordering::Relaxed);
-            num_failures.fetch_add(1, Ordering::Relaxed);
-        }
-    });
-
-    std::mem::drop(_r);
-    info!(
-        "num failures: {} out of {}",
-        num_failures.load(Ordering::Relaxed),
-        num_runs
-    );
+    run_fuzz_fn(num_runs, fuzz_proof_bytes, &passed);
 
     info!("fuzzing proof instances");
-    let num_failures = AtomicI64::new(0);
-    let _r = Gag::stdout().unwrap();
 
-    (0..num_runs).into_par_iter().progress().for_each(|_| {
+    let fuzz_proof_instances = || {
         let mut bad_inputs = vec![];
         for l in &proof.instances {
             bad_inputs.push(vec![Fr::random(rand::rngs::OsRng); l.len()]);
@@ -878,30 +829,18 @@ fn fuzz(
             transcript_type: transcript,
         };
 
-        let result = verify_proof_circuit_kzg(
+        verify_proof_circuit_kzg(
             params.verifier_params(),
             bad_proof.clone(),
             &pk.get_vk(),
             strategy.clone(),
-        );
+        )
+        .map_err(|_| ())
+    };
 
-        if result.is_ok() {
-            log::error!("verify succeeded with bad instances {:?}", bad_inputs);
-            passed.swap(false, Ordering::Relaxed);
-            num_failures.fetch_add(1, Ordering::Relaxed);
-        }
-    });
-
-    std::mem::drop(_r);
-    info!(
-        "num failures: {} out of {}",
-        num_failures.load(Ordering::Relaxed),
-        num_runs
-    );
+    run_fuzz_fn(num_runs, fuzz_proof_instances, &passed);
 
     if matches!(transcript, TranscriptType::EVM) {
-        info!("fuzzing evm verifier ... ");
-
         let num_instance = circuit
             .params
             .instance_shapes
@@ -913,10 +852,8 @@ fn fuzz(
         let deployment_code = gen_deployment_code(yul_code.clone()).unwrap();
 
         info!("fuzzing proof bytes for evm verifier");
-        let num_failures = AtomicI64::new(0);
-        let _r = Gag::stdout().unwrap();
 
-        (0..num_runs).into_par_iter().progress().for_each(|_| {
+        let fuzz_evm_proof_bytes = || {
             let mut rng = rand::thread_rng();
 
             let bad_proof_bytes: Vec<u8> = (0..proof.proof.len())
@@ -930,27 +867,22 @@ fn fuzz(
                 transcript_type: transcript,
             };
 
-            let res = evm_verify(deployment_code.clone(), bad_proof).unwrap();
+            let res = evm_verify(deployment_code.clone(), bad_proof);
 
-            if res {
-                log::error!("evm verify succeeded with bad proof bytes");
-                passed.swap(false, Ordering::Relaxed);
-                num_failures.fetch_add(1, Ordering::Relaxed);
+            match res {
+                Ok(b) => match b {
+                    true => Ok(()),
+                    false => Err(()),
+                },
+                Err(_) => Err(()),
             }
-        });
+        };
 
-        std::mem::drop(_r);
-        info!(
-            "num failures: {} out of {}",
-            num_failures.load(Ordering::Relaxed),
-            num_runs
-        );
+        run_fuzz_fn(num_runs, fuzz_evm_proof_bytes, &passed);
 
         info!("fuzzing proof instances for evm verifier");
-        let num_failures = AtomicI64::new(0);
-        let _r = Gag::stdout().unwrap();
 
-        (0..num_runs).into_par_iter().progress().for_each(|_| {
+        let fuzz_evm_instances = || {
             let mut bad_inputs = vec![];
             for l in &proof.instances {
                 bad_inputs.push(vec![Fr::random(rand::rngs::OsRng); l.len()]);
@@ -963,21 +895,18 @@ fn fuzz(
                 transcript_type: transcript,
             };
 
-            let res = evm_verify(deployment_code.clone(), bad_proof).unwrap();
+            let res = evm_verify(deployment_code.clone(), bad_proof);
 
-            if res {
-                log::error!("evm verify succeeded with bad instances {:?}", bad_inputs);
-                passed.swap(false, Ordering::Relaxed);
-                num_failures.fetch_add(1, Ordering::Relaxed);
+            match res {
+                Ok(b) => match b {
+                    true => Ok(()),
+                    false => Err(()),
+                },
+                Err(_) => Err(()),
             }
-        });
+        };
 
-        std::mem::drop(_r);
-        info!(
-            "num failures: {} out of {}",
-            num_failures.load(Ordering::Relaxed),
-            num_runs
-        );
+        run_fuzz_fn(num_runs, fuzz_evm_instances, &passed);
     }
 
     if !passed.into_inner() {
@@ -985,6 +914,31 @@ fn fuzz(
     } else {
         Ok(())
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn run_fuzz_fn(
+    num_runs: usize,
+    f: impl Fn() -> Result<(), ()> + std::marker::Sync + std::marker::Send,
+    passed: &AtomicBool,
+) {
+    let num_failures = AtomicI64::new(0);
+    let _r = Gag::stdout().unwrap();
+
+    (0..num_runs).into_par_iter().progress().for_each(|_| {
+        let result = f();
+        if result.is_ok() {
+            passed.swap(false, Ordering::Relaxed);
+            num_failures.fetch_add(1, Ordering::Relaxed);
+        }
+    });
+
+    std::mem::drop(_r);
+    info!(
+        "num failures: {} out of {}",
+        num_failures.load(Ordering::Relaxed),
+        num_runs
+    );
 }
 
 fn aggregate(

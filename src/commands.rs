@@ -326,7 +326,7 @@ pub enum Commands {
         #[clap(flatten)]
         args: RunArgs,
     },
-
+    #[cfg(not(target_arch = "wasm32"))]
     /// Loads model, data, and creates proof
     #[command(arg_required_else_help = true)]
     Fuzz {
@@ -455,7 +455,7 @@ pub enum Commands {
         /// Lower values optimze for deployment size while higher values optimize for execution cost.
         /// If not set will just use the default unoptimized SOLC configuration.
         #[arg(long)]
-        optimizer_runs: Option<usize>
+        optimizer_runs: Option<usize>,
     },
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -530,7 +530,7 @@ pub enum Commands {
         /// Lower values optimze for deployment size while higher values optimize for execution cost.
         /// If not set will just use the default unoptimized SOLC configuration.
         #[arg(long)]
-        optimizer_runs: Option<usize>
+        optimizer_runs: Option<usize>,
     },
 
     /// Print the proof in hexadecimal
