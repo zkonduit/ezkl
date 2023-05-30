@@ -680,10 +680,13 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 None => None,
             };
 
+            let output_padding = (deconv_node.adjustments[0], deconv_node.adjustments[1]);
+
             Box::new(PolyOp::DeConv {
                 kernel,
                 bias,
                 padding: (padding_h, padding_w),
+                output_padding: output_padding,
                 stride: (stride_h, stride_w),
             })
         }

@@ -23,6 +23,7 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
         kernel: ValTensor<F>,
         bias: Option<ValTensor<F>>,
         padding: (usize, usize),
+        output_padding: (usize, usize),
         stride: (usize, usize),
     },
     SumPool {
@@ -146,13 +147,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 kernel: a,
                 bias,
                 padding,
+                output_padding,
                 stride,
             } => {
                 inputs.push(Tensor::new(Some(&a.get_int_evals().unwrap()), a.dims())?);
                 if let Some(b) = bias {
                     inputs.push(Tensor::new(Some(&b.get_int_evals().unwrap()), b.dims())?);
                 }
-                tensor::ops::deconv(&inputs, *padding, *stride)
+                tensor::ops::deconv(&inputs, *padding, *output_padding, *stride)
             }
             PolyOp::SumPool {
                 padding,
@@ -238,6 +240,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 kernel,
                 bias,
                 padding,
+                output_padding,
                 stride,
             } => {
                 values.push(kernel.clone());
@@ -249,6 +252,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                     region,
                     values[..].try_into()?,
                     *padding,
+                    *output_padding,
                     *stride,
                     offset,
                 )?

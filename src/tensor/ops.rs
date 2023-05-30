@@ -239,7 +239,7 @@ pub fn matmul<
 /// ).unwrap();
 ///
 /// let result = einsum("bn,anm,bm->ba", &[z, x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[390,  414,  534, 994, 1153, 1384]), &[2, 3]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[390, 414, 534, 994, 1153, 1384]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 ///
@@ -1121,6 +1121,16 @@ pub fn intercalate_values<T: TensorType>(
 /// use ezkl_lib::tensor::Tensor;
 /// use ezkl_lib::tensor::ops::deconv;
 ///
+/// let c = Tensor::<i128>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 2, 2, 3]).unwrap();
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 4, 0, 1]),
+///     &[1, 1, 2, 2],
+/// ).unwrap();
+///
+/// let result = deconv::<i128>(&[x, c], (1, 1), (1, 1), (2, 2)).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 32, 0, 32, 0, 6, 0, 12, 0, 4, 0, 8, 0, 4, 0, 8, 0, 0, 0, 3, 0, 0, 0, 2]), &[1, 2, 3, 4]).unwrap();
+/// assert_eq!(result, expected);
+///
 /// let x = Tensor::<i128>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
@@ -1129,7 +1139,7 @@ pub fn intercalate_values<T: TensorType>(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], (0, 0), (1, 1)).unwrap();
+/// let result = deconv::<i128>(&[x, k], (0, 0), (0, 0), (1, 1)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[6, 14, 4, 2, 17, 21, 0, 1, 5]), &[1, 1, 3, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1142,7 +1152,7 @@ pub fn intercalate_values<T: TensorType>(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], (1, 1), (1, 1)).unwrap();
+/// let result = deconv::<i128>(&[x, k], (1, 1), (0, 0), (1, 1)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[17]), &[1, 1, 1, 1]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1155,7 +1165,7 @@ pub fn intercalate_values<T: TensorType>(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], (1, 1), (2, 2)).unwrap();
+/// let result = deconv::<i128>(&[x, k], (1, 1), (0, 0), (2, 2)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[10, 4, 0, 3]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1167,7 +1177,7 @@ pub fn intercalate_values<T: TensorType>(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], (0, 0), (2, 2)).unwrap();
+/// let result = deconv::<i128>(&[x, k], (0, 0), (0, 0), (2, 2)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[6, 2, 12, 4, 2, 10, 4, 20, 0, 0, 3, 1, 0, 0, 1, 5]), &[1, 1, 4, 4]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1179,7 +1189,7 @@ pub fn intercalate_values<T: TensorType>(
 ///     Some(&[3, 2]),
 ///     &[1, 1, 2, 1],
 /// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], (1, 1), (2, 2)).unwrap();
+/// let result = deconv::<i128>(&[x, k], (1, 1), (0, 0), (2, 2)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[0, 0]), &[1, 1, 2, 1]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1191,19 +1201,18 @@ pub fn intercalate_values<T: TensorType>(
 ///     Some(&[3, 2]),
 ///     &[1, 1, 2, 1],
 /// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], (0, 0), (2, 2)).unwrap();
+/// let result = deconv::<i128>(&[x, k], (0, 0), (0, 0), (2, 2)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 1, 4, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 ///
-/// let mut c = expected.clone();
-/// c.reshape(&[1, 2, 2, 3]);
+/// let c = Tensor::<i128>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 2, 2, 3]).unwrap();
 /// let x = Tensor::<i128>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap();
 ///
-/// let result = deconv::<i128>(&[x, c], (1, 1), (2, 2)).unwrap();
+/// let result = deconv::<i128>(&[x, c], (1, 1), (0, 0), (2, 2)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[0, 32, 0, 0, 6, 0, 0, 4, 0, 0, 0, 0]), &[1, 2, 2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1220,7 +1229,7 @@ pub fn intercalate_values<T: TensorType>(
 ///     Some(&[1]),
 ///     &[1],
 /// ).unwrap();
-/// let result = deconv::<i128>(&[x, k, b], (1, 1), (1, 1)).unwrap();
+/// let result = deconv::<i128>(&[x, k, b], (1, 1), (0, 0), (1, 1)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[55, 58, 66, 69]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1230,6 +1239,7 @@ pub fn deconv<
 >(
     inputs: &[Tensor<T>],
     padding: (usize, usize),
+    output_padding: (usize, usize),
     stride: (usize, usize),
 ) -> Result<Tensor<T>, TensorError> {
     let has_bias = inputs.len() == 3;
@@ -1287,9 +1297,9 @@ pub fn deconv<
         .enumerate()
         .map(|(i, d)| {
             if i == 2 {
-                padding.0..d - padding.0
+                padding.0..d - padding.0 + output_padding.0
             } else if i == 3 {
-                padding.1..d - padding.1
+                padding.1..d - padding.1 + output_padding.1
             } else {
                 0..*d
             }

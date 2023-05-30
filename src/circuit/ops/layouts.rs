@@ -977,6 +977,7 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
     region: Arc<Mutex<Option<&mut Region<F>>>>,
     inputs: &[ValTensor<F>],
     padding: (usize, usize),
+    output_padding: (usize, usize),
     stride: (usize, usize),
     offset: &mut usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
@@ -1051,9 +1052,9 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
         .enumerate()
         .map(|(i, d)| {
             if i == 2 {
-                padding.0..d - padding.0
+                padding.0..d - padding.0 + output_padding.0
             } else if i == 3 {
-                padding.1..d - padding.1
+                padding.1..d - padding.1 + output_padding.1
             } else {
                 0..*d
             }
@@ -1087,6 +1088,7 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
                     .map(|x| x.get_inner().unwrap())
                     .collect::<Vec<Tensor<_>>>(),
                 padding,
+                output_padding,
                 stride,
             )
             .map_err(|e| {
