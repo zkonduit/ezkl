@@ -1,4 +1,7 @@
-use super::{ops::pad, *};
+use super::{
+    ops::{intercalate_values, pad},
+    *,
+};
 use halo2_proofs::{arithmetic::Field, plonk::Instance};
 
 #[derive(Debug, Clone)]
@@ -360,6 +363,27 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                 inner: v, dims: d, ..
             } => {
                 *v = v.remove_every_n(n, initial_offset)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        }
+        Ok(())
+    }
+
+    /// Calls `intercalate_values` on the inner [Tensor].
+    pub fn intercalate_values(
+        &mut self,
+        value: ValType<F>,
+        stride: usize,
+        axis: usize,
+    ) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                *v = intercalate_values(v, value, stride, axis)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {

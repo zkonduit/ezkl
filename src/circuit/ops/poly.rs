@@ -19,6 +19,13 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
         padding: (usize, usize),
         stride: (usize, usize),
     },
+    DeConv {
+        kernel: ValTensor<F>,
+        bias: Option<ValTensor<F>>,
+        padding: (usize, usize),
+        output_padding: (usize, usize),
+        stride: (usize, usize),
+    },
     SumPool {
         padding: (usize, usize),
         stride: (usize, usize),
@@ -78,6 +85,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Pack(_, _) => "PACK",
             PolyOp::GlobalSumPool => "GLOBALSUMPOOL",
             PolyOp::Conv { .. } => "CONV",
+            PolyOp::DeConv { .. } => "DECONV",
             PolyOp::SumPool { .. } => "SUMPOOL",
             PolyOp::Gather { .. } => "GATHER",
             PolyOp::Concat { .. } => "CONCAT",
@@ -134,6 +142,19 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                     inputs.push(Tensor::new(Some(&b.get_int_evals().unwrap()), b.dims())?);
                 }
                 tensor::ops::conv(&inputs, *padding, *stride)
+            }
+            PolyOp::DeConv {
+                kernel: a,
+                bias,
+                padding,
+                output_padding,
+                stride,
+            } => {
+                inputs.push(Tensor::new(Some(&a.get_int_evals().unwrap()), a.dims())?);
+                if let Some(b) = bias {
+                    inputs.push(Tensor::new(Some(&b.get_int_evals().unwrap()), b.dims())?);
+                }
+                tensor::ops::deconv(&inputs, *padding, *output_padding, *stride)
             }
             PolyOp::SumPool {
                 padding,
@@ -211,6 +232,27 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                     region,
                     values[..].try_into()?,
                     *padding,
+                    *stride,
+                    offset,
+                )?
+            }
+            PolyOp::DeConv {
+                kernel,
+                bias,
+                padding,
+                output_padding,
+                stride,
+            } => {
+                values.push(kernel.clone());
+                if let Some(bias) = bias {
+                    values.push(bias.clone());
+                }
+                layouts::deconv(
+                    config,
+                    region,
+                    values[..].try_into()?,
+                    *padding,
+                    *output_padding,
                     *stride,
                     offset,
                 )?
@@ -296,6 +338,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
 
             PolyOp::Sum { .. } => in_scales[0],
             PolyOp::Conv { kernel, bias, .. } => {
+                let output_scale = in_scales[0] + kernel.scale();
+                if let Some(b) = bias {
+                    assert_eq!(output_scale, b.scale());
+                }
+                output_scale
+            }
+            PolyOp::DeConv { kernel, bias, .. } => {
                 let output_scale = in_scales[0] + kernel.scale();
                 if let Some(b) = bias {
                     assert_eq!(output_scale, b.scale());

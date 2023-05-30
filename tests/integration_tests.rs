@@ -83,7 +83,7 @@ mod native_tests {
 
     const LARGE_TESTS: [&str; 2] = ["self_attention", "nanoGPT"];
 
-    const TESTS: [&str; 32] = [
+    const TESTS: [&str; 33] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -118,6 +118,7 @@ mod native_tests {
         "min",
         "max",
         "1l_max_pool",
+        "1l_conv_transpose",
     ];
 
     const PACKING_TESTS: [&str; 14] = [
@@ -274,7 +275,7 @@ mod native_tests {
                 run_percentage_tolerance();
             }
 
-            seq!(N in 0..=31 {
+            seq!(N in 0..=32 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {

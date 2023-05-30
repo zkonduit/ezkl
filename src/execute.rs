@@ -429,6 +429,11 @@ fn forward(
 
     let res = model.forward(&model_inputs)?;
 
+    trace!(
+        "forward pass output shapes: {:?}",
+        res.iter().map(|t| t.dims()).collect_vec()
+    );
+
     let output_scales = model.graph.get_output_scales();
     let output_scales = output_scales
         .iter()
@@ -636,6 +641,7 @@ fn prove(
 
     let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(pk_path, circuit_params)
         .map_err(Box::<dyn Error>::from)?;
+
     trace!("params computed");
 
     let now = Instant::now();

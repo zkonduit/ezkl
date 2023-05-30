@@ -17,9 +17,9 @@ use crate::{
     tensor::{
         get_broadcasted_shape,
         ops::{
-            accumulated, add, conv as non_accum_conv, dot as non_accum_dot,
-            einsum as non_accum_einsum, max_pool2d as non_accum_max_pool2d, mult,
-            pack as non_accum_pack, sub, sum as non_accum_sum, sumpool as non_accum_sumpool,
+            accumulated, add, conv as non_accum_conv, deconv as non_accum_deconv,
+            dot as non_accum_dot, einsum as non_accum_einsum, max_pool2d as non_accum_max_pool2d,
+            mult, pack as non_accum_pack, sub, sum as non_accum_sum, sumpool as non_accum_sumpool,
         },
         Tensor, TensorError, ValType,
     },
@@ -969,6 +969,141 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     }
 
     Ok(res)
+}
+
+/// DeConvolution accumulated layout
+pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::marker::Sync>(
+    config: &BaseConfig<F>,
+    region: Arc<Mutex<Option<&mut Region<F>>>>,
+    inputs: &[ValTensor<F>],
+    padding: (usize, usize),
+    output_padding: (usize, usize),
+    stride: (usize, usize),
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let has_bias = inputs.len() == 3;
+    let (image, kernel) = (&inputs[0], &inputs[1]);
+
+    if (image.dims().len() != 4) || (kernel.dims().len() != 4) {
+        return Err(Box::new(TensorError::DimMismatch("deconv".to_string())));
+    }
+
+    if stride.0 == 0 || stride.1 == 0 {
+        return Err(Box::new(TensorError::DimMismatch(
+            "non-positive stride is not supported for deconv".to_string(),
+        )));
+    }
+
+    if has_bias {
+        let bias = &inputs[2];
+        if (bias.dims().len() != 1) || (bias.dims()[0] != kernel.dims()[0]) {
+            return Err(Box::new(TensorError::DimMismatch(
+                "deconv bias".to_string(),
+            )));
+        }
+    }
+
+    let (kernel_height, kernel_width) = (kernel.dims()[2], kernel.dims()[3]);
+
+    let mut lock = region.lock().unwrap();
+    let null_val: ValType<F> = if let Some(region) = lock.as_mut() {
+        config.inputs[1]
+            .assign_constant(*region, *offset, F::from(0))?
+            .into()
+    } else {
+        // for dummy run throughs
+        Value::known(F::from(0)).into()
+    };
+    *offset += 1;
+
+    std::mem::drop(lock);
+
+    let mut expanded_image = image.clone();
+    expanded_image.intercalate_values(null_val.clone(), stride.0, 2)?;
+    expanded_image.intercalate_values(null_val, stride.1, 3)?;
+    expanded_image.pad((kernel_height - 1, kernel_width - 1))?;
+
+    // flip order
+    let channel_coord = (0..kernel.dims()[0])
+        .cartesian_product(0..kernel.dims()[1])
+        .collect::<Vec<_>>();
+
+    let mut inverted_kernels = vec![];
+
+    for (i, j) in channel_coord {
+        let channel = kernel.get_slice(&[i..i + 1, j..j + 1])?;
+        let mut channel = Tensor::from(channel.get_inner_tensor()?.into_iter().rev());
+        channel.reshape(&[kernel.dims()[2], kernel.dims()[3]]);
+        inverted_kernels.push(channel);
+    }
+
+    let mut deconv_kernel =
+        Tensor::new(Some(&inverted_kernels), &[inverted_kernels.len()])?.combine()?;
+    deconv_kernel.reshape(&[
+        kernel.dims()[1],
+        kernel.dims()[0],
+        kernel.dims()[2],
+        kernel.dims()[3],
+    ]);
+
+    let slice_coord = expanded_image
+        .dims()
+        .iter()
+        .enumerate()
+        .map(|(i, d)| {
+            if i == 2 {
+                padding.0..d - padding.0 + output_padding.0
+            } else if i == 3 {
+                padding.1..d - padding.1 + output_padding.1
+            } else {
+                0..*d
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let sliced_expanded_image = expanded_image.get_slice(&slice_coord)?;
+
+    let conv_input = if has_bias {
+        vec![
+            sliced_expanded_image.into(),
+            deconv_kernel.clone().into(),
+            inputs[2].clone(),
+        ]
+    } else {
+        vec![sliced_expanded_image, deconv_kernel.clone().into()]
+    };
+
+    let output = conv(config, region, &conv_input, (0, 0), (1, 1), offset)?;
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be 0 so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let is_assigned = !Into::<Tensor<i32>>::into(output.get_inner()?)
+            .iter()
+            .all(|&x| x == 0);
+        if is_assigned {
+            let safe_conv = non_accum_deconv(
+                &inputs
+                    .iter()
+                    .map(|x| x.get_inner().unwrap())
+                    .collect::<Vec<Tensor<_>>>(),
+                padding,
+                output_padding,
+                stride,
+            )
+            .map_err(|e| {
+                error!("{}", e);
+                halo2_proofs::plonk::Error::Synthesis
+            })?;
+
+            assert_eq!(
+                Into::<Tensor<i32>>::into(output.get_inner()?),
+                Into::<Tensor<i32>>::into(safe_conv),
+            )
+        }
+    }
+
+    Ok(output)
 }
 
 /// Convolution accumulated layout
