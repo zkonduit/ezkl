@@ -54,6 +54,82 @@ pub fn iff<
     masked_a + masked_b
 }
 
+/// Resize using nearest neighbour interpolation.
+/// # Arguments
+/// * `a` - Tensor
+/// * `scales` - Vector of scales
+/// # Examples
+/// ```
+///
+///
+/// let a = Tensor::<i128>::new(
+///   Some(&[1, 2, 3, 4, 5, 6]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = resize(&a, &[1, 2]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6]), &[2, 6]).unwrap();
+/// assert_eq!(result, expected);
+///
+///
+/// let a = Tensor::<i128>::new(
+///   Some(&[1, 2, 3, 4, 5, 6]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = resize(&a, &[2, 2]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 1, 2, 2, 3, 3, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 4, 4, 5, 5, 6, 6]), &[4, 6]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::resize;
+/// let a = Tensor::<i128>::new(
+///   Some(&[1, 2, 3, 4]),
+/// &[2, 2],
+/// ).unwrap();
+/// let result = resize(&a, &[2, 2]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 1, 2, 2, 1, 1, 2, 2, 3, 3, 4, 4, 3, 3, 4, 4]), &[4, 4]).unwrap();
+/// assert_eq!(result, expected);
+///
+///
+/// let a = Tensor::<i128>::new(
+///   Some(&[1, 2, 3, 4, 5, 6]),
+/// &[3, 2],
+/// ).unwrap();
+/// let result = resize(&a, &[2, 3]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 5, 5, 5, 6, 6, 6]), &[6, 6]).unwrap();
+/// assert_eq!(result, expected);
+///
+///
+/// ```
+pub fn resize<T: TensorType>(a: &Tensor<T>, scales: &[usize]) -> Result<Tensor<T>, TensorError> {
+    let mut new_shape = vec![];
+    for (s, d) in scales.iter().zip(a.dims()) {
+        new_shape.push(s * d);
+    }
+
+    let mut output = Tensor::new(None, &new_shape)?;
+
+    let cartesian_coord: Vec<Vec<usize>> = new_shape
+        .iter()
+        .map(|d| (0..*d))
+        .multi_cartesian_product()
+        .collect();
+
+    // resize using nearest neighbour interpolation
+    // (i.e. just copy the value of the nearest neighbour to pad the tensor)
+    output.iter_mut().enumerate().for_each(|(i, o)| {
+        let mut coord = vec![];
+        for (j, (c, _d)) in cartesian_coord[i].iter().zip(new_shape.iter()).enumerate() {
+            let scale = scales[j];
+            let fragment = c / scale;
+            coord.push(fragment);
+        }
+
+        *o = a.get(&coord);
+    });
+
+    Ok(output)
+}
+
 /// Matrix multiplies two 2D tensors.
 /// # Arguments
 ///

@@ -61,6 +61,9 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
         end: usize,
     },
     Iff,
+    Resize {
+        scale_factor: Vec<usize>,
+    },
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {}
@@ -71,6 +74,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     }
     fn as_string(&self) -> String {
         let name = match &self {
+            PolyOp::Resize { .. } => "RESIZE",
             PolyOp::Iff => "IFF",
             PolyOp::Einsum { .. } => "EINSUM",
             PolyOp::Identity => "IDENTITY",
@@ -98,6 +102,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         let mut inputs = inputs.to_vec();
         match &self {
+            PolyOp::Resize { scale_factor } => tensor::ops::resize(&inputs[0], scale_factor),
             PolyOp::Iff => tensor::ops::iff(&inputs[0], &inputs[1], &inputs[2]),
             PolyOp::Einsum { equation } => tensor::ops::einsum(equation, &inputs),
             PolyOp::Gather { dim, index } => tensor::ops::gather(&inputs[0], *dim, index),
@@ -206,6 +211,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
         let mut values = values.to_vec();
 
         Ok(Some(match self {
+            PolyOp::Resize { scale_factor } => {
+                layouts::resize(config, region, values[..].try_into()?, scale_factor, offset)?
+            }
             PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?, offset)?,
             PolyOp::Einsum { equation } => {
                 let out = layouts::einsum(config, region, &mut values, equation, offset)?;
@@ -326,6 +334,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
 
     fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
         match self {
+            PolyOp::Resize { .. } => in_scales[0],
             PolyOp::Iff => in_scales[1],
             PolyOp::Einsum { .. } => {
                 let mut scale = in_scales[0];
