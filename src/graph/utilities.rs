@@ -12,6 +12,7 @@ use log::{debug, warn};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::array::Gather;
 use tract_onnx::tract_core::ops::array::Slice;
+use tract_onnx::tract_core::ops::cnn::DeconvUnary;
 use tract_onnx::tract_core::ops::einsum::EinSum;
 // use tract_onnx::tract_core::ops::binary::UnaryOp;
 // use tract_onnx::tract_core::ops::matmul::MatMulUnary;
@@ -616,6 +617,70 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             };
 
             Box::new(PolyOp::Conv {
+                kernel,
+                bias,
+                padding: (padding_h, padding_w),
+                stride: (stride_h, stride_w),
+            })
+        }
+        "DeconvUnary" => {
+            let deconv_node: &DeconvUnary = match node.op().downcast_ref::<DeconvUnary>() {
+                Some(b) => b,
+                None => {
+                    return Err(Box::new(GraphError::OpMismatch(idx, "deconv".to_string())));
+                }
+            };
+
+            if let Some(dilations) = &deconv_node.pool_spec.dilations {
+                if dilations.iter().any(|x| *x != 1) {
+                    return Err(Box::new(GraphError::MisformedParams(
+                        "non unit dilations not supported".to_string(),
+                    )));
+                }
+            }
+
+            if (deconv_node.pool_spec.data_format != DataFormat::NCHW)
+                || (deconv_node.kernel_format != KernelFormat::OIHW)
+            {
+                return Err(Box::new(GraphError::MisformedParams(
+                    "data or kernel in wrong format".to_string(),
+                )));
+            }
+
+            let stride = match deconv_node.pool_spec.strides.clone() {
+                Some(s) => s,
+                None => {
+                    return Err(Box::new(GraphError::MissingParams("strides".to_string())));
+                }
+            };
+            let padding = match &deconv_node.pool_spec.padding {
+                PaddingSpec::Explicit(p, _, _) => p,
+                _ => {
+                    return Err(Box::new(GraphError::MissingParams("padding".to_string())));
+                }
+            };
+
+            let (padding_h, padding_w, stride_h, stride_w) =
+                (padding[0], padding[1], stride[0], stride[1]);
+
+            let kernel = extract_tensor_value(deconv_node.kernel.clone())?;
+            let kernel = tensor_to_valtensor(kernel, scale, public_params)?;
+
+            let bias = match deconv_node.bias.clone() {
+                Some(b) => {
+                    let const_value = extract_tensor_value(b)?;
+
+                    let val = tensor_to_valtensor(
+                        const_value,
+                        scale + inputs[0].out_scales()[0],
+                        public_params,
+                    )?;
+                    Some(val)
+                }
+                None => None,
+            };
+
+            Box::new(PolyOp::DeConv {
                 kernel,
                 bias,
                 padding: (padding_h, padding_w),

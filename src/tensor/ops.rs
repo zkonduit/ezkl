@@ -1016,7 +1016,7 @@ pub fn conv<
     .multi_cartesian_product()
     .collect::<Vec<_>>();
 
-    output.iter_mut().enumerate().for_each(|(i, o)| {
+    output.par_iter_mut().enumerate().for_each(|(i, o)| {
         let cartesian_coord_per_group = &cartesian_coord[i];
         let (batch, group, i, j, k) = (
             cartesian_coord_per_group[0],
@@ -1055,6 +1055,260 @@ pub fn conv<
     });
 
     output.reshape(&[batch_size, output_channels, vert_slides, horz_slides]);
+
+    Ok(output)
+}
+
+/// Intercalates values into a tensor along a given axis.
+/// ```
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::intercalate_values;
+///
+/// let tensor = Tensor::<i128>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
+/// let result = intercalate_values(&tensor, 0, 2, 1).unwrap();
+///
+/// let expected = Tensor::<i128>::new(Some(&[1, 0, 2, 3, 0, 4]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = intercalate_values(&expected, 0, 2, 0).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 0, 2, 0, 0, 0, 3, 0, 4]), &[3, 3]).unwrap();
+///
+/// assert_eq!(result, expected);
+///
+/// ```
+pub fn intercalate_values<T: TensorType>(
+    tensor: &Tensor<T>,
+    value: T,
+    stride: usize,
+    axis: usize,
+) -> Result<Tensor<T>, TensorError> {
+    if stride == 1 {
+        return Ok(tensor.clone());
+    }
+
+    let mut output_dims = tensor.dims().to_vec();
+    output_dims[axis] = output_dims[axis] * stride - 1;
+
+    let mut output: Tensor<T> = Tensor::new(None, &output_dims)?;
+
+    let cartesian_coord = output
+        .dims()
+        .iter()
+        .map(|d| (0..*d))
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    let mut tensor_slice_iter = tensor.iter();
+
+    output.iter_mut().enumerate().for_each(|(i, o)| {
+        let coord = &cartesian_coord[i];
+
+        if coord[axis] % stride == 0 {
+            *o = tensor_slice_iter.next().unwrap().clone();
+        } else {
+            *o = value.clone();
+        }
+    });
+
+    Ok(output)
+}
+
+/// Performs a 2D deconvolution on the given input tensor.
+/// # Examples
+/// ```
+// // expected ouputs are taken from pytorch torch.nn.functional.conv_transpose2d
+///
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::deconv;
+///
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 4, 0, 1]),
+///     &[1, 1, 2, 2],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///     Some(&[3, 1, 1, 5]),
+///     &[1, 1, 2, 2],
+/// ).unwrap();
+/// let result = deconv::<i128>(&[x, k], (0, 0), (1, 1)).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[6, 14, 4, 2, 17, 21, 0, 1, 5]), &[1, 1, 3, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+///
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 4, 0, 1]),
+///     &[1, 1, 2, 2],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///     Some(&[3, 1, 1, 5]),
+///     &[1, 1, 2, 2],
+/// ).unwrap();
+/// let result = deconv::<i128>(&[x, k], (1, 1), (1, 1)).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[17]), &[1, 1, 1, 1]).unwrap();
+/// assert_eq!(result, expected);
+///
+///
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 4, 0, 1]),
+///     &[1, 1, 2, 2],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///     Some(&[3, 1, 1, 5]),
+///     &[1, 1, 2, 2],
+/// ).unwrap();
+/// let result = deconv::<i128>(&[x, k], (1, 1), (2, 2)).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[10, 4, 0, 3]), &[1, 1, 2, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 4, 0, 1]),
+///     &[1, 1, 2, 2],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///     Some(&[3, 1, 1, 5]),
+///     &[1, 1, 2, 2],
+/// ).unwrap();
+/// let result = deconv::<i128>(&[x, k], (0, 0), (2, 2)).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[6, 2, 12, 4, 2, 10, 4, 20, 0, 0, 3, 1, 0, 0, 1, 5]), &[1, 1, 4, 4]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 4, 0, 1]),
+///     &[1, 1, 2, 2],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///     Some(&[3, 2]),
+///     &[1, 1, 2, 1],
+/// ).unwrap();
+/// let result = deconv::<i128>(&[x, k], (1, 1), (2, 2)).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 0]), &[1, 1, 2, 1]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 4, 0, 1]),
+///     &[1, 1, 2, 2],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///     Some(&[3, 2]),
+///     &[1, 1, 2, 1],
+/// ).unwrap();
+/// let result = deconv::<i128>(&[x, k], (0, 0), (2, 2)).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 1, 4, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+///
+/// let mut c = expected.clone();
+/// c.reshape(&[1, 2, 2, 3]);
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 4, 0, 1]),
+///     &[1, 1, 2, 2],
+/// ).unwrap();
+///
+/// let result = deconv::<i128>(&[x, c], (1, 1), (2, 2)).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 32, 0, 0, 6, 0, 0, 4, 0, 0, 0, 0]), &[1, 2, 2, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+///
+/// let x = Tensor::<i128>::new(
+///     Some(&[3, 8, 0, 8, 4, 9, 8, 1, 8]),
+///     &[1, 1, 3, 3],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///     Some(&[1, 0, 4, 6]),
+///     &[1, 1, 2, 2],
+/// ).unwrap();
+/// let b = Tensor::<i128>::new(
+///     Some(&[1]),
+///     &[1],
+/// ).unwrap();
+/// let result = deconv::<i128>(&[x, k, b], (1, 1), (1, 1)).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[55, 58, 66, 69]), &[1, 1, 2, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// ```
+pub fn deconv<
+    T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Sync + std::marker::Send,
+>(
+    inputs: &[Tensor<T>],
+    padding: (usize, usize),
+    stride: (usize, usize),
+) -> Result<Tensor<T>, TensorError> {
+    let has_bias = inputs.len() == 3;
+    let (image, kernel) = (&inputs[0], &inputs[1]);
+
+    if (image.dims().len() != 4) || (kernel.dims().len() != 4) {
+        return Err(TensorError::DimMismatch("deconv".to_string()));
+    }
+
+    if stride.0 == 0 || stride.1 == 0 {
+        return Err(TensorError::DimMismatch(
+            "non-positive stride is not supported for deconv".to_string(),
+        ));
+    }
+
+    if has_bias {
+        let bias = &inputs[2];
+        if (bias.dims().len() != 1) || (bias.dims()[0] != kernel.dims()[0]) {
+            return Err(TensorError::DimMismatch("deconv bias".to_string()));
+        }
+    }
+
+    let (kernel_height, kernel_width) = (kernel.dims()[2], kernel.dims()[3]);
+
+    let mut expanded_image = intercalate_values(image, T::zero().unwrap(), stride.0, 2)?;
+    expanded_image = intercalate_values(&expanded_image, T::zero().unwrap(), stride.1, 3)?;
+    expanded_image = pad(&expanded_image, (kernel_height - 1, kernel_width - 1))?;
+
+    // flip order
+    let channel_coord = (0..kernel.dims()[0])
+        .cartesian_product(0..kernel.dims()[1])
+        .collect::<Vec<_>>();
+
+    let mut inverted_kernels = vec![];
+
+    for (i, j) in channel_coord {
+        let mut channel = kernel.get_slice(&[i..i + 1, j..j + 1])?;
+        channel = Tensor::from(channel.clone().into_iter().rev());
+        channel.reshape(&[kernel.dims()[2], kernel.dims()[3]]);
+        inverted_kernels.push(channel);
+    }
+
+    let mut deconv_kernel =
+        Tensor::new(Some(&inverted_kernels), &[inverted_kernels.len()])?.combine()?;
+    deconv_kernel.reshape(&[
+        kernel.dims()[1],
+        kernel.dims()[0],
+        kernel.dims()[2],
+        kernel.dims()[3],
+    ]);
+
+    let slice_coord = expanded_image
+        .dims()
+        .iter()
+        .enumerate()
+        .map(|(i, d)| {
+            if i == 2 {
+                padding.0..d - padding.0
+            } else if i == 3 {
+                padding.1..d - padding.1
+            } else {
+                0..*d
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let sliced_expanded_image = expanded_image.get_slice(&slice_coord)?;
+
+    let input = if has_bias {
+        vec![
+            sliced_expanded_image,
+            deconv_kernel.clone(),
+            inputs[2].clone(),
+        ]
+    } else {
+        vec![sliced_expanded_image, deconv_kernel.clone()]
+    };
+
+    let output = conv(&input, (0, 0), (1, 1))?;
 
     Ok(output)
 }
