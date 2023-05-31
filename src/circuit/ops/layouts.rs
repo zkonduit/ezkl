@@ -1422,6 +1422,22 @@ pub fn reshape<F: PrimeField + TensorType + PartialOrd>(
     Ok(t)
 }
 
+/// resize layout
+pub fn resize<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: Arc<Mutex<Option<&mut Region<F>>>>,
+    values: &[ValTensor<F>; 1],
+    scales: &[usize],
+    offset: &mut usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let mut lock = region.lock().unwrap();
+    let mut t = config.output.assign(&mut lock, *offset, &values[0])?;
+    *offset += t.len();
+    t.resize(scales)?;
+
+    Ok(t)
+}
+
 /// Slice layout
 pub fn slice<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
