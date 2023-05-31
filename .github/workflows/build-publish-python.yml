@@ -119,7 +119,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [aarch64, armv7, s390x, ppc64le, ppc64]
+        target: [aarch64, armv7, ppc64le, ppc64]
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-python@v4
@@ -160,7 +160,6 @@ jobs:
       matrix:
         target:
           - x86_64-unknown-linux-musl
-          - i686-unknown-linux-musl
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-python@v4
