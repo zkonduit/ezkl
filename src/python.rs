@@ -1,16 +1,18 @@
 use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::{RunArgs, StrategyType};
 use crate::eth::{fix_verifier_sol, verify_proof_via_solidity};
-use crate::execute::{create_proof_circuit_kzg, load_params_cmd, verify_proof_circuit_kzg, gen_deployment_code};
-use crate::graph::{quantize_float, Mode, Model, ModelCircuit, ModelParams, VarVisibility};
+use crate::execute::{
+    create_proof_circuit_kzg, gen_deployment_code, load_params_cmd, verify_proof_circuit_kzg,
+};
+use crate::graph::{quantize_float, Model, ModelCircuit, ModelParams, VarVisibility};
 use crate::pfsys::evm::{
+    aggregation::{gen_aggregation_evm_verifier, AggregationCircuit},
     evm_verify,
     single::gen_evm_verifier,
-    aggregation::{gen_aggregation_evm_verifier, AggregationCircuit},
     DeploymentCode,
 };
 use crate::pfsys::{
-    create_keys, gen_srs as ezkl_gen_srs, load_pk, load_vk, prepare_data, load_params, save_params,
+    create_keys, gen_srs as ezkl_gen_srs, load_params, load_pk, load_vk, prepare_data, save_params,
     save_pk, save_vk, Snark, TranscriptType,
 };
 use halo2_proofs::poly::kzg::{
@@ -114,7 +116,7 @@ fn table(model: String, py_run_args: Option<PyRunArgs>) -> Result<String, PyErr>
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let visibility: VarVisibility = run_args.to_var_visibility();
     let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
-    let result = Model::<Fr>::new(&mut reader, run_args, Mode::Mock, visibility);
+    let result = Model::<Fr>::new(&mut reader, run_args, visibility);
 
     match result {
         Ok(m) => Ok(m.table_nodes()),
@@ -169,7 +171,6 @@ fn forward(
     let model: Model<Fr> = Model::new(
         &mut reader,
         run_args,
-        crate::graph::Mode::Prove,
         crate::graph::VarVisibility::default(),
     )
     .map_err(|_| PyIOError::new_err("Failed to create new model"))?;
@@ -222,7 +223,7 @@ fn mock(data: String, model: String, py_run_args: Option<PyRunArgs>) -> Result<b
     let data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
     let visibility = run_args.to_var_visibility();
     let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
-    let procmodel = Model::<Fr>::new(&mut reader, run_args, Mode::Mock, visibility)
+    let procmodel = Model::<Fr>::new(&mut reader, run_args, visibility)
         .map_err(|_| PyIOError::new_err("Failed to process model"))?;
 
     let arcmodel: Arc<Model<Fr>> = Arc::new(procmodel);
@@ -269,7 +270,7 @@ fn setup(
     let visibility = run_args.to_var_visibility();
 
     let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
-    let procmodel = Model::<Fr>::new(&mut reader, run_args, Mode::Prove, visibility)
+    let procmodel = Model::<Fr>::new(&mut reader, run_args, visibility)
         .map_err(|_| PyIOError::new_err("Failed to process model"))?;
 
     let arcmodel: Arc<Model<Fr>> = Arc::new(procmodel);
@@ -462,12 +463,12 @@ fn aggregate(
             vk_path.to_path_buf(),
             // safe to clone as the inner model is wrapped in an Arc
             model_circuit_params.clone(),
-        ).map_err(|_| PyIOError::new_err("Failed to load vk_path"))?;
-        snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(
-            proof_path,
-            Some(&params_app),
-            Some(&vk),
-        ).map_err(|_| PyIOError::new_err("Failed to load proof_path"))?);
+        )
+        .map_err(|_| PyIOError::new_err("Failed to load vk_path"))?;
+        snarks.push(
+            Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path, Some(&params_app), Some(&vk))
+                .map_err(|_| PyIOError::new_err("Failed to load proof_path"))?,
+        );
     }
     // proof aggregation
     {
@@ -476,7 +477,8 @@ fn aggregate(
         let agg_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
             &agg_circuit,
             &params,
-        ).map_err(|_| PyRuntimeError::new_err("Failed to create keys"))?;
+        )
+        .map_err(|_| PyRuntimeError::new_err("Failed to create keys"))?;
 
         let snark = create_proof_circuit_kzg(
             agg_circuit.clone(),
@@ -486,9 +488,11 @@ fn aggregate(
             transcript,
             AccumulatorStrategy::new(&params),
             check_mode,
-        ).map_err(|_| PyRuntimeError::new_err("Failed to create proof circuit"))?;
+        )
+        .map_err(|_| PyRuntimeError::new_err("Failed to create proof circuit"))?;
 
-        snark.save(&proof_path)
+        snark
+            .save(&proof_path)
             .map_err(|_| PyIOError::new_err("Failed to save to proof_path"))?;
         save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, agg_pk.get_vk())
             .map_err(|_| PyIOError::new_err("Failed to save to vk_path"))?;
@@ -507,7 +511,7 @@ fn verify_aggr(
     proof_path: PathBuf,
     vk_path: PathBuf,
     params_path: PathBuf,
-    logrows: u32
+    logrows: u32,
 ) -> Result<bool, PyErr> {
     let params = load_params_cmd(params_path, logrows)
         .map_err(|_| PyIOError::new_err("Failed to load params"))?;
@@ -586,7 +590,7 @@ fn verify_evm(
     proof_path: PathBuf,
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
-    runs: Option<usize>
+    runs: Option<usize>,
 ) -> Result<bool, PyErr> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)
         .map_err(|_| PyIOError::new_err("Failed to load proof"))?;
@@ -598,7 +602,11 @@ fn verify_evm(
     if sol_code_path.is_some() {
         let result = Runtime::new()
             .unwrap()
-            .block_on(verify_proof_via_solidity(proof, sol_code_path.unwrap(), runs))
+            .block_on(verify_proof_via_solidity(
+                proof,
+                sol_code_path.unwrap(),
+                runs,
+            ))
             .map_err(|_| PyRuntimeError::new_err("Failed to verify proof via solidity"))?;
 
         trace!("Solidity verification result: {}", result);
@@ -632,11 +640,13 @@ fn create_evm_verifier_aggr(
         &agg_vk,
         AggregationCircuit::num_instance(),
         AggregationCircuit::accumulator_indices(),
-    ).map_err(|_| PyRuntimeError::new_err("Failed to create aggregation evm verifier"))?;
+    )
+    .map_err(|_| PyRuntimeError::new_err("Failed to create aggregation evm verifier"))?;
 
     let deployment_code = gen_deployment_code(yul_code.clone()).unwrap();
 
-    deployment_code.save(&deployment_code_path)
+    deployment_code
+        .save(&deployment_code_path)
         .map_err(|_| PyIOError::new_err("Failed to save to deployment code path"))?;
     if sol_code_path.is_some() {
         let mut f = File::create(sol_code_path.as_ref().unwrap())
@@ -668,7 +678,6 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<String, PyErr> {
     // return proof for now
     Ok(hex::encode(proof.proof))
 }
-
 
 // Python Module
 #[pymodule]

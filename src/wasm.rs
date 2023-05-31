@@ -118,7 +118,6 @@ pub fn prove_wasm(
     let model = crate::graph::Model::new(
         &mut reader,
         circuit_params.run_args,
-        crate::graph::Mode::Prove,
         circuit_params.visibility,
     )
     .unwrap();
