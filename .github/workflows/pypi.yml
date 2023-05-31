@@ -130,7 +130,7 @@ jobs:
       if: matrix.target == 'aarch64'
       run: |
         sudo apt-get update
-        sudo apt-get install -y aarch64-linux-gnu gcc make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+        sudo apt-get install -y gcc make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
 
     - name: Install cross-compilation tools for ARMv7
       if: matrix.target == 'armv7'
