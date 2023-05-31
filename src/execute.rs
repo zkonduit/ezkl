@@ -423,7 +423,6 @@ fn forward(
     let model: Model<Fr> = Model::new(
         &mut std::fs::File::open(model)?,
         args,
-        crate::graph::Mode::Prove,
         crate::graph::VarVisibility::default(),
     )?;
 

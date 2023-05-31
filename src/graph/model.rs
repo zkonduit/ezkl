@@ -16,8 +16,6 @@ use crate::{
 use halo2_proofs::circuit::Region;
 use halo2curves::ff::PrimeField;
 use log::warn;
-use serde::Deserialize;
-use serde::Serialize;
 use tract_onnx::prelude::{
     DatumExt, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
 };
@@ -41,21 +39,6 @@ use std::sync::Mutex;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::Framework;
-/// Mode we're using the model in.
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub enum Mode {
-    /// Initialize the model and display the operations table / graph
-    #[default]
-    Table,
-    /// Initialize the model and generate a mock proof
-    Mock,
-    /// Initialize the model and generate a proof
-    Prove,
-    /// Initialize the model, generate a proof, and verify
-    FullProve,
-    /// Initialize the model and verify an already generated proof
-    Verify,
-}
 
 /// A circuit configuration for the entirety of a model loaded from an Onnx file.
 #[derive(Clone, Debug)]
@@ -76,8 +59,6 @@ pub struct Model<F: PrimeField + TensorType + PartialOrd> {
     pub graph: ParsedNodes<F>,
     /// The [RunArgs] being used
     pub run_args: RunArgs,
-    /// The [Mode] we're using the model in.
-    pub mode: Mode,
     /// Defines which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
     pub visibility: VarVisibility,
 }
@@ -231,20 +212,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// # Arguments
     /// * `reader` - A reader for an Onnx file.
     /// * `run_args` - [RunArgs]
-    /// * `mode` - The [Mode] we're using the model in.
     /// * `visibility` - Which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
     pub fn new(
         reader: &mut dyn std::io::Read,
         run_args: RunArgs,
-        mode: Mode,
         visibility: VarVisibility,
     ) -> Result<Self, Box<dyn Error>> {
-        let graph = Self::load_onnx_model(reader, &run_args, &mode, &visibility)?;
+        let graph = Self::load_onnx_model(reader, &run_args, &visibility)?;
 
         let om = Model {
             run_args,
             graph,
-            mode,
             visibility,
         };
 
@@ -404,7 +382,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     fn load_onnx_model(
         reader: &mut dyn std::io::Read,
         run_args: &RunArgs,
-        mode: &Mode,
         visibility: &VarVisibility,
     ) -> Result<ParsedNodes<F>, Box<dyn Error>> {
         let mut model = tract_onnx::onnx().model_for_read(reader).map_err(|e| {
@@ -452,7 +429,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         let nodes = Self::nodes_from_graph(
             &model,
             run_args,
-            mode,
             visibility,
             model.inputs.iter().map(|_| run_args.scale).collect(),
         )?;
@@ -512,7 +488,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     pub fn nodes_from_graph(
         graph: &Graph<TypedFact, Box<dyn TypedOp>>,
         run_args: &RunArgs,
-        mode: &Mode,
         visibility: &VarVisibility,
         input_scales: Vec<u32>,
     ) -> Result<BTreeMap<usize, NodeType<F>>, Box<dyn Error>> {
@@ -529,7 +504,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                         .map(|i| nodes.get(&i.node).unwrap().out_scales()[0])
                         .collect_vec();
                     let subgraph_nodes =
-                        Self::nodes_from_graph(&model, run_args, mode, visibility, input_scales)?;
+                        Self::nodes_from_graph(&model, run_args, visibility, input_scales)?;
 
                     let subgraph = ParsedNodes {
                         nodes: subgraph_nodes,
@@ -540,7 +515,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                     let om = Model {
                         graph: subgraph,
                         run_args: run_args.clone(),
-                        mode: mode.clone(),
                         visibility: visibility.clone(),
                     };
                     nodes.insert(
@@ -583,41 +557,21 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         match cli.command {
             Commands::Table { model, args, .. } | Commands::Mock { model, args, .. } => {
                 let visibility = VarVisibility::from_args(args.clone())?;
-                Model::new(
-                    &mut std::fs::File::open(model)?,
-                    args,
-                    Mode::Mock,
-                    visibility,
-                )
+                Model::new(&mut std::fs::File::open(model)?, args, visibility)
             }
             Commands::Setup { model, args, .. } => {
                 let visibility = VarVisibility::from_args(args.clone())?;
-                Model::new(
-                    &mut std::fs::File::open(model)?,
-                    args,
-                    Mode::Prove,
-                    visibility,
-                )
+                Model::new(&mut std::fs::File::open(model)?, args, visibility)
             }
             #[cfg(not(target_arch = "wasm32"))]
             Commands::Fuzz { model, args, .. } => {
                 let visibility = VarVisibility::from_args(args.clone())?;
-                Model::new(
-                    &mut std::fs::File::open(model)?,
-                    args,
-                    Mode::Prove,
-                    visibility,
-                )
+                Model::new(&mut std::fs::File::open(model)?, args, visibility)
             }
             #[cfg(feature = "render")]
             Commands::RenderCircuit { model, args, .. } => {
                 let visibility = VarVisibility::from_args(args.clone())?;
-                Model::new(
-                    &mut std::fs::File::open(model)?,
-                    args,
-                    Mode::Table,
-                    visibility,
-                )
+                Model::new(&mut std::fs::File::open(model)?, args, visibility)
             }
             _ => panic!(),
         }
@@ -634,7 +588,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         Model::new(
             &mut std::fs::File::open(model)?,
             params.run_args.clone(),
-            Mode::Prove,
             visibility,
         )
     }
@@ -747,9 +700,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                             })?
                             .unwrap();
                         // only use with mock prover
-                        if matches!(self.mode, Mode::Mock) {
-                            trace!("------------ packed output {:?}", outputs[i].show());
-                        }
+                        trace!("------------ packed output {:?}", outputs[i].show());
                     }
                 }
 
@@ -816,13 +767,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                         // we get the max as for fused nodes this corresponds to the node output
                         results.insert(*idx, vt);
                         //only use with mock prover
-                        if matches!(self.mode, Mode::Mock) {
-                            trace!(
-                                "------------ output node {:?}: {:?}",
-                                idx,
-                                results.get(idx).unwrap().show()
-                            );
-                        }
+                        trace!(
+                            "------------ output node {:?}: {:?}",
+                            idx,
+                            results.get(idx).unwrap().show()
+                        );
                     }
                 }
                 NodeType::SubGraph { model, .. } => {
