@@ -318,7 +318,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
         }
         "Const" => {
             let op: Const = load_const(node.op(), idx, node.op().name().to_string())?;
-            let dt = op.clone().0.datum_type();
+            let dt = op.0.datum_type();
             let value = extract_tensor_value(op.0)?;
             let constant_scale = if dt == DatumType::Bool { 0 } else { scale };
             Box::new(crate::circuit::ops::Constant::new(
@@ -686,7 +686,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 kernel,
                 bias,
                 padding: (padding_h, padding_w),
-                output_padding: output_padding,
+                output_padding,
                 stride: (stride_h, stride_w),
             })
         }

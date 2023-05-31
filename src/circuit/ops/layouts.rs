@@ -276,7 +276,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         if non_common_coord_size == 1 && inputs.len() == 2 {
             let overflowed_len =
                 overflowed_len(*offset, i * common_coord.len(), config.output.col_size());
-            let mut local_offset = offset.clone() + overflowed_len;
+            let mut local_offset = *offset + overflowed_len;
 
             *o = dot(
                 config,
@@ -737,7 +737,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
     *offset += 1;
 
     // make sure mask is boolean
-    let assigned_mask = config.inputs[1].assign(&mut lock, *offset, &mask)?;
+    let assigned_mask = config.inputs[1].assign(&mut lock, *offset, mask)?;
     if let Some(region) = lock.as_mut() {
         for i in 0..assigned_mask.len() {
             let (x, y) = config.inputs[1].cartesian_coord(*offset + i);
@@ -1065,7 +1065,7 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
 
     let conv_input = if has_bias {
         vec![
-            sliced_expanded_image.into(),
+            sliced_expanded_image,
             deconv_kernel.clone().into(),
             inputs[2].clone(),
         ]
