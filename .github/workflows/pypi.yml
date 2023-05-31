@@ -130,13 +130,13 @@ jobs:
       if: matrix.target == 'aarch64'
       run: |
         sudo apt-get update
-        sudo apt-get install -y gcc make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-dev-arm64-cross libusb-1.0-0-dev
+        sudo apt-get install -y gcc make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-dev-arm64-cross libusb-1.0-0-dev libatomic1-arm64-cross
 
     - name: Install cross-compilation tools for armv7
       if: matrix.target == 'armv7'
       run: |
         sudo apt-get update
-        sudo apt-get install -y gcc make gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libc6-dev-armhf-cross libusb-1.0-0-dev
+        sudo apt-get install -y gcc make gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libc6-dev-armhf-cross libusb-1.0-0-dev libatomic1-armhf-cross
 
     - name: Build wheels
       uses: PyO3/maturin-action@v1
