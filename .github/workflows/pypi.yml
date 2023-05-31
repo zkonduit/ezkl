@@ -126,6 +126,18 @@ jobs:
       with:
         python-version: 3.7
 
+    - name: Install cross-compilation tools for aarch64
+      if: matrix.target == 'aarch64'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-aarch64-linux-gnu
+
+    - name: Install cross-compilation tools for ARMv7
+      if: matrix.target == 'armv7'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-arm-linux-gnueabihf
+
     - name: Build wheels
       uses: PyO3/maturin-action@v1
       with:
@@ -134,7 +146,6 @@ jobs:
         args: --release --out dist --features python-bindings
 
     - uses: uraimo/run-on-arch-action@v2.5.0
-      if: matrix.target != 'ppc64'
       name: Install built wheel
       with:
         arch: ${{ matrix.target }}
