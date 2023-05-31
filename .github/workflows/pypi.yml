@@ -10,6 +10,9 @@ defaults:
   run:
     working-directory: .
 
+env:
+  RUSTFLAGS: -C link-arg=-s
+
 jobs:
   macos:
     runs-on: macos-latest
