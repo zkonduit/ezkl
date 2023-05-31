@@ -45,7 +45,7 @@ mod native_tests {
 
     fn init_params_23() {
         KZG23.call_once(|| {
-            let status = Command::new(format!("curl"))
+            let status = Command::new("curl")
                 .args([
                     "-o",
                     &format!(
@@ -62,7 +62,7 @@ mod native_tests {
 
     fn init_params_24() {
         KZG24.call_once(|| {
-            let status = Command::new(format!("curl"))
+            let status = Command::new("curl")
                 .args([
                     "-o",
                     &format!(

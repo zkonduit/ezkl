@@ -156,7 +156,7 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
             so SOLC can optimize for the smallest deployment", size
         );                
     } 
-    Ok(ContractFactory::new(abi, bytecode, client.clone()))
+    Ok(ContractFactory::new(abi, bytecode, client))
 }
 
 /// Parses a private key into a [SigningKey]  
@@ -668,7 +668,7 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
 fn replace_vars_with_offset(contract: &str, regex_pattern: &str, offset: u32) -> String {
     let re = Regex::new(regex_pattern).unwrap();
     let replaced = re.replace_all(contract, |caps: &regex::Captures| {
-        let addr_as_num = u32::from_str_radix(&caps[1].strip_prefix("0x").unwrap(), 16).unwrap();
+        let addr_as_num = u32::from_str_radix(caps[1].strip_prefix("0x").unwrap(), 16).unwrap();
         let new_addr = addr_as_num + offset;
         format!("{:#x}", new_addr)
     });

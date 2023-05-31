@@ -47,7 +47,7 @@ pub fn iff<
 ) -> Result<Tensor<T>, TensorError> {
     let masked_a = (mask.clone() * a.clone())?;
     let masked_b =
-        ((Tensor::from(vec![T::one().ok_or_else(|| TensorError::DimError)?].into_iter())
+        ((Tensor::from(vec![T::one().ok_or(TensorError::DimError)?].into_iter())
             - mask.clone())?
             * b.clone())?;
 
@@ -816,7 +816,7 @@ pub fn sum_axes<T: TensorType + Add<Output = T>>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for (i, c) in coord.into_iter().enumerate() {
+        for (i, c) in coord.iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {
@@ -879,7 +879,7 @@ pub fn min_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for (i, c) in coord.into_iter().enumerate() {
+        for (i, c) in coord.iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {
@@ -942,7 +942,7 @@ pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 
     for coord in cartesian_coord.iter() {
         let mut sum_dims = vec![];
-        for (i, c) in coord.into_iter().enumerate() {
+        for (i, c) in coord.iter().enumerate() {
             if axes.contains(&i) {
                 sum_dims.push(0..a.dims()[i]);
             } else {
@@ -2160,9 +2160,9 @@ pub mod nonlinearities {
         const NCOEF: usize = 28;
         const COF: [f64; 28] = [
             -1.3026537197817094,
-            6.4196979235649026e-1,
+            6.419_697_923_564_902e-1,
             1.9476473204185836e-2,
-            -9.561514786808631e-3,
+            -9.561_514_786_808_63e-3,
             -9.46595344482036e-4,
             3.66839497852761e-4,
             4.2523324806907e-5,

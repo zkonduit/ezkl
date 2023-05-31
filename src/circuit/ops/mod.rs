@@ -312,7 +312,7 @@ fn homogenize_input_scales<F: PrimeField + TensorType + PartialOrd>(
     inputs_to_scale: Vec<usize>,
 ) -> Result<Box<dyn Op<F>>, Box<dyn Error>> {
     if inputs_to_scale.is_empty() {
-        return Ok(Box::new(op.clone()));
+        return Ok(Box::new(op));
     }
 
     let mut dividers: Vec<u128> = vec![1; input_scales.len()];
@@ -337,10 +337,10 @@ fn homogenize_input_scales<F: PrimeField + TensorType + PartialOrd>(
     // only rescale if need to
     if dividers.iter().any(|&x| x > 1) {
         Ok(Box::new(crate::circuit::Rescaled {
-            inner: Box::new(op.clone()),
+            inner: Box::new(op),
             scale: (0..input_scales.len()).zip(dividers).collect_vec(),
         }))
     } else {
-        Ok(Box::new(op.clone()))
+        Ok(Box::new(op))
     }
 }

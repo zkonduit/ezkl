@@ -730,8 +730,8 @@ fn fuzz(
 
         verify_proof_circuit_kzg(
             params.verifier_params(),
-            bad_proof.clone(),
-            &pk.get_vk(),
+            bad_proof,
+            pk.get_vk(),
             strategy.clone(),
         )
         .map_err(|_| ())
@@ -760,8 +760,8 @@ fn fuzz(
 
         verify_proof_circuit_kzg(
             params.verifier_params(),
-            bad_proof.clone(),
-            &pk.get_vk(),
+            bad_proof,
+            pk.get_vk(),
             strategy.clone(),
         )
         .map_err(|_| ())
@@ -793,7 +793,7 @@ fn fuzz(
         verify_proof_circuit_kzg(
             params.verifier_params(),
             proof.clone(),
-            &bad_vk,
+            bad_vk,
             strategy.clone(),
         )
         .map_err(|_| ())
@@ -819,8 +819,8 @@ fn fuzz(
 
         verify_proof_circuit_kzg(
             params.verifier_params(),
-            bad_proof.clone(),
-            &pk.get_vk(),
+            bad_proof,
+            pk.get_vk(),
             strategy.clone(),
         )
         .map_err(|_| ())
@@ -845,8 +845,8 @@ fn fuzz(
 
         verify_proof_circuit_kzg(
             params.verifier_params(),
-            bad_proof.clone(),
-            &pk.get_vk(),
+            bad_proof,
+            pk.get_vk(),
             strategy.clone(),
         )
         .map_err(|_| ())
@@ -863,7 +863,7 @@ fn fuzz(
             .collect();
 
         let yul_code = gen_evm_verifier(&params, pk.get_vk(), num_instance)?;
-        let deployment_code = gen_deployment_code(yul_code.clone()).unwrap();
+        let deployment_code = gen_deployment_code(yul_code).unwrap();
 
         info!("fuzzing proof bytes for evm verifier");
 
