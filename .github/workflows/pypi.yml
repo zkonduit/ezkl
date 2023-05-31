@@ -10,9 +10,6 @@ defaults:
   run:
     working-directory: .
 
-env:
-  RUSTFLAGS: -C link-arg=-s
-
 jobs:
   macos:
     runs-on: macos-latest
@@ -133,13 +130,13 @@ jobs:
       if: matrix.target == 'aarch64'
       run: |
         sudo apt-get update
-        sudo apt-get install -y gcc make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-dev-arm64-cross libusb-1.0-0-dev:arm64
+        sudo apt-get install -y gcc make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-dev-arm64-cross libusb-1.0-0-dev
 
     - name: Install cross-compilation tools for armv7
       if: matrix.target == 'armv7'
       run: |
         sudo apt-get update
-        sudo apt-get install -y gcc make gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libc6-dev-armhf-cross libusb-1.0-0-dev:armhf
+        sudo apt-get install -y gcc make gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libc6-dev-armhf-cross libusb-1.0-0-dev
 
     - name: Build wheels
       uses: PyO3/maturin-action@v1
