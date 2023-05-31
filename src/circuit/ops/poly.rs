@@ -19,6 +19,13 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
         padding: (usize, usize),
         stride: (usize, usize),
     },
+    DeConv {
+        kernel: ValTensor<F>,
+        bias: Option<ValTensor<F>>,
+        padding: (usize, usize),
+        output_padding: (usize, usize),
+        stride: (usize, usize),
+    },
     SumPool {
         padding: (usize, usize),
         stride: (usize, usize),
@@ -54,6 +61,9 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
         end: usize,
     },
     Iff,
+    Resize {
+        scale_factor: Vec<usize>,
+    },
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {}
@@ -64,6 +74,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     }
     fn as_string(&self) -> String {
         let name = match &self {
+            PolyOp::Resize { .. } => "RESIZE",
             PolyOp::Iff => "IFF",
             PolyOp::Einsum { .. } => "EINSUM",
             PolyOp::Identity => "IDENTITY",
@@ -78,6 +89,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Pack(_, _) => "PACK",
             PolyOp::GlobalSumPool => "GLOBALSUMPOOL",
             PolyOp::Conv { .. } => "CONV",
+            PolyOp::DeConv { .. } => "DECONV",
             PolyOp::SumPool { .. } => "SUMPOOL",
             PolyOp::Gather { .. } => "GATHER",
             PolyOp::Concat { .. } => "CONCAT",
@@ -90,6 +102,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
         let mut inputs = inputs.to_vec();
         match &self {
+            PolyOp::Resize { scale_factor } => tensor::ops::resize(&inputs[0], scale_factor),
             PolyOp::Iff => tensor::ops::iff(&inputs[0], &inputs[1], &inputs[2]),
             PolyOp::Einsum { equation } => tensor::ops::einsum(equation, &inputs),
             PolyOp::Gather { dim, index } => tensor::ops::gather(&inputs[0], *dim, index),
@@ -134,6 +147,19 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                     inputs.push(Tensor::new(Some(&b.get_int_evals().unwrap()), b.dims())?);
                 }
                 tensor::ops::conv(&inputs, *padding, *stride)
+            }
+            PolyOp::DeConv {
+                kernel: a,
+                bias,
+                padding,
+                output_padding,
+                stride,
+            } => {
+                inputs.push(Tensor::new(Some(&a.get_int_evals().unwrap()), a.dims())?);
+                if let Some(b) = bias {
+                    inputs.push(Tensor::new(Some(&b.get_int_evals().unwrap()), b.dims())?);
+                }
+                tensor::ops::deconv(&inputs, *padding, *output_padding, *stride)
             }
             PolyOp::SumPool {
                 padding,
@@ -185,6 +211,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
         let mut values = values.to_vec();
 
         Ok(Some(match self {
+            PolyOp::Resize { scale_factor } => {
+                layouts::resize(config, region, values[..].try_into()?, scale_factor, offset)?
+            }
             PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?, offset)?,
             PolyOp::Einsum { equation } => {
                 let out = layouts::einsum(config, region, &mut values, equation, offset)?;
@@ -211,6 +240,27 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                     region,
                     values[..].try_into()?,
                     *padding,
+                    *stride,
+                    offset,
+                )?
+            }
+            PolyOp::DeConv {
+                kernel,
+                bias,
+                padding,
+                output_padding,
+                stride,
+            } => {
+                values.push(kernel.clone());
+                if let Some(bias) = bias {
+                    values.push(bias.clone());
+                }
+                layouts::deconv(
+                    config,
+                    region,
+                    values[..].try_into()?,
+                    *padding,
+                    *output_padding,
                     *stride,
                     offset,
                 )?
@@ -284,6 +334,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
 
     fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
         match self {
+            PolyOp::Resize { .. } => in_scales[0],
             PolyOp::Iff => in_scales[1],
             PolyOp::Einsum { .. } => {
                 let mut scale = in_scales[0];
@@ -296,6 +347,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
 
             PolyOp::Sum { .. } => in_scales[0],
             PolyOp::Conv { kernel, bias, .. } => {
+                let output_scale = in_scales[0] + kernel.scale();
+                if let Some(b) = bias {
+                    assert_eq!(output_scale, b.scale());
+                }
+                output_scale
+            }
+            PolyOp::DeConv { kernel, bias, .. } => {
                 let output_scale = in_scales[0] + kernel.scale();
                 if let Some(b) = bias {
                     assert_eq!(output_scale, b.scale());

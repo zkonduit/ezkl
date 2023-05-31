@@ -37,6 +37,7 @@ tokio = { version = "1.26.0", features = ["macros", "rt"] }
 rayon = "*"
 bincode = "*"
 
+
 # python binding related deps
 pyo3 = { version = "0.18.3", features = ["extension-module", "abi3-py37"], optional = true }
 pyo3-log = { version = "0.8.1", optional = true }
@@ -48,6 +49,8 @@ pyo3-log = { version = "0.8.1", optional = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ethers = { version = "2.0.1", features = ["ledger"] }
 ethers-solc = "2.0.1"
+indicatif = {version = "0.17.4", features = ["rayon"]}
+gag = "1.0.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2.8", features = ["js"] }

@@ -1,4 +1,7 @@
-use super::{ops::pad, *};
+use super::{
+    ops::{intercalate_values, pad, resize},
+    *,
+};
 use halo2_proofs::{arithmetic::Field, plonk::Instance};
 
 #[derive(Debug, Clone)]
@@ -369,6 +372,41 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         Ok(())
     }
 
+    /// Calls `intercalate_values` on the inner [Tensor].
+    pub fn intercalate_values(
+        &mut self,
+        value: ValType<F>,
+        stride: usize,
+        axis: usize,
+    ) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                *v = intercalate_values(v, value, stride, axis)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        }
+        Ok(())
+    }
+    /// Calls `resize` on the inner [Tensor].
+    pub fn resize(&mut self, scales: &[usize]) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                *v = resize(v, scales)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        };
+        Ok(())
+    }
     /// Calls `pad` on the inner [Tensor].
     pub fn pad(&mut self, padding: (usize, usize)) -> Result<(), TensorError> {
         match self {

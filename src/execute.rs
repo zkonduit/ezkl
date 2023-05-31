@@ -1,6 +1,5 @@
 use crate::circuit::CheckMode;
 use crate::commands::{Cli, Commands, RunArgs, StrategyType};
-use crate::pfsys::evm::{DeploymentCode,YulCode};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{
     deploy_verifier, fix_verifier_sol, get_ledger_signing_provider, get_provider,
@@ -9,15 +8,18 @@ use crate::eth::{
 use crate::graph::{quantize_float, scale_to_multiplier, Model, ModelCircuit, ModelParams};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::pfsys::evm::{aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier};
-#[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::evm_verify;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::pfsys::evm::{aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier};
+use crate::pfsys::evm::{DeploymentCode, YulCode};
 use crate::pfsys::{
     create_keys, load_params, load_pk, load_vk, save_params, save_pk, Snark, TranscriptType,
 };
 use crate::pfsys::{create_proof_circuit, gen_srs, prepare_data, save_vk, verify_proof_circuit};
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::providers::Middleware;
+#[cfg(not(target_arch = "wasm32"))]
+use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::plonk::{Circuit, ProvingKey, VerifyingKey};
 use halo2_proofs::poly::commitment::Params;
@@ -31,12 +33,20 @@ use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
+#[cfg(not(target_arch = "wasm32"))]
+use halo2curves::ff::Field;
+#[cfg(not(target_arch = "wasm32"))]
+use indicatif::ParallelProgressIterator;
 use itertools::Itertools;
 #[cfg(not(target_arch = "wasm32"))]
 use log::warn;
 use log::{info, trace};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
+#[cfg(not(target_arch = "wasm32"))]
+use rand::Rng;
+#[cfg(not(target_arch = "wasm32"))]
+use rayon::prelude::IntoParallelIterator;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
@@ -48,6 +58,8 @@ use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
 use std::path::PathBuf;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 use std::time::Instant;
@@ -65,6 +77,14 @@ pub enum ExecutionError {
 pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     match cli.command {
         #[cfg(not(target_arch = "wasm32"))]
+        Commands::Fuzz {
+            data,
+            model: _,
+            transcript,
+            args,
+            num_runs,
+        } => fuzz(args.logrows, data, transcript, num_runs),
+        #[cfg(not(target_arch = "wasm32"))]
         Commands::SendProofEVM {
             secret,
             rpc_url,
@@ -79,7 +99,16 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             deployment_code_path,
             sol_code_path,
             optimizer_runs,
-        } => deploy_verifier_evm(secret, rpc_url, deployment_code_path, sol_code_path, optimizer_runs).await,
+        } => {
+            deploy_verifier_evm(
+                secret,
+                rpc_url,
+                deployment_code_path,
+                sol_code_path,
+                optimizer_runs,
+            )
+            .await
+        }
         Commands::GenSrs {
             params_path,
             logrows,
@@ -114,7 +143,9 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             params_path,
             deployment_code_path,
             sol_code_path,
-        } => create_evm_aggregate_verifier(vk_path, params_path, deployment_code_path, sol_code_path),
+        } => {
+            create_evm_aggregate_verifier(vk_path, params_path, deployment_code_path, sol_code_path)
+        }
         Commands::Setup {
             data,
             params_path,
@@ -182,8 +213,16 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             proof_path,
             deployment_code_path,
             sol_code_path,
-            optimizer_runs
-        } => verify_evm(proof_path, deployment_code_path, sol_code_path, optimizer_runs).await,
+            optimizer_runs,
+        } => {
+            verify_evm(
+                proof_path,
+                deployment_code_path,
+                sol_code_path,
+                optimizer_runs,
+            )
+            .await
+        }
         Commands::PrintProofHex { proof_path } => print_proof_hex(proof_path),
     }
 }
@@ -334,7 +373,7 @@ async fn deploy_verifier_evm(
     rpc_url: String,
     deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
-    runs: Option<usize>
+    runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
     let provider = get_provider(&rpc_url)?;
     let chain_id = provider.get_chainid().await?;
@@ -390,6 +429,11 @@ fn forward(
 
     let res = model.forward(&model_inputs)?;
 
+    trace!(
+        "forward pass output shapes: {:?}",
+        res.iter().map(|t| t.dims()).collect_vec()
+    );
+
     let output_scales = model.graph.get_output_scales();
     let output_scales = output_scales
         .iter()
@@ -435,7 +479,7 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<(), Box<dyn Error>> {
 /// helper function to generate the deployment code from yul code
 pub fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, Box<dyn Error>> {
     Ok(DeploymentCode {
-            code: evm::compile_yul(&yul_code)
+        code: evm::compile_yul(&yul_code),
     })
 }
 
@@ -501,18 +545,14 @@ async fn verify_evm(
     proof_path: PathBuf,
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
-    runs: Option<usize>
+    runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
     let code = DeploymentCode::load(&deployment_code_path)?;
     evm_verify(code, proof.clone())?;
 
     if sol_code_path.is_some() {
-        let result = verify_proof_via_solidity(
-            proof, 
-            sol_code_path.unwrap(), 
-            runs
-        ).await?;
+        let result = verify_proof_via_solidity(proof, sol_code_path.unwrap(), runs).await?;
 
         info!("Solidity verification result: {}", result);
 
@@ -530,8 +570,7 @@ fn create_evm_aggregate_verifier(
 ) -> Result<(), Box<dyn Error>> {
     let params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
 
-    let agg_vk =
-        load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
+    let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
 
     let yul_code = gen_aggregation_evm_verifier(
         &params,
@@ -602,6 +641,7 @@ fn prove(
 
     let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(pk_path, circuit_params)
         .map_err(Box::<dyn Error>::from)?;
+
     trace!("params computed");
 
     let now = Instant::now();
@@ -639,6 +679,280 @@ fn prove(
     snark.save(&proof_path)?;
 
     Ok(())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn fuzz(
+    logrows: u32,
+    data: String,
+    transcript: TranscriptType,
+    num_runs: usize,
+) -> Result<(), Box<dyn Error>> {
+    let passed = AtomicBool::new(true);
+
+    info!("setting up tests");
+
+    let _r = Gag::stdout().unwrap();
+    let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
+
+    let data = prepare_data(data)?;
+    // these aren't real values so the sanity checks are mostly meaningless
+    let circuit = ModelCircuit::<Fr>::from_arg(&data, CheckMode::UNSAFE)?;
+    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
+        .map_err(Box::<dyn Error>::from)?;
+
+    let public_inputs = circuit.prepare_public_inputs(&data)?;
+
+    let strategy = KZGSingleStrategy::new(&params);
+    std::mem::drop(_r);
+
+    info!("starting fuzzing");
+
+    info!("fuzzing pk");
+
+    let fuzz_pk = || {
+        let new_params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
+
+        let bad_pk =
+            create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &new_params)
+                .unwrap();
+
+        let bad_proof = create_proof_circuit_kzg(
+            circuit.clone(),
+            &params,
+            public_inputs.clone(),
+            &bad_pk,
+            transcript,
+            strategy.clone(),
+            CheckMode::UNSAFE,
+        )
+        .unwrap();
+
+        verify_proof_circuit_kzg(
+            params.verifier_params(),
+            bad_proof.clone(),
+            &pk.get_vk(),
+            strategy.clone(),
+        )
+        .map_err(|_| ())
+    };
+
+    run_fuzz_fn(num_runs, fuzz_pk, &passed);
+
+    info!("fuzzing public inputs");
+
+    let fuzz_public_inputs = || {
+        let mut bad_inputs = vec![];
+        for l in &public_inputs {
+            bad_inputs.push(vec![Fr::random(rand::rngs::OsRng); l.len()]);
+        }
+
+        let bad_proof = create_proof_circuit_kzg(
+            circuit.clone(),
+            &params,
+            bad_inputs.clone(),
+            &pk,
+            transcript,
+            strategy.clone(),
+            CheckMode::UNSAFE,
+        )
+        .unwrap();
+
+        verify_proof_circuit_kzg(
+            params.verifier_params(),
+            bad_proof.clone(),
+            &pk.get_vk(),
+            strategy.clone(),
+        )
+        .map_err(|_| ())
+    };
+
+    run_fuzz_fn(num_runs, fuzz_public_inputs, &passed);
+
+    info!("fuzzing vk");
+
+    let proof = create_proof_circuit_kzg(
+        circuit.clone(),
+        &params,
+        public_inputs.clone(),
+        &pk,
+        transcript,
+        strategy.clone(),
+        CheckMode::SAFE,
+    )?;
+
+    let fuzz_vk = || {
+        let new_params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
+
+        let bad_pk =
+            create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &new_params)
+                .unwrap();
+
+        let bad_vk = bad_pk.get_vk();
+
+        verify_proof_circuit_kzg(
+            params.verifier_params(),
+            proof.clone(),
+            &bad_vk,
+            strategy.clone(),
+        )
+        .map_err(|_| ())
+    };
+
+    run_fuzz_fn(num_runs, fuzz_vk, &passed);
+
+    info!("fuzzing proof bytes");
+
+    let fuzz_proof_bytes = || {
+        let mut rng = rand::thread_rng();
+
+        let bad_proof_bytes: Vec<u8> = (0..proof.proof.len())
+            .map(|_| rng.gen_range(0..20))
+            .collect();
+
+        let bad_proof = Snark::<_, _> {
+            instances: proof.instances.clone(),
+            proof: bad_proof_bytes,
+            protocol: proof.protocol.clone(),
+            transcript_type: transcript,
+        };
+
+        verify_proof_circuit_kzg(
+            params.verifier_params(),
+            bad_proof.clone(),
+            &pk.get_vk(),
+            strategy.clone(),
+        )
+        .map_err(|_| ())
+    };
+
+    run_fuzz_fn(num_runs, fuzz_proof_bytes, &passed);
+
+    info!("fuzzing proof instances");
+
+    let fuzz_proof_instances = || {
+        let mut bad_inputs = vec![];
+        for l in &proof.instances {
+            bad_inputs.push(vec![Fr::random(rand::rngs::OsRng); l.len()]);
+        }
+
+        let bad_proof = Snark::<_, _> {
+            instances: bad_inputs.clone(),
+            proof: proof.proof.clone(),
+            protocol: proof.protocol.clone(),
+            transcript_type: transcript,
+        };
+
+        verify_proof_circuit_kzg(
+            params.verifier_params(),
+            bad_proof.clone(),
+            &pk.get_vk(),
+            strategy.clone(),
+        )
+        .map_err(|_| ())
+    };
+
+    run_fuzz_fn(num_runs, fuzz_proof_instances, &passed);
+
+    if matches!(transcript, TranscriptType::EVM) {
+        let num_instance = circuit
+            .params
+            .instance_shapes
+            .iter()
+            .map(|x| x.iter().product())
+            .collect();
+
+        let yul_code = gen_evm_verifier(&params, pk.get_vk(), num_instance)?;
+        let deployment_code = gen_deployment_code(yul_code.clone()).unwrap();
+
+        info!("fuzzing proof bytes for evm verifier");
+
+        let fuzz_evm_proof_bytes = || {
+            let mut rng = rand::thread_rng();
+
+            let bad_proof_bytes: Vec<u8> = (0..proof.proof.len())
+                .map(|_| rng.gen_range(0..20))
+                .collect();
+
+            let bad_proof = Snark::<_, _> {
+                instances: proof.instances.clone(),
+                proof: bad_proof_bytes,
+                protocol: proof.protocol.clone(),
+                transcript_type: transcript,
+            };
+
+            let res = evm_verify(deployment_code.clone(), bad_proof);
+
+            match res {
+                Ok(b) => match b {
+                    true => Ok(()),
+                    false => Err(()),
+                },
+                Err(_) => Err(()),
+            }
+        };
+
+        run_fuzz_fn(num_runs, fuzz_evm_proof_bytes, &passed);
+
+        info!("fuzzing proof instances for evm verifier");
+
+        let fuzz_evm_instances = || {
+            let mut bad_inputs = vec![];
+            for l in &proof.instances {
+                bad_inputs.push(vec![Fr::random(rand::rngs::OsRng); l.len()]);
+            }
+
+            let bad_proof = Snark::<_, _> {
+                instances: bad_inputs.clone(),
+                proof: proof.proof.clone(),
+                protocol: proof.protocol.clone(),
+                transcript_type: transcript,
+            };
+
+            let res = evm_verify(deployment_code.clone(), bad_proof);
+
+            match res {
+                Ok(b) => match b {
+                    true => Ok(()),
+                    false => Err(()),
+                },
+                Err(_) => Err(()),
+            }
+        };
+
+        run_fuzz_fn(num_runs, fuzz_evm_instances, &passed);
+    }
+
+    if !passed.into_inner() {
+        Err("fuzzing failed".into())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn run_fuzz_fn(
+    num_runs: usize,
+    f: impl Fn() -> Result<(), ()> + std::marker::Sync + std::marker::Send,
+    passed: &AtomicBool,
+) {
+    let num_failures = AtomicI64::new(0);
+    let _r = Gag::stdout().unwrap();
+
+    (0..num_runs).into_par_iter().progress().for_each(|_| {
+        let result = f();
+        if result.is_ok() {
+            passed.swap(false, Ordering::Relaxed);
+            num_failures.fetch_add(1, Ordering::Relaxed);
+        }
+    });
+
+    std::mem::drop(_r);
+    info!(
+        "num failures: {} out of {}",
+        num_failures.load(Ordering::Relaxed),
+        num_runs
+    );
 }
 
 fn aggregate(

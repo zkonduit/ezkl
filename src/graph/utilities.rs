@@ -12,10 +12,11 @@ use log::{debug, warn};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::array::Gather;
 use tract_onnx::tract_core::ops::array::Slice;
+use tract_onnx::tract_core::ops::cnn::DeconvUnary;
 use tract_onnx::tract_core::ops::einsum::EinSum;
-// use tract_onnx::tract_core::ops::binary::UnaryOp;
-// use tract_onnx::tract_core::ops::matmul::MatMulUnary;
+
 use tract_onnx::tract_core::ops::element_wise::ElementWiseOp;
+
 use tract_onnx::tract_core::ops::nn::{LeakyRelu, Reduce, Softmax};
 use tract_onnx::tract_hir::internal::{AxisOp, DimLike};
 use tract_onnx::tract_hir::ops::cnn::ConvUnary;
@@ -621,6 +622,108 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 padding: (padding_h, padding_w),
                 stride: (stride_h, stride_w),
             })
+        }
+        "DeconvUnary" => {
+            let deconv_node: &DeconvUnary = match node.op().downcast_ref::<DeconvUnary>() {
+                Some(b) => b,
+                None => {
+                    return Err(Box::new(GraphError::OpMismatch(idx, "deconv".to_string())));
+                }
+            };
+
+            if let Some(dilations) = &deconv_node.pool_spec.dilations {
+                if dilations.iter().any(|x| *x != 1) {
+                    return Err(Box::new(GraphError::MisformedParams(
+                        "non unit dilations not supported".to_string(),
+                    )));
+                }
+            }
+
+            if (deconv_node.pool_spec.data_format != DataFormat::NCHW)
+                || (deconv_node.kernel_format != KernelFormat::OIHW)
+            {
+                return Err(Box::new(GraphError::MisformedParams(
+                    "data or kernel in wrong format".to_string(),
+                )));
+            }
+
+            let stride = match deconv_node.pool_spec.strides.clone() {
+                Some(s) => s,
+                None => {
+                    return Err(Box::new(GraphError::MissingParams("strides".to_string())));
+                }
+            };
+            let padding = match &deconv_node.pool_spec.padding {
+                PaddingSpec::Explicit(p, _, _) => p,
+                _ => {
+                    return Err(Box::new(GraphError::MissingParams("padding".to_string())));
+                }
+            };
+
+            let (padding_h, padding_w, stride_h, stride_w) =
+                (padding[0], padding[1], stride[0], stride[1]);
+
+            let kernel = extract_tensor_value(deconv_node.kernel.clone())?;
+            let kernel = tensor_to_valtensor(kernel, scale, public_params)?;
+
+            let bias = match deconv_node.bias.clone() {
+                Some(b) => {
+                    let const_value = extract_tensor_value(b)?;
+
+                    let val = tensor_to_valtensor(
+                        const_value,
+                        scale + inputs[0].out_scales()[0],
+                        public_params,
+                    )?;
+                    Some(val)
+                }
+                None => None,
+            };
+
+            let output_padding = (deconv_node.adjustments[0], deconv_node.adjustments[1]);
+
+            Box::new(PolyOp::DeConv {
+                kernel,
+                bias,
+                padding: (padding_h, padding_w),
+                output_padding: output_padding,
+                stride: (stride_h, stride_w),
+            })
+        }
+
+        "Resize" => {
+            // this is a bit hacky, but we need to extract the resize node somehow
+            // and this is the only way I can think of
+            // see https://github.com/sonos/tract/issues/324
+
+            let resize_node = format!("{:?}", node);
+
+            if !resize_node.contains("interpolator: Nearest")
+                && !resize_node.contains("nearest: Floor")
+            {
+                unimplemented!("Only nearest neighbor interpolation is supported")
+            }
+            let boxed_op = inputs[2].clone().opkind();
+            let scale_factor = match boxed_op
+                .as_any()
+                .downcast_ref::<crate::circuit::ops::Constant<F>>()
+            {
+                Some(c) => c
+                    .values
+                    .map(|x| x as usize)
+                    .into_iter()
+                    .collect::<Vec<usize>>(),
+                None => {
+                    return Err(Box::new(GraphError::OpMismatch(idx, "Resize".to_string())));
+                }
+            };
+
+            // remove the resize node from the inputs
+            inputs.pop();
+            // remove the scale factor node from the inputs
+            inputs.pop();
+
+            Box::new(PolyOp::Resize { scale_factor })
         }
 
         "SumPool" => {
