@@ -224,21 +224,20 @@ mod native_tests {
             use seq_macro::seq;
             use test_case::test_case;
             use crate::native_tests::PACKING_TESTS;
-            use crate::native_tests::mock_packed_outputs;
-            use crate::native_tests::mock_everything;
+            use crate::native_tests::mock;
 
             seq!(N in 0..=13 {
 
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_packed_outputs_(test: &str) {
                 crate::native_tests::init_binary();
-                mock_packed_outputs(test.to_string());
+                mock(test.to_string(), 7, 16, 17, false, false, true, 2);
             }
 
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_everything_(test: &str) {
                 crate::native_tests::init_binary();
-                mock_everything(test.to_string());
+                mock(test.to_string(), 7, 16, 17, true, false, true, 2);
             }
 
             });
@@ -256,8 +255,6 @@ mod native_tests {
             use crate::native_tests::LARGE_TESTS;
             use test_case::test_case;
             use crate::native_tests::mock;
-            use crate::native_tests::mock_public_inputs;
-            use crate::native_tests::mock_public_params;
             use crate::native_tests::forward_pass;
             use crate::native_tests::kzg_prove_and_verify;
             use crate::native_tests::kzg_fuzz;
@@ -287,19 +284,19 @@ mod native_tests {
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
                 crate::native_tests::init_binary();
-                mock(test.to_string(), 7, 16, 17);
+                mock(test.to_string(), 7, 16, 17, false, false, true, 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_inputs_(test: &str) {
                 crate::native_tests::init_binary();
-                mock_public_inputs(test.to_string());
+                mock(test.to_string(), 7, 16, 17, true, false, false, 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_params_(test: &str) {
                 crate::native_tests::init_binary();
-                mock_public_params(test.to_string());
+                mock(test.to_string(), 7, 16, 17, false, true, false, 1);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -335,7 +332,7 @@ mod native_tests {
             #(#[test_case(LARGE_TESTS[N])])*
             fn large_mock_(test: &str) {
                 crate::native_tests::init_binary();
-                mock(test.to_string(), 5, 23, 24);
+                mock(test.to_string(), 5, 23, 24, false, false, true, 1);
             }
         });
     }
@@ -584,7 +581,16 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
-    fn mock(example_name: String, scale: usize, bits: usize, logrows: usize) {
+    fn mock(
+        example_name: String,
+        scale: usize,
+        bits: usize,
+        logrows: usize,
+        public_inputs: bool,
+        public_params: bool,
+        public_outputs: bool,
+        pack_base: usize,
+    ) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "mock",
@@ -595,81 +601,10 @@ mod native_tests {
                 &format!("--bits={}", bits),
                 &format!("--logrows={}", logrows),
                 &format!("--scale={}", scale),
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
-
-    // Mock prove (fast, but does not cover some potential issues)
-    fn mock_packed_outputs(example_name: String) {
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "mock",
-                "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
-                "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--bits=16",
-                "-K=17",
-                "--pack-base=2",
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
-
-    // Mock prove (fast, but does not cover some potential issues)
-    fn mock_everything(example_name: String) {
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "mock",
-                "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
-                "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--bits=16",
-                "-K=17",
-                "--public-inputs=true",
-                "--pack-base=2",
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
-
-    // Mock prove (fast, but does not cover some potential issues)
-    fn mock_public_inputs(example_name: String) {
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "mock",
-                "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
-                "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--public-inputs=true",
-                "--public-outputs=false",
-                "--bits=16",
-                "-K=17",
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
-
-    // Mock prove (fast, but does not cover some potential issues)
-    fn mock_public_params(example_name: String) {
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "mock",
-                "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
-                "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--public-params=true",
-                "--public-outputs=false",
-                "-K=17",
-                "--bits=16",
+                &format!("--pack-base={}", pack_base),
+                &format!("--public-inputs={}", public_inputs),
+                &format!("--public-params={}", public_params),
+                &format!("--public-outputs={}", public_outputs),
             ])
             .status()
             .expect("failed to execute process");
