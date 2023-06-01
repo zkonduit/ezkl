@@ -87,7 +87,9 @@ pub async fn verify_proof_via_solidity(
     let contract = Verifier::new(addr, client.clone());
 
     let mut public_inputs = vec![];
-    for val in &proof.instances[0] {
+    let flattened_instances = proof.instances.into_iter().flatten();
+    
+    for val in flattened_instances {
         let bytes = val.to_repr();
         let u = U256::from_little_endian(bytes.as_slice());
         public_inputs.push(u);
@@ -306,7 +308,9 @@ pub async fn send_proof<M: 'static + Middleware>(
         let contract = Verifier::new(addr, client.clone());
 
         let mut public_inputs = vec![];
-        for val in &snark.instances[0] {
+        let flattened_instances = snark.instances.into_iter().flatten();
+
+        for val in flattened_instances {
             let bytes = val.to_repr();
             let u = U256::from_little_endian(bytes.as_slice());
             public_inputs.push(u);
