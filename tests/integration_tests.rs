@@ -382,7 +382,9 @@ mod native_tests {
                 fn kzg_evm_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test));
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), false, true);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), true, true);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), true, false);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -397,7 +399,9 @@ mod native_tests {
                 fn kzg_evm_aggr_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_23();
-                    kzg_evm_aggr_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test));
+                    kzg_evm_aggr_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), false, true);
+                    kzg_evm_aggr_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), true, true);
+                    kzg_evm_aggr_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), true, false);
                 }
 
             });
@@ -791,7 +795,7 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_evm_aggr_prove_and_verify(example_name: String, with_solidity: bool) {
+    fn kzg_evm_aggr_prove_and_verify(example_name: String, with_solidity: bool, public_inputs: bool, public_outputs: bool) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup",
@@ -822,6 +826,8 @@ mod native_tests {
                 ),
                 "--bits=16",
                 "-K=17",
+                &format!("--public-inputs={}", public_inputs),
+                &format!("--public-outputs={}", public_outputs)
             ])
             .status()
             .expect("failed to execute process");
@@ -1079,7 +1085,7 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
+    fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool, public_inputs: bool, public_outputs: bool) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup",
@@ -1102,6 +1108,8 @@ mod native_tests {
                 ),
                 "--bits=16",
                 "-K=17",
+                &format!("--public-inputs={}", public_inputs),
+                &format!("--public-outputs={}", public_outputs)
             ])
             .status()
             .expect("failed to execute process");
