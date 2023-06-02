@@ -1210,7 +1210,7 @@ checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#b0acdfdddd990ab39635e51c465662ba016c2e46"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#dd551144674abb2e29f85e38cece3b2d4f29d87c"
 dependencies = [
  "integer",
  "num-bigint",
@@ -2123,7 +2123,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/send-sync-region#f6ef2493b1f0aecce402db2ede6b28a2423a5062"
+source = "git+https://github.com/privacy-scaling-explorations/halo2?rev=a764a7f#a764a7fa774c511f45c065db3386728976a16863"
 dependencies = [
  "blake2b_simd",
  "ff",
@@ -2159,7 +2159,7 @@ dependencies = [
 [[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#b0acdfdddd990ab39635e51c465662ba016c2e46"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#dd551144674abb2e29f85e38cece3b2d4f29d87c"
 dependencies = [
  "halo2_proofs",
  "num-bigint",
@@ -2518,7 +2518,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#b0acdfdddd990ab39635e51c465662ba016c2e46"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#dd551144674abb2e29f85e38cece3b2d4f29d87c"
 dependencies = [
  "maingate",
  "num-bigint",
@@ -2798,7 +2798,7 @@ dependencies = [
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#b0acdfdddd990ab39635e51c465662ba016c2e46"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#dd551144674abb2e29f85e38cece3b2d4f29d87c"
 dependencies = [
  "halo2wrong",
  "num-bigint",
@@ -4558,7 +4558,7 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/send-sync-region#49b3fc8448c01680a14d9a7b63e1dd11f27fbb2f"
+source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/send-sync-region#728931b5dd5f2260a15e0f69e530651fb1b76f5f"
 dependencies = [
  "bytes",
  "ecc",
