@@ -1,7 +1,5 @@
 //use crate::onnx::OnnxModel;
 use clap::{Args, Parser, Subcommand, ValueEnum};
-#[cfg(not(target_arch = "wasm32"))]
-use ethereum_types::Address;
 use log::{debug, info};
 #[cfg(feature = "python-bindings")]
 use pyo3::{
@@ -430,50 +428,6 @@ pub enum Commands {
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
         // todo, optionally allow supplying proving key
-    },
-
-    #[cfg(not(target_arch = "wasm32"))]
-    /// Deploys an EVM verifier
-    #[command(name = "deploy-verifier-evm", arg_required_else_help = true)]
-    DeployVerifierEVM {
-        /// The path to the wallet mnemonic if not set will attempt to connect to ledger
-        #[arg(short = 'S', long)]
-        secret: Option<PathBuf>,
-        /// RPC Url
-        #[arg(short = 'U', long)]
-        rpc_url: String,
-        /// The path to the desired EVM bytecode file (optional), either set this or sol_code_path
-        #[arg(long)]
-        deployment_code_path: Option<PathBuf>,
-        /// The path to output the Solidity code (optional) supercedes deployment_code_path in priority
-        #[arg(long)]
-        sol_code_path: Option<PathBuf>,
-        /// The number of runs set to the SOLC optimizer.
-        /// Lower values optimze for deployment size while higher values optimize for execution cost.
-        /// If not set will just use the default unoptimized SOLC configuration.
-        #[arg(long)]
-        optimizer_runs: Option<usize>,
-    },
-
-    #[cfg(not(target_arch = "wasm32"))]
-    /// Send a proof to be verified to an already deployed verifier
-    #[command(name = "send-proof-evm", arg_required_else_help = true)]
-    SendProofEVM {
-        /// The path to the wallet mnemonic if not set will attempt to connect to ledger
-        #[arg(short = 'S', long)]
-        secret: Option<PathBuf>,
-        /// RPC Url
-        #[arg(short = 'U', long)]
-        rpc_url: String,
-        /// The deployed verifier address
-        #[arg(long)]
-        addr: Address,
-        /// The path to the proof
-        #[arg(long)]
-        proof_path: PathBuf,
-        /// If we have the contract abi locally (i.e adheres to format in Verifier.json)
-        #[arg(long)]
-        has_abi: bool,
     },
 
     /// Verifies a proof, returning accept or reject

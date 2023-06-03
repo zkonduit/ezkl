@@ -1,10 +1,7 @@
 use crate::circuit::CheckMode;
 use crate::commands::{Cli, Commands, RunArgs, StrategyType};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::eth::{
-    deploy_verifier, fix_verifier_sol, get_ledger_signing_provider, get_provider,
-    get_wallet_signing_provider, send_proof, verify_proof_via_solidity,
-};
+use crate::eth::{fix_verifier_sol, verify_proof_via_solidity};
 use crate::graph::{quantize_float, scale_to_multiplier, Model, ModelCircuit, ModelParams};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
@@ -16,8 +13,6 @@ use crate::pfsys::{
     create_keys, load_params, load_pk, load_vk, save_params, save_pk, Snark, TranscriptType,
 };
 use crate::pfsys::{create_proof_circuit, gen_srs, prepare_data, save_vk, verify_proof_circuit};
-#[cfg(not(target_arch = "wasm32"))]
-use ethers::providers::Middleware;
 #[cfg(not(target_arch = "wasm32"))]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
@@ -38,8 +33,6 @@ use halo2curves::ff::Field;
 #[cfg(not(target_arch = "wasm32"))]
 use indicatif::ParallelProgressIterator;
 use itertools::Itertools;
-#[cfg(not(target_arch = "wasm32"))]
-use log::warn;
 use log::{info, trace};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
@@ -52,16 +45,12 @@ use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
-#[cfg(not(target_arch = "wasm32"))]
-use std::fs::read_to_string;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::Arc;
 use std::time::Instant;
 use thiserror::Error;
 
@@ -84,31 +73,6 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             args,
             num_runs,
         } => fuzz(args.logrows, data, transcript, num_runs),
-        #[cfg(not(target_arch = "wasm32"))]
-        Commands::SendProofEVM {
-            secret,
-            rpc_url,
-            addr,
-            proof_path,
-            has_abi,
-        } => send_proof_evm(secret, rpc_url, addr, proof_path, has_abi).await,
-        #[cfg(not(target_arch = "wasm32"))]
-        Commands::DeployVerifierEVM {
-            secret,
-            rpc_url,
-            deployment_code_path,
-            sol_code_path,
-            optimizer_runs,
-        } => {
-            deploy_verifier_evm(
-                secret,
-                rpc_url,
-                deployment_code_path,
-                sol_code_path,
-                optimizer_runs,
-            )
-            .await
-        }
         Commands::GenSrs {
             params_path,
             logrows,
@@ -340,53 +304,6 @@ pub fn create_proof_circuit_kzg<
         )
         .map_err(Box::<dyn Error>::from),
     }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-async fn send_proof_evm(
-    secret: Option<PathBuf>,
-    rpc_url: String,
-    addr: ethereum_types::Address,
-    proof_path: PathBuf,
-    has_abi: bool,
-) -> Result<(), Box<dyn Error>> {
-    let provider = get_provider(&rpc_url)?;
-    let chain_id = provider.get_chainid().await?;
-    info!("using chain {}", chain_id);
-    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
-    if let Some(secret) = secret {
-        let mnemonic = read_to_string(secret)?;
-        let client = Arc::new(get_wallet_signing_provider(provider, &mnemonic).await?);
-        send_proof(client.clone(), addr, client.address(), proof, has_abi).await?;
-    } else {
-        warn!("connect your Ledger and open the Ethereum app");
-        let client = Arc::new(get_ledger_signing_provider(provider, chain_id.as_u64()).await?);
-        send_proof(client.clone(), addr, client.address(), proof, has_abi).await?;
-    };
-    Ok(())
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-async fn deploy_verifier_evm(
-    secret: Option<PathBuf>,
-    rpc_url: String,
-    deployment_code_path: Option<PathBuf>,
-    sol_code_path: Option<PathBuf>,
-    runs: Option<usize>,
-) -> Result<(), Box<dyn Error>> {
-    let provider = get_provider(&rpc_url)?;
-    let chain_id = provider.get_chainid().await?;
-    info!("using chain {}", chain_id);
-    if let Some(secret) = secret {
-        let mnemonic = read_to_string(secret)?;
-        let client = Arc::new(get_wallet_signing_provider(provider, &mnemonic).await?);
-        deploy_verifier(client, deployment_code_path, sol_code_path, runs).await?;
-    } else {
-        warn!("connect your Ledger and open the Ethereum app");
-        let client = Arc::new(get_ledger_signing_provider(provider, chain_id.as_u64()).await?);
-        deploy_verifier(client, deployment_code_path, sol_code_path, runs).await?;
-    };
-    Ok(())
 }
 
 fn gen_srs_cmd(params_path: PathBuf, logrows: u32) -> Result<(), Box<dyn Error>> {

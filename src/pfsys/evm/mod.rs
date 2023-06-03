@@ -1,9 +1,11 @@
-use ethereum_types::Address;
-use halo2curves::bn256::Fr;
-use halo2curves::bn256::G1Affine;
+#[cfg(not(target_arch = "wasm32"))]
+use halo2curves::bn256::{Fr, G1Affine};
+#[cfg(not(target_arch = "wasm32"))]
 use log::{debug, trace};
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_arch = "wasm32"))]
 use snark_verifier::loader::evm::encode_calldata;
+#[cfg(not(target_arch = "wasm32"))]
 use snark_verifier::loader::evm::ExecutorBuilder;
 use std::error::Error;
 use std::fs::File;
@@ -11,6 +13,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use thiserror::Error;
 
+#[cfg(not(target_arch = "wasm32"))]
 use super::Snark;
 
 /// Aggregate proof generation for EVM
@@ -78,6 +81,7 @@ impl DeploymentCode {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Verify by executing bytecode with instance variables and proof as input
 pub fn evm_verify(
     deployment_code: DeploymentCode,
@@ -90,7 +94,7 @@ pub fn evm_verify(
         .with_gas_limit(u64::MAX.into())
         .build();
 
-    let caller = Address::from_low_u64_be(0xfe);
+    let caller = ethers::types::Address::from_low_u64_be(0xfe);
     let deploy_result = evm.deploy(caller, deployment_code.code.into(), 0.into());
     debug!("evm deploy outcome: {:?}", deploy_result.exit_reason);
     trace!("full deploy result: {:?}", deploy_result);
