@@ -63,6 +63,17 @@ pub struct ModelInput {
     pub output_data: Vec<Vec<f32>>,
 }
 
+
+/// Modified version of ModelInput
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub struct ModelInputModified {
+    /// Modified input_data
+    pub input_data: Vec<Vec<i128>>,
+
+    /// retaining output_data
+    pub output_data: Vec<Vec<f32>>,
+}
+
 /// Truncates nested vector due to omit junk floating point values in python
 #[cfg(feature = "python-bindings")]
 fn truncate_nested_vector(input: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {

@@ -665,18 +665,16 @@ fn create_evm_verifier_aggr(
 
 /// print hex representation of a proof
 #[pyfunction(signature = (proof_path))]
-fn print_proof_hex(proof_path: PathBuf) -> Result<String, PyErr> {
+fn print_proof_hex(proof_path: PathBuf) -> Result<(Vec<String>, String), PyErr> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)
         .map_err(|_| PyIOError::new_err("Failed to load proof"))?;
 
-    // let mut return_string: String = "";
-    // for instance in proof.instances {
-    //     return_string.push_str(instance + "\n");
-    // }
-    // return_string = hex::encode(proof.proof);
-
+    let mut return_string = vec![];
+    for instance in proof.instances {
+        return_string.push(hex::encode(instance.to_vec().iter().flat_map(|x| x.to_bytes()).collect::<Vec<u8>>()));
+    }
     // return proof for now
-    Ok(hex::encode(proof.proof))
+    Ok((return_string, hex::encode(proof.proof)))
 }
 
 // Python Module
