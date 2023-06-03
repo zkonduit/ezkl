@@ -142,7 +142,6 @@ def test_setup():
     circuit_params_path = os.path.join(folder_path, 'circuit.params')
 
     res = ezkl_lib.setup(
-        data_path,
         model_path,
         vk_path,
         pk_path,
@@ -179,7 +178,6 @@ def test_setup_evm():
     circuit_params_path = os.path.join(folder_path, 'circuit.params')
 
     res = ezkl_lib.setup(
-        data_path,
         model_path,
         vk_path,
         pk_path,
@@ -342,7 +340,6 @@ def test_aggregate_and_verify_aggr():
     circuit_params_path = os.path.join(folder_path, '1l_relu_circuit.params')
 
     ezkl_lib.setup(
-        data_path,
         model_path,
         vk_path,
         pk_path,
@@ -414,7 +411,6 @@ def test_evm_aggregate_and_verify_aggr():
     circuit_params_path = os.path.join(folder_path, '1l_relu_circuit.params')
 
     ezkl_lib.setup(
-        data_path,
         model_path,
         vk_path,
         pk_path,
