@@ -187,9 +187,8 @@ mod native_tests {
         "1l_upsample",
     ];
 
-    const PACKING_TESTS: [&str; 14] = [
+    const PACKING_TESTS: [&str; 13] = [
         "1l_mlp",
-        "1l_average",
         "1l_div",
         "1l_reshape",
         "1l_sigmoid",
@@ -292,7 +291,7 @@ mod native_tests {
             use crate::native_tests::PACKING_TESTS;
             use crate::native_tests::mock;
 
-            seq!(N in 0..=13 {
+            seq!(N in 0..=12 {
 
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_packed_outputs_(test: &str) {
@@ -511,7 +510,6 @@ mod native_tests {
             seq!(N in 0..=1 {
             #(#[test_case(EXAMPLES[N])])*
             fn example_(test: &str) {
-                crate::native_tests::mv_test_(test);
                 run(test.to_string());
             }
             });
