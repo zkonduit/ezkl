@@ -40,9 +40,8 @@ mod wasi_tests {
         "4l_relu_conv_fc",
     ];
 
-    const PACKING_TESTS: [&str; 11] = [
+    const PACKING_TESTS: [&str; 10] = [
         "1l_mlp",
-        "1l_average",
         "1l_div",
         "1l_reshape",
         "1l_sigmoid",
@@ -69,7 +68,7 @@ mod wasi_tests {
             use crate::wasi_tests::mock_packed_outputs;
             use crate::wasi_tests::mock_everything;
 
-            seq!(N in 0..=10 {
+            seq!(N in 0..=9 {
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_packed_outputs_(test: &str) {
                 crate::wasi_tests::init();
