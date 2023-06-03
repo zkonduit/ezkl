@@ -2,6 +2,8 @@
 #[cfg(test)]
 mod native_tests {
 
+    use core::panic;
+    use ezkl_lib::pfsys::{prepare_data, save_data, ModelInput};
     use lazy_static::lazy_static;
     use std::env::var;
     use std::process::Command;
@@ -75,6 +77,69 @@ mod native_tests {
                 .expect("failed to execute process");
             assert!(status.success());
         })
+    }
+
+    fn mv_test_(test: &str) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
+        let path: std::path::PathBuf = format!("{}/{}", test_dir, test).into();
+        if !path.exists() {
+            let status = Command::new("cp")
+                .args([
+                    "-R",
+                    &format!("./examples/onnx/{}", test),
+                    &format!("{}/{}", test_dir, test),
+                ])
+                .status()
+                .expect("failed to execute process");
+            assert!(status.success());
+        }
+    }
+
+    fn mk_data_batches_(test: &str, output_dir: &str, num_batches: usize) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
+        let path: std::path::PathBuf = format!("{}/{}", test_dir, test).into();
+        if !path.exists() {
+            panic!("test_dir does not exist")
+        } else {
+            // copy the directory
+            let status = Command::new("cp")
+                .args([
+                    "-R",
+                    &format!("{}/{}", test_dir, test),
+                    &format!("{}/{}", test_dir, output_dir),
+                ])
+                .status()
+                .expect("failed to execute process");
+
+            assert!(status.success());
+
+            let data = prepare_data(format!("{}/{}/input.json", test_dir, test))
+                .expect("failed to load input data");
+
+            let duplicated_input_data: Vec<Vec<f32>> = data
+                .input_data
+                .iter()
+                .map(|data| (0..num_batches).map(|_| data.clone()).flatten().collect())
+                .collect();
+
+            let duplicated_output_data: Vec<Vec<f32>> = data
+                .output_data
+                .iter()
+                .map(|data| (0..num_batches).map(|_| data.clone()).flatten().collect())
+                .collect();
+
+            let duplicated_data = ModelInput {
+                input_data: duplicated_input_data,
+                output_data: duplicated_output_data,
+            };
+
+            let res = save_data(
+                format!("{}/{}/input.json", test_dir, output_dir),
+                duplicated_data,
+            );
+
+            assert!(res.is_ok());
+        }
     }
 
     const PF_FAILURE: &str = "examples/test_failure.proof";
@@ -209,6 +274,7 @@ mod native_tests {
             fn kzg_aggr_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::init_params_23();
+                crate::native_tests::mv_test_(test);
                 kzg_aggr_prove_and_verify(test.to_string());
             }
 
@@ -231,13 +297,15 @@ mod native_tests {
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_packed_outputs_(test: &str) {
                 crate::native_tests::init_binary();
-                mock(test.to_string(), 7, 16, 17, false, false, true, 2);
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 17, false, false, true, 2, 1);
             }
 
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_everything_(test: &str) {
                 crate::native_tests::init_binary();
-                mock(test.to_string(), 7, 16, 17, true, false, true, 2);
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 17, true, false, true, 2, 1);
             }
 
             });
@@ -260,48 +328,62 @@ mod native_tests {
             use crate::native_tests::kzg_fuzz;
             use crate::native_tests::render_circuit;
             use crate::native_tests::tutorial as run_tutorial;
-            use crate::native_tests::percentage_tolerance as run_percentage_tolerance;
 
 
             #[test]
             fn tutorial_() {
-                run_tutorial();
+                crate::native_tests::mv_test_("tutorial");
+                // absolute tolerance test
+                run_tutorial("2");
+                // percent tolerance test
+                run_tutorial("1.0");
             }
 
-            #[test]
-            fn percentage_tolerance_() {
-                run_percentage_tolerance();
-            }
+
 
             seq!(N in 0..=33 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
                 crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
                 render_circuit(test.to_string());
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
                 crate::native_tests::init_binary();
-                mock(test.to_string(), 7, 16, 17, false, false, true, 1);
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 17, false, false, true, 1, 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_large_batch_public_outputs_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                let large_batch_dir = &format!("large_batches_{}", test);
+                crate::native_tests::mk_data_batches_(test, &large_batch_dir, 10);
+                mock(large_batch_dir.to_string(), 7, 16, 17, false, false, true, 1, 10);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_inputs_(test: &str) {
                 crate::native_tests::init_binary();
-                mock(test.to_string(), 7, 16, 17, true, false, false, 1);
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 17, true, false, false, 1, 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_params_(test: &str) {
                 crate::native_tests::init_binary();
-                mock(test.to_string(), 7, 16, 17, false, true, false, 1);
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 17, false, true, false, 1, 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn forward_pass_(test: &str) {
                 crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
                 forward_pass(test.to_string());
             }
 
@@ -309,12 +391,14 @@ mod native_tests {
             fn kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::init_params_17();
+                crate::native_tests::mv_test_(test);
                 kzg_prove_and_verify(test.to_string(), 7, 16, 17, "safe");
             }
 
             #(#[test_case(TESTS[N])])*
             fn kzg_fuzz_(test: &str) {
                 crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
                 kzg_fuzz(test.to_string(), 7, 16, 17, "blake");
             }
 
@@ -326,13 +410,15 @@ mod native_tests {
             fn large_kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::init_params_24();
+                crate::native_tests::mv_test_(test);
                 kzg_prove_and_verify(test.to_string(), 5, 23, 24, "unsafe");
             }
 
             #(#[test_case(LARGE_TESTS[N])])*
             fn large_mock_(test: &str) {
                 crate::native_tests::init_binary();
-                mock(test.to_string(), 5, 23, 24, false, false, true, 1);
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 5, 23, 24, false, false, true, 1, 1);
             }
         });
     }
@@ -379,14 +465,14 @@ mod native_tests {
                 fn kzg_evm_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), false, true);
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), true, true);
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), true, false);
+                    crate::native_tests::mv_test_(test);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test));
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_fuzz_(test: &str) {
                     crate::native_tests::init_binary();
+                    crate::native_tests::mv_test_(test);
                     kzg_fuzz(test.to_string(), 7, 16, 17, "evm");
                 }
 
@@ -396,9 +482,8 @@ mod native_tests {
                 fn kzg_evm_aggr_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_23();
-                    kzg_evm_aggr_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), false, true);
-                    kzg_evm_aggr_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), true, true);
-                    kzg_evm_aggr_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), true, false);
+                    crate::native_tests::mv_test_(test);
+                    kzg_evm_aggr_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test));
                 }
 
             });
@@ -417,6 +502,7 @@ mod native_tests {
             seq!(N in 0..=1 {
             #(#[test_case(EXAMPLES[N])])*
             fn example_(test: &str) {
+                crate::native_tests::mv_test_(test);
                 run(test.to_string());
             }
             });
@@ -436,6 +522,8 @@ mod native_tests {
             #(#[test_case(NEG_TESTS[N])])*
             fn neg_examples_(test: (&str, &str)) {
                 crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test.0);
+                crate::native_tests::mv_test_(test.1);
                 run(test.0.to_string(), test.1.to_string());
             }
 
@@ -453,13 +541,14 @@ mod native_tests {
 
     // Mock prove (fast, but does not cover some potential issues)
     fn neg_mock(example_name: String, counter_example: String) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "mock",
                 "-D",
-                format!("./examples/onnx/{}/input.json", counter_example).as_str(),
+                format!("{}/{}/input.json", test_dir, counter_example).as_str(),
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--bits=16",
                 "-K=17",
             ])
@@ -479,24 +568,18 @@ mod native_tests {
 
     // Mock prove (fast, but does not cover some potential issues)
     fn forward_pass(example_name: String) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "forward",
                 "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "-O",
-                format!(
-                    "{}/{}_input_forward.json",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                )
-                .as_str(),
+                format!("{}/{}/input_forward.json", test_dir, example_name).as_str(),
                 "--bits=16",
                 "-K=17",
-                // "-K",
-                // "2",  //causes failure
             ])
             .status()
             .expect("failed to execute process");
@@ -506,14 +589,9 @@ mod native_tests {
             .args([
                 "mock",
                 "-D",
-                format!(
-                    "{}/{}_input_forward.json",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                )
-                .as_str(),
+                format!("{}/{}/input_forward.json", test_dir, example_name).as_str(),
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--bits=16",
                 "-K=17",
             ])
@@ -524,20 +602,14 @@ mod native_tests {
 
     // Mock prove (fast, but does not cover some potential issues)
     fn render_circuit(example_name: String) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "render-circuit",
-                "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "-O",
-                format!(
-                    "{}/{}_render.png",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                )
-                .as_str(),
+                format!("{}/{}/render.png", test_dir, example_name).as_str(),
                 "--bits=16",
                 "-K=17",
             ])
@@ -547,37 +619,19 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
-    fn tutorial() {
+    fn tutorial(tolerance: &str) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "mock",
                 "-D",
-                "./examples/onnx/tutorial/input.json".to_string().as_str(),
+                format!("{}/tutorial/input.json", test_dir).as_str(),
                 "-M",
-                "./examples/onnx/tutorial/network.onnx".to_string().as_str(),
-                "--tolerance=2",
+                format!("{}/tutorial/network.onnx", test_dir).as_str(),
+                &format!("--tolerance={}", tolerance),
                 "--scale=4",
                 "--bits=16",
                 "-K=17",
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
-
-    // Set tolerance as floating point (positive or negative number with a decimal point) for percent error, usize for abs error.
-    fn percentage_tolerance() {
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "--tolerance=1.0", // 1 % error
-                "--scale=4",
-                "--bits=16",
-                "-K=17",
-                "mock",
-                "-D",
-                "./examples/onnx/tutorial/input.json".to_string().as_str(),
-                "-M",
-                "./examples/onnx/tutorial/network.onnx".to_string().as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -594,18 +648,21 @@ mod native_tests {
         public_params: bool,
         public_outputs: bool,
         pack_base: usize,
+        batch_size: usize,
     ) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "mock",
                 "-D",
-                &format!("./examples/onnx/{}/input.json", example_name),
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
-                &format!("./examples/onnx/{}/network.onnx", example_name),
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!("--bits={}", bits),
                 &format!("--logrows={}", logrows),
                 &format!("--scale={}", scale),
                 &format!("--pack-base={}", pack_base),
+                &format!("--batch-size={}", batch_size),
                 &format!("--public-inputs={}", public_inputs),
                 &format!("--public-params={}", public_params),
                 &format!("--public-outputs={}", public_outputs),
@@ -617,25 +674,24 @@ mod native_tests {
 
     // prove-serialize-verify, the usual full path
     fn kzg_aggr_prove_and_verify(example_name: String) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup",
-                "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--pk-path",
-                &format!("{}/{}.pk", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!("{}/{}/key.pk", test_dir, example_name),
                 "--vk-path",
-                &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!("{}/{}/key.vk", test_dir, example_name),
                 &format!(
                     "--params-path={}/kzg23.params",
                     TEST_DIR.path().to_str().unwrap()
                 ),
                 &format!(
-                    "--circuit-params-path={}/{}.params",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
                 ),
                 "--bits=16",
                 "-K=17",
@@ -646,14 +702,13 @@ mod native_tests {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "prove",
-                "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--proof-path",
-                &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--pk-path",
-                &format!("{}/{}.pk", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!("{}/{}/key.pk", test_dir, example_name),
                 &format!(
                     "--params-path={}/kzg23.params",
                     TEST_DIR.path().to_str().unwrap()
@@ -661,9 +716,8 @@ mod native_tests {
                 "--transcript=poseidon",
                 "--strategy=accum",
                 &format!(
-                    "--circuit-params-path={}/{}.params",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
                 ),
             ])
             .status()
@@ -674,26 +728,17 @@ mod native_tests {
                 "aggregate",
                 "--logrows=23",
                 &format!(
-                    "--circuit-params-paths={}/{}.params",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
+                    "--circuit-params-paths={}/{}/circuit.params",
+                    test_dir, example_name
                 ),
                 "--aggregation-snarks",
-                &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--aggregation-vk-paths",
-                &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!("{}/{}/key.vk", test_dir, example_name),
                 "--proof-path",
-                &format!(
-                    "{}/{}_aggr.pf",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
+                &format!("{}/{}/aggr.pf", test_dir, example_name),
                 "--vk-path",
-                &format!(
-                    "{}/{}_aggr.vk",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
+                &format!("{}/{}/aggr.vk", test_dir, example_name),
                 &format!(
                     "--params-path={}/kzg23.params",
                     TEST_DIR.path().to_str().unwrap()
@@ -708,17 +753,9 @@ mod native_tests {
                 "verify-aggr",
                 "--logrows=23",
                 "--proof-path",
-                &format!(
-                    "{}/{}_aggr.pf",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
+                &format!("{}/{}/aggr.pf", test_dir, example_name),
                 "--vk-path",
-                &format!(
-                    "{}/{}_aggr.vk",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
+                &format!("{}/{}/aggr.vk", test_dir, example_name),
                 &format!(
                     "--params-path={}/kzg23.params",
                     TEST_DIR.path().to_str().unwrap()
@@ -730,39 +767,28 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_evm_aggr_prove_and_verify(example_name: String, with_solidity: bool, public_inputs: bool, public_outputs: bool) {
+    fn kzg_evm_aggr_prove_and_verify(example_name: String, with_solidity: bool) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup",
-                "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--vk-path",
-                &format!(
-                    "{}/{}_evm.vk",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
+                &format!("{}/{}/evm.vk", test_dir, example_name),
                 "--pk-path",
-                &format!(
-                    "{}/{}_evm.pk",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
+                &format!("{}/{}/evm.pk", test_dir, example_name),
                 &format!(
                     "--params-path={}/kzg23.params",
                     TEST_DIR.path().to_str().unwrap()
                 ),
                 &format!(
-                    "--circuit-params-path={}/{}.params",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
                 ),
                 "--bits=16",
                 "-K=17",
-                &format!("--public-inputs={}", public_inputs),
-                &format!("--public-outputs={}", public_outputs)
             ])
             .status()
             .expect("failed to execute process");
@@ -771,30 +797,20 @@ mod native_tests {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "prove",
-                "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--proof-path",
-                &format!(
-                    "{}/{}_evm.pf",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
+                &format!("{}/{}/evm.pf", test_dir, example_name),
                 "--pk-path",
-                &format!(
-                    "{}/{}_evm.pk",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
+                &format!("{}/{}/evm.pk", test_dir, example_name),
                 &format!(
                     "--params-path={}/kzg23.params",
                     TEST_DIR.path().to_str().unwrap()
                 ),
                 &format!(
-                    "--circuit-params-path={}/{}.params",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
                 ),
                 "--transcript=poseidon",
                 "--strategy=accum",
@@ -807,34 +823,17 @@ mod native_tests {
                 "aggregate",
                 "--logrows=23",
                 &format!(
-                    "--circuit-params-paths={}/{}.params",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
+                    "--circuit-params-paths={}/{}/circuit.params",
+                    test_dir, example_name
                 ),
                 "--aggregation-snarks",
-                &format!(
-                    "{}/{}_evm.pf",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
+                &format!("{}/{}/evm.pf", test_dir, example_name),
                 "--aggregation-vk-paths",
-                &format!(
-                    "{}/{}_evm.vk",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
+                &format!("{}/{}/evm.vk", test_dir, example_name),
                 "--proof-path",
-                &format!(
-                    "{}/{}_evm_aggr.pf",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
+                &format!("{}/{}/evm_aggr.pf", test_dir, example_name),
                 "--vk-path",
-                &format!(
-                    "{}/{}_evm_aggr.vk",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
-                ),
+                &format!("{}/{}/evm_aggr.vk", test_dir, example_name),
                 &format!(
                     "--params-path={}/kzg23.params",
                     TEST_DIR.path().to_str().unwrap()
@@ -845,20 +844,12 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let code_arg = format!(
-            "{}/{}_evm_aggr.code",
-            TEST_DIR.path().to_str().unwrap(),
-            example_name
-        );
+        let code_arg = format!("{}/{}/evm_aggr.code", test_dir, example_name);
         let param_arg = format!(
             "--params-path={}/kzg23.params",
             TEST_DIR.path().to_str().unwrap()
         );
-        let vk_arg = format!(
-            "{}/{}_evm_aggr.vk",
-            TEST_DIR.path().to_str().unwrap(),
-            example_name
-        );
+        let vk_arg = format!("{}/{}/evm_aggr.vk", test_dir, example_name);
 
         let mut args = vec![
             "create-evm-verifier-aggr",
@@ -869,7 +860,7 @@ mod native_tests {
             vk_arg.as_str(),
         ];
 
-        let sol_arg = format!("kzg_aggr{}.sol", example_name);
+        let sol_arg = format!("{}/{}/kzg_aggr.sol", test_dir, example_name);
 
         if with_solidity {
             args.push("--sol-code-path");
@@ -881,11 +872,7 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let pf_arg = format!(
-            "{}/{}_evm_aggr.pf",
-            TEST_DIR.path().to_str().unwrap(),
-            example_name
-        );
+        let pf_arg = format!("{}/{}/evm_aggr.pf", test_dir, example_name);
 
         let mut args = vec![
             "verify-evm",
@@ -920,26 +907,20 @@ mod native_tests {
         logrows: usize,
         checkmode: &str,
     ) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup",
-                "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--pk-path",
-                &format!("{}/{}.pk", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!("{}/{}/key.pk", test_dir, example_name),
                 "--vk-path",
-                &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!("{}/{}/key.vk", test_dir, example_name),
+                &format!("--params-path={}/kzg{}.params", test_dir, logrows),
                 &format!(
-                    "--params-path={}/kzg{}.params",
-                    TEST_DIR.path().to_str().unwrap(),
-                    logrows
-                ),
-                &format!(
-                    "--circuit-params-path={}/{}.params",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
                 ),
                 &format!("--bits={}", bits),
                 &format!("--logrows={}", logrows),
@@ -952,24 +933,19 @@ mod native_tests {
             .args([
                 "prove",
                 "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--proof-path",
-                &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--pk-path",
-                &format!("{}/{}.pk", TEST_DIR.path().to_str().unwrap(), example_name),
-                &format!(
-                    "--params-path={}/kzg{}.params",
-                    TEST_DIR.path().to_str().unwrap(),
-                    logrows
-                ),
+                &format!("{}/{}/key.pk", test_dir, example_name),
+                &format!("--params-path={}/kzg{}.params", test_dir, logrows),
                 "--transcript=blake",
                 "--strategy=single",
                 &format!(
-                    "--circuit-params-path={}/{}.params",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
                 ),
                 &format!("--check-mode={}", checkmode),
             ])
@@ -980,19 +956,14 @@ mod native_tests {
             .args([
                 "verify",
                 &format!(
-                    "--circuit-params-path={}/{}.params",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
                 ),
                 "--proof-path",
-                &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--vk-path",
-                &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
-                &format!(
-                    "--params-path={}/kzg{}.params",
-                    TEST_DIR.path().to_str().unwrap(),
-                    logrows
-                ),
+                &format!("{}/{}/key.vk", test_dir, example_name),
+                &format!("--params-path={}/kzg{}.params", test_dir, logrows),
             ])
             .status()
             .expect("failed to execute process");
@@ -1001,13 +972,14 @@ mod native_tests {
 
     // prove-serialize-verify, the usual full path
     fn kzg_fuzz(example_name: String, scale: usize, bits: usize, logrows: usize, transcript: &str) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "fuzz",
                 "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!("--bits={}", bits),
                 &format!("--logrows={}", logrows),
                 &format!("--scale={}", scale),
@@ -1020,31 +992,24 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool, public_inputs: bool, public_outputs: bool) {
+    fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup",
-                "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--pk-path",
-                &format!("{}/{}.pk", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!("{}/{}/key.pk", test_dir, example_name),
                 "--vk-path",
-                &format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!("{}/{}/key.vk", test_dir, example_name),
+                &format!("--params-path={}/kzg17.params", test_dir),
                 &format!(
-                    "--params-path={}/kzg17.params",
-                    TEST_DIR.path().to_str().unwrap()
-                ),
-                &format!(
-                    "--circuit-params-path={}/{}.params",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
                 ),
                 "--bits=16",
                 "-K=17",
-                &format!("--public-inputs={}", public_inputs),
-                &format!("--public-outputs={}", public_outputs)
             ])
             .status()
             .expect("failed to execute process");
@@ -1054,13 +1019,13 @@ mod native_tests {
             .args([
                 "prove",
                 "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--proof-path",
-                &format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--pk-path",
-                &format!("{}/{}.pk", TEST_DIR.path().to_str().unwrap(), example_name),
+                &format!("{}/{}/key.pk", test_dir, example_name),
                 &format!(
                     "--params-path={}/kzg17.params",
                     TEST_DIR.path().to_str().unwrap()
@@ -1068,9 +1033,8 @@ mod native_tests {
                 "--transcript=evm",
                 "--strategy=single",
                 &format!(
-                    "--circuit-params-path={}/{}.params",
-                    TEST_DIR.path().to_str().unwrap(),
-                    example_name
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
                 ),
             ])
             .status()
@@ -1078,20 +1042,12 @@ mod native_tests {
         assert!(status.success());
 
         let circuit_params = format!(
-            "--circuit-params-path={}/{}.params",
-            TEST_DIR.path().to_str().unwrap(),
-            example_name
+            "--circuit-params-path={}/{}/circuit.params",
+            test_dir, example_name
         );
-        let code_arg = format!(
-            "{}/{}.code",
-            TEST_DIR.path().to_str().unwrap(),
-            example_name
-        );
-        let vk_arg = format!("{}/{}.vk", TEST_DIR.path().to_str().unwrap(), example_name);
-        let param_arg = format!(
-            "--params-path={}/kzg17.params",
-            TEST_DIR.path().to_str().unwrap()
-        );
+        let code_arg = format!("{}/{}/deployment.code", test_dir, example_name);
+        let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
+        let param_arg = format!("--params-path={}/kzg17.params", test_dir);
 
         let mut args = vec![
             "create-evm-verifier",
@@ -1103,7 +1059,7 @@ mod native_tests {
             vk_arg.as_str(),
         ];
 
-        let sol_arg = format!("kzg_{}.sol", example_name);
+        let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
 
         if with_solidity {
             args.push("--sol-code-path");
@@ -1115,7 +1071,7 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let pf_arg = format!("{}/{}.pf", TEST_DIR.path().to_str().unwrap(), example_name);
+        let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
 
         let mut args = vec![
             "verify-evm",

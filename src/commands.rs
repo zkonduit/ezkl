@@ -108,6 +108,9 @@ pub struct RunArgs {
     /// The log_2 number of rows
     #[arg(short = 'K', long, default_value = "17")]
     pub logrows: u32,
+    /// The number of batches to split the input data into
+    #[arg(long, default_value = "1")]
+    pub batch_size: u32,
     /// Flags whether inputs are public
     #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
     pub public_inputs: bool,
@@ -209,9 +212,6 @@ pub enum Commands {
     /// Renders the model circuit to a .png file. For an overview of how to interpret these plots, see https://zcash.github.io/halo2/user/dev-tools.html
     #[command(arg_required_else_help = true)]
     RenderCircuit {
-        /// The path to the .json data file
-        #[arg(short = 'D', long)]
-        data: String,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: String,
@@ -304,9 +304,6 @@ pub enum Commands {
     /// Creates pk and vk and circuit params
     #[command(arg_required_else_help = true)]
     Setup {
-        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'D', long)]
-        data: String,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,

@@ -115,7 +115,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => gen_srs_cmd(params_path, logrows as u32),
         Commands::Table { model: _, .. } => table(cli),
         #[cfg(feature = "render")]
-        Commands::RenderCircuit { data, output, .. } => render(data, output),
+        Commands::RenderCircuit { output, .. } => render(output),
         Commands::Forward {
             data,
             model,
@@ -147,13 +147,12 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             create_evm_aggregate_verifier(vk_path, params_path, deployment_code_path, sol_code_path)
         }
         Commands::Setup {
-            data,
             params_path,
             circuit_params_path,
             vk_path,
             pk_path,
             ..
-        } => create_keys_kzg(data, params_path, vk_path, pk_path, circuit_params_path),
+        } => create_keys_kzg(params_path, vk_path, pk_path, circuit_params_path),
         Commands::Prove {
             data,
             model,
@@ -453,7 +452,7 @@ fn forward(
 fn mock(data: String) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
     // mock should catch any issues by default so we set it to safe
-    let circuit = ModelCircuit::<Fr>::from_arg(&data, CheckMode::SAFE)?;
+    let mut circuit = ModelCircuit::<Fr>::from_arg(CheckMode::SAFE)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     info!("Mock proof");
@@ -483,9 +482,8 @@ pub fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, Box<dyn 
 }
 
 #[cfg(feature = "render")]
-fn render(data: String, output: String) -> Result<(), Box<dyn Error>> {
-    let data = prepare_data(data.to_string())?;
-    let circuit = ModelCircuit::<Fr>::from_arg(&data, CheckMode::UNSAFE)?;
+fn render(output: String) -> Result<(), Box<dyn Error>> {
+    let circuit = ModelCircuit::<Fr>::from_arg(CheckMode::UNSAFE)?;
     info!("Rendering circuit");
 
     // Create the area we want to draw on.
@@ -593,15 +591,13 @@ fn create_evm_aggregate_verifier(
 }
 
 fn create_keys_kzg(
-    data: String,
     params_path: PathBuf,
     vk_path: PathBuf,
     pk_path: PathBuf,
     circuit_params_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
-    let data = prepare_data(data)?;
     // these aren't real values so the sanity checks are mostly meaningless
-    let circuit = ModelCircuit::<Fr>::from_arg(&data, CheckMode::UNSAFE)?;
+    let circuit = ModelCircuit::<Fr>::from_arg(CheckMode::UNSAFE)?;
     let params = load_params_cmd(params_path, circuit.model.run_args.logrows)?;
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
         .map_err(Box::<dyn Error>::from)?;
@@ -627,12 +623,8 @@ fn prove(
 ) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
     let model_circuit_params = ModelParams::load(&circuit_params_path);
-    let circuit = ModelCircuit::<Fr>::from_model_params(
-        &data,
-        &model_circuit_params,
-        &model_path,
-        check_mode,
-    )?;
+    let mut circuit =
+        ModelCircuit::<Fr>::from_model_params(&model_circuit_params, &model_path, check_mode)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
     let circuit_params = circuit.params.clone();
 
@@ -696,7 +688,7 @@ fn fuzz(
 
     let data = prepare_data(data)?;
     // these aren't real values so the sanity checks are mostly meaningless
-    let circuit = ModelCircuit::<Fr>::from_arg(&data, CheckMode::UNSAFE)?;
+    let mut circuit = ModelCircuit::<Fr>::from_arg(CheckMode::UNSAFE)?;
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
         .map_err(Box::<dyn Error>::from)?;
 
