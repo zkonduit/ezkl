@@ -113,6 +113,8 @@ jobs:
           components: rustfmt, clippy
       - name: Forward Pass
         run: cargo test --release --verbose tests::forward_pass_
+      - name: Forward Pass (batch-size=10)
+        run: cargo test --release --verbose tests::forward_large_batch_pass_
 
   render-circuit:
     runs-on: ubuntu-latest-32-cores

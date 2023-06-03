@@ -381,10 +381,19 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
+            fn forward_large_batch_pass_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                let large_batch_dir = &format!("large_batches_{}", test);
+                crate::native_tests::mk_data_batches_(test, &large_batch_dir, 10);
+                forward_pass(large_batch_dir.to_string(), 10);
+            }
+
+            #(#[test_case(TESTS[N])])*
             fn forward_pass_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                forward_pass(test.to_string());
+                forward_pass(test.to_string(), 1);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -567,7 +576,7 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
-    fn forward_pass(example_name: String) {
+    fn forward_pass(example_name: String, batch_size: usize) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -578,6 +587,7 @@ mod native_tests {
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "-O",
                 format!("{}/{}/input_forward.json", test_dir, example_name).as_str(),
+                &format!("--batch-size={}", batch_size).as_str(),
                 "--bits=16",
                 "-K=17",
             ])
@@ -592,6 +602,7 @@ mod native_tests {
                 format!("{}/{}/input_forward.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!("--batch-size={}", batch_size).as_str(),
                 "--bits=16",
                 "-K=17",
             ])
