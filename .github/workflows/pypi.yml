@@ -251,7 +251,9 @@ jobs:
     permissions:
       id-token: write
     if: "startsWith(github.ref, 'refs/tags/')"
-    needs: [ macos, windows, linux, linux-cross, musllinux, musllinux-cross ]
+    # TODO: Uncomment if linux-cross is working
+    # needs: [ macos, windows, linux, linux-cross, musllinux, musllinux-cross ]
+    needs: [ macos, windows, linux, musllinux, musllinux-cross ]
     steps:
       - uses: actions/download-artifact@v3
         with:
