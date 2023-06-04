@@ -39,9 +39,13 @@ def test_table_1l_average():
         "┌─────────┬───────────┬────────┬──────────────┬─────┐\n"
         "│ opkind  │ out_scale │ inputs │ out_dims     │ idx │\n"
         "├─────────┼───────────┼────────┼──────────────┼─────┤\n"
-        "│ Input   │ 7         │        │ [1, 1, 5, 5] │ 0   │\n"
+        "│ Input   │ 7         │        │ [1, 3, 2, 2] │ 0   │\n"
         "├─────────┼───────────┼────────┼──────────────┼─────┤\n"
-        "│ SUMPOOL │ 7         │ [0]    │ [1, 1, 3, 3] │ 1   │\n"
+        "│ PAD     │ 7         │ [0]    │ [1, 3, 4, 4] │ 1   │\n"
+        "├─────────┼───────────┼────────┼──────────────┼─────┤\n"
+        "│ SUMPOOL │ 7         │ [1]    │ [1, 3, 3, 3] │ 2   │\n"
+        "├─────────┼───────────┼────────┼──────────────┼─────┤\n"
+        "│ RESHAPE │ 7         │ [2]    │ [3, 3, 3]    │ 3   │\n"
         "└─────────┴───────────┴────────┴──────────────┴─────┘"
     )
     assert ezkl_lib.table(path) == expected_table
@@ -86,7 +90,7 @@ def test_forward():
     with open(output_path, "r") as f:
         data = json.load(f)
 
-    assert data == {"input_data": [[0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]], "output_data": [[0.9140625, 0.9140625, 0.9140625, 0.9140625, 0.9140625, 0.9140625, 0.9140625, 0.9140625, 0.9140625]]}
+    assert data == {"input_data": [[0.053262424,0.074970566,0.052355476,0.028825462,0.058487028,0.008225823,0.07530029,0.0821458,0.06227987,0.024306035,0.05793174,0.04044203]], "output_data": [[0.0546875,0.1328125,0.078125,0.109375,0.21875,0.109375,0.0546875,0.0859375,0.03125,0.0546875,0.0625,0.0078125,0.1328125,0.2265625,0.09375,0.078125,0.1640625,0.0859375,0.0625,0.0859375,0.0234375,0.1171875,0.1796875,0.0625,0.0546875,0.09375,0.0390625]]}
 
     os.remove(output_path)
 
@@ -138,7 +142,6 @@ def test_setup():
     circuit_params_path = os.path.join(folder_path, 'circuit.params')
 
     res = ezkl_lib.setup(
-        data_path,
         model_path,
         vk_path,
         pk_path,
@@ -175,7 +178,6 @@ def test_setup_evm():
     circuit_params_path = os.path.join(folder_path, 'circuit.params')
 
     res = ezkl_lib.setup(
-        data_path,
         model_path,
         vk_path,
         pk_path,
@@ -338,7 +340,6 @@ def test_aggregate_and_verify_aggr():
     circuit_params_path = os.path.join(folder_path, '1l_relu_circuit.params')
 
     ezkl_lib.setup(
-        data_path,
         model_path,
         vk_path,
         pk_path,
@@ -410,7 +411,6 @@ def test_evm_aggregate_and_verify_aggr():
     circuit_params_path = os.path.join(folder_path, '1l_relu_circuit.params')
 
     ezkl_lib.setup(
-        data_path,
         model_path,
         vk_path,
         pk_path,

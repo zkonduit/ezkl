@@ -7,10 +7,10 @@ class MyModel(nn.Module):
         super(MyModel, self).__init__()
 
     def forward(self, x):
-        return [torch.var(x, unbiased=False)]
+        return [torch.var(x, unbiased=False, dim=[1,2])]
 
 circuit = MyModel()
-export(circuit, input_shape = [3,3])
+export(circuit, input_shape = [1,3,3])
 
 
     

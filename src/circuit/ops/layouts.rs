@@ -1172,7 +1172,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     .multi_cartesian_product()
     .collect::<Vec<_>>();
 
-    output.par_iter_mut().enumerate().for_each(|(idx, o)| {
+    output.iter_mut().enumerate().for_each(|(idx, o)| {
         let cartesian_coord_per_group = &cartesian_coord[idx];
         let (batch, group, i, j, k) = (
             cartesian_coord_per_group[0],
@@ -1206,10 +1206,12 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
 
         local_kernel.flatten();
 
-        let mut local_offset = *offset + idx * local_image.len();
+        let mut total_len = idx * local_image.len();
         if has_bias {
-            local_offset += idx;
+            total_len += idx;
         }
+        let overflowed_len = overflowed_len(*offset, total_len, config.output.col_size());
+        let mut local_offset = *offset + overflowed_len;
 
         let mut res = einsum(
             config,
@@ -1221,18 +1223,15 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
         .unwrap();
 
         if has_bias {
+            let bias = values[2]
+                .get_inner_tensor()
+                .unwrap()
+                .get_slice(&[start_kernel_index..end_kernel_index])
+                .unwrap();
             res = pairwise(
                 config,
                 region.clone(),
-                &[
-                    res,
-                    values[2]
-                        .get_inner_tensor()
-                        .unwrap()
-                        .get_slice(&[start_kernel_index..end_kernel_index])
-                        .unwrap()
-                        .into(),
-                ],
+                &[res, bias.into()],
                 &mut local_offset,
                 BaseOp::Add,
             )
@@ -1242,11 +1241,13 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
         *o = res.get_inner_tensor().unwrap()[0].clone();
     });
 
-    *offset += output.len() * kernel_height * kernel_width * input_channels_per_group;
-    // add bias
+    let mut total_len = output.len() * kernel_height * kernel_width * input_channels_per_group;
     if has_bias {
-        *offset += output.len();
+        total_len += output.len();
     }
+    let overflowed_len = overflowed_len(*offset, total_len, config.output.col_size());
+
+    *offset += overflowed_len;
 
     output.reshape(&[batch_size, output_channels, vert_slides, horz_slides]);
 
