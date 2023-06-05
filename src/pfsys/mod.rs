@@ -254,6 +254,11 @@ pub fn prepare_data(datapath: String) -> Result<ModelInput, Box<dyn Error>> {
     serde_json::from_str(&data).map_err(Box::<dyn Error>::from)
 }
 
+/// Serializes the required inputs to a model to path `datapath`
+pub fn save_data(datapath: String, data: ModelInput) -> Result<(), Box<dyn Error>> {
+    serde_json::to_writer(File::create(&datapath)?, &data).map_err(Box::<dyn Error>::from)
+}
+
 /// Helper function for generating SRS. !!! Only use for testing
 pub fn gen_srs<Scheme: CommitmentScheme>(k: u32) -> Scheme::ParamsProver {
     Scheme::ParamsProver::new(k)

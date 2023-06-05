@@ -18,7 +18,7 @@ use tract_onnx::tract_core::ops::einsum::EinSum;
 use tract_onnx::tract_core::ops::element_wise::ElementWiseOp;
 
 use tract_onnx::tract_core::ops::nn::{LeakyRelu, Reduce, Softmax};
-use tract_onnx::tract_hir::internal::{AxisOp, DimLike};
+use tract_onnx::tract_hir::internal::DimLike;
 use tract_onnx::tract_hir::ops::cnn::ConvUnary;
 use tract_onnx::tract_hir::ops::konst::Const;
 use tract_onnx::tract_hir::{
@@ -144,23 +144,6 @@ pub fn tensor_to_valtensor<F: PrimeField + TensorType + PartialOrd>(
     };
     value.set_scale(scale);
     Ok(value)
-}
-
-/// Extracts an axis op from an onnx node.
-fn load_axis_op(
-    op: &dyn tract_onnx::prelude::Op,
-    idx: usize,
-    name: String,
-) -> Result<AxisOp, Box<dyn std::error::Error>> {
-    // Extract the slope layer hyperparams
-    let op: &AxisOp = match op.downcast_ref::<AxisOp>() {
-        Some(b) => b,
-        None => {
-            return Err(Box::new(GraphError::OpMismatch(idx, name)));
-        }
-    };
-
-    Ok(op.clone())
 }
 
 /// Extracts a Gather op from an onnx node.
@@ -329,19 +312,19 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
         }
         "Reduce<Min>" => {
             if inputs.len() != 1 {
-                return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
+                return Err(Box::new(GraphError::InvalidDims(idx, "min".to_string())));
             };
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
-            let axes = op.axes.iter().filter(|x| **x != 0).copied().collect();
+            let axes = op.axes.into_iter().collect();
 
             Box::new(HybridOp::Min { axes })
         }
         "Reduce<Max>" => {
             if inputs.len() != 1 {
-                return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
+                return Err(Box::new(GraphError::InvalidDims(idx, "max".to_string())));
             };
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
-            let axes = op.axes.iter().filter(|x| **x != 0).copied().collect();
+            let axes = op.axes.into_iter().collect();
 
             Box::new(HybridOp::Max { axes })
         }
@@ -350,7 +333,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
             };
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
-            let axes = op.axes.iter().filter(|x| **x != 0).copied().collect();
+            let axes = op.axes.into_iter().collect();
 
             Box::new(PolyOp::Sum { axes })
         }
@@ -810,33 +793,12 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             );
             Box::new(PolyOp::Pad(padding_h, padding_w))
         }
-        "RmAxis" => {
+        "RmAxis" | "Reshape" => {
             // Extract the slope layer hyperparams
-            let reshape = load_axis_op(node.op(), idx, node.op().name().to_string())?;
+            let shapes = node_output_shapes(&node)?;
+            let output_shape = shapes[0].as_ref().unwrap().clone();
 
-            let new_dims: Vec<usize> = match reshape {
-                AxisOp::Rm(_) => inputs[0].out_dims()[0].clone(),
-                _ => {
-                    return Err(Box::new(GraphError::MisformedParams("reshape".to_string())));
-                }
-            };
-
-            Box::new(PolyOp::Reshape(new_dims.to_vec()))
-        }
-        "Reshape" => {
-            // Extract the slope layer hyperparams
-            let reshape = load_axis_op(node.op(), idx, node.op().name().to_string())?;
-
-            let new_dims: Vec<usize> = match reshape {
-                AxisOp::Reshape(_, _shape_from, _shape_to) => {
-                    let shapes = node_output_shapes(&node)?;
-                    shapes[0].as_ref().unwrap().clone()
-                }
-                _ => {
-                    return Err(Box::new(GraphError::MisformedParams("reshape".to_string())));
-                }
-            };
-            Box::new(PolyOp::Reshape(new_dims.to_vec()))
+            Box::new(PolyOp::Reshape(output_shape))
         }
         "Flatten" => {
             let new_dims: Vec<usize> = vec![inputs[0].out_dims()[0].iter().product::<usize>()];
