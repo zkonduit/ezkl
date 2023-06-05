@@ -8,9 +8,9 @@ class MyModel(nn.Module):
         super(MyModel, self).__init__()
 
     def forward(self, x):
-        x = x.reshape([1, 6])
+        x = x.reshape([-1, 6])
         return x
 
 
 circuit = MyModel()
-export(circuit, input_shape=[3, 2])
+export(circuit, input_shape=[1, 3, 2])

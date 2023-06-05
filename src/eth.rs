@@ -1,10 +1,5 @@
-use crate::pfsys::evm::DeploymentCode;
 use crate::pfsys::evm::EvmVerificationError;
 use crate::pfsys::Snark;
-use ethereum_types::Address;
-use ethers::abi::ethabi::Bytes;
-use ethers::abi::Abi;
-use ethers::abi::AbiEncode;
 use ethers::contract::abigen;
 use ethers::contract::ContractFactory;
 use ethers::core::k256::ecdsa::SigningKey;
@@ -13,31 +8,23 @@ use ethers::middleware::SignerMiddleware;
 use ethers::prelude::Wallet;
 use ethers::providers::Middleware;
 use ethers::providers::{Http, Provider};
-use ethers::signers::coins_bip39::English;
-use ethers::signers::MnemonicBuilder;
 use ethers::signers::Signer;
-use ethers::signers::WalletError;
-use ethers::types::transaction::eip2718::TypedTransaction;
-use ethers::types::TransactionRequest;
 use ethers::types::U256;
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::{
-    prelude::{HDPath::LedgerLive, Ledger, LocalWallet, Wallet},
+    prelude::{LocalWallet, Wallet},
     utils::{Anvil, AnvilInstance},
 };
-use ethers_solc::{Solc, CompilerInput};
+use ethers_solc::{CompilerInput, Solc};
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
 use log::{debug, info};
-use snark_verifier::loader::evm::encode_calldata;
 use std::error::Error;
 use std::fmt::Write;
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
 use std::{convert::TryFrom, sync::Arc};
-
-const DEFAULT_DERIVATION_PATH_PREFIX: &str = "m/44'/60'/0'/0/";
 
 /// A local ethers-rs based client
 pub type EthersClient = Arc<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>;
@@ -69,17 +56,12 @@ pub async fn setup_eth_backend() -> Result<(AnvilInstance, EthersClient), Box<dy
 pub async fn verify_proof_via_solidity(
     proof: Snark<Fr, G1Affine>,
     sol_code_path: PathBuf,
-    runs: Option<usize>
+    runs: Option<usize>,
 ) -> Result<bool, Box<dyn Error>> {
-
     let (anvil, client) = setup_eth_backend().await?;
 
-    let factory = get_sol_contract_factory(
-        sol_code_path,
-        client.clone(),
-        runs
-    ).unwrap();
-    
+    let factory = get_sol_contract_factory(sol_code_path, client.clone(), runs).unwrap();
+
     let contract = factory.deploy(())?.send().await?;
     let addr = contract.address();
 
@@ -88,13 +70,13 @@ pub async fn verify_proof_via_solidity(
 
     let mut public_inputs = vec![];
     let flattened_instances = proof.instances.into_iter().flatten();
-    
+
     for val in flattened_instances {
         let bytes = val.to_repr();
         let u = U256::from_little_endian(bytes.as_slice());
         public_inputs.push(u);
     }
-    
+
     let tx = contract
         .verify(
             public_inputs.clone(),
@@ -131,10 +113,10 @@ pub async fn verify_proof_via_solidity(
 fn get_sol_contract_factory<M: 'static + Middleware>(
     sol_code_path: PathBuf,
     client: Arc<M>,
-    runs: Option<usize>
+    runs: Option<usize>,
 ) -> Result<ContractFactory<M>, Box<dyn Error>> {
     const MAX_RUNTIME_BYTECODE_SIZE: usize = 24_577; // Smart contract size limit
-    // Create the compiler input, enabling the optimizer and setting the optimzer runs.
+                                                     // Create the compiler input, enabling the optimizer and setting the optimzer runs.
     let input: CompilerInput = if let Some(r) = runs {
         let mut i = CompilerInput::new(sol_code_path)?[0].clone().optimizer(r);
         i.settings.optimizer.enable();
@@ -155,206 +137,11 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
             "Solidity runtime bytecode size is: {:#?}, 
             which exceeds 24577 bytes limit.
             Try setting '--optimzer-runs 1' 
-            so SOLC can optimize for the smallest deployment", size
-        );                
-    } 
+            so SOLC can optimize for the smallest deployment",
+            size
+        );
+    }
     Ok(ContractFactory::new(abi, bytecode, client))
-}
-
-/// Parses a private key into a [SigningKey]  
-fn parse_private_key(private_key: U256) -> Result<SigningKey, Bytes> {
-    if private_key.is_zero() {
-        return Err("Private key cannot be 0.".to_string().encode());
-    }
-    let mut bytes: [u8; 32] = [0; 32];
-    private_key.to_big_endian(&mut bytes);
-    SigningKey::from_bytes((&bytes).into()).map_err(|err| err.to_string().encode())
-}
-
-/// Parses a private key into a [Wallet]  
-fn get_signing_wallet(
-    private_key: U256,
-    chain_id: u64,
-) -> Result<Wallet<SigningKey>, Box<dyn Error>> {
-    let private_key = parse_private_key(private_key).unwrap();
-    let wallet: Wallet<SigningKey> = private_key.into();
-
-    Ok(wallet.with_chain_id(chain_id))
-}
-
-/// Obtains a Ledger hardware wallet backed [SignerMiddleWare] from an provider and a chain id.
-/// This middleware can be used for locally signing and broadcasting transactions while the hardware
-/// wallet is connected to the machine.
-pub async fn get_ledger_signing_provider(
-    provider: Provider<Http>,
-    chain_id: u64,
-) -> Result<SignerMiddleware<Arc<Provider<Http>>, Ledger>, Box<dyn Error>> {
-    let ledger = Ledger::new(LedgerLive(0), chain_id).await?;
-    let provider = Arc::new(provider);
-
-    Ok(SignerMiddleware::new(provider, ledger))
-}
-/// Obtains a [SignerMiddleWare] from an RPC url and a mnemonic string.
-/// The middleware can be used for locally signing and broadcasting transactions.
-pub async fn get_wallet_signing_provider(
-    provider: Provider<Http>,
-    mnemonic: &str,
-) -> Result<SignerMiddleware<Arc<Provider<Http>>, Wallet<SigningKey>>, Box<dyn Error>> {
-    let chain_id = provider.get_chainid().await?;
-    let private_key = derive_key(mnemonic, DEFAULT_DERIVATION_PATH_PREFIX, 0)?;
-    let signing_wallet = get_signing_wallet(private_key, chain_id.as_u64())?;
-
-    let provider = Arc::new(provider);
-
-    Ok(SignerMiddleware::new(provider, signing_wallet))
-}
-
-/// Derive a [U256] private key from a mnemonic string.
-fn derive_key(mnemonic: &str, path: &str, index: u32) -> Result<U256, WalletError> {
-    let derivation_path = if path.ends_with('/') {
-        format!("{path}{index}")
-    } else {
-        format!("{path}/{index}")
-    };
-
-    let wallet = MnemonicBuilder::<English>::default()
-        .phrase(mnemonic)
-        .derivation_path(&derivation_path)?
-        .build()?;
-
-    info!("wallet address: {:#?}", wallet.address());
-
-    let private_key = U256::from_big_endian(wallet.signer().to_bytes().as_slice());
-
-    Ok(private_key)
-}
-
-/// Deploys a verifier contract  
-pub async fn deploy_verifier<M: 'static + Middleware>(
-    client: Arc<M>,
-    deployment_code_path: Option<PathBuf>,
-    sol_code_path: Option<PathBuf>,
-    runs: Option<usize>
-) -> Result<(), Box<dyn Error>> {
-    // comment the following two lines if want to deploy to anvil
-
-    let gas = client.provider().get_gas_price().await?;
-    info!("gas price: {:#?}", gas);
-
-    // sol code supercedes deployment code
-    let factory = match sol_code_path {
-        Some(path) => get_sol_contract_factory(
-            path,
-            client.clone(),
-            runs
-        ).unwrap(),
-        None => match deployment_code_path {
-            Some(path) => {
-                let bytecode = DeploymentCode::load(&path)?;
-                ContractFactory::new(
-                    // our constructor is empty and ContractFactory only uses the abi constructor -- so this should be safe
-                    Abi::default(),
-                    (bytecode.code().clone()).into(),
-                    client.clone(),
-                )
-            }
-            None => {
-                panic!("at least one path should be set");
-            }
-        },
-    };
-
-    let deployer = factory.deploy(())?;
-
-    let tx = &deployer.tx;
-
-    debug!("transaction {:#?}", tx);
-    info!(
-        "estimated deployment gas cost: {:#?}",
-        client.estimate_gas(tx, None).await?
-    );
-    let (contract, deploy_receipt) = deployer.send_with_receipt().await?;
-    debug!("deploy receipt: {:#?}", deploy_receipt);
-    info!("contract address: {}", contract.address());
-
-    // uncomment if want to test on local anvil
-
-    Ok(())
-}
-
-/// get_provider returns a JSON RPC HTTP Provider
-pub fn get_provider(rpc_url: &str) -> Result<Provider<Http>, Box<dyn Error>> {
-    let provider = Provider::<Http>::try_from(rpc_url)?;
-    debug!("{:#?}", provider);
-    Ok(provider)
-}
-
-/// Sends a proof to an already deployed verifier contract
-pub async fn send_proof<M: 'static + Middleware>(
-    client: Arc<M>,
-    addr: Address,
-    signer_address: Address,
-    snark: Snark<Fr, G1Affine>,
-    has_abi: bool,
-) -> Result<(), Box<dyn Error>> {
-    info!("contract address: {}", addr);
-
-    let gas = client.provider().get_gas_price().await?;
-    info!("gas price: {:#?}", gas);
-
-    let mut verify_tx: TypedTransaction = if has_abi {
-        info!("using contract abi");
-        abigen!(Verifier, "./Verifier.json");
-        let contract = Verifier::new(addr, client.clone());
-
-        let mut public_inputs = vec![];
-        let flattened_instances = snark.instances.into_iter().flatten();
-
-        for val in flattened_instances {
-            let bytes = val.to_repr();
-            let u = U256::from_little_endian(bytes.as_slice());
-            public_inputs.push(u);
-        }
-
-        contract
-            .verify(
-                public_inputs,
-                ethers::types::Bytes::from(snark.proof.to_vec()),
-            )
-            .tx
-    } else {
-        info!("not using contract abi");
-        let calldata = encode_calldata(&snark.instances, &snark.proof);
-        TransactionRequest::default()
-            .to(addr)
-            .from(signer_address)
-            .data(calldata)
-            .into()
-    };
-
-    info!("created tx");
-    debug!("transaction {:#?}", verify_tx);
-
-    let gas = client.provider().get_gas_price().await.unwrap();
-    info!("gas price: {:#?}", gas);
-
-    let gas_estimate = client.estimate_gas(&verify_tx, None).await?;
-    info!("estimated function call gas cost: {:#?}", gas_estimate);
-
-    client.fill_transaction(&mut verify_tx, None).await?;
-    let result = client.send_transaction(verify_tx, None).await?.await;
-
-    if result.is_err() {
-        return Err(Box::new(EvmVerificationError::SolidityExecution));
-    }
-    let result = result.unwrap();
-
-    debug!("transaction {:#?}", result);
-
-    // uncomment if want to test on local anvil
-    // drop(anvil);
-
-    Ok(())
 }
 
 use regex::Regex;
@@ -638,33 +425,21 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
     }
     writeln!(write, "}} return success; }} }}")?;
 
-    // free memory pointer initialization  
+    // free memory pointer initialization
     let mut offset = 128;
-    
+
     // replace all mload(add(pubInputs, 0x...))) with mload(0x...
-    contract = replace_vars_with_offset(
-        &contract, 
-        r"add\(pubInputs, (0x[0-9a-fA-F]+)\)",
-        offset
-    );
+    contract = replace_vars_with_offset(&contract, r"add\(pubInputs, (0x[0-9a-fA-F]+)\)", offset);
 
     offset += 32 * num_pubinputs + 32;
 
     // replace all mload(add(proof, 0x...))) with mload(0x...
-    contract = replace_vars_with_offset(
-        &contract, 
-        r"add\(proof, (0x[0-9a-fA-F]+)\)",
-        offset
-    );
+    contract = replace_vars_with_offset(&contract, r"add\(proof, (0x[0-9a-fA-F]+)\)", offset);
 
     offset += 32 * proof_size + 32;
 
     // replace all (add(transcript, 0x...))) with (0x...)
-    contract = replace_vars_with_offset(
-        &contract, 
-        r"add\(transcript, (0x[0-9a-fA-F]+)\)",
-         offset
-    );
+    contract = replace_vars_with_offset(&contract, r"add\(transcript, (0x[0-9a-fA-F]+)\)", offset);
 
     Ok(contract)
 }

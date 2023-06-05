@@ -1,7 +1,5 @@
 //use crate::onnx::OnnxModel;
 use clap::{Args, Parser, Subcommand, ValueEnum};
-#[cfg(not(target_arch = "wasm32"))]
-use ethereum_types::Address;
 use log::{debug, info};
 #[cfg(feature = "python-bindings")]
 use pyo3::{
@@ -108,6 +106,9 @@ pub struct RunArgs {
     /// The log_2 number of rows
     #[arg(short = 'K', long, default_value = "17")]
     pub logrows: u32,
+    /// The number of batches to split the input data into
+    #[arg(long, default_value = "1")]
+    pub batch_size: u32,
     /// Flags whether inputs are public
     #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
     pub public_inputs: bool,
@@ -209,9 +210,6 @@ pub enum Commands {
     /// Renders the model circuit to a .png file. For an overview of how to interpret these plots, see https://zcash.github.io/halo2/user/dev-tools.html
     #[command(arg_required_else_help = true)]
     RenderCircuit {
-        /// The path to the .json data file
-        #[arg(short = 'D', long)]
-        data: String,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: String,
@@ -304,9 +302,6 @@ pub enum Commands {
     /// Creates pk and vk and circuit params
     #[command(arg_required_else_help = true)]
     Setup {
-        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'D', long)]
-        data: String,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
@@ -433,50 +428,6 @@ pub enum Commands {
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
         // todo, optionally allow supplying proving key
-    },
-
-    #[cfg(not(target_arch = "wasm32"))]
-    /// Deploys an EVM verifier
-    #[command(name = "deploy-verifier-evm", arg_required_else_help = true)]
-    DeployVerifierEVM {
-        /// The path to the wallet mnemonic if not set will attempt to connect to ledger
-        #[arg(short = 'S', long)]
-        secret: Option<PathBuf>,
-        /// RPC Url
-        #[arg(short = 'U', long)]
-        rpc_url: String,
-        /// The path to the desired EVM bytecode file (optional), either set this or sol_code_path
-        #[arg(long)]
-        deployment_code_path: Option<PathBuf>,
-        /// The path to output the Solidity code (optional) supercedes deployment_code_path in priority
-        #[arg(long)]
-        sol_code_path: Option<PathBuf>,
-        /// The number of runs set to the SOLC optimizer.
-        /// Lower values optimze for deployment size while higher values optimize for execution cost.
-        /// If not set will just use the default unoptimized SOLC configuration.
-        #[arg(long)]
-        optimizer_runs: Option<usize>,
-    },
-
-    #[cfg(not(target_arch = "wasm32"))]
-    /// Send a proof to be verified to an already deployed verifier
-    #[command(name = "send-proof-evm", arg_required_else_help = true)]
-    SendProofEVM {
-        /// The path to the wallet mnemonic if not set will attempt to connect to ledger
-        #[arg(short = 'S', long)]
-        secret: Option<PathBuf>,
-        /// RPC Url
-        #[arg(short = 'U', long)]
-        rpc_url: String,
-        /// The deployed verifier address
-        #[arg(long)]
-        addr: Address,
-        /// The path to the proof
-        #[arg(long)]
-        proof_path: PathBuf,
-        /// If we have the contract abi locally (i.e adheres to format in Verifier.json)
-        #[arg(long)]
-        has_abi: bool,
     },
 
     /// Verifies a proof, returning accept or reject

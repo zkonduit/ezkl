@@ -113,6 +113,8 @@ jobs:
           components: rustfmt, clippy
       - name: Forward Pass
         run: cargo test --release --verbose tests::forward_pass_
+      - name: Forward Pass (batch-size=10)
+        run: cargo test --release --verbose tests::forward_large_batch_pass_
 
   render-circuit:
     runs-on: ubuntu-latest-32-cores
@@ -155,6 +157,8 @@ jobs:
           components: rustfmt, clippy
       - name: Mock proving tests (public outputs)
         run: cargo test --release --verbose tests::mock_public_outputs_ -- --test-threads 32
+      - name: Mock proving tests (public outputs + batch size == 10)
+        run: cargo test --release --verbose tests::mock_large_batch_public_outputs_ -- --test-threads 32
       - name: Mock proving tests (public and packed outputs)
         run: cargo test --release --verbose packed_tests::mock_packed_outputs_ -- --test-threads 32
       - name: Mock proving tests (public inputs)
@@ -345,7 +349,7 @@ jobs:
         run: cargo test neg_tests_wasi::neg_examples_
 
   python-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-32-cores
     needs: [build, build-wasm, library-tests, docs]
     steps:
       - uses: actions/checkout@v3

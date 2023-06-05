@@ -1,10 +1,7 @@
 use crate::circuit::CheckMode;
 use crate::commands::{Cli, Commands, RunArgs, StrategyType};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::eth::{
-    deploy_verifier, fix_verifier_sol, get_ledger_signing_provider, get_provider,
-    get_wallet_signing_provider, send_proof, verify_proof_via_solidity,
-};
+use crate::eth::{fix_verifier_sol, verify_proof_via_solidity};
 use crate::graph::{quantize_float, scale_to_multiplier, Model, ModelCircuit, ModelParams};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
@@ -16,8 +13,6 @@ use crate::pfsys::{
     create_keys, load_params, load_pk, load_vk, save_params, save_pk, Snark, TranscriptType,
 };
 use crate::pfsys::{create_proof_circuit, gen_srs, prepare_data, save_vk, verify_proof_circuit};
-#[cfg(not(target_arch = "wasm32"))]
-use ethers::providers::Middleware;
 #[cfg(not(target_arch = "wasm32"))]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
@@ -38,8 +33,6 @@ use halo2curves::ff::Field;
 #[cfg(not(target_arch = "wasm32"))]
 use indicatif::ParallelProgressIterator;
 use itertools::Itertools;
-#[cfg(not(target_arch = "wasm32"))]
-use log::warn;
 use log::{info, trace};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
@@ -52,16 +45,12 @@ use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
-#[cfg(not(target_arch = "wasm32"))]
-use std::fs::read_to_string;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::Arc;
 use std::time::Instant;
 use thiserror::Error;
 
@@ -84,38 +73,13 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             args,
             num_runs,
         } => fuzz(args.logrows, data, transcript, num_runs),
-        #[cfg(not(target_arch = "wasm32"))]
-        Commands::SendProofEVM {
-            secret,
-            rpc_url,
-            addr,
-            proof_path,
-            has_abi,
-        } => send_proof_evm(secret, rpc_url, addr, proof_path, has_abi).await,
-        #[cfg(not(target_arch = "wasm32"))]
-        Commands::DeployVerifierEVM {
-            secret,
-            rpc_url,
-            deployment_code_path,
-            sol_code_path,
-            optimizer_runs,
-        } => {
-            deploy_verifier_evm(
-                secret,
-                rpc_url,
-                deployment_code_path,
-                sol_code_path,
-                optimizer_runs,
-            )
-            .await
-        }
         Commands::GenSrs {
             params_path,
             logrows,
         } => gen_srs_cmd(params_path, logrows as u32),
         Commands::Table { model: _, .. } => table(cli),
         #[cfg(feature = "render")]
-        Commands::RenderCircuit { data, output, .. } => render(data, output),
+        Commands::RenderCircuit { output, .. } => render(output),
         Commands::Forward {
             data,
             model,
@@ -147,13 +111,12 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             create_evm_aggregate_verifier(vk_path, params_path, deployment_code_path, sol_code_path)
         }
         Commands::Setup {
-            data,
             params_path,
             circuit_params_path,
             vk_path,
             pk_path,
             ..
-        } => create_keys_kzg(data, params_path, vk_path, pk_path, circuit_params_path),
+        } => create_keys_kzg(params_path, vk_path, pk_path, circuit_params_path),
         Commands::Prove {
             data,
             model,
@@ -343,53 +306,6 @@ pub fn create_proof_circuit_kzg<
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-async fn send_proof_evm(
-    secret: Option<PathBuf>,
-    rpc_url: String,
-    addr: ethereum_types::Address,
-    proof_path: PathBuf,
-    has_abi: bool,
-) -> Result<(), Box<dyn Error>> {
-    let provider = get_provider(&rpc_url)?;
-    let chain_id = provider.get_chainid().await?;
-    info!("using chain {}", chain_id);
-    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
-    if let Some(secret) = secret {
-        let mnemonic = read_to_string(secret)?;
-        let client = Arc::new(get_wallet_signing_provider(provider, &mnemonic).await?);
-        send_proof(client.clone(), addr, client.address(), proof, has_abi).await?;
-    } else {
-        warn!("connect your Ledger and open the Ethereum app");
-        let client = Arc::new(get_ledger_signing_provider(provider, chain_id.as_u64()).await?);
-        send_proof(client.clone(), addr, client.address(), proof, has_abi).await?;
-    };
-    Ok(())
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-async fn deploy_verifier_evm(
-    secret: Option<PathBuf>,
-    rpc_url: String,
-    deployment_code_path: Option<PathBuf>,
-    sol_code_path: Option<PathBuf>,
-    runs: Option<usize>,
-) -> Result<(), Box<dyn Error>> {
-    let provider = get_provider(&rpc_url)?;
-    let chain_id = provider.get_chainid().await?;
-    info!("using chain {}", chain_id);
-    if let Some(secret) = secret {
-        let mnemonic = read_to_string(secret)?;
-        let client = Arc::new(get_wallet_signing_provider(provider, &mnemonic).await?);
-        deploy_verifier(client, deployment_code_path, sol_code_path, runs).await?;
-    } else {
-        warn!("connect your Ledger and open the Ethereum app");
-        let client = Arc::new(get_ledger_signing_provider(provider, chain_id.as_u64()).await?);
-        deploy_verifier(client, deployment_code_path, sol_code_path, runs).await?;
-    };
-    Ok(())
-}
-
 fn gen_srs_cmd(params_path: PathBuf, logrows: u32) -> Result<(), Box<dyn Error>> {
     let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
     save_params::<KZGCommitmentScheme<Bn256>>(&params_path, &params)?;
@@ -453,7 +369,7 @@ fn forward(
 fn mock(data: String) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
     // mock should catch any issues by default so we set it to safe
-    let circuit = ModelCircuit::<Fr>::from_arg(&data, CheckMode::SAFE)?;
+    let mut circuit = ModelCircuit::<Fr>::from_arg(CheckMode::SAFE)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     info!("Mock proof");
@@ -483,9 +399,8 @@ pub fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, Box<dyn 
 }
 
 #[cfg(feature = "render")]
-fn render(data: String, output: String) -> Result<(), Box<dyn Error>> {
-    let data = prepare_data(data.to_string())?;
-    let circuit = ModelCircuit::<Fr>::from_arg(&data, CheckMode::UNSAFE)?;
+fn render(output: String) -> Result<(), Box<dyn Error>> {
+    let circuit = ModelCircuit::<Fr>::from_arg(CheckMode::UNSAFE)?;
     info!("Rendering circuit");
 
     // Create the area we want to draw on.
@@ -593,15 +508,13 @@ fn create_evm_aggregate_verifier(
 }
 
 fn create_keys_kzg(
-    data: String,
     params_path: PathBuf,
     vk_path: PathBuf,
     pk_path: PathBuf,
     circuit_params_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
-    let data = prepare_data(data)?;
     // these aren't real values so the sanity checks are mostly meaningless
-    let circuit = ModelCircuit::<Fr>::from_arg(&data, CheckMode::UNSAFE)?;
+    let circuit = ModelCircuit::<Fr>::from_arg(CheckMode::UNSAFE)?;
     let params = load_params_cmd(params_path, circuit.model.run_args.logrows)?;
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
         .map_err(Box::<dyn Error>::from)?;
@@ -627,12 +540,8 @@ fn prove(
 ) -> Result<(), Box<dyn Error>> {
     let data = prepare_data(data)?;
     let model_circuit_params = ModelParams::load(&circuit_params_path);
-    let circuit = ModelCircuit::<Fr>::from_model_params(
-        &data,
-        &model_circuit_params,
-        &model_path,
-        check_mode,
-    )?;
+    let mut circuit =
+        ModelCircuit::<Fr>::from_model_params(&model_circuit_params, &model_path, check_mode)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
     let circuit_params = circuit.params.clone();
 
@@ -696,7 +605,7 @@ fn fuzz(
 
     let data = prepare_data(data)?;
     // these aren't real values so the sanity checks are mostly meaningless
-    let circuit = ModelCircuit::<Fr>::from_arg(&data, CheckMode::UNSAFE)?;
+    let mut circuit = ModelCircuit::<Fr>::from_arg(CheckMode::UNSAFE)?;
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
         .map_err(Box::<dyn Error>::from)?;
 

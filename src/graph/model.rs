@@ -342,32 +342,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         let max_range = 2i128.pow(self.run_args.bits as u32 - 1);
         if max_lookup_inputs >= max_range {
             let recommended_bits = (max_lookup_inputs as f64).log2().ceil() as u32 + 1;
-            let recommended_scale = 1.0
-                + (max_lookup_inputs as f64 / max_range as f64).log2().ceil()
-                - self.run_args.scale as f64;
             warn!("At the selected lookup bits and fixed point scale, the largest input to a lookup table is too large to be represented (max: {}, bits: {}, scale: {}).",  max_lookup_inputs, self.run_args.bits, self.run_args.scale);
-            if recommended_scale > 0.0 {
-                warn!("Either increase the lookup bits to [{}] or decrease the scale to [{}] (or both).", recommended_bits, recommended_scale);
-                warn!("Remember to increase the circuit logrows if you increase the bits.");
-                warn!("Remember to re-run the forward pass with the new values.");
-            } else if recommended_bits <= 27 {
+            if recommended_bits <= 27 {
                 warn!("Increase the lookup bits to [{}]. The current scale cannot be decreased enough to fit the largest lookup input. ", recommended_bits);
                 warn!("Remember to increase the circuit logrows if you increase the bits.");
                 warn!("Remember to re-run the forward pass with the new values.");
             } else {
-                let max_range = 2i128.pow(27_u32 - 1);
-                let recommended_scale = self.run_args.scale as f64
-                    - (max_lookup_inputs as f64 / max_range as f64).log2().ceil();
-                if recommended_scale > 0.0 {
-                    warn!(
-                        "Increase the bits to [27] and the scale to [{}]",
-                        recommended_scale
-                    );
-                    warn!("Remember to increase the circuit logrows if you increase the bits.");
-                    warn!("Remember to re-run the forward pass with the new values.");
-                } else {
-                    warn!("No possible value of bits or scale can accomodate this value.")
-                }
+                warn!("No possible value of bits _at this scale_ can accomodate this value.")
             }
         }
 
@@ -402,7 +383,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                     Ok(x) => x as usize,
                     Err(_e) => {
                         if x.to_string() == "batch_size" {
-                            1
+                            run_args.batch_size as usize
                         } else {
                             panic!("Unknown dimension {}: {:?}", x.to_string(), x)
                         }
@@ -423,8 +404,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         let batch_size = model.symbol_table.sym("batch_size");
         let seq_len = model.symbol_table.sym("sequence_length");
         let model = model
-            .concretize_dims(&SymbolValues::default().with(&batch_size, 1))?
+            .concretize_dims(
+                &SymbolValues::default().with(&batch_size, run_args.batch_size as i64),
+            )?
             .concretize_dims(&SymbolValues::default().with(&seq_len, 1))?;
+
+        info!("set batch size to {}", run_args.batch_size);
 
         let nodes = Self::nodes_from_graph(
             &model,
