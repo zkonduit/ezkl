@@ -7,8 +7,11 @@ on:
 jobs:
   bump-version:
     runs-on: ubuntu-latest
+<<<<<<< HEAD
     permissions:
       contents: write
+=======
+>>>>>>> f4dddd60e564a128e740dbbff1d026a37e8e8984
 
     steps:
       - uses: actions/checkout@v3
