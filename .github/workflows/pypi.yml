@@ -269,4 +269,4 @@ jobs:
         continue-on-error: true
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: https://test.pypi.org/
+          repository-url: https://test.pypi.org/legacy/
