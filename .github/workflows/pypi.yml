@@ -253,7 +253,20 @@ jobs:
           name: wheels
       - name: List Files
         run: ls -R
+
+      # Both publish steps will fail if there is no trusted publisher setup
+      # On failure the publish step will then simply continue to the next one
+
+      # publishes to PyPI
       - name: Publish package distributions to PyPI
+        continue-on-error: true
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: ./
+
+      # publishes to TestPyPI
+      - name: Publish package distribution to TestPyPI
+        continue-on-error: true
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/
