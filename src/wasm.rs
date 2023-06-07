@@ -1,20 +1,19 @@
 use std::sync::Arc;
 
 use halo2_proofs::plonk::*;
-use halo2_proofs::poly::commitment::{ParamsProver, CommitmentScheme};
+use halo2_proofs::poly::commitment::{CommitmentScheme, ParamsProver};
 use halo2_proofs::poly::kzg::{
     commitment::{KZGCommitmentScheme, ParamsKZG},
     strategy::SingleStrategy as KZGSingleStrategy,
 };
-use halo2curves::ff::{FromUniformBytes, PrimeField};
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
+use halo2curves::ff::{FromUniformBytes, PrimeField};
 
-
+use crate::graph::vars::VarVisibility;
+use crate::tensor::TensorType;
 use halo2curves::serde::SerdeObject;
 use snark_verifier::system::halo2::compile;
 use wasm_bindgen::prelude::*;
-use crate::graph::vars::VarVisibility;
-use crate::tensor::TensorType;
 
 use console_error_panic_hook;
 
@@ -37,17 +36,13 @@ pub fn gen_circuit_params_wasm(
     run_args_ser: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Vec<u8> {
     let run_args: crate::commands::RunArgs = bincode::deserialize(&run_args_ser[..]).unwrap();
-    // get Varvisibility
-    let var_visibility = VarVisibility::from_args(run_args.clone()).expect("Failed to create VarVisibility");
+    // Get Varvisibility
+    let var_visibility =
+        VarVisibility::from_args(run_args.clone()).expect("Failed to create VarVisibility");
 
-    // read in circuit
+    // Read in circuit
     let mut reader = std::io::BufReader::new(&circuit_ser[..]);
-    let model = crate::graph::Model::new(
-        &mut reader,
-        run_args,
-        var_visibility,
-    )
-    .unwrap();
+    let model = crate::graph::Model::new(&mut reader, run_args, var_visibility).unwrap();
     let circuit =
         ModelCircuit::<Fr>::new(Arc::new(model), crate::circuit::CheckMode::UNSAFE).unwrap();
     let circuit_params = circuit.params;
@@ -61,14 +56,13 @@ pub fn gen_pk_wasm(
     params_ser: wasm_bindgen::Clamped<Vec<u8>>,
     circuit_params_ser: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Vec<u8> {
-    // read in circuit params
+    // Read in circuit params
     let circuit_params: ModelParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();
-    log(&format!("circuit_params: {:?}", circuit_params));
-    // read in kzg params
+    // Read in kzg params
     let mut reader = std::io::BufReader::new(&params_ser[..]);
     let params: ParamsKZG<Bn256> =
         halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).unwrap();
-    // read in circuit
+    // Read in circuit
     let mut circuit_reader = std::io::BufReader::new(&circuit_ser[..]);
     let model = crate::graph::Model::new(
         &mut circuit_reader,
@@ -80,14 +74,13 @@ pub fn gen_pk_wasm(
     let circuit =
         ModelCircuit::<Fr>::new(Arc::new(model), crate::circuit::CheckMode::UNSAFE).unwrap();
 
-    log(&format!("circuit: {:?}", circuit));
-
-    let pk = create_keys_wasm::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
-        .map_err(Box::<dyn std::error::Error>::from)
-        .unwrap();
+    // Create proving key
+    let pk =
+        create_keys_wasm::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
+            .map_err(Box::<dyn std::error::Error>::from)
+            .unwrap();
 
     let mut serialized_pk = Vec::new();
-    log(&format!("pk: {:?}", pk));
     pk.write(&mut serialized_pk, halo2_proofs::SerdeFormat::RawBytes)
         .unwrap();
 
@@ -100,11 +93,10 @@ pub fn gen_vk_wasm(
     pk: wasm_bindgen::Clamped<Vec<u8>>,
     circuit_params_ser: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Vec<u8> {
-    // read in circuit params
+    // Read in circuit params
     let circuit_params: ModelParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();
-    log(&format!("circuit_params: {:?}", circuit_params));
 
-    // read in proving key
+    // Read in proving key
     let mut reader = std::io::BufReader::new(&pk[..]);
     let pk = ProvingKey::<G1Affine>::read::<_, ModelCircuit<Fr>>(
         &mut reader,
@@ -114,7 +106,6 @@ pub fn gen_vk_wasm(
     .unwrap();
 
     let vk = pk.get_vk();
-    log(&format!("vk: {:?}", vk));
 
     let mut serialized_vk = Vec::new();
     vk.write(&mut serialized_vk, halo2_proofs::SerdeFormat::RawBytes)
@@ -182,7 +173,7 @@ pub fn verify_wasm(
     }
 }
 
-/// Prove proof in browser using wasm
+/// Prove in browser using wasm
 #[wasm_bindgen]
 pub fn prove_wasm(
     data: wasm_bindgen::Clamped<Vec<u8>>,
@@ -195,15 +186,12 @@ pub fn prove_wasm(
     let mut reader = std::io::BufReader::new(&params_ser[..]);
     let params: ParamsKZG<Bn256> =
         halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).unwrap();
-    log(&format!("params: {:?}", params));
 
     // read in model input
     let data: crate::pfsys::ModelInput = serde_json::from_slice(&data[..]).unwrap();
-    log(&format!("data: {:?}", data));
 
     // read in circuit params
     let circuit_params: ModelParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();
-    log(&format!("circuit_params: {:?}", circuit_params));
 
     // read in proving key
     let mut reader = std::io::BufReader::new(&pk[..]);
@@ -213,7 +201,6 @@ pub fn prove_wasm(
         circuit_params.clone(),
     )
     .unwrap();
-    log(&format!("pk: {:?}", pk));
 
     // read in circuit
     let mut reader = std::io::BufReader::new(&circuit_ser[..]);
@@ -226,8 +213,6 @@ pub fn prove_wasm(
 
     let mut circuit =
         ModelCircuit::<Fr>::new(Arc::new(model), crate::circuit::CheckMode::UNSAFE).unwrap();
-    
-    log(&format!("circuit: {:?}", circuit));
 
     // prep public inputs
     let public_inputs = circuit.prepare_public_inputs(&data).unwrap();
@@ -243,7 +228,6 @@ pub fn prove_wasm(
         crate::circuit::CheckMode::UNSAFE,
     )
     .unwrap();
-    log(&format!("proof: {:?}", proof));
 
     bincode::serialize(&proof.to_bytes()).unwrap()
 }
@@ -267,11 +251,4 @@ where
     let vk = keygen_vk(params, &empty_circuit)?;
     let pk = keygen_pk(params, vk, &empty_circuit)?;
     Ok(pk)
-}
-
-/// used for logging
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = console)]
-    fn log(s: &str);
 }
