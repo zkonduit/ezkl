@@ -1,6 +1,7 @@
 use crate::circuit::ops::hybrid::HybridOp;
 use crate::circuit::ops::poly::PolyOp;
 use crate::circuit::*;
+use crate::tensor::{Tensor, TensorType, ValTensor, VarTensor};
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     dev::MockProver,
@@ -9,8 +10,10 @@ use halo2_proofs::{
 use halo2curves::ff::{Field, PrimeField};
 use halo2curves::pasta::pallas;
 use halo2curves::pasta::Fp as F;
+use ops::lookup::LookupOp;
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
+use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 struct TestParams;
@@ -973,13 +976,16 @@ mod add_with_overflow_and_poseidon {
     use halo2curves::bn256::Fr;
 
     use crate::{
-        circuit::poseidon::{spec::PoseidonSpec, PoseidonChip, PoseidonConfig},
+        circuit::modules::{
+            poseidon::{spec::PoseidonSpec, PoseidonChip, PoseidonConfig},
+            ModulePlanner,
+        },
         tensor::ValType,
     };
 
     use super::*;
 
-    const K: usize = 10;
+    const K: usize = 8;
     const LEN: usize = 50;
     const WIDTH: usize = 15;
     const RATE: usize = 14;
@@ -998,7 +1004,7 @@ mod add_with_overflow_and_poseidon {
 
     impl Circuit<Fr> for MyCircuit {
         type Config = MyCircuitConfig;
-        type FloorPlanner = SimpleFloorPlanner;
+        type FloorPlanner = ModulePlanner;
         type Params = TestParams;
 
         fn without_witnesses(&self) -> Self {
@@ -1084,24 +1090,27 @@ mod add_with_overflow_and_poseidon {
                 _ => panic!(),
             };
 
+            layouter.assign_region(
+                || "constrain output",
+                |mut region| {
+                    let expected_var = region.assign_advice(
+                        || "load output",
+                        config.poseidon.hash_inputs[0],
+                        0,
+                        || self.commitment,
+                    )?;
+
+                    region.constrain_equal(output.cell(), expected_var.cell())
+                },
+            )?;
+
+            layouter.assign_region(|| "_new_module", |_| Ok(()))?;
+
             layouter
                 .assign_region(
-                    || "",
+                    || "model",
                     |mut region| {
-                        let expected_var = region.assign_advice(
-                            || "load output",
-                            config.poseidon.hash_inputs[0],
-                            0,
-                            || self.commitment,
-                        )?;
-
-                        region
-                            .constrain_equal(output.cell(), expected_var.cell())
-                            .unwrap();
-
-                        //
-                        let mut offset = 1;
-
+                        let mut offset = 0;
                         config
                             .base
                             .layout(
@@ -1123,7 +1132,8 @@ mod add_with_overflow_and_poseidon {
         let a = (0..LEN)
             .map(|i| halo2curves::bn256::Fr::from(i as u64 + 1))
             .collect::<Vec<_>>();
-        let commitment = poseidon::witness_hash::<RATE>(a.clone()).unwrap();
+        let commitment =
+            crate::circuit::modules::poseidon::witness_hash::<RATE>(a.clone()).unwrap();
 
         // parameters
         let a = Tensor::from(a.into_iter().map(|i| Value::known(i)));

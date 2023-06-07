@@ -1,7 +1,7 @@
 //! Specification for rate 4 Poseidon using the BN256 curve.
 //! Patterned after [halo2_gadgets::poseidon::primitives::P128Pow5T3]
 
-use crate::circuit::poseidon::primitives::*;
+use halo2_gadgets::poseidon::primitives::*;
 use halo2_proofs::arithmetic::Field;
 use halo2_proofs::halo2curves::bn256::Fr as Fp;
 

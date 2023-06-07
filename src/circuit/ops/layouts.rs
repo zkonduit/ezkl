@@ -11,8 +11,9 @@ use itertools::Itertools;
 use log::error;
 use rayon::prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
+use super::chip::{BaseConfig, CheckMode, CircuitError};
 use crate::{
-    circuit::{ops::base::BaseOp, utils, BaseConfig, CheckMode, CircuitError},
+    circuit::{ops::base::BaseOp, utils},
     fieldutils::i128_to_felt,
     tensor::{
         get_broadcasted_shape,
