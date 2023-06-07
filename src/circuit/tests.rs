@@ -968,6 +968,180 @@ mod add_with_overflow {
 }
 
 #[cfg(test)]
+mod add_with_overflow_and_poseidon {
+    use halo2_proofs::circuit::AssignedCell;
+    use halo2curves::bn256::Fr;
+
+    use crate::{
+        circuit::poseidon::{spec::PoseidonSpec, PoseidonChip, PoseidonConfig},
+        tensor::ValType,
+    };
+
+    use super::*;
+
+    const K: usize = 10;
+    const LEN: usize = 50;
+    const WIDTH: usize = 15;
+    const RATE: usize = 14;
+
+    #[derive(Debug, Clone)]
+    struct MyCircuitConfig {
+        base: BaseConfig<Fr>,
+        poseidon: PoseidonConfig<WIDTH, RATE>,
+    }
+
+    #[derive(Clone)]
+    struct MyCircuit {
+        inputs: [ValTensor<Fr>; 2],
+        commitment: Value<Fr>,
+    }
+
+    impl Circuit<Fr> for MyCircuit {
+        type Config = MyCircuitConfig;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN);
+            let b = VarTensor::new_advice(cs, K, LEN);
+            let output = VarTensor::new_advice(cs, K, LEN);
+
+            let base = BaseConfig::configure(cs, &[a, b], &output, CheckMode::SAFE, 0);
+
+            let hash_inputs = (0..WIDTH).map(|_| cs.advice_column()).collect::<Vec<_>>();
+            for input in &hash_inputs {
+                cs.enable_equality(input.clone());
+            }
+
+            let poseidon =
+                PoseidonChip::<PoseidonSpec, WIDTH, RATE, RATE>::configure(cs, hash_inputs);
+
+            MyCircuitConfig { base, poseidon }
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<Fr>,
+        ) -> Result<(), Error> {
+            let poseidon_chip: PoseidonChip<PoseidonSpec, WIDTH, RATE, RATE> =
+                PoseidonChip::construct(config.poseidon.clone());
+
+            let (message, zero_val) = layouter.assign_region(
+                || "load message",
+                |mut region| {
+                    let message_word = |i: usize| {
+                        let value = &self.inputs[0].get_inner_tensor().unwrap()[i];
+                        let value = match value {
+                            ValType::Value(c) => c,
+                            _ => panic!("wrong input type, must be previously assigned"),
+                        };
+
+                        let x = i % WIDTH;
+                        let y = i / WIDTH;
+
+                        region.assign_advice(
+                            || format!("load message_{}", i),
+                            config.poseidon.hash_inputs[x],
+                            y,
+                            || value.clone(),
+                        )
+                    };
+
+                    let message: Result<Vec<AssignedCell<Fr, Fr>>, Error> =
+                        (0..self.inputs[0].len()).map(message_word).collect();
+                    let message: Tensor<ValType<Fr>> = message?
+                        .iter()
+                        .map(|x| Into::<ValType<Fr>>::into(x.clone()))
+                        .into();
+
+                    let offset = self.inputs[0].len() / WIDTH + 1;
+
+                    let zero_val = region
+                        .assign_advice_from_constant(
+                            || "",
+                            config.poseidon.hash_inputs[0],
+                            offset,
+                            Fr::ZERO,
+                        )
+                        .unwrap();
+
+                    Ok((message.into(), zero_val))
+                },
+            )?;
+
+            let output = &poseidon_chip
+                .hash(&mut layouter, message, zero_val)?
+                .get_inner_tensor()
+                .unwrap()[0];
+
+            let output = match output {
+                ValType::PrevAssigned(v) => v,
+                _ => panic!(),
+            };
+
+            layouter
+                .assign_region(
+                    || "",
+                    |mut region| {
+                        let expected_var = region.assign_advice(
+                            || "load output",
+                            config.poseidon.hash_inputs[0],
+                            0,
+                            || self.commitment,
+                        )?;
+
+                        region
+                            .constrain_equal(output.cell(), expected_var.cell())
+                            .unwrap();
+
+                        //
+                        let mut offset = 1;
+
+                        config
+                            .base
+                            .layout(
+                                Arc::new(Mutex::new(Some(&mut region))),
+                                &self.inputs.clone(),
+                                &mut offset,
+                                Box::new(PolyOp::Add { a: None }),
+                            )
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn addcircuit() {
+        let a = (0..LEN)
+            .map(|i| halo2curves::bn256::Fr::from(i as u64 + 1))
+            .collect::<Vec<_>>();
+        let commitment = poseidon::witness_hash::<RATE>(a.clone()).unwrap();
+
+        // parameters
+        let a = Tensor::from(a.into_iter().map(|i| Value::known(i)));
+        let b = Tensor::from(
+            (0..LEN).map(|i| Value::known(halo2curves::bn256::Fr::from(i as u64 + 1))),
+        );
+
+        let circuit = MyCircuit {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
+            commitment,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+    }
+}
+
+#[cfg(test)]
 mod sub {
     use super::*;
 

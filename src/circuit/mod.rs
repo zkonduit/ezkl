@@ -2,6 +2,10 @@ use std::{
     str::FromStr,
     sync::{Arc, Mutex},
 };
+
+///
+pub mod poseidon;
+
 ///
 pub mod table;
 

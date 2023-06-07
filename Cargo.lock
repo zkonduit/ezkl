@@ -1645,6 +1645,7 @@ name = "ezkl-lib"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "bitvec 1.0.1",
  "clap 4.1.13",
  "colored",
  "colored_json",
@@ -1656,6 +1657,7 @@ dependencies = [
  "ethers-solc",
  "gag",
  "getrandom",
+ "halo2_gadgets",
  "halo2_proofs",
  "halo2curves",
  "hex",
@@ -2087,6 +2089,23 @@ checksum = "02b4af3693f1b705df946e9fe5631932443781d0aabb423b62fcd4d73f6d2fd0"
 dependencies = [
  "crunchy",
  "num-traits",
+]
+
+[[package]]
+name = "halo2_gadgets"
+version = "0.2.0"
+source = "git+https://github.com/privacy-scaling-explorations/halo2?rev=a764a7f#a764a7fa774c511f45c065db3386728976a16863"
+dependencies = [
+ "arrayvec 0.7.2",
+ "bitvec 1.0.1",
+ "ff",
+ "group",
+ "halo2_proofs",
+ "halo2curves",
+ "lazy_static",
+ "rand 0.8.5",
+ "subtle",
+ "uint",
 ]
 
 [[package]]
