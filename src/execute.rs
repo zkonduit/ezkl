@@ -792,10 +792,7 @@ fn fuzz(
             let res = evm_verify(deployment_code.clone(), bad_proof);
 
             match res {
-                Ok(b) => match b {
-                    true => Ok(()),
-                    false => Err(()),
-                },
+                Ok(_) => Ok(()),
                 Err(_) => Err(()),
             }
         };
@@ -820,10 +817,7 @@ fn fuzz(
             let res = evm_verify(deployment_code.clone(), bad_proof);
 
             match res {
-                Ok(b) => match b {
-                    true => Ok(()),
-                    false => Err(()),
-                },
+                Ok(_) => Ok(()),
                 Err(_) => Err(()),
             }
         };

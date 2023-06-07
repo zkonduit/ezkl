@@ -705,6 +705,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13418e745008f7349ec7e449155f419a61b92b58a99cc3616942b926825ec76b"
 
 [[package]]
+name = "convert_case"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
+
+[[package]]
 name = "core-foundation"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1005,8 +1011,10 @@ version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fb810d30a7c1953f91334de7244731fc3f3c10d7fe163338a35b9f640960321"
 dependencies = [
+ "convert_case",
  "proc-macro2",
  "quote",
+ "rustc_version 0.4.0",
  "syn 1.0.109",
 ]
 
@@ -1195,6 +1203,17 @@ dependencies = [
  "serde",
  "sha3 0.10.8",
  "zeroize",
+]
+
+[[package]]
+name = "enumn"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48016319042fb7c87b78d2993084a831793a897a5cd1a2a67cab9d1eeb4b7d76"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.18",
 ]
 
 [[package]]
@@ -1403,7 +1422,7 @@ dependencies = [
  "generic-array",
  "hex",
  "k256",
- "num_enum 0.6.1",
+ "num_enum",
  "once_cell",
  "open-fastrlp",
  "rand 0.8.5",
@@ -2018,7 +2037,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/public-cells#6e5c44c8223b4f7522d6dced4f88d1da41ec344b"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/public-cells#ac425ba75960c325310a488b1db7da26cc6b9f18"
 dependencies = [
  "arrayvec 0.7.2",
  "bitvec 1.0.1",
@@ -2035,7 +2054,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/public-cells#6e5c44c8223b4f7522d6dced4f88d1da41ec344b"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/public-cells#ac425ba75960c325310a488b1db7da26cc6b9f18"
 dependencies = [
  "blake2b_simd",
  "ff",
@@ -2147,6 +2166,12 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "hex-literal"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
 
 [[package]]
 name = "hmac"
@@ -2609,7 +2634,7 @@ dependencies = [
  "pest_derive",
  "regex",
  "serde",
- "time 0.3.21",
+ "time 0.3.22",
 ]
 
 [[package]]
@@ -2634,7 +2659,7 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "regex",
- "time 0.3.21",
+ "time 0.3.22",
  "unicode-segmentation",
 ]
 
@@ -2895,32 +2920,11 @@ dependencies = [
 
 [[package]]
 name = "num_enum"
-version = "0.5.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f646caf906c20226733ed5b1374287eb97e3c2a5c227ce668c1f2ce20ae57c9"
-dependencies = [
- "num_enum_derive 0.5.11",
-]
-
-[[package]]
-name = "num_enum"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a015b430d3c108a207fd776d2e2196aaf8b1cf8cf93253e3a097ff3085076a1"
 dependencies = [
- "num_enum_derive 0.6.1",
-]
-
-[[package]]
-name = "num_enum_derive"
-version = "0.5.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcbff9bc912032c62bf65ef1d5aea88983b420f4f839db1e9b0c281a25c9c799"
-dependencies = [
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
+ "num_enum_derive",
 ]
 
 [[package]]
@@ -3825,37 +3829,63 @@ dependencies = [
 
 [[package]]
 name = "revm"
-version = "2.3.1"
+version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73d84c8f9836efb0f5f5f8de4700a953c4e1f3119e5cfcb0aad8e5be73daf991"
+checksum = "f293f351c4c203d321744e54ed7eed3d2b6eef4c140228910dde3ac9a5ea8031"
 dependencies = [
- "arrayref",
  "auto_impl",
- "bytes",
- "hashbrown 0.13.2",
- "num_enum 0.5.11",
- "primitive-types",
- "revm_precompiles",
- "rlp",
+ "revm-interpreter",
+ "revm-precompile",
+]
+
+[[package]]
+name = "revm-interpreter"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a53980a26f9b5a66d13511c35074d4b53631e157850a1d7cf1af4efc2c2b72c9"
+dependencies = [
+ "derive_more",
+ "enumn",
+ "revm-primitives",
  "sha3 0.10.8",
 ]
 
 [[package]]
-name = "revm_precompiles"
-version = "1.1.2"
+name = "revm-precompile"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0353d456ef3e989dc9190f42c6020f09bc2025930c37895826029304413204b5"
+checksum = "41320af3bd6a65153d38eb1d3638ba89104cc9513c7feedb2d8510e8307dab29"
 dependencies = [
- "bytes",
- "hashbrown 0.13.2",
+ "k256",
  "num",
  "once_cell",
- "primitive-types",
+ "revm-primitives",
  "ripemd",
  "secp256k1",
  "sha2 0.10.6",
  "sha3 0.10.8",
  "substrate-bn",
+]
+
+[[package]]
+name = "revm-primitives"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "304d998f466ffef72d76c7f20b05bf08a96801736a6fb1fdef47d49a292618df"
+dependencies = [
+ "auto_impl",
+ "bitvec 1.0.1",
+ "bytes",
+ "derive_more",
+ "enumn",
+ "fixed-hash",
+ "hashbrown 0.13.2",
+ "hex",
+ "hex-literal",
+ "primitive-types",
+ "rlp",
+ "ruint",
+ "sha3 0.10.8",
 ]
 
 [[package]]
@@ -3913,6 +3943,26 @@ dependencies = [
  "quote",
  "syn 1.0.109",
 ]
+
+[[package]]
+name = "ruint"
+version = "1.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d470e29e933dac4101180fd6574971892315c414cf2961a192729089687cc9b"
+dependencies = [
+ "derive_more",
+ "primitive-types",
+ "rlp",
+ "ruint-macro",
+ "rustc_version 0.4.0",
+ "thiserror",
+]
+
+[[package]]
+name = "ruint-macro"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62cc5760263ea229d367e7dff3c0cbf09e4797a125bd87059a6c095804f3b2d1"
 
 [[package]]
 name = "rustc-hex"
@@ -4120,18 +4170,18 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.24.3"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b1629c9c557ef9b293568b338dddfc8208c98a18c59d722a9d53f859d9c9b62"
+checksum = "25996b82292a7a57ed3508f052cfff8640d38d32018784acd714758b43da9c8f"
 dependencies = [
  "secp256k1-sys",
 ]
 
 [[package]]
 name = "secp256k1-sys"
-version = "0.6.1"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83080e2c2fc1006e625be82e5d1eb6a43b7fd9578b617fcc55814daf286bba4b"
+checksum = "70a129b9e9efbfb223753b9163c4ab3b13cff7fd9c7f010fbac25ab4099fa07e"
 dependencies = [
  "cc",
 ]
@@ -4374,9 +4424,8 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/send-sync-region#b5ef30dbd963cf8f313a7260788e892c6934cec2"
+source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/send-sync-region#693e8fb3e883db6090d03e5e5a852e02a8d7dfee"
 dependencies = [
- "bytes",
  "ecc",
  "halo2_proofs",
  "halo2curves",
@@ -4387,10 +4436,8 @@ dependencies = [
  "num-integer",
  "num-traits",
  "poseidon",
- "primitive-types",
  "rand 0.8.5",
  "revm",
- "rlp",
  "sha3 0.10.8",
 ]
 
@@ -4739,9 +4786,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.21"
+version = "0.3.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f3403384eaacbca9923fa06940178ac13e4edb725486d70e8e15881d0c836cc"
+checksum = "ea9e1b3cf1243ae005d9e74085d4d542f3125458f3a81af210d901dcd7411efd"
 dependencies = [
  "itoa",
  "serde",
@@ -5731,7 +5778,7 @@ dependencies = [
  "hmac",
  "pbkdf2 0.11.0",
  "sha1",
- "time 0.3.21",
+ "time 0.3.22",
  "zstd",
 ]
 
