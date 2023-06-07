@@ -63,6 +63,7 @@ pub fn gen_pk_wasm(
 ) -> Vec<u8> {
     // read in circuit params
     let circuit_params: ModelParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();
+    log(&format!("circuit_params: {:?}", circuit_params));
     // read in kzg params
     let mut reader = std::io::BufReader::new(&params_ser[..]);
     let params: ParamsKZG<Bn256> =
@@ -79,11 +80,14 @@ pub fn gen_pk_wasm(
     let circuit =
         ModelCircuit::<Fr>::new(Arc::new(model), crate::circuit::CheckMode::UNSAFE).unwrap();
 
+    log(&format!("circuit: {:?}", circuit));
+
     let pk = create_keys_wasm::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
         .map_err(Box::<dyn std::error::Error>::from)
         .unwrap();
 
     let mut serialized_pk = Vec::new();
+    log(&format!("pk: {:?}", pk));
     pk.write(&mut serialized_pk, halo2_proofs::SerdeFormat::RawBytes)
         .unwrap();
 
@@ -98,6 +102,7 @@ pub fn gen_vk_wasm(
 ) -> Vec<u8> {
     // read in circuit params
     let circuit_params: ModelParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();
+    log(&format!("circuit_params: {:?}", circuit_params));
 
     // read in proving key
     let mut reader = std::io::BufReader::new(&pk[..]);
@@ -109,6 +114,7 @@ pub fn gen_vk_wasm(
     .unwrap();
 
     let vk = pk.get_vk();
+    log(&format!("vk: {:?}", vk));
 
     let mut serialized_vk = Vec::new();
     vk.write(&mut serialized_vk, halo2_proofs::SerdeFormat::RawBytes)
@@ -189,12 +195,15 @@ pub fn prove_wasm(
     let mut reader = std::io::BufReader::new(&params_ser[..]);
     let params: ParamsKZG<Bn256> =
         halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).unwrap();
+    log(&format!("params: {:?}", params));
 
     // read in model input
     let data: crate::pfsys::ModelInput = serde_json::from_slice(&data[..]).unwrap();
+    log(&format!("data: {:?}", data));
 
     // read in circuit params
     let circuit_params: ModelParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();
+    log(&format!("circuit_params: {:?}", circuit_params));
 
     // read in proving key
     let mut reader = std::io::BufReader::new(&pk[..]);
@@ -204,6 +213,7 @@ pub fn prove_wasm(
         circuit_params.clone(),
     )
     .unwrap();
+    log(&format!("pk: {:?}", pk));
 
     // read in circuit
     let mut reader = std::io::BufReader::new(&circuit_ser[..]);
@@ -216,6 +226,8 @@ pub fn prove_wasm(
 
     let mut circuit =
         ModelCircuit::<Fr>::new(Arc::new(model), crate::circuit::CheckMode::UNSAFE).unwrap();
+    
+    log(&format!("circuit: {:?}", circuit));
 
     // prep public inputs
     let public_inputs = circuit.prepare_public_inputs(&data).unwrap();
@@ -231,6 +243,7 @@ pub fn prove_wasm(
         crate::circuit::CheckMode::UNSAFE,
     )
     .unwrap();
+    log(&format!("proof: {:?}", proof));
 
     bincode::serialize(&proof.to_bytes()).unwrap()
 }
@@ -254,4 +267,11 @@ where
     let vk = keygen_vk(params, &empty_circuit)?;
     let pk = keygen_pk(params, vk, &empty_circuit)?;
     Ok(pk)
+}
+
+/// used for logging
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
 }
