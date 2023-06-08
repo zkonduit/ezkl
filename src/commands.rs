@@ -322,7 +322,7 @@ pub enum Commands {
         args: RunArgs,
     },
     #[cfg(not(target_arch = "wasm32"))]
-    /// Loads model, data, and creates proof
+    /// Fuzzes the proof pipeline with random inputs, random parameters, and random keys
     #[command(arg_required_else_help = true)]
     Fuzz {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
