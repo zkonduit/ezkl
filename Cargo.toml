@@ -13,7 +13,8 @@ crate-type = ["cdylib", "rlib"]
 
 
 [dependencies]
-halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2", rev= "a764a7f", features = ["thread-safe-region"]}
+halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch= "ac/public-cells" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "ac/public-cells", features = ["thread-safe-region"]}
 halo2curves = { git = 'https://github.com/privacy-scaling-explorations/halo2curves', tag = "0.3.2" }
 rand = "0.8"
 itertools = "0.10.3"
@@ -46,8 +47,8 @@ pyo3-log = { version = "0.8.1", optional = true }
 
 # evm related deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ethers = { version = "2.0.1" }
-ethers-solc = "2.0.1"
+ethers = { version = "2.0.7" }
+ethers-solc = "2.0.7"
 indicatif = {version = "0.17.4", features = ["rayon"]}
 gag = "1.0.0"
 

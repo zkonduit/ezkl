@@ -1,12 +1,12 @@
 #[cfg(not(target_arch = "wasm32"))]
 use halo2curves::bn256::{Fr, G1Affine};
 #[cfg(not(target_arch = "wasm32"))]
-use log::{debug, trace};
+use log::debug;
 use serde::{Deserialize, Serialize};
 #[cfg(not(target_arch = "wasm32"))]
-use snark_verifier::loader::evm::encode_calldata;
+use snark_verifier::loader::evm::deploy_and_call;
 #[cfg(not(target_arch = "wasm32"))]
-use snark_verifier::loader::evm::ExecutorBuilder;
+use snark_verifier::loader::evm::encode_calldata;
 use std::error::Error;
 use std::fs::File;
 use std::io::{Read, Write};
@@ -86,34 +86,18 @@ impl DeploymentCode {
 pub fn evm_verify(
     deployment_code: DeploymentCode,
     snark: Snark<Fr, G1Affine>,
-) -> Result<bool, Box<dyn Error>> {
+) -> Result<(), Box<dyn Error>> {
+    use log::error;
+
     debug!("evm deployment code length: {:?}", deployment_code.len());
 
     let calldata = encode_calldata(&snark.instances, &snark.proof);
-    let mut evm = ExecutorBuilder::default()
-        .with_gas_limit(u64::MAX.into())
-        .build();
-
-    let caller = ethers::types::Address::from_low_u64_be(0xfe);
-    let deploy_result = evm.deploy(caller, deployment_code.code.into(), 0.into());
-    debug!("evm deploy outcome: {:?}", deploy_result.exit_reason);
-    trace!("full deploy result: {:?}", deploy_result);
-    debug!("gas used for deployment: {}", deploy_result.gas_used);
-
-    if let Some(verifier) = deploy_result.address {
-        // Lot of stuff here as well.
-        let result = evm.call_raw(caller, verifier, calldata.into(), 0.into());
-
-        debug!("evm execution result: {:?}", result.exit_reason);
-        trace!("full execution result: {:?}", result);
-        debug!("gas used for execution: {}", result.gas_used);
-
-        if result.reverted {
-            return Err(Box::new(EvmVerificationError::Reverted));
+    match deploy_and_call(deployment_code.code, calldata) {
+        Ok(gas) => debug!("gas used for call: {}", gas),
+        Err(e) => {
+            error!("evm deployment failed: {:?}", e);
+            return Err(Box::new(EvmVerificationError::Deploy));
         }
-
-        Ok(!result.reverted)
-    } else {
-        Err(Box::new(EvmVerificationError::Deploy))
     }
+    Ok(())
 }

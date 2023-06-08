@@ -12,6 +12,7 @@ pub mod node;
 pub mod vars;
 
 use crate::circuit::lookup::LookupOp;
+use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
 use crate::commands::{Cli, RunArgs};
 use crate::fieldutils::i128_to_felt;
@@ -20,7 +21,7 @@ use crate::tensor::ops::pack;
 use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor};
 use halo2_proofs::{
-    circuit::{Layouter, SimpleFloorPlanner, Value},
+    circuit::{Layouter, Value},
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},
 };
 use log::{info, trace};
@@ -236,7 +237,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
 
 impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
     type Config = ModelConfig<F>;
-    type FloorPlanner = SimpleFloorPlanner;
+    type FloorPlanner = ModulePlanner;
     type Params = ModelParams;
 
     fn without_witnesses(&self) -> Self {

@@ -20,6 +20,8 @@ use self::lookup::LookupOp;
 ///
 pub mod base;
 ///
+pub mod chip;
+///
 pub mod hybrid;
 /// Layouts for specific functions (composed of base ops)
 pub mod layouts;
