@@ -26,7 +26,7 @@ pub fn init_panic_hook() {
 }
 
 use crate::execute::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
-use crate::graph::{ModelCircuit, ModelParams};
+use crate::graph::{GraphCircuit, ModelParams};
 use crate::pfsys::Snarkbytes;
 
 /// Generate circuit params in browser
@@ -43,8 +43,7 @@ pub fn gen_circuit_params_wasm(
     // Read in circuit
     let mut reader = std::io::BufReader::new(&circuit_ser[..]);
     let model = crate::graph::Model::new(&mut reader, run_args, var_visibility).unwrap();
-    let circuit =
-        ModelCircuit::<Fr>::new(Arc::new(model), crate::circuit::CheckMode::UNSAFE).unwrap();
+    let circuit = GraphCircuit::new(Arc::new(model), crate::circuit::CheckMode::UNSAFE).unwrap();
     let circuit_params = circuit.params;
     bincode::serialize(&circuit_params).unwrap()
 }
@@ -71,14 +70,12 @@ pub fn gen_pk_wasm(
     )
     .unwrap();
 
-    let circuit =
-        ModelCircuit::<Fr>::new(Arc::new(model), crate::circuit::CheckMode::UNSAFE).unwrap();
+    let circuit = GraphCircuit::new(Arc::new(model), crate::circuit::CheckMode::UNSAFE).unwrap();
 
     // Create proving key
-    let pk =
-        create_keys_wasm::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
-            .map_err(Box::<dyn std::error::Error>::from)
-            .unwrap();
+    let pk = create_keys_wasm::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
+        .map_err(Box::<dyn std::error::Error>::from)
+        .unwrap();
 
     let mut serialized_pk = Vec::new();
     pk.write(&mut serialized_pk, halo2_proofs::SerdeFormat::RawBytes)
@@ -98,7 +95,7 @@ pub fn gen_vk_wasm(
 
     // Read in proving key
     let mut reader = std::io::BufReader::new(&pk[..]);
-    let pk = ProvingKey::<G1Affine>::read::<_, ModelCircuit<Fr>>(
+    let pk = ProvingKey::<G1Affine>::read::<_, GraphCircuit>(
         &mut reader,
         halo2_proofs::SerdeFormat::RawBytes,
         circuit_params.clone(),
@@ -141,7 +138,7 @@ pub fn verify_wasm(
         .collect::<Vec<Vec<Fr>>>();
 
     let mut reader = std::io::BufReader::new(&vk[..]);
-    let vk = VerifyingKey::<G1Affine>::read::<_, ModelCircuit<Fr>>(
+    let vk = VerifyingKey::<G1Affine>::read::<_, GraphCircuit>(
         &mut reader,
         halo2_proofs::SerdeFormat::RawBytes,
         circuit_params,
@@ -195,7 +192,7 @@ pub fn prove_wasm(
 
     // read in proving key
     let mut reader = std::io::BufReader::new(&pk[..]);
-    let pk = ProvingKey::<G1Affine>::read::<_, ModelCircuit<Fr>>(
+    let pk = ProvingKey::<G1Affine>::read::<_, GraphCircuit>(
         &mut reader,
         halo2_proofs::SerdeFormat::RawBytes,
         circuit_params.clone(),
@@ -212,7 +209,7 @@ pub fn prove_wasm(
     .unwrap();
 
     let mut circuit =
-        ModelCircuit::<Fr>::new(Arc::new(model), crate::circuit::CheckMode::UNSAFE).unwrap();
+        GraphCircuit::new(Arc::new(model), crate::circuit::CheckMode::UNSAFE).unwrap();
 
     // prep public inputs
     let public_inputs = circuit.prepare_public_inputs(&data).unwrap();
@@ -234,7 +231,7 @@ pub fn prove_wasm(
 
 // HELPER FUNCTIONS
 
-/// Creates a [VerifyingKey] and [ProvingKey] for a [ModelCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`) for the WASM target
+/// Creates a [VerifyingKey] and [ProvingKey] for a [GraphCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`) for the WASM target
 #[cfg(target_arch = "wasm32")]
 pub fn create_keys_wasm<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
     circuit: &C,

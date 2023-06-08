@@ -297,14 +297,14 @@ mod native_tests {
             fn mock_packed_outputs_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, false, false, true, 2, 1);
+                mock(test.to_string(), 7, 16, 17, "private", "private", "public", 2, 1);
             }
 
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_everything_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, true, false, true, 2, 1);
+                mock(test.to_string(), 7, 16, 17, "public", "private", "public", 2, 1);
             }
 
             });
@@ -353,7 +353,7 @@ mod native_tests {
             fn mock_public_outputs_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, false, false, true, 1, 1);
+                mock(test.to_string(), 7, 16, 17, "private", "private", "public", 1, 1);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -362,21 +362,21 @@ mod native_tests {
                 crate::native_tests::mv_test_(test);
                 let large_batch_dir = &format!("large_batches_{}", test);
                 crate::native_tests::mk_data_batches_(test, &large_batch_dir, 10);
-                mock(large_batch_dir.to_string(), 7, 16, 17, false, false, true, 1, 10);
+                mock(large_batch_dir.to_string(), 7, 16, 17, "private", "private", "public", 1, 10);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_inputs_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, true, false, false, 1, 1);
+                mock(test.to_string(), 7, 16, 17, "public", "private", "private", 1, 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_params_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, false, true, false, 1, 1);
+                mock(test.to_string(), 7, 16, 17, "private", "public", "private", 1, 1);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -426,7 +426,7 @@ mod native_tests {
             fn large_mock_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 5, 23, 24, false, false, true, 1, 1);
+                mock(test.to_string(), 5, 23, 24, "private", "private", "public", 1, 1);
             }
         });
     }
@@ -653,9 +653,9 @@ mod native_tests {
         scale: usize,
         bits: usize,
         logrows: usize,
-        public_inputs: bool,
-        public_params: bool,
-        public_outputs: bool,
+        public_inputs: &str,
+        public_params: &str,
+        public_outputs: &str,
         pack_base: usize,
         batch_size: usize,
     ) {
@@ -672,9 +672,9 @@ mod native_tests {
                 &format!("--scale={}", scale),
                 &format!("--pack-base={}", pack_base),
                 &format!("--batch-size={}", batch_size),
-                &format!("--public-inputs={}", public_inputs),
-                &format!("--public-params={}", public_params),
-                &format!("--public-outputs={}", public_outputs),
+                &format!("--input-visibility={}", public_inputs),
+                &format!("--param-visibility={}", public_params),
+                &format!("--output-visibility={}", public_outputs),
             ])
             .status()
             .expect("failed to execute process");

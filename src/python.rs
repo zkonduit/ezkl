@@ -4,7 +4,7 @@ use crate::eth::{fix_verifier_sol, verify_proof_via_solidity};
 use crate::execute::{
     create_proof_circuit_kzg, gen_deployment_code, load_params_cmd, verify_proof_circuit_kzg,
 };
-use crate::graph::{quantize_float, Model, ModelCircuit, ModelParams, VarVisibility};
+use crate::graph::{quantize_float, GraphCircuit, Model, ModelParams, VarVisibility};
 use crate::pfsys::evm::{
     aggregation::{gen_aggregation_evm_verifier, AggregationCircuit},
     evm_verify,
@@ -60,11 +60,11 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub logrows: u32,
     #[pyo3(get, set)]
-    pub public_inputs: bool,
+    pub input_visbility: Visibility,
     #[pyo3(get, set)]
-    pub public_outputs: bool,
+    pub output_visibility: Visibility,
     #[pyo3(get, set)]
-    pub public_params: bool,
+    pub param_visibility: Visibility,
     #[pyo3(get, set)]
     pub pack_base: u32,
     #[pyo3(get, set)]
@@ -101,9 +101,9 @@ impl From<PyRunArgs> for RunArgs {
             scale: py_run_args.scale,
             bits: py_run_args.bits,
             logrows: py_run_args.logrows,
-            public_inputs: py_run_args.public_inputs,
-            public_outputs: py_run_args.public_outputs,
-            public_params: py_run_args.public_params,
+            input_visbility: py_run_args.input_visbility,
+            output_visbility: py_run_args.output_visbility,
+            param_visbility: py_run_args.param_visbility,
             pack_base: py_run_args.pack_base,
             allocated_constraints: py_run_args.allocated_constraints,
             batch_size: py_run_args.batch_size,
@@ -231,7 +231,7 @@ fn mock(data: String, model: String, py_run_args: Option<PyRunArgs>) -> Result<b
         .map_err(|_| PyIOError::new_err("Failed to process model"))?;
 
     let arcmodel: Arc<Model<Fr>> = Arc::new(procmodel);
-    let mut circuit = ModelCircuit::<Fr>::new(arcmodel, CheckMode::SAFE)
+    let mut circuit = GraphCircuit::<Fr>::new(arcmodel, CheckMode::SAFE)
         .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
 
     let public_inputs = circuit
@@ -275,14 +275,14 @@ fn setup(
         .map_err(|_| PyIOError::new_err("Failed to process model"))?;
 
     let arcmodel: Arc<Model<Fr>> = Arc::new(procmodel);
-    let circuit = ModelCircuit::<Fr>::new(arcmodel, CheckMode::UNSAFE)
+    let circuit = GraphCircuit::<Fr>::new(arcmodel, CheckMode::UNSAFE)
         .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
 
     let params = load_params_cmd(params_path, logrows)
         .map_err(|_| PyIOError::new_err("Failed to load params"))?;
 
     let proving_key =
-        create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
+        create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit<Fr>>(&circuit, &params)
             .map_err(|_| PyRuntimeError::new_err("Failed to create proving key"))?;
 
     let circuit_params = circuit.params.clone();
@@ -326,7 +326,7 @@ fn prove(
 
     let model_circuit_params = ModelParams::load(&circuit_params_path);
 
-    let mut circuit = ModelCircuit::<Fr>::from_model_params(
+    let mut circuit = GraphCircuit::<Fr>::from_model_params(
         &model_circuit_params,
         &model.into(),
         CheckMode::SAFE,
@@ -340,7 +340,7 @@ fn prove(
     let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)
         .map_err(|_| PyIOError::new_err("Failed to load params"))?;
 
-    let proving_key = load_pk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
+    let proving_key = load_pk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit<Fr>>(
         pk_path,
         circuit.params.clone(),
     )
@@ -412,7 +412,7 @@ fn verify(
 
     let strategy = KZGSingleStrategy::new(params.verifier_params());
     let vk =
-        load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)
+        load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit<Fr>>(vk_path, model_circuit_params)
             .map_err(|_| PyIOError::new_err("Failed to load verifier key"))?;
     let result = verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, strategy);
     match result {
@@ -459,7 +459,7 @@ fn aggregate(
         let params_app =
             load_params_cmd(params_path.clone(), model_circuit_params.run_args.logrows)
                 .map_err(|_| PyIOError::new_err("Failed to load model circuit params"))?;
-        let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
+        let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit<Fr>>(
             vk_path.to_path_buf(),
             // safe to clone as the inner model is wrapped in an Arc
             model_circuit_params.clone(),
@@ -552,7 +552,7 @@ fn create_evm_verifier(
         .collect();
 
     let vk =
-        load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)
+        load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit<Fr>>(vk_path, model_circuit_params)
             .map_err(|_| PyIOError::new_err("Failed to load verifier key"))?;
 
     let yul_code = gen_evm_verifier(&params, &vk, num_instance)

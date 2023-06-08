@@ -276,7 +276,7 @@ mod wasi_tests {
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
                 "--bits=16",
                 "-K=20",
-                "--public-inputs=true",
+                "--input-visibility=public",
                 "--pack-base=2",
             ])
             .status()
@@ -297,8 +297,8 @@ mod wasi_tests {
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--public-inputs=true",
-                "--public-outputs=false",
+                "--input-visibility=public",
+                "--output-visibility=private",
                 "--bits=16",
                 "-K=20",
             ])
@@ -320,8 +320,8 @@ mod wasi_tests {
                 format!("./examples/onnx/{}/input.json", example_name).as_str(),
                 "-M",
                 format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--public-params=true",
-                "--public-outputs=false",
+                "--param-visibility=public",
+                "--output-visibility=private",
                 "--bits=16",
                 "-K=20",
             ])

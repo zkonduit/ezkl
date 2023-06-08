@@ -400,7 +400,7 @@ pub fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, Box<dyn 
 
 #[cfg(feature = "render")]
 fn render(output: String) -> Result<(), Box<dyn Error>> {
-    let circuit = GraphCircuit::<Fr>::from_arg(CheckMode::UNSAFE)?;
+    let circuit = GraphCircuit::from_arg(CheckMode::UNSAFE)?;
     info!("Rendering circuit");
 
     // Create the area we want to draw on.
