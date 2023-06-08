@@ -13,8 +13,6 @@ pub enum VarTensor {
         inner: Vec<Column<Advice>>,
         /// Number of rows available to be used in each column of the storage
         col_size: usize,
-        /// Total capacity (number of advice cells), usually inner.len()*col_size
-        capacity: usize,
     },
     /// A VarTensor for holding Fixed values, which are assigned at circuit definition time.
     Fixed {
@@ -22,8 +20,6 @@ pub enum VarTensor {
         inner: Vec<Column<Fixed>>,
         /// Number of rows available to be used in each column of the storage
         col_size: usize,
-        /// Total capacity (number of advice cells), usually inner.len()*col_size
-        capacity: usize,
     },
     /// Dummy var
     Dummy {
@@ -62,7 +58,6 @@ impl VarTensor {
         VarTensor::Advice {
             inner: advices,
             col_size: max_rows,
-            capacity,
         }
     }
 
@@ -101,7 +96,6 @@ impl VarTensor {
         VarTensor::Fixed {
             inner: fixed,
             col_size: max_rows,
-            capacity,
         }
     }
 
@@ -134,13 +128,6 @@ impl VarTensor {
         }
     }
 
-    /// Returns the `capacity` attribute of the `VarTensor`.
-    pub fn capacity(&self) -> usize {
-        match self {
-            VarTensor::Advice { capacity, .. } | VarTensor::Fixed { capacity, .. } => *capacity,
-            _ => 0
-        }
-    }
 }
 
 impl VarTensor {

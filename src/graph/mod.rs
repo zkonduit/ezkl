@@ -1,6 +1,5 @@
 /// Helper functions
 pub mod utilities;
-use halo2curves::ff::PrimeField;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 pub use utilities::*;
@@ -12,18 +11,20 @@ pub mod node;
 pub mod vars;
 
 use crate::circuit::lookup::LookupOp;
+use crate::circuit::modules::poseidon::spec::PoseidonSpec;
+use crate::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig};
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
 use crate::commands::{Cli, RunArgs};
 use crate::fieldutils::i128_to_felt;
 use crate::pfsys::ModelInput;
 use crate::tensor::ops::pack;
-use crate::tensor::TensorType;
 use crate::tensor::{Tensor, ValTensor};
 use halo2_proofs::{
     circuit::{Layouter, Value},
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},
 };
+use halo2curves::bn256::Fr as Fp;
 use log::{info, trace};
 pub use model::*;
 pub use node::*;
@@ -111,23 +112,30 @@ impl ModelParams {
     }
 }
 
+/// Configuration for a computational graph / model loaded from a `.onnx` file.
+#[derive(Clone, Debug)]
+pub struct GraphConfig {
+    model_config: ModelConfig,
+    poseidon_config: Option<PoseidonConfig<15, 14>>,
+}
+
 /// Defines the circuit for a computational graph / model loaded from a `.onnx` file.
 #[derive(Clone, Debug, Default)]
-pub struct ModelCircuit<F: PrimeField + TensorType + PartialOrd> {
+pub struct GraphCircuit {
     /// The model / graph of computations.
-    pub model: Arc<Model<F>>,
+    pub model: Arc<Model>,
     /// Vector of input tensors to the model / graph of computations.
     pub inputs: Vec<Tensor<i128>>,
     /// The parameters of the model / graph of computations.
     pub params: ModelParams,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
+impl GraphCircuit {
     ///
     pub fn new(
-        model: Arc<Model<F>>,
+        model: Arc<Model>,
         check_mode: CheckMode,
-    ) -> Result<ModelCircuit<F>, Box<dyn std::error::Error>> {
+    ) -> Result<GraphCircuit, Box<dyn std::error::Error>> {
         // placeholder dummy inputs - must call prepare_public_inputs to load data afterwards
         let mut inputs: Vec<Tensor<i128>> = vec![];
         for shape in model.graph.input_shapes() {
@@ -135,7 +143,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
             inputs.push(t);
         }
 
-        Ok(ModelCircuit::<F> {
+        Ok(GraphCircuit {
             model: model.clone(),
             inputs: inputs,
             params: model.gen_params(check_mode)?,
@@ -180,7 +188,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
     pub fn prepare_public_inputs(
         &mut self,
         data: &ModelInput,
-    ) -> Result<Vec<Vec<F>>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
         let out_scales = self.model.graph.get_output_scales();
 
         self.load_inputs(data);
@@ -226,17 +234,21 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
         );
         trace!("{:?}", public_inputs);
 
-        let pi_inner: Vec<Vec<F>> = public_inputs
+        let pi_inner: Vec<Vec<Fp>> = public_inputs
             .iter()
-            .map(|i| i.iter().map(|e| i128_to_felt::<F>(*e)).collect::<Vec<F>>())
-            .collect::<Vec<Vec<F>>>();
+            .map(|i| {
+                i.iter()
+                    .map(|e| i128_to_felt::<Fp>(*e))
+                    .collect::<Vec<Fp>>()
+            })
+            .collect::<Vec<Vec<Fp>>>();
 
         Ok(pi_inner)
     }
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
-    type Config = ModelConfig<F>;
+impl Circuit<Fp> for GraphCircuit {
+    type Config = GraphConfig;
     type FloorPlanner = ModulePlanner;
     type Params = ModelParams;
 
@@ -249,7 +261,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
         self.params.clone()
     }
 
-    fn configure_with_params(cs: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
+    fn configure_with_params(cs: &mut ConstraintSystem<Fp>, params: Self::Params) -> Self::Config {
         let mut vars = ModelVars::new(
             cs,
             params.run_args.logrows as usize,
@@ -259,7 +271,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
             params.run_args.scale,
         );
 
-        let base = Model::<F>::configure(
+        let base = Model::configure(
             cs,
             &mut vars,
             params.run_args.bits,
@@ -269,28 +281,76 @@ impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ModelCircuit<F> {
         )
         .unwrap();
 
-        ModelConfig { base, vars }
+        let model_config = ModelConfig { base, vars };
+
+        let poseidon_config = if params.visibility.input.is_hashed()
+            || params.visibility.output.is_hashed()
+            || params.visibility.params.is_hashed()
+        {
+            Some(PoseidonChip::<PoseidonSpec, 15, 14, 14>::configure(cs))
+        } else {
+            None
+        };
+
+        GraphConfig {
+            model_config,
+            poseidon_config,
+        }
     }
 
-    fn configure(_: &mut ConstraintSystem<F>) -> Self::Config {
+    fn configure(_: &mut ConstraintSystem<Fp>) -> Self::Config {
         unimplemented!("you should call configure_with_params instead")
     }
 
     fn synthesize(
         &self,
         config: Self::Config,
-        mut layouter: impl Layouter<F>,
+        mut layouter: impl Layouter<Fp>,
     ) -> Result<(), PlonkError> {
         trace!("Setting input in synthesize");
         let inputs = self
             .inputs
             .iter()
-            .map(|i| ValTensor::from(<Tensor<i128> as Into<Tensor<Value<F>>>>::into(i.clone())))
-            .collect::<Vec<ValTensor<F>>>();
+            .map(|i| ValTensor::from(<Tensor<i128> as Into<Tensor<Value<Fp>>>>::into(i.clone())))
+            .collect::<Vec<ValTensor<Fp>>>();
+
+        let mut hash_offset = 0;
+        if self.model.visibility.input.is_hashed() {
+            // instantiate new poseidon module in chip
+            let chip = PoseidonChip::<PoseidonSpec, 15, 14, 14>::construct(
+                config.poseidon_config.as_ref().unwrap().clone(),
+            );
+            for (i, input) in inputs.iter().enumerate() {
+                chip.hash(&mut layouter, input, i)?;
+                hash_offset += 1;
+            }
+            // instantiate new module in chip
+            layouter.assign_region(|| "_new_module", |_| Ok(()))?;
+        }
+
         trace!("Laying out model");
-        self.model
-            .layout(config.clone(), &mut layouter, &inputs, &config.vars)
-            .unwrap();
+        let outputs = self
+            .model
+            .layout(
+                config.model_config.clone(),
+                &mut layouter,
+                &inputs,
+                &config.model_config.vars,
+            )
+            .map_err(|e| {
+                log::error!("{}", e);
+                PlonkError::Synthesis
+            })?;
+
+        if self.model.visibility.output.is_hashed() {
+            // instantiate new poseidon module in chip
+            let chip = PoseidonChip::<PoseidonSpec, 15, 14, 14>::construct(
+                config.poseidon_config.unwrap(),
+            );
+            for (i, output) in outputs.iter().enumerate() {
+                chip.hash(&mut layouter, output, hash_offset + i)?;
+            }
+        }
 
         Ok(())
     }

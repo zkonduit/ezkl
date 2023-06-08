@@ -110,14 +110,14 @@ pub struct RunArgs {
     #[arg(long, default_value = "1")]
     pub batch_size: u32,
     /// Flags whether inputs are public
-    #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
-    pub public_inputs: bool,
+    #[arg(long, default_value = "private")]
+    pub input_visibility: Visibility,
     /// Flags whether outputs are public
-    #[arg(long, default_value = "true", action = clap::ArgAction::Set)]
-    pub public_outputs: bool,
+    #[arg(long, default_value = "public")]
+    pub output_visibility: Visibility,
     /// Flags whether params are public
-    #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
-    pub public_params: bool,
+    #[arg(long, default_value = "private")]
+    pub param_visibility: Visibility,
     /// Base used to pack the public-inputs to the circuit. (value > 1) to pack instances as a single int.
     /// Useful when verifying on the EVM. Note that this will often break for very long inputs. Use with caution, still experimental.
     #[arg(long, default_value = "1")]
@@ -131,21 +131,9 @@ pub struct RunArgs {
 impl RunArgs {
     pub fn to_var_visibility(&self) -> VarVisibility {
         VarVisibility {
-            input: if self.public_inputs {
-                Visibility::Public
-            } else {
-                Visibility::Private
-            },
-            params: if self.public_params {
-                Visibility::Public
-            } else {
-                Visibility::Private
-            },
-            output: if self.public_outputs {
-                Visibility::Public
-            } else {
-                Visibility::Private
-            },
+            input: self.input_visibility,
+            params: self.param_visibility,
+            output: self.output_visibility,
         }
     }
 }

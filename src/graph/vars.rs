@@ -11,18 +11,36 @@ use serde::{Deserialize, Serialize};
 use super::*;
 
 /// Label enum to track whether model input, model parameters, and model output are public or private
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Visibility {
     /// Mark an item as private to the prover (not in the proof submitted for verification)
     #[default]
     Private,
     /// Mark an item as public (sent in the proof submitted for verification)
     Public,
+    /// Mark an item as publicly committed to (hash sent in the proof submitted for verification)
+    Hashed,
 }
+
+impl<'a> From<&'a str> for Visibility {
+    fn from(s: &'a str) -> Self {
+        match s {
+            "private" => Visibility::Private,
+            "public" => Visibility::Public,
+            "hashed" => Visibility::Hashed,
+            _ => panic!("Invalid visibility string"),
+        }
+    }
+}
+
 impl Visibility {
     #[allow(missing_docs)]
     pub fn is_public(&self) -> bool {
         matches!(&self, Visibility::Public)
+    }
+    #[allow(missing_docs)]
+    pub fn is_hashed(&self) -> bool {
+        matches!(&self, Visibility::Hashed)
     }
 }
 impl std::fmt::Display for Visibility {
@@ -30,6 +48,7 @@ impl std::fmt::Display for Visibility {
         match self {
             Visibility::Private => write!(f, "private"),
             Visibility::Public => write!(f, "public"),
+            Visibility::Hashed => write!(f, "hashed"),
         }
     }
 }
@@ -58,21 +77,9 @@ impl VarVisibility {
     /// Read from cli args whether the model input, model parameters, and model output are Public or Private to the prover.
     /// Place in [VarVisibility] struct.
     pub fn from_args(args: RunArgs) -> Result<Self, Box<dyn Error>> {
-        let input_vis = if args.public_inputs {
-            Visibility::Public
-        } else {
-            Visibility::Private
-        };
-        let params_vis = if args.public_params {
-            Visibility::Public
-        } else {
-            Visibility::Private
-        };
-        let output_vis = if args.public_outputs {
-            Visibility::Public
-        } else {
-            Visibility::Private
-        };
+        let input_vis = args.input_visibility;
+        let params_vis = args.param_visibility;
+        let output_vis = args.output_visibility;
         if !output_vis.is_public() & !params_vis.is_public() & !input_vis.is_public() {
             return Err(Box::new(GraphError::Visibility));
         }
