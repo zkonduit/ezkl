@@ -12,9 +12,9 @@ use super::poseidon_params;
 pub struct PoseidonSpec;
 
 /// Basically the number of columns allocated within the poseidon chip
-pub const POSEIDON_WIDTH: usize = 2;
+pub const POSEIDON_WIDTH: usize = 5;
 /// The number of full SBox rounds
-pub const POSEIDON_RATE: usize = 1;
+pub const POSEIDON_RATE: usize = 4;
 
 pub(crate) type Mds<Fp, const T: usize> = [[Fp; T]; T];
 
@@ -24,7 +24,7 @@ impl Spec<Fp, POSEIDON_WIDTH, POSEIDON_RATE> for PoseidonSpec {
     }
 
     fn partial_rounds() -> usize {
-        56
+        60
     }
 
     fn sbox(val: Fp) -> Fp {
