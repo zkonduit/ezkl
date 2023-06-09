@@ -113,7 +113,13 @@ impl VarVisibility {
         let input_vis = args.input_visibility;
         let params_vis = args.param_visibility;
         let output_vis = args.output_visibility;
-        if !output_vis.is_public() & !params_vis.is_public() & !input_vis.is_public() {
+        if !output_vis.is_public()
+            & !params_vis.is_public()
+            & !input_vis.is_public()
+            & !output_vis.is_hashed()
+            & !params_vis.is_hashed()
+            & !input_vis.is_hashed()
+        {
             return Err(Box::new(GraphError::Visibility));
         }
         Ok(Self {
