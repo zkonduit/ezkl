@@ -32,6 +32,13 @@ use std::sync::Arc;
 use thiserror::Error;
 pub use vars::*;
 
+#[cfg(feature = "python-bindings")]
+use pyo3::prelude::*;
+#[cfg(feature = "python-bindings")]
+use pyo3::types::PyDict;
+#[cfg(feature = "python-bindings")]
+use pyo3::ToPyObject;
+
 /// circuit related errors.
 #[derive(Debug, Error)]
 pub enum GraphError {
@@ -91,6 +98,35 @@ pub struct GraphInput {
     pub input_hashes: Option<Vec<Fp>>,
     /// Optional hashes of the inputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
     pub output_hashes: Option<Vec<Fp>>,
+}
+
+#[cfg(feature = "python-bindings")]
+impl ToPyObject for GraphInput {
+    fn to_object(&self, py: Python) -> PyObject {
+        // Create a Python dictionary
+        let dict = PyDict::new(py);
+        let input_data_mut = &self.input_data;
+        let output_data_mut = &self.output_data;
+        dict.set_item("input_data", truncate_nested_vector(&input_data_mut))
+            .unwrap();
+        dict.set_item("output_data", truncate_nested_vector(&output_data_mut))
+            .unwrap();
+
+        dict.to_object(py)
+    }
+}
+
+/// Truncates nested vector due to omit junk floating point values in python
+#[cfg(feature = "python-bindings")]
+fn truncate_nested_vector(input: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {
+    let mut input_mut = input.clone();
+    for inner_vec in input_mut.iter_mut() {
+        for value in inner_vec.iter_mut() {
+            // truncate 6 decimal places
+            *value = (*value * 10000000.0).trunc() / 10000000.0;
+        }
+    }
+    input_mut
 }
 
 impl GraphInput {

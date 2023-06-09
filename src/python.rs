@@ -4,7 +4,9 @@ use crate::eth::{fix_verifier_sol, verify_proof_via_solidity};
 use crate::execute::{
     create_proof_circuit_kzg, gen_deployment_code, load_params_cmd, verify_proof_circuit_kzg,
 };
-use crate::graph::{quantize_float, GraphCircuit, Model, ModelParams, VarVisibility, Visibility};
+use crate::graph::{
+    quantize_float, GraphCircuit, GraphInput, Model, ModelParams, VarVisibility, Visibility,
+};
 use crate::pfsys::evm::{
     aggregation::{gen_aggregation_evm_verifier, AggregationCircuit},
     evm_verify,
@@ -12,8 +14,8 @@ use crate::pfsys::evm::{
     DeploymentCode,
 };
 use crate::pfsys::{
-    create_keys, gen_srs as ezkl_gen_srs, load_params, load_pk, load_vk, prepare_data, save_params,
-    save_pk, save_vk, Snark, TranscriptType,
+    create_keys, gen_srs as ezkl_gen_srs, load_params, load_pk, load_vk, save_params, save_pk,
+    save_vk, Snark, TranscriptType,
 };
 use halo2_proofs::poly::kzg::{
     commitment::{KZGCommitmentScheme, ParamsKZG},
@@ -26,26 +28,9 @@ use pyo3::exceptions::{PyIOError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3_log;
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{fs::File, io::Write, path::PathBuf, sync::Arc};
 use tokio::runtime::Runtime;
-
-// See commands.rs and execute.rs
-// RenderCircuit
-// #[pyfunction]
-// fn render_circuit(
-//     data_path: &Path,
-//     model: _,
-//     output_path: &Path,
-//     args: Vec<String>
-// ) -> PyResult<()> {
-//     let data = prepare_data(data_path.to_string());
-//     let circuit = prepare_model_circuit::<Fr>(&data, &cli.args)?;
-
-//     halo2_proofs::dev::CircuitLayout::default()
-//         .show_labels(false)
-//         .render(args.logrows, &circuit, &root)?;
-// }
 
 /// pyclass containing the struct used for run_args
 #[pyclass]
@@ -147,13 +132,14 @@ fn gen_srs(params_path: PathBuf, logrows: usize) -> PyResult<()> {
     py_run_args = None
 ))]
 fn forward(
-    data: String,
-    model: String,
-    output: String,
+    data: PathBuf,
+    model: PathBuf,
+    output: PathBuf,
     py_run_args: Option<PyRunArgs>,
 ) -> PyResult<()> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
-    let mut data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
+    let mut data =
+        GraphInput::from_path(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
 
     let mut model_inputs = vec![];
     // quantize the supplied data using the provided scale.
@@ -221,10 +207,11 @@ fn forward(
     model,
     py_run_args = None
 ))]
-fn mock(data: String, model: String, py_run_args: Option<PyRunArgs>) -> Result<bool, PyErr> {
+fn mock(data: PathBuf, model: PathBuf, py_run_args: Option<PyRunArgs>) -> Result<bool, PyErr> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let logrows = run_args.logrows;
-    let data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
+    let data =
+        GraphInput::from_path(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
     let visibility = run_args.to_var_visibility();
     let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
     let procmodel = Model::new(&mut reader, run_args, visibility)
@@ -313,8 +300,8 @@ fn setup(
     circuit_params_path,
 ))]
 fn prove(
-    data: String,
-    model: String,
+    data: PathBuf,
+    model: PathBuf,
     pk_path: PathBuf,
     proof_path: PathBuf,
     params_path: PathBuf,
@@ -322,7 +309,8 @@ fn prove(
     strategy: StrategyType,
     circuit_params_path: PathBuf,
 ) -> Result<bool, PyErr> {
-    let data = prepare_data(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
+    let data =
+        GraphInput::from_path(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
 
     let model_circuit_params = ModelParams::load(&circuit_params_path);
 
