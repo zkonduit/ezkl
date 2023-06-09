@@ -5,7 +5,7 @@ use crate::execute::{
     create_proof_circuit_kzg, gen_deployment_code, load_params_cmd, verify_proof_circuit_kzg,
 };
 use crate::graph::{
-    quantize_float, GraphCircuit, GraphInput, Model, ModelParams, VarVisibility, Visibility,
+    quantize_float, GraphCircuit, GraphInput, GraphParams, Model, VarVisibility, Visibility,
 };
 use crate::pfsys::evm::{
     aggregation::{gen_aggregation_evm_verifier, AggregationCircuit},
@@ -312,7 +312,7 @@ fn prove(
     let data =
         GraphInput::from_path(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
 
-    let model_circuit_params = ModelParams::load(&circuit_params_path);
+    let model_circuit_params = GraphParams::load(&circuit_params_path);
 
     let mut circuit =
         GraphCircuit::from_model_params(&model_circuit_params, &model.into(), CheckMode::SAFE)
@@ -387,7 +387,7 @@ fn verify(
     vk_path: PathBuf,
     params_path: PathBuf,
 ) -> Result<bool, PyErr> {
-    let model_circuit_params = ModelParams::load(&circuit_params_path);
+    let model_circuit_params = GraphParams::load(&circuit_params_path);
     let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)
         .map_err(|_| PyIOError::new_err("Failed to load params"))?;
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)
@@ -437,7 +437,7 @@ fn aggregate(
         .zip(aggregation_vk_paths)
         .zip(circuit_params_paths)
     {
-        let model_circuit_params = ModelParams::load(&circuit_params_path);
+        let model_circuit_params = GraphParams::load(&circuit_params_path);
         let params_app =
             load_params_cmd(params_path.clone(), model_circuit_params.run_args.logrows)
                 .map_err(|_| PyIOError::new_err("Failed to load model circuit params"))?;
@@ -523,7 +523,7 @@ fn create_evm_verifier(
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
-    let model_circuit_params = ModelParams::load(&circuit_params_path);
+    let model_circuit_params = GraphParams::load(&circuit_params_path);
     let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)
         .map_err(|_| PyIOError::new_err("Failed to load model circuit parameters"))?;
 

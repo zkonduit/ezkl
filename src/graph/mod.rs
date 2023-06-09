@@ -129,7 +129,7 @@ fn truncate_nested_vector(input: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {
     input_mut
 }
 
-const POSEIDON_LEN_GRAPH: usize = 4;
+const POSEIDON_LEN_GRAPH: usize = 10;
 
 impl GraphInput {
     /// Load the model input from a file
@@ -161,22 +161,37 @@ pub struct ForwardResult {
 
 /// model parameters
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct ModelParams {
+pub struct GraphParams {
     /// run args
     pub run_args: RunArgs,
     /// the visibility of the variables in the circuit
     pub visibility: VarVisibility,
     /// the potential number of constraints in the circuit
     pub num_constraints: usize,
-    /// the shape of public inputs to the circuit (in order of appearance)
-    pub instance_shapes: Vec<Vec<usize>>,
+    /// the shape of public inputs to the model (in order of appearance)
+    pub model_instance_shapes: Vec<Vec<usize>>,
+    /// the number of hashes generated
+    pub num_hashes: usize,
     /// required_lookups
     pub required_lookups: Vec<LookupOp>,
     /// check mode
     pub check_mode: CheckMode,
 }
 
-impl ModelParams {
+impl GraphParams {
+    /// calculate the total number of instances
+    pub fn total_instances(&self) -> Vec<usize> {
+        let mut instances: Vec<usize> = self
+            .model_instance_shapes
+            .iter()
+            .map(|x| x.iter().product())
+            .collect();
+        if self.num_hashes > 0 {
+            instances.push(self.num_hashes)
+        }
+        instances
+    }
+
     /// save params to file
     pub fn save(&self, path: &std::path::PathBuf) {
         let mut file = std::fs::File::create(path).unwrap();
@@ -206,7 +221,7 @@ pub struct GraphCircuit {
     /// Vector of input tensors to the model / graph of computations.
     pub inputs: Vec<Tensor<i128>>,
     /// The parameters of the model / graph of computations.
-    pub params: ModelParams,
+    pub params: GraphParams,
 }
 
 impl GraphCircuit {
@@ -222,10 +237,18 @@ impl GraphCircuit {
             inputs.push(t);
         }
 
+        let mut params = model.gen_params(check_mode)?;
+        if params.run_args.input_visibility.is_hashed() {
+            params.num_hashes += model.graph.num_inputs();
+        }
+        if params.run_args.output_visibility.is_hashed() {
+            params.num_hashes += model.graph.num_outputs();
+        }
+
         Ok(GraphCircuit {
             model: model.clone(),
             inputs,
-            params: model.gen_params(check_mode)?,
+            params,
         })
     }
     ///
@@ -281,9 +304,9 @@ impl GraphCircuit {
         Self::new(model, check_mode)
     }
 
-    /// Create a new circuit from a set of input data and [ModelParams].
+    /// Create a new circuit from a set of input data and [GraphParams].
     pub fn from_model_params(
-        params: &ModelParams,
+        params: &GraphParams,
         model_path: &std::path::PathBuf,
         check_mode: CheckMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
@@ -371,7 +394,7 @@ impl GraphCircuit {
 impl Circuit<Fp> for GraphCircuit {
     type Config = GraphConfig;
     type FloorPlanner = ModulePlanner;
-    type Params = ModelParams;
+    type Params = GraphParams;
 
     fn without_witnesses(&self) -> Self {
         self.clone()
@@ -387,7 +410,7 @@ impl Circuit<Fp> for GraphCircuit {
             cs,
             params.run_args.logrows as usize,
             params.num_constraints,
-            params.instance_shapes.clone(),
+            params.model_instance_shapes.clone(),
             params.visibility.clone(),
             params.run_args.scale,
         );
