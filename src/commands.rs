@@ -109,13 +109,13 @@ pub struct RunArgs {
     /// The number of batches to split the input data into
     #[arg(long, default_value = "1")]
     pub batch_size: u32,
-    /// Flags whether inputs are public
+    /// Flags whether inputs are public, private, hashed
     #[arg(long, default_value = "private")]
     pub input_visibility: Visibility,
-    /// Flags whether outputs are public
+    /// Flags whether outputs are public, private, hashed
     #[arg(long, default_value = "public")]
     pub output_visibility: Visibility,
-    /// Flags whether params are public
+    /// Flags whether params are public, private, hashed
     #[arg(long, default_value = "private")]
     pub param_visibility: Visibility,
     /// Base used to pack the public-inputs to the circuit. (value > 1) to pack instances as a single int.

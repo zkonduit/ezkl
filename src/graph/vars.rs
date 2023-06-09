@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use super::*;
 
-/// Label enum to track whether model input, model parameters, and model output are public or private
+/// Label enum to track whether model input, model parameters, and model output are public, private, or hashed
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Visibility {
     /// Mark an item as private to the prover (not in the proof submitted for verification)
