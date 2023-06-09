@@ -6,6 +6,12 @@ use crate::tensor::{ValTensor, VarTensor};
 use halo2_proofs::plonk::ConstraintSystem;
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
+#[cfg(feature = "python-bindings")]
+use pyo3::{
+    exceptions::PyValueError, types::PyString, FromPyObject, IntoPy, PyAny, PyObject, PyResult,
+    PyTryFrom, Python, ToPyObject,
+};
+
 use serde::{Deserialize, Serialize};
 
 use super::*;
@@ -29,6 +35,33 @@ impl<'a> From<&'a str> for Visibility {
             "public" => Visibility::Public,
             "hashed" => Visibility::Hashed,
             _ => panic!("Invalid visibility string"),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Converts Visibility into a PyObject (Required for Visibility to be compatible with Python)
+impl IntoPy<PyObject> for Visibility {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            Visibility::Private => "private".to_object(py),
+            Visibility::Public => "public".to_object(py),
+            Visibility::Hashed => "hashed".to_object(py),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Obtains Visibility from PyObject (Required for Visibility to be compatible with Python)
+impl<'source> FromPyObject<'source> for Visibility {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let trystr = <PyString as PyTryFrom>::try_from(ob)?;
+        let strval = trystr.to_string();
+        match strval.to_lowercase().as_str() {
+            "private" => Ok(Visibility::Private),
+            "public" => Ok(Visibility::Public),
+            "hashed" => Ok(Visibility::Hashed),
+            _ => Err(PyValueError::new_err("Invalid value for Visibility")),
         }
     }
 }
