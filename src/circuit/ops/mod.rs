@@ -10,7 +10,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    graph::quantize_float,
+    graph::{quantize_float, Visibility},
     tensor::{self, Tensor, TensorError, TensorType, ValTensor},
 };
 use halo2curves::ff::PrimeField;
@@ -257,17 +257,17 @@ pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
     /// scale to quantize with
     pub scale: u32,
     /// is public ?
-    pub public: bool,
+    pub visibility: Visibility,
     _marker: PhantomData<F>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
     ///
-    pub fn new(values: Tensor<f32>, scale: u32, public: bool) -> Self {
+    pub fn new(values: Tensor<f32>, scale: u32, visibility: Visibility) -> Self {
         Self {
             values,
             scale,
-            public,
+            visibility,
             _marker: PhantomData,
         }
     }
@@ -293,10 +293,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
         _: &[ValTensor<F>],
         _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        Ok(Some(crate::graph::tensor_to_valtensor(
+        Ok(Some(tensor_to_valtensor(
             self.values.clone(),
             self.scale,
-            self.public,
+            self.visibility,
         )?))
     }
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
@@ -345,4 +345,31 @@ fn homogenize_input_scales<F: PrimeField + TensorType + PartialOrd>(
     } else {
         Ok(Box::new(op))
     }
+}
+
+/// Converts a tensor to a [ValTensor] with a given scale.
+pub fn tensor_to_valtensor<F: PrimeField + TensorType + PartialOrd>(
+    const_value: Tensor<f32>,
+    scale: u32,
+    visibility: Visibility,
+) -> Result<ValTensor<F>, Box<dyn std::error::Error>> {
+    let mut value: ValTensor<F> = match visibility {
+        Visibility::Public => const_value
+            .map(|x| {
+                crate::tensor::ValType::Constant(crate::fieldutils::i128_to_felt::<F>(
+                    quantize_float(&x, 0.0, scale).unwrap(),
+                ))
+            })
+            .into(),
+        Visibility::Private => const_value
+            .map(|x| {
+                crate::tensor::ValType::Value(halo2_proofs::circuit::Value::known(
+                    crate::fieldutils::i128_to_felt::<F>(quantize_float(&x, 0.0, scale).unwrap()),
+                ))
+            })
+            .into(),
+        Visibility::Hashed => unimplemented!("hashed visibility not supported yet"),
+    };
+    value.set_scale(scale);
+    Ok(value)
 }

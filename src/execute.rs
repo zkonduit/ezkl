@@ -1,8 +1,8 @@
 use crate::circuit::CheckMode;
-use crate::commands::{Cli, Commands, RunArgs, StrategyType};
+use crate::commands::{Cli, Commands, StrategyType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{fix_verifier_sol, verify_proof_via_solidity, get_provider, read_on_chain_inputs};
-use crate::graph::{quantize_float, scale_to_multiplier, Model, ModelCircuit, ModelParams};
+use crate::graph::{scale_to_multiplier, GraphCircuit, GraphInput, Model, ModelParams};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::evm_verify;
@@ -12,7 +12,7 @@ use crate::pfsys::evm::{DeploymentCode, YulCode};
 use crate::pfsys::{
     create_keys, load_params, load_pk, load_vk, save_params, save_pk, Snark, TranscriptType,
 };
-use crate::pfsys::{create_proof_circuit, gen_srs, prepare_data, save_vk, verify_proof_circuit};
+use crate::pfsys::{create_proof_circuit, gen_srs, save_vk, verify_proof_circuit};
 use ethers::providers::Middleware;
 #[cfg(not(target_arch = "wasm32"))]
 use gag::Gag;
@@ -40,8 +40,7 @@ use plotters::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
 use rand::Rng;
 #[cfg(not(target_arch = "wasm32"))]
-use rayon::prelude::IntoParallelIterator;
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
@@ -83,10 +82,10 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         Commands::RenderCircuit { output, .. } => render(output),
         Commands::Forward {
             data,
-            model,
+            model: _,
             output,
-            args,
-        } => forward(data, model, output, args),
+            args: _,
+        } => forward(data, output),
         Commands::Mock { data, .. } => mock(data),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
@@ -316,63 +315,47 @@ fn gen_srs_cmd(params_path: PathBuf, logrows: u32) -> Result<(), Box<dyn Error>>
 }
 
 fn table(cli: Cli) -> Result<(), Box<dyn Error>> {
-    let om = Model::<Fr>::from_ezkl_conf(cli)?;
+    let om = Model::from_ezkl_conf(cli)?;
     info!("\n {}", om.table_nodes());
     Ok(())
 }
 
-fn forward(
-    data: String,
-    model: String,
-    output: String,
-    args: RunArgs,
-) -> Result<(), Box<dyn Error>> {
-    let mut data = prepare_data(data)?;
+fn forward(data: PathBuf, output: PathBuf) -> Result<(), Box<dyn Error>> {
+    let mut data = GraphInput::from_path(data)?;
+    let mut circuit = GraphCircuit::from_arg(CheckMode::SAFE)?;
+    circuit.load_inputs(&data);
 
-    // quantize the supplied data using the provided scale.
-    let mut model_inputs = vec![];
-    for v in data.input_data.iter() {
-        let t: Vec<i128> = v
-            .par_iter()
-            .map(|x| quantize_float(x, 0.0, args.scale).unwrap())
-            .collect();
-        model_inputs.push(t.into_iter().into());
-    }
-
-    let model: Model<Fr> = Model::new(
-        &mut std::fs::File::open(model)?,
-        args,
-        crate::graph::VarVisibility::default(),
-    )?;
-
-    let res = model.forward(&model_inputs)?;
+    let res = circuit.forward()?;
 
     trace!(
         "forward pass output shapes: {:?}",
-        res.iter().map(|t| t.dims()).collect_vec()
+        res.outputs.iter().map(|t| t.dims()).collect_vec()
     );
 
-    let output_scales = model.graph.get_output_scales();
+    let output_scales = circuit.model.graph.get_output_scales();
     let output_scales = output_scales
         .iter()
         .map(|scale| scale_to_multiplier(*scale));
 
     let float_res: Vec<Vec<f32>> = res
+        .outputs
         .iter()
         .zip(output_scales)
         .map(|(t, scale)| t.iter().map(|e| ((*e as f64 / scale) as f32)).collect_vec())
         .collect();
     trace!("forward pass output: {:?}", float_res);
     data.output_data = float_res;
+    data.input_hashes = Some(res.input_hashes);
+    data.output_hashes = Some(res.output_hashes);
 
     serde_json::to_writer(&File::create(output)?, &data)?;
     Ok(())
 }
 
-fn mock(data: String) -> Result<(), Box<dyn Error>> {
-    let data = prepare_data(data)?;
+fn mock(data: PathBuf) -> Result<(), Box<dyn Error>> {
+    let data = GraphInput::from_path(data)?;
     // mock should catch any issues by default so we set it to safe
-    let mut circuit = ModelCircuit::<Fr>::from_arg(CheckMode::SAFE)?;
+    let mut circuit = GraphCircuit::from_arg(CheckMode::SAFE)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     info!("Mock proof");
@@ -402,8 +385,8 @@ pub fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, Box<dyn 
 }
 
 #[cfg(feature = "render")]
-fn render(output: String) -> Result<(), Box<dyn Error>> {
-    let circuit = ModelCircuit::<Fr>::from_arg(CheckMode::UNSAFE)?;
+fn render(output: PathBuf) -> Result<(), Box<dyn Error>> {
+    let circuit = GraphCircuit::from_arg(CheckMode::UNSAFE)?;
     info!("Rendering circuit");
 
     // Create the area we want to draw on.
@@ -438,7 +421,7 @@ fn create_evm_verifier(
         .collect();
 
     let vk =
-        load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)?;
+        load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, model_circuit_params)?;
     trace!("params computed");
 
     let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
@@ -517,9 +500,9 @@ fn create_keys_kzg(
     circuit_params_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
-    let circuit = ModelCircuit::<Fr>::from_arg(CheckMode::UNSAFE)?;
+    let circuit = GraphCircuit::from_arg(CheckMode::UNSAFE)?;
     let params = load_params_cmd(params_path, circuit.model.run_args.logrows)?;
-    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
+    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
         .map_err(Box::<dyn Error>::from)?;
     let circuit_params = circuit.params;
     trace!("params computed");
@@ -531,7 +514,7 @@ fn create_keys_kzg(
 }
 
 async fn prove(
-    data: String,
+    data: PathBuf,
     model_path: PathBuf,
     pk_path: PathBuf,
     proof_path: PathBuf,
@@ -542,10 +525,10 @@ async fn prove(
     check_mode: CheckMode,
     rpc_url: Option<String>,
 ) -> Result<(), Box<dyn Error>> {
-    let mut data = prepare_data(data)?;
+    let mut data = GraphInput::from_path(data)?;
     let model_circuit_params = ModelParams::load(&circuit_params_path);
     let mut circuit =
-        ModelCircuit::<Fr>::from_model_params(&model_circuit_params, &model_path, check_mode)?;
+        GraphCircuit::from_model_params(&model_circuit_params, &model_path, check_mode)?;
     if circuit.model.run_args.on_chain_inputs {
         let provider = get_provider(rpc_url.unwrap().as_str())?;
         let chain_id = provider.get_chainid().await?;
@@ -557,7 +540,7 @@ async fn prove(
 
     let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)?;
 
-    let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(pk_path, circuit_params)
+    let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(pk_path, circuit_params)
         .map_err(Box::<dyn Error>::from)?;
 
     trace!("params computed");
@@ -602,7 +585,7 @@ async fn prove(
 #[cfg(not(target_arch = "wasm32"))]
 fn fuzz(
     logrows: u32,
-    data: String,
+    data: PathBuf,
     transcript: TranscriptType,
     num_runs: usize,
 ) -> Result<(), Box<dyn Error>> {
@@ -613,10 +596,10 @@ fn fuzz(
     let _r = Gag::stdout().unwrap();
     let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
 
-    let data = prepare_data(data)?;
+    let data = GraphInput::from_path(data)?;
     // these aren't real values so the sanity checks are mostly meaningless
-    let mut circuit = ModelCircuit::<Fr>::from_arg(CheckMode::UNSAFE)?;
-    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &params)
+    let mut circuit = GraphCircuit::from_arg(CheckMode::UNSAFE)?;
+    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
         .map_err(Box::<dyn Error>::from)?;
 
     let public_inputs = circuit.prepare_public_inputs(&data)?;
@@ -632,7 +615,7 @@ fn fuzz(
         let new_params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
 
         let bad_pk =
-            create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &new_params)
+            create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &new_params)
                 .unwrap();
 
         let bad_proof = create_proof_circuit_kzg(
@@ -703,7 +686,7 @@ fn fuzz(
         let new_params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
 
         let bad_pk =
-            create_keys::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(&circuit, &new_params)
+            create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &new_params)
                 .unwrap();
 
         let bad_vk = bad_pk.get_vk();
@@ -891,7 +874,7 @@ fn aggregate(
         let model_circuit_params = ModelParams::load(&circuit_params_path);
         let params_app =
             load_params_cmd(params_path.clone(), model_circuit_params.run_args.logrows)?;
-        let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(
+        let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
             vk_path.to_path_buf(),
             // safe to clone as the inner model is wrapped in an Arc
             model_circuit_params.clone(),
@@ -943,7 +926,7 @@ fn verify(
 
     let strategy = KZGSingleStrategy::new(params.verifier_params());
     let vk =
-        load_vk::<KZGCommitmentScheme<Bn256>, Fr, ModelCircuit<Fr>>(vk_path, model_circuit_params)?;
+        load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, model_circuit_params)?;
     let now = Instant::now();
     let result = verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, strategy);
     info!("verify took {}", now.elapsed().as_secs());

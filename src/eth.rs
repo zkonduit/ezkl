@@ -1,4 +1,4 @@
-use crate::pfsys::ModelInput;
+use crate::graph::GraphInput;
 use crate::pfsys::evm::EvmVerificationError;
 use crate::pfsys::Snark;
 use ethers::contract::abigen;
@@ -120,8 +120,8 @@ pub fn get_provider(rpc_url: &str) -> Result<Provider<Http>, Box<dyn Error>> {
 /// Reads on-chain inputs, casts them as U256, converts them to f32 according to the decimcals field in the data and returns them as a vector
 pub async fn read_on_chain_inputs (
     _provider: &Provider<Http>,
-    data: &mut ModelInput
-) -> Result<ModelInput, Box<dyn Error>> {
+    data: &mut GraphInput
+) -> Result<GraphInput, Box<dyn Error>> {
     // Iterate over all on-chain inputs
     if let Some(on_chain_inputs) = &data.on_chain_input_data {
         for on_chain_data in on_chain_inputs {

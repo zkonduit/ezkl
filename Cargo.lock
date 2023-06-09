@@ -1577,7 +1577,7 @@ dependencies = [
 
 [[package]]
 name = "ezkl-lib"
-version = "0.1.0"
+version = "0.1.1-pre"
 dependencies = [
  "bincode",
  "clap 4.3.2",
@@ -2083,6 +2083,7 @@ dependencies = [
  "paste",
  "rand 0.8.5",
  "rand_core 0.6.4",
+ "serde",
  "static_assertions",
  "subtle",
 ]

@@ -1,6 +1,6 @@
 //use crate::onnx::OnnxModel;
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use log::{debug, info};
+use log::debug;
 #[cfg(feature = "python-bindings")]
 use pyo3::{
     conversion::{FromPyObject, PyTryFrom},
@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::error::Error;
 use std::fs::File;
-use std::io::{stdin, stdout, Read, Write};
+use std::io::Read;
 use std::path::PathBuf;
 
 use crate::circuit::{CheckMode, Tolerance};
@@ -112,15 +112,15 @@ pub struct RunArgs {
     /// Flags whether the inputs are on-chain and should be attested to
     #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
     pub on_chain_inputs: bool,
-    /// Flags whether inputs are public
-    #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
-    pub public_inputs: bool,
-    /// Flags whether outputs are public
-    #[arg(long, default_value = "true", action = clap::ArgAction::Set)]
-    pub public_outputs: bool,
-    /// Flags whether params are public
-    #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
-    pub public_params: bool,
+    /// Flags whether inputs are public, private, hashed
+    #[arg(long, default_value = "private")]
+    pub input_visibility: Visibility,
+    /// Flags whether outputs are public, private, hashed
+    #[arg(long, default_value = "public")]
+    pub output_visibility: Visibility,
+    /// Flags whether params are public, private, hashed
+    #[arg(long, default_value = "private")]
+    pub param_visibility: Visibility,
     /// Base used to pack the public-inputs to the circuit. (value > 1) to pack instances as a single int.
     /// Useful when verifying on the EVM. Note that this will often break for very long inputs. Use with caution, still experimental.
     #[arg(long, default_value = "1")]
@@ -134,21 +134,9 @@ pub struct RunArgs {
 impl RunArgs {
     pub fn to_var_visibility(&self) -> VarVisibility {
         VarVisibility {
-            input: if self.public_inputs {
-                Visibility::Public
-            } else {
-                Visibility::Private
-            },
-            params: if self.public_params {
-                Visibility::Public
-            } else {
-                Visibility::Private
-            },
-            output: if self.public_outputs {
-                Visibility::Public
-            } else {
-                Visibility::Private
-            },
+            input: self.input_visibility,
+            params: self.param_visibility,
+            output: self.output_visibility,
         }
     }
 }
@@ -203,7 +191,7 @@ pub enum Commands {
     Table {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
-        model: String,
+        model: PathBuf,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
@@ -215,10 +203,10 @@ pub enum Commands {
     RenderCircuit {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
-        model: String,
+        model: PathBuf,
         /// Path to save the .png circuit render
         #[arg(short = 'O', long)]
-        output: String,
+        output: PathBuf,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
@@ -229,13 +217,13 @@ pub enum Commands {
     Forward {
         /// The path to the .json data file
         #[arg(short = 'D', long)]
-        data: String,
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
-        model: String,
+        model: PathBuf,
         /// Path to the new .json file
         #[arg(short = 'O', long)]
-        output: String,
+        output: PathBuf,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
@@ -256,10 +244,10 @@ pub enum Commands {
     Mock {
         /// The path to the .json data file
         #[arg(short = 'D', long)]
-        data: String,
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
-        model: String,
+        model: PathBuf,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
@@ -330,7 +318,7 @@ pub enum Commands {
     Fuzz {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long)]
-        data: String,
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
@@ -355,7 +343,7 @@ pub enum Commands {
     Prove {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long)]
-        data: String,
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
@@ -497,24 +485,4 @@ pub enum Commands {
         #[arg(long)]
         proof_path: PathBuf,
     },
-}
-
-/// Loads the path to a path `data` represented as a [String]. If empty queries the user for an input.
-pub fn data_path(data: String) -> PathBuf {
-    let mut s = String::new();
-    match data.is_empty() {
-        false => {
-            info!("loading data from {}", data);
-            PathBuf::from(data)
-        }
-        true => {
-            info!("please enter a path to a .json file containing inputs for the model: ");
-            let _ = stdout().flush();
-            let _ = &stdin()
-                .read_line(&mut s)
-                .expect("did not enter a correct string");
-            s.truncate(s.len() - 1);
-            PathBuf::from(&s)
-        }
-    }
 }

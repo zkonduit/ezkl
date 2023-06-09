@@ -3,7 +3,7 @@
 mod native_tests {
 
     use core::panic;
-    use ezkl_lib::pfsys::{prepare_data, save_data, ModelInput};
+    use ezkl_lib::graph::GraphInput;
     use lazy_static::lazy_static;
     use std::env::var;
     use std::process::Command;
@@ -113,7 +113,7 @@ mod native_tests {
 
             assert!(status.success());
 
-            let data = prepare_data(format!("{}/{}/input.json", test_dir, test))
+            let data = GraphInput::from_path(format!("{}/{}/input.json", test_dir, test).into())
                 .expect("failed to load input data");
 
             let duplicated_input_data: Vec<Vec<f32>> = data
@@ -128,16 +128,16 @@ mod native_tests {
                 .map(|data| (0..num_batches).map(|_| data.clone()).flatten().collect())
                 .collect();
 
-            let duplicated_data = ModelInput {
+            let duplicated_data = GraphInput {
                 input_data: duplicated_input_data,
+                input_hashes: None,
+                output_hashes: None,
                 output_data: duplicated_output_data,
                 on_chain_input_data: None,
             };
 
-            let res = save_data(
-                format!("{}/{}/input.json", test_dir, output_dir),
-                duplicated_data,
-            );
+            let res =
+                duplicated_data.save(format!("{}/{}/input.json", test_dir, output_dir).into());
 
             assert!(res.is_ok());
         }
@@ -298,14 +298,14 @@ mod native_tests {
             fn mock_packed_outputs_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, false, false, true, 2, 1);
+                mock(test.to_string(), 7, 16, 17, "private", "private", "public", 2, 1);
             }
 
             #(#[test_case(PACKING_TESTS[N])])*
             fn mock_everything_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, true, false, true, 2, 1);
+                mock(test.to_string(), 7, 16, 17, "public", "private", "public", 2, 1);
             }
 
             });
@@ -354,7 +354,7 @@ mod native_tests {
             fn mock_public_outputs_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, false, false, true, 1, 1);
+                mock(test.to_string(), 7, 16, 17, "private", "private", "public", 1, 1);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -363,21 +363,21 @@ mod native_tests {
                 crate::native_tests::mv_test_(test);
                 let large_batch_dir = &format!("large_batches_{}", test);
                 crate::native_tests::mk_data_batches_(test, &large_batch_dir, 10);
-                mock(large_batch_dir.to_string(), 7, 16, 17, false, false, true, 1, 10);
+                mock(large_batch_dir.to_string(), 7, 16, 17, "private", "private", "public", 1, 10);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_inputs_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, true, false, false, 1, 1);
+                mock(test.to_string(), 7, 16, 17, "public", "private", "private", 1, 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_params_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, false, true, false, 1, 1);
+                mock(test.to_string(), 7, 16, 17, "private", "public", "private", 1, 1);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -386,14 +386,35 @@ mod native_tests {
                 crate::native_tests::mv_test_(test);
                 let large_batch_dir = &format!("large_batches_{}", test);
                 crate::native_tests::mk_data_batches_(test, &large_batch_dir, 10);
-                forward_pass(large_batch_dir.to_string(), 10);
+                forward_pass(large_batch_dir.to_string(), "private", "private", "public", 10);
             }
 
             #(#[test_case(TESTS[N])])*
             fn forward_pass_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                forward_pass(test.to_string(), 1);
+                forward_pass(test.to_string(),"private", "private", "public", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_hashed_input_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                forward_pass(test.to_string(),"hashed", "private", "public", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_hashed_output_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                forward_pass(test.to_string(),"public", "private", "hashed", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_hashed_input_output_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                forward_pass(test.to_string(),"hashed", "public", "hashed", 1);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -427,7 +448,7 @@ mod native_tests {
             fn large_mock_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 5, 23, 24, false, false, true, 1, 1);
+                mock(test.to_string(), 5, 23, 24, "private", "private", "public", 1, 1);
             }
         });
     }
@@ -475,7 +496,23 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test));
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "public", 1);
+                }
+
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_hashed_input_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params_17();
+                    crate::native_tests::mv_test_(test);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "hashed", "private", "private", 10000);
+                }
+
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_hashed_output_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params_17();
+                    crate::native_tests::mv_test_(test);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "hashed", 0);
                 }
 
                 // #(#[test_case(TESTS_EVM[N])])*
@@ -575,18 +612,27 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
-    fn forward_pass(example_name: String, batch_size: usize) {
+    fn forward_pass(
+        example_name: String,
+        input_visibility: &str,
+        param_visibility: &str,
+        output_visibility: &str,
+        batch_size: usize,
+    ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "forward",
                 "-D",
-                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                &format!("{}/{}/input.json", test_dir, example_name),
                 "-M",
-                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!("{}/{}/network.onnx", test_dir, example_name),
                 "-O",
-                format!("{}/{}/input_forward.json", test_dir, example_name).as_str(),
-                &format!("--batch-size={}", batch_size).as_str(),
+                &format!("{}/{}/input_forward.json", test_dir, example_name),
+                &format!("--batch-size={}", batch_size),
+                &format!("--input-visibility={}", input_visibility),
+                &format!("--param-visibility={}", param_visibility),
+                &format!("--output-visibility={}", output_visibility),
                 "--bits=16",
                 "-K=17",
             ])
@@ -602,6 +648,9 @@ mod native_tests {
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!("--batch-size={}", batch_size).as_str(),
+                &format!("--input-visibility={}", input_visibility),
+                &format!("--param-visibility={}", param_visibility),
+                &format!("--output-visibility={}", output_visibility),
                 "--bits=16",
                 "-K=17",
             ])
@@ -654,9 +703,9 @@ mod native_tests {
         scale: usize,
         bits: usize,
         logrows: usize,
-        public_inputs: bool,
-        public_params: bool,
-        public_outputs: bool,
+        input_visibility: &str,
+        param_visibility: &str,
+        output_visibility: &str,
         pack_base: usize,
         batch_size: usize,
     ) {
@@ -673,9 +722,9 @@ mod native_tests {
                 &format!("--scale={}", scale),
                 &format!("--pack-base={}", pack_base),
                 &format!("--batch-size={}", batch_size),
-                &format!("--public-inputs={}", public_inputs),
-                &format!("--public-params={}", public_params),
-                &format!("--public-outputs={}", public_outputs),
+                &format!("--input-visibility={}", input_visibility),
+                &format!("--param-visibility={}", param_visibility),
+                &format!("--output-visibility={}", output_visibility),
             ])
             .status()
             .expect("failed to execute process");
@@ -1002,8 +1051,24 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
+    fn kzg_evm_prove_and_verify(
+        example_name: String,
+        with_solidity: bool,
+        input_visibility: &str,
+        param_visibility: &str,
+        output_visibility: &str,
+        num_runs: usize,
+    ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
+
+        forward_pass(
+            example_name.clone(),
+            input_visibility,
+            param_visibility,
+            output_visibility,
+            1,
+        );
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup",
@@ -1018,6 +1083,9 @@ mod native_tests {
                     "--circuit-params-path={}/{}/circuit.params",
                     test_dir, example_name
                 ),
+                &format!("--input-visibility={}", input_visibility),
+                &format!("--param-visibility={}", param_visibility),
+                &format!("--output-visibility={}", output_visibility),
                 "--bits=16",
                 "-K=17",
             ])
@@ -1029,7 +1097,7 @@ mod native_tests {
             .args([
                 "prove",
                 "-D",
-                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                format!("{}/{}/input_forward.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--proof-path",
@@ -1083,13 +1151,15 @@ mod native_tests {
 
         let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
 
+        let opt_arg = format!("--optimizer-runs={}", num_runs);
+
         let mut args = vec![
             "verify-evm",
             "--proof-path",
             pf_arg.as_str(),
             "--deployment-code-path",
             code_arg.as_str(),
-            "--optimizer-runs=1",
+            opt_arg.as_str(),
         ];
         if with_solidity {
             args.push("--sol-code-path");

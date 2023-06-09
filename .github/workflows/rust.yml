@@ -167,6 +167,12 @@ jobs:
         run: cargo test --release --verbose tests::mock_public_params_ -- --test-threads 32
       - name: Mock 'everything' tests (public and packed outputs, public inputs)
         run: cargo test --release --verbose packed_tests::mock_everything_ -- --test-threads 32
+      - name: Mock proving tests (hashed inputs)
+        run: cargo test --release --verbose tests::mock_hashed_input_::t  -- --test-threads 32
+      - name: Mock proving tests (hashed outputs)
+        run: cargo test --release --verbose tests::mock_hashed_output_::t  -- --test-threads 32
+      - name: Mock proving tests (hashed inputs and outputs)
+        run: cargo test --release --verbose tests::mock_hashed_input_output_  -- --test-threads 32
 
   mock-proving-tests-wasi:
     runs-on: ubuntu-latest-32-cores
