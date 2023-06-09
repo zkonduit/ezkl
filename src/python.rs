@@ -527,11 +527,7 @@ fn create_evm_verifier(
     let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)
         .map_err(|_| PyIOError::new_err("Failed to load model circuit parameters"))?;
 
-    let num_instance = model_circuit_params
-        .instance_shapes
-        .iter()
-        .map(|x| x.iter().product())
-        .collect();
+    let num_instance = model_circuit_params.total_instances();
 
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, model_circuit_params)
         .map_err(|_| PyIOError::new_err("Failed to load verifier key"))?;

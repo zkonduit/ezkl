@@ -96,7 +96,7 @@ pub struct GraphInput {
     pub output_data: Vec<Vec<f32>>,
     /// Optional hashes of the inputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
     pub input_hashes: Option<Vec<Fp>>,
-    /// Optional hashes of the inputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
+    /// Optional hashes of the outputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
     pub output_hashes: Option<Vec<Fp>>,
 }
 
@@ -497,10 +497,12 @@ impl Circuit<Fp> for GraphCircuit {
             })?;
 
         if self.model.visibility.output.is_hashed() {
-            // instantiate new poseidon module in chip
-            let chip = PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_RATE>::construct(
-                config.poseidon_config.unwrap(),
-            );
+            let chip = PoseidonChip::<
+                PoseidonSpec,
+                POSEIDON_WIDTH,
+                POSEIDON_RATE,
+                POSEIDON_LEN_GRAPH,
+            >::construct(config.poseidon_config.unwrap());
             let mut hash_offset = 0;
             if self.model.visibility.input.is_hashed() {
                 hash_offset += inputs.len();

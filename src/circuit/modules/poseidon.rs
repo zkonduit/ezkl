@@ -113,12 +113,7 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
                                 y,
                                 || v.clone(),
                             ),
-                            ValType::PrevAssigned(v) => v.copy_advice(
-                                || format!("load message_{}", i),
-                                &mut region,
-                                self.config.hash_inputs[x],
-                                y,
-                            ),
+                            ValType::PrevAssigned(v) => Ok(v.clone()),
                             _ => panic!("wrong input type, must be previously assigned"),
                         }
                     };

@@ -1,10 +1,10 @@
 ///
 pub mod poseidon;
 
-use std::cmp;
 use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
+use std::{cmp, panic};
 
 use halo2curves::ff::Field;
 
@@ -348,6 +348,7 @@ impl<'r, 'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> RegionLayouter<F>
         to: &'v mut (dyn FnMut() -> Value<Assigned<F>> + 'v),
     ) -> Result<Cell, Error> {
         let module_idx = self.layouter.region_idx[&self.region_index];
+
         self.layouter.cs.assign_advice(
             annotation,
             column,

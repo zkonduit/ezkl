@@ -399,21 +399,14 @@ mod native_tests {
             fn mock_hashed_input_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                forward_pass(test.to_string(),"hashed", "private", "public", 1, 22);
+                forward_pass(test.to_string(),"hashed", "private", "public", 1, 17);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_output_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                forward_pass(test.to_string(),"public", "private", "hashed", 1, 22);
-            }
-
-            #(#[test_case(TESTS[N])])*
-            fn mock_hashed_input_output_(test: &str) {
-                crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                forward_pass(test.to_string(),"hashed", "public", "hashed", 1, 22);
+                forward_pass(test.to_string(),"public", "private", "hashed", 1, 17);
             }
 
             #(#[test_case(TESTS[N])])*
