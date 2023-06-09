@@ -1078,6 +1078,32 @@ mod add_with_overflow_and_poseidon {
             MockProver::run(K as u32, &circuit, vec![vec![commitment_a, commitment_b]]).unwrap();
         prover.assert_satisfied();
     }
+
+    #[test]
+    fn addcircuit_bad_hashes() {
+        let a = (0..LEN)
+            .map(|i| halo2curves::bn256::Fr::from(i as u64 + 1))
+            .collect::<Vec<_>>();
+        let b = (0..LEN)
+            .map(|i| halo2curves::bn256::Fr::from(i as u64 + 1))
+            .collect::<Vec<_>>();
+        let commitment_a =
+            crate::circuit::modules::poseidon::witness_hash::<RATE>(a.clone()).unwrap() + Fr::one();
+
+        let commitment_b =
+            crate::circuit::modules::poseidon::witness_hash::<RATE>(b.clone()).unwrap() + Fr::one();
+
+        // parameters
+        let a = Tensor::from(a.into_iter().map(|i| Value::known(i)));
+        let b = Tensor::from(b.into_iter().map(|i| Value::known(i)));
+        let circuit = MyCircuit {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
+        };
+
+        let prover =
+            MockProver::run(K as u32, &circuit, vec![vec![commitment_a, commitment_b]]).unwrap();
+        assert!(prover.verify().is_err());
+    }
 }
 
 #[cfg(test)]

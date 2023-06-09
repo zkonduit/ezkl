@@ -87,8 +87,10 @@ pub struct GraphInput {
     pub input_data: Vec<Vec<f32>>,
     /// The expected output of the model (can be empty vectors if outputs are not being constrained).
     pub output_data: Vec<Vec<f32>>,
-    /// Optional hashes of the inputs (can be None if there are no commitments) -- wrapped for backwards compatibility
-    pub hashes: Option<Vec<Fp>>,
+    /// Optional hashes of the inputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
+    pub input_hashes: Option<Vec<Fp>>,
+    /// Optional hashes of the inputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
+    pub output_hashes: Option<Vec<Fp>>,
 }
 
 impl GraphInput {
@@ -113,8 +115,10 @@ pub struct ForwardResult {
     pub inputs: Vec<Tensor<i128>>,
     /// The output of the forward pass
     pub outputs: Vec<Tensor<i128>>,
-    /// Any hashes to inputs or outputs generated during the forward pass
-    pub hashes: Vec<Fp>,
+    /// Any hashes of inputs generated during the forward pass
+    pub input_hashes: Vec<Fp>,
+    /// Any hashes of outputs generated during the forward pass
+    pub output_hashes: Vec<Fp>,
 }
 
 /// model parameters
@@ -206,18 +210,19 @@ impl GraphCircuit {
 
     /// Runs the forward pass of the model / graph of computations and any associated hashing.
     pub fn forward(&self) -> Result<ForwardResult, Box<dyn std::error::Error>> {
-        let mut hashes = vec![];
+        let mut input_hashes = vec![];
         if self.model.visibility.input.is_hashed() {
             for input in self.inputs.iter() {
-                hashes.push(witness_hash::<14>(
+                input_hashes.push(witness_hash::<14>(
                     input.iter().map(|x| i128_to_felt(*x)).collect(),
                 )?);
             }
         }
+        let mut output_hashes = vec![];
         let outputs = self.model.forward(&self.inputs)?;
         if self.model.visibility.output.is_hashed() {
             for input in outputs.iter() {
-                hashes.push(witness_hash::<14>(
+                output_hashes.push(witness_hash::<14>(
                     input.iter().map(|x| i128_to_felt(*x)).collect(),
                 )?);
             }
@@ -226,7 +231,8 @@ impl GraphCircuit {
         Ok(ForwardResult {
             inputs: self.inputs.clone(),
             outputs,
-            hashes,
+            input_hashes,
+            output_hashes,
         })
     }
 
@@ -306,10 +312,20 @@ impl GraphCircuit {
             })
             .collect::<Vec<Vec<Fp>>>();
 
-        if self.model.visibility.input.is_hashed() {
-            pi_inner.push(data.hashes.as_deref().unwrap().to_vec());
+        if self.model.visibility.input.is_hashed() || self.model.visibility.output.is_hashed() {
+            let mut hash_pi = vec![];
+            if self.model.visibility.input.is_hashed() {
+                // should unwrap safely
+                hash_pi.extend(data.input_hashes.as_deref().unwrap().to_vec());
+            }
+            if self.model.visibility.output.is_hashed() {
+                // should unwrap safely
+                hash_pi.extend(data.output_hashes.as_deref().unwrap().to_vec());
+            };
+            if hash_pi.len() > 0 {
+                pi_inner.push(hash_pi);
+            }
         }
-
         Ok(pi_inner)
     }
 }
@@ -381,7 +397,6 @@ impl Circuit<Fp> for GraphCircuit {
             .map(|i| ValTensor::from(<Tensor<i128> as Into<Tensor<Value<Fp>>>>::into(i.clone())))
             .collect::<Vec<ValTensor<Fp>>>();
 
-        let mut hash_offset = 0;
         if self.model.visibility.input.is_hashed() {
             // instantiate new poseidon module in chip
             let chip = PoseidonChip::<PoseidonSpec, 15, 14, 14>::construct(
@@ -390,7 +405,9 @@ impl Circuit<Fp> for GraphCircuit {
             for (i, input) in inputs.clone().iter().enumerate() {
                 // hash the input and replace the constrained cells in the inputs
                 inputs[i] = chip.hash(&mut layouter, &input, i)?;
-                hash_offset += 1;
+                inputs[i]
+                    .reshape(input.dims())
+                    .map_err(|_| PlonkError::Synthesis)?;
             }
             // instantiate new module in chip
             layouter.assign_region(|| "_new_module", |_| Ok(()))?;
@@ -415,9 +432,20 @@ impl Circuit<Fp> for GraphCircuit {
             let chip = PoseidonChip::<PoseidonSpec, 15, 14, 14>::construct(
                 config.poseidon_config.unwrap(),
             );
+            let mut hash_offset = 0;
+            if self.model.visibility.input.is_hashed() {
+                hash_offset += inputs.len();
+                // re-enter the first module
+                layouter.assign_region(|| "_enter_module_0", |_| Ok(()))?;
+            } else {
+                layouter.assign_region(|| "_new_module", |_| Ok(()))?;
+            }
             for (i, output) in outputs.clone().iter().enumerate() {
                 // hash the output and replace the constrained cells in the outputs
                 outputs[i] = chip.hash(&mut layouter, output, hash_offset + i)?;
+                outputs[i]
+                    .reshape(output.dims())
+                    .map_err(|_| PlonkError::Synthesis)?;
             }
         }
 

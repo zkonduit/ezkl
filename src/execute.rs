@@ -39,8 +39,7 @@ use plotters::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
 use rand::Rng;
 #[cfg(not(target_arch = "wasm32"))]
-use rayon::prelude::IntoParallelIterator;
-use rayon::prelude::ParallelIterator;
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
@@ -343,7 +342,8 @@ fn forward(data: PathBuf, output: PathBuf) -> Result<(), Box<dyn Error>> {
         .collect();
     trace!("forward pass output: {:?}", float_res);
     data.output_data = float_res;
-    data.hashes = Some(res.hashes);
+    data.input_hashes = Some(res.input_hashes);
+    data.output_hashes = Some(res.output_hashes);
 
     serde_json::to_writer(&File::create(output)?, &data)?;
     Ok(())
@@ -382,7 +382,7 @@ pub fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, Box<dyn 
 }
 
 #[cfg(feature = "render")]
-fn render(output: String) -> Result<(), Box<dyn Error>> {
+fn render(output: PathBuf) -> Result<(), Box<dyn Error>> {
     let circuit = GraphCircuit::from_arg(CheckMode::UNSAFE)?;
     info!("Rendering circuit");
 

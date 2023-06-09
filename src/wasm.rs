@@ -185,7 +185,7 @@ pub fn prove_wasm(
         halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).unwrap();
 
     // read in model input
-    let data: crate::pfsys::GraphInput = serde_json::from_slice(&data[..]).unwrap();
+    let data: crate::graph::GraphInput = serde_json::from_slice(&data[..]).unwrap();
 
     // read in circuit params
     let circuit_params: ModelParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();

@@ -15,6 +15,7 @@ use crate::{
 };
 use halo2curves::bn256::Fr as Fp;
 
+use colored::Colorize;
 use halo2_proofs::circuit::Region;
 use log::warn;
 use tract_onnx::prelude::{
@@ -242,6 +243,14 @@ impl Model {
         } else {
             self.dummy_layout(&self.graph.input_shapes()).unwrap()
         };
+
+        // Then number of columns in the circuits
+        info!(
+            "{} {} {}",
+            "The model generates".blue(),
+            num_constraints.to_string().blue(),
+            "constraints (does not include modules)".blue()
+        );
 
         // extract the requisite lookup ops from the model
         let mut lookup_ops: Vec<LookupOp> = self.required_lookups();

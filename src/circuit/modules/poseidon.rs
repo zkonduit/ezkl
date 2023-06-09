@@ -96,35 +96,36 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
         &self,
         layouter: &mut impl Layouter<Fp>,
         message: &ValTensor<Fp>,
-    ) -> Result<(ValTensor<Fp>, AssignedCell<Fp, Fp>), Error> {
+    ) -> Result<(Vec<AssignedCell<Fp, Fp>>, AssignedCell<Fp, Fp>), Error> {
         layouter
             .assign_region(
                 || "load message",
                 |mut region| {
                     let message_word = |i: usize| {
                         let value = &message.get_inner_tensor().unwrap()[i];
-                        let value = match value {
-                            ValType::Value(c) => c,
-                            _ => panic!("wrong input type, must be previously assigned"),
-                        };
-
                         let x = i % WIDTH;
                         let y = i / WIDTH;
 
-                        region.assign_advice(
-                            || format!("load message_{}", i),
-                            self.config.hash_inputs[x],
-                            y,
-                            || value.clone(),
-                        )
+                        match value {
+                            ValType::Value(v) => region.assign_advice(
+                                || format!("load message_{}", i),
+                                self.config.hash_inputs[x],
+                                y,
+                                || v.clone(),
+                            ),
+                            ValType::PrevAssigned(v) => v.copy_advice(
+                                || format!("load message_{}", i),
+                                &mut region,
+                                self.config.hash_inputs[x],
+                                y,
+                            ),
+                            _ => panic!("wrong input type, must be previously assigned"),
+                        }
                     };
 
                     let message: Result<Vec<AssignedCell<Fp, Fp>>, Error> =
                         (0..message.len()).map(message_word).collect();
-                    let message: Tensor<ValType<Fp>> = message?
-                        .iter()
-                        .map(|x| Into::<ValType<Fp>>::into(x.clone()))
-                        .into();
+                    let message = message?;
 
                     let offset = message.len() / WIDTH + 1;
 
@@ -137,7 +138,7 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
                         )
                         .unwrap();
 
-                    Ok((message.into(), zero_val))
+                    Ok((message, zero_val))
                 },
             )
             .map_err(|_| Error::Synthesis)
@@ -155,14 +156,7 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
         let (input, zero_val) = self.layout_inputs(layouter, input)?;
 
         // iterate over the input cells in blocks of L
-        let mut input_cells: Vec<AssignedCell<Fp, Fp>> = input
-            .get_inner_tensor()
-            .map_err(|_| Error::Synthesis)?
-            .map(|v| match v {
-                ValType::PrevAssigned(c) => c,
-                _ => panic!("wrong input type, must be previously assigned"),
-            })[..]
-            .to_vec();
+        let mut input_cells = input.clone();
 
         // do the Tree dance baby
         while input_cells.len() > 1 {
@@ -214,7 +208,11 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
                 region.constrain_equal(output.cell(), expected_var.cell())
             },
         )?;
-        Ok(input)
+
+        let assigned_input: Tensor<ValType<Fp>> =
+            input.iter().map(|e| ValType::from(e.clone())).into();
+
+        Ok(assigned_input.into())
     }
 }
 
