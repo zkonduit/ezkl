@@ -147,43 +147,44 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelCircuit<F> {
         let mut inputs: Vec<Tensor<i128>> = vec![];
         for (input, shape) in data.input_data.iter().zip(self.model.graph.input_shapes()) {
             let t: Vec<i128> = input
-                .par_iter()
-                .map(|x| quantize_float(x, 0.0, self.model.run_args.scale).unwrap())
-                .collect();
-
-            let mut t: Tensor<i128> = t.into_iter().into();
-            t.reshape(&shape);
-
-            inputs.push(t);
-        }
-        self.inputs = inputs;
+            .par_iter()
+            .map(|x| quantize_float(x, 0.0, self.model.run_args.scale).unwrap())
+            .collect();
+        
+        let mut t: Tensor<i128> = t.into_iter().into();
+        t.reshape(&shape);
+        
+        inputs.push(t);
     }
+    self.inputs = inputs;
+}
 
-    /// Create a new circuit from a set of input data and cli arguments.
-    pub fn from_arg(check_mode: CheckMode) -> Result<Self, Box<dyn std::error::Error>> {
-        let cli = Cli::create()?;
-        let model = Arc::new(Model::from_ezkl_conf(cli)?);
-        Self::new(model, check_mode)
-    }
+/// Create a new circuit from a set of input data and cli arguments.
+pub fn from_arg(check_mode: CheckMode) -> Result<Self, Box<dyn std::error::Error>> {
+    let cli = Cli::create()?;
+    let model = Arc::new(Model::from_ezkl_conf(cli)?);
+    Self::new(model, check_mode)
+}
 
-    /// Create a new circuit from a set of input data and [ModelParams].
-    pub fn from_model_params(
-        params: &ModelParams,
-        model_path: &std::path::PathBuf,
-        check_mode: CheckMode,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        let model = Arc::new(Model::from_model_params(params, model_path)?);
-        Self::new(model, check_mode)
-    }
+/// Create a new circuit from a set of input data and [ModelParams].
+pub fn from_model_params(
+    params: &ModelParams,
+    model_path: &std::path::PathBuf,
+    check_mode: CheckMode,
+) -> Result<Self, Box<dyn std::error::Error>> {
+    let model = Arc::new(Model::from_model_params(params, model_path)?);
+    Self::new(model, check_mode)
+}
 
-    /// Prepare the public inputs for the circuit.
-    pub fn prepare_public_inputs(
-        &mut self,
-        data: &ModelInput,
-    ) -> Result<Vec<Vec<F>>, Box<dyn std::error::Error>> {
-        let out_scales = self.model.graph.get_output_scales();
-
-        self.load_inputs(data);
+/// Prepare the public inputs for the circuit.
+pub fn prepare_public_inputs(
+    &mut self,
+    data: &ModelInput,
+) -> Result<Vec<Vec<F>>, Box<dyn std::error::Error>> {
+    let out_scales = self.model.graph.get_output_scales();
+    
+        // quantize the supplied data using the provided scale.
+        self.load_inputs(&data);
 
         // quantize the supplied data using the provided scale.
         // the ordering here is important, we want the inputs to come before the outputs

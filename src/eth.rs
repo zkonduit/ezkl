@@ -1,3 +1,4 @@
+use crate::pfsys::ModelInput;
 use crate::pfsys::evm::EvmVerificationError;
 use crate::pfsys::Snark;
 use ethers::contract::abigen;
@@ -9,6 +10,7 @@ use ethers::prelude::Wallet;
 use ethers::providers::Middleware;
 use ethers::providers::{Http, Provider};
 use ethers::signers::Signer;
+use ethers::types::H160;
 use ethers::types::U256;
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::{
@@ -107,6 +109,63 @@ pub async fn verify_proof_via_solidity(
 
     drop(anvil);
     Ok(result)
+}
+
+/// get_provider returns a JSON RPC HTTP Provider
+pub fn get_provider(rpc_url: &str) -> Result<Provider<Http>, Box<dyn Error>> {
+    let provider = Provider::<Http>::try_from(rpc_url)?;
+    debug!("{:#?}", provider);
+    Ok(provider)
+}
+/// Reads on-chain inputs, casts them as U256, converts them to f32 according to the decimcals field in the data and returns them as a vector
+pub async fn read_on_chain_inputs (
+    _provider: &Provider<Http>,
+    data: &mut ModelInput
+) -> Result<ModelInput, Box<dyn Error>> {
+    // Iterate over all on-chain inputs
+    if let Some(on_chain_inputs) = &data.on_chain_input_data {
+        for on_chain_data in on_chain_inputs {
+            // Construct the address
+            let _contract_address = H160::from_slice(&on_chain_data.address);
+            // TODO: Set up anvil cllient here to make reading on-chain data easier.
+            for _call_data in &on_chain_data.call_data {
+                   // Construct a call object
+                //    let function = ethers::abi::Function::parse_raw(call_data).map_err(|e| e.to_string())?;
+
+                //    let tx = TypedTransaction::Legacy(ethers::core::types::LegacyTransaction {
+                //        nonce: U256::zero(), // fill in actual nonce
+                //        gas_price: U256::zero(), // fill in actual gas price
+                //        gas_limit: U256::zero(), // fill in actual gas limit
+                //        to: Some(contract_address),
+                //        value: U256::zero(), // fill in actual value
+                //        data: call_data.clone().into(),
+                //        signature: Default::default(), // fill in actual signature
+                //    });
+   
+                //    let call = FunctionCall {
+                //        tx,
+                //        function,
+                //        block: None,
+                //        client: provider.clone(),
+                //        datatype: std::marker::PhantomData,
+                //        _m: std::marker::PhantomData,
+                //    };
+
+                // // Make a call to the Ethereum network
+                
+                // let response: U256 = provider.call(&call.call, None).await?;
+                
+                // Convert U256 to f32 according to decimals
+                // let converted = response.low_u64() as f32 / 10u64.pow(on_chain_data.decimals as u32) as f32;
+
+                // Store the result
+                data.input_data.push(vec![0.0]);
+                
+            }
+        }
+    }
+    
+    Ok(data.clone())
 }
 
 /// Generates the contract factory for a solidity verifier, optionally compiling the code with optimizer runs set on the Solc compiler.

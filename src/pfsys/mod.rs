@@ -53,12 +53,25 @@ pub enum TranscriptType {
     EVM,
 }
 
+#[allow(missing_docs)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct OnChainData {
+    /// Array of bytes representing the ABI encoded function calls to 
+    /// read the data from the address.
+    pub call_data: Vec<Vec<u8>>,
+    /// Address of the contract to read the data from.
+    pub address: Vec<u8>,
+    /// The decimals of the on-chain data.
+    pub decimals: u8
+}
 /// The input tensor data and shape, and output data for the computational graph (model) as floats.
 /// For example, the input might be the image data for a neural network, and the output class scores.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct ModelInput {
-    /// Inputs to the model / computational graph.
+    /// Inputs to the model / computational graph. (can be empty vectors if inputs are on-chain)
     pub input_data: Vec<Vec<f32>>,
+    /// On-chain inputs
+    pub on_chain_input_data: Option<Vec<OnChainData>>,
     /// The expected output of the model (can be empty vectors if outputs are not being constrained).
     pub output_data: Vec<Vec<f32>>,
 }

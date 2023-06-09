@@ -109,6 +109,9 @@ pub struct RunArgs {
     /// The number of batches to split the input data into
     #[arg(long, default_value = "1")]
     pub batch_size: u32,
+    /// Flags whether the inputs are on-chain and should be attested to
+    #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
+    pub on_chain_inputs: bool,
     /// Flags whether inputs are public
     #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
     pub public_inputs: bool,
@@ -388,6 +391,9 @@ pub enum Commands {
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = "safe")]
         check_mode: CheckMode,
+        /// RPC Url
+        #[arg(short = 'U', long)]
+        rpc_url: Option<String>,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for a single proof
