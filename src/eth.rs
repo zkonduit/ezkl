@@ -11,7 +11,9 @@ use ethers::providers::Middleware;
 use ethers::providers::{Http, Provider};
 use ethers::signers::Signer;
 use ethers::types::H160;
+use ethers::types::TransactionRequest;
 use ethers::types::U256;
+use ethers::types::transaction::eip2718::TypedTransaction;
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::{
     prelude::{LocalWallet, Wallet},
@@ -31,18 +33,27 @@ use std::{convert::TryFrom, sync::Arc};
 /// A local ethers-rs based client
 pub type EthersClient = Arc<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>;
 
-/// Return an instance of Anvil and a local client
+/// Return an instance of Anvil and a client for the given RPC URL. If none is provided, a local client is used.
 #[cfg(not(target_arch = "wasm32"))]
-pub async fn setup_eth_backend() -> Result<(AnvilInstance, EthersClient), Box<dyn Error>> {
+pub async fn setup_eth_backend(rpc_url: Option<&str>) -> Result<(AnvilInstance, EthersClient), Box<dyn Error>> {
     // Launch anvil
     let anvil = Anvil::new().spawn();
 
     // Instantiate the wallet
     let wallet: LocalWallet = anvil.keys()[0].clone().into();
 
+    let endpoint = if let Some(rpc_url) = rpc_url {
+        rpc_url.to_string()
+    } else {
+        anvil.endpoint()
+    };
+
     // Connect to the network
     let provider =
-        Provider::<Http>::try_from(anvil.endpoint())?.interval(Duration::from_millis(10u64));
+        Provider::<Http>::try_from(endpoint)?.interval(Duration::from_millis(10u64));
+
+    let chain_id = provider.get_chainid().await?;
+    info!("using chain {}", chain_id);
 
     // Instantiate the client with the wallet
     let client = Arc::new(SignerMiddleware::new(
@@ -60,7 +71,7 @@ pub async fn verify_proof_via_solidity(
     sol_code_path: PathBuf,
     runs: Option<usize>,
 ) -> Result<bool, Box<dyn Error>> {
-    let (anvil, client) = setup_eth_backend().await?;
+    let (anvil, client) = setup_eth_backend(None).await?;
 
     let factory = get_sol_contract_factory(sol_code_path, client.clone(), runs).unwrap();
 
@@ -117,45 +128,33 @@ pub fn get_provider(rpc_url: &str) -> Result<Provider<Http>, Box<dyn Error>> {
     debug!("{:#?}", provider);
     Ok(provider)
 }
-/// Reads on-chain inputs, casts them as U256, converts them to f32 according to the decimcals field in the data and returns them as a vector
+/// Reads on-chain inputs, casts them as U256, converts them to f32 according to the decimals field in the data and returns them as a vector
 pub async fn read_on_chain_inputs (
-    _provider: &Provider<Http>,
+    rpc_url: Option<&str>,
     data: &mut GraphInput
 ) -> Result<GraphInput, Box<dyn Error>> {
+    let (anvil, client) = setup_eth_backend(rpc_url).await?;
     // Iterate over all on-chain inputs
     if let Some(on_chain_inputs) = &data.on_chain_input_data {
         for on_chain_data in on_chain_inputs {
             // Construct the address
-            let _contract_address = H160::from_slice(&on_chain_data.address);
+            let contract_address_bytes = hex::decode(on_chain_data.address.clone())?;
+            let contract_address = H160::from_slice(&contract_address_bytes);
             // TODO: Set up anvil cllient here to make reading on-chain data easier.
-            for _call_data in &on_chain_data.call_data {
-                   // Construct a call object
-                //    let function = ethers::abi::Function::parse_raw(call_data).map_err(|e| e.to_string())?;
+            for call_data in &on_chain_data.call_data {
+                let call_data_bytes = hex::decode(call_data.clone())?;
+                let tx: TypedTransaction = TransactionRequest::default()
+                    .to(contract_address)
+                    .from(client.address())
+                    .data(call_data_bytes)
+                    .into();
 
-                //    let tx = TypedTransaction::Legacy(ethers::core::types::LegacyTransaction {
-                //        nonce: U256::zero(), // fill in actual nonce
-                //        gas_price: U256::zero(), // fill in actual gas price
-                //        gas_limit: U256::zero(), // fill in actual gas limit
-                //        to: Some(contract_address),
-                //        value: U256::zero(), // fill in actual value
-                //        data: call_data.clone().into(),
-                //        signature: Default::default(), // fill in actual signature
-                //    });
-   
-                //    let call = FunctionCall {
-                //        tx,
-                //        function,
-                //        block: None,
-                //        client: provider.clone(),
-                //        datatype: std::marker::PhantomData,
-                //        _m: std::marker::PhantomData,
-                //    };
-
-                // // Make a call to the Ethereum network
+                info!("created tx");
+                debug!("transaction {:#?}", tx);
+                let _result = client.call(&tx, None).await?;
                 
-                // let response: U256 = provider.call(&call.call, None).await?;
-                
-                // Convert U256 to f32 according to decimals
+                // Convert bytes to U256 to f32 according to decimals
+                //let response = U256::from_little_endian(&result[..]);
                 // let converted = response.low_u64() as f32 / 10u64.pow(on_chain_data.decimals as u32) as f32;
 
                 // Store the result
@@ -164,7 +163,7 @@ pub async fn read_on_chain_inputs (
             }
         }
     }
-    
+    drop(anvil);
     Ok(data.clone())
 }
 

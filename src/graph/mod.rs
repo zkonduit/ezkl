@@ -86,15 +86,15 @@ pub enum GraphError {
     PackingExponent,
 }
 
-/// Struct that deines how the contract address and call data view function to read on-chain data.
+/// Struct that defines how the contract address and call data view function to read on-chain data.
 /// verifyWithDataAttestation.sol
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct OnChainData {
-    /// Array of bytes representing the ABI encoded function calls to 
+    /// byte strings representing the ABI encoded function calls to 
     /// read the data from the address.
-    pub call_data: Vec<Vec<u8>>,
+    pub call_data: Vec<String>,
     /// Address of the contract to read the data from.
-    pub address: Vec<u8>,
+    pub address: String,
     /// The decimals of the on-chain data.
     pub decimals: u8
 }

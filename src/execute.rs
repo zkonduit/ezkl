@@ -1,7 +1,7 @@
 use crate::circuit::CheckMode;
 use crate::commands::{Cli, Commands, StrategyType};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::eth::{fix_verifier_sol, verify_proof_via_solidity, get_provider, read_on_chain_inputs};
+use crate::eth::{fix_verifier_sol, verify_proof_via_solidity, read_on_chain_inputs};
 use crate::graph::{scale_to_multiplier, GraphCircuit, GraphInput, Model, ModelParams};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
@@ -13,7 +13,6 @@ use crate::pfsys::{
     create_keys, load_params, load_pk, load_vk, save_params, save_pk, Snark, TranscriptType,
 };
 use crate::pfsys::{create_proof_circuit, gen_srs, save_vk, verify_proof_circuit};
-use ethers::providers::Middleware;
 #[cfg(not(target_arch = "wasm32"))]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
@@ -386,7 +385,7 @@ pub fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, Box<dyn 
 
 #[cfg(feature = "render")]
 fn render(output: PathBuf) -> Result<(), Box<dyn Error>> {
-    let circuit = GraphCircuit::from_arg(CheckMode::UNSAFE)?;
+    let circuit = GraphCircuit::from_arg(CheckMode::UNSAFE)?; 
     info!("Rendering circuit");
 
     // Create the area we want to draw on.
@@ -530,10 +529,7 @@ async fn prove(
     let mut circuit =
         GraphCircuit::from_model_params(&model_circuit_params, &model_path, check_mode)?;
     if circuit.model.run_args.on_chain_inputs {
-        let provider = get_provider(rpc_url.unwrap().as_str())?;
-        let chain_id = provider.get_chainid().await?;
-        info!("using chain {}", chain_id);
-        data = read_on_chain_inputs(&provider, &mut data).await?;
+        data = read_on_chain_inputs(rpc_url.as_deref(), &mut data).await?;
     }
     let public_inputs = circuit.prepare_public_inputs(&data)?;
     let circuit_params = circuit.params.clone();
