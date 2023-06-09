@@ -2,7 +2,6 @@
 pub mod evm;
 
 use crate::circuit::CheckMode;
-use crate::commands::data_path;
 use crate::execute::ExecutionError;
 use crate::tensor::TensorType;
 use clap::ValueEnum;
@@ -24,7 +23,7 @@ use snark_verifier::system::halo2::{compile, Config};
 use snark_verifier::verifier::plonk::PlonkProtocol;
 use std::error::Error;
 use std::fs::File;
-use std::io::{self, BufReader, BufWriter, Cursor, Read, Write};
+use std::io::{self, BufReader, BufWriter, Cursor, Write};
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -53,16 +52,6 @@ pub enum TranscriptType {
     EVM,
 }
 
-/// The input tensor data and shape, and output data for the computational graph (model) as floats.
-/// For example, the input might be the image data for a neural network, and the output class scores.
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct ModelInput {
-    /// Inputs to the model / computational graph.
-    pub input_data: Vec<Vec<f32>>,
-    /// The expected output of the model (can be empty vectors if outputs are not being constrained).
-    pub output_data: Vec<Vec<f32>>,
-}
-
 /// Truncates nested vector due to omit junk floating point values in python
 #[cfg(feature = "python-bindings")]
 fn truncate_nested_vector(input: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {
@@ -77,7 +66,7 @@ fn truncate_nested_vector(input: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {
 }
 
 #[cfg(feature = "python-bindings")]
-impl ToPyObject for ModelInput {
+impl ToPyObject for GraphInput {
     fn to_object(&self, py: Python) -> PyObject {
         // Create a Python dictionary
         let dict = PyDict::new(py);
@@ -243,20 +232,6 @@ impl<F: PrimeField + SerdeObject, C: CurveAffine> From<Snark<F, C>> for SnarkWit
             proof: Value::known(snark.proof),
         }
     }
-}
-
-/// Deserializes the required inputs to a model at path `datapath` to a [ModelInput] struct.
-pub fn prepare_data(datapath: String) -> Result<ModelInput, Box<dyn Error>> {
-    let mut file = File::open(data_path(datapath)).map_err(Box::<dyn Error>::from)?;
-    let mut data = String::new();
-    file.read_to_string(&mut data)
-        .map_err(Box::<dyn Error>::from)?;
-    serde_json::from_str(&data).map_err(Box::<dyn Error>::from)
-}
-
-/// Serializes the required inputs to a model to path `datapath`
-pub fn save_data(datapath: String, data: ModelInput) -> Result<(), Box<dyn Error>> {
-    serde_json::to_writer(File::create(&datapath)?, &data).map_err(Box::<dyn Error>::from)
 }
 
 /// Helper function for generating SRS. !!! Only use for testing

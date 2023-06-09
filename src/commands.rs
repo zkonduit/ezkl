@@ -1,6 +1,6 @@
 //use crate::onnx::OnnxModel;
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use log::{debug, info};
+use log::debug;
 #[cfg(feature = "python-bindings")]
 use pyo3::{
     conversion::{FromPyObject, PyTryFrom},
@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::error::Error;
 use std::fs::File;
-use std::io::{stdin, stdout, Read, Write};
+use std::io::Read;
 use std::path::PathBuf;
 
 use crate::circuit::{CheckMode, Tolerance};
@@ -188,7 +188,7 @@ pub enum Commands {
     Table {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
-        model: String,
+        model: PathBuf,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
@@ -200,10 +200,10 @@ pub enum Commands {
     RenderCircuit {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
-        model: String,
+        model: PathBuf,
         /// Path to save the .png circuit render
         #[arg(short = 'O', long)]
-        output: String,
+        output: PathBuf,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
@@ -214,13 +214,13 @@ pub enum Commands {
     Forward {
         /// The path to the .json data file
         #[arg(short = 'D', long)]
-        data: String,
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
-        model: String,
+        model: PathBuf,
         /// Path to the new .json file
         #[arg(short = 'O', long)]
-        output: String,
+        output: PathBuf,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
@@ -241,10 +241,10 @@ pub enum Commands {
     Mock {
         /// The path to the .json data file
         #[arg(short = 'D', long)]
-        data: String,
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
-        model: String,
+        model: PathBuf,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
@@ -315,7 +315,7 @@ pub enum Commands {
     Fuzz {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long)]
-        data: String,
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
@@ -340,7 +340,7 @@ pub enum Commands {
     Prove {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long)]
-        data: String,
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
@@ -479,24 +479,4 @@ pub enum Commands {
         #[arg(long)]
         proof_path: PathBuf,
     },
-}
-
-/// Loads the path to a path `data` represented as a [String]. If empty queries the user for an input.
-pub fn data_path(data: String) -> PathBuf {
-    let mut s = String::new();
-    match data.is_empty() {
-        false => {
-            info!("loading data from {}", data);
-            PathBuf::from(data)
-        }
-        true => {
-            info!("please enter a path to a .json file containing inputs for the model: ");
-            let _ = stdout().flush();
-            let _ = &stdin()
-                .read_line(&mut s)
-                .expect("did not enter a correct string");
-            s.truncate(s.len() - 1);
-            PathBuf::from(&s)
-        }
-    }
 }

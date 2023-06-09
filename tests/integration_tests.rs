@@ -3,7 +3,7 @@
 mod native_tests {
 
     use core::panic;
-    use ezkl_lib::pfsys::{prepare_data, save_data, ModelInput};
+    use ezkl_lib::graph::GraphInput;
     use lazy_static::lazy_static;
     use std::env::var;
     use std::process::Command;
@@ -113,7 +113,7 @@ mod native_tests {
 
             assert!(status.success());
 
-            let data = prepare_data(format!("{}/{}/input.json", test_dir, test))
+            let data = GraphInput::from_path(format!("{}/{}/input.json", test_dir, test).into())
                 .expect("failed to load input data");
 
             let duplicated_input_data: Vec<Vec<f32>> = data
@@ -128,15 +128,14 @@ mod native_tests {
                 .map(|data| (0..num_batches).map(|_| data.clone()).flatten().collect())
                 .collect();
 
-            let duplicated_data = ModelInput {
+            let duplicated_data = GraphInput {
                 input_data: duplicated_input_data,
+                hashes: None,
                 output_data: duplicated_output_data,
             };
 
-            let res = save_data(
-                format!("{}/{}/input.json", test_dir, output_dir),
-                duplicated_data,
-            );
+            let res =
+                duplicated_data.save(format!("{}/{}/input.json", test_dir, output_dir).into());
 
             assert!(res.is_ok());
         }

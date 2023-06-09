@@ -12,12 +12,11 @@ pub mod vars;
 
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::poseidon::spec::PoseidonSpec;
-use crate::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig};
+use crate::circuit::modules::poseidon::{witness_hash, PoseidonChip, PoseidonConfig};
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
 use crate::commands::{Cli, RunArgs};
 use crate::fieldutils::i128_to_felt;
-use crate::pfsys::ModelInput;
 use crate::tensor::ops::pack;
 use crate::tensor::{Tensor, ValTensor};
 use halo2_proofs::{
@@ -28,7 +27,7 @@ use halo2curves::bn256::Fr as Fp;
 use log::{info, trace};
 pub use model::*;
 pub use node::*;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::sync::Arc;
 use thiserror::Error;
 pub use vars::*;
@@ -78,6 +77,44 @@ pub enum GraphError {
     /// Packing exponent is too large
     #[error("largest packing exponent exceeds max. try reducing the scale")]
     PackingExponent,
+}
+
+/// The input tensor data and shape, and output data for the computational graph (model) as floats.
+/// For example, the input might be the image data for a neural network, and the output class scores.
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub struct GraphInput {
+    /// Inputs to the model / computational graph (can be empty vectors if inputs are not being constrained).
+    pub input_data: Vec<Vec<f32>>,
+    /// The expected output of the model (can be empty vectors if outputs are not being constrained).
+    pub output_data: Vec<Vec<f32>>,
+    /// Optional hashes of the inputs (can be None if there are no commitments) -- wrapped for backwards compatibility
+    pub hashes: Option<Vec<Fp>>,
+}
+
+impl GraphInput {
+    /// Load the model input from a file
+    pub fn from_path(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut file = std::fs::File::open(path)?;
+        let mut data = String::new();
+        file.read_to_string(&mut data)?;
+        serde_json::from_str(&data).map_err(|e| e.into())
+    }
+
+    /// Save the model input to a file
+    pub fn save(&self, path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+        serde_json::to_writer(std::fs::File::create(&path)?, &self).map_err(|e| e.into())
+    }
+}
+
+/// Result from a forward pass
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ForwardResult {
+    /// The inputs of the forward pass
+    pub inputs: Vec<Tensor<i128>>,
+    /// The output of the forward pass
+    pub outputs: Vec<Tensor<i128>>,
+    /// Any hashes to inputs or outputs generated during the forward pass
+    pub hashes: Vec<Fp>,
 }
 
 /// model parameters
@@ -145,12 +182,12 @@ impl GraphCircuit {
 
         Ok(GraphCircuit {
             model: model.clone(),
-            inputs: inputs,
+            inputs,
             params: model.gen_params(check_mode)?,
         })
     }
     ///
-    pub fn load_inputs(&mut self, data: &ModelInput) {
+    pub fn load_inputs(&mut self, data: &GraphInput) {
         // quantize the supplied data using the provided scale.
         let mut inputs: Vec<Tensor<i128>> = vec![];
         for (input, shape) in data.input_data.iter().zip(self.model.graph.input_shapes()) {
@@ -165,6 +202,32 @@ impl GraphCircuit {
             inputs.push(t);
         }
         self.inputs = inputs;
+    }
+
+    /// Runs the forward pass of the model / graph of computations and any associated hashing.
+    pub fn forward(&self) -> Result<ForwardResult, Box<dyn std::error::Error>> {
+        let mut hashes = vec![];
+        if self.model.visibility.input.is_hashed() {
+            for input in self.inputs.iter() {
+                hashes.push(witness_hash::<14>(
+                    input.iter().map(|x| i128_to_felt(*x)).collect(),
+                )?);
+            }
+        }
+        let outputs = self.model.forward(&self.inputs)?;
+        if self.model.visibility.output.is_hashed() {
+            for input in outputs.iter() {
+                hashes.push(witness_hash::<14>(
+                    input.iter().map(|x| i128_to_felt(*x)).collect(),
+                )?);
+            }
+        }
+
+        Ok(ForwardResult {
+            inputs: self.inputs.clone(),
+            outputs,
+            hashes,
+        })
     }
 
     /// Create a new circuit from a set of input data and cli arguments.
@@ -187,7 +250,7 @@ impl GraphCircuit {
     /// Prepare the public inputs for the circuit.
     pub fn prepare_public_inputs(
         &mut self,
-        data: &ModelInput,
+        data: &GraphInput,
     ) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
         let out_scales = self.model.graph.get_output_scales();
 
@@ -234,7 +297,7 @@ impl GraphCircuit {
         );
         trace!("{:?}", public_inputs);
 
-        let pi_inner: Vec<Vec<Fp>> = public_inputs
+        let mut pi_inner: Vec<Vec<Fp>> = public_inputs
             .iter()
             .map(|i| {
                 i.iter()
@@ -242,6 +305,10 @@ impl GraphCircuit {
                     .collect::<Vec<Fp>>()
             })
             .collect::<Vec<Vec<Fp>>>();
+
+        if self.model.visibility.input.is_hashed() {
+            pi_inner.push(data.hashes.as_deref().unwrap().to_vec());
+        }
 
         Ok(pi_inner)
     }
@@ -308,7 +375,7 @@ impl Circuit<Fp> for GraphCircuit {
         mut layouter: impl Layouter<Fp>,
     ) -> Result<(), PlonkError> {
         trace!("Setting input in synthesize");
-        let inputs = self
+        let mut inputs = self
             .inputs
             .iter()
             .map(|i| ValTensor::from(<Tensor<i128> as Into<Tensor<Value<Fp>>>>::into(i.clone())))
@@ -320,8 +387,9 @@ impl Circuit<Fp> for GraphCircuit {
             let chip = PoseidonChip::<PoseidonSpec, 15, 14, 14>::construct(
                 config.poseidon_config.as_ref().unwrap().clone(),
             );
-            for (i, input) in inputs.iter().enumerate() {
-                chip.hash(&mut layouter, input, i)?;
+            for (i, input) in inputs.clone().iter().enumerate() {
+                // hash the input and replace the constrained cells in the inputs
+                inputs[i] = chip.hash(&mut layouter, &input, i)?;
                 hash_offset += 1;
             }
             // instantiate new module in chip
@@ -329,7 +397,7 @@ impl Circuit<Fp> for GraphCircuit {
         }
 
         trace!("Laying out model");
-        let outputs = self
+        let mut outputs = self
             .model
             .layout(
                 config.model_config.clone(),
@@ -347,8 +415,9 @@ impl Circuit<Fp> for GraphCircuit {
             let chip = PoseidonChip::<PoseidonSpec, 15, 14, 14>::construct(
                 config.poseidon_config.unwrap(),
             );
-            for (i, output) in outputs.iter().enumerate() {
-                chip.hash(&mut layouter, output, hash_offset + i)?;
+            for (i, output) in outputs.clone().iter().enumerate() {
+                // hash the output and replace the constrained cells in the outputs
+                outputs[i] = chip.hash(&mut layouter, output, hash_offset + i)?;
             }
         }
 

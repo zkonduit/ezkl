@@ -1,8 +1,8 @@
 use crate::circuit::CheckMode;
-use crate::commands::{Cli, Commands, RunArgs, StrategyType};
+use crate::commands::{Cli, Commands, StrategyType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{fix_verifier_sol, verify_proof_via_solidity};
-use crate::graph::{quantize_float, scale_to_multiplier, GraphCircuit, Model, ModelParams};
+use crate::graph::{scale_to_multiplier, GraphCircuit, GraphInput, Model, ModelParams};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::evm_verify;
@@ -12,7 +12,7 @@ use crate::pfsys::evm::{DeploymentCode, YulCode};
 use crate::pfsys::{
     create_keys, load_params, load_pk, load_vk, save_params, save_pk, Snark, TranscriptType,
 };
-use crate::pfsys::{create_proof_circuit, gen_srs, prepare_data, save_vk, verify_proof_circuit};
+use crate::pfsys::{create_proof_circuit, gen_srs, save_vk, verify_proof_circuit};
 #[cfg(not(target_arch = "wasm32"))]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
@@ -40,7 +40,7 @@ use plotters::prelude::*;
 use rand::Rng;
 #[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::IntoParallelIterator;
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::ParallelIterator;
 use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
@@ -82,10 +82,10 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         Commands::RenderCircuit { output, .. } => render(output),
         Commands::Forward {
             data,
-            model,
+            model: _,
             output,
-            args,
-        } => forward(data, model, output, args),
+            args: _,
+        } => forward(data, output),
         Commands::Mock { data, .. } => mock(data),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
@@ -318,56 +318,39 @@ fn table(cli: Cli) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn forward(
-    data: String,
-    model: String,
-    output: String,
-    args: RunArgs,
-) -> Result<(), Box<dyn Error>> {
-    let mut data = prepare_data(data)?;
+fn forward(data: PathBuf, output: PathBuf) -> Result<(), Box<dyn Error>> {
+    let mut data = GraphInput::from_path(data)?;
+    let mut circuit = GraphCircuit::from_arg(CheckMode::SAFE)?;
+    circuit.load_inputs(&data);
 
-    // quantize the supplied data using the provided scale.
-    let mut model_inputs = vec![];
-    for v in data.input_data.iter() {
-        let t: Vec<i128> = v
-            .par_iter()
-            .map(|x| quantize_float(x, 0.0, args.scale).unwrap())
-            .collect();
-        model_inputs.push(t.into_iter().into());
-    }
-
-    let model = Model::new(
-        &mut std::fs::File::open(model)?,
-        args,
-        crate::graph::VarVisibility::default(),
-    )?;
-
-    let res = model.forward(&model_inputs)?;
+    let res = circuit.forward()?;
 
     trace!(
         "forward pass output shapes: {:?}",
-        res.iter().map(|t| t.dims()).collect_vec()
+        res.outputs.iter().map(|t| t.dims()).collect_vec()
     );
 
-    let output_scales = model.graph.get_output_scales();
+    let output_scales = circuit.model.graph.get_output_scales();
     let output_scales = output_scales
         .iter()
         .map(|scale| scale_to_multiplier(*scale));
 
     let float_res: Vec<Vec<f32>> = res
+        .outputs
         .iter()
         .zip(output_scales)
         .map(|(t, scale)| t.iter().map(|e| ((*e as f64 / scale) as f32)).collect_vec())
         .collect();
     trace!("forward pass output: {:?}", float_res);
     data.output_data = float_res;
+    data.hashes = Some(res.hashes);
 
     serde_json::to_writer(&File::create(output)?, &data)?;
     Ok(())
 }
 
-fn mock(data: String) -> Result<(), Box<dyn Error>> {
-    let data = prepare_data(data)?;
+fn mock(data: PathBuf) -> Result<(), Box<dyn Error>> {
+    let data = GraphInput::from_path(data)?;
     // mock should catch any issues by default so we set it to safe
     let mut circuit = GraphCircuit::from_arg(CheckMode::SAFE)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
@@ -528,7 +511,7 @@ fn create_keys_kzg(
 }
 
 fn prove(
-    data: String,
+    data: PathBuf,
     model_path: PathBuf,
     pk_path: PathBuf,
     proof_path: PathBuf,
@@ -538,7 +521,7 @@ fn prove(
     circuit_params_path: PathBuf,
     check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
-    let data = prepare_data(data)?;
+    let data = GraphInput::from_path(data)?;
     let model_circuit_params = ModelParams::load(&circuit_params_path);
     let mut circuit =
         GraphCircuit::from_model_params(&model_circuit_params, &model_path, check_mode)?;
@@ -592,7 +575,7 @@ fn prove(
 #[cfg(not(target_arch = "wasm32"))]
 fn fuzz(
     logrows: u32,
-    data: String,
+    data: PathBuf,
     transcript: TranscriptType,
     num_runs: usize,
 ) -> Result<(), Box<dyn Error>> {
@@ -603,7 +586,7 @@ fn fuzz(
     let _r = Gag::stdout().unwrap();
     let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
 
-    let data = prepare_data(data)?;
+    let data = GraphInput::from_path(data)?;
     // these aren't real values so the sanity checks are mostly meaningless
     let mut circuit = GraphCircuit::from_arg(CheckMode::UNSAFE)?;
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
