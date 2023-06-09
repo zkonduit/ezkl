@@ -11,7 +11,7 @@ pub mod node;
 pub mod vars;
 
 use crate::circuit::lookup::LookupOp;
-use crate::circuit::modules::poseidon::spec::PoseidonSpec;
+use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
 use crate::circuit::modules::poseidon::{witness_hash, PoseidonChip, PoseidonConfig};
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
@@ -129,6 +129,8 @@ fn truncate_nested_vector(input: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {
     input_mut
 }
 
+const POSEIDON_LEN_GRAPH: usize = 4;
+
 impl GraphInput {
     /// Load the model input from a file
     pub fn from_path(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
@@ -193,7 +195,7 @@ impl ModelParams {
 #[derive(Clone, Debug)]
 pub struct GraphConfig {
     model_config: ModelConfig,
-    poseidon_config: Option<PoseidonConfig<15, 14>>,
+    poseidon_config: Option<PoseidonConfig<POSEIDON_WIDTH, POSEIDON_RATE>>,
 }
 
 /// Defines the circuit for a computational graph / model loaded from a `.onnx` file.
@@ -249,7 +251,7 @@ impl GraphCircuit {
         let mut input_hashes = vec![];
         if self.model.visibility.input.is_hashed() {
             for input in self.inputs.iter() {
-                input_hashes.push(witness_hash::<14>(
+                input_hashes.push(witness_hash::<POSEIDON_LEN_GRAPH>(
                     input.iter().map(|x| i128_to_felt(*x)).collect(),
                 )?);
             }
@@ -258,7 +260,7 @@ impl GraphCircuit {
         let outputs = self.model.forward(&self.inputs)?;
         if self.model.visibility.output.is_hashed() {
             for input in outputs.iter() {
-                output_hashes.push(witness_hash::<14>(
+                output_hashes.push(witness_hash::<POSEIDON_LEN_GRAPH>(
                     input.iter().map(|x| i128_to_felt(*x)).collect(),
                 )?);
             }
@@ -406,7 +408,12 @@ impl Circuit<Fp> for GraphCircuit {
             || params.visibility.output.is_hashed()
             || params.visibility.params.is_hashed()
         {
-            Some(PoseidonChip::<PoseidonSpec, 15, 14, 14>::configure(cs))
+            Some(PoseidonChip::<
+                PoseidonSpec,
+                POSEIDON_WIDTH,
+                POSEIDON_RATE,
+                POSEIDON_LEN_GRAPH,
+            >::configure(cs))
         } else {
             None
         };
@@ -435,9 +442,12 @@ impl Circuit<Fp> for GraphCircuit {
 
         if self.model.visibility.input.is_hashed() {
             // instantiate new poseidon module in chip
-            let chip = PoseidonChip::<PoseidonSpec, 15, 14, 14>::construct(
-                config.poseidon_config.as_ref().unwrap().clone(),
-            );
+            let chip = PoseidonChip::<
+                PoseidonSpec,
+                POSEIDON_WIDTH,
+                POSEIDON_RATE,
+                POSEIDON_LEN_GRAPH,
+            >::construct(config.poseidon_config.as_ref().unwrap().clone());
             for (i, input) in inputs.clone().iter().enumerate() {
                 // hash the input and replace the constrained cells in the inputs
                 inputs[i] = chip.hash(&mut layouter, &input, i)?;
@@ -465,7 +475,7 @@ impl Circuit<Fp> for GraphCircuit {
 
         if self.model.visibility.output.is_hashed() {
             // instantiate new poseidon module in chip
-            let chip = PoseidonChip::<PoseidonSpec, 15, 14, 14>::construct(
+            let chip = PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_RATE>::construct(
                 config.poseidon_config.unwrap(),
             );
             let mut hash_offset = 0;

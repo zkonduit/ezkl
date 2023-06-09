@@ -975,16 +975,19 @@ mod add_with_overflow_and_poseidon {
     use halo2curves::bn256::Fr;
 
     use crate::circuit::modules::{
-        poseidon::{spec::PoseidonSpec, PoseidonChip, PoseidonConfig},
+        poseidon::{
+            spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
+            PoseidonChip, PoseidonConfig,
+        },
         ModulePlanner,
     };
 
     use super::*;
 
-    const K: usize = 9;
+    const K: usize = 12;
     const LEN: usize = 50;
-    const WIDTH: usize = 15;
-    const RATE: usize = 14;
+    const WIDTH: usize = POSEIDON_WIDTH;
+    const RATE: usize = POSEIDON_RATE;
 
     #[derive(Debug, Clone)]
     struct MyCircuitConfig {

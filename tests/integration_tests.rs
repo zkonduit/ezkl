@@ -399,14 +399,14 @@ mod native_tests {
             fn mock_hashed_input_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                forward_pass(test.to_string(),"hashed", "public", "public", 1);
+                forward_pass(test.to_string(),"hashed", "private", "public", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_output_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                forward_pass(test.to_string(),"public", "public", "hashed", 1);
+                forward_pass(test.to_string(),"public", "private", "hashed", 1);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -495,7 +495,23 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test));
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "public", 1);
+                }
+
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_hashed_input_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params_17();
+                    crate::native_tests::mv_test_(test);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "hashed", "private", "private", 10000);
+                }
+
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_hashed_output_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params_17();
+                    crate::native_tests::mv_test_(test);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "hashed", 0);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -1034,8 +1050,24 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_evm_prove_and_verify(example_name: String, with_solidity: bool) {
+    fn kzg_evm_prove_and_verify(
+        example_name: String,
+        with_solidity: bool,
+        input_visibility: &str,
+        param_visibility: &str,
+        output_visibility: &str,
+        num_runs: usize,
+    ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
+
+        forward_pass(
+            example_name.clone(),
+            input_visibility,
+            param_visibility,
+            output_visibility,
+            1,
+        );
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup",
@@ -1050,6 +1082,9 @@ mod native_tests {
                     "--circuit-params-path={}/{}/circuit.params",
                     test_dir, example_name
                 ),
+                &format!("--input-visibility={}", input_visibility),
+                &format!("--param-visibility={}", param_visibility),
+                &format!("--output-visibility={}", output_visibility),
                 "--bits=16",
                 "-K=17",
             ])
@@ -1061,7 +1096,7 @@ mod native_tests {
             .args([
                 "prove",
                 "-D",
-                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                format!("{}/{}/input_forward.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--proof-path",
@@ -1115,13 +1150,15 @@ mod native_tests {
 
         let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
 
+        let opt_arg = format!("--optimizer-runs={}", num_runs);
+
         let mut args = vec![
             "verify-evm",
             "--proof-path",
             pf_arg.as_str(),
             "--deployment-code-path",
             code_arg.as_str(),
-            "--optimizer-runs=1",
+            opt_arg.as_str(),
         ];
         if with_solidity {
             args.push("--sol-code-path");

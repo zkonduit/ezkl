@@ -4,7 +4,7 @@ is already implemented in halo2_gadgets, there is no wrapper chip that makes it 
 Thanks to https://github.com/summa-dev/summa-solvency/blob/master/src/chips/poseidon/hash.rs for the inspiration (and also helping us understand how to use this).
 */
 
-pub mod rate15_params;
+pub mod poseidon_params;
 pub mod spec;
 
 // This chip adds a set of advice columns to the gadget Chip to store the inputs of the hash
@@ -232,8 +232,8 @@ pub fn witness_hash<const L: usize>(message: Vec<Fp>) -> Result<Fp, Box<dyn std:
                 _,
                 PoseidonSpec,
                 ConstantLength<L>,
-                15,
-                14,
+                { spec::POSEIDON_WIDTH },
+                { spec::POSEIDON_RATE },
             >::init()
             .hash(block.clone().try_into().unwrap());
             hashes.push(hash);
@@ -249,7 +249,10 @@ pub fn witness_hash<const L: usize>(message: Vec<Fp>) -> Result<Fp, Box<dyn std:
 #[allow(unused)]
 mod tests {
 
-    use super::{spec::PoseidonSpec, *};
+    use super::{
+        spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
+        *,
+    };
 
     use std::marker::PhantomData;
 
@@ -260,8 +263,8 @@ mod tests {
     };
     use halo2curves::ff::Field;
 
-    const WIDTH: usize = 15;
-    const RATE: usize = 14;
+    const WIDTH: usize = POSEIDON_WIDTH;
+    const RATE: usize = POSEIDON_RATE;
     const R: usize = 240;
 
     struct HashCircuit<S: Spec<Fp, WIDTH, RATE>, const L: usize> {
@@ -310,7 +313,7 @@ mod tests {
         let mut message: Tensor<ValType<Fp>> =
             message.into_iter().map(|m| Value::known(m).into()).into();
 
-        let k = 7;
+        let k = 9;
         let circuit = HashCircuit::<PoseidonSpec, 2> {
             message: message.into(),
             _spec: PhantomData,
@@ -329,7 +332,7 @@ mod tests {
         let mut message: Tensor<ValType<Fp>> =
             message.into_iter().map(|m| Value::known(m).into()).into();
 
-        let k = 7;
+        let k = 9;
         let circuit = HashCircuit::<PoseidonSpec, 3> {
             message: message.into(),
             _spec: PhantomData,
@@ -345,13 +348,13 @@ mod tests {
 
         let mut message: Vec<Fp> = (0..2048).map(|_| Fp::random(rng)).collect::<Vec<_>>();
 
-        let output = witness_hash::<14>(message.clone()).unwrap();
+        let output = witness_hash::<25>(message.clone()).unwrap();
 
         let mut message: Tensor<ValType<Fp>> =
             message.into_iter().map(|m| Value::known(m).into()).into();
 
         let k = 17;
-        let circuit = HashCircuit::<PoseidonSpec, 14> {
+        let circuit = HashCircuit::<PoseidonSpec, 25> {
             message: message.into(),
             _spec: PhantomData,
         };
