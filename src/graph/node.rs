@@ -1,9 +1,9 @@
 use super::utilities::node_output_shapes;
+use super::Visibility;
 use crate::circuit::Op;
 use crate::graph::new_op_from_onnx;
 use crate::graph::GraphError;
-use crate::tensor::TensorType;
-use halo2curves::ff::PrimeField;
+use halo2curves::bn256::Fr as Fp;
 use log::trace;
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -22,7 +22,7 @@ fn display_vector<T: fmt::Debug>(v: &Vec<T>) -> String {
     }
 }
 
-fn display_opkind<F: PrimeField + TensorType + PartialOrd>(v: &Box<dyn Op<F>>) -> String {
+fn display_opkind(v: &Box<dyn Op<Fp>>) -> String {
     v.as_string()
 }
 
@@ -34,10 +34,10 @@ fn display_opkind<F: PrimeField + TensorType + PartialOrd>(v: &Box<dyn Op<F>>) -
 /// * `inputs` - The indices of other nodes that feed into this self.
 /// * `idx` - The node's unique identifier.
 #[derive(Clone, Debug, Tabled)]
-pub struct Node<F: PrimeField + TensorType + PartialOrd> {
+pub struct Node {
     /// [OpKind] enum, i.e what operation this node represents.
     #[tabled(display_with = "display_opkind")]
-    pub opkind: Box<dyn Op<F>>,
+    pub opkind: Box<dyn Op<Fp>>,
     /// The denominator in the fixed point representation for the node's output. Tensors of differing scales should not be combined.
     pub out_scale: u32,
     // Usually there is a simple in and out shape of the node as an operator.  For example, an Affine node has three input_shapes (one for the input, weight, and bias),
@@ -52,7 +52,7 @@ pub struct Node<F: PrimeField + TensorType + PartialOrd> {
     pub idx: usize,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
+impl Node {
     /// Converts a tract [OnnxNode] into an ezkl [Node].
     /// # Arguments:
     /// * `node` - [OnnxNode]
@@ -61,9 +61,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
     /// * `idx` - The node's unique identifier.
     pub fn new(
         mut node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
-        other_nodes: &mut BTreeMap<usize, super::NodeType<F>>,
+        other_nodes: &mut BTreeMap<usize, super::NodeType>,
         scale: u32,
-        public_params: bool,
+        param_visibility: Visibility,
         idx: usize,
     ) -> Result<Self, Box<dyn Error>> {
         trace!("Create {:?}", node);
@@ -79,7 +79,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Node<F> {
             }
         }
 
-        let mut opkind = new_op_from_onnx(idx, scale, public_params, node.clone(), &mut inputs)?; // parses the op name
+        let mut opkind = new_op_from_onnx(idx, scale, param_visibility, node.clone(), &mut inputs)?; // parses the op name
 
         // rescale the inputs if necessary to get consistent fixed points
         let in_scales: Vec<u32> = inputs.iter().map(|n| n.out_scales()[0]).collect();

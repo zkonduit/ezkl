@@ -2,19 +2,21 @@ use super::node::*;
 use super::scale_to_multiplier;
 use super::vars::*;
 use super::GraphError;
-use super::ModelParams;
+use super::GraphParams;
 use crate::circuit::hybrid::HybridOp;
+
 use crate::circuit::Input;
 use crate::circuit::Tolerance;
 use crate::circuit::Unknown;
 use crate::{
     circuit::{lookup::LookupOp, ops::poly::PolyOp, BaseConfig as PolyConfig, CheckMode, Op},
     commands::{Cli, Commands, RunArgs},
-    tensor::{Tensor, TensorType, ValTensor},
+    tensor::{Tensor, ValTensor},
 };
+use halo2curves::bn256::Fr as Fp;
 
+use colored::Colorize;
 use halo2_proofs::circuit::Region;
-use halo2curves::ff::PrimeField;
 use log::warn;
 use tract_onnx::prelude::{
     DatumExt, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
@@ -42,21 +44,21 @@ use tract_onnx::prelude::Framework;
 
 /// A circuit configuration for the entirety of a model loaded from an Onnx file.
 #[derive(Clone, Debug)]
-pub struct ModelConfig<F: PrimeField + TensorType + PartialOrd> {
+pub struct ModelConfig {
     /// The base configuration for the circuit
-    pub base: PolyConfig<F>,
+    pub base: PolyConfig<Fp>,
     /// A wrapper for holding all columns that will be assigned to by the model
-    pub vars: ModelVars<F>,
+    pub vars: ModelVars<Fp>,
 }
 
 /// Representation of execution graph
-pub type NodeGraph<F> = BTreeMap<usize, NodeType<F>>;
+pub type NodeGraph = BTreeMap<usize, NodeType>;
 
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
 #[derive(Clone, Debug, Default)]
-pub struct Model<F: PrimeField + TensorType + PartialOrd> {
+pub struct Model {
     /// input indices
-    pub graph: ParsedNodes<F>,
+    pub graph: ParsedNodes,
     /// The [RunArgs] being used
     pub run_args: RunArgs,
     /// Defines which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
@@ -65,13 +67,13 @@ pub struct Model<F: PrimeField + TensorType + PartialOrd> {
 
 /// Enables model as subnode of other models
 #[derive(Clone, Debug)]
-pub enum NodeType<F: PrimeField + TensorType + PartialOrd> {
+pub enum NodeType {
     /// A node in the model
-    Node(Node<F>),
+    Node(Node),
     /// A submodel
     SubGraph {
         /// The subgraph
-        model: Model<F>,
+        model: Model,
         /// The subgraph's inputs
         inputs: Vec<usize>,
         /// the subgraph's idx within the parent graph
@@ -79,7 +81,7 @@ pub enum NodeType<F: PrimeField + TensorType + PartialOrd> {
     },
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> NodeType<F> {
+impl NodeType {
     /// Returns the indices of the node's inputs.
     pub fn inputs(&self) -> Vec<usize> {
         match self {
@@ -145,7 +147,7 @@ impl<F: PrimeField + TensorType + PartialOrd> NodeType<F> {
     }
 
     /// Returns the operation kind of the node (if any).
-    pub fn opkind(&self) -> Box<dyn Op<F>> {
+    pub fn opkind(&self) -> Box<dyn Op<Fp>> {
         match self {
             NodeType::Node(n) => n.opkind.clone_dyn(),
             NodeType::SubGraph { .. } => Unknown.clone_dyn(),
@@ -155,13 +157,13 @@ impl<F: PrimeField + TensorType + PartialOrd> NodeType<F> {
 
 #[derive(Clone, Debug, Default)]
 /// A set of EZKL nodes that represent a computational graph.
-pub struct ParsedNodes<F: PrimeField + TensorType + PartialOrd> {
-    nodes: BTreeMap<usize, NodeType<F>>,
+pub struct ParsedNodes {
+    nodes: BTreeMap<usize, NodeType>,
     inputs: Vec<usize>,
     outputs: Vec<usize>,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> ParsedNodes<F> {
+impl ParsedNodes {
     /// Returns the number of the computational graph's inputs
     pub fn num_inputs(&self) -> usize {
         let input_nodes = self.inputs.iter();
@@ -199,7 +201,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ParsedNodes<F> {
     }
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
+impl Model {
     fn required_lookups(&self) -> Vec<LookupOp> {
         self.graph
             .nodes
@@ -232,7 +234,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     }
 
     /// Generate model parameters for the circuit
-    pub fn gen_params(&self, check_mode: CheckMode) -> Result<ModelParams, Box<dyn Error>> {
+    pub fn gen_params(&self, check_mode: CheckMode) -> Result<GraphParams, Box<dyn Error>> {
         let instance_shapes = self.instance_shapes();
         // this is the total number of variables we will need to allocate
         // for the circuit
@@ -241,6 +243,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         } else {
             self.dummy_layout(&self.graph.input_shapes()).unwrap()
         };
+
+        // Then number of columns in the circuits
+        info!(
+            "{} {} {}",
+            "The model generates".blue(),
+            num_constraints.to_string().blue(),
+            "constraints (does not include modules)".blue()
+        );
 
         // extract the requisite lookup ops from the model
         let mut lookup_ops: Vec<LookupOp> = self.required_lookups();
@@ -251,7 +261,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 val,
                 scale: scale_to_multiplier(self.run_args.scale) as usize,
             };
-            let opkind: Box<dyn Op<F>> = Box::new(HybridOp::RangeCheck(tolerance));
+            let opkind: Box<dyn Op<Fp>> = Box::new(HybridOp::RangeCheck(tolerance));
             lookup_ops.extend(opkind.required_lookups());
         }
 
@@ -261,17 +271,18 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                 val,
                 scale: scale_to_multiplier(self.run_args.scale) as usize,
             };
-            let opkind: Box<dyn Op<F>> = Box::new(HybridOp::RangeCheck(tolerance));
+            let opkind: Box<dyn Op<Fp>> = Box::new(HybridOp::RangeCheck(tolerance));
             lookup_ops.extend(opkind.required_lookups());
         }
 
         let set: HashSet<_> = lookup_ops.drain(..).collect(); // dedup
         lookup_ops.extend(set.into_iter().sorted());
 
-        Ok(ModelParams {
+        Ok(GraphParams {
             run_args: self.run_args.clone(),
             visibility: self.visibility.clone(),
-            instance_shapes,
+            model_instance_shapes: instance_shapes,
+            num_hashes: 0,
             num_constraints,
             required_lookups: lookup_ops,
             check_mode,
@@ -318,7 +329,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
 
             match n {
                 NodeType::Node(n) => {
-                    let res = Op::<F>::f(&*n.opkind, &inputs)?;
+                    let res = Op::<Fp>::f(&*n.opkind, &inputs)?;
                     results.insert(idx, res);
                 }
                 NodeType::SubGraph { model, .. } => {
@@ -364,7 +375,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         reader: &mut dyn std::io::Read,
         run_args: &RunArgs,
         visibility: &VarVisibility,
-    ) -> Result<ParsedNodes<F>, Box<dyn Error>> {
+    ) -> Result<ParsedNodes, Box<dyn Error>> {
         let mut model = tract_onnx::onnx().model_for_read(reader).map_err(|e| {
             error!("Error loading model: {}", e);
             GraphError::ModelLoad
@@ -475,8 +486,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
         run_args: &RunArgs,
         visibility: &VarVisibility,
         input_scales: Vec<u32>,
-    ) -> Result<BTreeMap<usize, NodeType<F>>, Box<dyn Error>> {
-        let mut nodes = BTreeMap::<usize, NodeType<F>>::new();
+    ) -> Result<BTreeMap<usize, NodeType>, Box<dyn Error>> {
+        let mut nodes = BTreeMap::<usize, NodeType>::new();
         let mut input_idx = 0;
         for (i, n) in graph.nodes.iter().enumerate() {
             // Extract the slope layer hyperparams
@@ -513,11 +524,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                     );
                 }
                 None => {
-                    let mut n = Node::<F>::new(
+                    let mut n = Node::new(
                         n.clone(),
                         &mut nodes,
                         run_args.scale,
-                        run_args.public_params,
+                        run_args.param_visibility,
                         i,
                     )?;
                     if n.opkind.is_input() {
@@ -540,11 +551,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// * `cli` - A [Cli] struct holding parsed CLI arguments.
     pub fn from_ezkl_conf(cli: Cli) -> Result<Self, Box<dyn Error>> {
         match cli.command {
-            Commands::Table { model, args, .. } | Commands::Mock { model, args, .. } => {
-                let visibility = VarVisibility::from_args(args.clone())?;
-                Model::new(&mut std::fs::File::open(model)?, args, visibility)
-            }
-            Commands::Setup { model, args, .. } => {
+            Commands::Table { model, args, .. }
+            | Commands::Mock { model, args, .. }
+            | Commands::Setup { model, args, .. }
+            | Commands::Forward { model, args, .. } => {
                 let visibility = VarVisibility::from_args(args.clone())?;
                 Model::new(&mut std::fs::File::open(model)?, args, visibility)
             }
@@ -564,9 +574,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
 
     /// Creates a `Model` from parsed model params
     /// # Arguments
-    /// * `params` - A [ModelParams] struct holding parsed CLI arguments.
+    /// * `params` - A [GraphParams] struct holding parsed CLI arguments.
     pub fn from_model_params(
-        params: &ModelParams,
+        params: &GraphParams,
         model: &std::path::PathBuf,
     ) -> Result<Self, Box<dyn Error>> {
         let visibility = VarVisibility::from_args(params.run_args.clone())?;
@@ -590,13 +600,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// * `run_args` - [RunArgs]
     /// * `required_lookups` - The required lookup operations for the circuit.
     pub fn configure(
-        meta: &mut ConstraintSystem<F>,
-        vars: &mut ModelVars<F>,
+        meta: &mut ConstraintSystem<Fp>,
+        vars: &mut ModelVars<Fp>,
         num_bits: usize,
         tolerance: Tolerance,
         required_lookups: Vec<LookupOp>,
         check_mode: CheckMode,
-    ) -> Result<PolyConfig<F>, Box<dyn Error>> {
+    ) -> Result<PolyConfig<Fp>, Box<dyn Error>> {
         info!("configuring model");
         // Extract the abs tolerance value for the baseop range check. Will be zero if percentage tolerance is used.
         let tol_abs = match tolerance {
@@ -628,13 +638,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// * `vars` - The variables for the circuit.
     pub fn layout(
         &self,
-        mut config: ModelConfig<F>,
-        layouter: &mut impl Layouter<F>,
-        inputs: &[ValTensor<F>],
-        vars: &ModelVars<F>,
-    ) -> Result<(), Box<dyn Error>> {
+        mut config: ModelConfig,
+        layouter: &mut impl Layouter<Fp>,
+        inputs: &[ValTensor<Fp>],
+        vars: &ModelVars<Fp>,
+    ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
         info!("model layout...");
-        let mut results = BTreeMap::<usize, ValTensor<F>>::new();
+        let mut results = BTreeMap::<usize, ValTensor<Fp>>::new();
+
         for (i, input_idx) in self.graph.inputs.iter().enumerate() {
             if self.visibility.input.is_public() {
                 results.insert(*input_idx, vars.instances[i].clone());
@@ -645,7 +656,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
 
         config.base.layout_tables(layouter)?;
 
-        layouter.assign_region(
+        let outputs = layouter.assign_region(
             || "model",
             |mut region| {
                 let mut offset: usize = 0;
@@ -689,48 +700,50 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
                     }
                 }
 
-                if self.run_args.public_outputs {
-                    let tolerance = match self.run_args.tolerance {
-                        Tolerance::Percentage { val, .. } => Tolerance::Percentage {
-                            val,
-                            scale: scale_to_multiplier(self.run_args.scale) as usize,
-                        },
-                        _ => self.run_args.tolerance,
-                    };
-                    let _ = outputs
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, output)| {
-                            let mut instance_offset = 0;
-                            if self.visibility.input.is_public() {
-                                instance_offset += inputs.len();
-                            };
-                            config.base.layout(
-                                thread_safe_region.clone(),
-                                &[output, vars.instances[instance_offset + i].clone()],
-                                &mut offset,
-                                Box::new(HybridOp::RangeCheck(tolerance)),
-                            )
-                        })
-                        .collect_vec();
+                match self.run_args.output_visibility {
+                    Visibility::Public => {
+                        let tolerance = match self.run_args.tolerance {
+                            Tolerance::Percentage { val, .. } => Tolerance::Percentage {
+                                val,
+                                scale: scale_to_multiplier(self.run_args.scale) as usize,
+                            },
+                            _ => self.run_args.tolerance,
+                        };
+                        let _ = outputs
+                            .iter()
+                            .enumerate()
+                            .map(|(i, output)| {
+                                let mut instance_offset = 0;
+                                if self.visibility.input.is_public() {
+                                    instance_offset += inputs.len();
+                                };
+                                config.base.layout(
+                                    thread_safe_region.clone(),
+                                    &[output.clone(), vars.instances[instance_offset + i].clone()],
+                                    &mut offset,
+                                    Box::new(HybridOp::RangeCheck(tolerance)),
+                                )
+                            })
+                            .collect_vec();
+                    }
+                    _ => {}
                 }
-
-                Ok(())
+                info!("computing...");
+                Ok(outputs)
             },
         )?;
-        info!("computing...");
-        Ok(())
+        Ok(outputs)
     }
 
     fn layout_nodes(
         &self,
-        config: &mut ModelConfig<F>,
-        region: Arc<Mutex<Option<&mut Region<F>>>>,
-        results: &mut BTreeMap<usize, ValTensor<F>>,
+        config: &mut ModelConfig,
+        region: Arc<Mutex<Option<&mut Region<Fp>>>>,
+        results: &mut BTreeMap<usize, ValTensor<Fp>>,
         offset: &mut usize,
-    ) -> Result<Vec<ValTensor<F>>, Box<dyn Error>> {
+    ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
         for (idx, node) in self.graph.nodes.iter() {
-            let values: Vec<ValTensor<F>> = node
+            let values: Vec<ValTensor<Fp>> = node
                 .inputs()
                 .iter()
                 .map(|i| results.get(i).unwrap().clone())
@@ -784,12 +797,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
     /// * `input_shapes` - The shapes of the inputs to the model.
     pub fn dummy_layout(&self, input_shapes: &[Vec<usize>]) -> Result<usize, Box<dyn Error>> {
         info!("calculating num of constraints using dummy model layout...");
-        let mut results = BTreeMap::<usize, ValTensor<F>>::new();
+        let mut results = BTreeMap::<usize, ValTensor<Fp>>::new();
 
-        let inputs: Vec<ValTensor<F>> = input_shapes
+        let inputs: Vec<ValTensor<Fp>> = input_shapes
             .iter()
             .map(|shape| {
-                let t: Tensor<Value<F>> = Tensor::new(None, shape).unwrap();
+                let t: Tensor<Value<Fp>> = Tensor::new(None, shape).unwrap();
                 t.into()
             })
             .collect_vec();
@@ -828,28 +841,31 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
             }
         }
 
-        if self.run_args.public_outputs {
-            let tolerance = match self.run_args.tolerance {
-                Tolerance::Percentage { val, .. } => Tolerance::Percentage {
-                    val,
-                    scale: scale_to_multiplier(self.run_args.scale) as usize,
-                },
-                _ => self.run_args.tolerance,
-            };
-            let _ = outputs
-                .clone()
-                .into_iter()
-                .map(|output| {
-                    dummy_config
-                        .layout(
-                            Arc::new(Mutex::new(None)),
-                            &[output.clone(), output],
-                            &mut offset,
-                            Box::new(HybridOp::RangeCheck(tolerance)),
-                        )
-                        .unwrap()
-                })
-                .collect_vec();
+        match self.run_args.output_visibility {
+            Visibility::Public => {
+                let tolerance = match self.run_args.tolerance {
+                    Tolerance::Percentage { val, .. } => Tolerance::Percentage {
+                        val,
+                        scale: scale_to_multiplier(self.run_args.scale) as usize,
+                    },
+                    _ => self.run_args.tolerance,
+                };
+                let _ = outputs
+                    .clone()
+                    .into_iter()
+                    .map(|output| {
+                        dummy_config
+                            .layout(
+                                Arc::new(Mutex::new(None)),
+                                &[output.clone(), output],
+                                &mut offset,
+                                Box::new(HybridOp::RangeCheck(tolerance)),
+                            )
+                            .unwrap()
+                    })
+                    .collect_vec();
+            }
+            _ => {}
         }
 
         Ok(offset)
@@ -857,11 +873,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
 
     fn dummy_layout_nodes(
         &self,
-        dummy_config: &mut PolyConfig<F>,
-        _nodes: &NodeGraph<F>,
-        results: &mut BTreeMap<usize, ValTensor<F>>,
+        dummy_config: &mut PolyConfig<Fp>,
+        _nodes: &NodeGraph,
+        results: &mut BTreeMap<usize, ValTensor<Fp>>,
         offset: &mut usize,
-    ) -> Result<Vec<ValTensor<F>>, Box<dyn Error>> {
+    ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
         for (idx, node) in self.graph.nodes.iter() {
             debug!(
                 "dummy layout {}: {}, offset: {}",
@@ -872,7 +888,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Model<F> {
 
             match node {
                 NodeType::Node(n) => {
-                    let values: Vec<ValTensor<F>> = node
+                    let values: Vec<ValTensor<Fp>> = node
                         .inputs()
                         .iter()
                         .map(|i| results.get(i).unwrap().clone())
