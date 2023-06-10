@@ -402,12 +402,20 @@ pub enum Commands {
         /// The path to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
-        /// The path to output to the desired EVM bytecode file
+        /// The path to the compiled yul bytecode code
         #[arg(long)]
         deployment_code_path: PathBuf,
         /// The path to output the Solidity code
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
+        /// The path to output the compiled Solidity bytecode
+        #[arg(long)]
+        sol_bytecode_path: Option<PathBuf>,
+        /// The number of runs set to the SOLC optimizer.
+        /// Lower values optimze for deployment size while higher values optimize for execution cost.
+        /// If not set will just use the default unoptimized SOLC configuration.
+        #[arg(long)]
+        optimizer_runs: Option<usize>,
         // todo, optionally allow supplying proving key
     },
 
@@ -421,12 +429,20 @@ pub enum Commands {
         /// The path to output to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
-        /// The path to the deployment code
+        /// The path to the compiled yul bytecode code
         #[arg(long)]
         deployment_code_path: Option<PathBuf>,
         /// The path to the Solidity code
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
+        /// The path to output the compiled Solidity bytecode
+        #[arg(long)]
+        sol_bytecode_path: Option<PathBuf>,
+        /// The number of runs set to the SOLC optimizer.
+        /// Lower values optimze for deployment size while higher values optimize for execution cost.
+        /// If not set will just use the default unoptimized SOLC configuration.
+        #[arg(long)]
+        optimizer_runs: Option<usize>,
         // todo, optionally allow supplying proving key
     },
 
@@ -477,6 +493,9 @@ pub enum Commands {
         /// The path to the Solidity code
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
+        /// The path to output the compiled Solidity bytecode
+        #[arg(long)]
+        sol_bytecode_path: Option<PathBuf>,
         /// The number of runs set to the SOLC optimizer.
         /// Lower values optimze for deployment size while higher values optimize for execution cost.
         /// If not set will just use the default unoptimized SOLC configuration.
