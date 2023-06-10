@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
-use super::GraphError;
+use super::{GraphError, Visibility};
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::poly::PolyOp;
-use crate::fieldutils::i128_to_felt;
-use crate::tensor::{Tensor, TensorError, TensorType, ValTensor};
-use halo2_proofs::circuit::Value;
-use halo2curves::ff::PrimeField;
+use crate::circuit::tensor_to_valtensor;
+use crate::tensor::{Tensor, TensorError};
+use halo2curves::bn256::Fr as Fp;
 use log::{debug, warn};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::array::Gather;
@@ -119,33 +118,6 @@ fn extract_tensor_value(
     Ok(const_value)
 }
 
-/// Converts a tensor to a [ValTensor] with a given scale.
-pub fn tensor_to_valtensor<F: PrimeField + TensorType + PartialOrd>(
-    const_value: Tensor<f32>,
-    scale: u32,
-    public_params: bool,
-) -> Result<ValTensor<F>, Box<dyn std::error::Error>> {
-    let mut value: ValTensor<F> = if public_params {
-        const_value
-            .map(|x| {
-                crate::tensor::ValType::Constant(i128_to_felt::<F>(
-                    quantize_float(&x, 0.0, scale).unwrap(),
-                ))
-            })
-            .into()
-    } else {
-        const_value
-            .map(|x| {
-                crate::tensor::ValType::Value(Value::known(i128_to_felt::<F>(
-                    quantize_float(&x, 0.0, scale).unwrap(),
-                )))
-            })
-            .into()
-    };
-    value.set_scale(scale);
-    Ok(value)
-}
-
 /// Extracts a Gather op from an onnx node.
 fn load_gather_op(
     op: &dyn tract_onnx::prelude::Op,
@@ -249,13 +221,13 @@ fn load_slice_op(
 /// * `public_params` - whether the node's parameters are public.
 /// * `node` - the [OnnxNode] to be converted into a [Node].
 /// * `inputs` - the node's inputs.
-pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
+pub fn new_op_from_onnx(
     idx: usize,
     scale: u32,
-    public_params: bool,
+    param_visibility: Visibility,
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
-    inputs: &mut Vec<super::NodeType<F>>,
-) -> Result<Box<dyn crate::circuit::Op<F>>, Box<dyn std::error::Error>> {
+    inputs: &mut Vec<super::NodeType>,
+) -> Result<Box<dyn crate::circuit::Op<Fp>>, Box<dyn std::error::Error>> {
     debug!("Loading node: {:?}", node);
     Ok(match node.op().name().as_ref() {
         "Gather" => {
@@ -268,7 +240,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             let boxed_op = inputs[1].clone().opkind();
             let index: Tensor<usize> = match boxed_op
                 .as_any()
-                .downcast_ref::<crate::circuit::ops::Constant<F>>()
+                .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
             {
                 Some(c) => c.values.map(|e| e as usize),
                 None => {
@@ -307,7 +279,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             Box::new(crate::circuit::ops::Constant::new(
                 value,
                 constant_scale,
-                public_params,
+                param_visibility,
             ))
         }
         "Reduce<Min>" => {
@@ -344,7 +316,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             let boxed_op = inputs[1].clone().opkind();
             let unit = match boxed_op
                 .as_any()
-                .downcast_ref::<crate::circuit::ops::Constant<F>>()
+                .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
             {
                 Some(c) => c.values[0],
                 None => {
@@ -407,13 +379,13 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 let boxed_op = &inp.opkind();
                 if let Some(c) = boxed_op
                     .as_any()
-                    .downcast_ref::<crate::circuit::ops::Constant<F>>()
+                    .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
                 {
                     inputs.remove(idx);
-                    params = Some(tensor_to_valtensor::<F>(
+                    params = Some(tensor_to_valtensor(
                         c.values.clone(),
                         max_scale,
-                        public_params,
+                        param_visibility,
                     )?);
                 }
             }
@@ -428,13 +400,13 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 let boxed_op = &inp.opkind();
                 if let Some(c) = boxed_op
                     .as_any()
-                    .downcast_ref::<crate::circuit::ops::Constant<F>>()
+                    .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
                 {
                     inputs.remove(idx);
-                    params = Some(tensor_to_valtensor::<F>(
+                    params = Some(tensor_to_valtensor(
                         c.values.clone(),
                         scale,
-                        public_params,
+                        param_visibility,
                     )?);
                 }
             }
@@ -447,7 +419,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             let boxed_op = inputs[0].clone().opkind();
             let unit = match boxed_op
                 .as_any()
-                .downcast_ref::<crate::circuit::ops::Constant<F>>()
+                .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
             {
                 Some(c) => {
                     if c.values.len() == 1 {
@@ -583,7 +555,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 (padding[0], padding[1], stride[0], stride[1]);
 
             let kernel = extract_tensor_value(conv_node.kernel.clone())?;
-            let kernel = tensor_to_valtensor(kernel, scale, public_params)?;
+            let kernel = tensor_to_valtensor(kernel, scale, param_visibility)?;
 
             let bias = match conv_node.bias.clone() {
                 Some(b) => {
@@ -592,7 +564,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                     let val = tensor_to_valtensor(
                         const_value,
                         scale + inputs[0].out_scales()[0],
-                        public_params,
+                        param_visibility,
                     )?;
                     Some(val)
                 }
@@ -647,7 +619,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                 (padding[0], padding[1], stride[0], stride[1]);
 
             let kernel = extract_tensor_value(deconv_node.kernel.clone())?;
-            let kernel = tensor_to_valtensor(kernel, scale, public_params)?;
+            let kernel = tensor_to_valtensor(kernel, scale, param_visibility)?;
 
             let bias = match deconv_node.bias.clone() {
                 Some(b) => {
@@ -656,7 +628,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
                     let val = tensor_to_valtensor(
                         const_value,
                         scale + inputs[0].out_scales()[0],
-                        public_params,
+                        param_visibility,
                     )?;
                     Some(val)
                 }
@@ -689,7 +661,7 @@ pub fn new_op_from_onnx<F: PrimeField + TensorType + PartialOrd>(
             let boxed_op = inputs[2].clone().opkind();
             let scale_factor = match boxed_op
                 .as_any()
-                .downcast_ref::<crate::circuit::ops::Constant<F>>()
+                .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
             {
                 Some(c) => c
                     .values

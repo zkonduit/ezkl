@@ -1,10 +1,10 @@
 ///
 pub mod poseidon;
 
-use std::cmp;
 use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
+use std::{cmp, panic};
 
 use halo2curves::ff::Field;
 
@@ -96,7 +96,16 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F> for ModuleLayo
     {
         // if the name contains the required substring we increment the current module idx
         if Into::<String>::into(name()).contains("_new_module") {
-            self.current_module += 1;
+            self.current_module = self.regions.keys().max().unwrap_or(&0) + 1;
+        } else if Into::<String>::into(name()).contains("_enter_module_") {
+            let index = Into::<String>::into(name())
+                .split("_enter_module_")
+                .last()
+                .unwrap_or_else(|| panic!("Invalid module name"))
+                .parse::<usize>()
+                .unwrap_or_else(|_| panic!("Invalid module name"));
+            assert!(self.regions.contains_key(&index), "module does not exist");
+            self.current_module = index;
         }
 
         let region_index = self.region_idx.len();
@@ -339,6 +348,7 @@ impl<'r, 'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> RegionLayouter<F>
         to: &'v mut (dyn FnMut() -> Value<Assigned<F>> + 'v),
     ) -> Result<Cell, Error> {
         let module_idx = self.layouter.region_idx[&self.region_index];
+
         self.layouter.cs.assign_advice(
             annotation,
             column,

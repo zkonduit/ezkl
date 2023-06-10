@@ -81,9 +81,9 @@ mod wasm32 {
             bits: 16,
             logrows: 17,
             batch_size: 1,
-            public_inputs: false,
-            public_outputs: true,
-            public_params: false,
+            input_visibility: "private".into(),
+            output_visibility: "public".into(),
+            param_visibility: "private".into(),
             pack_base: 1,
             allocated_constraints: Some(1000), // assuming an arbitrary value here for the sake of the example
         };

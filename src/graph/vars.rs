@@ -6,23 +6,74 @@ use crate::tensor::{ValTensor, VarTensor};
 use halo2_proofs::plonk::ConstraintSystem;
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
+#[cfg(feature = "python-bindings")]
+use pyo3::{
+    exceptions::PyValueError, types::PyString, FromPyObject, IntoPy, PyAny, PyObject, PyResult,
+    PyTryFrom, Python, ToPyObject,
+};
+
 use serde::{Deserialize, Serialize};
 
 use super::*;
 
-/// Label enum to track whether model input, model parameters, and model output are public or private
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
+/// Label enum to track whether model input, model parameters, and model output are public, private, or hashed
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Visibility {
     /// Mark an item as private to the prover (not in the proof submitted for verification)
     #[default]
     Private,
     /// Mark an item as public (sent in the proof submitted for verification)
     Public,
+    /// Mark an item as publicly committed to (hash sent in the proof submitted for verification)
+    Hashed,
 }
+
+impl<'a> From<&'a str> for Visibility {
+    fn from(s: &'a str) -> Self {
+        match s {
+            "private" => Visibility::Private,
+            "public" => Visibility::Public,
+            "hashed" => Visibility::Hashed,
+            _ => panic!("Invalid visibility string"),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Converts Visibility into a PyObject (Required for Visibility to be compatible with Python)
+impl IntoPy<PyObject> for Visibility {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            Visibility::Private => "private".to_object(py),
+            Visibility::Public => "public".to_object(py),
+            Visibility::Hashed => "hashed".to_object(py),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Obtains Visibility from PyObject (Required for Visibility to be compatible with Python)
+impl<'source> FromPyObject<'source> for Visibility {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let trystr = <PyString as PyTryFrom>::try_from(ob)?;
+        let strval = trystr.to_string();
+        match strval.to_lowercase().as_str() {
+            "private" => Ok(Visibility::Private),
+            "public" => Ok(Visibility::Public),
+            "hashed" => Ok(Visibility::Hashed),
+            _ => Err(PyValueError::new_err("Invalid value for Visibility")),
+        }
+    }
+}
+
 impl Visibility {
     #[allow(missing_docs)]
     pub fn is_public(&self) -> bool {
         matches!(&self, Visibility::Public)
+    }
+    #[allow(missing_docs)]
+    pub fn is_hashed(&self) -> bool {
+        matches!(&self, Visibility::Hashed)
     }
 }
 impl std::fmt::Display for Visibility {
@@ -30,6 +81,7 @@ impl std::fmt::Display for Visibility {
         match self {
             Visibility::Private => write!(f, "private"),
             Visibility::Public => write!(f, "public"),
+            Visibility::Hashed => write!(f, "hashed"),
         }
     }
 }
@@ -58,22 +110,16 @@ impl VarVisibility {
     /// Read from cli args whether the model input, model parameters, and model output are Public or Private to the prover.
     /// Place in [VarVisibility] struct.
     pub fn from_args(args: RunArgs) -> Result<Self, Box<dyn Error>> {
-        let input_vis = if args.public_inputs {
-            Visibility::Public
-        } else {
-            Visibility::Private
-        };
-        let params_vis = if args.public_params {
-            Visibility::Public
-        } else {
-            Visibility::Private
-        };
-        let output_vis = if args.public_outputs {
-            Visibility::Public
-        } else {
-            Visibility::Private
-        };
-        if !output_vis.is_public() & !params_vis.is_public() & !input_vis.is_public() {
+        let input_vis = args.input_visibility;
+        let params_vis = args.param_visibility;
+        let output_vis = args.output_visibility;
+        if !output_vis.is_public()
+            & !params_vis.is_public()
+            & !input_vis.is_public()
+            & !output_vis.is_hashed()
+            & !params_vis.is_hashed()
+            & !input_vis.is_hashed()
+        {
             return Err(Box::new(GraphError::Visibility));
         }
         Ok(Self {

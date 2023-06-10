@@ -16,7 +16,7 @@ pub fn level_color(level: &log::Level, msg: &str) -> String {
     match level {
         Level::Error => msg.red(),
         Level::Warn => msg.yellow(),
-        Level::Info => msg.green(),
+        Level::Info => msg.blue(),
         Level::Debug => msg.green(),
         Level::Trace => msg.magenta(),
     }
@@ -78,7 +78,7 @@ pub fn init_logger() {
             start.elapsed().as_secs(),
             record.metadata().target(),
             level_text_color(&record.level(), &format!("{}", record.args()))
-            .replace('\n', &format!("\n{} ", " | ".white().bold()))
+                .replace('\n', &format!("\n{} ", " | ".white().bold()))
         )
     });
     builder.target(env_logger::Target::Stdout);
