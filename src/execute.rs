@@ -429,8 +429,8 @@ fn create_evm_verifier(
     circuit_params_path: PathBuf,
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
-    _sol_bytecode_path: Option<PathBuf>,
-    _runs: Option<usize>
+    sol_bytecode_path: Option<PathBuf>,
+    runs: Option<usize>
 ) -> Result<(), Box<dyn Error>> {
 
     let model_circuit_params = GraphParams::load(&circuit_params_path);
@@ -454,11 +454,12 @@ fn create_evm_verifier(
 
         let mut f = File::create(sol_code_path.as_ref().unwrap())?;
         let _ = f.write(output.as_bytes());
+
+        if sol_bytecode_path.is_some() {
+            let sol_bytecode = gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), runs).unwrap();
+            sol_bytecode.save(&sol_bytecode_path.unwrap())?;
+        }
     }
-    // if sol_bytecode_path.is_some() {
-    //     let sol_bytecode = gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), runs).unwrap();
-    //     sol_bytecode.save(&sol_bytecode_path.unwrap())?;
-    // }
     Ok(())
 }
 
@@ -467,7 +468,7 @@ async fn verify_evm(
     proof_path: PathBuf,
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
-    _sol_bytecode_path: Option<PathBuf>,
+    sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
@@ -486,20 +487,20 @@ async fn verify_evm(
         info!("Solidity verification result: {}", result);
 
         assert!(result);
-
+        
+        if sol_bytecode_path.is_some() {
+            let result = verify_proof_via_solidity(
+                proof,
+                None,
+                sol_bytecode_path,
+                runs
+            ).await?;
+    
+            info!("Solidity bytecode verification result: {}", result);
+    
+            assert!(result);
+        }
     }
-    // if sol_bytecode_path.is_some() {
-    //     let result = verify_proof_via_solidity(
-    //         proof,
-    //         None,
-    //         sol_bytecode_path,
-    //         runs
-    //     ).await?;
-
-    //     info!("Solidity bytecode verification result: {}", result);
-
-    //     assert!(result);
-    // }
     Ok(())
 }
 
@@ -533,10 +534,11 @@ fn create_evm_aggregate_verifier(
 
         let mut f = File::create(sol_code_path.as_ref().unwrap())?;
         let _ = f.write(output.as_bytes());
-    }
-    if sol_bytecode_path.is_some() {
-        let sol_bytecode = gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), runs).unwrap();
-        sol_bytecode.save(&sol_bytecode_path.unwrap())?;
+        
+        if sol_bytecode_path.is_some() {
+            let sol_bytecode = gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), runs).unwrap();
+            sol_bytecode.save(&sol_bytecode_path.unwrap())?;
+        }
     }
     Ok(())
 }
