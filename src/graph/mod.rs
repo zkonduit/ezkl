@@ -12,7 +12,7 @@ pub mod vars;
 
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
-use crate::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig, witness_hash};
+use crate::circuit::modules::poseidon::{witness_hash, PoseidonChip, PoseidonConfig};
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
 use crate::commands::{Cli, RunArgs};
@@ -175,22 +175,37 @@ pub struct ForwardResult {
 
 /// model parameters
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct ModelParams {
+pub struct GraphParams {
     /// run args
     pub run_args: RunArgs,
     /// the visibility of the variables in the circuit
     pub visibility: VarVisibility,
     /// the potential number of constraints in the circuit
     pub num_constraints: usize,
-    /// the shape of public inputs to the circuit (in order of appearance)
-    pub instance_shapes: Vec<Vec<usize>>,
+    /// the shape of public inputs to the model (in order of appearance)
+    pub model_instance_shapes: Vec<Vec<usize>>,
+    /// the number of hashes generated
+    pub num_hashes: usize,
     /// required_lookups
     pub required_lookups: Vec<LookupOp>,
     /// check mode
     pub check_mode: CheckMode,
 }
 
-impl ModelParams {
+impl GraphParams {
+    /// calculate the total number of instances
+    pub fn total_instances(&self) -> Vec<usize> {
+        let mut instances: Vec<usize> = self
+            .model_instance_shapes
+            .iter()
+            .map(|x| x.iter().product())
+            .collect();
+        if self.num_hashes > 0 {
+            instances.push(self.num_hashes)
+        }
+        instances
+    }
+
     /// save params to file
     pub fn save(&self, path: &std::path::PathBuf) {
         let mut file = std::fs::File::create(path).unwrap();
@@ -220,7 +235,7 @@ pub struct GraphCircuit {
     /// Vector of input tensors to the model / graph of computations.
     pub inputs: Vec<Tensor<i128>>,
     /// The parameters of the model / graph of computations.
-    pub params: ModelParams,
+    pub params: GraphParams,
 }
 
 impl GraphCircuit {
@@ -236,10 +251,18 @@ impl GraphCircuit {
             inputs.push(t);
         }
 
+        let mut params = model.gen_params(check_mode)?;
+        if params.run_args.input_visibility.is_hashed() {
+            params.num_hashes += model.graph.num_inputs();
+        }
+        if params.run_args.output_visibility.is_hashed() {
+            params.num_hashes += model.graph.num_outputs();
+        }
+
         Ok(GraphCircuit {
             model: model.clone(),
             inputs,
-            params: model.gen_params(check_mode)?,
+            params,
         })
     }
     ///
@@ -295,9 +318,9 @@ impl GraphCircuit {
         Self::new(model, check_mode)
     }
 
-    /// Create a new circuit from a set of input data and [ModelParams].
+    /// Create a new circuit from a set of input data and [GraphParams].
     pub fn from_model_params(
-        params: &ModelParams,
+        params: &GraphParams,
         model_path: &std::path::PathBuf,
         check_mode: CheckMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
@@ -356,37 +379,37 @@ impl GraphCircuit {
             );
             trace!("{:?}", public_inputs);
 
-            let mut pi_inner: Vec<Vec<Fp>> = public_inputs
-                .iter()
-                .map(|i| {
-                    i.iter()
-                        .map(|e| i128_to_felt::<Fp>(*e))
-                        .collect::<Vec<Fp>>()
-                })
-                .collect::<Vec<Vec<Fp>>>();
+        let mut pi_inner: Vec<Vec<Fp>> = public_inputs
+            .iter()
+            .map(|i| {
+                i.iter()
+                    .map(|e| i128_to_felt::<Fp>(*e))
+                    .collect::<Vec<Fp>>()
+            })
+            .collect::<Vec<Vec<Fp>>>();
 
-            if self.model.visibility.input.is_hashed() || self.model.visibility.output.is_hashed() {
-                let mut hash_pi = vec![];
-                if self.model.visibility.input.is_hashed() {
-                    // should unwrap safely
-                    hash_pi.extend(data.input_hashes.as_deref().unwrap().to_vec());
-                }
-                if self.model.visibility.output.is_hashed() {
-                    // should unwrap safely
-                    hash_pi.extend(data.output_hashes.as_deref().unwrap().to_vec());
-                };
-                if hash_pi.len() > 0 {
-                    pi_inner.push(hash_pi);
-                }
+        if self.model.visibility.input.is_hashed() || self.model.visibility.output.is_hashed() {
+            let mut hash_pi = vec![];
+            if self.model.visibility.input.is_hashed() {
+                // should unwrap safely
+                hash_pi.extend(data.input_hashes.as_deref().unwrap().to_vec());
             }
-            Ok(pi_inner)
+            if self.model.visibility.output.is_hashed() {
+                // should unwrap safely
+                hash_pi.extend(data.output_hashes.as_deref().unwrap().to_vec());
+            };
+            if hash_pi.len() > 0 {
+                pi_inner.push(hash_pi);
+            }
         }
+        Ok(pi_inner)
+    }
 }
 
 impl Circuit<Fp> for GraphCircuit {
     type Config = GraphConfig;
     type FloorPlanner = ModulePlanner;
-    type Params = ModelParams;
+    type Params = GraphParams;
 
     fn without_witnesses(&self) -> Self {
         self.clone()
@@ -402,7 +425,7 @@ impl Circuit<Fp> for GraphCircuit {
             cs,
             params.run_args.logrows as usize,
             params.num_constraints,
-            params.instance_shapes.clone(),
+            params.model_instance_shapes.clone(),
             params.visibility.clone(),
             params.run_args.scale,
         );
@@ -489,10 +512,12 @@ impl Circuit<Fp> for GraphCircuit {
             })?;
 
         if self.model.visibility.output.is_hashed() {
-            // instantiate new poseidon module in chip
-            let chip = PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_RATE>::construct(
-                config.poseidon_config.unwrap(),
-            );
+            let chip = PoseidonChip::<
+                PoseidonSpec,
+                POSEIDON_WIDTH,
+                POSEIDON_RATE,
+                POSEIDON_LEN_GRAPH,
+            >::construct(config.poseidon_config.unwrap());
             let mut hash_offset = 0;
             if self.model.visibility.input.is_hashed() {
                 hash_offset += inputs.len();

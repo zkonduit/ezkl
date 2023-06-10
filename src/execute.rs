@@ -2,7 +2,7 @@ use crate::circuit::CheckMode;
 use crate::commands::{Cli, Commands, StrategyType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{fix_verifier_sol, verify_proof_via_solidity, read_on_chain_inputs};
-use crate::graph::{scale_to_multiplier, GraphCircuit, GraphInput, Model, ModelParams};
+use crate::graph::{scale_to_multiplier, GraphCircuit, GraphInput, Model, GraphParams};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::evm_verify;
@@ -385,7 +385,7 @@ pub fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, Box<dyn 
 
 #[cfg(feature = "render")]
 fn render(output: PathBuf) -> Result<(), Box<dyn Error>> {
-    let circuit = GraphCircuit::from_arg(CheckMode::UNSAFE)?; 
+    let circuit = GraphCircuit::from_arg(CheckMode::UNSAFE)?;
     info!("Rendering circuit");
 
     // Create the area we want to draw on.
@@ -410,14 +410,10 @@ fn create_evm_verifier(
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
-    let model_circuit_params = ModelParams::load(&circuit_params_path);
+    let model_circuit_params = GraphParams::load(&circuit_params_path);
     let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)?;
 
-    let num_instance = model_circuit_params
-        .instance_shapes
-        .iter()
-        .map(|x| x.iter().product())
-        .collect();
+    let num_instance = model_circuit_params.total_instances();
 
     let vk =
         load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, model_circuit_params)?;
@@ -447,6 +443,7 @@ async fn verify_evm(
     runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
+    print!("proof {:?}", proof);
     let code = DeploymentCode::load(&deployment_code_path)?;
     evm_verify(code, proof.clone())?;
 
@@ -525,13 +522,14 @@ async fn prove(
     rpc_url: Option<String>,
 ) -> Result<(), Box<dyn Error>> {
     let mut data = GraphInput::from_path(data)?;
-    let model_circuit_params = ModelParams::load(&circuit_params_path);
+    let model_circuit_params = GraphParams::load(&circuit_params_path);
     let mut circuit =
         GraphCircuit::from_model_params(&model_circuit_params, &model_path, check_mode)?;
     if circuit.model.run_args.on_chain_inputs {
         data = read_on_chain_inputs(rpc_url.as_deref(), &mut data).await?;
     }
     let public_inputs = circuit.prepare_public_inputs(&data)?;
+
     let circuit_params = circuit.params.clone();
 
     let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)?;
@@ -752,12 +750,7 @@ fn fuzz(
     run_fuzz_fn(num_runs, fuzz_proof_instances, &passed);
 
     if matches!(transcript, TranscriptType::EVM) {
-        let num_instance = circuit
-            .params
-            .instance_shapes
-            .iter()
-            .map(|x| x.iter().product())
-            .collect();
+        let num_instance = circuit.params.total_instances();
 
         let yul_code = gen_evm_verifier(&params, pk.get_vk(), num_instance)?;
         let deployment_code = gen_deployment_code(yul_code).unwrap();
@@ -867,7 +860,7 @@ fn aggregate(
         .zip(aggregation_vk_paths)
         .zip(circuit_params_paths)
     {
-        let model_circuit_params = ModelParams::load(&circuit_params_path);
+        let model_circuit_params = GraphParams::load(&circuit_params_path);
         let params_app =
             load_params_cmd(params_path.clone(), model_circuit_params.run_args.logrows)?;
         let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
@@ -913,12 +906,12 @@ fn verify(
     vk_path: PathBuf,
     params_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
-    let model_circuit_params = ModelParams::load(&circuit_params_path);
+    let model_circuit_params = GraphParams::load(&circuit_params_path);
 
     let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)?;
 
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
-    let model_circuit_params = ModelParams::load(&circuit_params_path);
+    let model_circuit_params = GraphParams::load(&circuit_params_path);
 
     let strategy = KZGSingleStrategy::new(params.verifier_params());
     let vk =

@@ -2,7 +2,7 @@ use super::node::*;
 use super::scale_to_multiplier;
 use super::vars::*;
 use super::GraphError;
-use super::ModelParams;
+use super::GraphParams;
 use crate::circuit::hybrid::HybridOp;
 
 use crate::circuit::Input;
@@ -234,7 +234,7 @@ impl Model {
     }
 
     /// Generate model parameters for the circuit
-    pub fn gen_params(&self, check_mode: CheckMode) -> Result<ModelParams, Box<dyn Error>> {
+    pub fn gen_params(&self, check_mode: CheckMode) -> Result<GraphParams, Box<dyn Error>> {
         let instance_shapes = self.instance_shapes();
         // this is the total number of variables we will need to allocate
         // for the circuit
@@ -278,10 +278,11 @@ impl Model {
         let set: HashSet<_> = lookup_ops.drain(..).collect(); // dedup
         lookup_ops.extend(set.into_iter().sorted());
 
-        Ok(ModelParams {
+        Ok(GraphParams {
             run_args: self.run_args.clone(),
             visibility: self.visibility.clone(),
-            instance_shapes,
+            model_instance_shapes: instance_shapes,
+            num_hashes: 0,
             num_constraints,
             required_lookups: lookup_ops,
             check_mode,
@@ -573,9 +574,9 @@ impl Model {
 
     /// Creates a `Model` from parsed model params
     /// # Arguments
-    /// * `params` - A [ModelParams] struct holding parsed CLI arguments.
+    /// * `params` - A [GraphParams] struct holding parsed CLI arguments.
     pub fn from_model_params(
-        params: &ModelParams,
+        params: &GraphParams,
         model: &std::path::PathBuf,
     ) -> Result<Self, Box<dyn Error>> {
         let visibility = VarVisibility::from_args(params.run_args.clone())?;

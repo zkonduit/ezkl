@@ -386,35 +386,28 @@ mod native_tests {
                 crate::native_tests::mv_test_(test);
                 let large_batch_dir = &format!("large_batches_{}", test);
                 crate::native_tests::mk_data_batches_(test, &large_batch_dir, 10);
-                forward_pass(large_batch_dir.to_string(), "private", "private", "public", 10);
+                forward_pass(large_batch_dir.to_string(), "private", "private", "public", 10, 17);
             }
 
             #(#[test_case(TESTS[N])])*
             fn forward_pass_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                forward_pass(test.to_string(),"private", "private", "public", 1);
+                forward_pass(test.to_string(),"private", "private", "public", 1, 17);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_input_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                forward_pass(test.to_string(),"hashed", "private", "public", 1);
+                forward_pass(test.to_string(),"hashed", "private", "public", 1, 17);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_output_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                forward_pass(test.to_string(),"public", "private", "hashed", 1);
-            }
-
-            #(#[test_case(TESTS[N])])*
-            fn mock_hashed_input_output_(test: &str) {
-                crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                forward_pass(test.to_string(),"hashed", "public", "hashed", 1);
+                forward_pass(test.to_string(),"public", "private", "hashed", 1, 17);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -618,6 +611,7 @@ mod native_tests {
         param_visibility: &str,
         output_visibility: &str,
         batch_size: usize,
+        logrows: usize,
     ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -633,8 +627,8 @@ mod native_tests {
                 &format!("--input-visibility={}", input_visibility),
                 &format!("--param-visibility={}", param_visibility),
                 &format!("--output-visibility={}", output_visibility),
+                &format!("--logrows={}", logrows),
                 "--bits=16",
-                "-K=17",
             ])
             .status()
             .expect("failed to execute process");
@@ -651,8 +645,8 @@ mod native_tests {
                 &format!("--input-visibility={}", input_visibility),
                 &format!("--param-visibility={}", param_visibility),
                 &format!("--output-visibility={}", output_visibility),
+                &format!("--logrows={}", logrows),
                 "--bits=16",
-                "-K=17",
             ])
             .status()
             .expect("failed to execute process");
@@ -1067,6 +1061,7 @@ mod native_tests {
             param_visibility,
             output_visibility,
             1,
+            17,
         );
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))

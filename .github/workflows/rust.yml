@@ -63,7 +63,7 @@ jobs:
         run: cargo doc --verbose
 
   library-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-32-cores
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -74,7 +74,7 @@ jobs:
       - name: Doc tests
         run: cargo test --doc --verbose
       - name: Library tests
-        run: cargo test --lib --verbose
+        run: cargo test --lib --verbose -- --include-ignored
 
   wasm32-tests:
     runs-on: ubuntu-latest
@@ -171,8 +171,6 @@ jobs:
         run: cargo test --release --verbose tests::mock_hashed_input_::t  -- --test-threads 32
       - name: Mock proving tests (hashed outputs)
         run: cargo test --release --verbose tests::mock_hashed_output_::t  -- --test-threads 32
-      - name: Mock proving tests (hashed inputs and outputs)
-        run: cargo test --release --verbose tests::mock_hashed_input_output_  -- --test-threads 32
 
   mock-proving-tests-wasi:
     runs-on: ubuntu-latest-32-cores
@@ -223,7 +221,11 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
       - name: KZG prove and verify tests (EVM)
-        run: cargo test --release --verbose tests_evm -- --test-threads 4
+        run: cargo test --release --verbose tests_evm::kzg_evm_prove_and_verify -- --test-threads 4
+      - name: KZG prove and verify tests (EVM + hashed inputs)
+        run: cargo test --release --verbose tests_evm::kzg_evm_hashed_input_prove_and_verify -- --test-threads 4
+      - name: KZG prove and verify tests (EVM + hashed outputs)
+        run: cargo test --release --verbose tests_evm::kzg_evm_hashed_output_prove_and_verify -- --test-threads 4
 
   prove-and-verify-tests:
     runs-on: ubuntu-latest-32-cores

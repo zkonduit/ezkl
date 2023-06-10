@@ -122,11 +122,6 @@ impl VarVisibility {
         {
             return Err(Box::new(GraphError::Visibility));
         }
-        // For POC, we don't support private inputs for on chain inputs.
-        // TODO: remove this check when we move to state proofs
-        if !input_vis.is_public() & args.on_chain_inputs {
-            return Err(Box::new(GraphError::Visibility));
-        }
         Ok(Self {
             input: input_vis,
             params: params_vis,

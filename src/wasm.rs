@@ -26,7 +26,7 @@ pub fn init_panic_hook() {
 }
 
 use crate::execute::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
-use crate::graph::{GraphCircuit, ModelParams};
+use crate::graph::{GraphCircuit, GraphParams};
 use crate::pfsys::Snarkbytes;
 
 /// Generate circuit params in browser
@@ -56,7 +56,7 @@ pub fn gen_pk_wasm(
     circuit_params_ser: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Vec<u8> {
     // Read in circuit params
-    let circuit_params: ModelParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();
+    let circuit_params: GraphParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();
     // Read in kzg params
     let mut reader = std::io::BufReader::new(&params_ser[..]);
     let params: ParamsKZG<Bn256> =
@@ -91,7 +91,7 @@ pub fn gen_vk_wasm(
     circuit_params_ser: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Vec<u8> {
     // Read in circuit params
-    let circuit_params: ModelParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();
+    let circuit_params: GraphParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();
 
     // Read in proving key
     let mut reader = std::io::BufReader::new(&pk[..]);
@@ -123,7 +123,7 @@ pub fn verify_wasm(
     let params: ParamsKZG<Bn256> =
         halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).unwrap();
 
-    let circuit_params: ModelParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();
+    let circuit_params: GraphParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();
 
     let snark_bytes: Snarkbytes = bincode::deserialize(&proof_js[..]).unwrap();
 
@@ -188,7 +188,7 @@ pub fn prove_wasm(
     let data: crate::graph::GraphInput = serde_json::from_slice(&data[..]).unwrap();
 
     // read in circuit params
-    let circuit_params: ModelParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();
+    let circuit_params: GraphParams = bincode::deserialize(&circuit_params_ser[..]).unwrap();
 
     // read in proving key
     let mut reader = std::io::BufReader::new(&pk[..]);
