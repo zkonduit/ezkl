@@ -160,6 +160,7 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
 }
 
 /// Compiles a solidity verifier contract and returns the abi, bytecode, and runtime bytecode
+#[cfg(not(target_arch = "wasm32"))]
 pub fn get_contract_artifacts(
     sol_code_path: PathBuf,
     runs: Option<usize>,

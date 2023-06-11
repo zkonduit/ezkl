@@ -396,6 +396,7 @@ pub fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, Box<dyn 
 }
 
 /// helper function to generate the compiled bytcecode from sol code path
+#[cfg(not(target_arch = "wasm32"))]
 pub fn gen_sol_bytecode(sol_code_path: PathBuf, runs: Option<usize> ) -> Result<DeploymentCode, Box<dyn Error>> {
     let (_, bytecode, _) = get_contract_artifacts(sol_code_path, runs)?;
     Ok(DeploymentCode {
