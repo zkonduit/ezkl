@@ -92,7 +92,7 @@ impl<'source> FromPyObject<'source> for StrategyType {
 }
 
 /// Parameters specific to a proving run
-#[derive(Debug, Args, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Copy, Args, Deserialize, Serialize, Clone, Default)]
 pub struct RunArgs {
     /// The tolerance for error on model outputs
     #[arg(short = 'T', long, default_value = "0")]
@@ -134,6 +134,24 @@ impl RunArgs {
             input: self.input_visibility,
             params: self.param_visibility,
             output: self.output_visibility,
+        }
+    }
+
+    /// Creates `RunArgs` from parsed CLI arguments
+    /// # Arguments
+    /// * `cli` - A [Cli] struct holding parsed CLI arguments.
+    pub fn from_cli(cli: Cli) -> Result<Self, Box<dyn Error>> {
+        match cli.command {
+            Commands::Table { args, .. }
+            | Commands::Mock { args, .. }
+            | Commands::Setup { args, .. }
+            | Commands::Calibrate { args, .. }
+            | Commands::Forward { args, .. } => Ok(args),
+            #[cfg(not(target_arch = "wasm32"))]
+            Commands::Fuzz { args, .. } => Ok(args),
+            #[cfg(feature = "render")]
+            Commands::RenderCircuit { model, args, .. } => Ok(args),
+            _ => panic!(),
         }
     }
 }
@@ -226,6 +244,23 @@ pub enum Commands {
         args: RunArgs,
     },
 
+    /// Calibrates the proving hyperparameters, produces a quantized output from those hyperparameters, and saves it to a .json file. The circuit parameters are also saved to a file.
+    #[command(arg_required_else_help = true)]
+    Calibrate {
+        /// The path to the .json calibration data file
+        #[arg(short = 'D', long)]
+        data: PathBuf,
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: PathBuf,
+        /// Path to circuit_params file to output
+        #[arg(short = 'O', long)]
+        output: PathBuf,
+        /// proving arguments
+        #[clap(flatten)]
+        args: RunArgs,
+    },
+
     /// Generates a dummy SRS
     #[command(name = "gen-srs", arg_required_else_help = true)]
     GenSrs {
@@ -290,6 +325,9 @@ pub enum Commands {
     /// Creates pk and vk and circuit params
     #[command(arg_required_else_help = true)]
     Setup {
+        /// The path to the .json calibration data file
+        #[arg(long)]
+        calibration_data: Option<PathBuf>,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,

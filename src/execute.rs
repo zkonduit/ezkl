@@ -79,6 +79,12 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         Commands::Table { model: _, .. } => table(cli),
         #[cfg(feature = "render")]
         Commands::RenderCircuit { output, .. } => render(output),
+        Commands::Calibrate {
+            data,
+            model: _,
+            output,
+            args: _,
+        } => calibrate(data, output),
         Commands::Forward {
             data,
             model: _,
@@ -114,8 +120,15 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             circuit_params_path,
             vk_path,
             pk_path,
+            calibration_data,
             ..
-        } => create_keys_kzg(params_path, vk_path, pk_path, circuit_params_path),
+        } => setup(
+            params_path,
+            vk_path,
+            pk_path,
+            circuit_params_path,
+            calibration_data,
+        ),
         Commands::Prove {
             data,
             model,
@@ -312,7 +325,7 @@ fn gen_srs_cmd(params_path: PathBuf, logrows: u32) -> Result<(), Box<dyn Error>>
 }
 
 fn table(cli: Cli) -> Result<(), Box<dyn Error>> {
-    let om = Model::from_ezkl_conf(cli)?;
+    let om = Model::from_cli(cli)?;
     info!("\n {}", om.table_nodes());
     Ok(())
 }
@@ -349,6 +362,17 @@ fn forward(data: PathBuf, output: PathBuf) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn calibrate(data: PathBuf, output: PathBuf) -> Result<(), Box<dyn Error>> {
+    let data = GraphInput::from_path(data)?;
+    let mut circuit = GraphCircuit::from_arg(CheckMode::SAFE)?;
+    circuit.load_inputs(&data);
+    let circuit_params = circuit.params.clone();
+    trace!("params computed");
+    circuit_params.save(&output)?;
+
+    circuit.calibrate()
+}
+
 fn mock(data: PathBuf) -> Result<(), Box<dyn Error>> {
     let data = GraphInput::from_path(data)?;
     // mock should catch any issues by default so we set it to safe
@@ -357,7 +381,7 @@ fn mock(data: PathBuf) -> Result<(), Box<dyn Error>> {
 
     info!("Mock proof");
 
-    let prover = MockProver::run(circuit.model.run_args.logrows, &circuit, public_inputs)
+    let prover = MockProver::run(circuit.run_args.logrows, &circuit, public_inputs)
         .map_err(Box::<dyn Error>::from)?;
     prover.assert_satisfied();
     prover
@@ -396,7 +420,7 @@ fn render(output: PathBuf) -> Result<(), Box<dyn Error>> {
     halo2_proofs::dev::CircuitLayout::default()
         // We hide labels, else most circuits become impossible to decipher because of overlaid text
         .show_labels(false)
-        .render(circuit.model.run_args.logrows, &circuit, &root)?;
+        .render(circuit.run_args.logrows, &circuit, &root)?;
     Ok(())
 }
 
@@ -408,13 +432,12 @@ fn create_evm_verifier(
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
-    let model_circuit_params = GraphParams::load(&circuit_params_path);
-    let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)?;
+    let circuit_params = GraphParams::load(&circuit_params_path)?;
+    let params = load_params_cmd(params_path, circuit_params.run_args.logrows)?;
 
-    let num_instance = model_circuit_params.total_instances();
+    let num_instance = circuit_params.total_instances();
 
-    let vk =
-        load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, model_circuit_params)?;
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_params)?;
     trace!("params computed");
 
     let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
@@ -487,20 +510,29 @@ fn create_evm_aggregate_verifier(
     Ok(())
 }
 
-fn create_keys_kzg(
+fn setup(
     params_path: PathBuf,
     vk_path: PathBuf,
     pk_path: PathBuf,
     circuit_params_path: PathBuf,
+    calibration_data: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
-    let circuit = GraphCircuit::from_arg(CheckMode::UNSAFE)?;
-    let params = load_params_cmd(params_path, circuit.model.run_args.logrows)?;
+    let mut circuit = GraphCircuit::from_arg(CheckMode::UNSAFE)?;
+
+    if calibration_data.is_some() {
+        let calibration_data = GraphInput::from_path(calibration_data.unwrap())?;
+        circuit.load_inputs(&calibration_data);
+        circuit.calibrate()?;
+    }
+
+    let params = load_params_cmd(params_path, circuit.run_args.logrows)?;
+
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
         .map_err(Box::<dyn Error>::from)?;
     let circuit_params = circuit.params;
     trace!("params computed");
-    circuit_params.save(&circuit_params_path);
+    circuit_params.save(&circuit_params_path)?;
 
     save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, pk.get_vk())?;
     save_pk::<KZGCommitmentScheme<Bn256>>(&pk_path, &pk)?;
@@ -519,14 +551,13 @@ fn prove(
     check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
     let data = GraphInput::from_path(data)?;
-    let model_circuit_params = GraphParams::load(&circuit_params_path);
-    let mut circuit =
-        GraphCircuit::from_model_params(&model_circuit_params, &model_path, check_mode)?;
+    let circuit_params = GraphParams::load(&circuit_params_path)?;
+    let mut circuit = GraphCircuit::from_params(&circuit_params, &model_path, check_mode)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     let circuit_params = circuit.params.clone();
 
-    let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)?;
+    let params = load_params_cmd(params_path, circuit_params.run_args.logrows)?;
 
     let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(pk_path, circuit_params)
         .map_err(Box::<dyn Error>::from)?;
@@ -854,13 +885,12 @@ fn aggregate(
         .zip(aggregation_vk_paths)
         .zip(circuit_params_paths)
     {
-        let model_circuit_params = GraphParams::load(&circuit_params_path);
-        let params_app =
-            load_params_cmd(params_path.clone(), model_circuit_params.run_args.logrows)?;
+        let circuit_params = GraphParams::load(&circuit_params_path)?;
+        let params_app = load_params_cmd(params_path.clone(), circuit_params.run_args.logrows)?;
         let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
             vk_path.to_path_buf(),
             // safe to clone as the inner model is wrapped in an Arc
-            model_circuit_params.clone(),
+            circuit_params.clone(),
         )?;
         snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(
             proof_path,
@@ -900,16 +930,15 @@ fn verify(
     vk_path: PathBuf,
     params_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
-    let model_circuit_params = GraphParams::load(&circuit_params_path);
+    let circuit_params = GraphParams::load(&circuit_params_path)?;
 
-    let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)?;
+    let params = load_params_cmd(params_path, circuit_params.run_args.logrows)?;
 
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
-    let model_circuit_params = GraphParams::load(&circuit_params_path);
+    let circuit_params = GraphParams::load(&circuit_params_path)?;
 
     let strategy = KZGSingleStrategy::new(params.verifier_params());
-    let vk =
-        load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, model_circuit_params)?;
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_params)?;
     let now = Instant::now();
     let result = verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, strategy);
     info!("verify took {}", now.elapsed().as_secs());

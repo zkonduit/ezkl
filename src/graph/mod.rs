@@ -24,7 +24,7 @@ use halo2_proofs::{
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},
 };
 use halo2curves::bn256::Fr as Fp;
-use log::{info, trace};
+use log::{error, info, trace};
 pub use model::*;
 pub use node::*;
 use std::io::{Read, Write};
@@ -157,6 +157,8 @@ pub struct ForwardResult {
     pub input_hashes: Vec<Fp>,
     /// Any hashes of outputs generated during the forward pass
     pub output_hashes: Vec<Fp>,
+    /// max lookup input
+    pub max_lookup_input: i128,
 }
 
 /// model parameters
@@ -193,16 +195,18 @@ impl GraphParams {
     }
 
     /// save params to file
-    pub fn save(&self, path: &std::path::PathBuf) {
-        let mut file = std::fs::File::create(path).unwrap();
-        let encoded: Vec<u8> = bincode::serialize(&self).unwrap();
-        file.write_all(&encoded).unwrap();
+    pub fn save(&self, path: &std::path::PathBuf) -> Result<(), std::io::Error> {
+        let encoded = serde_json::to_string(&self)?;
+        let mut file = std::fs::File::create(path)?;
+        file.write_all(&encoded.as_bytes())
     }
     /// load params from file
-    pub fn load(path: &std::path::PathBuf) -> Self {
-        let file = std::fs::File::open(path).unwrap();
-        let decoded: Self = bincode::deserialize_from(file).unwrap();
-        decoded
+    pub fn load(path: &std::path::PathBuf) -> Result<Self, std::io::Error> {
+        let mut file = std::fs::File::open(path)?;
+        let mut data = String::new();
+        file.read_to_string(&mut data)?;
+        let res = serde_json::from_str(&data)?;
+        Ok(res)
     }
 }
 
@@ -222,12 +226,15 @@ pub struct GraphCircuit {
     pub inputs: Vec<Tensor<i128>>,
     /// The parameters of the model / graph of computations.
     pub params: GraphParams,
+    /// Run Args
+    pub run_args: RunArgs,
 }
 
 impl GraphCircuit {
     ///
     pub fn new(
         model: Arc<Model>,
+        run_args: RunArgs,
         check_mode: CheckMode,
     ) -> Result<GraphCircuit, Box<dyn std::error::Error>> {
         // placeholder dummy inputs - must call prepare_public_inputs to load data afterwards
@@ -237,7 +244,7 @@ impl GraphCircuit {
             inputs.push(t);
         }
 
-        let mut params = model.gen_params(check_mode)?;
+        let mut params = model.gen_params(run_args, check_mode)?;
         if params.run_args.input_visibility.is_hashed() {
             params.num_hashes += model.graph.num_inputs();
         }
@@ -249,6 +256,7 @@ impl GraphCircuit {
             model: model.clone(),
             inputs,
             params,
+            run_args,
         })
     }
     ///
@@ -258,7 +266,7 @@ impl GraphCircuit {
         for (input, shape) in data.input_data.iter().zip(self.model.graph.input_shapes()) {
             let t: Vec<i128> = input
                 .par_iter()
-                .map(|x| quantize_float(x, 0.0, self.model.run_args.scale).unwrap())
+                .map(|x| quantize_float(x, 0.0, self.run_args.scale).unwrap())
                 .collect();
 
             let mut t: Tensor<i128> = t.into_iter().into();
@@ -267,6 +275,41 @@ impl GraphCircuit {
             inputs.push(t);
         }
         self.inputs = inputs;
+    }
+
+    /// Calibrate the circuit to the supplied data.
+    pub fn calibrate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let res = self.forward()?;
+        let max_range = 2i128.pow(self.run_args.bits as u32 - 1);
+        if res.max_lookup_input >= max_range {
+            let recommended_bits = (res.max_lookup_input as f64).log2().ceil() as usize + 1;
+            if recommended_bits <= 27 {
+                self.run_args.bits = recommended_bits;
+                self.run_args.logrows = (recommended_bits + 1) as u32;
+                info!(
+                    "increasing bits to: {}, increasing logrows to: {}",
+                    recommended_bits,
+                    recommended_bits + 1
+                );
+                return self.calibrate();
+            } else {
+                let err_string = format!("No possible value of bits (estimate {}) at scale {} can accomodate this value. Try changing the scale and re-running calibration.", recommended_bits, self.run_args.scale);
+                error!("{}", err_string);
+                return Err(err_string.into());
+            }
+        } else {
+            let min_bits = (res.max_lookup_input as f64).log2().ceil() as usize + 1;
+            let min_rows_from_constraints =
+                (self.params.num_constraints as f64).log2().ceil() as usize + 1;
+            let logrows = std::cmp::max(min_bits, min_rows_from_constraints);
+            info!(
+                "setting bits to: {}, setting logrows to: {}",
+                min_bits, logrows
+            );
+            self.run_args.bits = min_bits;
+            self.run_args.logrows = logrows as u32;
+        }
+        Ok(())
     }
 
     /// Runs the forward pass of the model / graph of computations and any associated hashing.
@@ -281,8 +324,9 @@ impl GraphCircuit {
         }
         let mut output_hashes = vec![];
         let outputs = self.model.forward(&self.inputs)?;
+
         if self.model.visibility.output.is_hashed() {
-            for input in outputs.iter() {
+            for input in outputs.outputs.iter() {
                 output_hashes.push(witness_hash::<POSEIDON_LEN_GRAPH>(
                     input.iter().map(|x| i128_to_felt(*x)).collect(),
                 )?);
@@ -291,27 +335,29 @@ impl GraphCircuit {
 
         Ok(ForwardResult {
             inputs: self.inputs.clone(),
-            outputs,
+            outputs: outputs.outputs,
             input_hashes,
             output_hashes,
+            max_lookup_input: outputs.max_lookup_inputs,
         })
     }
 
     /// Create a new circuit from a set of input data and cli arguments.
     pub fn from_arg(check_mode: CheckMode) -> Result<Self, Box<dyn std::error::Error>> {
         let cli = Cli::create()?;
-        let model = Arc::new(Model::from_ezkl_conf(cli)?);
-        Self::new(model, check_mode)
+        let model = Arc::new(Model::from_cli(cli.clone())?);
+        let run_args = RunArgs::from_cli(cli)?;
+        Self::new(model, run_args, check_mode)
     }
 
     /// Create a new circuit from a set of input data and [GraphParams].
-    pub fn from_model_params(
+    pub fn from_params(
         params: &GraphParams,
         model_path: &std::path::PathBuf,
         check_mode: CheckMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let model = Arc::new(Model::from_model_params(params, model_path)?);
-        Self::new(model, check_mode)
+        Self::new(model, params.run_args, check_mode)
     }
 
     /// Prepare the public inputs for the circuit.
@@ -340,17 +386,12 @@ impl GraphCircuit {
                 let mut t: Tensor<i128> = t.into_iter().into();
 
                 let len = t.len();
-                if self.model.run_args.pack_base > 1 {
-                    let max_exponent =
-                        (((len - 1) as u32) * (self.model.run_args.scale + 1)) as f64;
-                    if max_exponent > (i128::MAX as f64).log(self.model.run_args.pack_base as f64) {
+                if self.run_args.pack_base > 1 {
+                    let max_exponent = (((len - 1) as u32) * (self.run_args.scale + 1)) as f64;
+                    if max_exponent > (i128::MAX as f64).log(self.run_args.pack_base as f64) {
                         return Err(Box::new(GraphError::PackingExponent));
                     }
-                    t = pack(
-                        &t,
-                        self.model.run_args.pack_base as i128,
-                        self.model.run_args.scale,
-                    )?;
+                    t = pack(&t, self.run_args.pack_base as i128, self.run_args.scale)?;
                 }
                 public_inputs.push(t);
             }
@@ -488,6 +529,7 @@ impl Circuit<Fp> for GraphCircuit {
             .layout(
                 config.model_config.clone(),
                 &mut layouter,
+                &self.run_args,
                 &inputs,
                 &config.model_config.vars,
             )
