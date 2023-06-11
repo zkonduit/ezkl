@@ -1,4 +1,4 @@
-use crate::graph::GraphInput;
+use crate::graph::{OnChainData, GraphInput};
 use crate::pfsys::evm::EvmVerificationError;
 use crate::pfsys::Snark;
 use ethers::contract::abigen;
@@ -151,15 +151,20 @@ pub async fn read_on_chain_inputs (
 
                 info!("created tx");
                 debug!("transaction {:#?}", tx);
-                let _result = client.call(&tx, None).await?;
-                
+
+                let result = client.call(&tx, None).await?;
+                debug!("return data {:#?}", result);
+
                 // Convert bytes to U256 to f32 according to decimals
-                //let response = U256::from_little_endian(&result[..]);
-                // let converted = response.low_u64() as f32 / 10u64.pow(on_chain_data.decimals as u32) as f32;
+                let response = U256::from_big_endian(&result[..]);
+                debug!("response {:#?}", response);
+
+                // Convert U256 to f32 according to decimals
+                let converted = response.low_u64() as f32 / 10f32.powi(on_chain_data.decimals as i32);
+                debug!("rconverted {:#?}", converted);
 
                 // Store the result
-                data.input_data.push(vec![0.0]);
-                
+                data.input_data[0].push(converted);
             }
         }
     }
@@ -207,7 +212,11 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 /// Reads in raw bytes code and generates equivalent .sol file
-pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
+/// Can optionally attest to on-chain inputs
+pub fn fix_verifier_sol(
+    input_file: PathBuf, 
+    data: Option<Vec<OnChainData>>
+) -> Result<String, Box<dyn Error>> {
     let file = File::open(input_file.clone())?;
     let reader = BufReader::new(file);
 
@@ -456,23 +465,109 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
 
     // get the max transcript addr
     let max_transcript_addr = transcript_addrs.iter().max().unwrap() / 32;
-    let mut contract = format!(
-        "// SPDX-License-Identifier: MIT
-    pragma solidity ^0.8.17;
-    
-    contract Verifier {{
-        function verify(
-            uint256[] memory pubInputs,
-            bytes memory proof
-        ) public view returns (bool) {{
-            bool success = true;
-            bytes32[{}] memory transcript;
-            assembly {{
-        ",
-        max_transcript_addr
-    )
-    .trim()
-    .to_string();
+
+    let mut contract = if let Some(data) = data {
+        format!(
+            r#"// SPDX-License-Identifier: MIT
+            pragma solidity ^0.8.17;
+            
+            contract DataAttestationVerifier {{
+            
+                /**
+                 * @notice Struct used to make view only calls to accounts to fetch the data that EZKL reads from.
+                 * @param the address of the account to make calls to
+                 * @param the abi encoded function calls to make to the `contractAddress`
+                 */
+                struct AccountCall {{
+                    address contractAddress;
+                    mapping(uint256 => bytes) callData;
+                    uint callCount;
+                }}
+                AccountCall[{}] public accountCalls;
+            
+                uint public totalCalls;
+            
+                /**
+                 * @dev Initialize the contract with account calls the EZKL model will read from.
+                 * @param _contractAddresses - The calls to all the contracts EZKL reads storage from.
+                 * @param _callData - The abi encoded function calls to make to the `contractAddress` that EZKL reads storage from.
+                 */
+                constructor(address[] memory _contractAddresses, bytes[][] memory _callData) {{
+                    require(_contractAddresses.length == _callData.length && accountCalls.length == _contractAddresses.length, "Invalid input length");
+                    // fill in the accountCalls storage array
+                    for(uint256 i = 0; i < _contractAddresses.length; i++) {{
+                        AccountCall storage accountCall = accountCalls[i];
+                        accountCall.contractAddress = _contractAddresses[i];
+                        accountCall.callCount = _callData[i].length;
+                        for(uint256 j = 0; j < _callData[i].length; j++){{
+                            accountCall.callData[j] = _callData[i][j];
+                        }}
+                        // count the total number of storage reads across all of the accounts
+                        totalCalls += _callData[i].length;
+                    }}
+                }}
+            
+                function staticCall (address target, bytes memory data) internal view returns (bytes memory) {{
+                    (bool success, bytes memory returndata) = target.staticcall(data);
+                    if (success) {{
+                        if (returndata.length == 0) {{
+                            // only check isContract if the call was successful and the return data is empty
+                            // otherwise we already know that it was a contract
+                            require(target.code.length > 0, "Address: call to non-contract");
+                        }}
+                    return returndata;
+                    }} else {{
+                        revert("Address: low-level call failed");
+                    }}
+                }}
+            
+                function attestData(uint256[] memory pubInputs) internal view {{
+                    require(pubInputs.length >= totalCalls, "Invalid public inputs length");
+                    uint256 _accountCount = accountCalls.length;
+                    uint counter = 0; 
+                    for (uint8 i = 0; i < _accountCount; ++i) {{
+                        address account = accountCalls[i].contractAddress;
+                        for (uint8 j = 0; j < accountCalls[i].callCount; j++) {{
+                            bytes memory returnData = staticCall(account, accountCalls[i].callData[j]);
+                            require(abi.decode(returnData, (uint256)) == pubInputs[counter], "Public input does not match");
+                            counter++;
+                        }}
+                    }}
+                }}
+            
+                function verifyWithDataAttestation(
+                    uint256[] memory pubInputs,
+                    bytes memory proof
+                ) public view returns (bool) {{
+                    bool success = true;
+                    bytes32[{}] memory transcript;
+                    attestData(pubInputs);
+                    assembly {{ 
+                "#,
+            data.len(),
+            max_transcript_addr
+        )
+        .trim()
+        .to_string()
+    } else {
+        format!(
+            "// SPDX-License-Identifier: MIT
+        pragma solidity ^0.8.17;
+        
+        contract Verifier {{
+            function verify(
+                uint256[] memory pubInputs,
+                bytes memory proof
+            ) public view returns (bool) {{
+                bool success = true;
+                bytes32[{}] memory transcript;
+                assembly {{
+            ",
+            max_transcript_addr
+        )
+        .trim()
+        .to_string()
+    };
 
     // using a boxed Write trait object here to show it works for any Struct impl'ing Write
     // you may also use a std::fs::File here

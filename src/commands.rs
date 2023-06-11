@@ -405,6 +405,32 @@ pub enum Commands {
         // todo, optionally allow supplying proving key
     },
 
+    /// Creates an EVM verifier that attests to on-chain inputs for a single proof
+    #[command(name = "create-evm-data-attestation-verifier", arg_required_else_help = true)]
+    CreateEVMDataAttestationVerifier {
+        /// The path to load the desired params file
+        #[arg(long)]
+        params_path: PathBuf,
+        /// The path to save circuit params to
+        #[arg(long)]
+        circuit_params_path: PathBuf,
+        /// The path to load the desired verfication key file
+        #[arg(long)]
+        vk_path: PathBuf,
+        /// The path to output the Solidity code
+        #[arg(long)]
+        sol_code_path: PathBuf,
+        /// The path to the .json data file, which should
+        /// contain the necessary calldata and accoount addresses  
+        /// needed need to read from all the on-chain
+        /// view functions that return the data that the network
+        /// ingests as inputs. 
+        #[arg(short = 'D', long)]
+        data: PathBuf,
+        // todo, optionally allow supplying proving key
+        // todo, optionally allow supplying proving key
+    },
+
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for an aggregate proof
     #[command(name = "create-evm-verifier-aggr", arg_required_else_help = true)]
@@ -421,7 +447,6 @@ pub enum Commands {
         /// The path to the Solidity code
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
-        // todo, optionally allow supplying proving key
     },
 
     /// Verifies a proof, returning accept or reject

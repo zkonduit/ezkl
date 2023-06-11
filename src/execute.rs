@@ -100,15 +100,26 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             deployment_code_path,
             sol_code_path,
         ),
+        Commands::CreateEVMDataAttestationVerifier {
+            params_path,
+            circuit_params_path,
+            vk_path,
+            sol_code_path,
+            data 
+        } => create_evm_data_attestation_verifier(
+            params_path,
+            circuit_params_path,
+            vk_path,
+            sol_code_path,
+            data
+        ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifierAggr {
             vk_path,
             params_path,
             deployment_code_path,
             sol_code_path,
-        } => {
-            create_evm_aggregate_verifier(vk_path, params_path, deployment_code_path, sol_code_path)
-        }
+        } => create_evm_aggregate_verifier(vk_path, params_path, deployment_code_path, sol_code_path),
         Commands::Setup {
             params_path,
             circuit_params_path,
@@ -427,10 +438,51 @@ fn create_evm_verifier(
         let mut f = File::create(sol_code_path.as_ref().unwrap())?;
         let _ = f.write(yul_code.as_bytes());
 
-        let output = fix_verifier_sol(sol_code_path.as_ref().unwrap().clone())?;
+        let output = fix_verifier_sol(
+            sol_code_path.as_ref().unwrap().clone(),
+            None
+        )?;
 
         let mut f = File::create(sol_code_path.as_ref().unwrap())?;
         let _ = f.write(output.as_bytes());
+    }
+    Ok(())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn create_evm_data_attestation_verifier(
+    vk_path: PathBuf,
+    params_path: PathBuf,
+    circuit_params_path: PathBuf,
+    sol_code_path: PathBuf,
+    data: PathBuf
+) -> Result<(), Box<dyn Error>> {
+    let model_circuit_params = GraphParams::load(&circuit_params_path);
+    let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)?;
+
+    let num_instance = model_circuit_params.total_instances();
+
+    let vk =
+        load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, model_circuit_params)?;
+    trace!("params computed");
+
+    let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
+    
+    let mut f = File::create(sol_code_path.clone())?;
+    let _ = f.write(yul_code.as_bytes());
+
+    let data = GraphInput::from_path(data)?.on_chain_input_data;
+
+    if let Some(data) = data {
+        let output = fix_verifier_sol(
+            sol_code_path.clone(),
+            Some(data)
+        )?;
+        
+        let mut f = File::create(sol_code_path.clone())?;
+        let _ = f.write(output.as_bytes());
+    } else {
+        panic!("No on_chain_input_data field found in .json data file")
     }
     Ok(())
 }
@@ -481,7 +533,10 @@ fn create_evm_aggregate_verifier(
         let mut f = File::create(sol_code_path.as_ref().unwrap())?;
         let _ = f.write(yul_code.as_bytes());
 
-        let output = fix_verifier_sol(sol_code_path.as_ref().unwrap().clone())?;
+        let output = fix_verifier_sol(
+            sol_code_path.as_ref().unwrap().clone(),
+            None
+        )?;
 
         let mut f = File::create(sol_code_path.as_ref().unwrap())?;
         let _ = f.write(output.as_bytes());

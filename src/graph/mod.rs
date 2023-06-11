@@ -86,12 +86,15 @@ pub enum GraphError {
     PackingExponent,
 }
 
-/// Struct that defines how the contract address and call data view function to read on-chain data.
-/// verifyWithDataAttestation.sol
+/// Defines the view only calls to accounts to fetch the on-chain input data.
+/// This data will be included as part of the first elements in the publicInputs
+/// for the sol evm verifier and will be  verifyWithDataAttestation.sol
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct OnChainData {
     /// byte strings representing the ABI encoded function calls to 
-    /// read the data from the address.
+    /// read the data from the address. This call must return a single
+    /// elementary type (https://docs.soliditylang.org/en/v0.8.20/abi-spec.html#types).
+    /// We don't support dynamic types currently.
     pub call_data: Vec<String>,
     /// Address of the contract to read the data from.
     pub address: String,
@@ -102,7 +105,7 @@ pub struct OnChainData {
 /// For example, the input might be the image data for a neural network, and the output class scores.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct GraphInput {
-    /// Inputs to the model / computational graph (can be empty vectors if inputs are not being constrained).
+    /// Inputs to the model / computational graph (can be empty vectors if inputs are coming from on-chain).
     pub input_data: Vec<Vec<f32>>,
     /// The expected output of the model (can be empty vectors if outputs are not being constrained).
     pub output_data: Vec<Vec<f32>>,
