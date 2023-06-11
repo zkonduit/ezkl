@@ -2,7 +2,7 @@ use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::{RunArgs, StrategyType};
 use crate::eth::{fix_verifier_sol, verify_proof_via_solidity};
 use crate::execute::{
-    create_proof_circuit_kzg, gen_deployment_code, load_params_cmd, verify_proof_circuit_kzg,
+    create_proof_circuit_kzg, gen_deployment_code, gen_sol_bytecode, load_params_cmd, verify_proof_circuit_kzg,
 };
 use crate::graph::{
     quantize_float, GraphCircuit, GraphInput, GraphParams, Model, VarVisibility, Visibility,
@@ -515,6 +515,8 @@ fn verify_aggr(
     circuit_params_path,
     deployment_code_path,
     sol_code_path=None,
+    sol_bytecode_path=None,
+    runs=None,
 ))]
 fn create_evm_verifier(
     vk_path: PathBuf,
@@ -522,6 +524,8 @@ fn create_evm_verifier(
     circuit_params_path: PathBuf,
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
+    sol_bytecode_path: Option<PathBuf>,
+    runs: Option<usize>,
 ) -> Result<bool, PyErr> {
     let model_circuit_params = GraphParams::load(&circuit_params_path);
     let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)
@@ -552,6 +556,13 @@ fn create_evm_verifier(
         let mut f = File::create(sol_code_path.as_ref().unwrap())
             .map_err(|_| PyIOError::new_err("Failed to write solidity code into file"))?;
         let _ = f.write(output.as_bytes());
+
+        if sol_bytecode_path.is_some() {
+            let sol_bytecode = gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), runs).unwrap();
+            sol_bytecode
+                .save(&sol_bytecode_path.unwrap())
+                .map_err(|_| PyIOError::new_err("Failed to save deployment code"))?;
+        }
     }
     Ok(true)
 }
@@ -561,12 +572,14 @@ fn create_evm_verifier(
     proof_path,
     deployment_code_path,
     sol_code_path=None,
+    sol_bytecode_path=None,
     runs=None
 ))]
 fn verify_evm(
     proof_path: PathBuf,
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
+    sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
 ) -> Result<bool, PyErr> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)
@@ -580,8 +593,9 @@ fn verify_evm(
         let result = Runtime::new()
             .unwrap()
             .block_on(verify_proof_via_solidity(
-                proof,
-                sol_code_path.unwrap(),
+                proof.clone(),
+                sol_code_path,
+                None,
                 runs,
             ))
             .map_err(|_| PyRuntimeError::new_err("Failed to verify proof via solidity"))?;
@@ -589,6 +603,23 @@ fn verify_evm(
         trace!("Solidity verification result: {}", result);
 
         assert!(result);
+
+        if sol_bytecode_path.is_some() {
+
+            let result = Runtime::new()
+                .unwrap()
+                .block_on(verify_proof_via_solidity(
+                    proof,
+                    None,
+                    sol_bytecode_path,
+                    runs
+                ))
+                .map_err(|_| PyRuntimeError::new_err("Failed to verify proof via solidity"))?;
+    
+            trace!("Solidity bytecode verification result: {}", result);
+    
+            assert!(result);
+        }
     }
     Ok(true)
 }
@@ -599,12 +630,16 @@ fn verify_evm(
     params_path,
     deployment_code_path,
     sol_code_path=None,
+    sol_bytecode_path=None,
+    runs=None,
 ))]
 fn create_evm_verifier_aggr(
     vk_path: PathBuf,
     params_path: PathBuf,
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
+    sol_bytecode_path: Option<PathBuf>,
+    runs: Option<usize>,
 ) -> Result<bool, PyErr> {
     let params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(params_path)
         .map_err(|_| PyIOError::new_err("Failed to load params"))?;
@@ -636,6 +671,13 @@ fn create_evm_verifier_aggr(
         let mut f = File::create(sol_code_path.as_ref().unwrap())
             .map_err(|_| PyIOError::new_err("Failed to write solidity code into file"))?;
         let _ = f.write(output.as_bytes());
+
+        if sol_bytecode_path.is_some() {
+            let sol_bytecode = gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), runs).unwrap();
+            sol_bytecode
+                .save(&sol_bytecode_path.unwrap())
+                .map_err(|_| PyIOError::new_err("Failed to save deployment code"))?;
+        }
     }
     Ok(true)
 }
