@@ -138,7 +138,7 @@ impl RunArgs {
             #[cfg(not(target_arch = "wasm32"))]
             Commands::Fuzz { args, .. } => Ok(args),
             #[cfg(feature = "render")]
-            Commands::RenderCircuit { model, args, .. } => Ok(args),
+            Commands::RenderCircuit { args, .. } => Ok(args),
             _ => panic!(),
         }
     }

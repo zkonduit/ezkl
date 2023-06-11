@@ -444,7 +444,7 @@ fn render(output: PathBuf) -> Result<(), Box<dyn Error>> {
     halo2_proofs::dev::CircuitLayout::default()
         // We hide labels, else most circuits become impossible to decipher because of overlaid text
         .show_labels(false)
-        .render(circuit.run_args.logrows, &circuit, &root)?;
+        .render(circuit.params.run_args.logrows, &circuit, &root)?;
     Ok(())
 }
 
