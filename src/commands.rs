@@ -144,9 +144,7 @@ impl RunArgs {
         match cli.command {
             Commands::Table { args, .. }
             | Commands::Mock { args, .. }
-            | Commands::Setup { args, .. }
-            | Commands::Calibrate { args, .. }
-            | Commands::Forward { args, .. } => Ok(args),
+            | Commands::Calibrate { args, .. } => Ok(args),
             #[cfg(not(target_arch = "wasm32"))]
             Commands::Fuzz { args, .. } => Ok(args),
             #[cfg(feature = "render")]
@@ -239,9 +237,9 @@ pub enum Commands {
         /// Path to the new .json file
         #[arg(short = 'O', long)]
         output: PathBuf,
-        /// proving arguments
-        #[clap(flatten)]
-        args: RunArgs,
+        /// Path to the circuit params to load
+        #[arg(long)]
+        circuit_params_path: PathBuf,
     },
 
     /// Calibrates the proving hyperparameters, produces a quantized output from those hyperparameters, and saves it to a .json file. The circuit parameters are also saved to a file.
@@ -255,7 +253,7 @@ pub enum Commands {
         model: PathBuf,
         /// Path to circuit_params file to output
         #[arg(short = 'O', long)]
-        output: PathBuf,
+        params_output: PathBuf,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
@@ -325,9 +323,6 @@ pub enum Commands {
     /// Creates pk and vk and circuit params
     #[command(arg_required_else_help = true)]
     Setup {
-        /// The path to the .json calibration data file
-        #[arg(long)]
-        calibration_data: Option<PathBuf>,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
@@ -340,13 +335,11 @@ pub enum Commands {
         /// The path to output the proving key file
         #[arg(long)]
         pk_path: PathBuf,
-        /// The path to save circuit params to
+        /// The path to load circuit params from
         #[arg(long)]
         circuit_params_path: PathBuf,
-        /// proving arguments
-        #[clap(flatten)]
-        args: RunArgs,
     },
+
     #[cfg(not(target_arch = "wasm32"))]
     /// Fuzzes the proof pipeline with random inputs, random parameters, and random keys
     #[command(arg_required_else_help = true)]

@@ -546,8 +546,6 @@ impl Model {
         match cli.command {
             Commands::Table { model, args, .. }
             | Commands::Mock { model, args, .. }
-            | Commands::Setup { model, args, .. }
-            | Commands::Forward { model, args, .. }
             | Commands::Calibrate { model, args, .. } => {
                 let visibility = VarVisibility::from_args(args.clone())?;
                 Model::new(&mut std::fs::File::open(model)?, args, visibility)

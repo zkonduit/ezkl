@@ -82,15 +82,15 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         Commands::Calibrate {
             data,
             model: _,
-            output,
+            params_output,
             args: _,
-        } => calibrate(data, output),
+        } => calibrate(data, params_output),
         Commands::Forward {
             data,
-            model: _,
+            model,
             output,
-            args: _,
-        } => forward(data, output),
+            circuit_params_path,
+        } => forward(model, data, output, circuit_params_path),
         Commands::Mock { data, .. } => mock(data),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
@@ -116,19 +116,12 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             create_evm_aggregate_verifier(vk_path, params_path, deployment_code_path, sol_code_path)
         }
         Commands::Setup {
+            model,
             params_path,
             circuit_params_path,
             vk_path,
             pk_path,
-            calibration_data,
-            ..
-        } => setup(
-            params_path,
-            vk_path,
-            pk_path,
-            circuit_params_path,
-            calibration_data,
-        ),
+        } => setup(model, params_path, circuit_params_path, vk_path, pk_path),
         Commands::Prove {
             data,
             model,
@@ -330,9 +323,16 @@ fn table(cli: Cli) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn forward(data: PathBuf, output: PathBuf) -> Result<(), Box<dyn Error>> {
+fn forward(
+    model_path: PathBuf,
+    data: PathBuf,
+    output: PathBuf,
+    circuit_params_path: PathBuf,
+) -> Result<(), Box<dyn Error>> {
+    // these aren't real values so the sanity checks are mostly meaningless
+    let circuit_params = GraphParams::load(&circuit_params_path)?;
+    let mut circuit = GraphCircuit::from_params(&circuit_params, &model_path, CheckMode::UNSAFE)?;
     let mut data = GraphInput::from_path(data)?;
-    let mut circuit = GraphCircuit::from_arg(CheckMode::SAFE)?;
     circuit.load_inputs(&data);
 
     let res = circuit.forward()?;
@@ -511,28 +511,19 @@ fn create_evm_aggregate_verifier(
 }
 
 fn setup(
+    model_path: PathBuf,
     params_path: PathBuf,
+    circuit_params_path: PathBuf,
     vk_path: PathBuf,
     pk_path: PathBuf,
-    circuit_params_path: PathBuf,
-    calibration_data: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
-    let mut circuit = GraphCircuit::from_arg(CheckMode::UNSAFE)?;
-
-    if calibration_data.is_some() {
-        let calibration_data = GraphInput::from_path(calibration_data.unwrap())?;
-        circuit.load_inputs(&calibration_data);
-        circuit.calibrate()?;
-    }
-
+    let circuit_params = GraphParams::load(&circuit_params_path)?;
+    let circuit = GraphCircuit::from_params(&circuit_params, &model_path, CheckMode::UNSAFE)?;
     let params = load_params_cmd(params_path, circuit.run_args.logrows)?;
 
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
         .map_err(Box::<dyn Error>::from)?;
-    let circuit_params = circuit.params;
-    trace!("params computed");
-    circuit_params.save(&circuit_params_path)?;
 
     save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, pk.get_vk())?;
     save_pk::<KZGCommitmentScheme<Bn256>>(&pk_path, &pk)?;
