@@ -2,7 +2,7 @@ use crate::circuit::CheckMode;
 use crate::commands::{Cli, Commands, StrategyType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{fix_verifier_sol, verify_proof_via_solidity};
-use crate::graph::{scale_to_multiplier, GraphCircuit, GraphInput, GraphParams, Model};
+use crate::graph::{scale_to_multiplier, GraphCircuit, GraphInput, GraphParams, Model, Visibility};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::evm_verify;
@@ -71,26 +71,28 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             transcript,
             args,
             num_runs,
+            ..
         } => fuzz(args.logrows, data, transcript, num_runs),
         Commands::GenSrs {
             params_path,
             logrows,
         } => gen_srs_cmd(params_path, logrows as u32),
-        Commands::Table { model: _, .. } => table(cli),
+        Commands::Table { .. } => table(),
         #[cfg(feature = "render")]
         Commands::RenderCircuit { output, .. } => render(output),
         Commands::Calibrate {
             data,
             model: _,
-            params_output,
-            args: _,
-        } => calibrate(data, params_output),
+            circuit_params_path,
+            args,
+        } => calibrate(data, args.batch_size, circuit_params_path),
         Commands::Forward {
             data,
             model,
             output,
-            circuit_params_path,
-        } => forward(model, data, output, circuit_params_path),
+            scale,
+            batch_size,
+        } => forward(model, data, output, scale, batch_size),
         Commands::Mock { data, .. } => mock(data),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
@@ -317,9 +319,9 @@ fn gen_srs_cmd(params_path: PathBuf, logrows: u32) -> Result<(), Box<dyn Error>>
     Ok(())
 }
 
-fn table(cli: Cli) -> Result<(), Box<dyn Error>> {
-    let om = Model::from_cli(cli)?;
-    info!("\n {}", om.table_nodes());
+fn table() -> Result<(), Box<dyn Error>> {
+    let model = Model::from_arg()?;
+    info!("\n {}", model.table_nodes());
     Ok(())
 }
 
@@ -327,10 +329,16 @@ fn forward(
     model_path: PathBuf,
     data: PathBuf,
     output: PathBuf,
-    circuit_params_path: PathBuf,
+    scale: u32,
+    batch_size: usize,
 ) -> Result<(), Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
-    let circuit_params = GraphParams::load(&circuit_params_path)?;
+    let mut circuit_params = GraphParams::default();
+    circuit_params.run_args.scale = scale;
+    circuit_params.run_args.batch_size = batch_size;
+    circuit_params.run_args.allocated_constraints = Some(0);
+    circuit_params.run_args.output_visibility = Visibility::Public;
+
     let mut circuit = GraphCircuit::from_params(&circuit_params, &model_path, CheckMode::UNSAFE)?;
     let mut data = GraphInput::from_path(data)?;
     circuit.load_inputs(&data);
@@ -362,15 +370,31 @@ fn forward(
     Ok(())
 }
 
-fn calibrate(data: PathBuf, output: PathBuf) -> Result<(), Box<dyn Error>> {
+fn calibrate(data: PathBuf, batch_size: usize, output: PathBuf) -> Result<(), Box<dyn Error>> {
     let data = GraphInput::from_path(data)?;
     let mut circuit = GraphCircuit::from_arg(CheckMode::SAFE)?;
-    circuit.load_inputs(&data);
+
+    let mut calibrated_params = None;
+
+    for chunk in data.split_into_batches(batch_size)? {
+        circuit.load_inputs(&chunk);
+        circuit.calibrate()?;
+
+        if calibrated_params.is_none() {
+            calibrated_params = Some(circuit.params.clone());
+        }
+        // we want the largest logrows across batches of calibration data
+        if let Some(p) = &calibrated_params {
+            if p.run_args.logrows > circuit.params.run_args.logrows {
+                calibrated_params = Some(circuit.params.clone());
+            }
+        }
+    }
+
     let circuit_params = circuit.params.clone();
     trace!("params computed");
     circuit_params.save(&output)?;
-
-    circuit.calibrate()
+    Ok(())
 }
 
 fn mock(data: PathBuf) -> Result<(), Box<dyn Error>> {
@@ -381,7 +405,7 @@ fn mock(data: PathBuf) -> Result<(), Box<dyn Error>> {
 
     info!("Mock proof");
 
-    let prover = MockProver::run(circuit.run_args.logrows, &circuit, public_inputs)
+    let prover = MockProver::run(circuit.params.run_args.logrows, &circuit, public_inputs)
         .map_err(Box::<dyn Error>::from)?;
     prover.assert_satisfied();
     prover
@@ -520,7 +544,7 @@ fn setup(
     // these aren't real values so the sanity checks are mostly meaningless
     let circuit_params = GraphParams::load(&circuit_params_path)?;
     let circuit = GraphCircuit::from_params(&circuit_params, &model_path, CheckMode::UNSAFE)?;
-    let params = load_params_cmd(params_path, circuit.run_args.logrows)?;
+    let params = load_params_cmd(params_path, circuit_params.run_args.logrows)?;
 
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
         .map_err(Box::<dyn Error>::from)?;

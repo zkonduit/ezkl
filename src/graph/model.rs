@@ -218,12 +218,9 @@ impl Model {
     /// # Arguments
     /// * `reader` - A reader for an Onnx file.
     /// * `run_args` - [RunArgs]
-    /// * `visibility` - Which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
-    pub fn new(
-        reader: &mut dyn std::io::Read,
-        run_args: RunArgs,
-        visibility: VarVisibility,
-    ) -> Result<Self, Box<dyn Error>> {
+    pub fn new(reader: &mut dyn std::io::Read, run_args: RunArgs) -> Result<Self, Box<dyn Error>> {
+        let visibility = VarVisibility::from_args(run_args)?;
+
         let graph = Self::load_onnx_model(reader, &run_args, &visibility)?;
 
         let om = Model { graph, visibility };
@@ -283,9 +280,11 @@ impl Model {
         let set: HashSet<_> = lookup_ops.drain(..).collect(); // dedup
         lookup_ops.extend(set.into_iter().sorted());
 
+        let batch_size = self.graph.input_shapes()[0][0];
+        assert!(self.graph.input_shapes().iter().all(|x| x[0] == batch_size));
+
         Ok(GraphParams {
             run_args,
-            visibility: self.visibility.clone(),
             model_instance_shapes: instance_shapes,
             num_hashes: 0,
             num_constraints,
@@ -388,7 +387,7 @@ impl Model {
                     Ok(x) => x as usize,
                     Err(_e) => {
                         if x.to_string() == "batch_size" {
-                            run_args.batch_size as usize
+                            run_args.batch_size
                         } else {
                             panic!("Unknown dimension {}: {:?}", x.to_string(), x)
                         }
@@ -406,13 +405,13 @@ impl Model {
         }
         // Note: do not optimize the model, as the layout will depend on underlying hardware
         let model = model.into_typed()?.into_decluttered()?;
-        let batch_size = model.symbol_table.sym("batch_size");
-        let seq_len = model.symbol_table.sym("sequence_length");
+        let batch_size_sym = model.symbol_table.sym("batch_size");
+        let seq_len_sym = model.symbol_table.sym("sequence_length");
         let model = model
             .concretize_dims(
-                &SymbolValues::default().with(&batch_size, run_args.batch_size as i64),
+                &SymbolValues::default().with(&batch_size_sym, run_args.batch_size as i64),
             )?
-            .concretize_dims(&SymbolValues::default().with(&seq_len, 1))?;
+            .concretize_dims(&SymbolValues::default().with(&seq_len_sym, 1))?;
 
         info!("set batch size to {}", run_args.batch_size);
 
@@ -544,21 +543,18 @@ impl Model {
     /// * `cli` - A [Cli] struct holding parsed CLI arguments.
     pub fn from_cli(cli: Cli) -> Result<Self, Box<dyn Error>> {
         match cli.command {
-            Commands::Table { model, args, .. }
-            | Commands::Mock { model, args, .. }
+            Commands::Mock { model, args, .. }
+            | Commands::Table { model, args, .. }
             | Commands::Calibrate { model, args, .. } => {
-                let visibility = VarVisibility::from_args(args.clone())?;
-                Model::new(&mut std::fs::File::open(model)?, args, visibility)
+                Model::new(&mut std::fs::File::open(model)?, args)
             }
             #[cfg(not(target_arch = "wasm32"))]
             Commands::Fuzz { model, args, .. } => {
-                let visibility = VarVisibility::from_args(args.clone())?;
-                Model::new(&mut std::fs::File::open(model)?, args, visibility)
+                Model::new(&mut std::fs::File::open(model)?, args)
             }
             #[cfg(feature = "render")]
             Commands::RenderCircuit { model, args, .. } => {
-                let visibility = VarVisibility::from_args(args.clone())?;
-                Model::new(&mut std::fs::File::open(model)?, args, visibility)
+                Model::new(&mut std::fs::File::open(model)?, args)
             }
             _ => panic!(),
         }
@@ -571,12 +567,7 @@ impl Model {
         params: &GraphParams,
         model: &std::path::PathBuf,
     ) -> Result<Self, Box<dyn Error>> {
-        let visibility = VarVisibility::from_args(params.run_args.clone())?;
-        Model::new(
-            &mut std::fs::File::open(model)?,
-            params.run_args.clone(),
-            visibility,
-        )
+        Model::new(&mut std::fs::File::open(model)?, params.run_args.clone())
     }
 
     /// Creates a `Model` based on CLI arguments

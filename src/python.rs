@@ -4,9 +4,7 @@ use crate::eth::{fix_verifier_sol, verify_proof_via_solidity};
 use crate::execute::{
     create_proof_circuit_kzg, gen_deployment_code, load_params_cmd, verify_proof_circuit_kzg,
 };
-use crate::graph::{
-    quantize_float, GraphCircuit, GraphInput, GraphParams, Model, VarVisibility, Visibility,
-};
+use crate::graph::{scale_to_multiplier, GraphCircuit, GraphInput, GraphParams, Model, Visibility};
 use crate::pfsys::evm::{
     aggregation::{gen_aggregation_evm_verifier, AggregationCircuit},
     evm_verify,
@@ -23,12 +21,12 @@ use halo2_proofs::poly::kzg::{
 };
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
 use halo2curves::bn256::{Bn256, Fr};
+use itertools::Itertools;
 use log::trace;
 use pyo3::exceptions::{PyIOError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3_log;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::{fs::File, io::Write, path::PathBuf, sync::Arc};
 use tokio::runtime::Runtime;
 
@@ -53,7 +51,7 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub pack_base: u32,
     #[pyo3(get, set)]
-    pub batch_size: u32,
+    pub batch_size: usize,
     #[pyo3(get, set)]
     pub allocated_constraints: Option<usize>,
 }
@@ -103,9 +101,8 @@ impl From<PyRunArgs> for RunArgs {
 ))]
 fn table(model: String, py_run_args: Option<PyRunArgs>) -> Result<String, PyErr> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
-    let visibility: VarVisibility = run_args.to_var_visibility();
     let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
-    let result = Model::new(&mut reader, run_args, visibility);
+    let result = Model::new(&mut reader, run_args);
 
     match result {
         Ok(m) => Ok(m.table_nodes()),
@@ -131,60 +128,106 @@ fn gen_srs(params_path: PathBuf, logrows: usize) -> PyResult<()> {
     output,
     py_run_args = None
 ))]
-fn forward(
+fn calibrate(
     data: PathBuf,
     model: PathBuf,
     output: PathBuf,
     py_run_args: Option<PyRunArgs>,
-) -> PyResult<()> {
+) -> Result<bool, PyErr> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
+    let data =
+        GraphInput::from_path(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
+
+    let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
+    let procmodel = Model::new(&mut reader, run_args)
+        .map_err(|_| PyIOError::new_err("Failed to process model"))?;
+
+    let arcmodel: Arc<Model> = Arc::new(procmodel);
+    let mut circuit = GraphCircuit::new(arcmodel, run_args, CheckMode::SAFE)
+        .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
+
+    let mut calibrated_params = None;
+
+    for chunk in data
+        .split_into_batches(run_args.batch_size)
+        .map_err(|_| PyRuntimeError::new_err("Failed to split calibration data into batches"))?
+    {
+        circuit.load_inputs(&chunk);
+        circuit
+            .calibrate()
+            .map_err(|_| PyRuntimeError::new_err("Failed to run calibration pass on circuit"))?;
+
+        if calibrated_params.is_none() {
+            calibrated_params = Some(circuit.params.clone());
+        }
+        // we want the largest logrows across batches of calibration data
+        if let Some(p) = &calibrated_params {
+            if p.run_args.logrows > circuit.params.run_args.logrows {
+                calibrated_params = Some(circuit.params.clone());
+            }
+        }
+    }
+
+    let circuit_params = circuit.params.clone();
+    trace!("params computed");
+    circuit_params
+        .save(&output)
+        .map_err(|_| PyRuntimeError::new_err("Failed to save circuit params"))?;
+    Ok(true)
+}
+
+/// runs the forward pass operation
+#[pyfunction(signature = (
+    data,
+    model,
+    output,
+    scale, batch_size
+))]
+fn forward(
+    data: PathBuf,
+    model: PathBuf,
+    output: PathBuf,
+    scale: u32,
+    batch_size: usize,
+) -> PyResult<()> {
     let mut data =
         GraphInput::from_path(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
 
-    let mut model_inputs = vec![];
-    // quantize the supplied data using the provided scale.
-    // for v in new_data.input_data.iter() {
-    //     match vector_to_quantized(v, &Vec::from([v.len()]), 0.0, run_args.scale) {
-    //         Ok(t) => model_inputs.push(t),
-    //         Err(_) => return Err(PyValueError::new_err("Failed to quantize vector")),
-    //     }
-    // }
-    for v in data.input_data.iter() {
-        let t: Vec<i128> = v
-            .par_iter()
-            .map(|x| quantize_float(x, 0.0, run_args.scale).unwrap())
-            .collect();
-        model_inputs.push(t.into_iter().into());
-    }
-    let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
+    // these aren't real values so the sanity checks are mostly meaningless
+    let mut circuit_params = GraphParams::default();
+    circuit_params.run_args.scale = scale;
+    circuit_params.run_args.batch_size = batch_size;
+    circuit_params.run_args.allocated_constraints = Some(0);
+    circuit_params.run_args.output_visibility = Visibility::Public;
 
-    let model = Model::new(
-        &mut reader,
-        run_args,
-        crate::graph::VarVisibility::default(),
-    )
-    .map_err(|_| PyIOError::new_err("Failed to create new model"))?;
+    let mut circuit = GraphCircuit::from_params(&circuit_params, &model, CheckMode::UNSAFE)
+        .map_err(|_| PyIOError::new_err("Failed to load circuit"))?;
+    circuit.load_inputs(&data);
 
-    let res = model
-        .forward(&model_inputs)
-        .map_err(|_| PyIOError::new_err("Failed to run forward pass"))?;
+    let res = circuit
+        .forward()
+        .map_err(|_| PyIOError::new_err("Failed to run forward pass on circuit"))?;
 
-    let output_scales = model.graph.get_output_scales();
+    trace!(
+        "forward pass output shapes: {:?}",
+        res.outputs.iter().map(|t| t.dims()).collect_vec()
+    );
+
+    let output_scales = circuit.model.graph.get_output_scales();
     let output_scales = output_scales
         .iter()
-        .map(|scale| crate::graph::scale_to_multiplier(*scale));
+        .map(|scale| scale_to_multiplier(*scale));
 
     let float_res: Vec<Vec<f32>> = res
+        .outputs
         .iter()
         .zip(output_scales)
-        .map(|(t, scale)| {
-            t.iter()
-                .map(|e| ((*e as f64) / scale) as f32)
-                .collect::<Vec<f32>>()
-        })
+        .map(|(t, scale)| t.iter().map(|e| ((*e as f64 / scale) as f32)).collect_vec())
         .collect();
     trace!("forward pass output: {:?}", float_res);
     data.output_data = float_res;
+    data.input_hashes = Some(res.input_hashes);
+    data.output_hashes = Some(res.output_hashes);
 
     match serde_json::to_writer(&File::create(output)?, &data) {
         Ok(_) => {
@@ -212,13 +255,13 @@ fn mock(data: PathBuf, model: PathBuf, py_run_args: Option<PyRunArgs>) -> Result
     let logrows = run_args.logrows;
     let data =
         GraphInput::from_path(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
-    let visibility = run_args.to_var_visibility();
+
     let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
-    let procmodel = Model::new(&mut reader, run_args, visibility)
+    let procmodel = Model::new(&mut reader, run_args)
         .map_err(|_| PyIOError::new_err("Failed to process model"))?;
 
     let arcmodel: Arc<Model> = Arc::new(procmodel);
-    let mut circuit = GraphCircuit::new(arcmodel, CheckMode::SAFE)
+    let mut circuit = GraphCircuit::new(arcmodel, run_args, CheckMode::SAFE)
         .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
 
     let public_inputs = circuit
@@ -243,7 +286,6 @@ fn mock(data: PathBuf, model: PathBuf, py_run_args: Option<PyRunArgs>) -> Result
     pk_path,
     params_path,
     circuit_params_path,
-    py_run_args = None
 ))]
 fn setup(
     model: String,
@@ -251,18 +293,18 @@ fn setup(
     pk_path: PathBuf,
     params_path: PathBuf,
     circuit_params_path: PathBuf,
-    py_run_args: Option<PyRunArgs>,
 ) -> Result<bool, PyErr> {
-    let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
-    let logrows = run_args.logrows;
-    let visibility = run_args.to_var_visibility();
+    let model_circuit_params = GraphParams::load(&circuit_params_path)
+        .map_err(|_| PyRuntimeError::new_err("Failed to load circuit params"))?;
+
+    let logrows = model_circuit_params.run_args.logrows;
 
     let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
-    let procmodel = Model::new(&mut reader, run_args, visibility)
+    let procmodel = Model::new(&mut reader, model_circuit_params.run_args)
         .map_err(|_| PyIOError::new_err("Failed to process model"))?;
 
     let arcmodel: Arc<Model> = Arc::new(procmodel);
-    let circuit = GraphCircuit::new(arcmodel, CheckMode::UNSAFE)
+    let circuit = GraphCircuit::new(arcmodel, model_circuit_params.run_args, CheckMode::UNSAFE)
         .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
 
     let params = load_params_cmd(params_path, logrows)
@@ -272,8 +314,6 @@ fn setup(
         create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
             .map_err(|_| PyRuntimeError::new_err("Failed to create proving key"))?;
 
-    let circuit_params = circuit.params.clone();
-
     // save the verifier key
     save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, proving_key.get_vk())
         .map_err(|_| PyIOError::new_err("Failed to save verifier key to vk_path"))?;
@@ -281,9 +321,6 @@ fn setup(
     // save the prover key
     save_pk::<KZGCommitmentScheme<Bn256>>(&pk_path, &proving_key)
         .map_err(|_| PyIOError::new_err("Failed to save proving key to pk_path"))?;
-
-    // save the circuit
-    circuit_params.save(&circuit_params_path);
 
     Ok(true)
 }
@@ -312,10 +349,11 @@ fn prove(
     let data =
         GraphInput::from_path(data).map_err(|_| PyIOError::new_err("Failed to import data"))?;
 
-    let model_circuit_params = GraphParams::load(&circuit_params_path);
+    let model_circuit_params = GraphParams::load(&circuit_params_path)
+        .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
 
     let mut circuit =
-        GraphCircuit::from_model_params(&model_circuit_params, &model.into(), CheckMode::SAFE)
+        GraphCircuit::from_params(&model_circuit_params, &model.into(), CheckMode::SAFE)
             .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
 
     let public_inputs = circuit
@@ -387,7 +425,8 @@ fn verify(
     vk_path: PathBuf,
     params_path: PathBuf,
 ) -> Result<bool, PyErr> {
-    let model_circuit_params = GraphParams::load(&circuit_params_path);
+    let model_circuit_params = GraphParams::load(&circuit_params_path)
+        .map_err(|_| PyIOError::new_err("Failed to load model circuit params"))?;
     let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)
         .map_err(|_| PyIOError::new_err("Failed to load params"))?;
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)
@@ -437,10 +476,11 @@ fn aggregate(
         .zip(aggregation_vk_paths)
         .zip(circuit_params_paths)
     {
-        let model_circuit_params = GraphParams::load(&circuit_params_path);
+        let model_circuit_params = GraphParams::load(&circuit_params_path)
+            .map_err(|_| PyIOError::new_err("Failed to load model circuit params"))?;
         let params_app =
             load_params_cmd(params_path.clone(), model_circuit_params.run_args.logrows)
-                .map_err(|_| PyIOError::new_err("Failed to load model circuit params"))?;
+                .map_err(|_| PyIOError::new_err("Failed to load kzg params"))?;
         let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
             vk_path.to_path_buf(),
             // safe to clone as the inner model is wrapped in an Arc
@@ -523,7 +563,9 @@ fn create_evm_verifier(
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
-    let model_circuit_params = GraphParams::load(&circuit_params_path);
+    let model_circuit_params = GraphParams::load(&circuit_params_path)
+        .map_err(|_| PyRuntimeError::new_err("Failed to create circuit"))?;
+
     let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)
         .map_err(|_| PyIOError::new_err("Failed to load model circuit parameters"))?;
 
@@ -669,6 +711,7 @@ fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(setup, m)?)?;
     m.add_function(wrap_pyfunction!(prove, m)?)?;
     m.add_function(wrap_pyfunction!(verify, m)?)?;
+    m.add_function(wrap_pyfunction!(calibrate, m)?)?;
     m.add_function(wrap_pyfunction!(aggregate, m)?)?;
     m.add_function(wrap_pyfunction!(verify_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;

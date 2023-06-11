@@ -63,6 +63,33 @@ def test_gen_srs():
     assert os.path.isfile(params_k20_path)
 
 
+def test_calibrate():
+    """
+    Test for calibration pass
+    """
+    data_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_average',
+        'input.json'
+    )
+    model_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_average',
+        'network.onnx'
+    )
+    output_path = os.path.join(
+        folder_path,
+        'circuit.params'
+    )
+    # TODO: Dictionary outputs
+    res = ezkl_lib.calibrate(data_path, model_path, output_path)
+
+    assert os.path.isfile(output_path)
+    assert res == True
+
+
 def test_forward():
     """
     Test for vanilla forward pass
@@ -83,14 +110,20 @@ def test_forward():
         folder_path,
         'output.json'
     )
+
+    scale = 7
+    batch_size = 1
+
     # TODO: Dictionary outputs
-    res = ezkl_lib.forward(data_path, model_path, output_path)
+    res = ezkl_lib.forward(data_path, model_path,
+                           output_path, scale, batch_size)
     # assert res == {"input_data":[[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]],"input_shapes":[[1,5,5]],"output_data":[[0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625]]}
 
     with open(output_path, "r") as f:
         data = json.load(f)
 
-    assert data == {"input_data": [[0.053262424,0.074970566,0.052355476,0.028825462,0.058487028,0.008225823,0.07530029,0.0821458,0.06227987,0.024306035,0.05793174,0.04044203]], "input_hashes": None, "output_data": [[0.0546875,0.1328125,0.078125,0.109375,0.21875,0.109375,0.0546875,0.0859375,0.03125,0.0546875,0.0625,0.0078125,0.1328125,0.2265625,0.09375,0.078125,0.1640625,0.0859375,0.0625,0.0859375,0.0234375,0.1171875,0.1796875,0.0625,0.0546875,0.09375,0.0390625]], "output_hashes": None}
+    assert data == {"input_data": [[0.053262424, 0.074970566, 0.052355476, 0.028825462, 0.058487028, 0.008225823, 0.07530029, 0.0821458, 0.06227987, 0.024306035, 0.05793174, 0.04044203]], "input_hashes": [[3436631722270378000, 8118955762768849905, 10867548865092998679, 3171898146904824339]], "output_data": [[0.0546875, 0.1328125, 0.078125, 0.109375,
+                                                                                                                                                                                                                                                                                                                      0.21875, 0.109375, 0.0546875, 0.0859375, 0.03125, 0.0546875, 0.0625, 0.0078125, 0.1328125, 0.2265625, 0.09375, 0.078125, 0.1640625, 0.0859375, 0.0625, 0.0859375, 0.0234375, 0.1171875, 0.1796875, 0.0625, 0.0546875, 0.09375, 0.0390625]], "output_hashes": [[14199756545157573751, 8119908235494716828, 14053980955531533637, 3334079602463363322]]}
 
     os.remove(output_path)
 
@@ -227,7 +260,8 @@ def test_prove_and_verify():
     assert os.path.isfile(proof_path)
 
     vk_path = os.path.join(folder_path, 'test.vk')
-    res = ezkl_lib.verify(proof_path, circuit_params_path, vk_path, params_path)
+    res = ezkl_lib.verify(proof_path, circuit_params_path,
+                          vk_path, params_path)
     assert res == True
     assert os.path.isfile(vk_path)
 
@@ -311,7 +345,7 @@ def test_verify_evm():
         proof_path,
         deployment_code_path,
         # sol_code_path
-        # optimizer_runs 
+        # optimizer_runs
     )
 
     assert res == True
@@ -338,6 +372,12 @@ def test_aggregate_and_verify_aggr():
     pk_path = os.path.join(folder_path, '1l_relu.pk')
     vk_path = os.path.join(folder_path, '1l_relu.vk')
     circuit_params_path = os.path.join(folder_path, '1l_relu_circuit.params')
+
+    ezkl_lib.calibrate(
+        data_path,
+        model_path,
+        circuit_params_path,
+    )
 
     ezkl_lib.setup(
         model_path,
@@ -409,6 +449,12 @@ def test_evm_aggregate_and_verify_aggr():
     pk_path = os.path.join(folder_path, '1l_relu.pk')
     vk_path = os.path.join(folder_path, '1l_relu.vk')
     circuit_params_path = os.path.join(folder_path, '1l_relu_circuit.params')
+
+    ezkl_lib.calibrate(
+        data_path,
+        model_path,
+        circuit_params_path,
+    )
 
     ezkl_lib.setup(
         model_path,

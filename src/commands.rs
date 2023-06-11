@@ -16,7 +16,7 @@ use std::io::Read;
 use std::path::PathBuf;
 
 use crate::circuit::{CheckMode, Tolerance};
-use crate::graph::{VarVisibility, Visibility};
+use crate::graph::Visibility;
 use crate::pfsys::TranscriptType;
 
 impl std::fmt::Display for TranscriptType {
@@ -108,7 +108,7 @@ pub struct RunArgs {
     pub logrows: u32,
     /// The number of batches to split the input data into
     #[arg(long, default_value = "1")]
-    pub batch_size: u32,
+    pub batch_size: usize,
     /// Flags whether inputs are public, private, hashed
     #[arg(long, default_value = "private")]
     pub input_visibility: Visibility,
@@ -129,22 +129,12 @@ pub struct RunArgs {
 
 #[allow(missing_docs)]
 impl RunArgs {
-    pub fn to_var_visibility(&self) -> VarVisibility {
-        VarVisibility {
-            input: self.input_visibility,
-            params: self.param_visibility,
-            output: self.output_visibility,
-        }
-    }
-
     /// Creates `RunArgs` from parsed CLI arguments
     /// # Arguments
     /// * `cli` - A [Cli] struct holding parsed CLI arguments.
     pub fn from_cli(cli: Cli) -> Result<Self, Box<dyn Error>> {
         match cli.command {
-            Commands::Table { args, .. }
-            | Commands::Mock { args, .. }
-            | Commands::Calibrate { args, .. } => Ok(args),
+            Commands::Mock { args, .. } | Commands::Calibrate { args, .. } => Ok(args),
             #[cfg(not(target_arch = "wasm32"))]
             Commands::Fuzz { args, .. } => Ok(args),
             #[cfg(feature = "render")]
@@ -237,9 +227,12 @@ pub enum Commands {
         /// Path to the new .json file
         #[arg(short = 'O', long)]
         output: PathBuf,
-        /// Path to the circuit params to load
-        #[arg(long)]
-        circuit_params_path: PathBuf,
+        /// Scale to use for quantization
+        #[arg(short = 'S', long)]
+        scale: u32,
+        /// The number of batches to split the input data into
+        #[arg(short = 'B', long)]
+        batch_size: usize,
     },
 
     /// Calibrates the proving hyperparameters, produces a quantized output from those hyperparameters, and saves it to a .json file. The circuit parameters are also saved to a file.
@@ -253,7 +246,7 @@ pub enum Commands {
         model: PathBuf,
         /// Path to circuit_params file to output
         #[arg(short = 'O', long)]
-        params_output: PathBuf,
+        circuit_params_path: PathBuf,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
