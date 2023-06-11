@@ -333,8 +333,10 @@ impl GraphCircuit {
     pub fn calibrate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let res = self.forward()?;
         let max_range = 2i128.pow(self.params.run_args.bits as u32 - 1);
-        if res.max_lookup_input >= max_range {
+        if res.max_lookup_input > max_range {
             let recommended_bits = (res.max_lookup_input as f64).log2().ceil() as usize + 1;
+            assert!(res.max_lookup_input <= 2i128.pow(recommended_bits as u32 - 1));
+
             if recommended_bits <= 27 {
                 self.params.run_args.bits = recommended_bits;
                 self.params.run_args.logrows = (recommended_bits + 1) as u32;

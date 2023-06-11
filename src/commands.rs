@@ -15,9 +15,12 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
-use crate::circuit::{CheckMode, Tolerance};
 use crate::graph::Visibility;
 use crate::pfsys::TranscriptType;
+use crate::{
+    circuit::{CheckMode, Tolerance},
+    execute::CalibrationTarget,
+};
 
 impl std::fmt::Display for TranscriptType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -247,6 +250,9 @@ pub enum Commands {
         /// Path to circuit_params file to output
         #[arg(short = 'O', long)]
         circuit_params_path: PathBuf,
+        /// Target for calibration
+        #[arg(long, default_value = "resources")]
+        target: CalibrationTarget,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,

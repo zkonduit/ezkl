@@ -38,8 +38,10 @@ use log::{info, trace};
 use plotters::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
 use rand::Rng;
+use rayon::prelude::IntoParallelRefIterator;
 #[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
 use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
@@ -59,6 +61,25 @@ pub enum ExecutionError {
     /// Shape mismatch in a operation
     #[error("verification failed")]
     VerifyError(Vec<VerifyFailure>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Determines what the calibration pass should optimize for
+pub enum CalibrationTarget {
+    /// Optimizes for reducing cpu and memory usage
+    Resources,
+    /// Optimizes for numerical accuracy given the fixed point representation
+    Accuracy,
+}
+
+impl From<&str> for CalibrationTarget {
+    fn from(s: &str) -> Self {
+        match s {
+            "resources" => CalibrationTarget::Resources,
+            "accuracy" => CalibrationTarget::Accuracy,
+            _ => panic!("invalid calibration target"),
+        }
+    }
 }
 
 /// Run an ezkl command with given args
@@ -85,7 +106,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             model: _,
             circuit_params_path,
             args,
-        } => calibrate(data, args.batch_size, circuit_params_path),
+            target,
+        } => calibrate(data, args.batch_size, circuit_params_path, target),
         Commands::Forward {
             data,
             model,
@@ -370,30 +392,54 @@ fn forward(
     Ok(())
 }
 
-fn calibrate(data: PathBuf, batch_size: usize, output: PathBuf) -> Result<(), Box<dyn Error>> {
+fn calibrate(
+    data: PathBuf,
+    batch_size: usize,
+    params_output: PathBuf,
+    target: CalibrationTarget,
+) -> Result<(), Box<dyn Error>> {
     let data = GraphInput::from_path(data)?;
     let mut circuit = GraphCircuit::from_arg(CheckMode::SAFE)?;
+    let params = &mut circuit.params;
 
-    let mut calibrated_params = None;
+    let mut found_ = false;
 
-    for chunk in data.split_into_batches(batch_size)? {
-        circuit.load_inputs(&chunk);
-        circuit.calibrate()?;
+    let iterator: Box<dyn Iterator<Item = usize>> = match target {
+        CalibrationTarget::Resources => Box::new(2..=32),
+        CalibrationTarget::Accuracy => Box::new((2..=32).rev()),
+    };
 
-        if calibrated_params.is_none() {
-            calibrated_params = Some(circuit.params.clone());
-        }
-        // we want the largest logrows across batches of calibration data
-        if let Some(p) = &calibrated_params {
-            if p.run_args.logrows > circuit.params.run_args.logrows {
-                calibrated_params = Some(circuit.params.clone());
-            }
+    for scale in iterator {
+        let res: Result<Vec<GraphParams>, &str> = data
+            .split_into_batches(batch_size)?
+            .par_iter()
+            .map(|chunk| {
+                let mut circuit = GraphCircuit::from_arg(CheckMode::SAFE).unwrap();
+                circuit.params.run_args.scale = scale as u32;
+                circuit.load_inputs(&chunk);
+                circuit.calibrate().map_err(|_| "failed to calibrate")?;
+                Ok(circuit.params)
+            })
+            .collect();
+        if res.is_ok() {
+            // pick the one with the largest logrows
+            *params = res
+                .unwrap()
+                .into_iter()
+                .max_by_key(|p| p.run_args.logrows)
+                .unwrap();
+            found_ = true;
+            break;
         }
     }
 
-    let circuit_params = circuit.params.clone();
+    if !found_ {
+        return Err("calibration failed, could not find any suitable parameters given the calibration dataset".into());
+    }
+
     trace!("params computed");
-    circuit_params.save(&output)?;
+    params.save(&params_output)?;
+
     Ok(())
 }
 
