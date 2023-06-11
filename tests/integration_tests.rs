@@ -727,7 +727,6 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!("--params-path={}/kzg23.params", test_dir),
                 &format!(
                     "--circuit-params-path={}/{}/circuit.params",
                     test_dir, example_name
@@ -838,7 +837,6 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!("--params-path={}/kzg23.params", test_dir),
                 &format!(
                     "--circuit-params-path={}/{}/circuit.params",
                     test_dir, example_name
@@ -977,7 +975,6 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!("--params-path={}/kzg{}.params", test_dir, logrows),
                 &format!(
                     "--circuit-params-path={}/{}/circuit.params",
                     test_dir, example_name
@@ -1088,7 +1085,6 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!("--params-path={}/kzg17.params", test_dir),
                 &format!(
                     "--circuit-params-path={}/{}/circuit.params",
                     test_dir, example_name
