@@ -71,10 +71,15 @@ pub async fn verify_proof_via_solidity(
     sol_code_path: PathBuf,
     runs: Option<usize>,
 ) -> Result<bool, Box<dyn Error>> {
+
     let (anvil, client) = setup_eth_backend(None).await?;
 
-    let factory = get_sol_contract_factory(sol_code_path, client.clone(), runs).unwrap();
-
+    let factory = get_sol_contract_factory(
+        sol_code_path, 
+        "Verifier",
+        client.clone(), 
+        runs
+    ).unwrap();
     let contract = factory.deploy(())?.send().await?;
     let addr = contract.address();
 
@@ -122,6 +127,87 @@ pub async fn verify_proof_via_solidity(
     Ok(result)
 }
 
+/// Verify a proof using a Solidity DataAttestationVerifier contract
+pub async fn verify_proof_with_data_attestation(
+    proof: Snark<Fr, G1Affine>,
+    sol_code_path: PathBuf,
+    data: PathBuf,
+    runs: Option<usize>,
+) -> Result<bool, Box<dyn Error>> {
+
+    let (anvil, client) = setup_eth_backend(None).await?;
+
+    let data = GraphInput::from_path(data)?.on_chain_input_data;
+    let factory = get_sol_contract_factory(
+        sol_code_path,
+        "DataAttestationVerifier",
+        client.clone(),
+        runs
+    ).unwrap();
+
+    // TODO: Handle the floating point conversion on the EVM side. For now, we just convert to u256
+    let (contract_addresses, call_data) = if let Some(data) = data {
+        let mut contract_addresses = vec![];
+        let mut call_data = vec![vec![]];
+        for val in data {
+            let contract_address_bytes = hex::decode(val.address.clone())?;
+            let contract_address = H160::from_slice(&contract_address_bytes);
+            contract_addresses.push(contract_address);
+            for call in val.call_data {
+                let call_data_bytes = hex::decode(call)?;
+                call_data.push(call_data_bytes);
+            }
+        }
+        (contract_addresses, call_data)
+    } else {
+        panic!("No on_chain_input_data field found in .json data file")
+    };
+
+    let contract = factory.deploy((contract_addresses, call_data))?.send().await?;
+
+    abigen!(DataAttestationVerifier, "./DataAttestationVerifier.json");
+    let contract = DataAttestationVerifier::new(contract.address(), client.clone());
+
+    let mut public_inputs = vec![];
+    let flattened_instances = proof.instances.into_iter().flatten();
+
+    for val in flattened_instances {
+        let bytes = val.to_repr();
+        let u = U256::from_little_endian(bytes.as_slice());
+        public_inputs.push(u);
+    }
+
+    let tx = contract
+        .verify_with_data_attestation(
+            public_inputs.clone(),
+            ethers::types::Bytes::from(proof.proof.to_vec()),
+        )
+        .tx;
+
+    info!(
+        "estimated verify gas cost: {:#?}",
+        client.estimate_gas(&tx, None).await?
+    );
+
+    let result = contract
+        .verify_with_data_attestation(
+            public_inputs,
+            ethers::types::Bytes::from(proof.proof.to_vec()),
+        )
+        .call()
+        .await;
+
+    if result.is_err() {
+        return Err(Box::new(EvmVerificationError::SolidityExecution));
+    }
+    let result = result.unwrap();
+    if !result {
+        return Err(Box::new(EvmVerificationError::InvalidProof));
+    }
+    drop(anvil);
+    Ok(result)
+}
+
 /// get_provider returns a JSON RPC HTTP Provider
 pub fn get_provider(rpc_url: &str) -> Result<Provider<Http>, Box<dyn Error>> {
     let provider = Provider::<Http>::try_from(rpc_url)?;
@@ -160,7 +246,7 @@ pub async fn read_on_chain_inputs (
                 debug!("response {:#?}", response);
 
                 // Convert U256 to f32 according to decimals
-                let converted = response.low_u64() as f32 / 10f32.powi(on_chain_data.decimals as i32);
+                let converted = response.low_u128() as f32 / 10f32.powi(on_chain_data.decimals as i32);
                 debug!("rconverted {:#?}", converted);
 
                 // Store the result
@@ -175,6 +261,7 @@ pub async fn read_on_chain_inputs (
 /// Generates the contract factory for a solidity verifier, optionally compiling the code with optimizer runs set on the Solc compiler.
 fn get_sol_contract_factory<M: 'static + Middleware>(
     sol_code_path: PathBuf,
+    contract_name: &str,
     client: Arc<M>,
     runs: Option<usize>,
 ) -> Result<ContractFactory<M>, Box<dyn Error>> {
@@ -189,7 +276,7 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
     };
     let compiled = Solc::default().compile(&input).unwrap();
     let (abi, bytecode, _runtime_bytecode) = compiled
-        .find("Verifier")
+        .find(contract_name)
         .expect("could not find contract")
         .into_parts_or_default();
     let size = _runtime_bytecode.len();

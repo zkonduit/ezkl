@@ -1,7 +1,7 @@
 use crate::circuit::CheckMode;
 use crate::commands::{Cli, Commands, StrategyType};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::eth::{fix_verifier_sol, verify_proof_via_solidity, read_on_chain_inputs};
+use crate::eth::{fix_verifier_sol, verify_proof_via_solidity, verify_proof_with_data_attestation, read_on_chain_inputs};
 use crate::graph::{scale_to_multiplier, GraphCircuit, GraphInput, Model, GraphParams};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
@@ -188,12 +188,14 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             proof_path,
             deployment_code_path,
             sol_code_path,
+            data,
             optimizer_runs,
         } => {
             verify_evm(
                 proof_path,
                 deployment_code_path,
                 sol_code_path,
+                data,
                 optimizer_runs,
             )
             .await
@@ -490,20 +492,35 @@ fn create_evm_data_attestation_verifier(
 #[cfg(not(target_arch = "wasm32"))]
 async fn verify_evm(
     proof_path: PathBuf,
-    deployment_code_path: PathBuf,
+    deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
-    runs: Option<usize>,
+    data: Option<PathBuf>,
+    runs: Option<usize>
 ) -> Result<(), Box<dyn Error>> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
     print!("proof {:?}", proof);
-    let code = DeploymentCode::load(&deployment_code_path)?;
-    evm_verify(code, proof.clone())?;
+
+    if deployment_code_path.is_some() {
+        let deployment_code = DeploymentCode::load(&deployment_code_path.unwrap())?;
+        evm_verify(deployment_code, proof.clone())?;
+    }
 
     if sol_code_path.is_some() {
-        let result = verify_proof_via_solidity(proof, sol_code_path.unwrap(), runs).await?;
-
+        let result = if let Some(data) = data {
+            verify_proof_with_data_attestation(
+                proof, 
+                sol_code_path.unwrap(),
+                data,
+                runs
+            ).await?
+        } else {            
+            verify_proof_via_solidity(
+                proof, 
+                sol_code_path.unwrap(),
+                runs
+            ).await?
+        };
         info!("Solidity verification result: {}", result);
-
         assert!(result);
     }
     Ok(())

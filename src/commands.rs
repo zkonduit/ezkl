@@ -492,10 +492,17 @@ pub enum Commands {
         proof_path: PathBuf,
         /// The path to verifier contract's deployment code
         #[arg(long)]
-        deployment_code_path: PathBuf,
+        deployment_code_path: Option<PathBuf>,
         /// The path to the Solidity code
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
+        /// The path to the .json data file, which should
+        /// contain the necessary calldata and account addresses  
+        /// needed need to read from all the on-chain
+        /// view functions that return the data that the network
+        /// ingests as inputs. 
+        #[arg(short = 'D', long)]
+        data: Option<PathBuf>,
         /// The number of runs set to the SOLC optimizer.
         /// Lower values optimze for deployment size while higher values optimize for execution cost.
         /// If not set will just use the default unoptimized SOLC configuration.

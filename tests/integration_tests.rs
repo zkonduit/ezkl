@@ -234,26 +234,26 @@ mod native_tests {
         ("2l_relu_small", "2l_relu_sigmoid_small"),
     ];
 
-    const TESTS_EVM: [&str; 1] = [
+    const TESTS_EVM: [&str; 18] = [
         "1l_mlp",
-        // "1l_flatten",
-        // "1l_average",
-        // "1l_reshape",
-        // "1l_sigmoid",
-        // "1l_div",
-        // "1l_sqrt",
-        // // "1l_prelu",
-        // "1l_var",
-        // "1l_leakyrelu",
-        // "1l_gelu_noappx",
-        // "1l_relu",
-        // "1l_tanh",
-        // "2l_relu_sigmoid_small",
-        // "2l_relu_small",
-        // "2l_relu_fc",
-        // "min",
-        // "max",
-        // "1l_max_pool",
+        "1l_flatten",
+        "1l_average",
+        "1l_reshape",
+        "1l_sigmoid",
+        "1l_div",
+        "1l_sqrt",
+        // "1l_prelu",
+        "1l_var",
+        "1l_leakyrelu",
+        "1l_gelu_noappx",
+        "1l_relu",
+        "1l_tanh",
+        "2l_relu_sigmoid_small",
+        "2l_relu_small",
+        "2l_relu_fc",
+        "min",
+        "max",
+        "1l_max_pool",
     ];
 
     const EXAMPLES: [&str; 2] = ["mlp_4d_einsum", "conv2d_mnist"];
@@ -461,24 +461,24 @@ mod native_tests {
 
             /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
             /// specify those that will
-            const TESTS_SOLIDITY: [&str; 1] = [
+            const TESTS_SOLIDITY: [&str; 16] = [
                 "1l_mlp",
-                // "1l_average",
-                // "1l_reshape",
-                // "1l_sigmoid",
-                // "1l_div",
-                // "1l_sqrt",
-                // // "1l_prelu",
-                // "1l_var",
-                // "1l_leakyrelu",
-                // "1l_gelu_noappx",
-                // "1l_relu",
-                // "1l_tanh",
-                // "2l_relu_sigmoid_small",
-                // "2l_relu_small",
-                // "2l_relu_fc",
-                // "min",
-                // "max",
+                "1l_average",
+                "1l_reshape",
+                "1l_sigmoid",
+                "1l_div",
+                "1l_sqrt",
+                // "1l_prelu",
+                "1l_var",
+                "1l_leakyrelu",
+                "1l_gelu_noappx",
+                "1l_relu",
+                "1l_tanh",
+                "2l_relu_sigmoid_small",
+                "2l_relu_small",
+                "2l_relu_fc",
+                "min",
+                "max",
             ];
 
 
@@ -508,12 +508,12 @@ mod native_tests {
                     kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "hashed", 0);
                 }
 
-                // #(#[test_case(TESTS_EVM[N])])*
-                // fn kzg_evm_fuzz_(test: &str) {
-                //     crate::native_tests::init_binary();
-                //     crate::native_tests::mv_test_(test);
-                //     kzg_fuzz(test.to_string(), 7, 16, 17, "evm");
-                // }
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_fuzz_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::mv_test_(test);
+                    kzg_fuzz(test.to_string(), 7, 16, 17, "evm");
+                }
 
                 // these take a particularly long time to run
                 #(#[test_case(TESTS_EVM[N])])*

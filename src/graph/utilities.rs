@@ -40,7 +40,7 @@ pub fn quantize_float(elem: &f32, shift: f32, scale: u32) -> Result<i128, Tensor
     let max_value = ((i128::MAX as f32 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
 
     if *elem > max_value {
-        return Err(TensorError::SigBitTruncatioError);
+        return Err(TensorError::SigBitTruncationError);
     }
 
     // we parallelize the quantization process as it seems to be quite slow at times
