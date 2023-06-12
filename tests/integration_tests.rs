@@ -119,13 +119,13 @@ mod native_tests {
             let duplicated_input_data: Vec<Vec<f32>> = data
                 .input_data
                 .iter()
-                .map(|data| (0..num_batches).map(|_| data.clone()).flatten().collect())
+                .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
                 .collect();
 
             let duplicated_output_data: Vec<Vec<f32>> = data
                 .output_data
                 .iter()
-                .map(|data| (0..num_batches).map(|_| data.clone()).flatten().collect())
+                .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
                 .collect();
 
             let duplicated_data = GraphInput::new(duplicated_input_data, duplicated_output_data);
@@ -632,7 +632,7 @@ mod native_tests {
                 format!("{}/{}/input_forward.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!("--batch-size={}", batch_size).as_str(),
+                (format!("--batch-size={}", batch_size).as_str()),
                 &format!("--input-visibility={}", input_visibility),
                 &format!("--param-visibility={}", param_visibility),
                 &format!("--output-visibility={}", output_visibility),

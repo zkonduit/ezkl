@@ -537,7 +537,7 @@ impl Model {
         run_args: &RunArgs,
         model: &std::path::PathBuf,
     ) -> Result<Self, Box<dyn Error>> {
-        Model::new(&mut std::fs::File::open(model)?, run_args.clone())
+        Model::new(&mut std::fs::File::open(model)?, *run_args)
     }
 
     /// Configures a model for the circuit

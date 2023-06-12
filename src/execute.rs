@@ -412,7 +412,7 @@ pub(crate) fn gen_circuit_params(
     calibration_args: CalibrationArgs,
 ) -> Result<(), Box<dyn Error>> {
     let circuit = GraphCircuit::from_run_args(&run_args, &model_path, CheckMode::SAFE)?;
-    let params = circuit.params.clone();
+    let params = circuit.params;
 
     match calibration_args.data {
         None => params.save(&params_output).map_err(Box::<dyn Error>::from),
@@ -477,14 +477,11 @@ pub(crate) fn calibrate(
             .unwrap()
             .par_iter()
             .map(|chunk| {
-                let run_args = RunArgs {
-                    scale,
-                    ..run_args.clone()
-                };
+                let run_args = RunArgs { scale, ..run_args };
                 let mut circuit =
                     GraphCircuit::from_run_args(&run_args, &model_path, CheckMode::SAFE)
                         .map_err(|_| "failed to create circuit from run args")?;
-                circuit.load_inputs(&chunk);
+                circuit.load_inputs(chunk);
                 circuit.calibrate().map_err(|_| "failed to calibrate")?;
 
                 // ensures we have converges
@@ -497,22 +494,17 @@ pub(crate) fn calibrate(
             })
             .collect();
         std::mem::drop(_r);
-        if res.is_ok() {
+        if let Ok(res) = res {
             // pick the one with the largest logrows
-            Some(
-                res.unwrap()
-                    .into_iter()
-                    .max_by_key(|p| p.run_args.logrows)
-                    .unwrap(),
-            )
+            Some(res.into_iter().max_by_key(|p| p.run_args.logrows).unwrap())
         } else {
             None
         }
     });
     pb.finish_with_message("Done.");
 
-    let found_params: Vec<GraphParams> = found_params.filter_map(|p| p).collect();
-    if found_params.len() == 0 {
+    let found_params: Vec<GraphParams> = found_params.flatten().collect();
+    if found_params.is_empty() {
         return Err("calibration failed, could not find any suitable parameters given the calibration dataset".into());
     }
 

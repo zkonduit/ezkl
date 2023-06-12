@@ -1,5 +1,6 @@
 /// Helper functions
 pub mod utilities;
+use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
@@ -24,7 +25,7 @@ use halo2_proofs::{
     circuit::{Layouter, Value},
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},
 };
-use halo2curves::bn256::Fr as Fp;
+use halo2curves::bn256::{self, Fr as Fp};
 use log::{error, info, trace};
 pub use model::*;
 pub use node::*;
@@ -131,7 +132,7 @@ impl GraphInput {
 
         for input in &self.input_data.iter().chunks(batch_size) {
             let mut batch = vec![];
-            for i in input.into_iter() {
+            for i in input {
                 batch.push(i.clone());
             }
             input_batches.push(batch);
@@ -142,7 +143,7 @@ impl GraphInput {
 
         for output in &self.output_data.iter().chunks(batch_size) {
             let mut batch = vec![];
-            for i in output.into_iter() {
+            for i in output {
                 batch.push(i.clone());
             }
             output_batches.push(batch);
@@ -201,7 +202,7 @@ impl GraphInput {
 
     /// Save the model input to a file
     pub fn save(&self, path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-        serde_json::to_writer(std::fs::File::create(&path)?, &self).map_err(|e| e.into())
+        serde_json::to_writer(std::fs::File::create(path)?, &self).map_err(|e| e.into())
     }
 }
 
@@ -255,7 +256,7 @@ impl GraphParams {
     pub fn save(&self, path: &std::path::PathBuf) -> Result<(), std::io::Error> {
         let encoded = serde_json::to_string(&self)?;
         let mut file = std::fs::File::create(path)?;
-        file.write_all(&encoded.as_bytes())
+        file.write_all(encoded.as_bytes())
     }
     /// load params from file
     pub fn load(path: &std::path::PathBuf) -> Result<Self, std::io::Error> {
@@ -308,7 +309,7 @@ impl GraphCircuit {
         }
 
         Ok(GraphCircuit {
-            model: model.clone(),
+            model,
             inputs,
             params,
         })
@@ -330,7 +331,7 @@ impl GraphCircuit {
         params.check_mode = check_mode;
 
         Ok(GraphCircuit {
-            model: model.clone(),
+            model,
             inputs,
             params,
         })
@@ -361,7 +362,7 @@ impl GraphCircuit {
             let recommended_bits = (res.max_lookup_input as f64).log2().ceil() as usize + 1;
             assert!(res.max_lookup_input <= 2i128.pow(recommended_bits as u32 - 1));
 
-            if recommended_bits <= 27 {
+            if recommended_bits <= (bn256::Fr::S - 1) as usize {
                 self.params.run_args.bits = recommended_bits;
                 self.params.run_args.logrows = (recommended_bits + 1) as u32;
                 info!(
@@ -385,9 +386,12 @@ impl GraphCircuit {
                 + 1;
             let mut logrows = std::cmp::max(min_bits + 1, min_rows_from_constraints);
             // ensure logrows is at least 4
-            if logrows < 4 {
-                logrows = 4;
-            }
+            logrows = std::cmp::max(
+                logrows,
+                (ASSUMED_BLINDING_FACTORS as f64).ceil() as usize + 1,
+            );
+            logrows = std::cmp::min(logrows, bn256::Fr::S as usize);
+
             info!(
                 "setting bits to: {}, setting logrows to: {}",
                 min_bits, logrows
@@ -398,7 +402,7 @@ impl GraphCircuit {
 
         self.params = self
             .model
-            .gen_params(self.params.run_args.clone(), self.params.check_mode.clone())?;
+            .gen_params(self.params.run_args, self.params.check_mode)?;
         Ok(())
     }
 
@@ -436,7 +440,7 @@ impl GraphCircuit {
         check_mode: CheckMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let model = Arc::new(Model::from_run_args(run_args, model_path)?);
-        Self::new(model, run_args.clone(), check_mode)
+        Self::new(model, *run_args, check_mode)
     }
 
     /// Create a new circuit from a set of input data and [GraphParams].
@@ -521,7 +525,7 @@ impl GraphCircuit {
                 // should unwrap safely
                 hash_pi.extend(data.output_hashes.as_deref().unwrap().to_vec());
             };
-            if hash_pi.len() > 0 {
+            if !hash_pi.is_empty() {
                 pi_inner.push(hash_pi);
             }
         }
@@ -613,7 +617,7 @@ impl Circuit<Fp> for GraphCircuit {
             >::construct(config.poseidon_config.as_ref().unwrap().clone());
             for (i, input) in inputs.clone().iter().enumerate() {
                 // hash the input and replace the constrained cells in the inputs
-                inputs[i] = chip.hash(&mut layouter, &input, i)?;
+                inputs[i] = chip.hash(&mut layouter, input, i)?;
                 inputs[i]
                     .reshape(input.dims())
                     .map_err(|_| PlonkError::Synthesis)?;

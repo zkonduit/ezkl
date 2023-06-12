@@ -145,7 +145,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F> for ModuleLayo
         // Update column usage information.
         for column in shape.columns() {
             self.columns.insert(
-                (self.current_module, column.clone()),
+                (self.current_module, *column),
                 region_start + shape.row_count(),
             );
         }
