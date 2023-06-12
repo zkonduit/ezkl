@@ -87,6 +87,8 @@ pub enum GraphError {
     PackingExponent,
 }
 
+const ASSUMED_BLINDING_FACTORS: usize = 6;
+
 /// The input tensor data and shape, and output data for the computational graph (model) as floats.
 /// For example, the input might be the image data for a neural network, and the output class scores.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -219,7 +221,7 @@ pub struct ForwardResult {
 }
 
 /// model parameters
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct GraphParams {
     /// run args
     pub run_args: RunArgs,
@@ -371,13 +373,21 @@ impl GraphCircuit {
             } else {
                 let err_string = format!("No possible value of bits (estimate {}) at scale {} can accomodate this value.", recommended_bits, self.params.run_args.scale);
                 error!("{}", err_string);
+
                 return Err(err_string.into());
             }
         } else {
             let min_bits = (res.max_lookup_input as f64).log2().ceil() as usize + 1;
-            let min_rows_from_constraints =
-                (self.params.num_constraints as f64).log2().ceil() as usize + 1;
-            let logrows = std::cmp::max(min_bits + 1, min_rows_from_constraints);
+            let min_rows_from_constraints = (self.params.num_constraints as f64
+                + ASSUMED_BLINDING_FACTORS as f64)
+                .log2()
+                .ceil() as usize
+                + 1;
+            let mut logrows = std::cmp::max(min_bits + 1, min_rows_from_constraints);
+            // ensure logrows is at least 4
+            if logrows < 4 {
+                logrows = 4;
+            }
             info!(
                 "setting bits to: {}, setting logrows to: {}",
                 min_bits, logrows
@@ -385,6 +395,10 @@ impl GraphCircuit {
             self.params.run_args.bits = min_bits;
             self.params.run_args.logrows = logrows as u32;
         }
+
+        self.params = self
+            .model
+            .gen_params(self.params.run_args.clone(), self.params.check_mode.clone())?;
         Ok(())
     }
 

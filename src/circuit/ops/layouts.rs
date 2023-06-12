@@ -1545,7 +1545,7 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
         // if not empty apply the nonlinearity !
         _ => {
             let x = Op::<F>::f(nl, &[integer_evals])?;
-            x.map(|elem| Value::known(i128_to_felt(elem)))
+            x.output.map(|elem| Value::known(i128_to_felt(elem)))
         }
     };
 
@@ -1955,7 +1955,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
             let int_evals = Tensor::new(Some(&values[0].get_int_evals()?), values[0].dims())?;
             // scale is double the output
             let ref_sofmax: Tensor<i128> =
-                tensor::ops::nonlinearities::softmax(&int_evals, input_scale, output_scale);
+                tensor::ops::nonlinearities::softmax(&int_evals, input_scale, output_scale).0;
 
             let output_int_evals = Tensor::new(Some(&softmax.get_int_evals()?), values[0].dims())?;
 

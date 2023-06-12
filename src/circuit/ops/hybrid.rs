@@ -11,7 +11,7 @@ use crate::{
 use halo2_proofs::circuit::Region;
 use serde::{Deserialize, Serialize};
 
-use super::{lookup::LookupOp, Op};
+use super::{lookup::LookupOp, ForwardResult, Op};
 use halo2curves::ff::PrimeField;
 // import run args from model
 
@@ -42,21 +42,29 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     }
 
     /// Matches a [Op] to an operation in the `tensor::ops` module.
-    fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
-        match &self {
-            HybridOp::Max { axes, .. } => Ok(tensor::ops::max_axes(&inputs[0], axes)?),
+    fn f(&self, inputs: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
+        let (res, intermediate_lookups) = match &self {
+            HybridOp::Max { axes, .. } => (tensor::ops::max_axes(&inputs[0], axes)?, vec![]),
             HybridOp::MaxPool2d {
                 padding,
                 stride,
                 pool_dims,
                 ..
-            } => tensor::ops::max_pool2d(&inputs[0], padding, stride, pool_dims),
-            HybridOp::Min { axes, .. } => Ok(tensor::ops::min_axes(&inputs[0], axes)?),
-            HybridOp::Softmax { scales } => Ok(tensor::ops::nonlinearities::multi_dim_softmax(
-                &inputs[0], scales.0, scales.1,
-            )),
-            HybridOp::RangeCheck(..) => Ok(inputs[0].clone()),
-        }
+            } => (
+                tensor::ops::max_pool2d(&inputs[0], padding, stride, pool_dims)?,
+                vec![],
+            ),
+            HybridOp::Min { axes, .. } => (tensor::ops::min_axes(&inputs[0], axes)?, vec![]),
+            HybridOp::Softmax { scales } => {
+                tensor::ops::nonlinearities::multi_dim_softmax(&inputs[0], scales.0, scales.1)
+            }
+            HybridOp::RangeCheck(..) => (inputs[0].clone(), vec![]),
+        };
+
+        Ok(ForwardResult {
+            output: res,
+            intermediate_lookups,
+        })
     }
 
     fn as_string(&self) -> String {

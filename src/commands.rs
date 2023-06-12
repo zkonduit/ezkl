@@ -148,7 +148,7 @@ impl<'source> FromPyObject<'source> for CalibrationTarget {
 }
 
 /// Parameters specific to a proving run
-#[derive(Debug, Copy, Args, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Copy, Args, Deserialize, Serialize, Clone, Default, PartialEq, PartialOrd)]
 pub struct RunArgs {
     /// The tolerance for error on model outputs
     #[arg(short = 'T', long, default_value = "0")]
@@ -181,23 +181,6 @@ pub struct RunArgs {
     /// the number of constraints the circuit might use. If not specified, this will be calculated using a 'dummy layout' pass.
     #[arg(long)]
     pub allocated_constraints: Option<usize>,
-}
-
-#[allow(missing_docs)]
-impl RunArgs {
-    /// Creates `RunArgs` from parsed CLI arguments
-    /// # Arguments
-    /// * `cli` - A [Cli] struct holding parsed CLI arguments.
-    pub fn from_cli(cli: Cli) -> Result<Self, Box<dyn Error>> {
-        match cli.command {
-            Commands::Mock { args, .. } | Commands::GenCircuitParams { args, .. } => Ok(args),
-            #[cfg(not(target_arch = "wasm32"))]
-            Commands::Fuzz { args, .. } => Ok(args),
-            #[cfg(feature = "render")]
-            Commands::RenderCircuit { args, .. } => Ok(args),
-            _ => panic!(),
-        }
-    }
 }
 
 const EZKLCONF: &str = "EZKLCONF";
@@ -305,6 +288,7 @@ pub enum Commands {
     },
 
     /// Calibrates the proving hyperparameters, produces a quantized output from those hyperparameters, and saves it to a .json file. The circuit parameters are also saved to a file.
+    #[cfg(not(target_arch = "wasm32"))]
     #[command(arg_required_else_help = true)]
     GenCircuitParams {
         /// The path to the .onnx model file

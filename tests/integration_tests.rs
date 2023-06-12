@@ -740,6 +740,24 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
+                "forward",
+                "-D",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
+                ),
+                "-O",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
                 "setup",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -841,6 +859,24 @@ mod native_tests {
                     "--circuit-params-path={}/{}/circuit.params",
                     test_dir, example_name
                 ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "forward",
+                "-D",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
+                ),
+                "-O",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -985,6 +1021,24 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
+                "forward",
+                "-D",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
+                ),
+                "-O",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
                 "setup",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -1093,6 +1147,24 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "forward",
+                "-D",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
+                ),
+                "-O",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
         forward_pass(
             example_name.clone(),
             input_visibility,
@@ -1117,11 +1189,6 @@ mod native_tests {
                     "--circuit-params-path={}/{}/circuit.params",
                     test_dir, example_name
                 ),
-                &format!("--input-visibility={}", input_visibility),
-                &format!("--param-visibility={}", param_visibility),
-                &format!("--output-visibility={}", output_visibility),
-                "--bits=16",
-                "-K=17",
             ])
             .status()
             .expect("failed to execute process");

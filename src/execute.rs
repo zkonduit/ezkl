@@ -1,5 +1,7 @@
 use crate::circuit::CheckMode;
-use crate::commands::{CalibrationArgs, CalibrationTarget, Cli, Commands, RunArgs, StrategyType};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::commands::{CalibrationArgs, CalibrationTarget};
+use crate::commands::{Cli, Commands, RunArgs, StrategyType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{fix_verifier_sol, verify_proof_via_solidity};
 use crate::graph::{scale_to_multiplier, GraphCircuit, GraphInput, GraphParams, Model, Visibility};
@@ -7,8 +9,9 @@ use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::evm_verify;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::pfsys::evm::{aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier};
-use crate::pfsys::evm::{DeploymentCode, YulCode};
+use crate::pfsys::evm::{
+    aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier, DeploymentCode, YulCode,
+};
 use crate::pfsys::{
     create_keys, load_params, load_pk, load_vk, save_params, save_pk, Snark, TranscriptType,
 };
@@ -33,14 +36,14 @@ use halo2curves::ff::Field;
 #[cfg(not(target_arch = "wasm32"))]
 use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
-use log::{info, trace, warn};
+use log::{info, trace};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
 use rand::Rng;
-use rayon::prelude::IntoParallelRefIterator;
 #[cfg(not(target_arch = "wasm32"))]
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+#[cfg(not(target_arch = "wasm32"))]
 use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
@@ -51,9 +54,9 @@ use std::io::Write;
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
-use std::sync::Arc;
-use std::thread;
-use std::time::{Duration, Instant};
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Duration;
+use std::time::Instant;
 use thiserror::Error;
 
 /// A wrapper for tensor related errors.
@@ -95,6 +98,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             output,
             args,
         } => render(model, output, args),
+        #[cfg(not(target_arch = "wasm32"))]
         Commands::GenCircuitParams {
             model,
             circuit_params_path,
@@ -399,17 +403,15 @@ pub(crate) fn forward(
     Ok(())
 }
 
+//not for wasm targets
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn gen_circuit_params(
     model_path: PathBuf,
     params_output: PathBuf,
     run_args: RunArgs,
     calibration_args: CalibrationArgs,
 ) -> Result<(), Box<dyn Error>> {
-    let mut reader = File::open(&model_path)?;
-    let procmodel = Model::new(&mut reader, run_args)?;
-
-    let arcmodel: Arc<Model> = Arc::new(procmodel);
-    let circuit = GraphCircuit::new(arcmodel, run_args, CheckMode::SAFE)?;
+    let circuit = GraphCircuit::from_run_args(&run_args, &model_path, CheckMode::SAFE)?;
     let params = circuit.params.clone();
 
     match calibration_args.data {
@@ -419,7 +421,7 @@ pub(crate) fn gen_circuit_params(
                 calibrate(model_path, run_args, data, params_output, target)
             } else {
                 // default to resources
-                warn!("no calibration target specified, defaulting to resource usage optimization");
+                info!("no calibration target specified, defaulting to resource usage optimization");
                 calibrate(
                     model_path,
                     run_args,
@@ -432,6 +434,8 @@ pub(crate) fn gen_circuit_params(
     }
 }
 
+// not for wasm targets
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn init_spinner() -> ProgressBar {
     let pb = indicatif::ProgressBar::new_spinner();
     pb.set_draw_target(indicatif::ProgressDrawTarget::stdout());
@@ -453,6 +457,7 @@ pub(crate) fn init_spinner() -> ProgressBar {
 }
 
 /// Calibrate the circuit parameters given a dataset
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn calibrate(
     model_path: PathBuf,
     run_args: RunArgs,
@@ -463,23 +468,32 @@ pub(crate) fn calibrate(
     let data = GraphInput::from_path(data)?;
     let pb = init_spinner();
     pb.set_message("Calibrating...");
-    thread::sleep(Duration::from_secs(5));
-    let found_params = (4..20).map(|scale| {
+    let found_params = (4..12).map(|scale| {
+        #[cfg(not(target_arch = "wasm32"))]
         let _r = Gag::stdout().unwrap();
+
         let res: Result<Vec<GraphParams>, &str> = data
             .split_into_batches(run_args.batch_size)
             .unwrap()
             .par_iter()
             .map(|chunk| {
-                let mut reader = File::open(&model_path).unwrap();
-                let procmodel = Model::new(&mut reader, run_args).unwrap();
-
-                let arcmodel: Arc<Model> = Arc::new(procmodel);
-                let mut circuit = GraphCircuit::new(arcmodel, run_args, CheckMode::SAFE).unwrap();
-                circuit.params.run_args.scale = scale as u32;
+                let run_args = RunArgs {
+                    scale,
+                    ..run_args.clone()
+                };
+                let mut circuit =
+                    GraphCircuit::from_run_args(&run_args, &model_path, CheckMode::SAFE)
+                        .map_err(|_| "failed to create circuit from run args")?;
                 circuit.load_inputs(&chunk);
                 circuit.calibrate().map_err(|_| "failed to calibrate")?;
-                Ok(circuit.params)
+
+                // ensures we have converges
+                let params_before = circuit.params.clone();
+                circuit.calibrate().map_err(|_| "failed to calibrate")?;
+                let params_after = circuit.params.clone();
+
+                assert_eq!(params_before, params_after);
+                Ok(params_after)
             })
             .collect();
         std::mem::drop(_r);
@@ -579,6 +593,7 @@ pub(crate) fn print_proof_hex(proof_path: PathBuf) -> Result<(), Box<dyn Error>>
     Ok(())
 }
 /// helper function to generate the deployment code from yul code
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, Box<dyn Error>> {
     Ok(DeploymentCode {
         code: evm::compile_yul(&yul_code),
@@ -644,7 +659,6 @@ pub(crate) async fn verify_evm(
     runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
-    print!("proof {:?}", proof);
     let code = DeploymentCode::load(&deployment_code_path)?;
     evm_verify(code, proof.clone())?;
 
@@ -1082,8 +1096,13 @@ pub(crate) fn aggregate(
         )?);
     }
     // proof aggregation
-    let pb = init_spinner();
-    pb.set_message("Aggregating (may take a while)...");
+    #[cfg(not(target_arch = "wasm32"))]
+    let pb = {
+        let pb = init_spinner();
+        pb.set_message("Aggregating (may take a while)...");
+        pb
+    };
+
     {
         let agg_circuit = AggregationCircuit::new(&params, snarks)?;
         let agg_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
@@ -1106,7 +1125,9 @@ pub(crate) fn aggregate(
         snark.save(&proof_path)?;
         save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, agg_pk.get_vk())?;
     }
+    #[cfg(not(target_arch = "wasm32"))]
     pb.finish_with_message("Done.");
+
     Ok(())
 }
 

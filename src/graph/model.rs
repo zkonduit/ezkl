@@ -116,17 +116,6 @@ impl NodeType {
         }
     }
 
-    /// Runs a forward pass on sample data
-    pub fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, Box<dyn Error>> {
-        match self {
-            NodeType::Node(n) => n.opkind.f(inputs).map_err(|e| e.into()),
-            NodeType::SubGraph { model, .. } => {
-                let res = model.forward(inputs)?;
-                assert_eq!(res.outputs.len(), 1);
-                Ok(res.outputs[0].clone())
-            }
-        }
-    }
     /// Returns a string representation of the operation.
     pub fn as_str(&self) -> String {
         match self {
@@ -239,6 +228,7 @@ impl Model {
         let instance_shapes = self.instance_shapes();
         // this is the total number of variables we will need to allocate
         // for the circuit
+
         let num_constraints = if let Some(num_constraints) = run_args.allocated_constraints {
             num_constraints
         } else {
@@ -256,16 +246,6 @@ impl Model {
 
         // extract the requisite lookup ops from the model
         let mut lookup_ops: Vec<LookupOp> = self.required_lookups();
-
-        // if we're using percentage tolerance, we need to add the necessary range check ops for it.
-        if let Tolerance::Percentage { val, .. } = run_args.tolerance {
-            let tolerance = Tolerance::Percentage {
-                val,
-                scale: scale_to_multiplier(run_args.scale) as usize,
-            };
-            let opkind: Box<dyn Op<Fp>> = Box::new(HybridOp::RangeCheck(tolerance));
-            lookup_ops.extend(opkind.required_lookups());
-        }
 
         // if we're using percentage tolerance, we need to add the necessary range check ops for it.
         if let Tolerance::Percentage { val, .. } = run_args.tolerance {
@@ -331,10 +311,22 @@ impl Model {
             match n {
                 NodeType::Node(n) => {
                     let res = Op::<Fp>::f(&*n.opkind, &inputs)?;
-                    results.insert(idx, res);
+                    // see if any of the intermediate lookup calcs are the max
+                    if !res.intermediate_lookups.is_empty() {
+                        let mut max = 0;
+                        for i in &res.intermediate_lookups {
+                            max = max.max(i.iter().map(|x| x.abs()).max().unwrap());
+                        }
+                        max_lookup_inputs = max_lookup_inputs.max(max);
+                    }
+
+                    results.insert(idx, res.output);
                 }
                 NodeType::SubGraph { model, .. } => {
                     let res = model.forward(&inputs)?;
+                    // recursively get the max lookup inputs for subgraphs
+                    max_lookup_inputs = max_lookup_inputs.max(res.max_lookup_inputs);
+
                     let mut res = res.outputs.last().unwrap().clone();
                     res.flatten();
                     results.insert(idx, res);
