@@ -10,7 +10,7 @@ use crate::circuit::Tolerance;
 use crate::circuit::Unknown;
 use crate::{
     circuit::{lookup::LookupOp, ops::poly::PolyOp, BaseConfig as PolyConfig, CheckMode, Op},
-    commands::{Cli, Commands, RunArgs},
+    commands::RunArgs,
     tensor::{Tensor, ValTensor},
 };
 use halo2curves::bn256::Fr as Fp;
@@ -538,42 +538,14 @@ impl Model {
         Ok(nodes)
     }
 
-    /// Creates a `Model` from parsed CLI arguments
-    /// # Arguments
-    /// * `cli` - A [Cli] struct holding parsed CLI arguments.
-    pub fn from_cli(cli: Cli) -> Result<Self, Box<dyn Error>> {
-        match cli.command {
-            Commands::Mock { model, args, .. }
-            | Commands::Table { model, args, .. }
-            | Commands::Calibrate { model, args, .. } => {
-                Model::new(&mut std::fs::File::open(model)?, args)
-            }
-            #[cfg(not(target_arch = "wasm32"))]
-            Commands::Fuzz { model, args, .. } => {
-                Model::new(&mut std::fs::File::open(model)?, args)
-            }
-            #[cfg(feature = "render")]
-            Commands::RenderCircuit { model, args, .. } => {
-                Model::new(&mut std::fs::File::open(model)?, args)
-            }
-            _ => panic!(),
-        }
-    }
-
-    /// Creates a `Model` from parsed model params
+    /// Creates a `Model` from parsed run_args
     /// # Arguments
     /// * `params` - A [GraphParams] struct holding parsed CLI arguments.
-    pub fn from_model_params(
-        params: &GraphParams,
+    pub fn from_run_args(
+        run_args: &RunArgs,
         model: &std::path::PathBuf,
     ) -> Result<Self, Box<dyn Error>> {
-        Model::new(&mut std::fs::File::open(model)?, params.run_args.clone())
-    }
-
-    /// Creates a `Model` based on CLI arguments
-    pub fn from_arg() -> Result<Self, Box<dyn Error>> {
-        let conf = Cli::create()?;
-        Self::from_cli(conf)
+        Model::new(&mut std::fs::File::open(model)?, run_args.clone())
     }
 
     /// Configures a model for the circuit

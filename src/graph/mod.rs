@@ -16,7 +16,7 @@ use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEI
 use crate::circuit::modules::poseidon::{witness_hash, PoseidonChip, PoseidonConfig};
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
-use crate::commands::{Cli, RunArgs};
+use crate::commands::RunArgs;
 use crate::fieldutils::i128_to_felt;
 use crate::tensor::ops::pack;
 use crate::tensor::{Tensor, ValTensor};
@@ -311,6 +311,28 @@ impl GraphCircuit {
             params,
         })
     }
+
+    ///
+    pub fn new_from_params(
+        model: Arc<Model>,
+        mut params: GraphParams,
+        check_mode: CheckMode,
+    ) -> Result<GraphCircuit, Box<dyn std::error::Error>> {
+        // placeholder dummy inputs - must call prepare_public_inputs to load data afterwards
+        let mut inputs: Vec<Tensor<i128>> = vec![];
+        for shape in model.graph.input_shapes() {
+            let t: Tensor<i128> = Tensor::new(None, &shape).unwrap();
+            inputs.push(t);
+        }
+
+        params.check_mode = check_mode;
+
+        Ok(GraphCircuit {
+            model: model.clone(),
+            inputs,
+            params,
+        })
+    }
     ///
     pub fn load_inputs(&mut self, data: &GraphInput) {
         // quantize the supplied data using the provided scale.
@@ -347,7 +369,7 @@ impl GraphCircuit {
                 );
                 return self.calibrate();
             } else {
-                let err_string = format!("No possible value of bits (estimate {}) at scale {} can accomodate this value. Try changing the scale and re-running calibration.", recommended_bits, self.params.run_args.scale);
+                let err_string = format!("No possible value of bits (estimate {}) at scale {} can accomodate this value.", recommended_bits, self.params.run_args.scale);
                 error!("{}", err_string);
                 return Err(err_string.into());
             }
@@ -393,12 +415,14 @@ impl GraphCircuit {
         })
     }
 
-    /// Create a new circuit from a set of input data and cli arguments.
-    pub fn from_arg(check_mode: CheckMode) -> Result<Self, Box<dyn std::error::Error>> {
-        let cli = Cli::create()?;
-        let model = Arc::new(Model::from_cli(cli.clone())?);
-        let run_args = RunArgs::from_cli(cli)?;
-        Self::new(model, run_args, check_mode)
+    /// Create a new circuit from a set of input data and [RunArgs].
+    pub fn from_run_args(
+        run_args: &RunArgs,
+        model_path: &std::path::PathBuf,
+        check_mode: CheckMode,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let model = Arc::new(Model::from_run_args(run_args, model_path)?);
+        Self::new(model, run_args.clone(), check_mode)
     }
 
     /// Create a new circuit from a set of input data and [GraphParams].
@@ -407,8 +431,8 @@ impl GraphCircuit {
         model_path: &std::path::PathBuf,
         check_mode: CheckMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let model = Arc::new(Model::from_model_params(params, model_path)?);
-        Self::new(model, params.run_args, check_mode)
+        let model = Arc::new(Model::from_run_args(&params.run_args, model_path)?);
+        Self::new_from_params(model, params.clone(), check_mode)
     }
 
     /// Prepare the public inputs for the circuit.

@@ -722,8 +722,8 @@ mod native_tests {
         let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "calibrate",
-                "-D",
+                "gen-circuit-params",
+                "--calibration-data",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -832,8 +832,8 @@ mod native_tests {
         let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "calibrate",
-                "-D",
+                "gen-circuit-params",
+                "--calibration-data",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -841,8 +841,6 @@ mod native_tests {
                     "--circuit-params-path={}/{}/circuit.params",
                     test_dir, example_name
                 ),
-                "--bits=2",
-                "-K=3",
             ])
             .status()
             .expect("failed to execute process");
@@ -970,8 +968,8 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "calibrate",
-                "-D",
+                "gen-circuit-params",
+                "--calibration-data",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -979,8 +977,6 @@ mod native_tests {
                     "--circuit-params-path={}/{}/circuit.params",
                     test_dir, example_name
                 ),
-                "--bits=2",
-                "-K=3",
                 &format!("--scale={}", scale),
             ])
             .status()
@@ -1080,8 +1076,8 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "calibrate",
-                "-D",
+                "gen-circuit-params",
+                "--calibration-data",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),

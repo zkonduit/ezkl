@@ -15,12 +15,9 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
+use crate::circuit::{CheckMode, Tolerance};
 use crate::graph::Visibility;
 use crate::pfsys::TranscriptType;
-use crate::{
-    circuit::{CheckMode, Tolerance},
-    execute::CalibrationTarget,
-};
 
 impl std::fmt::Display for TranscriptType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -94,6 +91,62 @@ impl<'source> FromPyObject<'source> for StrategyType {
     }
 }
 
+/// Calibration specific parameters
+#[derive(Debug, Args, Deserialize, Serialize, Clone, Default)]
+pub struct CalibrationArgs {
+    /// The path to the .json calibration data file. If set will finetune the selected parameters to a calibration dataset.
+    #[arg(long = "calibration-data")]
+    pub data: Option<PathBuf>,
+    #[arg(long = "calibration-target")]
+    /// Target for calibration. "Resources" will calibrate for resource usage, "Accuracy" will calibrate for numerical accuracy.
+    pub target: Option<CalibrationTarget>,
+}
+
+#[derive(clap::ValueEnum, Debug, Default, Copy, Clone, Serialize, Deserialize)]
+/// Determines what the calibration pass should optimize for
+pub enum CalibrationTarget {
+    /// Optimizes for reducing cpu and memory usage
+    #[default]
+    Resources,
+    /// Optimizes for numerical accuracy given the fixed point representation
+    Accuracy,
+}
+
+impl From<&str> for CalibrationTarget {
+    fn from(s: &str) -> Self {
+        match s {
+            "resources" => CalibrationTarget::Resources,
+            "accuracy" => CalibrationTarget::Accuracy,
+            _ => panic!("invalid calibration target"),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Converts CalibrationTarget into a PyObject (Required for CalibrationTarget to be compatible with Python)
+impl IntoPy<PyObject> for CalibrationTarget {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            CalibrationTarget::Resources => "resources".to_object(py),
+            CalibrationTarget::Accuracy => "accuracy".to_object(py),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Obtains CalibrationTarget from PyObject (Required for CalibrationTarget to be compatible with Python)
+impl<'source> FromPyObject<'source> for CalibrationTarget {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let trystr = <PyString as PyTryFrom>::try_from(ob)?;
+        let strval = trystr.to_string();
+        match strval.to_lowercase().as_str() {
+            "resources" => Ok(CalibrationTarget::Resources),
+            "accuracy" => Ok(CalibrationTarget::Accuracy),
+            _ => Err(PyValueError::new_err("Invalid value for CalibrationTarget")),
+        }
+    }
+}
+
 /// Parameters specific to a proving run
 #[derive(Debug, Copy, Args, Deserialize, Serialize, Clone, Default)]
 pub struct RunArgs {
@@ -137,7 +190,7 @@ impl RunArgs {
     /// * `cli` - A [Cli] struct holding parsed CLI arguments.
     pub fn from_cli(cli: Cli) -> Result<Self, Box<dyn Error>> {
         match cli.command {
-            Commands::Mock { args, .. } | Commands::Calibrate { args, .. } => Ok(args),
+            Commands::Mock { args, .. } | Commands::GenCircuitParams { args, .. } => Ok(args),
             #[cfg(not(target_arch = "wasm32"))]
             Commands::Fuzz { args, .. } => Ok(args),
             #[cfg(feature = "render")]
@@ -231,31 +284,41 @@ pub enum Commands {
         #[arg(short = 'O', long)]
         output: PathBuf,
         /// Scale to use for quantization
-        #[arg(short = 'S', long)]
-        scale: u32,
+        #[arg(
+            short = 'S',
+            long,
+            default_value = "7",
+            conflicts_with = "circuit_params_path"
+        )]
+        scale: Option<u32>,
         /// The number of batches to split the input data into
-        #[arg(short = 'B', long)]
-        batch_size: usize,
+        #[arg(
+            short = 'B',
+            long,
+            default_value = "1",
+            conflicts_with = "circuit_params_path"
+        )]
+        batch_size: Option<usize>,
+        /// optional circuit params path
+        #[arg(long)]
+        circuit_params_path: Option<PathBuf>,
     },
 
     /// Calibrates the proving hyperparameters, produces a quantized output from those hyperparameters, and saves it to a .json file. The circuit parameters are also saved to a file.
     #[command(arg_required_else_help = true)]
-    Calibrate {
-        /// The path to the .json calibration data file
-        #[arg(short = 'D', long)]
-        data: PathBuf,
+    GenCircuitParams {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
         /// Path to circuit_params file to output
         #[arg(short = 'O', long)]
         circuit_params_path: PathBuf,
-        /// Target for calibration
-        #[arg(long, default_value = "resources")]
-        target: CalibrationTarget,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
+        /// calibration args
+        #[clap(flatten)]
+        calibration: CalibrationArgs,
     },
 
     /// Generates a dummy SRS
@@ -280,6 +343,9 @@ pub enum Commands {
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
+        /// optional circuit params path (overrides any run args set)
+        #[arg(long)]
+        circuit_params_path: Option<PathBuf>,
     },
 
     /// Aggregates proofs :)
@@ -363,6 +429,9 @@ pub enum Commands {
         /// number of fuzz iterations
         #[arg(long)]
         num_runs: usize,
+        /// optional circuit params path (overrides any run args set)
+        #[arg(long)]
+        circuit_params_path: Option<PathBuf>,
     },
 
     /// Loads model, data, and creates proof

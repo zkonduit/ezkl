@@ -1,4 +1,5 @@
 import ezkl_lib
+from ezkl_lib import PyCalArgs
 import os
 import pytest
 import json
@@ -83,8 +84,13 @@ def test_calibrate():
         folder_path,
         'circuit.params'
     )
+
+    cal_args = PyCalArgs()
+    cal_args.data = data_path
     # TODO: Dictionary outputs
-    res = ezkl_lib.calibrate(data_path, model_path, output_path)
+    res = ezkl_lib.gen_circuit_params(
+        model_path, output_path,
+        py_cal_args=cal_args)
 
     assert os.path.isfile(output_path)
     assert res == True
@@ -108,24 +114,23 @@ def test_forward():
     )
     output_path = os.path.join(
         folder_path,
-        'output.json'
+        'input_forward.json'
     )
-
-    scale = 7
-    batch_size = 1
+    circuit_params_path = os.path.join(
+        folder_path,
+        'circuit.params'
+    )
 
     # TODO: Dictionary outputs
     res = ezkl_lib.forward(data_path, model_path,
-                           output_path, scale, batch_size)
+                           output_path, circuit_params_path=circuit_params_path)
     # assert res == {"input_data":[[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]],"input_shapes":[[1,5,5]],"output_data":[[0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625]]}
 
     with open(output_path, "r") as f:
         data = json.load(f)
 
-    assert data == {"input_data": [[0.053262424, 0.074970566, 0.052355476, 0.028825462, 0.058487028, 0.008225823, 0.07530029, 0.0821458, 0.06227987, 0.024306035, 0.05793174, 0.04044203]], "input_hashes": [[3436631722270378000, 8118955762768849905, 10867548865092998679, 3171898146904824339]], "output_data": [[0.0546875, 0.1328125, 0.078125, 0.109375,
-                                                                                                                                                                                                                                                                                                                      0.21875, 0.109375, 0.0546875, 0.0859375, 0.03125, 0.0546875, 0.0625, 0.0078125, 0.1328125, 0.2265625, 0.09375, 0.078125, 0.1640625, 0.0859375, 0.0625, 0.0859375, 0.0234375, 0.1171875, 0.1796875, 0.0625, 0.0546875, 0.09375, 0.0390625]], "output_hashes": [[14199756545157573751, 8119908235494716828, 14053980955531533637, 3334079602463363322]]}
-
-    os.remove(output_path)
+    assert data == {"input_data": [[0.053262424, 0.074970566, 0.052355476, 0.028825462, 0.058487028, 0.008225823, 0.07530029, 0.0821458, 0.06227987, 0.024306035, 0.05793174, 0.04044203]], "output_data": [[0.05326271, 0.12823296, 0.074970245, 0.10561752, 0.20941353, 0.103796005, 0.052354813, 0.08118057, 0.02882576, 0.05848694, 0.06671333, 0.008226395, 0.13378716, 0.22415924,
+                                                                                                                                                                                                             0.090372086, 0.07530022, 0.15744591, 0.08214569, 0.062280655, 0.086586, 0.024305344, 0.120212555, 0.18495941, 0.06474686, 0.0579319, 0.09837341, 0.040441513]], "input_hashes": [[11989424819309673627, 6461986199153821963, 5179491524821780789, 872338485408700734]], "output_hashes": [[11095476124799272939, 11481879698617861790, 12451506336613682186, 3104900000392183595]]}
 
 
 def test_mock():
@@ -134,10 +139,8 @@ def test_mock():
     """
 
     data_path = os.path.join(
-        examples_path,
-        'onnx',
-        '1l_average',
-        'input.json'
+        folder_path,
+        'input_forward.json'
     )
 
     model_path = os.path.join(
@@ -147,7 +150,10 @@ def test_mock():
         'network.onnx'
     )
 
-    res = ezkl_lib.mock(data_path, model_path)
+    circuit_params_path = os.path.join(folder_path, 'circuit.params')
+
+    res = ezkl_lib.mock(data_path, model_path,
+                        circuit_params_path)
     assert res == True
 
 
@@ -157,10 +163,8 @@ def test_setup():
     """
 
     data_path = os.path.join(
-        examples_path,
-        'onnx',
-        '1l_average',
-        'input.json'
+        folder_path,
+        'input_forward.json'
     )
 
     model_path = os.path.join(
@@ -193,10 +197,8 @@ def test_setup_evm():
     """
 
     data_path = os.path.join(
-        examples_path,
-        'onnx',
-        '1l_average',
-        'input.json'
+        folder_path,
+        'input_forward.json'
     )
 
     model_path = os.path.join(
@@ -229,10 +231,8 @@ def test_prove_and_verify():
     """
 
     data_path = os.path.join(
-        examples_path,
-        'onnx',
-        '1l_average',
-        'input.json'
+        folder_path,
+        'input_forward.json'
     )
 
     model_path = os.path.join(
@@ -272,10 +272,8 @@ def test_prove_evm():
     """
 
     data_path = os.path.join(
-        examples_path,
-        'onnx',
-        '1l_average',
-        'input.json'
+        folder_path,
+        'input_forward.json'
     )
 
     model_path = os.path.join(
@@ -373,10 +371,13 @@ def test_aggregate_and_verify_aggr():
     vk_path = os.path.join(folder_path, '1l_relu.vk')
     circuit_params_path = os.path.join(folder_path, '1l_relu_circuit.params')
 
-    ezkl_lib.calibrate(
-        data_path,
+    cal_args = PyCalArgs()
+    cal_args.data = data_path
+
+    ezkl_lib.gen_circuit_params(
         model_path,
         circuit_params_path,
+        py_cal_args=cal_args
     )
 
     ezkl_lib.setup(
@@ -450,10 +451,13 @@ def test_evm_aggregate_and_verify_aggr():
     vk_path = os.path.join(folder_path, '1l_relu.vk')
     circuit_params_path = os.path.join(folder_path, '1l_relu_circuit.params')
 
-    ezkl_lib.calibrate(
-        data_path,
+    cal_args = PyCalArgs()
+    cal_args.data = data_path
+
+    ezkl_lib.gen_circuit_params(
         model_path,
         circuit_params_path,
+        py_cal_args=cal_args
     )
 
     ezkl_lib.setup(
