@@ -98,7 +98,7 @@ pub struct CalibrationArgs {
     #[arg(long = "calibration-data")]
     pub data: Option<PathBuf>,
     #[arg(long = "calibration-target")]
-    /// Target for calibration. "Resources" will calibrate for resource usage, "Accuracy" will calibrate for numerical accuracy.
+    /// Target for calibration.
     pub target: Option<CalibrationTarget>,
 }
 
