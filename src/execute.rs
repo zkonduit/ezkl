@@ -3,7 +3,7 @@ use crate::circuit::CheckMode;
 use crate::commands::{CalibrationArgs, CalibrationTarget};
 use crate::commands::{Cli, Commands, RunArgs, StrategyType};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::eth::{fix_verifier_sol, verify_proof_via_solidity, get_contract_artifacts};
+use crate::eth::{fix_verifier_sol, get_contract_artifacts, verify_proof_via_solidity};
 use crate::graph::{scale_to_multiplier, GraphCircuit, GraphInput, GraphParams, Model, Visibility};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
@@ -127,7 +127,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             deployment_code_path,
             sol_code_path,
             sol_bytecode_path,
-            optimizer_runs
+            optimizer_runs,
         } => create_evm_verifier(
             vk_path,
             params_path,
@@ -135,7 +135,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             deployment_code_path,
             sol_code_path,
             sol_bytecode_path,
-            optimizer_runs
+            optimizer_runs,
         ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifierAggr {
@@ -144,16 +144,15 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             deployment_code_path,
             sol_code_path,
             sol_bytecode_path,
-            optimizer_runs
-        } => {
-            create_evm_aggregate_verifier(
-                vk_path, params_path, 
-                deployment_code_path, 
-                sol_code_path,
-                sol_bytecode_path,
-                optimizer_runs
-            )
-        }
+            optimizer_runs,
+        } => create_evm_aggregate_verifier(
+            vk_path,
+            params_path,
+            deployment_code_path,
+            sol_code_path,
+            sol_bytecode_path,
+            optimizer_runs,
+        ),
         Commands::Setup {
             model,
             params_path,
@@ -608,7 +607,10 @@ pub(crate) fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, B
 
 /// helper function to generate the compiled bytcecode from sol code path
 #[cfg(not(target_arch = "wasm32"))]
-pub fn gen_sol_bytecode(sol_code_path: PathBuf, runs: Option<usize> ) -> Result<DeploymentCode, Box<dyn Error>> {
+pub fn gen_sol_bytecode(
+    sol_code_path: PathBuf,
+    runs: Option<usize>,
+) -> Result<DeploymentCode, Box<dyn Error>> {
     let (_, bytecode, _) = get_contract_artifacts(sol_code_path, runs)?;
     Ok(DeploymentCode {
         code: bytecode.to_vec(),
@@ -642,7 +644,7 @@ pub(crate) fn create_evm_verifier(
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
-    runs: Option<usize>
+    runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
     let circuit_params = GraphParams::load(&circuit_params_path)?;
     let params = load_params_cmd(params_path, circuit_params.run_args.logrows)?;
@@ -666,7 +668,8 @@ pub(crate) fn create_evm_verifier(
         let _ = f.write(output.as_bytes());
 
         if sol_bytecode_path.is_some() {
-            let sol_bytecode = gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), runs).unwrap();
+            let sol_bytecode =
+                gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), runs).unwrap();
             sol_bytecode.save(&sol_bytecode_path.unwrap())?;
         }
     }
@@ -686,27 +689,17 @@ pub(crate) async fn verify_evm(
     evm_verify(code, proof.clone())?;
 
     if sol_code_path.is_some() {
-        let result = verify_proof_via_solidity(
-            proof.clone(),
-            sol_code_path,
-            None,
-            runs
-        ).await?;
+        let result = verify_proof_via_solidity(proof.clone(), sol_code_path, None, runs).await?;
 
         info!("Solidity verification result: {}", result);
 
         assert!(result);
-        
+
         if sol_bytecode_path.is_some() {
-            let result = verify_proof_via_solidity(
-                proof,
-                None,
-                sol_bytecode_path,
-                runs
-            ).await?;
-    
+            let result = verify_proof_via_solidity(proof, None, sol_bytecode_path, runs).await?;
+
             info!("Solidity bytecode verification result: {}", result);
-    
+
             assert!(result);
         }
     }
@@ -720,7 +713,7 @@ pub(crate) fn create_evm_aggregate_verifier(
     deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
-    runs: Option<usize>
+    runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
     let params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
 
@@ -743,9 +736,10 @@ pub(crate) fn create_evm_aggregate_verifier(
 
         let mut f = File::create(sol_code_path.as_ref().unwrap())?;
         let _ = f.write(output.as_bytes());
-        
+
         if sol_bytecode_path.is_some() {
-            let sol_bytecode = gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), runs).unwrap();
+            let sol_bytecode =
+                gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), runs).unwrap();
             sol_bytecode.save(&sol_bytecode_path.unwrap())?;
         }
     }
@@ -1186,11 +1180,8 @@ pub(crate) fn verify(
     params_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
     let circuit_params = GraphParams::load(&circuit_params_path)?;
-
     let params = load_params_cmd(params_path, circuit_params.run_args.logrows)?;
-
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
-    let circuit_params = GraphParams::load(&circuit_params_path)?;
 
     let strategy = KZGSingleStrategy::new(params.verifier_params());
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_params)?;
