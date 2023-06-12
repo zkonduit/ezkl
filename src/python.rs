@@ -342,6 +342,8 @@ fn verify_aggr(
     circuit_params_path,
     deployment_code_path,
     sol_code_path=None,
+    sol_bytecode_path=None,
+    runs=None,
 ))]
 fn create_evm_verifier(
     vk_path: PathBuf,
@@ -349,6 +351,8 @@ fn create_evm_verifier(
     circuit_params_path: PathBuf,
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
+    sol_bytecode_path: Option<PathBuf>,
+    runs: Option<usize>,
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_verifier(
         vk_path,
@@ -368,12 +372,14 @@ fn create_evm_verifier(
     proof_path,
     deployment_code_path,
     sol_code_path=None,
+    sol_bytecode_path=None,
     runs=None
 ))]
 fn verify_evm(
     proof_path: PathBuf,
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
+    sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
 ) -> Result<bool, PyErr> {
 
@@ -397,12 +403,16 @@ fn verify_evm(
     params_path,
     deployment_code_path,
     sol_code_path=None,
+    sol_bytecode_path=None,
+    runs=None,
 ))]
 fn create_evm_verifier_aggr(
     vk_path: PathBuf,
     params_path: PathBuf,
     deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
+    sol_bytecode_path: Option<PathBuf>,
+    runs: Option<usize>,
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_aggregate_verifier(
         vk_path,
