@@ -457,7 +457,7 @@ mod native_tests {
             use test_case::test_case;
             use crate::native_tests::kzg_evm_prove_and_verify;
             use crate::native_tests::kzg_evm_aggr_prove_and_verify;
-            use crate::native_tests::kzg_fuzz;
+           use crate::native_tests::kzg_fuzz;
 
             /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
             /// specify those that will
@@ -904,21 +904,38 @@ mod native_tests {
         );
         let vk_arg = format!("{}/{}/evm_aggr.vk", test_dir, example_name);
 
-        let mut args = vec![
+        fn build_args<'a>(
+            with_solidity: bool, 
+              base_args: Vec<&'a str>, 
+              sol_arg: &'a str, 
+              sol_bytecode_arg: &'a str
+        ) -> Vec<&'a str> {
+            let mut args = base_args;
+
+            if with_solidity {
+                args.push("--sol-code-path");
+                args.push(sol_arg);
+                args.push("--sol-bytecode-path");
+                args.push(sol_bytecode_arg);
+                args.push("--optimizer-runs=1");
+            }
+            args
+        }
+
+        let sol_arg = format!("{}/{}/kzg_aggr.sol", test_dir, example_name);
+        let sol_bytecode_arg = format!("{}/{}/kzg_aggr.code", test_dir, example_name);
+
+        let base_args = vec![
             "create-evm-verifier-aggr",
             "--deployment-code-path",
             code_arg.as_str(),
             param_arg.as_str(),
             "--vk-path",
-            vk_arg.as_str(),
+            vk_arg.as_str()
         ];
 
-        let sol_arg = format!("{}/{}/kzg_aggr.sol", test_dir, example_name);
+        let args = build_args(with_solidity, base_args, &sol_arg, &sol_bytecode_arg);
 
-        if with_solidity {
-            args.push("--sol-code-path");
-            args.push(sol_arg.as_str());
-        }
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(args)
             .status()
@@ -927,17 +944,16 @@ mod native_tests {
 
         let pf_arg = format!("{}/{}/evm_aggr.pf", test_dir, example_name);
 
-        let mut args = vec![
+        let base_args = vec![
             "verify-evm",
             "--proof-path",
             pf_arg.as_str(),
             "--deployment-code-path",
             code_arg.as_str(),
         ];
-        if with_solidity {
-            args.push("--sol-code-path");
-            args.push(sol_arg.as_str());
-        }
+
+        let mut args = build_args(with_solidity, base_args, &sol_arg, &sol_bytecode_arg);
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(&args)
             .status()
@@ -1122,6 +1138,8 @@ mod native_tests {
         let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
         let param_arg = format!("--params-path={}/kzg17.params", test_dir);
 
+        let opt_arg = format!("--optimizer-runs={}", num_runs);
+
         let mut args = vec![
             "create-evm-verifier",
             circuit_params.as_str(),
@@ -1130,14 +1148,19 @@ mod native_tests {
             param_arg.as_str(),
             "--vk-path",
             vk_arg.as_str(),
+            opt_arg.as_str(),
         ];
 
         let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
+        let sol_bytecode_arg = format!("{}/{}/kzg.code", test_dir, example_name);
 
         if with_solidity {
             args.push("--sol-code-path");
             args.push(sol_arg.as_str());
+            args.push("--sol-bytecode-path");
+            args.push(sol_bytecode_arg.as_str());
         }
+        
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(&args)
             .status()
@@ -1146,7 +1169,6 @@ mod native_tests {
 
         let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
 
-        let opt_arg = format!("--optimizer-runs={}", num_runs);
 
         let mut args = vec![
             "verify-evm",
@@ -1159,6 +1181,8 @@ mod native_tests {
         if with_solidity {
             args.push("--sol-code-path");
             args.push(sol_arg.as_str());
+            args.push("--sol-bytecode-path");
+            args.push(sol_bytecode_arg.as_str());
         }
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(&args)
