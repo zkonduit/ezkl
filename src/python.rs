@@ -360,6 +360,8 @@ fn create_evm_verifier(
         circuit_params_path,
         deployment_code_path,
         sol_code_path,
+        sol_bytecode_path, 
+        runs,
     ).map_err(|e| {
         let err_str = format!("Failed to run create_evm_verifier: {}", e);
         PyRuntimeError::new_err(err_str)})?;
@@ -389,6 +391,7 @@ fn verify_evm(
         proof_path,
         deployment_code_path,
         sol_code_path,
+        sol_bytecode_path,
         runs,
     )).map_err(|e| {
         let err_str = format!("Failed to run verify_evm: {}", e);
@@ -419,6 +422,8 @@ fn create_evm_verifier_aggr(
         params_path,
         deployment_code_path,
         sol_code_path,
+        sol_bytecode_path,
+        runs,
     ).map_err(|e| {
         let err_str = format!("Failed to run create_evm_verifier_aggr: {}", e);
         PyRuntimeError::new_err(err_str)})?;
