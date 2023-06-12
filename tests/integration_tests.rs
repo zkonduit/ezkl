@@ -1165,16 +1165,6 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        forward_pass(
-            example_name.clone(),
-            input_visibility,
-            param_visibility,
-            output_visibility,
-            1,
-            17,
-            7,
-        );
-
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup",
@@ -1198,7 +1188,7 @@ mod native_tests {
             .args([
                 "prove",
                 "-D",
-                format!("{}/{}/input_forward.json", test_dir, example_name).as_str(),
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--proof-path",
