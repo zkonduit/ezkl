@@ -2,7 +2,6 @@
 pub mod evm;
 
 use crate::circuit::CheckMode;
-use crate::execute::ExecutionError;
 use crate::tensor::TensorType;
 use clap::ValueEnum;
 use halo2_proofs::circuit::Value;
@@ -260,7 +259,7 @@ where
             .map_err(Box::<dyn Error>::from)?;
         prover
             .verify()
-            .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
+            .map_err(|e| Box::<dyn Error>::from(crate::execute::ExecutionError::VerifyError(e)))?;
     }
 
     let mut transcript = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);

@@ -1071,8 +1071,8 @@ mod add_with_overflow_and_poseidon {
             crate::circuit::modules::poseidon::witness_hash::<WIDTH>(b.clone()).unwrap();
 
         // parameters
-        let a = Tensor::from(a.into_iter().map(|i| Value::known(i)));
-        let b = Tensor::from(b.into_iter().map(|i| Value::known(i)));
+        let a = Tensor::from(a.into_iter().map(Value::known));
+        let b = Tensor::from(b.into_iter().map(Value::known));
         let circuit = MyCircuit {
             inputs: [ValTensor::from(a), ValTensor::from(b)],
         };
@@ -1099,8 +1099,8 @@ mod add_with_overflow_and_poseidon {
             + Fr::one();
 
         // parameters
-        let a = Tensor::from(a.into_iter().map(|i| Value::known(i)));
-        let b = Tensor::from(b.into_iter().map(|i| Value::known(i)));
+        let a = Tensor::from(a.into_iter().map(Value::known));
+        let b = Tensor::from(b.into_iter().map(Value::known));
         let circuit = MyCircuit {
             inputs: [ValTensor::from(a), ValTensor::from(b)],
         };

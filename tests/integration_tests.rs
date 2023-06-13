@@ -119,21 +119,16 @@ mod native_tests {
             let duplicated_input_data: Vec<Vec<f32>> = data
                 .input_data
                 .iter()
-                .map(|data| (0..num_batches).map(|_| data.clone()).flatten().collect())
+                .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
                 .collect();
 
             let duplicated_output_data: Vec<Vec<f32>> = data
                 .output_data
                 .iter()
-                .map(|data| (0..num_batches).map(|_| data.clone()).flatten().collect())
+                .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
                 .collect();
 
-            let duplicated_data = GraphInput {
-                input_data: duplicated_input_data,
-                input_hashes: None,
-                output_hashes: None,
-                output_data: duplicated_output_data,
-            };
+            let duplicated_data = GraphInput::new(duplicated_input_data, duplicated_output_data);
 
             let res =
                 duplicated_data.save(format!("{}/{}/input.json", test_dir, output_dir).into());
@@ -385,28 +380,28 @@ mod native_tests {
                 crate::native_tests::mv_test_(test);
                 let large_batch_dir = &format!("large_batches_{}", test);
                 crate::native_tests::mk_data_batches_(test, &large_batch_dir, 10);
-                forward_pass(large_batch_dir.to_string(), "private", "private", "public", 10, 17);
+                forward_pass(large_batch_dir.to_string(), "private", "private", "public", 10, 17, 7);
             }
 
             #(#[test_case(TESTS[N])])*
             fn forward_pass_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                forward_pass(test.to_string(),"private", "private", "public", 1, 17);
+                forward_pass(test.to_string(),"private", "private", "public", 1, 17, 7);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_input_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                forward_pass(test.to_string(),"hashed", "private", "public", 1, 17);
+                forward_pass(test.to_string(),"hashed", "private", "public", 1, 17, 7);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_output_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                forward_pass(test.to_string(),"public", "private", "hashed", 1, 17);
+                forward_pass(test.to_string(),"public", "private", "hashed", 1, 17, 7);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -414,7 +409,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 crate::native_tests::init_params_17();
                 crate::native_tests::mv_test_(test);
-                kzg_prove_and_verify(test.to_string(), 7, 16, 17, "safe");
+                kzg_prove_and_verify(test.to_string(), 7, 17, "safe");
             }
 
             #(#[test_case(TESTS[N])])*
@@ -433,7 +428,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 crate::native_tests::init_params_24();
                 crate::native_tests::mv_test_(test);
-                kzg_prove_and_verify(test.to_string(), 5, 23, 24, "unsafe");
+                kzg_prove_and_verify(test.to_string(), 5, 24,"unsafe");
             }
 
             #(#[test_case(LARGE_TESTS[N])])*
@@ -496,7 +491,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "hashed", "private", "private", 10000);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "hashed", "private", "private", 1);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -504,7 +499,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "hashed", 0);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "hashed", 1);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -611,6 +606,7 @@ mod native_tests {
         output_visibility: &str,
         batch_size: usize,
         logrows: usize,
+        scale: usize,
     ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -623,11 +619,7 @@ mod native_tests {
                 "-O",
                 &format!("{}/{}/input_forward.json", test_dir, example_name),
                 &format!("--batch-size={}", batch_size),
-                &format!("--input-visibility={}", input_visibility),
-                &format!("--param-visibility={}", param_visibility),
-                &format!("--output-visibility={}", output_visibility),
-                &format!("--logrows={}", logrows),
-                "--bits=16",
+                &format!("--scale={}", scale),
             ])
             .status()
             .expect("failed to execute process");
@@ -640,11 +632,12 @@ mod native_tests {
                 format!("{}/{}/input_forward.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!("--batch-size={}", batch_size).as_str(),
+                (format!("--batch-size={}", batch_size).as_str()),
                 &format!("--input-visibility={}", input_visibility),
                 &format!("--param-visibility={}", param_visibility),
                 &format!("--output-visibility={}", output_visibility),
                 &format!("--logrows={}", logrows),
+                &format!("--scale={}", scale),
                 "--bits=16",
             ])
             .status()
@@ -729,6 +722,42 @@ mod native_tests {
         let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
+                "gen-circuit-params",
+                "--calibration-data",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
+                ),
+                "--bits=2",
+                "-K=3",
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "forward",
+                "-D",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
+                ),
+                "-O",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
                 "setup",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -744,8 +773,6 @@ mod native_tests {
                     "--circuit-params-path={}/{}/circuit.params",
                     test_dir, example_name
                 ),
-                "--bits=16",
-                "-K=17",
             ])
             .status()
             .expect("failed to execute process");
@@ -823,6 +850,40 @@ mod native_tests {
         let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
+                "gen-circuit-params",
+                "--calibration-data",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "forward",
+                "-D",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
+                ),
+                "-O",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
                 "setup",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -830,16 +891,11 @@ mod native_tests {
                 &format!("{}/{}/evm.vk", test_dir, example_name),
                 "--pk-path",
                 &format!("{}/{}/evm.pk", test_dir, example_name),
-                &format!(
-                    "--params-path={}/kzg23.params",
-                    TEST_DIR.path().to_str().unwrap()
-                ),
+                &format!("--params-path={}/kzg23.params", test_dir),
                 &format!(
                     "--circuit-params-path={}/{}/circuit.params",
                     test_dir, example_name
                 ),
-                "--bits=16",
-                "-K=17",
             ])
             .status()
             .expect("failed to execute process");
@@ -856,10 +912,7 @@ mod native_tests {
                 &format!("{}/{}/evm.pf", test_dir, example_name),
                 "--pk-path",
                 &format!("{}/{}/evm.pk", test_dir, example_name),
-                &format!(
-                    "--params-path={}/kzg23.params",
-                    TEST_DIR.path().to_str().unwrap()
-                ),
+                &format!("--params-path={}/kzg23.params", test_dir),
                 &format!(
                     "--circuit-params-path={}/{}/circuit.params",
                     test_dir, example_name
@@ -886,10 +939,7 @@ mod native_tests {
                 &format!("{}/{}/evm_aggr.pf", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/evm_aggr.vk", test_dir, example_name),
-                &format!(
-                    "--params-path={}/kzg23.params",
-                    TEST_DIR.path().to_str().unwrap()
-                ),
+                &format!("--params-path={}/kzg23.params", test_dir),
                 "--transcript=evm",
             ])
             .status()
@@ -897,17 +947,14 @@ mod native_tests {
         assert!(status.success());
 
         let code_arg = format!("{}/{}/evm_aggr.code", test_dir, example_name);
-        let param_arg = format!(
-            "--params-path={}/kzg23.params",
-            TEST_DIR.path().to_str().unwrap()
-        );
+        let param_arg = format!("--params-path={}/kzg23.params", test_dir);
         let vk_arg = format!("{}/{}/evm_aggr.vk", test_dir, example_name);
 
         fn build_args<'a>(
-            with_solidity: bool, 
-              base_args: Vec<&'a str>, 
-              sol_arg: &'a str, 
-              sol_bytecode_arg: &'a str
+            with_solidity: bool,
+            base_args: Vec<&'a str>,
+            sol_arg: &'a str,
+            sol_bytecode_arg: &'a str,
         ) -> Vec<&'a str> {
             let mut args = base_args;
 
@@ -930,7 +977,7 @@ mod native_tests {
             code_arg.as_str(),
             param_arg.as_str(),
             "--vk-path",
-            vk_arg.as_str()
+            vk_arg.as_str(),
         ];
 
         let args = build_args(with_solidity, base_args, &sol_arg, &sol_bytecode_arg);
@@ -968,14 +1015,44 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_prove_and_verify(
-        example_name: String,
-        scale: usize,
-        bits: usize,
-        logrows: usize,
-        checkmode: &str,
-    ) {
+    fn kzg_prove_and_verify(example_name: String, scale: usize, logrows: usize, checkmode: &str) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "gen-circuit-params",
+                "--calibration-data",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
+                ),
+                &format!("--scale={}", scale),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "forward",
+                "-D",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
+                ),
+                "-O",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup",
@@ -990,9 +1067,6 @@ mod native_tests {
                     "--circuit-params-path={}/{}/circuit.params",
                     test_dir, example_name
                 ),
-                &format!("--bits={}", bits),
-                &format!("--logrows={}", logrows),
-                &format!("--scale={}", scale),
             ])
             .status()
             .expect("failed to execute process");
@@ -1070,14 +1144,42 @@ mod native_tests {
     ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
 
-        forward_pass(
-            example_name.clone(),
-            input_visibility,
-            param_visibility,
-            output_visibility,
-            1,
-            17,
-        );
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "gen-circuit-params",
+                "--calibration-data",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
+                ),
+                &format!("--input-visibility={}", input_visibility),
+                &format!("--param-visibility={}", param_visibility),
+                &format!("--output-visibility={}", output_visibility),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "forward",
+                "-D",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--circuit-params-path={}/{}/circuit.params",
+                    test_dir, example_name
+                ),
+                "-O",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1093,11 +1195,6 @@ mod native_tests {
                     "--circuit-params-path={}/{}/circuit.params",
                     test_dir, example_name
                 ),
-                &format!("--input-visibility={}", input_visibility),
-                &format!("--param-visibility={}", param_visibility),
-                &format!("--output-visibility={}", output_visibility),
-                "--bits=16",
-                "-K=17",
             ])
             .status()
             .expect("failed to execute process");
@@ -1107,7 +1204,7 @@ mod native_tests {
             .args([
                 "prove",
                 "-D",
-                format!("{}/{}/input_forward.json", test_dir, example_name).as_str(),
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--proof-path",
@@ -1159,7 +1256,7 @@ mod native_tests {
             args.push("--sol-bytecode-path");
             args.push(sol_bytecode_arg.as_str());
         }
-        
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(&args)
             .status()
@@ -1167,7 +1264,6 @@ mod native_tests {
         assert!(status.success());
 
         let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
-
 
         let mut args = vec![
             "verify-evm",

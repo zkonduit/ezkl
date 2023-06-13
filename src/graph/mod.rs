@@ -1,5 +1,7 @@
 /// Helper functions
 pub mod utilities;
+use halo2curves::ff::PrimeField;
+use itertools::Itertools;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 pub use utilities::*;
@@ -15,7 +17,7 @@ use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEI
 use crate::circuit::modules::poseidon::{witness_hash, PoseidonChip, PoseidonConfig};
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
-use crate::commands::{Cli, RunArgs};
+use crate::commands::RunArgs;
 use crate::fieldutils::i128_to_felt;
 use crate::tensor::ops::pack;
 use crate::tensor::{Tensor, ValTensor};
@@ -23,8 +25,8 @@ use halo2_proofs::{
     circuit::{Layouter, Value},
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},
 };
-use halo2curves::bn256::Fr as Fp;
-use log::{info, trace};
+use halo2curves::bn256::{self, Fr as Fp};
+use log::{error, info, trace};
 pub use model::*;
 pub use node::*;
 use std::io::{Read, Write};
@@ -86,6 +88,8 @@ pub enum GraphError {
     PackingExponent,
 }
 
+const ASSUMED_BLINDING_FACTORS: usize = 6;
+
 /// The input tensor data and shape, and output data for the computational graph (model) as floats.
 /// For example, the input might be the image data for a neural network, and the output class scores.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -98,6 +102,62 @@ pub struct GraphInput {
     pub input_hashes: Option<Vec<Fp>>,
     /// Optional hashes of the outputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
     pub output_hashes: Option<Vec<Fp>>,
+}
+
+impl GraphInput {
+    ///
+    pub fn new(input_data: Vec<Vec<f32>>, output_data: Vec<Vec<f32>>) -> Self {
+        GraphInput {
+            input_data,
+            output_data,
+            input_hashes: None,
+            output_hashes: None,
+        }
+    }
+    ///
+    pub fn split_into_batches(
+        &self,
+        batch_size: usize,
+    ) -> Result<Vec<Self>, Box<dyn std::error::Error>> {
+        // ensure the input is devenly divisible by batch_size
+        if self.input_data.len() % batch_size != 0 || self.output_data.len() % batch_size != 0 {
+            return Err(Box::new(GraphError::InvalidDims(
+                0,
+                "input data length must be evenly divisible by batch size".to_string(),
+            )));
+        }
+
+        // split input data into batches
+        let mut input_batches = vec![];
+
+        for input in &self.input_data.iter().chunks(batch_size) {
+            let mut batch = vec![];
+            for i in input {
+                batch.push(i.clone());
+            }
+            input_batches.push(batch);
+        }
+
+        // split output data into batches
+        let mut output_batches = vec![];
+
+        for output in &self.output_data.iter().chunks(batch_size) {
+            let mut batch = vec![];
+            for i in output {
+                batch.push(i.clone());
+            }
+            output_batches.push(batch);
+        }
+
+        // create a new GraphInput for each batch
+        let batches = input_batches
+            .into_iter()
+            .zip(output_batches.into_iter())
+            .map(|(input, output)| GraphInput::new(input, output))
+            .collect::<Vec<GraphInput>>();
+
+        Ok(batches)
+    }
 }
 
 #[cfg(feature = "python-bindings")]
@@ -130,6 +190,8 @@ fn truncate_nested_vector(input: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {
 }
 
 const POSEIDON_LEN_GRAPH: usize = 10;
+// TODO: make this a function of the number of constraints this is a bit of a hack
+const POSEIDON_CONSTRAINTS_ESTIMATE: usize = 44;
 
 impl GraphInput {
     /// Load the model input from a file
@@ -142,7 +204,7 @@ impl GraphInput {
 
     /// Save the model input to a file
     pub fn save(&self, path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-        serde_json::to_writer(std::fs::File::create(&path)?, &self).map_err(|e| e.into())
+        serde_json::to_writer(std::fs::File::create(path)?, &self).map_err(|e| e.into())
     }
 }
 
@@ -157,15 +219,15 @@ pub struct ForwardResult {
     pub input_hashes: Vec<Fp>,
     /// Any hashes of outputs generated during the forward pass
     pub output_hashes: Vec<Fp>,
+    /// max lookup input
+    pub max_lookup_input: i128,
 }
 
 /// model parameters
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct GraphParams {
     /// run args
     pub run_args: RunArgs,
-    /// the visibility of the variables in the circuit
-    pub visibility: VarVisibility,
     /// the potential number of constraints in the circuit
     pub num_constraints: usize,
     /// the shape of public inputs to the model (in order of appearance)
@@ -193,16 +255,18 @@ impl GraphParams {
     }
 
     /// save params to file
-    pub fn save(&self, path: &std::path::PathBuf) {
-        let mut file = std::fs::File::create(path).unwrap();
-        let encoded: Vec<u8> = bincode::serialize(&self).unwrap();
-        file.write_all(&encoded).unwrap();
+    pub fn save(&self, path: &std::path::PathBuf) -> Result<(), std::io::Error> {
+        let encoded = serde_json::to_string(&self)?;
+        let mut file = std::fs::File::create(path)?;
+        file.write_all(encoded.as_bytes())
     }
     /// load params from file
-    pub fn load(path: &std::path::PathBuf) -> Self {
-        let file = std::fs::File::open(path).unwrap();
-        let decoded: Self = bincode::deserialize_from(file).unwrap();
-        decoded
+    pub fn load(path: &std::path::PathBuf) -> Result<Self, std::io::Error> {
+        let mut file = std::fs::File::open(path)?;
+        let mut data = String::new();
+        file.read_to_string(&mut data)?;
+        let res = serde_json::from_str(&data)?;
+        Ok(res)
     }
 }
 
@@ -228,6 +292,7 @@ impl GraphCircuit {
     ///
     pub fn new(
         model: Arc<Model>,
+        run_args: RunArgs,
         check_mode: CheckMode,
     ) -> Result<GraphCircuit, Box<dyn std::error::Error>> {
         // placeholder dummy inputs - must call prepare_public_inputs to load data afterwards
@@ -237,16 +302,50 @@ impl GraphCircuit {
             inputs.push(t);
         }
 
-        let mut params = model.gen_params(check_mode)?;
+        let mut hashing_constraints = 0;
+        let mut params = model.gen_params(run_args, check_mode)?;
         if params.run_args.input_visibility.is_hashed() {
             params.num_hashes += model.graph.num_inputs();
+            for input in model.graph.input_shapes() {
+                hashing_constraints +=
+                    POSEIDON_CONSTRAINTS_ESTIMATE * input.iter().product::<usize>();
+            }
         }
         if params.run_args.output_visibility.is_hashed() {
             params.num_hashes += model.graph.num_outputs();
+            for output in model.graph.output_shapes() {
+                hashing_constraints +=
+                    POSEIDON_CONSTRAINTS_ESTIMATE * output.iter().product::<usize>();
+            }
         }
 
+        // as they occupy independent rows
+        params.num_constraints = std::cmp::max(params.num_constraints, hashing_constraints);
+
         Ok(GraphCircuit {
-            model: model.clone(),
+            model,
+            inputs,
+            params,
+        })
+    }
+
+    ///
+    pub fn new_from_params(
+        model: Arc<Model>,
+        mut params: GraphParams,
+        check_mode: CheckMode,
+    ) -> Result<GraphCircuit, Box<dyn std::error::Error>> {
+        // placeholder dummy inputs - must call prepare_public_inputs to load data afterwards
+        let mut inputs: Vec<Tensor<i128>> = vec![];
+        for shape in model.graph.input_shapes() {
+            let t: Tensor<i128> = Tensor::new(None, &shape).unwrap();
+            inputs.push(t);
+        }
+
+        params.check_mode = check_mode;
+
+        Ok(GraphCircuit {
+            model,
             inputs,
             params,
         })
@@ -258,7 +357,7 @@ impl GraphCircuit {
         for (input, shape) in data.input_data.iter().zip(self.model.graph.input_shapes()) {
             let t: Vec<i128> = input
                 .par_iter()
-                .map(|x| quantize_float(x, 0.0, self.model.run_args.scale).unwrap())
+                .map(|x| quantize_float(x, 0.0, self.params.run_args.scale).unwrap())
                 .collect();
 
             let mut t: Tensor<i128> = t.into_iter().into();
@@ -269,49 +368,110 @@ impl GraphCircuit {
         self.inputs = inputs;
     }
 
+    /// Calibrate the circuit to the supplied data.
+    pub fn calibrate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let res = self.forward()?;
+        let max_range = 2i128.pow(self.params.run_args.bits as u32 - 1);
+        if res.max_lookup_input > max_range {
+            let recommended_bits = (res.max_lookup_input as f64).log2().ceil() as usize + 1;
+            assert!(res.max_lookup_input <= 2i128.pow(recommended_bits as u32 - 1));
+
+            if recommended_bits <= (bn256::Fr::S - 1) as usize {
+                self.params.run_args.bits = recommended_bits;
+                self.params.run_args.logrows = (recommended_bits + 1) as u32;
+                info!(
+                    "increasing bits to: {}, increasing logrows to: {}",
+                    recommended_bits,
+                    recommended_bits + 1
+                );
+                return self.calibrate();
+            } else {
+                let err_string = format!("No possible value of bits (estimate {}) at scale {} can accomodate this value.", recommended_bits, self.params.run_args.scale);
+                error!("{}", err_string);
+
+                return Err(err_string.into());
+            }
+        } else {
+            let min_bits = (res.max_lookup_input as f64).log2().ceil() as usize + 1;
+
+            let min_rows_from_constraints = (self.params.num_constraints as f64
+                + ASSUMED_BLINDING_FACTORS as f64)
+                .log2()
+                .ceil() as usize
+                + 1;
+            let mut logrows = std::cmp::max(min_bits + 1, min_rows_from_constraints);
+
+            // ensure logrows is at least 4
+            logrows = std::cmp::max(
+                logrows,
+                (ASSUMED_BLINDING_FACTORS as f64).ceil() as usize + 1,
+            );
+
+            logrows = std::cmp::min(logrows, bn256::Fr::S as usize);
+
+            info!(
+                "setting bits to: {}, setting logrows to: {}",
+                min_bits, logrows
+            );
+            self.params.run_args.bits = min_bits;
+            self.params.run_args.logrows = logrows as u32;
+        }
+
+        self.params = GraphCircuit::new(
+            self.model.clone(),
+            self.params.run_args.clone(),
+            self.params.check_mode,
+        )?
+        .params;
+
+        Ok(())
+    }
+
     /// Runs the forward pass of the model / graph of computations and any associated hashing.
     pub fn forward(&self) -> Result<ForwardResult, Box<dyn std::error::Error>> {
         let mut input_hashes = vec![];
-        if self.model.visibility.input.is_hashed() {
-            for input in self.inputs.iter() {
-                input_hashes.push(witness_hash::<POSEIDON_LEN_GRAPH>(
-                    input.iter().map(|x| i128_to_felt(*x)).collect(),
-                )?);
-            }
+        for input in self.inputs.iter() {
+            input_hashes.push(witness_hash::<POSEIDON_LEN_GRAPH>(
+                input.iter().map(|x| i128_to_felt(*x)).collect(),
+            )?);
         }
+
         let mut output_hashes = vec![];
         let outputs = self.model.forward(&self.inputs)?;
-        if self.model.visibility.output.is_hashed() {
-            for input in outputs.iter() {
-                output_hashes.push(witness_hash::<POSEIDON_LEN_GRAPH>(
-                    input.iter().map(|x| i128_to_felt(*x)).collect(),
-                )?);
-            }
+
+        for input in outputs.outputs.iter() {
+            output_hashes.push(witness_hash::<POSEIDON_LEN_GRAPH>(
+                input.iter().map(|x| i128_to_felt(*x)).collect(),
+            )?);
         }
 
         Ok(ForwardResult {
             inputs: self.inputs.clone(),
-            outputs,
+            outputs: outputs.outputs,
             input_hashes,
             output_hashes,
+            max_lookup_input: outputs.max_lookup_inputs,
         })
     }
 
-    /// Create a new circuit from a set of input data and cli arguments.
-    pub fn from_arg(check_mode: CheckMode) -> Result<Self, Box<dyn std::error::Error>> {
-        let cli = Cli::create()?;
-        let model = Arc::new(Model::from_ezkl_conf(cli)?);
-        Self::new(model, check_mode)
+    /// Create a new circuit from a set of input data and [RunArgs].
+    pub fn from_run_args(
+        run_args: &RunArgs,
+        model_path: &std::path::PathBuf,
+        check_mode: CheckMode,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let model = Arc::new(Model::from_run_args(run_args, model_path)?);
+        Self::new(model, *run_args, check_mode)
     }
 
     /// Create a new circuit from a set of input data and [GraphParams].
-    pub fn from_model_params(
+    pub fn from_params(
         params: &GraphParams,
         model_path: &std::path::PathBuf,
         check_mode: CheckMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let model = Arc::new(Model::from_model_params(params, model_path)?);
-        Self::new(model, check_mode)
+        let model = Arc::new(Model::from_run_args(&params.run_args, model_path)?);
+        Self::new_from_params(model, params.clone(), check_mode)
     }
 
     /// Prepare the public inputs for the circuit.
@@ -327,10 +487,10 @@ impl GraphCircuit {
         // the ordering here is important, we want the inputs to come before the outputs
         // as they are configured in that order as Column<Instances>
         let mut public_inputs = vec![];
-        if self.model.visibility.input.is_public() {
+        if self.params.run_args.input_visibility.is_public() {
             public_inputs = self.inputs.clone();
         }
-        if self.model.visibility.output.is_public() {
+        if self.params.run_args.output_visibility.is_public() {
             for (idx, v) in data.output_data.iter().enumerate() {
                 let t: Vec<i128> = v
                     .par_iter()
@@ -340,16 +500,17 @@ impl GraphCircuit {
                 let mut t: Tensor<i128> = t.into_iter().into();
 
                 let len = t.len();
-                if self.model.run_args.pack_base > 1 {
+                if self.params.run_args.pack_base > 1 {
                     let max_exponent =
-                        (((len - 1) as u32) * (self.model.run_args.scale + 1)) as f64;
-                    if max_exponent > (i128::MAX as f64).log(self.model.run_args.pack_base as f64) {
+                        (((len - 1) as u32) * (self.params.run_args.scale + 1)) as f64;
+                    if max_exponent > (i128::MAX as f64).log(self.params.run_args.pack_base as f64)
+                    {
                         return Err(Box::new(GraphError::PackingExponent));
                     }
                     t = pack(
                         &t,
-                        self.model.run_args.pack_base as i128,
-                        self.model.run_args.scale,
+                        self.params.run_args.pack_base as i128,
+                        self.params.run_args.scale,
                     )?;
                 }
                 public_inputs.push(t);
@@ -373,17 +534,19 @@ impl GraphCircuit {
             })
             .collect::<Vec<Vec<Fp>>>();
 
-        if self.model.visibility.input.is_hashed() || self.model.visibility.output.is_hashed() {
+        if self.params.run_args.input_visibility.is_hashed()
+            || self.params.run_args.output_visibility.is_hashed()
+        {
             let mut hash_pi = vec![];
-            if self.model.visibility.input.is_hashed() {
+            if self.params.run_args.input_visibility.is_hashed() {
                 // should unwrap safely
                 hash_pi.extend(data.input_hashes.as_deref().unwrap().to_vec());
             }
-            if self.model.visibility.output.is_hashed() {
+            if self.params.run_args.output_visibility.is_hashed() {
                 // should unwrap safely
                 hash_pi.extend(data.output_hashes.as_deref().unwrap().to_vec());
             };
-            if hash_pi.len() > 0 {
+            if !hash_pi.is_empty() {
                 pi_inner.push(hash_pi);
             }
         }
@@ -406,12 +569,14 @@ impl Circuit<Fp> for GraphCircuit {
     }
 
     fn configure_with_params(cs: &mut ConstraintSystem<Fp>, params: Self::Params) -> Self::Config {
+        let visibility = VarVisibility::from_args(params.run_args).unwrap();
+
         let mut vars = ModelVars::new(
             cs,
             params.run_args.logrows as usize,
             params.num_constraints,
             params.model_instance_shapes.clone(),
-            params.visibility.clone(),
+            visibility.clone(),
             params.run_args.scale,
         );
 
@@ -427,9 +592,9 @@ impl Circuit<Fp> for GraphCircuit {
 
         let model_config = ModelConfig { base, vars };
 
-        let poseidon_config = if params.visibility.input.is_hashed()
-            || params.visibility.output.is_hashed()
-            || params.visibility.params.is_hashed()
+        let poseidon_config = if visibility.input.is_hashed()
+            || visibility.output.is_hashed()
+            || visibility.params.is_hashed()
         {
             Some(PoseidonChip::<
                 PoseidonSpec,
@@ -463,7 +628,7 @@ impl Circuit<Fp> for GraphCircuit {
             .map(|i| ValTensor::from(<Tensor<i128> as Into<Tensor<Value<Fp>>>>::into(i.clone())))
             .collect::<Vec<ValTensor<Fp>>>();
 
-        if self.model.visibility.input.is_hashed() {
+        if self.params.run_args.input_visibility.is_hashed() {
             // instantiate new poseidon module in chip
             let chip = PoseidonChip::<
                 PoseidonSpec,
@@ -473,7 +638,7 @@ impl Circuit<Fp> for GraphCircuit {
             >::construct(config.poseidon_config.as_ref().unwrap().clone());
             for (i, input) in inputs.clone().iter().enumerate() {
                 // hash the input and replace the constrained cells in the inputs
-                inputs[i] = chip.hash(&mut layouter, &input, i)?;
+                inputs[i] = chip.hash(&mut layouter, input, i)?;
                 inputs[i]
                     .reshape(input.dims())
                     .map_err(|_| PlonkError::Synthesis)?;
@@ -488,6 +653,7 @@ impl Circuit<Fp> for GraphCircuit {
             .layout(
                 config.model_config.clone(),
                 &mut layouter,
+                &self.params.run_args,
                 &inputs,
                 &config.model_config.vars,
             )
@@ -496,7 +662,7 @@ impl Circuit<Fp> for GraphCircuit {
                 PlonkError::Synthesis
             })?;
 
-        if self.model.visibility.output.is_hashed() {
+        if self.params.run_args.output_visibility.is_hashed() {
             let chip = PoseidonChip::<
                 PoseidonSpec,
                 POSEIDON_WIDTH,
@@ -504,7 +670,7 @@ impl Circuit<Fp> for GraphCircuit {
                 POSEIDON_LEN_GRAPH,
             >::construct(config.poseidon_config.unwrap());
             let mut hash_offset = 0;
-            if self.model.visibility.input.is_hashed() {
+            if self.params.run_args.input_visibility.is_hashed() {
                 hash_offset += inputs.len();
                 // re-enter the first module
                 layouter.assign_region(|| "_enter_module_0", |_| Ok(()))?;

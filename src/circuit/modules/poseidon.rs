@@ -62,15 +62,15 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
         //  instantiate the required columns
         let hash_inputs = (0..WIDTH).map(|_| meta.advice_column()).collect::<Vec<_>>();
         for input in &hash_inputs {
-            meta.enable_equality(input.clone());
+            meta.enable_equality(*input);
         }
 
         let partial_sbox = meta.advice_column();
         let rc_a = (0..WIDTH).map(|_| meta.fixed_column()).collect::<Vec<_>>();
         let rc_b = (0..WIDTH).map(|_| meta.fixed_column()).collect::<Vec<_>>();
 
-        for i in 0..WIDTH {
-            meta.enable_equality(hash_inputs[i]);
+        for input in hash_inputs.iter().take(WIDTH) {
+            meta.enable_equality(*input);
         }
         meta.enable_constant(rc_b[0]);
 
@@ -111,7 +111,7 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
                                 || format!("load message_{}", i),
                                 self.config.hash_inputs[x],
                                 y,
-                                || v.clone(),
+                                || *v,
                             ),
                             ValType::PrevAssigned(v) => Ok(v.clone()),
                             _ => panic!("wrong input type, must be previously assigned"),
@@ -213,7 +213,7 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
 
 ///
 pub fn witness_hash<const L: usize>(message: Vec<Fp>) -> Result<Fp, Box<dyn std::error::Error>> {
-    let mut hash_inputs = message.clone();
+    let mut hash_inputs = message;
     // do the Tree dance baby
     while hash_inputs.len() > 1 {
         let mut hashes: Vec<Fp> = vec![];
@@ -291,8 +291,7 @@ mod tests {
             config: PoseidonConfig<WIDTH, RATE>,
             mut layouter: impl Layouter<Fp>,
         ) -> Result<(), Error> {
-            let chip: PoseidonChip<PoseidonSpec, WIDTH, RATE, L> =
-                PoseidonChip::construct(config.clone());
+            let chip: PoseidonChip<PoseidonSpec, WIDTH, RATE, L> = PoseidonChip::construct(config);
             chip.hash(&mut layouter, &self.message, 0)?;
             Ok(())
         }

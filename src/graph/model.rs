@@ -10,21 +10,18 @@ use crate::circuit::Tolerance;
 use crate::circuit::Unknown;
 use crate::{
     circuit::{lookup::LookupOp, ops::poly::PolyOp, BaseConfig as PolyConfig, CheckMode, Op},
-    commands::{Cli, Commands, RunArgs},
+    commands::RunArgs,
     tensor::{Tensor, ValTensor},
 };
 use halo2curves::bn256::Fr as Fp;
 
 use colored::Colorize;
 use halo2_proofs::circuit::Region;
-use log::warn;
 use tract_onnx::prelude::{
     DatumExt, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
 };
 use tract_onnx::tract_hir::ops::scan::Scan;
 
-// use tract_onnx::tract_hir::internal::GenericFactoid;
-//use clap::Parser;
 use core::panic;
 use halo2_proofs::{
     circuit::{Layouter, Value},
@@ -41,6 +38,15 @@ use std::sync::Mutex;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::Framework;
+
+/// The result of a forward pass.
+#[derive(Clone, Debug)]
+pub struct ForwardResult {
+    /// The outputs of the forward pass.
+    pub outputs: Vec<Tensor<i128>>,
+    /// The maximum value of any input to a lookup operation.
+    pub max_lookup_inputs: i128,
+}
 
 /// A circuit configuration for the entirety of a model loaded from an Onnx file.
 #[derive(Clone, Debug)]
@@ -59,8 +65,6 @@ pub type NodeGraph = BTreeMap<usize, NodeType>;
 pub struct Model {
     /// input indices
     pub graph: ParsedNodes,
-    /// The [RunArgs] being used
-    pub run_args: RunArgs,
     /// Defines which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
     pub visibility: VarVisibility,
 }
@@ -112,17 +116,6 @@ impl NodeType {
         }
     }
 
-    /// Runs a forward pass on sample data
-    pub fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, Box<dyn Error>> {
-        match self {
-            NodeType::Node(n) => n.opkind.f(inputs).map_err(|e| e.into()),
-            NodeType::SubGraph { model, .. } => {
-                let res = model.forward(inputs)?;
-                assert_eq!(res.len(), 1);
-                Ok(res[0].clone())
-            }
-        }
-    }
     /// Returns a string representation of the operation.
     pub fn as_str(&self) -> String {
         match self {
@@ -214,19 +207,12 @@ impl Model {
     /// # Arguments
     /// * `reader` - A reader for an Onnx file.
     /// * `run_args` - [RunArgs]
-    /// * `visibility` - Which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
-    pub fn new(
-        reader: &mut dyn std::io::Read,
-        run_args: RunArgs,
-        visibility: VarVisibility,
-    ) -> Result<Self, Box<dyn Error>> {
+    pub fn new(reader: &mut dyn std::io::Read, run_args: RunArgs) -> Result<Self, Box<dyn Error>> {
+        let visibility = VarVisibility::from_args(run_args)?;
+
         let graph = Self::load_onnx_model(reader, &run_args, &visibility)?;
 
-        let om = Model {
-            run_args,
-            graph,
-            visibility,
-        };
+        let om = Model { graph, visibility };
 
         debug!("\n {}", om.table_nodes());
 
@@ -234,14 +220,20 @@ impl Model {
     }
 
     /// Generate model parameters for the circuit
-    pub fn gen_params(&self, check_mode: CheckMode) -> Result<GraphParams, Box<dyn Error>> {
+    pub fn gen_params(
+        &self,
+        run_args: RunArgs,
+        check_mode: CheckMode,
+    ) -> Result<GraphParams, Box<dyn Error>> {
         let instance_shapes = self.instance_shapes();
         // this is the total number of variables we will need to allocate
         // for the circuit
-        let num_constraints = if let Some(num_constraints) = self.run_args.allocated_constraints {
+
+        let num_constraints = if let Some(num_constraints) = run_args.allocated_constraints {
             num_constraints
         } else {
-            self.dummy_layout(&self.graph.input_shapes()).unwrap()
+            self.dummy_layout(&run_args, &self.graph.input_shapes())
+                .unwrap()
         };
 
         // Then number of columns in the circuits
@@ -256,20 +248,10 @@ impl Model {
         let mut lookup_ops: Vec<LookupOp> = self.required_lookups();
 
         // if we're using percentage tolerance, we need to add the necessary range check ops for it.
-        if let Tolerance::Percentage { val, .. } = self.run_args.tolerance {
+        if let Tolerance::Percentage { val, .. } = run_args.tolerance {
             let tolerance = Tolerance::Percentage {
                 val,
-                scale: scale_to_multiplier(self.run_args.scale) as usize,
-            };
-            let opkind: Box<dyn Op<Fp>> = Box::new(HybridOp::RangeCheck(tolerance));
-            lookup_ops.extend(opkind.required_lookups());
-        }
-
-        // if we're using percentage tolerance, we need to add the necessary range check ops for it.
-        if let Tolerance::Percentage { val, .. } = self.run_args.tolerance {
-            let tolerance = Tolerance::Percentage {
-                val,
-                scale: scale_to_multiplier(self.run_args.scale) as usize,
+                scale: scale_to_multiplier(run_args.scale) as usize,
             };
             let opkind: Box<dyn Op<Fp>> = Box::new(HybridOp::RangeCheck(tolerance));
             lookup_ops.extend(opkind.required_lookups());
@@ -278,9 +260,11 @@ impl Model {
         let set: HashSet<_> = lookup_ops.drain(..).collect(); // dedup
         lookup_ops.extend(set.into_iter().sorted());
 
+        let batch_size = self.graph.input_shapes()[0][0];
+        assert!(self.graph.input_shapes().iter().all(|x| x[0] == batch_size));
+
         Ok(GraphParams {
-            run_args: self.run_args.clone(),
-            visibility: self.visibility.clone(),
+            run_args,
             model_instance_shapes: instance_shapes,
             num_hashes: 0,
             num_constraints,
@@ -294,10 +278,7 @@ impl Model {
     /// * `reader` - A reader for an Onnx file.
     /// * `model_inputs` - A vector of [Tensor]s to use as inputs to the model.
     /// * `run_args` - [RunArgs]
-    pub fn forward(
-        &self,
-        model_inputs: &[Tensor<i128>],
-    ) -> Result<Vec<Tensor<i128>>, Box<dyn Error>> {
+    pub fn forward(&self, model_inputs: &[Tensor<i128>]) -> Result<ForwardResult, Box<dyn Error>> {
         let mut results: BTreeMap<&usize, Tensor<i128>> = BTreeMap::new();
         let mut max_lookup_inputs = 0;
         let mut input_idx = 0;
@@ -330,11 +311,23 @@ impl Model {
             match n {
                 NodeType::Node(n) => {
                     let res = Op::<Fp>::f(&*n.opkind, &inputs)?;
-                    results.insert(idx, res);
+                    // see if any of the intermediate lookup calcs are the max
+                    if !res.intermediate_lookups.is_empty() {
+                        let mut max = 0;
+                        for i in &res.intermediate_lookups {
+                            max = max.max(i.iter().map(|x| x.abs()).max().unwrap());
+                        }
+                        max_lookup_inputs = max_lookup_inputs.max(max);
+                    }
+
+                    results.insert(idx, res.output);
                 }
                 NodeType::SubGraph { model, .. } => {
                     let res = model.forward(&inputs)?;
-                    let mut res = res.last().unwrap().clone();
+                    // recursively get the max lookup inputs for subgraphs
+                    max_lookup_inputs = max_lookup_inputs.max(res.max_lookup_inputs);
+
+                    let mut res = res.outputs.last().unwrap().clone();
                     res.flatten();
                     results.insert(idx, res);
                 }
@@ -350,20 +343,12 @@ impl Model {
             .map(|o| results.get(&o).unwrap().clone().map(|x| x))
             .collect_vec();
 
-        let max_range = 2i128.pow(self.run_args.bits as u32 - 1);
-        if max_lookup_inputs >= max_range {
-            let recommended_bits = (max_lookup_inputs as f64).log2().ceil() as u32 + 1;
-            warn!("At the selected lookup bits and fixed point scale, the largest input to a lookup table is too large to be represented (max: {}, bits: {}, scale: {}).",  max_lookup_inputs, self.run_args.bits, self.run_args.scale);
-            if recommended_bits <= 27 {
-                warn!("Increase the lookup bits to [{}]. The current scale cannot be decreased enough to fit the largest lookup input. ", recommended_bits);
-                warn!("Remember to increase the circuit logrows if you increase the bits.");
-                warn!("Remember to re-run the forward pass with the new values.");
-            } else {
-                warn!("No possible value of bits _at this scale_ can accomodate this value.")
-            }
-        }
+        let res = ForwardResult {
+            outputs,
+            max_lookup_inputs,
+        };
 
-        Ok(outputs)
+        Ok(res)
     }
 
     /// Loads an Onnx model from a specified path.
@@ -394,7 +379,7 @@ impl Model {
                     Ok(x) => x as usize,
                     Err(_e) => {
                         if x.to_string() == "batch_size" {
-                            run_args.batch_size as usize
+                            run_args.batch_size
                         } else {
                             panic!("Unknown dimension {}: {:?}", x.to_string(), x)
                         }
@@ -412,13 +397,13 @@ impl Model {
         }
         // Note: do not optimize the model, as the layout will depend on underlying hardware
         let model = model.into_typed()?.into_decluttered()?;
-        let batch_size = model.symbol_table.sym("batch_size");
-        let seq_len = model.symbol_table.sym("sequence_length");
+        let batch_size_sym = model.symbol_table.sym("batch_size");
+        let seq_len_sym = model.symbol_table.sym("sequence_length");
         let model = model
             .concretize_dims(
-                &SymbolValues::default().with(&batch_size, run_args.batch_size as i64),
+                &SymbolValues::default().with(&batch_size_sym, run_args.batch_size as i64),
             )?
-            .concretize_dims(&SymbolValues::default().with(&seq_len, 1))?;
+            .concretize_dims(&SymbolValues::default().with(&seq_len_sym, 1))?;
 
         info!("set batch size to {}", run_args.batch_size);
 
@@ -510,7 +495,6 @@ impl Model {
 
                     let om = Model {
                         graph: subgraph,
-                        run_args: run_args.clone(),
                         visibility: visibility.clone(),
                     };
                     nodes.insert(
@@ -546,51 +530,14 @@ impl Model {
         Ok(nodes)
     }
 
-    /// Creates a `Model` from parsed CLI arguments
-    /// # Arguments
-    /// * `cli` - A [Cli] struct holding parsed CLI arguments.
-    pub fn from_ezkl_conf(cli: Cli) -> Result<Self, Box<dyn Error>> {
-        match cli.command {
-            Commands::Table { model, args, .. }
-            | Commands::Mock { model, args, .. }
-            | Commands::Setup { model, args, .. }
-            | Commands::Forward { model, args, .. } => {
-                let visibility = VarVisibility::from_args(args.clone())?;
-                Model::new(&mut std::fs::File::open(model)?, args, visibility)
-            }
-            #[cfg(not(target_arch = "wasm32"))]
-            Commands::Fuzz { model, args, .. } => {
-                let visibility = VarVisibility::from_args(args.clone())?;
-                Model::new(&mut std::fs::File::open(model)?, args, visibility)
-            }
-            #[cfg(feature = "render")]
-            Commands::RenderCircuit { model, args, .. } => {
-                let visibility = VarVisibility::from_args(args.clone())?;
-                Model::new(&mut std::fs::File::open(model)?, args, visibility)
-            }
-            _ => panic!(),
-        }
-    }
-
-    /// Creates a `Model` from parsed model params
+    /// Creates a `Model` from parsed run_args
     /// # Arguments
     /// * `params` - A [GraphParams] struct holding parsed CLI arguments.
-    pub fn from_model_params(
-        params: &GraphParams,
+    pub fn from_run_args(
+        run_args: &RunArgs,
         model: &std::path::PathBuf,
     ) -> Result<Self, Box<dyn Error>> {
-        let visibility = VarVisibility::from_args(params.run_args.clone())?;
-        Model::new(
-            &mut std::fs::File::open(model)?,
-            params.run_args.clone(),
-            visibility,
-        )
-    }
-
-    /// Creates a `Model` based on CLI arguments
-    pub fn from_arg() -> Result<Self, Box<dyn Error>> {
-        let conf = Cli::create()?;
-        Self::from_ezkl_conf(conf)
+        Model::new(&mut std::fs::File::open(model)?, *run_args)
     }
 
     /// Configures a model for the circuit
@@ -640,6 +587,7 @@ impl Model {
         &self,
         mut config: ModelConfig,
         layouter: &mut impl Layouter<Fp>,
+        run_args: &RunArgs,
         inputs: &[ValTensor<Fp>],
         vars: &ModelVars<Fp>,
     ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
@@ -676,7 +624,7 @@ impl Model {
                     })?;
 
                 // pack outputs if need be
-                if self.run_args.pack_base > 1 {
+                if run_args.pack_base > 1 {
                     for i in 0..outputs.len() {
                         debug!("packing outputs...");
                         outputs[i] = config
@@ -685,10 +633,7 @@ impl Model {
                                 thread_safe_region.clone(),
                                 &outputs[i..i + 1],
                                 &mut offset,
-                                Box::new(PolyOp::Pack(
-                                    self.run_args.pack_base,
-                                    self.run_args.scale,
-                                )),
+                                Box::new(PolyOp::Pack(run_args.pack_base, run_args.scale)),
                             )
                             .map_err(|e| {
                                 error!("{}", e);
@@ -700,14 +645,14 @@ impl Model {
                     }
                 }
 
-                match self.run_args.output_visibility {
+                match run_args.output_visibility {
                     Visibility::Public => {
-                        let tolerance = match self.run_args.tolerance {
+                        let tolerance = match run_args.tolerance {
                             Tolerance::Percentage { val, .. } => Tolerance::Percentage {
                                 val,
-                                scale: scale_to_multiplier(self.run_args.scale) as usize,
+                                scale: scale_to_multiplier(run_args.scale) as usize,
                             },
-                            _ => self.run_args.tolerance,
+                            _ => run_args.tolerance,
                         };
                         let _ = outputs
                             .iter()
@@ -795,7 +740,11 @@ impl Model {
     /// Assigns dummy values to the regions created when calling `configure`.
     /// # Arguments
     /// * `input_shapes` - The shapes of the inputs to the model.
-    pub fn dummy_layout(&self, input_shapes: &[Vec<usize>]) -> Result<usize, Box<dyn Error>> {
+    pub fn dummy_layout(
+        &self,
+        run_args: &RunArgs,
+        input_shapes: &[Vec<usize>],
+    ) -> Result<usize, Box<dyn Error>> {
         info!("calculating num of constraints using dummy model layout...");
         let mut results = BTreeMap::<usize, ValTensor<Fp>>::new();
 
@@ -811,7 +760,7 @@ impl Model {
             results.insert(*input_idx, inputs[i].clone());
         }
 
-        let mut dummy_config = PolyConfig::dummy(self.run_args.logrows as usize);
+        let mut dummy_config = PolyConfig::dummy(run_args.logrows as usize);
 
         let mut offset: usize = 0;
 
@@ -823,7 +772,7 @@ impl Model {
         )?;
 
         // pack outputs if need be
-        if self.run_args.pack_base > 1 {
+        if run_args.pack_base > 1 {
             for i in 0..outputs.len() {
                 debug!("packing outputs...");
                 outputs[i] = dummy_config
@@ -831,7 +780,7 @@ impl Model {
                         Arc::new(Mutex::new(None)),
                         &outputs[i..i + 1],
                         &mut offset,
-                        Box::new(PolyOp::Pack(self.run_args.pack_base, self.run_args.scale)),
+                        Box::new(PolyOp::Pack(run_args.pack_base, run_args.scale)),
                     )
                     .map_err(|e| {
                         error!("{}", e);
@@ -841,14 +790,14 @@ impl Model {
             }
         }
 
-        match self.run_args.output_visibility {
+        match run_args.output_visibility {
             Visibility::Public => {
-                let tolerance = match self.run_args.tolerance {
+                let tolerance = match run_args.tolerance {
                     Tolerance::Percentage { val, .. } => Tolerance::Percentage {
                         val,
-                        scale: scale_to_multiplier(self.run_args.scale) as usize,
+                        scale: scale_to_multiplier(run_args.scale) as usize,
                     },
-                    _ => self.run_args.tolerance,
+                    _ => run_args.tolerance,
                 };
                 let _ = outputs
                     .clone()

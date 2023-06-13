@@ -99,9 +99,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     }
 
     /// Matches a [Op] to an operation in the `tensor::ops` module.
-    fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
+    fn f(&self, inputs: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
         let mut inputs = inputs.to_vec();
-        match &self {
+        let res = match &self {
             PolyOp::Resize { scale_factor } => tensor::ops::resize(&inputs[0], scale_factor),
             PolyOp::Iff => tensor::ops::iff(&inputs[0], &inputs[1], &inputs[2]),
             PolyOp::Einsum { equation } => tensor::ops::einsum(equation, &inputs),
@@ -198,7 +198,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 }
                 Ok(tensor::ops::slice(&inputs[0], axis, start, end)?)
             }
-        }
+        }?;
+
+        Ok(ForwardResult {
+            output: res,
+            intermediate_lookups: vec![],
+        })
     }
 
     fn layout(
