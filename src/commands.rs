@@ -99,7 +99,7 @@ pub struct CalibrationArgs {
     pub data: Option<PathBuf>,
     #[arg(long = "calibration-target")]
     /// Target for calibration.
-    pub target: Option<CalibrationTarget>,
+    pub target: CalibrationTarget,
 }
 
 #[derive(clap::ValueEnum, Debug, Default, Copy, Clone, Serialize, Deserialize)]
@@ -295,7 +295,7 @@ pub enum Commands {
         #[arg(short = 'M', long)]
         model: PathBuf,
         /// Path to circuit_params file to output
-        #[arg(short = 'O', long)]
+        #[arg(short = 'O', long, default_value = "circuit.json")]
         circuit_params_path: PathBuf,
         /// proving arguments
         #[clap(flatten)]
@@ -309,7 +309,7 @@ pub enum Commands {
     #[command(name = "gen-srs", arg_required_else_help = true)]
     GenSrs {
         /// The path to output to the desired params file
-        #[arg(long)]
+        #[arg(long, default_value = "kzg.params")]
         params_path: PathBuf,
         /// number of logrows to use for srs
         #[arg(long)]
@@ -345,10 +345,10 @@ pub enum Commands {
         #[arg(long)]
         aggregation_vk_paths: Vec<PathBuf>,
         /// The path to save the desired verfication key file
-        #[arg(long)]
+        #[arg(long, default_value = "vk_aggr.key")]
         vk_path: PathBuf,
         /// The path to the desired output file
-        #[arg(long)]
+        #[arg(long, default_value = "proof_aggr.proof")]
         proof_path: PathBuf,
         /// The transcript type
         #[arg(long)]
@@ -379,10 +379,10 @@ pub enum Commands {
         #[arg(long)]
         params_path: PathBuf,
         /// The path to output the verfication key file
-        #[arg(long)]
+        #[arg(long, default_value = "vk.key")]
         vk_path: PathBuf,
         /// The path to output the proving key file
-        #[arg(long)]
+        #[arg(long, default_value = "pk.key")]
         pk_path: PathBuf,
         /// The path to load circuit params from
         #[arg(long)]
@@ -411,7 +411,7 @@ pub enum Commands {
         #[clap(flatten)]
         args: RunArgs,
         /// number of fuzz iterations
-        #[arg(long)]
+        #[arg(long, default_value = "10")]
         num_runs: usize,
         /// optional circuit params path (overrides any run args set)
         #[arg(long)]
@@ -431,7 +431,7 @@ pub enum Commands {
         #[arg(long)]
         pk_path: PathBuf,
         /// The path to the desired output file
-        #[arg(long)]
+        #[arg(long, default_value = "proof.proof")]
         proof_path: PathBuf,
         /// The parameter path
         #[arg(long)]
@@ -474,13 +474,13 @@ pub enum Commands {
         #[arg(long)]
         vk_path: PathBuf,
         /// The path to the compiled yul bytecode code
-        #[arg(long)]
+        #[arg(long, default_value = "evm_deploy.yul")]
         deployment_code_path: PathBuf,
         /// The path to output the Solidity code
-        #[arg(long)]
+        #[arg(long, default_value = "evm_deploy.sol")]
         sol_code_path: Option<PathBuf>,
         /// The path to output the compiled Solidity bytecode
-        #[arg(long)]
+        #[arg(long, default_value = "evm_deploy.sol.bin")]
         sol_bytecode_path: Option<PathBuf>,
         /// The number of runs set to the SOLC optimizer.
         /// Lower values optimze for deployment size while higher values optimize for execution cost.
@@ -501,13 +501,13 @@ pub enum Commands {
         #[arg(long)]
         vk_path: PathBuf,
         /// The path to the compiled yul bytecode code
-        #[arg(long)]
+        #[arg(long, default_value = "evm_deploy_aggr.yul")]
         deployment_code_path: Option<PathBuf>,
         /// The path to the Solidity code
-        #[arg(long)]
+        #[arg(long, default_value = "evm_deploy_aggr.sol")]
         sol_code_path: Option<PathBuf>,
         /// The path to output the compiled Solidity bytecode
-        #[arg(long)]
+        #[arg(long, default_value = "evm_deploy_aggr.sol.bin")]
         sol_bytecode_path: Option<PathBuf>,
         /// The number of runs set to the SOLC optimizer.
         /// Lower values optimze for deployment size while higher values optimize for execution cost.
@@ -520,7 +520,7 @@ pub enum Commands {
     /// Verifies a proof, returning accept or reject
     #[command(arg_required_else_help = true)]
     Verify {
-        /// The path to save circuit params to
+        /// The path to load circuit params from
         #[arg(long)]
         circuit_params_path: PathBuf,
         /// The path to the proof file
@@ -529,7 +529,7 @@ pub enum Commands {
         /// The path to output the desired verfication key file (optional)
         #[arg(long)]
         vk_path: PathBuf,
-        /// The transcript type
+        /// The kzg params path
         #[arg(long)]
         params_path: PathBuf,
     },

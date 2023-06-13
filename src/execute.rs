@@ -429,21 +429,13 @@ pub(crate) fn gen_circuit_params(
 
     match calibration_args.data {
         None => params.save(&params_output).map_err(Box::<dyn Error>::from),
-        Some(data) => {
-            if let Some(target) = calibration_args.target {
-                calibrate(model_path, run_args, data, params_output, target)
-            } else {
-                // default to resources
-                info!("no calibration target specified, defaulting to resource usage optimization");
-                calibrate(
-                    model_path,
-                    run_args,
-                    data,
-                    params_output,
-                    CalibrationTarget::Resources,
-                )
-            }
-        }
+        Some(data) => calibrate(
+            model_path,
+            run_args,
+            data,
+            params_output,
+            calibration_args.target,
+        ),
     }
 }
 
