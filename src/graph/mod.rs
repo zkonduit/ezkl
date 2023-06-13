@@ -190,6 +190,8 @@ fn truncate_nested_vector(input: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {
 }
 
 const POSEIDON_LEN_GRAPH: usize = 10;
+// TODO: make this a function of the number of constraints this is a bit of a hack
+const POSEIDON_CONSTRAINTS_ESTIMATE: usize = 44;
 
 impl GraphInput {
     /// Load the model input from a file
@@ -300,13 +302,25 @@ impl GraphCircuit {
             inputs.push(t);
         }
 
+        let mut hashing_constraints = 0;
         let mut params = model.gen_params(run_args, check_mode)?;
         if params.run_args.input_visibility.is_hashed() {
             params.num_hashes += model.graph.num_inputs();
+            for input in model.graph.input_shapes() {
+                hashing_constraints +=
+                    POSEIDON_CONSTRAINTS_ESTIMATE * input.iter().product::<usize>();
+            }
         }
         if params.run_args.output_visibility.is_hashed() {
             params.num_hashes += model.graph.num_outputs();
+            for output in model.graph.output_shapes() {
+                hashing_constraints +=
+                    POSEIDON_CONSTRAINTS_ESTIMATE * output.iter().product::<usize>();
+            }
         }
+
+        // as they occupy independent rows
+        params.num_constraints = std::cmp::max(params.num_constraints, hashing_constraints);
 
         Ok(GraphCircuit {
             model,
@@ -379,17 +393,20 @@ impl GraphCircuit {
             }
         } else {
             let min_bits = (res.max_lookup_input as f64).log2().ceil() as usize + 1;
+
             let min_rows_from_constraints = (self.params.num_constraints as f64
                 + ASSUMED_BLINDING_FACTORS as f64)
                 .log2()
                 .ceil() as usize
                 + 1;
             let mut logrows = std::cmp::max(min_bits + 1, min_rows_from_constraints);
+
             // ensure logrows is at least 4
             logrows = std::cmp::max(
                 logrows,
                 (ASSUMED_BLINDING_FACTORS as f64).ceil() as usize + 1,
             );
+
             logrows = std::cmp::min(logrows, bn256::Fr::S as usize);
 
             info!(
@@ -400,9 +417,13 @@ impl GraphCircuit {
             self.params.run_args.logrows = logrows as u32;
         }
 
-        self.params = self
-            .model
-            .gen_params(self.params.run_args, self.params.check_mode)?;
+        self.params = GraphCircuit::new(
+            self.model.clone(),
+            self.params.run_args.clone(),
+            self.params.check_mode,
+        )?
+        .params;
+
         Ok(())
     }
 
