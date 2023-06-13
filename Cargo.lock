@@ -591,6 +591,7 @@ dependencies = [
  "encode_unicode",
  "lazy_static",
  "libc",
+ "unicode-width",
  "windows-sys 0.45.0",
 ]
 
@@ -2276,6 +2277,7 @@ dependencies = [
  "number_prefix",
  "portable-atomic",
  "rayon",
+ "unicode-width",
 ]
 
 [[package]]
