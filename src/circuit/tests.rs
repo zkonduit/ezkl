@@ -1755,7 +1755,7 @@ mod rangecheckpercent {
                                 &mut 0,
                                 Box::new(HybridOp::RangeCheck(Tolerance::Percentage {
                                     val: RANGE,
-                                    scale: SCALE,
+                                    scales: (SCALE, SCALE),
                                 })),
                             )
                             .map_err(|_| Error::Synthesis)
