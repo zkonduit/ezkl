@@ -20,7 +20,7 @@ rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false } 
 plotters = { version = "0.3.0", default_features = false, optional = true }
 tract-onnx = { git = "https://github.com/sonos/tract/", rev= "0a661fe", default_features = false, optional = true }
-clap = { version = "4.3.3", default_features = false, features = ["derive", "std", "help"]}
+clap = { version = "4.3.3", features = ["derive"]}
 serde = { version = "1.0.126", features = ["derive"], optional = true  }
 serde_json = { version = "1.0.64", default_features = false, optional = true }
 log = { version = "0.4.17", default_features = false, optional = true }
