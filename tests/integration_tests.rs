@@ -491,7 +491,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "hashed", "private", "private", 10000);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "hashed", "private", "private", 1);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -499,7 +499,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "hashed", 0);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "hashed", 1);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -951,10 +951,10 @@ mod native_tests {
         let vk_arg = format!("{}/{}/evm_aggr.vk", test_dir, example_name);
 
         fn build_args<'a>(
-            with_solidity: bool, 
-              base_args: Vec<&'a str>, 
-              sol_arg: &'a str, 
-              sol_bytecode_arg: &'a str
+            with_solidity: bool,
+            base_args: Vec<&'a str>,
+            sol_arg: &'a str,
+            sol_bytecode_arg: &'a str,
         ) -> Vec<&'a str> {
             let mut args = base_args;
 
@@ -977,7 +977,7 @@ mod native_tests {
             code_arg.as_str(),
             param_arg.as_str(),
             "--vk-path",
-            vk_arg.as_str()
+            vk_arg.as_str(),
         ];
 
         let args = build_args(with_solidity, base_args, &sol_arg, &sol_bytecode_arg);
@@ -1256,7 +1256,7 @@ mod native_tests {
             args.push("--sol-bytecode-path");
             args.push(sol_bytecode_arg.as_str());
         }
-        
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(&args)
             .status()
@@ -1264,7 +1264,6 @@ mod native_tests {
         assert!(status.success());
 
         let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
-
 
         let mut args = vec![
             "verify-evm",

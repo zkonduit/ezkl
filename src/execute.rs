@@ -495,15 +495,18 @@ pub(crate) fn calibrate(
                     GraphCircuit::from_run_args(&run_args, &model_path, CheckMode::SAFE)
                         .map_err(|_| "failed to create circuit from run args")?;
                 circuit.load_inputs(chunk);
-                circuit.calibrate().map_err(|_| "failed to calibrate")?;
 
-                // ensures we have converges
-                let params_before = circuit.params.clone();
-                circuit.calibrate().map_err(|_| "failed to calibrate")?;
-                let params_after = circuit.params.clone();
+                loop {
+                    // ensures we have converges
+                    let params_before = circuit.params.clone();
+                    circuit.calibrate().map_err(|_| "failed to calibrate")?;
+                    let params_after = circuit.params.clone();
+                    if params_before == params_after {
+                        break;
+                    }
+                }
 
-                assert_eq!(params_before, params_after);
-                Ok(params_after)
+                Ok(circuit.params.clone())
             })
             .collect();
         std::mem::drop(_r);
