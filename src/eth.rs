@@ -1,7 +1,8 @@
-use crate::pfsys::evm::{EvmVerificationError, DeploymentCode};
+use crate::pfsys::evm::{DeploymentCode, EvmVerificationError};
 use crate::pfsys::Snark;
-use ethers::contract::abigen;
 use ethers::abi::Abi;
+use ethers::abi::Contract;
+use ethers::contract::abigen;
 use ethers::contract::ContractFactory;
 use ethers::core::k256::ecdsa::SigningKey;
 use ethers::middleware::SignerMiddleware;
@@ -10,13 +11,14 @@ use ethers::prelude::Wallet;
 use ethers::providers::Middleware;
 use ethers::providers::{Http, Provider};
 use ethers::signers::Signer;
+use ethers::solc::{CompilerInput, Solc};
+use ethers::types::Bytes;
 use ethers::types::U256;
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::{
     prelude::{LocalWallet, Wallet},
     utils::{Anvil, AnvilInstance},
 };
-use ethers_solc::{CompilerInput, Solc};
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
 use log::{debug, info};
@@ -26,8 +28,6 @@ use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
 use std::{convert::TryFrom, sync::Arc};
-use ethers::abi::Contract;
-use ethers::types::Bytes;
 
 /// A local ethers-rs based client
 pub type EthersClient = Arc<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>;
@@ -62,16 +62,11 @@ pub async fn verify_proof_via_solidity(
     sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
 ) -> Result<bool, Box<dyn Error>> {
-
     let (anvil, client) = setup_eth_backend().await?;
 
     // sol code supercedes deployment code
     let factory = match sol_code_path {
-        Some(path) => get_sol_contract_factory(
-            path,
-            client.clone(),
-            runs
-        ).unwrap(),
+        Some(path) => get_sol_contract_factory(path, client.clone(), runs).unwrap(),
         None => match sol_bytecode_path {
             Some(path) => {
                 let bytecode = DeploymentCode::load(&path)?;

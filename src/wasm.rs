@@ -42,7 +42,7 @@ pub fn gen_circuit_params_wasm(
     let circuit =
         GraphCircuit::new(Arc::new(model), run_args, crate::circuit::CheckMode::UNSAFE).unwrap();
     let circuit_params = circuit.params;
-    bincode::serialize(&circuit_params).unwrap()
+    serde_json::to_vec(&circuit_params).unwrap()
 }
 
 /// Generate proving key in browser
