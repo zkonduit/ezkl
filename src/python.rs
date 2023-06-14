@@ -85,7 +85,7 @@ struct PyCalArgs {
     #[pyo3(get, set)]
     pub data: Option<PathBuf>,
     #[pyo3(get, set)]
-    pub target: Option<CalibrationTarget>,
+    pub target: CalibrationTarget,
 }
 
 /// default instantiation of PyCalArgs
@@ -95,7 +95,7 @@ impl PyCalArgs {
     fn new() -> Self {
         PyCalArgs {
             data: None::<PathBuf>,
-            target: None::<CalibrationTarget>,
+            target: CalibrationTarget::default(),
         }
     }
 }
@@ -375,14 +375,12 @@ fn create_evm_verifier(
     deployment_code_path,
     sol_code_path=None,
     sol_bytecode_path=None,
-    runs=None
 ))]
 fn verify_evm(
     proof_path: PathBuf,
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
-    runs: Option<usize>,
 ) -> Result<bool, PyErr> {
 
     Runtime::new()
@@ -392,7 +390,6 @@ fn verify_evm(
         deployment_code_path,
         sol_code_path,
         sol_bytecode_path,
-        runs,
     )).map_err(|e| {
         let err_str = format!("Failed to run verify_evm: {}", e);
         PyRuntimeError::new_err(err_str)})?;
