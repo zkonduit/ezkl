@@ -127,8 +127,8 @@ impl IntoPy<PyObject> for Tolerance {
     fn into_py(self, py: Python) -> PyObject {
         match self {
             Tolerance::Abs { val } => (String::from("abs"), val).to_object(py),
-            Tolerance::Percentage { val, scale } => {
-                (String::from("percentage"), val, scale).to_object(py)
+            Tolerance::Percentage { val, scales } => {
+                (String::from("percentage"), val, scales).to_object(py)
             }
         }
     }
@@ -143,9 +143,9 @@ impl<'source> FromPyObject<'source> for Tolerance {
                 "abs" => Ok(Tolerance::Abs { val }),
                 _ => Err(PyValueError::new_err("Invalid value for Tolerance")),
             }
-        } else if let Ok((mode, val, scale)) = ob.extract::<(String, f32, usize)>() {
+        } else if let Ok((mode, val, scales)) = ob.extract::<(String, f32, (usize, usize))>() {
             match mode.to_lowercase().as_str() {
-                "percentage" => Ok(Tolerance::Percentage { val, scale }),
+                "percentage" => Ok(Tolerance::Percentage { val, scales }),
                 _ => Err(PyValueError::new_err("Invalid value for Tolerance")),
             }
         } else {
