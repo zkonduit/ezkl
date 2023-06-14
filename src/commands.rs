@@ -265,7 +265,7 @@ pub enum Commands {
         model: PathBuf,
         /// Path to the new .json file
         #[arg(short = 'O', long)]
-        output: PathBuf,
+        output: Option<PathBuf>,
         /// Scale to use for quantization
         #[arg(
             short = 'S',

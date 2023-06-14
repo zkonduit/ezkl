@@ -112,7 +112,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             scale,
             batch_size,
             circuit_params_path,
-        } => forward(model, data, output, scale, batch_size, circuit_params_path),
+        } => forward(model, data, output, scale, batch_size, circuit_params_path).map(|_| ()),
         Commands::Mock {
             model,
             data,
@@ -366,11 +366,11 @@ pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<(), Box<dyn Err
 pub(crate) fn forward(
     model_path: PathBuf,
     data: PathBuf,
-    output: PathBuf,
+    output: Option<PathBuf>,
     scale: Option<u32>,
     batch_size: Option<usize>,
     circuit_params_path: Option<PathBuf>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<GraphInput, Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
 
     let circuit_params = match circuit_params_path {
@@ -412,8 +412,10 @@ pub(crate) fn forward(
     data.input_hashes = Some(res.input_hashes);
     data.output_hashes = Some(res.output_hashes);
 
-    serde_json::to_writer(&File::create(output)?, &data)?;
-    Ok(())
+    if let Some(output_path) = output {
+        serde_json::to_writer(&File::create(output_path)?, &data)?;
+    }
+    Ok(data)
 }
 
 //not for wasm targets

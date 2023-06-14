@@ -1,12 +1,12 @@
 use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::{CalibrationArgs, CalibrationTarget, RunArgs, StrategyType};
-use crate::graph::{Model, Visibility};
+use crate::graph::{Model, Visibility, GraphInput, PyGraphInput};
 use crate::pfsys::{
     gen_srs as ezkl_gen_srs, save_params,
      Snark, TranscriptType,
 };
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-use halo2curves::bn256::Bn256;
+use halo2curves::bn256::{Bn256, Fr as Fp};
 use pyo3::exceptions::{PyIOError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -160,28 +160,40 @@ fn gen_circuit_params(
     Ok(true)
 }
 
+/// helper function for forward to convert Fp to string
+fn fp_to_string(fp: &Fp) -> String {
+    format!("{},{},{},{}", fp.0[0], fp.0[1], fp.0[2], fp.0[3])
+}
+
 /// runs the forward pass operation
 #[pyfunction(signature = (
     data,
     model,
-    output,
-    scale = 7, 
-    batch_size = 1,  
-    circuit_params_path = None, 
+    output = None,
+    scale = 7,
+    batch_size = 1,
+    circuit_params_path = None,
 ))]
 fn forward(
     data: PathBuf,
     model: PathBuf,
-    output: PathBuf,
+    output: Option<PathBuf>,
     scale: Option<u32>,
     batch_size: Option<usize>,
     circuit_params_path: Option<PathBuf>,
-) -> PyResult<()> {
-    crate::execute::forward(model, data, output, scale, batch_size, circuit_params_path)
+) -> PyResult<PyGraphInput> {
+    let data: GraphInput = crate::execute::forward(model, data, output, scale, batch_size, circuit_params_path)
         .map_err(|e| {
             let err_str = format!("Failed to run forward: {}", e);
             PyRuntimeError::new_err(err_str)})?;
-    Ok(())
+    let py_data = PyGraphInput {
+        input_data: data.input_data,
+        output_data: data.output_data,
+        input_hashes: data.input_hashes.map(|v| v.iter().map(fp_to_string).collect()),
+        output_hashes: data.output_hashes.map(|v| v.iter().map(fp_to_string).collect()),
+    };
+
+    Ok(py_data)
 }
 
 /// mocks the prover
@@ -245,7 +257,7 @@ fn prove(
     strategy: StrategyType,
     circuit_params_path: PathBuf,
 ) -> Result<bool, PyErr> {
-    
+
     crate::execute::prove(data, model, pk_path, proof_path, params_path, transcript, strategy, circuit_params_path, CheckMode::UNSAFE).map_err(|e| {
         let err_str = format!("Failed to run prove: {}", e);
         PyRuntimeError::new_err(err_str)})?;
@@ -310,7 +322,7 @@ fn aggregate(
         check_mode).map_err(|e| {
         let err_str = format!("Failed to run aggregate: {}", e);
         PyRuntimeError::new_err(err_str)})?;
-    
+
     Ok(true)
 }
 
@@ -360,7 +372,7 @@ fn create_evm_verifier(
         circuit_params_path,
         deployment_code_path,
         sol_code_path,
-        sol_bytecode_path, 
+        sol_bytecode_path,
         runs,
     ).map_err(|e| {
         let err_str = format!("Failed to run create_evm_verifier: {}", e);

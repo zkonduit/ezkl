@@ -90,6 +90,16 @@ pub enum GraphError {
 
 const ASSUMED_BLINDING_FACTORS: usize = 6;
 
+#[cfg(feature = "python-bindings")]
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct PyGraphInput {
+    pub input_data: Vec<Vec<f32>>,
+    pub output_data: Vec<Vec<f32>>,
+    pub input_hashes: Option<Vec<String>>,
+    pub output_hashes: Option<Vec<String>>,
+}
+
 /// The input tensor data and shape, and output data for the computational graph (model) as floats.
 /// For example, the input might be the image data for a neural network, and the output class scores.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -119,7 +129,7 @@ impl GraphInput {
         &self,
         batch_size: usize,
     ) -> Result<Vec<Self>, Box<dyn std::error::Error>> {
-        // ensure the input is devenly divisible by batch_size
+        // ensure the input is evenly divisible by batch_size
         if self.input_data.len() % batch_size != 0 || self.output_data.len() % batch_size != 0 {
             return Err(Box::new(GraphError::InvalidDims(
                 0,
