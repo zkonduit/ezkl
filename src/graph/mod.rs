@@ -1,7 +1,6 @@
 /// Helper functions
 pub mod utilities;
 use halo2curves::ff::PrimeField;
-use itertools::Itertools;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 pub use utilities::*;
@@ -118,33 +117,75 @@ impl GraphInput {
     pub fn split_into_batches(
         &self,
         batch_size: usize,
+        input_shapes: Vec<Vec<usize>>,
+        output_shapes: Vec<Vec<usize>>,
     ) -> Result<Vec<Self>, Box<dyn std::error::Error>> {
-        // ensure the input is devenly divisible by batch_size
-        if self.input_data.len() % batch_size != 0 || self.output_data.len() % batch_size != 0 {
-            return Err(Box::new(GraphError::InvalidDims(
-                0,
-                "input data length must be evenly divisible by batch size".to_string(),
-            )));
-        }
-
         // split input data into batches
-        let mut input_batches = vec![];
+        let mut batched_inputs = vec![];
 
-        for input in &self.input_data.iter().chunks(batch_size) {
+        for (i, input) in self.input_data.iter().enumerate() {
+            // ensure the input is devenly divisible by batch_size
+            if input.len() % batch_size != 0 {
+                return Err(Box::new(GraphError::InvalidDims(
+                    0,
+                    "input data length must be evenly divisible by batch size".to_string(),
+                )));
+            }
+            let input_size = input_shapes[i].clone().iter().product::<usize>();
+            let mut batches = vec![];
+            for batch in input.chunks(batch_size * input_size) {
+                batches.push(batch.to_vec());
+            }
+            batched_inputs.push(batches);
+        }
+        // now merge all the batches for each input into a vector of batches
+        // first assert each input has the same number of batches
+        let num_batches = batched_inputs[0].len();
+        for input in batched_inputs.iter() {
+            assert_eq!(input.len(), num_batches);
+        }
+        // now merge the batches
+        let mut input_batches = vec![];
+        for i in 0..num_batches {
             let mut batch = vec![];
-            for i in input {
-                batch.push(i.clone());
+            for input in batched_inputs.iter() {
+                batch.push(input[i].clone());
             }
             input_batches.push(batch);
         }
 
         // split output data into batches
-        let mut output_batches = vec![];
+        let mut batched_outputs = vec![];
 
-        for output in &self.output_data.iter().chunks(batch_size) {
+        for (i, output) in self.output_data.iter().enumerate() {
+            // ensure the input is devenly divisible by batch_size
+            if output.len() % batch_size != 0 {
+                return Err(Box::new(GraphError::InvalidDims(
+                    0,
+                    "input data length must be evenly divisible by batch size".to_string(),
+                )));
+            }
+
+            let output_size = output_shapes[i].clone().iter().product::<usize>();
+            let mut batches = vec![];
+            for batch in output.chunks(batch_size * output_size) {
+                batches.push(batch.to_vec());
+            }
+            batched_outputs.push(batches);
+        }
+
+        // now merge all the batches for each output into a vector of batches
+        // first assert each output has the same number of batches
+        let num_batches = batched_outputs[0].len();
+        for output in batched_outputs.iter() {
+            assert_eq!(output.len(), num_batches);
+        }
+        // now merge the batches
+        let mut output_batches = vec![];
+        for i in 0..num_batches {
             let mut batch = vec![];
-            for i in output {
-                batch.push(i.clone());
+            for output in batched_outputs.iter() {
+                batch.push(output[i].clone());
             }
             output_batches.push(batch);
         }

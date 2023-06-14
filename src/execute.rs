@@ -475,16 +475,26 @@ pub(crate) fn calibrate(
     let data = GraphInput::from_path(data)?;
     let pb = init_spinner();
     pb.set_message("Calibrating...");
+    // we load the model to get the input and output shapes
+    let _r = Gag::stdout().unwrap();
+    let model = Model::from_run_args(&run_args, &model_path).unwrap();
+    std::mem::drop(_r);
+
     let found_params: Vec<GraphParams> = (4..12)
         .map(|scale| {
             pb.set_message(format!("Calibrating with scale {}", scale));
             std::thread::sleep(Duration::from_millis(100));
 
             let res: Result<Vec<GraphParams>, &str> = data
-                .split_into_batches(run_args.batch_size)
+                .split_into_batches(
+                    run_args.batch_size,
+                    model.graph.input_shapes(),
+                    model.graph.output_shapes(),
+                )
                 .unwrap()
                 .par_iter()
                 .map(|chunk| {
+                    debug!("chunk size: {}", chunk.input_data[0].len());
                     let _r = Gag::stdout().unwrap();
                     let run_args = RunArgs { scale, ..run_args };
                     let mut circuit =
