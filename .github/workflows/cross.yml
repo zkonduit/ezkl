@@ -1,0 +1,81 @@
+name: ezkl-lib-release
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  create-release:
+    name: create-release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ env.VERSION }}
+    steps:
+      - name: Determine version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.VERSION }}
+          release_name: Release ${{ env.VERSION }}
+          draft: false
+          prerelease: false
+
+  build-release:
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          target: ${{ matrix.target }}
+          toolchain: stable
+          override: true
+
+      - name: Install Cross
+        run: cargo install cross
+
+      - name: Build Release
+        run: cross build --target ${{ matrix.target }} --release
+
+      - name: Archive
+        id: archive
+        run: |
+          VERSION=${{ needs.create-release.outputs.version }}
+          TARGET=${{ matrix.target }}
+          if [[ $TARGET == *"windows"* ]]; then
+            mv target/$TARGET/release/ezkl_lib.exe ezkl_lib-$VERSION-$TARGET.exe
+            7z a ezkl_lib-$VERSION-$TARGET.zip ezkl_lib-$VERSION-$TARGET.exe
+            echo "::set-output name=path::$(pwd)/ezkl_lib-$VERSION-$TARGET.zip"
+          else
+            mv target/$TARGET/release/ezkl_lib ezkl_lib-$VERSION-$TARGET
+            tar czvf ezkl_lib-$VERSION-$TARGET.tar.gz ezkl_lib-$VERSION-$TARGET
+            echo "::set-output name=path::$(pwd)/ezkl_lib-$VERSION-$TARGET.tar.gz"
+          fi
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ${{ steps.archive.outputs.path }}
+          asset_name: ${{ steps.archive.outputs.path }}
+          asset_content_type: application/octet-stream
