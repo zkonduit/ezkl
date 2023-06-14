@@ -91,17 +91,6 @@ impl<'source> FromPyObject<'source> for StrategyType {
     }
 }
 
-/// Calibration specific parameters
-#[derive(Debug, Args, Deserialize, Serialize, Clone, Default)]
-pub struct CalibrationArgs {
-    /// The path to the .json calibration data file. If set will finetune the selected parameters to a calibration dataset.
-    #[arg(long = "calibration-data")]
-    pub data: Option<PathBuf>,
-    #[arg(long = "calibration-target", default_value = "resources")]
-    /// Target for calibration.
-    pub target: CalibrationTarget,
-}
-
 #[derive(clap::ValueEnum, Debug, Default, Copy, Clone, Serialize, Deserialize)]
 /// Determines what the calibration pass should optimize for
 pub enum CalibrationTarget {
@@ -267,40 +256,54 @@ pub enum Commands {
         #[arg(short = 'O', long)]
         output: PathBuf,
         /// Scale to use for quantization
-        #[arg(short = 'S', long, conflicts_with = "circuit_params_path")]
+        #[arg(short = 'S', long, conflicts_with = "settings_path")]
         scale: Option<u32>,
         /// The number of batches to split the input data into
-        #[arg(short = 'B', long, conflicts_with = "circuit_params_path")]
+        #[arg(short = 'B', long, conflicts_with = "settings_path")]
         batch_size: Option<usize>,
         /// optional circuit params path
         #[arg(long)]
-        circuit_params_path: Option<PathBuf>,
+        settings_path: Option<PathBuf>,
     },
 
-    /// Calibrates the proving hyperparameters, produces a quantized output from those hyperparameters, and saves it to a .json file. The circuit parameters are also saved to a file.
-    #[cfg(not(target_arch = "wasm32"))]
+    /// Produces the proving hyperparameters, from run-args
     #[command(arg_required_else_help = true)]
-    GenCircuitParams {
+    GenSettings {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
-        /// Path to circuit_params file to output
-        #[arg(short = 'O', long, default_value = "circuit.json")]
-        circuit_params_path: PathBuf,
+        /// Path to circuit_settings file to output
+        #[arg(short = 'O', long, default_value = "settings.json")]
+        settings_path: PathBuf,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
-        /// calibration args
-        #[clap(flatten)]
-        calibration: CalibrationArgs,
+    },
+
+    /// Calibrates the proving scale, lookup bits and logrows from a circuit settings file.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[command(arg_required_else_help = true)]
+    CalibrateSettings {
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: PathBuf,
+        /// Path to circuit_settings file to read in AND overwrite.
+        #[arg(short = 'O', long, default_value = "settings.json")]
+        settings_path: PathBuf,
+        /// The path to the .json calibration data file.
+        #[arg(short = 'D', long = "data")]
+        data: PathBuf,
+        #[arg(long = "target", default_value = "resources")]
+        /// Target for calibration.
+        target: CalibrationTarget,
     },
 
     /// Generates a dummy SRS
     #[command(name = "gen-srs", arg_required_else_help = true)]
     GenSrs {
-        /// The path to output to the desired params file
-        #[arg(long, default_value = "kzg.params")]
-        params_path: PathBuf,
+        /// The path to output to the desired srs file
+        #[arg(long, default_value = "kzg.srs")]
+        srs_path: PathBuf,
         /// number of logrows to use for srs
         #[arg(long)]
         logrows: usize,
@@ -319,15 +322,15 @@ pub enum Commands {
         args: RunArgs,
         /// optional circuit params path (overrides any run args set)
         #[arg(long)]
-        circuit_params_path: Option<PathBuf>,
+        settings_path: Option<PathBuf>,
     },
 
     /// Aggregates proofs :)
     #[command(arg_required_else_help = true)]
     Aggregate {
-        /// The path to the params files.
+        /// The path to the settings files.
         #[arg(long)]
-        circuit_params_paths: Vec<PathBuf>,
+        settings_paths: Vec<PathBuf>,
         /// The path to the snarks to aggregate over
         #[arg(long)]
         aggregation_snarks: Vec<PathBuf>,
@@ -340,9 +343,9 @@ pub enum Commands {
         /// The path to the desired output file
         #[arg(long, default_value = "proof_aggr.proof")]
         proof_path: PathBuf,
-        /// The transcript type
+        /// The path to SRS
         #[arg(long)]
-        params_path: PathBuf,
+        srs_path: PathBuf,
         #[arg(
             long,
             require_equals = true,
@@ -365,9 +368,9 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
-        /// The parameter path
+        /// The srs path
         #[arg(long)]
-        params_path: PathBuf,
+        srs_path: PathBuf,
         /// The path to output the verfication key file
         #[arg(long, default_value = "vk.key")]
         vk_path: PathBuf,
@@ -376,7 +379,7 @@ pub enum Commands {
         pk_path: PathBuf,
         /// The path to load circuit params from
         #[arg(long)]
-        circuit_params_path: PathBuf,
+        settings_path: PathBuf,
     },
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -405,7 +408,7 @@ pub enum Commands {
         num_runs: usize,
         /// optional circuit params path (overrides any run args set)
         #[arg(long)]
-        circuit_params_path: Option<PathBuf>,
+        settings_path: Option<PathBuf>,
     },
 
     /// Loads model, data, and creates proof
@@ -425,7 +428,7 @@ pub enum Commands {
         proof_path: PathBuf,
         /// The parameter path
         #[arg(long)]
-        params_path: PathBuf,
+        srs_path: PathBuf,
         #[arg(
             long,
             require_equals = true,
@@ -445,7 +448,7 @@ pub enum Commands {
         strategy: StrategyType,
         /// The path to load circuit params from
         #[arg(long)]
-        circuit_params_path: PathBuf,
+        settings_path: PathBuf,
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = "safe")]
         check_mode: CheckMode,
@@ -456,10 +459,10 @@ pub enum Commands {
     CreateEVMVerifier {
         /// The path to load the desired params file
         #[arg(long)]
-        params_path: PathBuf,
+        srs_path: PathBuf,
         /// The path to save circuit params to
         #[arg(long)]
-        circuit_params_path: PathBuf,
+        settings_path: PathBuf,
         /// The path to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
@@ -486,7 +489,7 @@ pub enum Commands {
     CreateEVMVerifierAggr {
         /// The path to load the desired params file
         #[arg(long)]
-        params_path: PathBuf,
+        srs_path: PathBuf,
         /// The path to output to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
@@ -512,16 +515,16 @@ pub enum Commands {
     Verify {
         /// The path to load circuit params from
         #[arg(long)]
-        circuit_params_path: PathBuf,
+        settings_path: PathBuf,
         /// The path to the proof file
         #[arg(long)]
         proof_path: PathBuf,
         /// The path to output the desired verfication key file (optional)
         #[arg(long)]
         vk_path: PathBuf,
-        /// The kzg params path
+        /// The kzg srs path
         #[arg(long)]
-        params_path: PathBuf,
+        srs_path: PathBuf,
     },
 
     /// Verifies an aggregate proof, returning accept or reject
@@ -533,9 +536,9 @@ pub enum Commands {
         /// The path to output the desired verfication key file (optional)
         #[arg(long)]
         vk_path: PathBuf,
-        /// The path to load the desired verfication key file (optional)
+        /// The srs path
         #[arg(long)]
-        params_path: PathBuf,
+        srs_path: PathBuf,
         /// logrows used for aggregation circuit
         #[arg(long)]
         logrows: u32,

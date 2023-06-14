@@ -33,10 +33,7 @@ mod native_tests {
             let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
                 .args([
                     "gen-srs",
-                    &format!(
-                        "--params-path={}/kzg17.params",
-                        TEST_DIR.path().to_str().unwrap()
-                    ),
+                    &format!("--srs-path={}/kzg17.srs", TEST_DIR.path().to_str().unwrap()),
                     "--logrows=17",
                 ])
                 .status()
@@ -51,7 +48,7 @@ mod native_tests {
                 .args([
                     "-o",
                     &format!(
-                        "{}/kzg23.params",
+                        "{}/kzg23.srs",
                         TEST_DIR.path().to_str().unwrap()
                     ),
                     "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/perpetual-powers-of-tau-raw-23",
@@ -68,7 +65,7 @@ mod native_tests {
                 .args([
                     "-o",
                     &format!(
-                        "{}/kzg24.params",
+                        "{}/kzg24.srs",
                         TEST_DIR.path().to_str().unwrap()
                     ),
                     "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/perpetual-powers-of-tau-raw-24",
@@ -722,17 +719,31 @@ mod native_tests {
         let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "gen-circuit-params",
-                "--calibration-data",
-                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "gen-settings",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
                 "--bits=2",
                 "-K=3",
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "calibrate-settings",
+                "--data",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -746,7 +757,7 @@ mod native_tests {
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
                 "-O",
@@ -765,12 +776,9 @@ mod native_tests {
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
+                &format!("--srs-path={}/kzg23.srs", TEST_DIR.path().to_str().unwrap()),
                 &format!(
-                    "--params-path={}/kzg23.params",
-                    TEST_DIR.path().to_str().unwrap()
-                ),
-                &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
             ])
@@ -788,14 +796,11 @@ mod native_tests {
                 &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--pk-path",
                 &format!("{}/{}/key.pk", test_dir, example_name),
-                &format!(
-                    "--params-path={}/kzg23.params",
-                    TEST_DIR.path().to_str().unwrap()
-                ),
+                &format!("--srs-path={}/kzg23.srs", TEST_DIR.path().to_str().unwrap()),
                 "--transcript=poseidon",
                 "--strategy=accum",
                 &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
             ])
@@ -807,7 +812,7 @@ mod native_tests {
                 "aggregate",
                 "--logrows=23",
                 &format!(
-                    "--circuit-params-paths={}/{}/circuit.params",
+                    "--settings-paths={}/{}/settings.json",
                     test_dir, example_name
                 ),
                 "--aggregation-snarks",
@@ -818,10 +823,7 @@ mod native_tests {
                 &format!("{}/{}/aggr.pf", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/aggr.vk", test_dir, example_name),
-                &format!(
-                    "--params-path={}/kzg23.params",
-                    TEST_DIR.path().to_str().unwrap()
-                ),
+                &format!("--srs-path={}/kzg23.srs", TEST_DIR.path().to_str().unwrap()),
                 "--transcript=blake",
             ])
             .status()
@@ -835,10 +837,7 @@ mod native_tests {
                 &format!("{}/{}/aggr.pf", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/aggr.vk", test_dir, example_name),
-                &format!(
-                    "--params-path={}/kzg23.params",
-                    TEST_DIR.path().to_str().unwrap()
-                ),
+                &format!("--srs-path={}/kzg23.srs", TEST_DIR.path().to_str().unwrap()),
             ])
             .status()
             .expect("failed to execute process");
@@ -850,13 +849,27 @@ mod native_tests {
         let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "gen-circuit-params",
-                "--calibration-data",
+                "gen-settings",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "calibrate-settings",
+                "--data",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
             ])
@@ -872,7 +885,7 @@ mod native_tests {
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
                 "-O",
@@ -891,9 +904,9 @@ mod native_tests {
                 &format!("{}/{}/evm.vk", test_dir, example_name),
                 "--pk-path",
                 &format!("{}/{}/evm.pk", test_dir, example_name),
-                &format!("--params-path={}/kzg23.params", test_dir),
+                &format!("--srs-path={}/kzg23.srs", test_dir),
                 &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
             ])
@@ -912,9 +925,9 @@ mod native_tests {
                 &format!("{}/{}/evm.pf", test_dir, example_name),
                 "--pk-path",
                 &format!("{}/{}/evm.pk", test_dir, example_name),
-                &format!("--params-path={}/kzg23.params", test_dir),
+                &format!("--srs-path={}/kzg23.srs", test_dir),
                 &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
                 "--transcript=poseidon",
@@ -928,7 +941,7 @@ mod native_tests {
                 "aggregate",
                 "--logrows=23",
                 &format!(
-                    "--circuit-params-paths={}/{}/circuit.params",
+                    "--settings-paths={}/{}/settings.json",
                     test_dir, example_name
                 ),
                 "--aggregation-snarks",
@@ -939,7 +952,7 @@ mod native_tests {
                 &format!("{}/{}/evm_aggr.pf", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/evm_aggr.vk", test_dir, example_name),
-                &format!("--params-path={}/kzg23.params", test_dir),
+                &format!("--srs-path={}/kzg23.srs", test_dir),
                 "--transcript=evm",
             ])
             .status()
@@ -947,7 +960,7 @@ mod native_tests {
         assert!(status.success());
 
         let code_arg = format!("{}/{}/evm_aggr.code", test_dir, example_name);
-        let param_arg = format!("--params-path={}/kzg23.params", test_dir);
+        let param_arg = format!("--srs-path={}/kzg23.srs", test_dir);
         let vk_arg = format!("{}/{}/evm_aggr.vk", test_dir, example_name);
 
         fn build_args<'a>(
@@ -963,7 +976,6 @@ mod native_tests {
                 args.push(sol_arg);
                 args.push("--sol-bytecode-path");
                 args.push(sol_bytecode_arg);
-                args.push("--optimizer-runs=1");
             }
             args
         }
@@ -978,6 +990,7 @@ mod native_tests {
             param_arg.as_str(),
             "--vk-path",
             vk_arg.as_str(),
+            "--optimizer-runs=1",
         ];
 
         let args = build_args(with_solidity, base_args, &sol_arg, &sol_bytecode_arg);
@@ -1020,16 +1033,30 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "gen-circuit-params",
-                "--calibration-data",
+                "gen-settings",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+                &format!("--scale={}", scale),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "calibrate-settings",
+                "--data",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
-                &format!("--scale={}", scale),
             ])
             .status()
             .expect("failed to execute process");
@@ -1043,7 +1070,7 @@ mod native_tests {
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
                 "-O",
@@ -1062,9 +1089,9 @@ mod native_tests {
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
-                &format!("--params-path={}/kzg{}.params", test_dir, logrows),
+                &format!("--srs-path={}/kzg{}.srs", test_dir, logrows),
                 &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
             ])
@@ -1082,11 +1109,11 @@ mod native_tests {
                 &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--pk-path",
                 &format!("{}/{}/key.pk", test_dir, example_name),
-                &format!("--params-path={}/kzg{}.params", test_dir, logrows),
+                &format!("--srs-path={}/kzg{}.srs", test_dir, logrows),
                 "--transcript=blake",
                 "--strategy=single",
                 &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
                 &format!("--check-mode={}", checkmode),
@@ -1098,14 +1125,14 @@ mod native_tests {
             .args([
                 "verify",
                 &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
                 "--proof-path",
                 &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
-                &format!("--params-path={}/kzg{}.params", test_dir, logrows),
+                &format!("--srs-path={}/kzg{}.srs", test_dir, logrows),
             ])
             .status()
             .expect("failed to execute process");
@@ -1146,18 +1173,32 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "gen-circuit-params",
-                "--calibration-data",
-                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "gen-settings",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
                 &format!("--input-visibility={}", input_visibility),
                 &format!("--param-visibility={}", param_visibility),
                 &format!("--output-visibility={}", output_visibility),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "calibrate-settings",
+                "--data",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1171,7 +1212,7 @@ mod native_tests {
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
                 "-O",
@@ -1190,9 +1231,9 @@ mod native_tests {
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
-                &format!("--params-path={}/kzg17.params", test_dir),
+                &format!("--srs-path={}/kzg17.srs", test_dir),
                 &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
             ])
@@ -1211,14 +1252,11 @@ mod native_tests {
                 &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--pk-path",
                 &format!("{}/{}/key.pk", test_dir, example_name),
-                &format!(
-                    "--params-path={}/kzg17.params",
-                    TEST_DIR.path().to_str().unwrap()
-                ),
+                &format!("--srs-path={}/kzg17.srs", TEST_DIR.path().to_str().unwrap()),
                 "--transcript=evm",
                 "--strategy=single",
                 &format!(
-                    "--circuit-params-path={}/{}/circuit.params",
+                    "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
             ])
@@ -1226,19 +1264,19 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let circuit_params = format!(
-            "--circuit-params-path={}/{}/circuit.params",
+        let circuit_settings = format!(
+            "--settings-path={}/{}/settings.json",
             test_dir, example_name
         );
         let code_arg = format!("{}/{}/deployment.code", test_dir, example_name);
         let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
-        let param_arg = format!("--params-path={}/kzg17.params", test_dir);
+        let param_arg = format!("--srs-path={}/kzg17.srs", test_dir);
 
         let opt_arg = format!("--optimizer-runs={}", num_runs);
 
         let mut args = vec![
             "create-evm-verifier",
-            circuit_params.as_str(),
+            circuit_settings.as_str(),
             "--deployment-code-path",
             code_arg.as_str(),
             param_arg.as_str(),

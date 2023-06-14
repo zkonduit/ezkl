@@ -3,10 +3,10 @@
 mod wasm32 {
     use ezkl_lib::circuit::Tolerance;
     use ezkl_lib::commands::RunArgs;
-    use ezkl_lib::graph::GraphParams;
+    use ezkl_lib::graph::GraphSettings;
     use ezkl_lib::pfsys::Snarkbytes;
     use ezkl_lib::wasm::{
-        gen_circuit_params_wasm, gen_pk_wasm, gen_vk_wasm, prove_wasm, verify_wasm,
+        gen_circuit_settings_wasm, gen_pk_wasm, gen_vk_wasm, prove_wasm, verify_wasm,
     };
     pub use wasm_bindgen_rayon::init_thread_pool;
     use wasm_bindgen_test::*;
@@ -75,7 +75,7 @@ mod wasm32 {
     }
 
     #[wasm_bindgen_test]
-    async fn gen_circuit_params_test() {
+    async fn gen_circuit_settings_test() {
         let run_args = RunArgs {
             tolerance: Tolerance::default(),
             scale: 7,
@@ -92,14 +92,15 @@ mod wasm32 {
         let serialized_run_args =
             bincode::serialize(&run_args).expect("Failed to serialize RunArgs");
 
-        let circuit_params_ser = gen_circuit_params_wasm(
+        let circuit_settings_ser = gen_circuit_settings_wasm(
             wasm_bindgen::Clamped(NETWORK.to_vec()),
             wasm_bindgen::Clamped(serialized_run_args),
         );
 
-        assert!(circuit_params_ser.len() > 0);
+        assert!(circuit_settings_ser.len() > 0);
 
-        let _circuit_params: GraphParams = serde_json::from_slice(&circuit_params_ser[..]).unwrap();
+        let _circuit_settings: GraphSettings =
+            serde_json::from_slice(&circuit_settings_ser[..]).unwrap();
     }
 
     #[wasm_bindgen_test]
@@ -130,7 +131,7 @@ mod wasm32 {
     }
 
     #[wasm_bindgen_test]
-    async fn circuit_params_is_valid_test() {
+    async fn circuit_settings_is_valid_test() {
         let run_args = RunArgs {
             tolerance: Tolerance::default(),
             scale: 0,
@@ -147,17 +148,17 @@ mod wasm32 {
         let serialized_run_args =
             bincode::serialize(&run_args).expect("Failed to serialize RunArgs");
 
-        let circuit_params_ser = gen_circuit_params_wasm(
+        let circuit_settings_ser = gen_circuit_settings_wasm(
             wasm_bindgen::Clamped(NETWORK.to_vec()),
             wasm_bindgen::Clamped(serialized_run_args),
         );
 
-        assert!(circuit_params_ser.len() > 0);
+        assert!(circuit_settings_ser.len() > 0);
 
         let pk = gen_pk_wasm(
             wasm_bindgen::Clamped(NETWORK.to_vec()),
             wasm_bindgen::Clamped(KZG_PARAMS.to_vec()),
-            wasm_bindgen::Clamped(circuit_params_ser),
+            wasm_bindgen::Clamped(circuit_settings_ser),
         );
 
         assert!(pk.len() > 0);

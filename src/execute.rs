@@ -1,10 +1,12 @@
 use crate::circuit::CheckMode;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::commands::{CalibrationArgs, CalibrationTarget};
+use crate::commands::CalibrationTarget;
 use crate::commands::{Cli, Commands, RunArgs, StrategyType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{fix_verifier_sol, get_contract_artifacts, verify_proof_via_solidity};
-use crate::graph::{scale_to_multiplier, GraphCircuit, GraphInput, GraphParams, Model, Visibility};
+use crate::graph::{
+    scale_to_multiplier, GraphCircuit, GraphInput, GraphSettings, Model, Visibility,
+};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::evm_verify;
@@ -77,7 +79,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             transcript,
             args,
             num_runs,
-            circuit_params_path,
+            settings_path,
         } => fuzz(
             model,
             args.logrows,
@@ -85,12 +87,9 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             transcript,
             num_runs,
             args,
-            circuit_params_path,
+            settings_path,
         ),
-        Commands::GenSrs {
-            params_path,
-            logrows,
-        } => gen_srs_cmd(params_path, logrows as u32),
+        Commands::GenSrs { srs_path, logrows } => gen_srs_cmd(srs_path, logrows as u32),
         Commands::Table { model, args } => table(model, args),
         #[cfg(feature = "render")]
         Commands::RenderCircuit {
@@ -98,40 +97,45 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             output,
             args,
         } => render(model, output, args),
-        #[cfg(not(target_arch = "wasm32"))]
-        Commands::GenCircuitParams {
+        Commands::GenSettings {
             model,
-            circuit_params_path,
+            settings_path,
             args,
-            calibration,
-        } => gen_circuit_params(model, circuit_params_path, args, calibration),
+        } => gen_circuit_settings(model, settings_path, args),
+        #[cfg(not(target_arch = "wasm32"))]
+        Commands::CalibrateSettings {
+            model,
+            settings_path,
+            data,
+            target,
+        } => calibrate(model, data, settings_path, target),
         Commands::Forward {
             data,
             model,
             output,
             scale,
             batch_size,
-            circuit_params_path,
-        } => forward(model, data, output, scale, batch_size, circuit_params_path),
+            settings_path,
+        } => forward(model, data, output, scale, batch_size, settings_path),
         Commands::Mock {
             model,
             data,
-            circuit_params_path,
+            settings_path,
             args,
-        } => mock(model, data, args, circuit_params_path),
+        } => mock(model, data, args, settings_path),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
             vk_path,
-            params_path,
-            circuit_params_path,
+            srs_path,
+            settings_path,
             deployment_code_path,
             sol_code_path,
             sol_bytecode_path,
             optimizer_runs,
         } => create_evm_verifier(
             vk_path,
-            params_path,
-            circuit_params_path,
+            srs_path,
+            settings_path,
             deployment_code_path,
             sol_code_path,
             sol_bytecode_path,
@@ -140,14 +144,14 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifierAggr {
             vk_path,
-            params_path,
+            srs_path,
             deployment_code_path,
             sol_code_path,
             sol_bytecode_path,
             optimizer_runs,
         } => create_evm_aggregate_verifier(
             vk_path,
-            params_path,
+            srs_path,
             deployment_code_path,
             sol_code_path,
             sol_bytecode_path,
@@ -155,65 +159,65 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         ),
         Commands::Setup {
             model,
-            params_path,
-            circuit_params_path,
+            srs_path,
+            settings_path,
             vk_path,
             pk_path,
-        } => setup(model, params_path, circuit_params_path, vk_path, pk_path),
+        } => setup(model, srs_path, settings_path, vk_path, pk_path),
         Commands::Prove {
             data,
             model,
             pk_path,
             proof_path,
-            params_path,
+            srs_path,
             transcript,
             strategy,
-            circuit_params_path,
+            settings_path,
             check_mode,
         } => prove(
             data,
             model,
             pk_path,
             proof_path,
-            params_path,
+            srs_path,
             transcript,
             strategy,
-            circuit_params_path,
+            settings_path,
             check_mode,
         ),
         Commands::Aggregate {
-            circuit_params_paths,
+            settings_paths,
             proof_path,
             aggregation_snarks,
             aggregation_vk_paths,
             vk_path,
-            params_path,
+            srs_path,
             transcript,
             logrows,
             check_mode,
         } => aggregate(
             proof_path,
             aggregation_snarks,
-            circuit_params_paths,
+            settings_paths,
             aggregation_vk_paths,
             vk_path,
-            params_path,
+            srs_path,
             transcript,
             logrows,
             check_mode,
         ),
         Commands::Verify {
             proof_path,
-            circuit_params_path,
+            settings_path,
             vk_path,
-            params_path,
-        } => verify(proof_path, circuit_params_path, vk_path, params_path),
+            srs_path,
+        } => verify(proof_path, settings_path, vk_path, srs_path),
         Commands::VerifyAggr {
             proof_path,
             vk_path,
-            params_path,
+            srs_path,
             logrows,
-        } => verify_aggr(proof_path, vk_path, params_path, logrows),
+        } => verify_aggr(proof_path, vk_path, srs_path, logrows),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::VerifyEVM {
             proof_path,
@@ -349,9 +353,9 @@ pub fn create_proof_circuit_kzg<
     }
 }
 
-pub(crate) fn gen_srs_cmd(params_path: PathBuf, logrows: u32) -> Result<(), Box<dyn Error>> {
+pub(crate) fn gen_srs_cmd(srs_path: PathBuf, logrows: u32) -> Result<(), Box<dyn Error>> {
     let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
-    save_params::<KZGCommitmentScheme<Bn256>>(&params_path, &params)?;
+    save_params::<KZGCommitmentScheme<Bn256>>(&srs_path, &params)?;
     Ok(())
 }
 
@@ -367,25 +371,26 @@ pub(crate) fn forward(
     output: PathBuf,
     scale: Option<u32>,
     batch_size: Option<usize>,
-    circuit_params_path: Option<PathBuf>,
+    settings_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
 
-    let circuit_params = match circuit_params_path {
-        Some(path) => GraphParams::load(&path)?,
+    let circuit_settings = match settings_path {
+        Some(path) => GraphSettings::load(&path)?,
         None => {
-            let mut circuit_params = GraphParams::default();
-            circuit_params.run_args.scale = scale.unwrap();
-            circuit_params.run_args.batch_size = batch_size.unwrap();
-            circuit_params.run_args.allocated_constraints = Some(0);
-            circuit_params.run_args.output_visibility = Visibility::Public;
-            circuit_params
+            let mut circuit_settings = GraphSettings::default();
+            circuit_settings.run_args.scale = scale.unwrap();
+            circuit_settings.run_args.batch_size = batch_size.unwrap();
+            circuit_settings.run_args.allocated_constraints = Some(0);
+            circuit_settings.run_args.output_visibility = Visibility::Public;
+            circuit_settings
         }
     };
 
-    info!("set scale to {}", circuit_params.run_args.scale);
+    info!("set scale to {}", circuit_settings.run_args.scale);
 
-    let mut circuit = GraphCircuit::from_params(&circuit_params, &model_path, CheckMode::UNSAFE)?;
+    let mut circuit =
+        GraphCircuit::from_settings(&circuit_settings, &model_path, CheckMode::UNSAFE)?;
     let mut data = GraphInput::from_path(data)?;
     circuit.load_inputs(&data);
 
@@ -416,27 +421,15 @@ pub(crate) fn forward(
     Ok(())
 }
 
-//not for wasm targets
-#[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn gen_circuit_params(
+/// Generate a circuit settings file
+pub(crate) fn gen_circuit_settings(
     model_path: PathBuf,
     params_output: PathBuf,
     run_args: RunArgs,
-    calibration_args: CalibrationArgs,
 ) -> Result<(), Box<dyn Error>> {
     let circuit = GraphCircuit::from_run_args(&run_args, &model_path, CheckMode::SAFE)?;
-    let params = circuit.params;
-
-    match calibration_args.data {
-        None => params.save(&params_output).map_err(Box::<dyn Error>::from),
-        Some(data) => calibrate(
-            model_path,
-            run_args,
-            data,
-            params_output,
-            calibration_args.target,
-        ),
-    }
+    let params = circuit.settings;
+    params.save(&params_output).map_err(Box::<dyn Error>::from)
 }
 
 // not for wasm targets
@@ -444,7 +437,7 @@ pub(crate) fn gen_circuit_params(
 pub(crate) fn init_spinner() -> ProgressBar {
     let pb = indicatif::ProgressBar::new_spinner();
     pb.set_draw_target(indicatif::ProgressDrawTarget::stdout());
-    pb.enable_steady_tick(Duration::from_millis(100));
+    pb.enable_steady_tick(Duration::from_millis(200));
     pb.set_style(
         ProgressStyle::with_template("{spinner:.blue} {msg}")
             .unwrap()
@@ -461,19 +454,24 @@ pub(crate) fn init_spinner() -> ProgressBar {
     pb
 }
 
-/// Calibrate the circuit parameters given a dataset
+/// Calibrate the circuit parameters to a given a dataset
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn calibrate(
     model_path: PathBuf,
-    run_args: RunArgs,
     data: PathBuf,
-    params_output: PathBuf,
+    settings_path: PathBuf,
     target: CalibrationTarget,
 ) -> Result<(), Box<dyn Error>> {
     use log::debug;
 
     let data = GraphInput::from_path(data)?;
+    // load the pre-generated settings
+    let settings = GraphSettings::load(&settings_path)?;
+    // now retrieve the run args
+    let run_args = settings.run_args;
+
     let pb = init_spinner();
+
     pb.set_message("Calibrating...");
     // we load the model to get the input and output shapes
     let _r = Gag::stdout().unwrap();
@@ -490,13 +488,13 @@ pub(crate) fn calibrate(
 
     debug!("num of calibration batches: {}", chunks.len(),);
 
-    let found_params: Vec<GraphParams> = (4..12)
+    let found_params: Vec<GraphSettings> = (4..12)
         .map(|scale| {
             pb.set_message(format!("Calibrating with scale {}", scale));
             std::thread::sleep(Duration::from_millis(100));
 
             let _r = Gag::stdout().unwrap();
-            let res: Result<Vec<GraphParams>, &str> = chunks
+            let res: Result<Vec<GraphSettings>, &str> = chunks
                 .par_iter()
                 .map(|chunk| {
                     let run_args = RunArgs { scale, ..run_args };
@@ -507,15 +505,15 @@ pub(crate) fn calibrate(
 
                     loop {
                         // ensures we have converges
-                        let params_before = circuit.params.clone();
+                        let params_before = circuit.settings.clone();
                         circuit.calibrate().map_err(|_| "failed to calibrate")?;
-                        let params_after = circuit.params.clone();
+                        let params_after = circuit.settings.clone();
                         if params_before == params_after {
                             break;
                         }
                     }
 
-                    Ok(circuit.params.clone())
+                    Ok(circuit.settings.clone())
                 })
                 .collect();
             std::mem::drop(_r);
@@ -551,7 +549,7 @@ pub(crate) fn calibrate(
                 .max_by_key(|p| p.run_args.scale)
                 .unwrap();
 
-            best_params.save(&params_output)?;
+            best_params.save(&settings_path)?;
         }
         CalibrationTarget::Accuracy => {
             let param_iterator = found_params.iter().sorted_by_key(|p| p.run_args.scale);
@@ -566,7 +564,7 @@ pub(crate) fn calibrate(
                 .min_by_key(|p| p.run_args.logrows)
                 .unwrap();
 
-            best_params.save(&params_output)?;
+            best_params.save(&settings_path)?;
         }
     }
 
@@ -579,14 +577,14 @@ pub(crate) fn mock(
     model_path: PathBuf,
     data: PathBuf,
     run_args: RunArgs,
-    circuit_params_path: Option<PathBuf>,
+    settings_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     // mock should catch any issues by default so we set it to safe
 
-    let mut circuit = match circuit_params_path {
+    let mut circuit = match settings_path {
         Some(path) => {
-            let circuit_params = GraphParams::load(&path)?;
-            GraphCircuit::from_params(&circuit_params, &model_path, CheckMode::SAFE)?
+            let circuit_settings = GraphSettings::load(&path)?;
+            GraphCircuit::from_settings(&circuit_settings, &model_path, CheckMode::SAFE)?
         }
         None => GraphCircuit::from_run_args(&run_args, &model_path, CheckMode::SAFE)?,
     };
@@ -597,7 +595,7 @@ pub(crate) fn mock(
 
     info!("Mock proof");
 
-    let prover = MockProver::run(circuit.params.run_args.logrows, &circuit, public_inputs)
+    let prover = MockProver::run(circuit.settings.run_args.logrows, &circuit, public_inputs)
         .map_err(Box::<dyn Error>::from)?;
     prover.assert_satisfied();
     prover
@@ -649,26 +647,26 @@ pub(crate) fn render(model: PathBuf, output: PathBuf, args: RunArgs) -> Result<(
     halo2_proofs::dev::CircuitLayout::default()
         // We hide labels, else most circuits become impossible to decipher because of overlaid text
         .show_labels(false)
-        .render(circuit.params.run_args.logrows, &circuit, &root)?;
+        .render(circuit.settings.run_args.logrows, &circuit, &root)?;
     Ok(())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn create_evm_verifier(
     vk_path: PathBuf,
-    params_path: PathBuf,
-    circuit_params_path: PathBuf,
+    srs_path: PathBuf,
+    settings_path: PathBuf,
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
-    let circuit_params = GraphParams::load(&circuit_params_path)?;
-    let params = load_params_cmd(params_path, circuit_params.run_args.logrows)?;
+    let circuit_settings = GraphSettings::load(&settings_path)?;
+    let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
 
-    let num_instance = circuit_params.total_instances();
+    let num_instance = circuit_settings.total_instances();
 
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_params)?;
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_settings)?;
     trace!("params computed");
 
     let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
@@ -725,13 +723,13 @@ pub(crate) async fn verify_evm(
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn create_evm_aggregate_verifier(
     vk_path: PathBuf,
-    params_path: PathBuf,
+    srs_path: PathBuf,
     deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
-    let params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
+    let params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(srs_path)?;
 
     let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
 
@@ -764,15 +762,15 @@ pub(crate) fn create_evm_aggregate_verifier(
 
 pub(crate) fn setup(
     model_path: PathBuf,
-    params_path: PathBuf,
-    circuit_params_path: PathBuf,
+    srs_path: PathBuf,
+    settings_path: PathBuf,
     vk_path: PathBuf,
     pk_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
-    let circuit_params = GraphParams::load(&circuit_params_path)?;
-    let circuit = GraphCircuit::from_params(&circuit_params, &model_path, CheckMode::UNSAFE)?;
-    let params = load_params_cmd(params_path, circuit_params.run_args.logrows)?;
+    let circuit_settings = GraphSettings::load(&settings_path)?;
+    let circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, CheckMode::UNSAFE)?;
+    let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
 
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
         .map_err(Box::<dyn Error>::from)?;
@@ -787,22 +785,22 @@ pub(crate) fn prove(
     model_path: PathBuf,
     pk_path: PathBuf,
     proof_path: PathBuf,
-    params_path: PathBuf,
+    srs_path: PathBuf,
     transcript: TranscriptType,
     strategy: StrategyType,
-    circuit_params_path: PathBuf,
+    settings_path: PathBuf,
     check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
     let data = GraphInput::from_path(data)?;
-    let circuit_params = GraphParams::load(&circuit_params_path)?;
-    let mut circuit = GraphCircuit::from_params(&circuit_params, &model_path, check_mode)?;
+    let circuit_settings = GraphSettings::load(&settings_path)?;
+    let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, check_mode)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
-    let circuit_params = circuit.params.clone();
+    let circuit_settings = circuit.settings.clone();
 
-    let params = load_params_cmd(params_path, circuit_params.run_args.logrows)?;
+    let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
 
-    let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(pk_path, circuit_params)
+    let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(pk_path, circuit_settings)
         .map_err(Box::<dyn Error>::from)?;
 
     trace!("params computed");
@@ -852,7 +850,7 @@ pub(crate) fn fuzz(
     transcript: TranscriptType,
     num_runs: usize,
     run_args: RunArgs,
-    circuit_params_path: Option<PathBuf>,
+    settings_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     let passed = AtomicBool::new(true);
 
@@ -863,10 +861,10 @@ pub(crate) fn fuzz(
 
     let data = GraphInput::from_path(data)?;
     // these aren't real values so the sanity checks are mostly meaningless
-    let mut circuit = match circuit_params_path {
+    let mut circuit = match settings_path {
         Some(path) => {
-            let circuit_params = GraphParams::load(&path)?;
-            GraphCircuit::from_params(&circuit_params, &model_path, CheckMode::UNSAFE)?
+            let circuit_settings = GraphSettings::load(&path)?;
+            GraphCircuit::from_settings(&circuit_settings, &model_path, CheckMode::UNSAFE)?
         }
         None => GraphCircuit::from_run_args(&run_args, &model_path, CheckMode::UNSAFE)?,
     };
@@ -1028,7 +1026,7 @@ pub(crate) fn fuzz(
     run_fuzz_fn(num_runs, fuzz_proof_instances, &passed);
 
     if matches!(transcript, TranscriptType::EVM) {
-        let num_instance = circuit.params.total_instances();
+        let num_instance = circuit.settings.total_instances();
 
         let yul_code = gen_evm_verifier(&params, pk.get_vk(), num_instance)?;
         let deployment_code = gen_deployment_code(yul_code).unwrap();
@@ -1122,30 +1120,30 @@ pub(crate) fn run_fuzz_fn(
 pub(crate) fn aggregate(
     proof_path: PathBuf,
     aggregation_snarks: Vec<PathBuf>,
-    circuit_params_paths: Vec<PathBuf>,
+    settings_paths: Vec<PathBuf>,
     aggregation_vk_paths: Vec<PathBuf>,
     vk_path: PathBuf,
-    params_path: PathBuf,
+    srs_path: PathBuf,
     transcript: TranscriptType,
     logrows: u32,
     check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
     // the K used for the aggregation circuit
-    let params = load_params_cmd(params_path.clone(), logrows)?;
+    let params = load_params_cmd(srs_path.clone(), logrows)?;
 
     let mut snarks = vec![];
 
-    for ((proof_path, vk_path), circuit_params_path) in aggregation_snarks
+    for ((proof_path, vk_path), settings_path) in aggregation_snarks
         .iter()
         .zip(aggregation_vk_paths)
-        .zip(circuit_params_paths)
+        .zip(settings_paths)
     {
-        let circuit_params = GraphParams::load(&circuit_params_path)?;
-        let params_app = load_params_cmd(params_path.clone(), circuit_params.run_args.logrows)?;
+        let circuit_settings = GraphSettings::load(&settings_path)?;
+        let params_app = load_params_cmd(srs_path.clone(), circuit_settings.run_args.logrows)?;
         let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
             vk_path.to_path_buf(),
             // safe to clone as the inner model is wrapped in an Arc
-            circuit_params.clone(),
+            circuit_settings.clone(),
         )?;
         snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(
             proof_path,
@@ -1191,16 +1189,16 @@ pub(crate) fn aggregate(
 
 pub(crate) fn verify(
     proof_path: PathBuf,
-    circuit_params_path: PathBuf,
+    settings_path: PathBuf,
     vk_path: PathBuf,
-    params_path: PathBuf,
+    srs_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
-    let circuit_params = GraphParams::load(&circuit_params_path)?;
-    let params = load_params_cmd(params_path, circuit_params.run_args.logrows)?;
+    let circuit_settings = GraphSettings::load(&settings_path)?;
+    let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
 
     let strategy = KZGSingleStrategy::new(params.verifier_params());
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_params)?;
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_settings)?;
     let now = Instant::now();
     let result = verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, strategy);
     info!("verify took {}", now.elapsed().as_secs());
@@ -1211,10 +1209,10 @@ pub(crate) fn verify(
 pub(crate) fn verify_aggr(
     proof_path: PathBuf,
     vk_path: PathBuf,
-    params_path: PathBuf,
+    srs_path: PathBuf,
     logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
-    let params = load_params_cmd(params_path, logrows)?;
+    let params = load_params_cmd(srs_path, logrows)?;
 
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
 
@@ -1229,10 +1227,10 @@ pub(crate) fn verify_aggr(
 
 /// helper function for load_params
 pub(crate) fn load_params_cmd(
-    params_path: PathBuf,
+    srs_path: PathBuf,
     logrows: u32,
 ) -> Result<ParamsKZG<Bn256>, Box<dyn Error>> {
-    let mut params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(params_path)?;
+    let mut params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(srs_path)?;
     info!("downsizing params to {} logrows", logrows);
     if logrows < params.k() {
         params.downsize(logrows);

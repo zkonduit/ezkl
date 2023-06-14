@@ -266,7 +266,7 @@ pub struct ForwardResult {
 
 /// model parameters
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
-pub struct GraphParams {
+pub struct GraphSettings {
     /// run args
     pub run_args: RunArgs,
     /// the potential number of constraints in the circuit
@@ -281,7 +281,7 @@ pub struct GraphParams {
     pub check_mode: CheckMode,
 }
 
-impl GraphParams {
+impl GraphSettings {
     /// calculate the total number of instances
     pub fn total_instances(&self) -> Vec<usize> {
         let mut instances: Vec<usize> = self
@@ -325,8 +325,8 @@ pub struct GraphCircuit {
     pub model: Arc<Model>,
     /// Vector of input tensors to the model / graph of computations.
     pub inputs: Vec<Tensor<i128>>,
-    /// The parameters of the model / graph of computations.
-    pub params: GraphParams,
+    /// The settings of the model / graph of computations.
+    pub settings: GraphSettings,
 }
 
 impl GraphCircuit {
@@ -344,16 +344,16 @@ impl GraphCircuit {
         }
 
         let mut hashing_constraints = 0;
-        let mut params = model.gen_params(run_args, check_mode)?;
-        if params.run_args.input_visibility.is_hashed() {
-            params.num_hashes += model.graph.num_inputs();
+        let mut settings = model.gen_params(run_args, check_mode)?;
+        if settings.run_args.input_visibility.is_hashed() {
+            settings.num_hashes += model.graph.num_inputs();
             for input in model.graph.input_shapes() {
                 hashing_constraints +=
                     POSEIDON_CONSTRAINTS_ESTIMATE * input.iter().product::<usize>();
             }
         }
-        if params.run_args.output_visibility.is_hashed() {
-            params.num_hashes += model.graph.num_outputs();
+        if settings.run_args.output_visibility.is_hashed() {
+            settings.num_hashes += model.graph.num_outputs();
             for output in model.graph.output_shapes() {
                 hashing_constraints +=
                     POSEIDON_CONSTRAINTS_ESTIMATE * output.iter().product::<usize>();
@@ -361,19 +361,19 @@ impl GraphCircuit {
         }
 
         // as they occupy independent rows
-        params.num_constraints = std::cmp::max(params.num_constraints, hashing_constraints);
+        settings.num_constraints = std::cmp::max(settings.num_constraints, hashing_constraints);
 
         Ok(GraphCircuit {
             model,
             inputs,
-            params,
+            settings,
         })
     }
 
     ///
-    pub fn new_from_params(
+    pub fn new_from_settings(
         model: Arc<Model>,
-        mut params: GraphParams,
+        mut settings: GraphSettings,
         check_mode: CheckMode,
     ) -> Result<GraphCircuit, Box<dyn std::error::Error>> {
         // placeholder dummy inputs - must call prepare_public_inputs to load data afterwards
@@ -383,12 +383,12 @@ impl GraphCircuit {
             inputs.push(t);
         }
 
-        params.check_mode = check_mode;
+        settings.check_mode = check_mode;
 
         Ok(GraphCircuit {
             model,
             inputs,
-            params,
+            settings,
         })
     }
     ///
@@ -398,7 +398,7 @@ impl GraphCircuit {
         for (input, shape) in data.input_data.iter().zip(self.model.graph.input_shapes()) {
             let t: Vec<i128> = input
                 .par_iter()
-                .map(|x| quantize_float(x, 0.0, self.params.run_args.scale).unwrap())
+                .map(|x| quantize_float(x, 0.0, self.settings.run_args.scale).unwrap())
                 .collect();
 
             let mut t: Tensor<i128> = t.into_iter().into();
@@ -412,14 +412,14 @@ impl GraphCircuit {
     /// Calibrate the circuit to the supplied data.
     pub fn calibrate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let res = self.forward()?;
-        let max_range = 2i128.pow(self.params.run_args.bits as u32 - 1);
+        let max_range = 2i128.pow(self.settings.run_args.bits as u32 - 1);
         if res.max_lookup_input > max_range {
             let recommended_bits = (res.max_lookup_input as f64).log2().ceil() as usize + 1;
             assert!(res.max_lookup_input <= 2i128.pow(recommended_bits as u32 - 1));
 
             if recommended_bits <= (bn256::Fr::S - 1) as usize {
-                self.params.run_args.bits = recommended_bits;
-                self.params.run_args.logrows = (recommended_bits + 1) as u32;
+                self.settings.run_args.bits = recommended_bits;
+                self.settings.run_args.logrows = (recommended_bits + 1) as u32;
                 info!(
                     "increasing bits to: {}, increasing logrows to: {}",
                     recommended_bits,
@@ -427,7 +427,7 @@ impl GraphCircuit {
                 );
                 return self.calibrate();
             } else {
-                let err_string = format!("No possible value of bits (estimate {}) at scale {} can accomodate this value.", recommended_bits, self.params.run_args.scale);
+                let err_string = format!("No possible value of bits (estimate {}) at scale {} can accomodate this value.", recommended_bits, self.settings.run_args.scale);
                 error!("{}", err_string);
 
                 return Err(err_string.into());
@@ -435,7 +435,7 @@ impl GraphCircuit {
         } else {
             let min_bits = (res.max_lookup_input as f64).log2().ceil() as usize + 1;
 
-            let min_rows_from_constraints = (self.params.num_constraints as f64
+            let min_rows_from_constraints = (self.settings.num_constraints as f64
                 + ASSUMED_BLINDING_FACTORS as f64)
                 .log2()
                 .ceil() as usize
@@ -454,16 +454,16 @@ impl GraphCircuit {
                 "setting bits to: {}, setting logrows to: {}",
                 min_bits, logrows
             );
-            self.params.run_args.bits = min_bits;
-            self.params.run_args.logrows = logrows as u32;
+            self.settings.run_args.bits = min_bits;
+            self.settings.run_args.logrows = logrows as u32;
         }
 
-        self.params = GraphCircuit::new(
+        self.settings = GraphCircuit::new(
             self.model.clone(),
-            self.params.run_args,
-            self.params.check_mode,
+            self.settings.run_args,
+            self.settings.check_mode,
         )?
-        .params;
+        .settings;
 
         Ok(())
     }
@@ -505,14 +505,14 @@ impl GraphCircuit {
         Self::new(model, *run_args, check_mode)
     }
 
-    /// Create a new circuit from a set of input data and [GraphParams].
-    pub fn from_params(
-        params: &GraphParams,
+    /// Create a new circuit from a set of input data and [GraphSettings].
+    pub fn from_settings(
+        params: &GraphSettings,
         model_path: &std::path::PathBuf,
         check_mode: CheckMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let model = Arc::new(Model::from_run_args(&params.run_args, model_path)?);
-        Self::new_from_params(model, params.clone(), check_mode)
+        Self::new_from_settings(model, params.clone(), check_mode)
     }
 
     /// Prepare the public inputs for the circuit.
@@ -528,10 +528,10 @@ impl GraphCircuit {
         // the ordering here is important, we want the inputs to come before the outputs
         // as they are configured in that order as Column<Instances>
         let mut public_inputs = vec![];
-        if self.params.run_args.input_visibility.is_public() {
+        if self.settings.run_args.input_visibility.is_public() {
             public_inputs = self.inputs.clone();
         }
-        if self.params.run_args.output_visibility.is_public() {
+        if self.settings.run_args.output_visibility.is_public() {
             for (idx, v) in data.output_data.iter().enumerate() {
                 let t: Vec<i128> = v
                     .par_iter()
@@ -541,17 +541,18 @@ impl GraphCircuit {
                 let mut t: Tensor<i128> = t.into_iter().into();
 
                 let len = t.len();
-                if self.params.run_args.pack_base > 1 {
+                if self.settings.run_args.pack_base > 1 {
                     let max_exponent =
-                        (((len - 1) as u32) * (self.params.run_args.scale + 1)) as f64;
-                    if max_exponent > (i128::MAX as f64).log(self.params.run_args.pack_base as f64)
+                        (((len - 1) as u32) * (self.settings.run_args.scale + 1)) as f64;
+                    if max_exponent
+                        > (i128::MAX as f64).log(self.settings.run_args.pack_base as f64)
                     {
                         return Err(Box::new(GraphError::PackingExponent));
                     }
                     t = pack(
                         &t,
-                        self.params.run_args.pack_base as i128,
-                        self.params.run_args.scale,
+                        self.settings.run_args.pack_base as i128,
+                        self.settings.run_args.scale,
                     )?;
                 }
                 public_inputs.push(t);
@@ -575,15 +576,15 @@ impl GraphCircuit {
             })
             .collect::<Vec<Vec<Fp>>>();
 
-        if self.params.run_args.input_visibility.is_hashed()
-            || self.params.run_args.output_visibility.is_hashed()
+        if self.settings.run_args.input_visibility.is_hashed()
+            || self.settings.run_args.output_visibility.is_hashed()
         {
             let mut hash_pi = vec![];
-            if self.params.run_args.input_visibility.is_hashed() {
+            if self.settings.run_args.input_visibility.is_hashed() {
                 // should unwrap safely
                 hash_pi.extend(data.input_hashes.as_deref().unwrap().to_vec());
             }
-            if self.params.run_args.output_visibility.is_hashed() {
+            if self.settings.run_args.output_visibility.is_hashed() {
                 // should unwrap safely
                 hash_pi.extend(data.output_hashes.as_deref().unwrap().to_vec());
             };
@@ -598,7 +599,7 @@ impl GraphCircuit {
 impl Circuit<Fp> for GraphCircuit {
     type Config = GraphConfig;
     type FloorPlanner = ModulePlanner;
-    type Params = GraphParams;
+    type Params = GraphSettings;
 
     fn without_witnesses(&self) -> Self {
         self.clone()
@@ -606,7 +607,7 @@ impl Circuit<Fp> for GraphCircuit {
 
     fn params(&self) -> Self::Params {
         // safe to clone because the model is Arc'd
-        self.params.clone()
+        self.settings.clone()
     }
 
     fn configure_with_params(cs: &mut ConstraintSystem<Fp>, params: Self::Params) -> Self::Config {
@@ -669,7 +670,7 @@ impl Circuit<Fp> for GraphCircuit {
             .map(|i| ValTensor::from(<Tensor<i128> as Into<Tensor<Value<Fp>>>>::into(i.clone())))
             .collect::<Vec<ValTensor<Fp>>>();
 
-        if self.params.run_args.input_visibility.is_hashed() {
+        if self.settings.run_args.input_visibility.is_hashed() {
             // instantiate new poseidon module in chip
             let chip = PoseidonChip::<
                 PoseidonSpec,
@@ -694,7 +695,7 @@ impl Circuit<Fp> for GraphCircuit {
             .layout(
                 config.model_config.clone(),
                 &mut layouter,
-                &self.params.run_args,
+                &self.settings.run_args,
                 &inputs,
                 &config.model_config.vars,
             )
@@ -703,7 +704,7 @@ impl Circuit<Fp> for GraphCircuit {
                 PlonkError::Synthesis
             })?;
 
-        if self.params.run_args.output_visibility.is_hashed() {
+        if self.settings.run_args.output_visibility.is_hashed() {
             let chip = PoseidonChip::<
                 PoseidonSpec,
                 POSEIDON_WIDTH,
@@ -711,7 +712,7 @@ impl Circuit<Fp> for GraphCircuit {
                 POSEIDON_LEN_GRAPH,
             >::construct(config.poseidon_config.unwrap());
             let mut hash_offset = 0;
-            if self.params.run_args.input_visibility.is_hashed() {
+            if self.settings.run_args.input_visibility.is_hashed() {
                 hash_offset += inputs.len();
                 // re-enter the first module
                 layouter.assign_region(|| "_enter_module_0", |_| Ok(()))?;
