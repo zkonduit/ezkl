@@ -64,10 +64,10 @@ jobs:
         run: |
           gh release create $VERSION --title "Release $VERSION" --notes "Release $VERSION"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Upload Release Asset
         run: |
           gh release upload $VERSION ${{ steps.archive.outputs.path }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
