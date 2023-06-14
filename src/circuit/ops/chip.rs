@@ -74,7 +74,7 @@ impl From<String> for CheckMode {
 #[derive(Clone, Debug, PartialEq, PartialOrd, Serialize, Deserialize, Copy)]
 pub enum Tolerance {
     Abs { val: usize },
-    Percentage { val: f32, scale: usize },
+    Percentage { val: f32, scales: (usize, usize) },
 }
 
 impl Default for Tolerance {
@@ -89,7 +89,7 @@ impl FromStr for Tolerance {
         if let Ok(val) = s.parse::<usize>() {
             Ok(Tolerance::Abs { val })
         } else if let Ok(val) = s.parse::<f32>() {
-            Ok(Tolerance::Percentage { val, scale: 1 })
+            Ok(Tolerance::Percentage { val, scales: (1,1) })
         } else {
             Err("Invalid tolerance value provided. It should be either an absolute value (usize) or a percentage (f32).".to_string())
         }

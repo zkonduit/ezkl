@@ -16,7 +16,7 @@ use std::io::Read;
 use std::path::PathBuf;
 
 use crate::circuit::{CheckMode, Tolerance};
-use crate::graph::{VarVisibility, Visibility};
+use crate::graph::Visibility;
 use crate::pfsys::TranscriptType;
 
 impl std::fmt::Display for TranscriptType {
@@ -91,8 +91,64 @@ impl<'source> FromPyObject<'source> for StrategyType {
     }
 }
 
-/// Parameters specific to a proving run
+/// Calibration specific parameters
 #[derive(Debug, Args, Deserialize, Serialize, Clone, Default)]
+pub struct CalibrationArgs {
+    /// The path to the .json calibration data file. If set will finetune the selected parameters to a calibration dataset.
+    #[arg(long = "calibration-data")]
+    pub data: Option<PathBuf>,
+    #[arg(long = "calibration-target")]
+    /// Target for calibration.
+    pub target: Option<CalibrationTarget>,
+}
+
+#[derive(clap::ValueEnum, Debug, Default, Copy, Clone, Serialize, Deserialize)]
+/// Determines what the calibration pass should optimize for
+pub enum CalibrationTarget {
+    /// Optimizes for reducing cpu and memory usage
+    #[default]
+    Resources,
+    /// Optimizes for numerical accuracy given the fixed point representation
+    Accuracy,
+}
+
+impl From<&str> for CalibrationTarget {
+    fn from(s: &str) -> Self {
+        match s {
+            "resources" => CalibrationTarget::Resources,
+            "accuracy" => CalibrationTarget::Accuracy,
+            _ => panic!("invalid calibration target"),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Converts CalibrationTarget into a PyObject (Required for CalibrationTarget to be compatible with Python)
+impl IntoPy<PyObject> for CalibrationTarget {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            CalibrationTarget::Resources => "resources".to_object(py),
+            CalibrationTarget::Accuracy => "accuracy".to_object(py),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Obtains CalibrationTarget from PyObject (Required for CalibrationTarget to be compatible with Python)
+impl<'source> FromPyObject<'source> for CalibrationTarget {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let trystr = <PyString as PyTryFrom>::try_from(ob)?;
+        let strval = trystr.to_string();
+        match strval.to_lowercase().as_str() {
+            "resources" => Ok(CalibrationTarget::Resources),
+            "accuracy" => Ok(CalibrationTarget::Accuracy),
+            _ => Err(PyValueError::new_err("Invalid value for CalibrationTarget")),
+        }
+    }
+}
+
+/// Parameters specific to a proving run
+#[derive(Debug, Copy, Args, Deserialize, Serialize, Clone, Default, PartialEq, PartialOrd)]
 pub struct RunArgs {
     /// The tolerance for error on model outputs
     #[arg(short = 'T', long, default_value = "0")]
@@ -108,7 +164,7 @@ pub struct RunArgs {
     pub logrows: u32,
     /// The number of batches to split the input data into
     #[arg(long, default_value = "1")]
-    pub batch_size: u32,
+    pub batch_size: usize,
     /// Flags whether the inputs are on-chain and should be attested to
     #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
     pub on_chain_inputs: bool,
@@ -128,17 +184,6 @@ pub struct RunArgs {
     /// the number of constraints the circuit might use. If not specified, this will be calculated using a 'dummy layout' pass.
     #[arg(long)]
     pub allocated_constraints: Option<usize>,
-}
-
-#[allow(missing_docs)]
-impl RunArgs {
-    pub fn to_var_visibility(&self) -> VarVisibility {
-        VarVisibility {
-            input: self.input_visibility,
-            params: self.param_visibility,
-            output: self.output_visibility,
-        }
-    }
 }
 
 const EZKLCONF: &str = "EZKLCONF";
@@ -224,9 +269,43 @@ pub enum Commands {
         /// Path to the new .json file
         #[arg(short = 'O', long)]
         output: PathBuf,
+        /// Scale to use for quantization
+        #[arg(
+            short = 'S',
+            long,
+            default_value = "7",
+            conflicts_with = "circuit_params_path"
+        )]
+        scale: Option<u32>,
+        /// The number of batches to split the input data into
+        #[arg(
+            short = 'B',
+            long,
+            default_value = "1",
+            conflicts_with = "circuit_params_path"
+        )]
+        batch_size: Option<usize>,
+        /// optional circuit params path
+        #[arg(long)]
+        circuit_params_path: Option<PathBuf>,
+    },
+
+    /// Calibrates the proving hyperparameters, produces a quantized output from those hyperparameters, and saves it to a .json file. The circuit parameters are also saved to a file.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[command(arg_required_else_help = true)]
+    GenCircuitParams {
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: PathBuf,
+        /// Path to circuit_params file to output
+        #[arg(short = 'O', long)]
+        circuit_params_path: PathBuf,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
+        /// calibration args
+        #[clap(flatten)]
+        calibration: CalibrationArgs,
     },
 
     /// Generates a dummy SRS
@@ -251,6 +330,9 @@ pub enum Commands {
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
+        /// optional circuit params path (overrides any run args set)
+        #[arg(long)]
+        circuit_params_path: Option<PathBuf>,
     },
 
     /// Aggregates proofs :)
@@ -305,13 +387,11 @@ pub enum Commands {
         /// The path to output the proving key file
         #[arg(long)]
         pk_path: PathBuf,
-        /// The path to save circuit params to
+        /// The path to load circuit params from
         #[arg(long)]
         circuit_params_path: PathBuf,
-        /// proving arguments
-        #[clap(flatten)]
-        args: RunArgs,
     },
+
     #[cfg(not(target_arch = "wasm32"))]
     /// Fuzzes the proof pipeline with random inputs, random parameters, and random keys
     #[command(arg_required_else_help = true)]
@@ -336,6 +416,9 @@ pub enum Commands {
         /// number of fuzz iterations
         #[arg(long)]
         num_runs: usize,
+        /// optional circuit params path (overrides any run args set)
+        #[arg(long)]
+        circuit_params_path: Option<PathBuf>,
     },
 
     /// Loads model, data, and creates proof

@@ -30,10 +30,17 @@ pub mod lookup;
 ///
 pub mod poly;
 
+/// A struct representing the result of a forward pass.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct ForwardResult {
+    pub(crate) output: Tensor<i128>,
+    pub(crate) intermediate_lookups: Vec<Tensor<i128>>,
+}
+
 /// An enum representing operations that can be represented as constraints in a circuit.
 pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + Sync + Any {
     /// Matches a [Op] to an operation in the `tensor::ops` module.
-    fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError>;
+    fn f(&self, x: &[Tensor<i128>]) -> Result<ForwardResult, TensorError>;
     /// Returns a string representation of the operation.
     fn as_string(&self) -> String;
 
@@ -98,8 +105,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
         self
     }
 
-    fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
-        Ok(x[0].clone())
+    fn f(&self, x: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
+        Ok(ForwardResult {
+            output: x[0].clone(),
+            intermediate_lookups: vec![],
+        })
     }
 
     fn as_string(&self) -> String {
@@ -142,7 +152,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
+    fn f(&self, x: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
         if self.scale.len() != x.len() {
             return Err(TensorError::DimMismatch("rescaled inputs".to_string()));
         }
@@ -224,7 +234,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn f(&self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
+    fn f(&self, _: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
         Err(TensorError::WrongMethod)
     }
 
@@ -277,10 +287,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn f(&self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
-        Ok(self
-            .values
-            .map(|x| quantize_float(&x, 0., self.scale).unwrap()))
+    fn f(&self, _: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
+        Ok(ForwardResult {
+            output: self
+                .values
+                .map(|x| quantize_float(&x, 0., self.scale).unwrap()),
+            intermediate_lookups: vec![],
+        })
     }
 
     fn as_string(&self) -> String {

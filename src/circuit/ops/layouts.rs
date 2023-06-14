@@ -1545,7 +1545,7 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
         // if not empty apply the nonlinearity !
         _ => {
             let x = Op::<F>::f(nl, &[integer_evals])?;
-            x.map(|elem| Value::known(i128_to_felt(elem)))
+            x.output.map(|elem| Value::known(i128_to_felt(elem)))
         }
     };
 
@@ -1955,7 +1955,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
             let int_evals = Tensor::new(Some(&values[0].get_int_evals()?), values[0].dims())?;
             // scale is double the output
             let ref_sofmax: Tensor<i128> =
-                tensor::ops::nonlinearities::softmax(&int_evals, input_scale, output_scale);
+                tensor::ops::nonlinearities::softmax(&int_evals, input_scale, output_scale).0;
 
             let output_int_evals = Tensor::new(Some(&softmax.get_int_evals()?), values[0].dims())?;
 
@@ -1973,7 +1973,8 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: Arc<Mutex<Option<&mut Region<F>>>>,
     values: &[ValTensor<F>; 2],
-    scale: usize,
+    input_scale: usize,
+    output_scale: usize,
     offset: &mut usize,
     tol: f32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
@@ -1981,7 +1982,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     let diff = pairwise(config, region.clone(), values, offset, BaseOp::Sub)?;
 
     // Calculate the reciprocal of the expected output tensor, scaling by double the scaling factor
-    let scale = scale.pow(2);
+    let scale = input_scale * output_scale;
     let recip = nonlinearity(
         config,
         region.clone(),
@@ -2052,7 +2053,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
                 Tensor::new(Some(&values[1].get_int_evals()?), values[1].dims())?,
             ];
             let ref_range_check_percent: Tensor<i128> =
-                tensor::ops::nonlinearities::range_check_percent(int_evals, scale, tol);
+                tensor::ops::nonlinearities::range_check_percent(int_evals, input_scale, output_scale, tol);
             let output_int_evals = Tensor::new(Some(&sum.get_int_evals()?), values[0].dims())?;
             assert_eq!(output_int_evals, ref_range_check_percent)
         }

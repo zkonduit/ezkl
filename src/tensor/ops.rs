@@ -46,10 +46,9 @@ pub fn iff<
     a: &Tensor<T>,
 ) -> Result<Tensor<T>, TensorError> {
     let masked_a = (mask.clone() * a.clone())?;
-    let masked_b =
-        ((Tensor::from(vec![T::one().ok_or(TensorError::DimError)?].into_iter())
-            - mask.clone())?
-            * b.clone())?;
+    let masked_b = ((Tensor::from(vec![T::one().ok_or(TensorError::DimError)?].into_iter())
+        - mask.clone())?
+        * b.clone())?;
 
     masked_a + masked_b
 }
@@ -918,10 +917,6 @@ pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
     axes: &[usize],
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
-
-    if axes.is_empty() {
-        return Ok(a.clone());
-    }
 
     let mut new_dims = vec![];
     for i in 0..a.dims().len() {
@@ -1900,6 +1895,18 @@ pub mod nonlinearities {
     /// let result = exp(&x, 1, 1);
     /// let expected = Tensor::<i128>::new(Some(&[7, 3269017, 7, 3, 3, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
+    ///
+    ///
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[37, 12, 41]),
+    ///   &[3],
+    /// ).unwrap();
+    /// let result = exp(&x, 512, 512);
+    ///
+    /// let expected = Tensor::<i128>::new(Some(&[550, 524, 555]), &[3]).unwrap();
+    ///
+    /// assert_eq!(result, expected);
+    /// ```
     /// ```
     pub fn exp(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
         // calculate value of output
@@ -1919,13 +1926,15 @@ pub mod nonlinearities {
         a: &Tensor<i128>,
         scale_input: usize,
         scale_output: usize,
-    ) -> Tensor<i128> {
+    ) -> (Tensor<i128>, Vec<Tensor<i128>>) {
         // we want this to be as small as possible so we set the output scale to 1
         let dims = a.dims();
 
         if dims.len() == 1 {
             return softmax(a, scale_input, scale_output);
         }
+
+        let mut intermediate_values = vec![];
 
         let cartesian_coord = dims[..dims.len() - 1]
             .iter()
@@ -1944,7 +1953,10 @@ pub mod nonlinearities {
 
             let softmax_input = a.get_slice(&sum_dims).unwrap();
 
-            outputs.push(softmax(&softmax_input, scale_input, scale_output));
+            let res = softmax(&softmax_input, scale_input, scale_output);
+
+            outputs.push(res.0);
+            intermediate_values.extend(res.1);
         }
 
         let mut res = Tensor::new(Some(&outputs), &[outputs.len()])
@@ -1953,7 +1965,7 @@ pub mod nonlinearities {
             .unwrap();
         res.reshape(dims);
 
-        res
+        (res, intermediate_values)
     }
 
     /// Applies softmax
@@ -1970,37 +1982,26 @@ pub mod nonlinearities {
     ///     Some(&[2, 4, 2, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let result = softmax(&x, 128, 128);
+    /// let result = softmax(&x, 128, 128).0;
     /// // doubles the scale of the input
     /// let expected = Tensor::<i128>::new(Some(&[2730, 2772, 2730, 2709, 2709, 2688]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn softmax(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn softmax(
+        a: &Tensor<i128>,
+        scale_input: usize,
+        scale_output: usize,
+    ) -> (Tensor<i128>, Vec<Tensor<i128>>) {
         // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
+        let mut intermediate_values = vec![];
+
         let exp = exp(a, scale_input, scale_output);
+
         let sum = sum(&exp).unwrap();
+        intermediate_values.push(sum.clone());
         let inv_denom = recip(&sum, scale_output.pow(2) as u32);
 
-        // let mut output = a.clone();
-
-        // let denominator = a.iter().fold(0.0, |acc, x| {
-        //     let kix = (*x as f64) / (scale_input as f64);
-        //     acc + kix.exp()
-        // });
-
-        // let mut res = vec![];
-        // for (i, a_i) in a.iter().enumerate() {
-        //     let kix = (*a_i as f64) / (scale_input as f64);
-        //     let numerator = kix.exp();
-        //     let fout = numerator / denominator;
-        //     res.push(fout);
-        //     let rounded = ((scale_output as f64) * fout).round();
-        //     output[i] = rounded as i128;
-        // }
-
-        // assert_eq!(res.iter().fold(0.0, |acc, x| acc + x), 1.0);
-
-        (exp * inv_denom).unwrap()
+        ((exp * inv_denom).unwrap(), intermediate_values)
     }
 
     /// Applies range_check_percent
@@ -2022,17 +2023,17 @@ pub mod nonlinearities {
     ///    Some(&[103, 204, 303, 404, 505, 607]),
     ///   &[2, 3],
     /// ).unwrap();
-    /// let result = range_check_percent(&[x, y], 1024, 1.0); // 1% tolerance
+    /// let result = range_check_percent(&[x, y], 1024, 1024, 1.0); // 1% tolerance
     /// let expected = Tensor::<i128>::new(Some(&[1, 1, 0, 0, 0, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn range_check_percent(t: &[Tensor<i128>], scale: usize, tol: f32) -> Tensor<i128> {
+    pub fn range_check_percent(t: &[Tensor<i128>], input_scale: usize, output_scale: usize, tol: f32) -> Tensor<i128> {
         // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
-        let _double_scale = scale.pow(2);
+        let scale = input_scale*output_scale;
         let diff: Tensor<i128> = sub(t).unwrap();
-        let recip = recip(&t[0], _double_scale as u32);
+        let recip = recip(&t[0], scale as u32);
         let product = mult(&[diff, recip]).unwrap();
-        let _tol = ((tol / 100.0) * _double_scale as f32).round() as f64;
+        let _tol = ((tol / 100.0) * scale as f32).round() as f64;
         let upper_bound = greater_than(&product, _tol);
         let neg_product =
             mult(&[product, Tensor::<i128>::new(Some(&[-1]), &[1]).unwrap()]).unwrap();
