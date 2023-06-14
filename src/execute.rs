@@ -480,22 +480,25 @@ pub(crate) fn calibrate(
     let model = Model::from_run_args(&run_args, &model_path).unwrap();
     std::mem::drop(_r);
 
+    let chunks = data
+        .split_into_batches(
+            run_args.batch_size,
+            model.graph.input_shapes(),
+            model.graph.output_shapes(),
+        )
+        .unwrap();
+
+    debug!("num of calibration batches: {}", chunks.len(),);
+
     let found_params: Vec<GraphParams> = (4..12)
         .map(|scale| {
             pb.set_message(format!("Calibrating with scale {}", scale));
             std::thread::sleep(Duration::from_millis(100));
 
-            let res: Result<Vec<GraphParams>, &str> = data
-                .split_into_batches(
-                    run_args.batch_size,
-                    model.graph.input_shapes(),
-                    model.graph.output_shapes(),
-                )
-                .unwrap()
+            let _r = Gag::stdout().unwrap();
+            let res: Result<Vec<GraphParams>, &str> = chunks
                 .par_iter()
                 .map(|chunk| {
-                    debug!("chunk size: {}", chunk.input_data[0].len());
-                    let _r = Gag::stdout().unwrap();
                     let run_args = RunArgs { scale, ..run_args };
                     let mut circuit =
                         GraphCircuit::from_run_args(&run_args, &model_path, CheckMode::SAFE)
@@ -511,11 +514,11 @@ pub(crate) fn calibrate(
                             break;
                         }
                     }
-                    std::mem::drop(_r);
+
                     Ok(circuit.params.clone())
                 })
                 .collect();
-
+            std::mem::drop(_r);
             if let Ok(res) = res {
                 // pick the one with the largest logrows
                 Some(res.into_iter().max_by_key(|p| p.run_args.logrows).unwrap())
