@@ -567,11 +567,6 @@ pub enum Commands {
         /// The path to output the compiled Solidity bytecode
         #[arg(long)]
         sol_bytecode_path: Option<PathBuf>,
-        /// The number of runs set to the SOLC optimizer.
-        /// Lower values optimze for deployment size while higher values optimize for execution cost.
-        /// If not set will just use the default unoptimized SOLC configuration.
-        #[arg(long)]
-        optimizer_runs: Option<usize>,
     },
 
     /// Print the proof in hexadecimal

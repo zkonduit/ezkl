@@ -419,7 +419,7 @@ impl GraphCircuit {
 
         self.params = GraphCircuit::new(
             self.model.clone(),
-            self.params.run_args.clone(),
+            self.params.run_args,
             self.params.check_mode,
         )?
         .params;

@@ -220,14 +220,12 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             deployment_code_path,
             sol_code_path,
             sol_bytecode_path,
-            optimizer_runs,
         } => {
             verify_evm(
                 proof_path,
                 deployment_code_path,
                 sol_code_path,
                 sol_bytecode_path,
-                optimizer_runs,
             )
             .await
         }
@@ -677,21 +675,20 @@ pub(crate) async fn verify_evm(
     deployment_code_path: PathBuf,
     sol_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
-    runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
     let code = DeploymentCode::load(&deployment_code_path)?;
     evm_verify(code, proof.clone())?;
 
     if sol_code_path.is_some() {
-        let result = verify_proof_via_solidity(proof.clone(), sol_code_path, None, runs).await?;
+        let result = verify_proof_via_solidity(proof.clone(), sol_code_path, None).await?;
 
         info!("Solidity verification result: {}", result);
 
         assert!(result);
 
         if sol_bytecode_path.is_some() {
-            let result = verify_proof_via_solidity(proof, None, sol_bytecode_path, runs).await?;
+            let result = verify_proof_via_solidity(proof, None, sol_bytecode_path).await?;
 
             info!("Solidity bytecode verification result: {}", result);
 
