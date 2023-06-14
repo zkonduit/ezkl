@@ -5,29 +5,8 @@ on:
       - '*'
 
 jobs:
-  build-release:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            rust: stable
-          - os: ubuntu-latest
-            target: arm-unknown-linux-gnueabihf
-            rust: stable
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            rust: stable
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            rust: stable
-          - os: windows-latest
-            target: x86_64-pc-windows-gnu
-            rust: stable
-          - os: windows-latest
-            target: i686-pc-windows-msvc
-            rust: stable
+  build-linux:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -35,30 +14,95 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          target: ${{ matrix.target }}
-          toolchain: ${{ matrix.rust }}
+          target: x86_64-unknown-linux-musl
+          toolchain: stable
           override: true
 
       - name: Install Cross
         run: cargo install cross
 
       - name: Build Release
-        run: cross build --target ${{ matrix.target }} --release
+        run: cross build --target x86_64-unknown-linux-musl --release
 
       - name: Archive
         id: archive
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
-          TARGET=${{ matrix.target }}
-          if [[ $TARGET == *"windows"* ]]; then
-            mv target/$TARGET/release/ezkl_lib.exe ezkl_lib-$VERSION-$TARGET.exe
-            7z a ezkl_lib-$VERSION-$TARGET.zip ezkl_lib-$VERSION-$TARGET.exe
-            echo "::set-output name=path::$(pwd)/ezkl_lib-$VERSION-$TARGET.zip"
-          else
-            mv target/$TARGET/release/ezkl_lib ezkl_lib-$VERSION-$TARGET
-            tar czvf ezkl_lib-$VERSION-$TARGET.tar.gz ezkl_lib-$VERSION-$TARGET
-            echo "::set-output name=path::$(pwd)/ezkl_lib-$VERSION-$TARGET.tar.gz"
-          fi
+          mv target/x86_64-unknown-linux-musl/release/ezkl_lib ezkl_lib-$VERSION-x86_64-unknown-linux-musl
+          tar czvf ezkl_lib-$VERSION-x86_64-unknown-linux-musl.tar.gz ezkl_lib-$VERSION-x86_64-unknown-linux-musl
+          echo "::set-output name=path::$(pwd)/ezkl_lib-$VERSION-x86_64-unknown-linux-musl.tar.gz"
+
+      - name: Create Release
+        run: |
+          gh release create $VERSION --title "Release $VERSION" --notes "Release $VERSION"
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Upload Release Asset
+        run: |
+          gh release upload $VERSION ${{ steps.archive.outputs.path }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          target: x86_64-pc-windows-msvc
+          toolchain: stable
+          override: true
+
+      - name: Build Release
+        run: cargo build --target x86_64-pc-windows-msvc --release
+
+      - name: Archive
+        id: archive
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          mv target/x86_64-pc-windows-msvc/release/ezkl_lib.exe ezkl_lib-$VERSION-x86_64-pc-windows-msvc.exe
+          7z a ezkl_lib-$VERSION-x86_64-pc-windows-msvc.zip ezkl_lib-$VERSION-x86_64-pc-windows-msvc.exe
+          echo "::set-output name=path::$(pwd)/ezkl_lib-$VERSION-x86_64-pc-windows-msvc.zip"
+
+      - name: Create Release
+        run: |
+          gh release create $VERSION --title "Release $VERSION" --notes "Release $VERSION"
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Upload Release Asset
+        run: |
+          gh release upload $VERSION ${{ steps.archive.outputs.path }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          target: x86_64-apple-darwin
+          toolchain: stable
+          override: true
+
+      - name: Build Release
+        run: cargo build --target x86_64-apple-darwin --release
+
+      - name: Archive
+        id: archive
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          mv target/x86_64-apple-darwin/release/ezkl_lib ezkl_lib-$VERSION-x86_64-apple-darwin
+          tar czvf ezkl_lib-$VERSION-x86_64-apple-darwin.tar.gz ezkl_lib-$VERSION-x86_64-apple-darwin
+          echo "::set-output name=path::$(pwd)/ezkl_lib-$VERSION-x86_64-apple-darwin.tar.gz"
 
       - name: Create Release
         run: |
