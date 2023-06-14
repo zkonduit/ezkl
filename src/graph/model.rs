@@ -2,7 +2,7 @@ use super::node::*;
 use super::scale_to_multiplier;
 use super::vars::*;
 use super::GraphError;
-use super::GraphParams;
+use super::GraphSettings;
 use crate::circuit::hybrid::HybridOp;
 
 use crate::circuit::Input;
@@ -224,7 +224,7 @@ impl Model {
         &self,
         run_args: RunArgs,
         check_mode: CheckMode,
-    ) -> Result<GraphParams, Box<dyn Error>> {
+    ) -> Result<GraphSettings, Box<dyn Error>> {
         let instance_shapes = self.instance_shapes();
         // this is the total number of variables we will need to allocate
         // for the circuit
@@ -263,7 +263,7 @@ impl Model {
         let batch_size = self.graph.input_shapes()[0][0];
         assert!(self.graph.input_shapes().iter().all(|x| x[0] == batch_size));
 
-        Ok(GraphParams {
+        Ok(GraphSettings {
             run_args,
             model_instance_shapes: instance_shapes,
             num_hashes: 0,
@@ -532,7 +532,7 @@ impl Model {
 
     /// Creates a `Model` from parsed run_args
     /// # Arguments
-    /// * `params` - A [GraphParams] struct holding parsed CLI arguments.
+    /// * `params` - A [GraphSettings] struct holding parsed CLI arguments.
     pub fn from_run_args(
         run_args: &RunArgs,
         model: &std::path::PathBuf,
