@@ -90,20 +90,22 @@ pub enum GraphError {
 
 const ASSUMED_BLINDING_FACTORS: usize = 6;
 
+type Decimals = u8;
 /// Defines the view only calls to accounts to fetch the on-chain input data.
 /// This data will be included as part of the first elements in the publicInputs
 /// for the sol evm verifier and will be  verifyWithDataAttestation.sol
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
+
 pub struct OnChainData {
-    /// byte strings representing the ABI encoded function calls to 
+    /// A vector of length 2 types, where index 0 of tuples
+    /// are the byte strings representing the ABI encoded function calls to 
     /// read the data from the address. This call must return a single
     /// elementary type (https://docs.soliditylang.org/en/v0.8.20/abi-spec.html#types).
+    /// The second index of the tuple is the number of decimals for f32 conversion.
     /// We don't support dynamic types currently.
-    pub call_data: Vec<String>,
+    pub call_data: Vec<(String, Decimals)>,
     /// Address of the contract to read the data from.
     pub address: String,
-    /// The decimals of the on-chain data.
-    pub decimals: u8
 }
 /// The input tensor data and shape, and output data for the computational graph (model) as floats.
 /// For example, the input might be the image data for a neural network, and the output class scores.

@@ -688,6 +688,7 @@ pub(crate) fn create_evm_verifier(
 
         let output = fix_verifier_sol(
             sol_code_path.as_ref().unwrap().clone(),
+            None,
             None
         )?;
 
@@ -719,7 +720,7 @@ fn create_evm_data_attestation_verifier(
     let num_instance = model_circuit_params.total_instances();
 
     let vk =
-        load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, model_circuit_params)?;
+        load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, model_circuit_params.clone())?;
     trace!("params computed");
 
     let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
@@ -732,6 +733,7 @@ fn create_evm_data_attestation_verifier(
     if let Some(data) = data {
         let output = fix_verifier_sol(
             sol_code_path.clone(),
+            Some(model_circuit_params.run_args.scale),
             Some(data)
         )?;
         
@@ -822,6 +824,7 @@ pub(crate) fn create_evm_aggregate_verifier(
 
         let output = fix_verifier_sol(
             sol_code_path.as_ref().unwrap().clone(),
+            None,
             None
         )?;
 
@@ -873,7 +876,7 @@ pub(crate) async fn prove(
     let circuit_params = GraphParams::load(&circuit_params_path)?;
     let mut circuit = GraphCircuit::from_params(&circuit_params, &model_path, check_mode)?;
     if circuit.params.run_args.on_chain_inputs {
-        data = read_on_chain_inputs(rpc_url.as_deref(), &mut data).await?;
+        data = read_on_chain_inputs(rpc_url.as_deref(), circuit.params.run_args.scale, &mut data).await?;
     }
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 

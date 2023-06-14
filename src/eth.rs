@@ -177,7 +177,7 @@ pub async fn verify_proof_with_data_attestation(
             let contract_address_bytes = hex::decode(val.address.clone())?;
             let contract_address = H160::from_slice(&contract_address_bytes);
             contract_addresses.push(contract_address);
-            for call in val.call_data {
+            for (call, _) in val.call_data {
                 let call_data_bytes = hex::decode(call)?;
                 call_data.push(call_data_bytes);
             }
@@ -238,9 +238,10 @@ pub fn get_provider(rpc_url: &str) -> Result<Provider<Http>, Box<dyn Error>> {
     debug!("{:#?}", provider);
     Ok(provider)
 }
-/// Reads on-chain inputs, casts them as U256, converts them to f32 according to the decimals field in the data and returns them as a vector
+/// Reads on-chain inputs, casts them as U256, then quantizes them to the specified scale.
 pub async fn read_on_chain_inputs (
     rpc_url: Option<&str>,
+    _scale: u32,
     data: &mut GraphInput
 ) -> Result<GraphInput, Box<dyn Error>> {
     let (anvil, client) = setup_eth_backend(rpc_url).await?;
@@ -250,8 +251,8 @@ pub async fn read_on_chain_inputs (
             // Construct the address
             let contract_address_bytes = hex::decode(on_chain_data.address.clone())?;
             let contract_address = H160::from_slice(&contract_address_bytes);
-            // TODO: Set up anvil cllient here to make reading on-chain data easier.
-            for call_data in &on_chain_data.call_data {
+
+            for (call_data, _decimals) in &on_chain_data.call_data {
                 let call_data_bytes = hex::decode(call_data.clone())?;
                 let tx: TypedTransaction = TransactionRequest::default()
                     .to(contract_address)
@@ -266,15 +267,34 @@ pub async fn read_on_chain_inputs (
                 debug!("return data {:#?}", result);
 
                 // Convert bytes to U256 to f32 according to decimals
-                let response = U256::from_big_endian(&result[..]);
-                debug!("response {:#?}", response);
+                
+                // TODO: Do all of the quantization in the EVM and return the result into data.input_data.
+                // This will require compiling new contract that quantizes this calldata
+                // into a format that EZKL can ingest. Will create this contract with the quantize_data
+                // function that the DataAttestationVerifier.sol has, create an revm instance, 
+                // call to it and read from the output. 
 
-                // Convert U256 to f32 according to decimals
-                let converted = response.low_u128() as f32 / 10f32.powi(on_chain_data.decimals as i32);
-                debug!("rconverted {:#?}", converted);
+                let response = U256::from_big_endian(&result[..]);
+                // debug!("response {:#?}", response);
+
+                // let decimals = 10f32.powi(on_chain_data.decimals as i32) / scale as f32;
+
+                // response.
+
+                // let str_value = decimals.to_string();
+
+                // //let converted = response.low_u128() as f32 / 10f32.powi(on_chain_data.decimals as i32);
+
+
+
+                // let value = U256::from_dec_str(&str_value)?.checked_div(other);
+
+                // // Convert U256 to f32 according to decimals
+                //let converted = response.checked_div(U256::from_dec_str(&value)?)? as f32;
+                debug!("rconverted {:#?}", response);
 
                 // Store the result
-                data.input_data[0].push(converted);
+                data.input_data[0].push(0.0);
             }
         }
     }
@@ -338,6 +358,7 @@ use std::io::{BufRead, BufReader};
 /// Can optionally attest to on-chain inputs
 pub fn fix_verifier_sol(
     input_file: PathBuf, 
+    scale: Option<u32>,
     data: Option<Vec<OnChainData>>
 ) -> Result<String, Box<dyn Error>> {
     let file = File::open(input_file.clone())?;
@@ -607,6 +628,8 @@ pub fn fix_verifier_sol(
                     uint callCount;
                 }}
                 AccountCall[{}] public accountCalls;
+
+                uint constant public SCALE = 2<<{};
             
                 uint public totalCalls;
             
@@ -615,7 +638,7 @@ pub fn fix_verifier_sol(
                  * @param _contractAddresses - The calls to all the contracts EZKL reads storage from.
                  * @param _callData - The abi encoded function calls to make to the `contractAddress` that EZKL reads storage from.
                  */
-                constructor(address[] memory _contractAddresses, bytes[][] memory _callData) {{
+                constructor(address[] memory _contractAddresses, bytes[][] memory _callData, uint256[] memory _decimals) {{
                     require(_contractAddresses.length == _callData.length && accountCalls.length == _contractAddresses.length, "Invalid input length");
                     // fill in the accountCalls storage array
                     for(uint256 i = 0; i < _contractAddresses.length; i++) {{
@@ -624,10 +647,109 @@ pub fn fix_verifier_sol(
                         accountCall.callCount = _callData[i].length;
                         for(uint256 j = 0; j < _callData[i].length; j++){{
                             accountCall.callData[j] = _callData[i][j];
+                            accountCall.decimals[j] = 10**_decimals[totalCalls + j];
                         }}
                         // count the total number of storage reads across all of the accounts
                         totalCalls += _callData[i].length;
                     }}
+                }}
+            
+                /// @dev Credit to Remco Bloemen under MIT license https://xn--2-umb.com/21/muldiv
+                function mulDiv(
+                    uint256 a,
+                    uint256 b,
+                    uint256 denominator
+                ) internal pure returns (uint256 result) {{
+                    // 512-bit multiply [prod1 prod0] = a * b
+                    // Compute the product mod 2**256 and mod 2**256 - 1
+                    // then use the Chinese Remainder Theorem to reconstruct
+                    // the 512 bit result. The result is stored in two 256
+                    // variables such that product = prod1 * 2**256 + prod0
+                    uint256 prod0; // Least significant 256 bits of the product
+                    uint256 prod1; // Most significant 256 bits of the product
+                    assembly {{
+                        let mm := mulmod(a, b, not(0))
+                        prod0 := mul(a, b)
+                        prod1 := sub(sub(mm, prod0), lt(mm, prod0))
+                    }}
+            
+                    // Handle non-overflow cases, 256 by 256 division
+                    if (prod1 == 0) {{
+                        require(denominator > 0);
+                        assembly {{
+                            result := div(prod0, denominator)
+                        }}
+                        return result;
+                    }}
+            
+                    // Make sure the result is less than 2**256.
+                    // Also prevents denominator == 0
+                    require(denominator > prod1);
+            
+                    ///////////////////////////////////////////////
+                    // 512 by 256 division.
+                    ///////////////////////////////////////////////
+            
+                    // Make division exact by subtracting the remainder from [prod1 prod0]
+                    // Compute remainder using mulmod
+                    uint256 remainder;
+                    assembly {{
+                        remainder := mulmod(a, b, denominator)
+                    }}
+                    // Subtract 256 bit number from 512 bit number
+                    assembly {{
+                        prod1 := sub(prod1, gt(remainder, prod0))
+                        prod0 := sub(prod0, remainder)
+                    }}
+            
+                    // Factor powers of two out of denominator
+                    // Compute largest power of two divisor of denominator.
+                    // Always >= 1.
+                    uint256 twos = -denominator & denominator;
+                    // Divide denominator by power of two
+                    assembly {{
+                        denominator := div(denominator, twos)
+                    }}
+            
+                    // Divide [prod1 prod0] by the factors of two
+                    assembly {{
+                        prod0 := div(prod0, twos)
+                    }}
+                    // Shift in bits from prod1 into prod0. For this we need
+                    // to flip `twos` such that it is 2**256 / twos.
+                    // If twos is zero, then it becomes one
+                    assembly {{
+                        twos := add(div(sub(0, twos), twos), 1)
+                    }}
+                    prod0 |= prod1 * twos;
+            
+                    // Invert denominator mod 2**256
+                    // Now that denominator is an odd number, it has an inverse
+                    // modulo 2**256 such that denominator * inv = 1 mod 2**256.
+                    // Compute the inverse by starting with a seed that is correct
+                    // correct for four bits. That is, denominator * inv = 1 mod 2**4
+                    uint256 inv = (3 * denominator) ^ 2;
+                    // Now use Newton-Raphson iteration to improve the precision.
+                    // Thanks to Hensel's lifting lemma, this also works in modular
+                    // arithmetic, doubling the correct bits in each step.
+                    inv *= 2 - denominator * inv; // inverse mod 2**8
+                    inv *= 2 - denominator * inv; // inverse mod 2**16
+                    inv *= 2 - denominator * inv; // inverse mod 2**32
+                    inv *= 2 - denominator * inv; // inverse mod 2**64
+                    inv *= 2 - denominator * inv; // inverse mod 2**128
+                    inv *= 2 - denominator * inv; // inverse mod 2**256
+            
+                    // Because the division is now exact we can divide by multiplying
+                    // with the modular inverse of denominator. This will give us the
+                    // correct result modulo 2**256. Since the precoditions guarantee
+                    // that the outcome is less than 2**256, this is the final result.
+                    // We don't need to compute the high bits of the result and prod1
+                    // is no longer required.
+                    result = prod0 * inv;
+                    return result;
+                }}
+                function quantize_data(uint256 data, uint256 decimals) internal pure returns (uint256) {{
+                    mulDiv(data, decimals, SCALE);
                 }}
             
                 function staticCall (address target, bytes memory data) internal view returns (bytes memory) {{
@@ -648,10 +770,12 @@ pub fn fix_verifier_sol(
                     require(pubInputs.length >= totalCalls, "Invalid public inputs length");
                     uint256 _accountCount = accountCalls.length;
                     uint counter = 0; 
+                    uint256[] memory data = new uint256[](totalCalls);
                     for (uint8 i = 0; i < _accountCount; ++i) {{
                         address account = accountCalls[i].contractAddress;
                         for (uint8 j = 0; j < accountCalls[i].callCount; j++) {{
                             bytes memory returnData = staticCall(account, accountCalls[i].callData[j]);
+                            uint256 quantize_data = quantize_data(abi.decode(returnData, (uint256)), accountCalls[i].decimals[j]);
                             require(abi.decode(returnData, (uint256)) == pubInputs[counter], "Public input does not match");
                             counter++;
                         }}
@@ -667,6 +791,7 @@ pub fn fix_verifier_sol(
                     attestData(pubInputs);
                     assembly {{ 
                 "#,
+            scale.unwrap(),
             data.len(),
             max_transcript_addr
         )
