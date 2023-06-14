@@ -1,5 +1,4 @@
 import ezkl_lib
-from ezkl_lib import PyCalArgs
 import os
 import pytest
 import json
@@ -20,7 +19,7 @@ examples_path = os.path.abspath(
     )
 )
 
-params_path = os.path.join(folder_path, 'kzg_test.params')
+srs_path = os.path.join(folder_path, 'kzg_test.params')
 params_k20_path = os.path.join(folder_path, 'kzg_test_k20.params')
 
 
@@ -57,8 +56,8 @@ def test_gen_srs():
     test for gen_srs() with 17 logrows and 20 logrows.
     You may want to comment this test as it takes a long time to run
     """
-    ezkl_lib.gen_srs(params_path, 17)
-    assert os.path.isfile(params_path)
+    ezkl_lib.gen_srs(srs_path, 17)
+    assert os.path.isfile(srs_path)
 
     ezkl_lib.gen_srs(params_k20_path, 20)
     assert os.path.isfile(params_k20_path)
@@ -82,18 +81,17 @@ def test_calibrate():
     )
     output_path = os.path.join(
         folder_path,
-        'circuit.params'
+        'settings.json'
     )
 
-    cal_args = PyCalArgs()
-    cal_args.data = data_path
     # TODO: Dictionary outputs
-    res = ezkl_lib.gen_circuit_params(
-        model_path, output_path,
-        py_cal_args=cal_args)
-
-    assert os.path.isfile(output_path)
+    res = ezkl_lib.gen_settings(model_path, output_path)
     assert res == True
+
+    res = ezkl_lib.calibrate_settings(
+        data_path, model_path, output_path, "resources")
+    assert res == True
+    assert os.path.isfile(output_path)
 
 
 def test_forward():
@@ -116,14 +114,14 @@ def test_forward():
         folder_path,
         'input_forward.json'
     )
-    circuit_params_path = os.path.join(
+    settings_path = os.path.join(
         folder_path,
-        'circuit.params'
+        'settings.json'
     )
 
     # TODO: Dictionary outputs
     res = ezkl_lib.forward(data_path, model_path,
-                           output_path, circuit_params_path=circuit_params_path)
+                           output_path, settings_path=settings_path)
     # assert res == {"input_data":[[0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1]],"input_shapes":[[1,5,5]],"output_data":[[0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625,0.9140625]]}
 
     with open(output_path, "r") as f:
@@ -149,10 +147,10 @@ def test_mock():
         'network.onnx'
     )
 
-    circuit_params_path = os.path.join(folder_path, 'circuit.params')
+    settings_path = os.path.join(folder_path, 'settings.json')
 
     res = ezkl_lib.mock(data_path, model_path,
-                        circuit_params_path)
+                        settings_path)
     assert res == True
 
 
@@ -175,19 +173,19 @@ def test_setup():
 
     pk_path = os.path.join(folder_path, 'test.pk')
     vk_path = os.path.join(folder_path, 'test.vk')
-    circuit_params_path = os.path.join(folder_path, 'circuit.params')
+    settings_path = os.path.join(folder_path, 'settings.json')
 
     res = ezkl_lib.setup(
         model_path,
         vk_path,
         pk_path,
-        params_path,
-        circuit_params_path,
+        srs_path,
+        settings_path,
     )
     assert res == True
     assert os.path.isfile(vk_path)
     assert os.path.isfile(pk_path)
-    assert os.path.isfile(circuit_params_path)
+    assert os.path.isfile(settings_path)
 
 
 def test_setup_evm():
@@ -209,19 +207,19 @@ def test_setup_evm():
 
     pk_path = os.path.join(folder_path, 'test_evm.pk')
     vk_path = os.path.join(folder_path, 'test_evm.vk')
-    circuit_params_path = os.path.join(folder_path, 'circuit.params')
+    settings_path = os.path.join(folder_path, 'settings.json')
 
     res = ezkl_lib.setup(
         model_path,
         vk_path,
         pk_path,
-        params_path,
-        circuit_params_path,
+        srs_path,
+        settings_path,
     )
     assert res == True
     assert os.path.isfile(vk_path)
     assert os.path.isfile(pk_path)
-    assert os.path.isfile(circuit_params_path)
+    assert os.path.isfile(settings_path)
 
 
 def test_prove_and_verify():
@@ -243,24 +241,24 @@ def test_prove_and_verify():
 
     pk_path = os.path.join(folder_path, 'test.pk')
     proof_path = os.path.join(folder_path, 'test.pf')
-    circuit_params_path = os.path.join(folder_path, 'circuit.params')
+    settings_path = os.path.join(folder_path, 'settings.json')
 
     res = ezkl_lib.prove(
         data_path,
         model_path,
         pk_path,
         proof_path,
-        params_path,
+        srs_path,
         "poseidon",
         "single",
-        circuit_params_path,
+        settings_path,
     )
     assert res == True
     assert os.path.isfile(proof_path)
 
     vk_path = os.path.join(folder_path, 'test.vk')
-    res = ezkl_lib.verify(proof_path, circuit_params_path,
-                          vk_path, params_path)
+    res = ezkl_lib.verify(proof_path, settings_path,
+                          vk_path, srs_path)
     assert res == True
     assert os.path.isfile(vk_path)
 
@@ -284,17 +282,17 @@ def test_prove_evm():
 
     pk_path = os.path.join(folder_path, 'test_evm.pk')
     proof_path = os.path.join(folder_path, 'test_evm.pf')
-    circuit_params_path = os.path.join(folder_path, 'circuit.params')
+    settings_path = os.path.join(folder_path, 'settings.json')
 
     res = ezkl_lib.prove(
         data_path,
         model_path,
         pk_path,
         proof_path,
-        params_path,
+        srs_path,
         "evm",
         "single",
-        circuit_params_path,
+        settings_path,
     )
     assert res == True
     assert os.path.isfile(proof_path)
@@ -310,14 +308,14 @@ def test_create_evm_verifier():
     In order to run this test you will need to install solc in your environment
     """
     vk_path = os.path.join(folder_path, 'test_evm.vk')
-    circuit_params_path = os.path.join(folder_path, 'circuit.params')
+    settings_path = os.path.join(folder_path, 'settings.json')
     deployment_code_path = os.path.join(folder_path, 'deploy.code')
     sol_code_path = os.path.join(folder_path, 'test.sol')
 
     res = ezkl_lib.create_evm_verifier(
         vk_path,
-        params_path,
-        circuit_params_path,
+        srs_path,
+        settings_path,
         deployment_code_path,
         sol_code_path
     )
@@ -368,23 +366,24 @@ def test_aggregate_and_verify_aggr():
 
     pk_path = os.path.join(folder_path, '1l_relu.pk')
     vk_path = os.path.join(folder_path, '1l_relu.vk')
-    circuit_params_path = os.path.join(folder_path, '1l_relu_circuit.params')
+    settings_path = os.path.join(
+        folder_path, '1l_relu_settings.json')
 
-    cal_args = PyCalArgs()
-    cal_args.data = data_path
+   # TODO: Dictionary outputs
+    res = ezkl_lib.gen_settings(model_path, settings_path)
+    assert res == True
 
-    ezkl_lib.gen_circuit_params(
-        model_path,
-        circuit_params_path,
-        py_cal_args=cal_args
-    )
+    res = ezkl_lib.calibrate_settings(
+        data_path, model_path, settings_path, "resources")
+    assert res == True
+    assert os.path.isfile(settings_path)
 
     ezkl_lib.setup(
         model_path,
         vk_path,
         pk_path,
-        params_path,
-        circuit_params_path,
+        srs_path,
+        settings_path,
     )
 
     proof_path = os.path.join(folder_path, '1l_relu.pf')
@@ -394,10 +393,10 @@ def test_aggregate_and_verify_aggr():
         model_path,
         pk_path,
         proof_path,
-        params_path,
+        srs_path,
         "poseidon",
         "accum",
-        circuit_params_path,
+        settings_path,
     )
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')
@@ -406,7 +405,7 @@ def test_aggregate_and_verify_aggr():
     res = ezkl_lib.aggregate(
         aggregate_proof_path,
         [proof_path],
-        [circuit_params_path],
+        [settings_path],
         [vk_path],
         aggregate_vk_path,
         params_k20_path,
@@ -448,23 +447,27 @@ def test_evm_aggregate_and_verify_aggr():
 
     pk_path = os.path.join(folder_path, '1l_relu.pk')
     vk_path = os.path.join(folder_path, '1l_relu.vk')
-    circuit_params_path = os.path.join(folder_path, '1l_relu_circuit.params')
+    settings_path = os.path.join(
+        folder_path, '1l_relu_settings.json')
 
-    cal_args = PyCalArgs()
-    cal_args.data = data_path
-
-    ezkl_lib.gen_circuit_params(
+    ezkl_lib.gen_settings(
         model_path,
-        circuit_params_path,
-        py_cal_args=cal_args
+        settings_path,
+    )
+
+    ezkl_lib.calibrate_settings(
+        data_path,
+        model_path,
+        settings_path,
+        "resources",
     )
 
     ezkl_lib.setup(
         model_path,
         vk_path,
         pk_path,
-        params_path,
-        circuit_params_path,
+        srs_path,
+        settings_path,
     )
 
     proof_path = os.path.join(folder_path, '1l_relu.pf')
@@ -474,10 +477,10 @@ def test_evm_aggregate_and_verify_aggr():
         model_path,
         pk_path,
         proof_path,
-        params_path,
+        srs_path,
         "poseidon",
         "accum",
-        circuit_params_path,
+        settings_path,
     )
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')
@@ -486,7 +489,7 @@ def test_evm_aggregate_and_verify_aggr():
     res = ezkl_lib.aggregate(
         aggregate_proof_path,
         [proof_path],
-        [circuit_params_path],
+        [settings_path],
         [vk_path],
         aggregate_vk_path,
         params_k20_path,
