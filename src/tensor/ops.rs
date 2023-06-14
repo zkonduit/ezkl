@@ -1863,7 +1863,24 @@ pub mod nonlinearities {
     /// ).unwrap();
     /// let result = sigmoid(&x, 1, 1);
     /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 1, 1, 1]), &[2, 3]).unwrap();
+    ///
     /// assert_eq!(result, expected);
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[65536]),
+    ///   &[1],
+    /// ).unwrap();
+    /// let result = sigmoid(&x, 65536, 256);
+    /// let expected = Tensor::<i128>::new(Some(&[187]), &[1]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// /// assert_eq!(result, expected);
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[256]),
+    ///   &[1],
+    /// ).unwrap();
+    /// let result = sigmoid(&x, 256, 256);
+    /// let expected = Tensor::<i128>::new(Some(&[187]), &[1]).unwrap();
+    ///
     /// ```
     pub fn sigmoid(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
         // calculate value of output

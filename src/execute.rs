@@ -383,6 +383,8 @@ pub(crate) fn forward(
         }
     };
 
+    info!("set scale to {}", circuit_params.run_args.scale);
+
     let mut circuit = GraphCircuit::from_params(&circuit_params, &model_path, CheckMode::UNSAFE)?;
     let mut data = GraphInput::from_path(data)?;
     circuit.load_inputs(&data);
@@ -442,7 +444,7 @@ pub(crate) fn gen_circuit_params(
 pub(crate) fn init_spinner() -> ProgressBar {
     let pb = indicatif::ProgressBar::new_spinner();
     pb.set_draw_target(indicatif::ProgressDrawTarget::stdout());
-    pb.enable_steady_tick(Duration::from_millis(200));
+    pb.enable_steady_tick(Duration::from_millis(100));
     pb.set_style(
         ProgressStyle::with_template("{spinner:.blue} {msg}")
             .unwrap()
@@ -468,51 +470,58 @@ pub(crate) fn calibrate(
     params_output: PathBuf,
     target: CalibrationTarget,
 ) -> Result<(), Box<dyn Error>> {
+    use log::debug;
+
     let data = GraphInput::from_path(data)?;
     let pb = init_spinner();
     pb.set_message("Calibrating...");
-    let found_params = (4..12).map(|scale| {
-        #[cfg(not(target_arch = "wasm32"))]
-        let _r = Gag::stdout().unwrap();
+    let found_params: Vec<GraphParams> = (4..12)
+        .map(|scale| {
+            pb.set_message(format!("Calibrating with scale {}", scale));
+            std::thread::sleep(Duration::from_millis(100));
 
-        let res: Result<Vec<GraphParams>, &str> = data
-            .split_into_batches(run_args.batch_size)
-            .unwrap()
-            .par_iter()
-            .map(|chunk| {
-                let run_args = RunArgs { scale, ..run_args };
-                let mut circuit =
-                    GraphCircuit::from_run_args(&run_args, &model_path, CheckMode::SAFE)
-                        .map_err(|_| "failed to create circuit from run args")?;
-                circuit.load_inputs(chunk);
+            let res: Result<Vec<GraphParams>, &str> = data
+                .split_into_batches(run_args.batch_size)
+                .unwrap()
+                .par_iter()
+                .map(|chunk| {
+                    let _r = Gag::stdout().unwrap();
+                    let run_args = RunArgs { scale, ..run_args };
+                    let mut circuit =
+                        GraphCircuit::from_run_args(&run_args, &model_path, CheckMode::SAFE)
+                            .map_err(|_| "failed to create circuit from run args")?;
+                    circuit.load_inputs(chunk);
 
-                loop {
-                    // ensures we have converges
-                    let params_before = circuit.params.clone();
-                    circuit.calibrate().map_err(|_| "failed to calibrate")?;
-                    let params_after = circuit.params.clone();
-                    if params_before == params_after {
-                        break;
+                    loop {
+                        // ensures we have converges
+                        let params_before = circuit.params.clone();
+                        circuit.calibrate().map_err(|_| "failed to calibrate")?;
+                        let params_after = circuit.params.clone();
+                        if params_before == params_after {
+                            break;
+                        }
                     }
-                }
+                    std::mem::drop(_r);
+                    Ok(circuit.params.clone())
+                })
+                .collect();
 
-                Ok(circuit.params.clone())
-            })
-            .collect();
-        std::mem::drop(_r);
-        if let Ok(res) = res {
-            // pick the one with the largest logrows
-            Some(res.into_iter().max_by_key(|p| p.run_args.logrows).unwrap())
-        } else {
-            None
-        }
-    });
-    pb.finish_with_message("Done.");
+            if let Ok(res) = res {
+                // pick the one with the largest logrows
+                Some(res.into_iter().max_by_key(|p| p.run_args.logrows).unwrap())
+            } else {
+                None
+            }
+        })
+        .flatten()
+        .collect();
+    pb.finish_with_message("Calibration Done.");
 
-    let found_params: Vec<GraphParams> = found_params.flatten().collect();
     if found_params.is_empty() {
         return Err("calibration failed, could not find any suitable parameters given the calibration dataset".into());
     }
+
+    debug!("Found {} sets of parameters", found_params.len());
 
     // now find the best params according to the target
     match target {
@@ -547,6 +556,8 @@ pub(crate) fn calibrate(
             best_params.save(&params_output)?;
         }
     }
+
+    debug!("Saved parameters.");
 
     Ok(())
 }

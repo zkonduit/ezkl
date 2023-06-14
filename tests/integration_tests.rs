@@ -1271,7 +1271,6 @@ mod native_tests {
             pf_arg.as_str(),
             "--deployment-code-path",
             code_arg.as_str(),
-            opt_arg.as_str(),
         ];
         if with_solidity {
             args.push("--sol-code-path");

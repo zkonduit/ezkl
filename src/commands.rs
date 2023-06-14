@@ -97,7 +97,7 @@ pub struct CalibrationArgs {
     /// The path to the .json calibration data file. If set will finetune the selected parameters to a calibration dataset.
     #[arg(long = "calibration-data")]
     pub data: Option<PathBuf>,
-    #[arg(long = "calibration-target")]
+    #[arg(long = "calibration-target", default_value = "resources")]
     /// Target for calibration.
     pub target: CalibrationTarget,
 }
@@ -267,20 +267,10 @@ pub enum Commands {
         #[arg(short = 'O', long)]
         output: PathBuf,
         /// Scale to use for quantization
-        #[arg(
-            short = 'S',
-            long,
-            default_value = "7",
-            conflicts_with = "circuit_params_path"
-        )]
+        #[arg(short = 'S', long, conflicts_with = "circuit_params_path")]
         scale: Option<u32>,
         /// The number of batches to split the input data into
-        #[arg(
-            short = 'B',
-            long,
-            default_value = "1",
-            conflicts_with = "circuit_params_path"
-        )]
+        #[arg(short = 'B', long, conflicts_with = "circuit_params_path")]
         batch_size: Option<usize>,
         /// optional circuit params path
         #[arg(long)]
