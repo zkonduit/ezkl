@@ -5,29 +5,7 @@ on:
       - '*'
 
 jobs:
-  create-release:
-    name: create-release
-    runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-      version: ${{ env.VERSION }}
-    steps:
-      - name: Determine version
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ env.VERSION }}
-          release_name: Release ${{ env.VERSION }}
-          draft: false
-          prerelease: false
-
   build-release:
-    needs: create-release
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -70,7 +48,7 @@ jobs:
       - name: Archive
         id: archive
         run: |
-          VERSION=${{ needs.create-release.outputs.version }}
+          VERSION=${GITHUB_REF#refs/tags/}
           TARGET=${{ matrix.target }}
           if [[ $TARGET == *"windows"* ]]; then
             mv target/$TARGET/release/ezkl_lib.exe ezkl_lib-$VERSION-$TARGET.exe
@@ -82,12 +60,14 @@ jobs:
             echo "::set-output name=path::$(pwd)/ezkl_lib-$VERSION-$TARGET.tar.gz"
           fi
 
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1.0.2
+      - name: Create Release
+        run: |
+          gh release create $VERSION --title "Release $VERSION" --notes "Release $VERSION"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.archive.outputs.path }}
-          asset_name: ${{ steps.archive.outputs.path }}
-          asset_content_type: application/octet-stream
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Asset
+        run: |
+          gh release upload $VERSION ${{ steps.archive.outputs.path }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
