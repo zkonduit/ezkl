@@ -9,7 +9,6 @@ mod native_tests {
     use std::process::Command;
     use std::sync::Once;
     use tempdir::TempDir;
-    use tract_onnx::tract_core::ops::matmul::pack;
     static COMPILE: Once = Once::new();
     static KZG17: Once = Once::new();
     static KZG23: Once = Once::new();
