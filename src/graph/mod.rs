@@ -201,6 +201,10 @@ impl GraphInput {
     }
 }
 
+fn fp_to_string(fp: &Fp) -> String {
+    format!("{:#?}", fp)
+}
+
 #[cfg(feature = "python-bindings")]
 impl ToPyObject for GraphInput {
     fn to_object(&self, py: Python) -> PyObject {
@@ -208,11 +212,21 @@ impl ToPyObject for GraphInput {
         let dict = PyDict::new(py);
         let input_data_mut = &self.input_data;
         let output_data_mut = &self.output_data;
+
         dict.set_item("input_data", truncate_nested_vector(&input_data_mut))
             .unwrap();
         dict.set_item("output_data", truncate_nested_vector(&output_data_mut))
             .unwrap();
 
+        if let Some(input_hashes) = &self.input_hashes {
+            let input_hashes_str: Vec<String> = input_hashes.iter().map(fp_to_string).collect();
+            dict.set_item("input_hashes", input_hashes_str).unwrap();
+        }
+
+        if let Some(output_hashes) = &self.output_hashes {
+            let output_hashes_str: Vec<String> = output_hashes.iter().map(fp_to_string).collect();
+            dict.set_item("output_hashes", output_hashes_str).unwrap();
+        }
         dict.to_object(py)
     }
 }
