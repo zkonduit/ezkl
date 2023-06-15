@@ -1,8 +1,9 @@
 use crate::graph::{CallsToAccount, GraphInput};
-use crate::pfsys::evm::{EvmVerificationError, DeploymentCode};
+use crate::pfsys::evm::{DeploymentCode, EvmVerificationError};
 use crate::pfsys::Snark;
-use ethers::contract::abigen;
 use ethers::abi::Abi;
+use ethers::abi::Contract;
+use ethers::contract::abigen;
 use ethers::contract::ContractFactory;
 use ethers::core::k256::ecdsa::SigningKey;
 use ethers::middleware::SignerMiddleware;
@@ -13,6 +14,8 @@ use ethers::providers::{Http, Provider};
 use ethers::signers::Signer;
 use ethers::types::H160;
 use ethers::types::TransactionRequest;
+use ethers::solc::{CompilerInput, Solc};
+use ethers::types::Bytes;
 use ethers::types::U256;
 use ethers::types::transaction::eip2718::TypedTransaction;
 #[cfg(not(target_arch = "wasm32"))]
@@ -20,7 +23,6 @@ use ethers::{
     prelude::{LocalWallet, Wallet},
     utils::{Anvil, AnvilInstance},
 };
-use ethers_solc::{CompilerInput, Solc};
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
 use log::{debug, info};
@@ -30,8 +32,6 @@ use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
 use std::{convert::TryFrom, sync::Arc};
-use ethers::abi::Contract;
-use ethers::types::Bytes;
 
 /// A local ethers-rs based client
 pub type EthersClient = Arc<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>;
@@ -74,9 +74,7 @@ pub async fn verify_proof_via_solidity(
     proof: Snark<Fr, G1Affine>,
     sol_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
-    runs: Option<usize>,
 ) -> Result<bool, Box<dyn Error>> {
-
     let (anvil, client) = setup_eth_backend(None).await?;
 
     // sol code supercedes deployment code
@@ -86,7 +84,6 @@ pub async fn verify_proof_via_solidity(
                 path.clone(),
                 "Verifier",
                 client.clone(),
-                runs
             ).unwrap()
         } 
         None => match sol_bytecode_path {
@@ -157,7 +154,6 @@ pub async fn verify_proof_with_data_attestation(
     proof: Snark<Fr, G1Affine>,
     sol_code_path: PathBuf,
     data: PathBuf,
-    runs: Option<usize>,
 ) -> Result<bool, Box<dyn Error>> {
 
     let (anvil, client) = setup_eth_backend(None).await?;
@@ -166,8 +162,7 @@ pub async fn verify_proof_with_data_attestation(
     let factory = get_sol_contract_factory(
         sol_code_path,
         "DataAttestationVerifier",
-        client.clone(),
-        runs
+        client.clone()
     ).unwrap();
 
     // TODO: Handle the floating point conversion on the EVM side. For now, we just convert to u256
@@ -280,7 +275,6 @@ pub async fn read_on_chain_inputs (
             PathBuf::from("./QuantizeData.sol"),
             "DataAttestationVerifier",
             client.clone(),
-            None
         ).unwrap();
         
         
@@ -323,11 +317,10 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
     sol_code_path: PathBuf,
     contract_name: &str,
     client: Arc<M>,
-    runs: Option<usize>,
 ) -> Result<ContractFactory<M>, Box<dyn Error>> {
     const MAX_RUNTIME_BYTECODE_SIZE: usize = 24577;
     // call get_contract_artificacts to get the abi and bytecode
-    let (abi, bytecode, runtime_bytecode) = get_contract_artifacts(sol_code_path, contract_name, runs)?;
+    let (abi, bytecode, runtime_bytecode) = get_contract_artifacts(sol_code_path, contract_name, None)?;
     let size = runtime_bytecode.len();
     debug!("runtime bytecode size: {:#?}", size);
     if size > MAX_RUNTIME_BYTECODE_SIZE {
@@ -335,7 +328,7 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
         panic!(
             "Solidity runtime bytecode size is: {:#?}, 
             which exceeds 24577 bytes limit.
-            Try setting '--optimzer-runs 1' 
+            Try setting '--optimzer-runs 1' when generating the verifier
             so SOLC can optimize for the smallest deployment",
             size
         );

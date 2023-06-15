@@ -34,6 +34,8 @@ pub struct PoseidonConfig<const WIDTH: usize, const RATE: usize> {
     pub pow5_config: Pow5Config<Fp, WIDTH, RATE>,
 }
 
+type InputAssignments = (Vec<AssignedCell<Fp, Fp>>, AssignedCell<Fp, Fp>);
+
 /// PoseidonChip is a wrapper around the Pow5Chip that adds a set of advice columns to the gadget Chip to store the inputs of the hash
 #[derive(Debug, Clone)]
 pub struct PoseidonChip<
@@ -96,7 +98,7 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
         &self,
         layouter: &mut impl Layouter<Fp>,
         message: &ValTensor<Fp>,
-    ) -> Result<(Vec<AssignedCell<Fp, Fp>>, AssignedCell<Fp, Fp>), Error> {
+    ) -> Result<InputAssignments, Error> {
         layouter
             .assign_region(
                 || "load message",
