@@ -1,4 +1,4 @@
-use crate::graph::{OnChainData, GraphInput};
+use crate::graph::{CallsToAccount, GraphInput};
 use crate::pfsys::evm::{EvmVerificationError, DeploymentCode};
 use crate::pfsys::Snark;
 use ethers::contract::abigen;
@@ -66,6 +66,7 @@ pub async fn setup_eth_backend(rpc_url: Option<&str>) -> Result<(AnvilInstance, 
 
     Ok((anvil, client))
 }
+
 
 /// Verify a proof using a Solidity verifier contract
 #[cfg(not(target_arch = "wasm32"))]
@@ -173,7 +174,7 @@ pub async fn verify_proof_with_data_attestation(
     let (contract_addresses, call_data) = if let Some(data) = data {
         let mut contract_addresses = vec![];
         let mut call_data = vec![vec![]];
-        for val in data {
+        for val in data.0 {
             let contract_address_bytes = hex::decode(val.address.clone())?;
             let contract_address = H160::from_slice(&contract_address_bytes);
             contract_addresses.push(contract_address);
@@ -240,19 +241,22 @@ pub fn get_provider(rpc_url: &str) -> Result<Provider<Http>, Box<dyn Error>> {
 }
 /// Reads on-chain inputs, casts them as U256, then quantizes them to the specified scale.
 pub async fn read_on_chain_inputs (
-    rpc_url: Option<&str>,
-    _scale: u32,
+    scale: u32,
     data: &mut GraphInput
 ) -> Result<GraphInput, Box<dyn Error>> {
-    let (anvil, client) = setup_eth_backend(rpc_url).await?;
     // Iterate over all on-chain inputs
-    if let Some(on_chain_inputs) = &data.on_chain_input_data {
+    if let Some((on_chain_inputs, rpc_url)) = &data.on_chain_input_data {
+        // Set up anvil instance for reading on-chain data from desired RPC endpoint
+        let (anvil, client) = setup_eth_backend(Some(rpc_url)).await?;
+
+        let mut fetched_inputs = vec![];
+        let mut decimals = vec![];
         for on_chain_data in on_chain_inputs {
             // Construct the address
             let contract_address_bytes = hex::decode(on_chain_data.address.clone())?;
             let contract_address = H160::from_slice(&contract_address_bytes);
 
-            for (call_data, _decimals) in &on_chain_data.call_data {
+            for (call_data, decimal) in &on_chain_data.call_data {
                 let call_data_bytes = hex::decode(call_data.clone())?;
                 let tx: TypedTransaction = TransactionRequest::default()
                     .to(contract_address)
@@ -265,40 +269,52 @@ pub async fn read_on_chain_inputs (
 
                 let result = client.call(&tx, None).await?;
                 debug!("return data {:#?}", result);
-
-                // Convert bytes to U256 to f32 according to decimals
-                
-                // TODO: Do all of the quantization in the EVM and return the result into data.input_data.
-                // This will require compiling new contract that quantizes this calldata
-                // into a format that EZKL can ingest. Will create this contract with the quantize_data
-                // function that the DataAttestationVerifier.sol has, create an revm instance, 
-                // call to it and read from the output. 
-
-                let response = U256::from_big_endian(&result[..]);
-                // debug!("response {:#?}", response);
-
-                // let decimals = 10f32.powi(on_chain_data.decimals as i32) / scale as f32;
-
-                // response.
-
-                // let str_value = decimals.to_string();
-
-                // //let converted = response.low_u128() as f32 / 10f32.powi(on_chain_data.decimals as i32);
-
-
-
-                // let value = U256::from_dec_str(&str_value)?.checked_div(other);
-
-                // // Convert U256 to f32 according to decimals
-                //let converted = response.checked_div(U256::from_dec_str(&value)?)? as f32;
-                debug!("rconverted {:#?}", response);
-
-                // Store the result
-                data.input_data[0].push(0.0);
+                fetched_inputs.push(result);
+                decimals.push(decimal);
             }
         }
+        drop(anvil);
+        // Set up another anvil instance for deploying quantizationData contract to a local EVM instance.
+        let (anvil, client) = setup_eth_backend(None).await?;
+        let factory = get_sol_contract_factory(
+            PathBuf::from("./QuantizeData.sol"),
+            "DataAttestationVerifier",
+            client.clone(),
+            None
+        ).unwrap();
+        
+        
+        let contract = factory.deploy(())?.send().await?;
+        
+        abigen!(QuantizeData, "./QuantizeData.json");
+        
+        let contract = QuantizeData::new(contract.address(), client.clone());
+
+        let fetched_inputs = fetched_inputs
+            .iter()
+            .map(|x| Result::<_, std::convert::Infallible>::Ok(ethers::types::Bytes::from(x.to_vec())))
+            .collect::<Result<Vec<Bytes>, _>>()?;
+
+        let decimals = decimals
+            .iter()
+            .map(|x| U256::from_dec_str(&x.to_string()))
+            .collect::<Result<Vec<U256>, _>>()?;
+
+        let result = contract
+            .quantize_data(
+                fetched_inputs, 
+                decimals,
+                U256::from_dec_str(&scale.to_string())?
+            )
+            .call()
+            .await;
+           
+        let result = result.unwrap();
+        data.input_data[0] = result.iter().map(|&x| U256::from(x).low_u128() as f32).collect();
+        drop(anvil);
+    } else {
+        panic!("No on_chain_input_data field found in .json data file")
     }
-    drop(anvil);
     Ok(data.clone())
 }
 
@@ -359,7 +375,7 @@ use std::io::{BufRead, BufReader};
 pub fn fix_verifier_sol(
     input_file: PathBuf, 
     scale: Option<u32>,
-    data: Option<Vec<OnChainData>>
+    data: Option<Vec<CallsToAccount>>
 ) -> Result<String, Box<dyn Error>> {
     let file = File::open(input_file.clone())?;
     let reader = BufReader::new(file);
@@ -610,7 +626,9 @@ pub fn fix_verifier_sol(
     // get the max transcript addr
     let max_transcript_addr = transcript_addrs.iter().max().unwrap() / 32;
 
+
     let mut contract = if let Some(data) = data {
+        let total_calls: usize = data.iter().map(|v| v.call_data.len()).sum();
         format!(
             r#"// SPDX-License-Identifier: MIT
             pragma solidity ^0.8.17;
@@ -631,7 +649,7 @@ pub fn fix_verifier_sol(
 
                 uint constant public SCALE = 2<<{};
             
-                uint public totalCalls;
+                uint constan public TOTAL_CALLS = {};
             
                 /**
                  * @dev Initialize the contract with account calls the EZKL model will read from.
@@ -654,102 +672,93 @@ pub fn fix_verifier_sol(
                     }}
                 }}
             
-                /// @dev Credit to Remco Bloemen under MIT license https://xn--2-umb.com/21/muldiv
-                function mulDiv(
-                    uint256 a,
-                    uint256 b,
-                    uint256 denominator
-                ) internal pure returns (uint256 result) {{
-                    // 512-bit multiply [prod1 prod0] = a * b
-                    // Compute the product mod 2**256 and mod 2**256 - 1
-                    // then use the Chinese Remainder Theorem to reconstruct
-                    // the 512 bit result. The result is stored in two 256
-                    // variables such that product = prod1 * 2**256 + prod0
-                    uint256 prod0; // Least significant 256 bits of the product
-                    uint256 prod1; // Most significant 256 bits of the product
-                    assembly {{
-                        let mm := mulmod(a, b, not(0))
-                        prod0 := mul(a, b)
-                        prod1 := sub(sub(mm, prod0), lt(mm, prod0))
-                    }}
-            
-                    // Handle non-overflow cases, 256 by 256 division
-                    if (prod1 == 0) {{
-                        require(denominator > 0);
+                /**
+                 * @notice Calculates floor(x * y / denominator) with full precision. Throws if result overflows a uint256 or denominator == 0
+                 * @dev Original credit to Remco Bloemen under MIT license (https://xn--2-umb.com/21/muldiv)
+                 * with further edits by Uniswap Labs also under MIT license.
+                 */
+                function mulDiv(uint256 x, uint256 y, uint256 denominator) internal pure returns (uint256 result) {{
+                    unchecked {{
+                        // 512-bit multiply [prod1 prod0] = x * y. Compute the product mod 2^256 and mod 2^256 - 1, then use
+                        // use the Chinese Remainder Theorem to reconstruct the 512 bit result. The result is stored in two 256
+                        // variables such that product = prod1 * 2^256 + prod0.
+                        uint256 prod0; // Least significant 256 bits of the product
+                        uint256 prod1; // Most significant 256 bits of the product
                         assembly {{
-                            result := div(prod0, denominator)
+                            let mm := mulmod(x, y, not(0))
+                            prod0 := mul(x, y)
+                            prod1 := sub(sub(mm, prod0), lt(mm, prod0))
                         }}
+            
+                        // Handle non-overflow cases, 256 by 256 division.
+                        if (prod1 == 0) {{
+                            // Solidity will revert if denominator == 0, unlike the div opcode on its own.
+                            // The surrounding unchecked block does not change this fact.
+                            // See https://docs.soliditylang.org/en/latest/control-structures.html#checked-or-unchecked-arithmetic.
+                            return prod0 / denominator;
+                        }}
+            
+                        // Make sure the result is less than 2^256. Also prevents denominator == 0.
+                        require(denominator > prod1, "Math: mulDiv overflow");
+            
+                        ///////////////////////////////////////////////
+                        // 512 by 256 division.
+                        ///////////////////////////////////////////////
+            
+                        // Make division exact by subtracting the remainder from [prod1 prod0].
+                        uint256 remainder;
+                        assembly {{
+                            // Compute remainder using mulmod.
+                            remainder := mulmod(x, y, denominator)
+            
+                            // Subtract 256 bit number from 512 bit number.
+                            prod1 := sub(prod1, gt(remainder, prod0))
+                            prod0 := sub(prod0, remainder)
+                        }}
+            
+                        // Factor powers of two out of denominator and compute largest power of two divisor of denominator. Always >= 1.
+                        // See https://cs.stackexchange.com/q/138556/92363.
+            
+                        // Does not overflow because the denominator cannot be zero at this stage in the function.
+                        uint256 twos = denominator & (~denominator + 1);
+                        assembly {{
+                            // Divide denominator by twos.
+                            denominator := div(denominator, twos)
+            
+                            // Divide [prod1 prod0] by twos.
+                            prod0 := div(prod0, twos)
+            
+                            // Flip twos such that it is 2^256 / twos. If twos is zero, then it becomes one.
+                            twos := add(div(sub(0, twos), twos), 1)
+                        }}
+            
+                        // Shift in bits from prod1 into prod0.
+                        prod0 |= prod1 * twos;
+            
+                        // Invert denominator mod 2^256. Now that denominator is an odd number, it has an inverse modulo 2^256 such
+                        // that denominator * inv = 1 mod 2^256. Compute the inverse by starting with a seed that is correct for
+                        // four bits. That is, denominator * inv = 1 mod 2^4.
+                        uint256 inverse = (3 * denominator) ^ 2;
+            
+                        // Use the Newton-Raphson iteration to improve the precision. Thanks to Hensel's lifting lemma, this also works
+                        // in modular arithmetic, doubling the correct bits in each step.
+                        inverse *= 2 - denominator * inverse; // inverse mod 2^8
+                        inverse *= 2 - denominator * inverse; // inverse mod 2^16
+                        inverse *= 2 - denominator * inverse; // inverse mod 2^32
+                        inverse *= 2 - denominator * inverse; // inverse mod 2^64
+                        inverse *= 2 - denominator * inverse; // inverse mod 2^128
+                        inverse *= 2 - denominator * inverse; // inverse mod 2^256
+            
+                        // Because the division is now exact we can divide by multiplying with the modular inverse of denominator.
+                        // This will give us the correct result modulo 2^256. Since the preconditions guarantee that the outcome is
+                        // less than 2^256, this is the final result. We don't need to compute the high bits of the result and prod1
+                        // is no longer required.
+                        result = prod0 * inverse;
                         return result;
                     }}
-            
-                    // Make sure the result is less than 2**256.
-                    // Also prevents denominator == 0
-                    require(denominator > prod1);
-            
-                    ///////////////////////////////////////////////
-                    // 512 by 256 division.
-                    ///////////////////////////////////////////////
-            
-                    // Make division exact by subtracting the remainder from [prod1 prod0]
-                    // Compute remainder using mulmod
-                    uint256 remainder;
-                    assembly {{
-                        remainder := mulmod(a, b, denominator)
-                    }}
-                    // Subtract 256 bit number from 512 bit number
-                    assembly {{
-                        prod1 := sub(prod1, gt(remainder, prod0))
-                        prod0 := sub(prod0, remainder)
-                    }}
-            
-                    // Factor powers of two out of denominator
-                    // Compute largest power of two divisor of denominator.
-                    // Always >= 1.
-                    uint256 twos = -denominator & denominator;
-                    // Divide denominator by power of two
-                    assembly {{
-                        denominator := div(denominator, twos)
-                    }}
-            
-                    // Divide [prod1 prod0] by the factors of two
-                    assembly {{
-                        prod0 := div(prod0, twos)
-                    }}
-                    // Shift in bits from prod1 into prod0. For this we need
-                    // to flip `twos` such that it is 2**256 / twos.
-                    // If twos is zero, then it becomes one
-                    assembly {{
-                        twos := add(div(sub(0, twos), twos), 1)
-                    }}
-                    prod0 |= prod1 * twos;
-            
-                    // Invert denominator mod 2**256
-                    // Now that denominator is an odd number, it has an inverse
-                    // modulo 2**256 such that denominator * inv = 1 mod 2**256.
-                    // Compute the inverse by starting with a seed that is correct
-                    // correct for four bits. That is, denominator * inv = 1 mod 2**4
-                    uint256 inv = (3 * denominator) ^ 2;
-                    // Now use Newton-Raphson iteration to improve the precision.
-                    // Thanks to Hensel's lifting lemma, this also works in modular
-                    // arithmetic, doubling the correct bits in each step.
-                    inv *= 2 - denominator * inv; // inverse mod 2**8
-                    inv *= 2 - denominator * inv; // inverse mod 2**16
-                    inv *= 2 - denominator * inv; // inverse mod 2**32
-                    inv *= 2 - denominator * inv; // inverse mod 2**64
-                    inv *= 2 - denominator * inv; // inverse mod 2**128
-                    inv *= 2 - denominator * inv; // inverse mod 2**256
-            
-                    // Because the division is now exact we can divide by multiplying
-                    // with the modular inverse of denominator. This will give us the
-                    // correct result modulo 2**256. Since the precoditions guarantee
-                    // that the outcome is less than 2**256, this is the final result.
-                    // We don't need to compute the high bits of the result and prod1
-                    // is no longer required.
-                    result = prod0 * inv;
-                    return result;
                 }}
-                function quantize_data(uint256 data, uint256 decimals) internal pure returns (uint256) {{
-                    mulDiv(data, decimals, SCALE);
+                function quantize_data(bytes memory data, uint256 decimals, uint256 scale) internal pure returns (uint256) {{
+                    return mulDiv(abi.decode(data, (uint256)), decimals, scale);
                 }}
             
                 function staticCall (address target, bytes memory data) internal view returns (bytes memory) {{
@@ -775,7 +784,7 @@ pub fn fix_verifier_sol(
                         address account = accountCalls[i].contractAddress;
                         for (uint8 j = 0; j < accountCalls[i].callCount; j++) {{
                             bytes memory returnData = staticCall(account, accountCalls[i].callData[j]);
-                            uint256 quantize_data = quantize_data(abi.decode(returnData, (uint256)), accountCalls[i].decimals[j]);
+                            uint256 quantize_data = quantize_data(returnData, accountCalls[i].decimals[j], SCALE);
                             require(abi.decode(returnData, (uint256)) == pubInputs[counter], "Public input does not match");
                             counter++;
                         }}
@@ -793,7 +802,8 @@ pub fn fix_verifier_sol(
                 "#,
             scale.unwrap(),
             data.len(),
-            max_transcript_addr
+            max_transcript_addr,
+            total_calls
         )
         .trim()
         .to_string()

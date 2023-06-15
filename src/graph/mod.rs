@@ -91,19 +91,21 @@ pub enum GraphError {
 const ASSUMED_BLINDING_FACTORS: usize = 6;
 
 type Decimals = u8;
+type Call = String;
+type RPCUrl = String;
 /// Defines the view only calls to accounts to fetch the on-chain input data.
 /// This data will be included as part of the first elements in the publicInputs
 /// for the sol evm verifier and will be  verifyWithDataAttestation.sol
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 
-pub struct OnChainData {
-    /// A vector of length 2 types, where index 0 of tuples
+pub struct CallsToAccount {
+    /// A vector of tuples, where index 0 of tuples
     /// are the byte strings representing the ABI encoded function calls to 
     /// read the data from the address. This call must return a single
     /// elementary type (https://docs.soliditylang.org/en/v0.8.20/abi-spec.html#types).
     /// The second index of the tuple is the number of decimals for f32 conversion.
     /// We don't support dynamic types currently.
-    pub call_data: Vec<(String, Decimals)>,
+    pub call_data: Vec<(Call, Decimals)>,
     /// Address of the contract to read the data from.
     pub address: String,
 }
@@ -120,7 +122,7 @@ pub struct GraphInput {
     /// Optional hashes of the inputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
     pub output_hashes: Option<Vec<Fp>>,
     /// Optional on-chain inputs. (can be None if there are no on-chain inputs). Wrapped as Option for backwards compatibility
-    pub on_chain_input_data: Option<Vec<OnChainData>>,
+    pub on_chain_input_data: Option<(Vec<CallsToAccount>, RPCUrl)>,
 }
 
 impl GraphInput {
@@ -380,13 +382,13 @@ impl GraphCircuit {
             .map(|x| quantize_float(x, 0.0, self.params.run_args.scale).unwrap())
             .collect();
         
-        let mut t: Tensor<i128> = t.into_iter().into();
-        t.reshape(&shape);
-        
-        inputs.push(t);
+            let mut t: Tensor<i128> = t.into_iter().into();
+            t.reshape(&shape);
+            
+            inputs.push(t);
+        }
+        self.inputs = inputs;
     }
-    self.inputs = inputs;
-}
 
     /// Calibrate the circuit to the supplied data.
     pub fn calibrate(&mut self) -> Result<(), Box<dyn std::error::Error>> {

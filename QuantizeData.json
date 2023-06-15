@@ -1,0 +1,31 @@
+[
+	{
+		"inputs": [
+			{
+				"internalType": "bytes[]",
+				"name": "data",
+				"type": "bytes[]"
+			},
+			{
+				"internalType": "uint256[]",
+				"name": "decimals",
+				"type": "uint256[]"
+			},
+			{
+				"internalType": "uint256",
+				"name": "SCALE",
+				"type": "uint256"
+			}
+		],
+		"name": "quantize_data",
+		"outputs": [
+			{
+				"internalType": "uint256[]",
+				"name": "quantized_data",
+				"type": "uint256[]"
+			}
+		],
+		"stateMutability": "pure",
+		"type": "function"
+	}
+]

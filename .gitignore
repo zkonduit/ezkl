@@ -2,6 +2,7 @@ target
 data
 *.ipynb_checkpoints
 *.sol
+!QuantizeData.sol
 *.pf
 *.vk
 *.pk

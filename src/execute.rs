@@ -186,8 +186,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             transcript,
             strategy,
             circuit_params_path,
-            check_mode,
-            rpc_url
+            check_mode
         } => prove(
             data,
             model,
@@ -197,8 +196,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             transcript,
             strategy,
             circuit_params_path,
-            check_mode,
-            rpc_url
+            check_mode
         ).await,
         Commands::Aggregate {
             circuit_params_paths,
@@ -734,7 +732,7 @@ fn create_evm_data_attestation_verifier(
         let output = fix_verifier_sol(
             sol_code_path.clone(),
             Some(model_circuit_params.run_args.scale),
-            Some(data)
+            Some(data.0)
         )?;
         
         let mut f = File::create(sol_code_path.clone())?;
@@ -870,13 +868,12 @@ pub(crate) async fn prove(
     strategy: StrategyType,
     circuit_params_path: PathBuf,
     check_mode: CheckMode,
-    rpc_url: Option<String>,
 ) -> Result<(), Box<dyn Error>> {
     let mut data = GraphInput::from_path(data)?;
     let circuit_params = GraphParams::load(&circuit_params_path)?;
     let mut circuit = GraphCircuit::from_params(&circuit_params, &model_path, check_mode)?;
     if circuit.params.run_args.on_chain_inputs {
-        data = read_on_chain_inputs(rpc_url.as_deref(), circuit.params.run_args.scale, &mut data).await?;
+        data = read_on_chain_inputs(circuit.params.run_args.scale, &mut data).await?;
     }
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 

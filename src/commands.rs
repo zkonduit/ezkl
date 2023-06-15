@@ -461,10 +461,7 @@ pub enum Commands {
         circuit_params_path: PathBuf,
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = "safe")]
-        check_mode: CheckMode,
-        /// RPC Url
-        #[arg(short = 'U', long)]
-        rpc_url: Option<String>,
+        check_mode: CheckMode
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for a single proof
