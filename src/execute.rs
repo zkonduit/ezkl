@@ -121,8 +121,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             model,
             data,
             settings_path,
-            args,
-        } => mock(model, data, args, settings_path),
+        } => mock(model, data, settings_path),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
             vk_path,
@@ -576,18 +575,12 @@ pub(crate) fn calibrate(
 pub(crate) fn mock(
     model_path: PathBuf,
     data: PathBuf,
-    run_args: RunArgs,
-    settings_path: Option<PathBuf>,
+    settings_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
     // mock should catch any issues by default so we set it to safe
 
-    let mut circuit = match settings_path {
-        Some(path) => {
-            let circuit_settings = GraphSettings::load(&path)?;
-            GraphCircuit::from_settings(&circuit_settings, &model_path, CheckMode::SAFE)?
-        }
-        None => GraphCircuit::from_run_args(&run_args, &model_path, CheckMode::SAFE)?,
-    };
+    let circuit_settings = GraphSettings::load(&settings_path)?;
+    let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, CheckMode::SAFE)?;
 
     let data = GraphInput::from_path(data)?;
     circuit.load_inputs(&data);

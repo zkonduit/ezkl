@@ -179,12 +179,9 @@ fn forward(
     data,
     model,
     settings_path,
-    py_run_args = None
 ))]
-fn mock(data: PathBuf, model: PathBuf, settings_path: Option<PathBuf>, py_run_args: Option<PyRunArgs>) -> PyResult<bool> {
-    let run_args = py_run_args.unwrap_or_else(PyRunArgs::new).into();
-
-    crate::execute::mock(model, data, run_args, settings_path).map_err(|e| {
+fn mock(data: PathBuf, model: PathBuf, settings_path: PathBuf) -> PyResult<bool> {
+    crate::execute::mock(model, data, settings_path).map_err(|e| {
         let err_str = format!("Failed to run setup: {}", e);
         PyRuntimeError::new_err(err_str)})?;
 

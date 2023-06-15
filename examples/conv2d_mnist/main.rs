@@ -1,3 +1,4 @@
+use ezkl_lib::circuit::region::RegionCtx;
 use ezkl_lib::circuit::{
     ops::lookup::LookupOp, ops::poly::PolyOp, BaseConfig as PolyConfig, CheckMode,
 };
@@ -30,7 +31,6 @@ use halo2curves::pasta::Fp as F;
 use mnist::*;
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
-use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 mod params;
@@ -174,9 +174,9 @@ where
         let x = layouter
             .assign_region(
                 || "mlp_4d",
-                |mut region| {
-                    let mut offset = 0;
-                    let region = Arc::new(Mutex::new(Some(&mut region)));
+                |region| {
+                    let mut region = RegionCtx::new(region, 0);
+
                     let op = PolyOp::Conv {
                         kernel: self.l0_params[0].clone(),
                         bias: Some(self.l0_params[1].clone()),
@@ -185,20 +185,14 @@ where
                     };
                     let x = config
                         .layer_config
-                        .layout(
-                            region.clone(),
-                            &[self.input.clone()],
-                            &mut offset,
-                            Box::new(op),
-                        )
+                        .layout(&mut region, &[self.input.clone()], Box::new(op))
                         .unwrap();
 
                     let mut x = config
                         .layer_config
                         .layout(
-                            region.clone(),
+                            &mut region,
                             &[x.unwrap()],
-                            &mut offset,
                             Box::new(LookupOp::ReLU { scale: 32 }),
                         )
                         .unwrap()
@@ -208,9 +202,8 @@ where
                     let x = config
                         .layer_config
                         .layout(
-                            region.clone(),
+                            &mut region,
                             &[self.l2_params[0].clone(), x],
-                            &mut offset,
                             Box::new(PolyOp::Einsum {
                                 equation: "ij,j->ik".to_string(),
                             }),
@@ -221,9 +214,8 @@ where
                     let x: ValTensor<F> = config
                         .layer_config
                         .layout(
-                            region,
+                            &mut region,
                             &[x],
-                            &mut offset,
                             Box::new(PolyOp::Add {
                                 a: Some(self.l2_params[1].clone()),
                             }),

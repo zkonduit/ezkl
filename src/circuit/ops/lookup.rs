@@ -1,10 +1,6 @@
 use super::*;
-use halo2_proofs::circuit::Region;
 use serde::{Deserialize, Serialize};
-use std::{
-    error::Error,
-    sync::{Arc, Mutex},
-};
+use std::error::Error;
 
 use crate::{
     circuit::{layouts, utils},
@@ -118,16 +114,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: Arc<Mutex<Option<&mut Region<F>>>>,
+        region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
-        offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         Ok(Some(layouts::nonlinearity(
             config,
             region,
             values[..].try_into()?,
             self,
-            offset,
         )?))
     }
 

@@ -11,10 +11,9 @@ use halo2curves::ff::{Field, PrimeField};
 use halo2curves::pasta::pallas;
 use halo2curves::pasta::Fp as F;
 use ops::lookup::LookupOp;
+use ops::region::RegionCtx;
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
-use std::sync::{Arc, Mutex};
-
 #[derive(Default)]
 struct TestParams;
 
@@ -56,12 +55,12 @@ mod matmul {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &self.inputs.clone(),
-                                &mut 0,
                                 Box::new(PolyOp::Einsum {
                                     equation: "ij,jk->ik".to_string(),
                                 }),
@@ -132,12 +131,12 @@ mod matmul_col_overflow {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &self.inputs.clone(),
-                                &mut 0,
                                 Box::new(PolyOp::Einsum {
                                     equation: "ij,jk->ik".to_string(),
                                 }),
@@ -209,12 +208,12 @@ mod dot {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &self.inputs.clone(),
-                                &mut 0,
                                 Box::new(PolyOp::Einsum {
                                     equation: "i,i->".to_string(),
                                 }),
@@ -282,12 +281,12 @@ mod dot_col_overflow {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &self.inputs.clone(),
-                                &mut 0,
                                 Box::new(PolyOp::Einsum {
                                     equation: "i,i->".to_string(),
                                 }),
@@ -355,12 +354,12 @@ mod sum {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &self.inputs.clone(),
-                                &mut 0,
                                 Box::new(PolyOp::Sum { axes: vec![0] }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -424,12 +423,12 @@ mod sum_col_overflow {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &self.inputs.clone(),
-                                &mut 0,
                                 Box::new(PolyOp::Sum { axes: vec![0] }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -457,6 +456,7 @@ mod sum_col_overflow {
 
 #[cfg(test)]
 mod composition {
+
     use super::*;
 
     const K: usize = 9;
@@ -494,13 +494,12 @@ mod composition {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
-                        let mut offset = 0;
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         let _ = config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &self.inputs.clone(),
-                                &mut offset,
                                 Box::new(PolyOp::Einsum {
                                     equation: "i,i->".to_string(),
                                 }),
@@ -508,9 +507,8 @@ mod composition {
                             .unwrap();
                         let _ = config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &self.inputs.clone(),
-                                &mut offset,
                                 Box::new(PolyOp::Einsum {
                                     equation: "i,i->".to_string(),
                                 }),
@@ -518,9 +516,8 @@ mod composition {
                             .unwrap();
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &self.inputs.clone(),
-                                &mut offset,
                                 Box::new(PolyOp::Einsum {
                                     equation: "i,i->".to_string(),
                                 }),
@@ -588,12 +585,12 @@ mod conv {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &[self.inputs[0].clone()],
-                                &mut 0,
                                 Box::new(PolyOp::Conv {
                                     kernel: self.inputs[1].clone(),
                                     bias: None,
@@ -715,12 +712,12 @@ mod sumpool {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &self.inputs.clone(),
-                                &mut 0,
                                 Box::new(PolyOp::SumPool {
                                     padding: (0, 0),
                                     stride: (1, 1),
@@ -795,12 +792,12 @@ mod add_w_shape_casting {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &self.inputs.clone(),
-                                &mut 0,
                                 Box::new(PolyOp::Add { a: None }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -866,12 +863,12 @@ mod add {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &self.inputs.clone(),
-                                &mut 0,
                                 Box::new(PolyOp::Add { a: None }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -937,12 +934,12 @@ mod add_with_overflow {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &self.inputs.clone(),
-                                &mut 0,
                                 Box::new(PolyOp::Add { a: None }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -1038,16 +1035,11 @@ mod add_with_overflow_and_poseidon {
 
             layouter.assign_region(
                 || "model",
-                |mut region| {
-                    let mut offset = 0;
+                |region| {
+                    let mut region = RegionCtx::new(region, 0);
                     config
                         .base
-                        .layout(
-                            Arc::new(Mutex::new(Some(&mut region))),
-                            &inputs,
-                            &mut offset,
-                            Box::new(PolyOp::Add { a: None }),
-                        )
+                        .layout(&mut region, &inputs, Box::new(PolyOp::Add { a: None }))
                         .map_err(|_| Error::Synthesis)
                 },
             )?;
@@ -1149,14 +1141,10 @@ mod sub {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
-                            .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
-                                &self.inputs.clone(),
-                                &mut 0,
-                                Box::new(PolyOp::Sub),
-                            )
+                            .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Sub))
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -1220,12 +1208,12 @@ mod mult {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &self.inputs.clone(),
-                                &mut 0,
                                 Box::new(PolyOp::Mult { a: None }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -1291,14 +1279,10 @@ mod pow {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
-                            .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
-                                &self.inputs.clone(),
-                                &mut 0,
-                                Box::new(PolyOp::Pow(5)),
-                            )
+                            .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Pow(5)))
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -1360,12 +1344,12 @@ mod pack {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &self.inputs.clone(),
-                                &mut 0,
                                 Box::new(PolyOp::Pack(2, 1)),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -1446,12 +1430,12 @@ mod rescaled {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &self.inputs.clone(),
-                                &mut 0,
                                 Box::new(Rescaled {
                                     inner: Box::new(PolyOp::Sum { axes: vec![0] }),
                                     scale: vec![(0, 5)],
@@ -1533,26 +1517,20 @@ mod matmul_relu {
             config.base_config.layout_tables(&mut layouter).unwrap();
             layouter.assign_region(
                 || "",
-                |mut region| {
+                |region| {
+                    let mut region = RegionCtx::new(region, 0);
                     let op = PolyOp::Einsum {
                         equation: "ij,jk->ik".to_string(),
                     };
-                    let mut offset = 0;
                     let output = config
                         .base_config
-                        .layout(
-                            Arc::new(Mutex::new(Some(&mut region))),
-                            &self.inputs,
-                            &mut offset,
-                            Box::new(op),
-                        )
+                        .layout(&mut region, &self.inputs, Box::new(op))
                         .unwrap();
                     let _output = config
                         .base_config
                         .layout(
-                            Arc::new(Mutex::new(Some(&mut region))),
+                            &mut region,
                             &[output.unwrap()],
-                            &mut offset,
                             Box::new(LookupOp::ReLU { scale: 1 }),
                         )
                         .unwrap();
@@ -1633,12 +1611,12 @@ mod rangecheck {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &[self.input.clone(), self.output.clone()],
-                                &mut 0,
                                 Box::new(HybridOp::RangeCheck(Tolerance::Abs { val: RANGE })),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -1747,12 +1725,12 @@ mod rangecheckpercent {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &[self.output.clone(), self.input.clone()],
-                                &mut 0,
                                 Box::new(HybridOp::RangeCheck(Tolerance::Percentage {
                                     val: RANGE,
                                     scales: (SCALE, SCALE),
@@ -1863,12 +1841,12 @@ mod relu {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &[self.input.clone()],
-                                &mut 0,
                                 Box::new(LookupOp::ReLU { scale: 1 }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -1966,13 +1944,12 @@ mod softmax {
             layouter
                 .assign_region(
                     || "",
-                    |mut region| {
-                        let mut offset = 0;
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
                         let _output = config
                             .layout(
-                                Arc::new(Mutex::new(Some(&mut region))),
+                                &mut region,
                                 &[self.input.clone()],
-                                &mut offset,
                                 Box::new(HybridOp::Softmax {
                                     scales: (SCALE, SCALE),
                                 }),
