@@ -1,3 +1,4 @@
+# test
 name: ezkl-lib-release
 on:
   push:
