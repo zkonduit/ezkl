@@ -41,16 +41,16 @@ jobs:
 
       - name: Create Release
         run: |
-          gh auth login --with-token <<< "${{ secrets.GH_TOKEN }}"
+          gh auth login --with-token <<< "${{ secrets.RELEASE_TOKEN }}"
           gh release create $VERSION --title "Release $VERSION" --notes "Release $VERSION"
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Upload Release Asset
         run: |
           gh release upload $VERSION ${{ steps.archive.outputs.path }}
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
   build-windows:
     runs-on: windows-latest
@@ -78,18 +78,18 @@ jobs:
 
       - name: Create Release
         run: |
-          gh auth login --with-token <<< "${{ secrets.GH_TOKEN }}"
+          gh auth login --with-token <<< "${{ secrets.RELEASE_TOKEN }}"
           gh release create $VERSION --title "Release $VERSION" --notes "Release $VERSION"
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Upload Release Asset
         run: |
           gh release upload $VERSION ${{ steps.archive.outputs.path }}
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
   build-macos:
     runs-on: macos-latest
@@ -121,13 +121,13 @@ jobs:
 
       - name: Create Release
         run: |
-          gh auth login --with-token <<< "${{ secrets.GH_TOKEN }}"
+          gh auth login --with-token <<< "${{ secrets.RELEASE_TOKEN }}"
           gh release create $VERSION --title "Release $VERSION" --notes "Release $VERSION"
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Upload Release Asset
         run: |
           gh release upload $VERSION ${{ steps.archive.outputs.path }}
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
