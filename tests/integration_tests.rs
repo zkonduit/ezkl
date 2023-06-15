@@ -686,6 +686,22 @@ mod native_tests {
     // Mock prove (fast, but does not cover some potential issues)
     fn tutorial(tolerance: &str) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "gen-settings",
+                "-M",
+                format!("{}/tutorial/network.onnx", test_dir).as_str(),
+                &format!("--settings-path={}/tutorial/settings.json", test_dir),
+                &format!("--bits=16"),
+                &format!("--logrows=17"),
+                &format!("--scale=4"),
+                &format!("--tolerance={}", tolerance),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "mock",
@@ -693,10 +709,7 @@ mod native_tests {
                 format!("{}/tutorial/input.json", test_dir).as_str(),
                 "-M",
                 format!("{}/tutorial/network.onnx", test_dir).as_str(),
-                &format!("--tolerance={}", tolerance),
-                "--scale=4",
-                "--bits=16",
-                "-K=17",
+                &format!("--settings-path={}/tutorial/settings.json", test_dir),
             ])
             .status()
             .expect("failed to execute process");
