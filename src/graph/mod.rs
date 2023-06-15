@@ -201,6 +201,7 @@ impl GraphInput {
     }
 }
 
+#[cfg(feature = "python-bindings")]
 fn fp_to_string(fp: &Fp) -> String {
     format!("{:#?}", fp)
 }
