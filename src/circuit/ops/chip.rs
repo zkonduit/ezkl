@@ -74,7 +74,7 @@ impl From<String> for CheckMode {
 #[derive(Clone, Debug, PartialEq, PartialOrd, Serialize, Deserialize, Copy)]
 pub enum Tolerance {
     Abs { val: usize },
-    Percentage { val: f32, scale: usize },
+    Percentage { val: f32, scales: (usize, usize) },
 }
 
 impl Default for Tolerance {
@@ -89,7 +89,7 @@ impl FromStr for Tolerance {
         if let Ok(val) = s.parse::<usize>() {
             Ok(Tolerance::Abs { val })
         } else if let Ok(val) = s.parse::<f32>() {
-            Ok(Tolerance::Percentage { val, scale: 1 })
+            Ok(Tolerance::Percentage { val, scales: (1,1) })
         } else {
             Err("Invalid tolerance value provided. It should be either an absolute value (usize) or a percentage (f32).".to_string())
         }
@@ -127,8 +127,8 @@ impl IntoPy<PyObject> for Tolerance {
     fn into_py(self, py: Python) -> PyObject {
         match self {
             Tolerance::Abs { val } => (String::from("abs"), val).to_object(py),
-            Tolerance::Percentage { val, scale } => {
-                (String::from("percentage"), val, scale).to_object(py)
+            Tolerance::Percentage { val, scales } => {
+                (String::from("percentage"), val, scales).to_object(py)
             }
         }
     }
@@ -143,9 +143,9 @@ impl<'source> FromPyObject<'source> for Tolerance {
                 "abs" => Ok(Tolerance::Abs { val }),
                 _ => Err(PyValueError::new_err("Invalid value for Tolerance")),
             }
-        } else if let Ok((mode, val, scale)) = ob.extract::<(String, f32, usize)>() {
+        } else if let Ok((mode, val, scales)) = ob.extract::<(String, f32, (usize, usize))>() {
             match mode.to_lowercase().as_str() {
-                "percentage" => Ok(Tolerance::Percentage { val, scale }),
+                "percentage" => Ok(Tolerance::Percentage { val, scales }),
                 _ => Err(PyValueError::new_err("Invalid value for Tolerance")),
             }
         } else {

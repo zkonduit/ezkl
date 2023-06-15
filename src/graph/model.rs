@@ -249,12 +249,17 @@ impl Model {
 
         // if we're using percentage tolerance, we need to add the necessary range check ops for it.
         if let Tolerance::Percentage { val, .. } = run_args.tolerance {
-            let tolerance = Tolerance::Percentage {
-                val,
-                scale: scale_to_multiplier(run_args.scale) as usize,
-            };
-            let opkind: Box<dyn Op<Fp>> = Box::new(HybridOp::RangeCheck(tolerance));
-            lookup_ops.extend(opkind.required_lookups());
+            for scale in self.graph.get_output_scales(){
+                let tolerance = Tolerance::Percentage {
+                    val,
+                    scales:(
+                        scale_to_multiplier(scale) as usize,  
+                        scale_to_multiplier(run_args.scale) as usize,  
+                    ) 
+                };
+                let opkind: Box<dyn Op<Fp>> = Box::new(HybridOp::RangeCheck(tolerance));
+                lookup_ops.extend(opkind.required_lookups());
+            }
         }
 
         let set: HashSet<_> = lookup_ops.drain(..).collect(); // dedup
@@ -647,17 +652,23 @@ impl Model {
 
                 match run_args.output_visibility {
                     Visibility::Public => {
-                        let tolerance = match run_args.tolerance {
-                            Tolerance::Percentage { val, .. } => Tolerance::Percentage {
-                                val,
-                                scale: scale_to_multiplier(run_args.scale) as usize,
-                            },
-                            _ => run_args.tolerance,
-                        };
+                        let output_scales = self.graph.get_output_scales();
+                        let global_scale = scale_to_multiplier(run_args.scale) as usize;
                         let _ = outputs
-                            .iter()
-                            .enumerate()
-                            .map(|(i, output)| {
+                        .iter()
+                        .enumerate()
+                        .map(|(i, output)| { 
+                                let tolerance = match run_args.tolerance {
+                                    Tolerance::Percentage { val, .. } => Tolerance::Percentage {
+                                        val,
+                                        scales: 
+                                        ( 
+                                            scale_to_multiplier(output_scales[i]) as usize,
+                                            global_scale
+                                        ),
+                                    },
+                                    _ => run_args.tolerance,
+                                };
                                 let mut instance_offset = 0;
                                 if self.visibility.input.is_public() {
                                     instance_offset += inputs.len();
@@ -792,13 +803,6 @@ impl Model {
 
         match run_args.output_visibility {
             Visibility::Public => {
-                let tolerance = match run_args.tolerance {
-                    Tolerance::Percentage { val, .. } => Tolerance::Percentage {
-                        val,
-                        scale: scale_to_multiplier(run_args.scale) as usize,
-                    },
-                    _ => run_args.tolerance,
-                };
                 let _ = outputs
                     .clone()
                     .into_iter()
@@ -808,7 +812,7 @@ impl Model {
                                 Arc::new(Mutex::new(None)),
                                 &[output.clone(), output],
                                 &mut offset,
-                                Box::new(HybridOp::RangeCheck(tolerance)),
+                                Box::new(HybridOp::RangeCheck(run_args.tolerance)),
                             )
                             .unwrap()
                     })
