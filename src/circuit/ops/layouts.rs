@@ -91,13 +91,12 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
         if y == 0 && i > 0 {
             continue;
         }
-        if i == 0 {
-            let selector = config.selectors.get(&(BaseOp::Mult, x));
-            region.enable(selector, y)?;
+        let selector = if i == 0 {
+            config.selectors.get(&(BaseOp::Mult, x))
         } else {
-            let selector = config.selectors.get(&(BaseOp::Dot, x));
-            region.enable(selector, y)?;
-        }
+            config.selectors.get(&(BaseOp::Dot, x))
+        };
+        region.enable(selector, y)?;
     }
 
     let last_elem = output

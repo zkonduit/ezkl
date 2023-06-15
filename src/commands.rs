@@ -317,12 +317,9 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
-        /// proving arguments
-        #[clap(flatten)]
-        args: RunArgs,
-        /// optional circuit params path (overrides any run args set)
+        /// circuit params path
         #[arg(long)]
-        settings_path: Option<PathBuf>,
+        settings_path: PathBuf,
     },
 
     /// Aggregates proofs :)
