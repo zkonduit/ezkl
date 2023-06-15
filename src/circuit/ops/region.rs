@@ -1,6 +1,6 @@
 use halo2_proofs::{
-    circuit::{Cell, Region, Value},
-    plonk::{Advice, Column, Error, Fixed, Selector},
+    circuit::Region,
+    plonk::{Error, Selector},
 };
 use std::sync::{Arc, Mutex};
 
@@ -45,27 +45,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         self.offset
     }
 
-    /// Assign a fixed value
-    pub fn assign_fixed<A, AR>(
-        &mut self,
-        annotation: A,
-        column: Column<Fixed>,
-        value: F,
-    ) -> Result<ValType<F>, Error>
-    where
-        A: Fn() -> AR,
-        AR: Into<String>,
-    {
-        let mut lock = self.region.lock().unwrap();
-        if let Some(region) = lock.as_mut() {
-            let cell =
-                region.assign_fixed(annotation, column, self.offset, || Value::known(value))?;
-            Ok(cell.into())
-        } else {
-            Ok(Value::known(value).into())
-        }
-    }
-
     /// Assign a constant value
     pub fn assign_constant(&mut self, var: &VarTensor, value: F) -> Result<ValType<F>, Error> {
         let mut lock = self.region.lock().unwrap();
@@ -94,36 +73,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     ) -> Result<(ValTensor<F>, usize), Error> {
         let mut lock = self.region.lock().unwrap();
         var.assign_with_duplication(&mut lock, self.offset, values, check_mode)
-    }
-
-    /// Assign an advice value
-    pub fn assign_advice<A, AR>(
-        &mut self,
-        annotation: A,
-        column: Column<Advice>,
-        value: Value<F>,
-    ) -> Result<ValType<F>, Error>
-    where
-        A: Fn() -> AR,
-        AR: Into<String>,
-    {
-        let mut lock = self.region.lock().unwrap();
-        if let Some(region) = lock.as_mut() {
-            let cell = region.assign_advice(annotation, column, self.offset, || value)?;
-            Ok(cell.into())
-        } else {
-            Ok(value.into())
-        }
-    }
-
-    /// Constrain two cells to be equal
-    pub fn constrain_equal(&mut self, cell_0: Cell, cell_1: Cell) -> Result<(), Error> {
-        let mut lock = self.region.lock().unwrap();
-        if let Some(region) = lock.as_mut() {
-            region.constrain_equal(cell_0, cell_1)
-        } else {
-            Ok(())
-        }
     }
 
     /// Enable a selector
