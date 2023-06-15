@@ -65,9 +65,9 @@ jobs:
         shell: pwsh
         run: |
             $VERSION=$env:GITHUB_REF -replace 'refs/tags/', ''
-            mv target/x86_64-pc-windows-msvc/release/ezkl_lib.exe ezkl_lib-$VERSION-x86_64-pc-windows-msvc.exe
-            7z a ezkl_lib-$VERSION-x86_64-pc-windows-msvc.zip ezkl_lib-$VERSION-x86_64-pc-windows-msvc.exe
-            echo "::set-output name=path::$(pwd)/ezkl_lib-$VERSION-x86_64-pc-windows-msvc.zip"
+            mv target/x86_64-pc-windows-msvc/release/ezkl.exe ezkl-$VERSION-x86_64-pc-windows-msvc.exe
+            7z a ezkl-$VERSION-x86_64-pc-windows-msvc.zip ezkl-$VERSION-x86_64-pc-windows-msvc.exe
+            echo "::set-output name=path::$(pwd)/ezkl-$VERSION-x86_64-pc-windows-msvc.zip"
 
       - name: Create Release
         run: |
