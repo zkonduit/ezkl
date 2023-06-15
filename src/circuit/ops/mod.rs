@@ -1,11 +1,5 @@
-use std::{
-    any::Any,
-    error::Error,
-    marker::PhantomData,
-    sync::{Arc, Mutex},
-};
+use std::{any::Any, error::Error, marker::PhantomData};
 
-use halo2_proofs::circuit::Region;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
@@ -15,7 +9,7 @@ use crate::{
 };
 use halo2curves::ff::PrimeField;
 
-use self::lookup::LookupOp;
+use self::{lookup::LookupOp, region::RegionCtx};
 
 ///
 pub mod base;
@@ -29,6 +23,8 @@ pub mod layouts;
 pub mod lookup;
 ///
 pub mod poly;
+///
+pub mod region;
 
 /// A struct representing the result of a forward pass.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -48,9 +44,8 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: Arc<Mutex<Option<&mut Region<F>>>>,
+        region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
-        offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>>;
 
     /// Returns the scale of the output of the operation.
@@ -119,9 +114,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
     fn layout(
         &self,
         _: &mut crate::circuit::BaseConfig<F>,
-        _: Arc<Mutex<Option<&mut Region<F>>>>,
+        _: &mut RegionCtx<F>,
         _: &[ValTensor<F>],
-        _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         Ok(None)
     }
@@ -201,9 +195,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: Arc<Mutex<Option<&mut Region<F>>>>,
+        region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
-        offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         if self.scale.len() != values.len() {
             return Err(Box::new(TensorError::DimMismatch(
@@ -211,14 +204,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
             )));
         }
 
-        let res = &layouts::rescale(
-            config,
-            region.clone(),
-            values[..].try_into()?,
-            &self.scale,
-            offset,
-        )?[..];
-        self.inner.layout(config, region, res, offset)
+        let res = &layouts::rescale(config, region, values[..].try_into()?, &self.scale)?[..];
+        self.inner.layout(config, region, res)
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
@@ -244,9 +231,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
     fn layout(
         &self,
         _: &mut crate::circuit::BaseConfig<F>,
-        _: Arc<Mutex<Option<&mut Region<F>>>>,
+        _: &mut RegionCtx<F>,
         _: &[ValTensor<F>],
-        _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         Err(Box::new(super::CircuitError::UnsupportedOp))
     }
@@ -302,9 +288,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
     fn layout(
         &self,
         _: &mut crate::circuit::BaseConfig<F>,
-        _: Arc<Mutex<Option<&mut Region<F>>>>,
+        _: &mut RegionCtx<F>,
         _: &[ValTensor<F>],
-        _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         Ok(Some(tensor_to_valtensor(
             self.values.clone(),

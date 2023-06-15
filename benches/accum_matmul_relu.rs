@@ -15,7 +15,6 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::{Bn256, Fr};
 use std::marker::PhantomData;
-use std::sync::{Arc, Mutex};
 
 const BITS: usize = 8;
 static mut LEN: usize = 4;
@@ -68,26 +67,20 @@ impl Circuit<Fr> for MyCircuit {
         config.base_config.layout_tables(&mut layouter).unwrap();
         layouter.assign_region(
             || "",
-            |mut region| {
+            |region| {
                 let op = PolyOp::Einsum {
                     equation: "ij,jk->ik".to_string(),
                 };
-                let mut offset = 0;
+                let mut region = region::RegionCtx::new(region, 0);
                 let output = config
                     .base_config
-                    .layout(
-                        Arc::new(Mutex::new(Some(&mut region))),
-                        &self.inputs,
-                        &mut offset,
-                        Box::new(op),
-                    )
+                    .layout(&mut region, &self.inputs, Box::new(op))
                     .unwrap();
                 let _output = config
                     .base_config
                     .layout(
-                        Arc::new(Mutex::new(Some(&mut region))),
+                        &mut region,
                         &[output.unwrap()],
-                        &mut offset,
                         Box::new(LookupOp::ReLU { scale: 1 }),
                     )
                     .unwrap();

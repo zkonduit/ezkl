@@ -1,12 +1,9 @@
-use std::{
-    str::FromStr,
-    sync::{Arc, Mutex},
-};
+use std::str::FromStr;
 
 use thiserror::Error;
 
 use halo2_proofs::{
-    circuit::{Layouter, Region},
+    circuit::Layouter,
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
     poly::Rotation,
 };
@@ -28,7 +25,7 @@ use crate::{
 };
 use std::{collections::BTreeMap, error::Error, marker::PhantomData};
 
-use super::{lookup::LookupOp, Op};
+use super::{lookup::LookupOp, region::RegionCtx, Op};
 use halo2curves::ff::{Field, PrimeField};
 
 /// circuit related errors.
@@ -89,7 +86,10 @@ impl FromStr for Tolerance {
         if let Ok(val) = s.parse::<usize>() {
             Ok(Tolerance::Abs { val })
         } else if let Ok(val) = s.parse::<f32>() {
-            Ok(Tolerance::Percentage { val, scales: (1,1) })
+            Ok(Tolerance::Percentage {
+                val,
+                scales: (1, 1),
+            })
         } else {
             Err("Invalid tolerance value provided. It should be either an absolute value (usize) or a percentage (f32).".to_string())
         }
@@ -389,29 +389,22 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     /// # Arguments
     /// * `values` - The explicit values to the operations.
     /// * `layouter` - A Halo2 Layouter.
-    /// * `offset` - Offset to assign.
     /// * `op` - The operation being represented.
     pub fn layout(
         &mut self,
-        region: Arc<Mutex<Option<&mut Region<F>>>>,
+        region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
-        offset: &mut usize,
         op: Box<dyn Op<F>>,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         let mut cp_values = vec![];
         for v in values.iter() {
             if let ValTensor::Instance { .. } = v {
-                cp_values.push(super::layouts::identity(
-                    self,
-                    region.clone(),
-                    &[v.clone()],
-                    offset,
-                )?);
+                cp_values.push(super::layouts::identity(self, region, &[v.clone()])?);
             } else {
                 cp_values.push(v.clone());
             }
         }
-        let res = op.layout(self, region, &cp_values, offset);
+        let res = op.layout(self, region, &cp_values);
         res
     }
 }
