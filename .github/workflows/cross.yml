@@ -28,9 +28,9 @@ jobs:
         id: archive
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
-          mv target/x86_64-unknown-linux-musl/release/ezkl_lib ezkl_lib-$VERSION-x86_64-unknown-linux-musl
-          tar czvf ezkl_lib-$VERSION-x86_64-unknown-linux-musl.tar.gz ezkl_lib-$VERSION-x86_64-unknown-linux-musl
-          echo "::set-output name=path::$(pwd)/ezkl_lib-$VERSION-x86_64-unknown-linux-musl.tar.gz"
+          mv target/x86_64-unknown-linux-musl/release/ezkl ezkl-$VERSION-x86_64-unknown-linux-musl
+          tar czvf ezkl-$VERSION-x86_64-unknown-linux-musl.tar.gz ezkl-$VERSION-x86_64-unknown-linux-musl
+          echo "::set-output name=path::$(pwd)/ezkl-$VERSION-x86_64-unknown-linux-musl.tar.gz"
 
       - name: Create Release
         run: |
@@ -62,11 +62,12 @@ jobs:
 
       - name: Archive
         id: archive
+        shell: pwsh
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          mv target/x86_64-pc-windows-msvc/release/ezkl_lib.exe ezkl_lib-$VERSION-x86_64-pc-windows-msvc.exe
-          7z a ezkl_lib-$VERSION-x86_64-pc-windows-msvc.zip ezkl_lib-$VERSION-x86_64-pc-windows-msvc.exe
-          echo "::set-output name=path::$(pwd)/ezkl_lib-$VERSION-x86_64-pc-windows-msvc.zip"
+            $VERSION=$env:GITHUB_REF -replace 'refs/tags/', ''
+            mv target/x86_64-pc-windows-msvc/release/ezkl_lib.exe ezkl_lib-$VERSION-x86_64-pc-windows-msvc.exe
+            7z a ezkl_lib-$VERSION-x86_64-pc-windows-msvc.zip ezkl_lib-$VERSION-x86_64-pc-windows-msvc.exe
+            echo "::set-output name=path::$(pwd)/ezkl_lib-$VERSION-x86_64-pc-windows-msvc.zip"
 
       - name: Create Release
         run: |
@@ -100,9 +101,9 @@ jobs:
         id: archive
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
-          mv target/x86_64-apple-darwin/release/ezkl_lib ezkl_lib-$VERSION-x86_64-apple-darwin
-          tar czvf ezkl_lib-$VERSION-x86_64-apple-darwin.tar.gz ezkl_lib-$VERSION-x86_64-apple-darwin
-          echo "::set-output name=path::$(pwd)/ezkl_lib-$VERSION-x86_64-apple-darwin.tar.gz"
+          mv target/x86_64-apple-darwin/release/ezkl ezkl-$VERSION-x86_64-apple-darwin
+          tar czvf ezkl-$VERSION-x86_64-apple-darwin.tar.gz ezkl-$VERSION-x86_64-apple-darwin
+          echo "::set-output name=path::$(pwd)/ezkl-$VERSION-x86_64-apple-darwin.tar.gz"
 
       - name: Create Release
         run: |
