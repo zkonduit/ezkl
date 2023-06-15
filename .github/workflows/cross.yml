@@ -27,10 +27,9 @@ jobs:
       - name: Archive
         id: archive
         run: |
-          VERSION=${GITHUB_REF##*/}
-          mv target/x86_64-unknown-linux-musl/release/ezkl ezkl-$VERSION-x86_64-unknown-linux-musl
-          tar czvf ezkl-$VERSION-x86_64-unknown-linux-musl.tar.gz ezkl-$VERSION-x86_64-unknown-linux-musl
-          echo "::set-output name=path::$(pwd)/ezkl-$VERSION-x86_64-unknown-linux-musl.tar.gz"
+          mv target/x86_64-unknown-linux-musl/release/ezkl ezkl-x86_64-unknown-linux-musl
+          tar czvf ezkl-x86_64-unknown-linux-musl.tar.gz ezkl-x86_64-unknown-linux-musl
+          echo "::set-output name=path::$(pwd)/ezkl-x86_64-unknown-linux-musl.tar.gz"
 
       - name: Setup GitHub CLI
         run: |
@@ -42,13 +41,13 @@ jobs:
       - name: Create Release
         run: |
           gh auth login --with-token <<< "${{ secrets.RELEASE_TOKEN }}"
-          gh release create $VERSION --title "Release $VERSION" --notes "Release $VERSION"
+          gh release create 0.4.7 --title "Release 0.4.7" --notes "Release 0.4.7"
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Upload Release Asset
         run: |
-          gh release upload $VERSION ${{ steps.archive.outputs.path }}
+          gh release upload 0.4.7 ${{ steps.archive.outputs.path }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
@@ -71,22 +70,21 @@ jobs:
       - name: Archive
         id: archive
         run: |
-          VERSION=${GITHUB_REF##*/}
-          mv target/x86_64-pc-windows-msvc/release/ezkl.exe ezkl-$VERSION-x86_64-pc-windows-msvc.exe
-          7z a ezkl-$VERSION-x86_64-pc-windows-msvc.zip ezkl-$VERSION-x86_64-pc-windows-msvc.exe
-          echo "::set-output name=path::$(pwd)/ezkl-$VERSION-x86_64-pc-windows-msvc.zip"
+          mv target/x86_64-pc-windows-msvc/release/ezkl.exe ezkl-t-x86_64-pc-windows-msvc.exe
+          7z a ezkl-t-x86_64-pc-windows-msvc.zip ezkl-t-x86_64-pc-windows-msvc.exe
+          echo "::set-output name=path::$(pwd)/ezkl-t-x86_64-pc-windows-msvc.zip"
 
       - name: Create Release
         run: |
           gh auth login --with-token <<< "${{ secrets.RELEASE_TOKEN }}"
-          gh release create $VERSION --title "Release $VERSION" --notes "Release $VERSION"
+          gh release create 0.4.7 --title "Release 0.4.7" --notes "Release 0.4.7"
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Upload Release Asset
         run: |
-          gh release upload $VERSION ${{ steps.archive.outputs.path }}
+          gh release upload 0.4.7 ${{ steps.archive.outputs.path }}
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
@@ -110,10 +108,9 @@ jobs:
       - name: Archive
         id: archive
         run: |
-          VERSION=${GITHUB_REF##*/}
-          mv target/x86_64-apple-darwin/release/ezkl ezkl-$VERSION-x86_64-apple-darwin
-          tar czvf ezkl-$VERSION-x86_64-apple-darwin.tar.gz ezkl-$VERSION-x86_64-apple-darwin
-          echo "::set-output name=path::$(pwd)/ezkl-$VERSION-x86_64-apple-darwin.tar.gz"
+          mv target/x86_64-apple-darwin/release/ezkl ezkl-t-x86_64-apple-darwin
+          tar czvf ezkl-t-x86_64-apple-darwin.tar.gz ezkl-t-x86_64-apple-darwin
+          echo "::set-output name=path::$(pwd)/ezkl-t-x86_64-apple-darwin.tar.gz"
 
       - name: Setup GitHub CLI
         run: |
@@ -122,12 +119,12 @@ jobs:
       - name: Create Release
         run: |
           gh auth login --with-token <<< "${{ secrets.RELEASE_TOKEN }}"
-          gh release create $VERSION --title "Release $VERSION" --notes "Release $VERSION"
+          gh release create 0.4.7 --title "Release 0.4.7" --notes "Release 0.4.7"
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Upload Release Asset
         run: |
-          gh release upload $VERSION ${{ steps.archive.outputs.path }}
+          gh release upload 0.4.7 ${{ steps.archive.outputs.path }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
