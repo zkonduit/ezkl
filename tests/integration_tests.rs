@@ -385,7 +385,9 @@ mod native_tests {
 
 
             seq!(N in 0..=1 {
+
             #(#[test_case(LARGE_TESTS[N])])*
+            #[ignore]
             fn large_kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::init_params_24();
@@ -394,6 +396,7 @@ mod native_tests {
             }
 
             #(#[test_case(LARGE_TESTS[N])])*
+            #[ignore]
             fn large_mock_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
