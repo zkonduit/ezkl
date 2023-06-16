@@ -401,8 +401,6 @@ impl GraphCircuit {
             pi_inner.push(module_instances);
         }
 
-        println!("pi_inner last: {}", pi_inner.last().unwrap().len());
-
         Ok(pi_inner)
     }
 }
@@ -471,7 +469,6 @@ impl Circuit<Fp> for GraphCircuit {
             .collect::<Vec<ValTensor<Fp>>>();
 
         let mut instance_offset = 0;
-        println!("instance_offset: {}", instance_offset);
         // we reserve module 0 for input, params, and output processing modules
         GraphModules::layout(
             &mut layouter,
@@ -480,8 +477,6 @@ impl Circuit<Fp> for GraphCircuit {
             self.settings.run_args.input_visibility,
             &mut instance_offset,
         )?;
-
-        println!("instance_offset: {}", instance_offset);
 
         // now we need to flatten the params
         let mut flattened_params = vec![];
@@ -494,8 +489,6 @@ impl Circuit<Fp> for GraphCircuit {
                     })?,
                 ];
         }
-
-        println!("instance_offset: {}", instance_offset);
 
         // now do stuff to the model params
         GraphModules::layout(

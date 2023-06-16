@@ -1050,7 +1050,7 @@ pub fn get_broadcasted_shape(
 ) -> Result<Vec<usize>, Box<dyn Error>> {
     let num_dims_a = shape_a.len();
     let num_dims_b = shape_b.len();
-    
+
     if num_dims_a == num_dims_b {
         let mut broadcasted_shape = Vec::with_capacity(num_dims_a);
         for (dim_a, dim_b) in shape_a.iter().zip(shape_b.iter()) {
@@ -1075,6 +1075,27 @@ mod tests {
         let data: Vec<f32> = vec![-1.0f32, 0.0, 1.0, 2.5];
         let tensor = Tensor::<f32>::new(Some(&data), &[2, 2]).unwrap();
         assert_eq!(&tensor[..], &data[..]);
+    }
+
+    #[test]
+    fn test_fr() {
+        let field = halo2curves::bn256::Fr::from(278);
+        let bytes = field.to_bytes();
+        let bytes_first_u64 = u64::from_le_bytes(bytes[0..8][..].try_into().unwrap());
+        let bytes_second_u64 = u64::from_le_bytes(bytes[8..16][..].try_into().unwrap());
+        let bytes_third_u64 = u64::from_le_bytes(bytes[16..24][..].try_into().unwrap());
+        let bytes_fourth_u64 = u64::from_le_bytes(bytes[24..32][..].try_into().unwrap());
+
+        let field_from_extracted_u64 =
+            halo2curves::bn256::Fr::from([first_u64, second_u64, third_u64, fourth_u64]);
+
+        let repr = field.to_repr();
+        let repr_first_u64 = u64::from_le_bytes(repr[0..8][..].try_into().unwrap());
+        let repr_second_u64 = u64::from_le_bytes(repr[8..16][..].try_into().unwrap());
+        let third_u64 = u64::from_le_bytes(repr[16..24][..].try_into().unwrap());
+        let fourth_u64 = u64::from_le_bytes(repr[24..32][..].try_into().unwrap());
+
+        println!("{:?}", field.to_bytes());
     }
 
     #[test]

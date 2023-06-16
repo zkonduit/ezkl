@@ -19,7 +19,7 @@ pub struct GraphInput {
     pub output_data: Vec<Vec<f32>>,
     /// Optional hashes of the inputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
     pub processed_inputs: Option<ModuleForwardResult>,
-    /// Optional hashes of the inputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
+    /// Optional hashes of the params (can be None if there are no commitments). Wrapped as Option for backwards compatibility
     pub processed_params: Option<ModuleForwardResult>,
     /// Optional hashes of the outputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
     pub processed_outputs: Option<ModuleForwardResult>,
