@@ -794,6 +794,25 @@ impl Model {
         consts
     }
 
+    /// Shapes of the computational graph's constants
+    pub fn const_shapes(&self) -> Vec<Vec<usize>> {
+        let mut const_shapes = vec![];
+        for node in self.graph.nodes.values() {
+            match node {
+                NodeType::Node(n) => {
+                    let boxed_op = n.opkind.clone_dyn();
+                    if let Some(constant) = extract_const_quantized_values(&boxed_op) {
+                        const_shapes.push(constant.dims().to_vec());
+                    };
+                }
+                NodeType::SubGraph { model, .. } => {
+                    const_shapes.extend(model.const_shapes());
+                }
+            }
+        }
+        const_shapes
+    }
+
     /// Replaces all constants in the model with the provided values (in order of indexing)
     pub fn replace_consts(&mut self, consts: Vec<ValTensor<Fp>>) {
         let mut const_idx = 0;
@@ -817,25 +836,6 @@ impl Model {
                 }
             }
         }
-    }
-
-    /// Shapes of the computational graph's constants
-    pub fn const_shapes(&self) -> Vec<Vec<usize>> {
-        let mut const_shapes = vec![];
-        for node in self.graph.nodes.values() {
-            match node {
-                NodeType::Node(n) => {
-                    let boxed_op = n.opkind.clone_dyn();
-                    if let Some(constant) = extract_const_quantized_values(&boxed_op) {
-                        const_shapes.push(constant.dims().to_vec());
-                    };
-                }
-                NodeType::SubGraph { model, .. } => {
-                    const_shapes.extend(model.const_shapes());
-                }
-            }
-        }
-        const_shapes
     }
 
     /// Shapes of the computational graph's public inputs (if any)

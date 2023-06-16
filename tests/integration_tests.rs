@@ -681,9 +681,24 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
+                "forward",
+                "-D",
+                &format!("{}/tutorial/input.json", test_dir),
+                "-M",
+                &format!("{}/tutorial/network.onnx", test_dir),
+                "-O",
+                &format!("{}/tutorial/input_forward.json", test_dir),
+                &format!("--settings-path={}/tutorial/settings.json", test_dir),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
                 "mock",
                 "-D",
-                format!("{}/tutorial/input.json", test_dir).as_str(),
+                format!("{}/tutorial/input_forward.json", test_dir).as_str(),
                 "-M",
                 format!("{}/tutorial/network.onnx", test_dir).as_str(),
                 &format!("--settings-path={}/tutorial/settings.json", test_dir),

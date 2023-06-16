@@ -36,7 +36,6 @@ impl ModuleConfigs {
         visibility: VarVisibility,
         num_module_instances: usize,
     ) -> Self {
-        println!("num_module_instances: {}", num_module_instances);
         let poseidon_config = if (visibility.input.is_hashed()
             || visibility.output.is_hashed()
             || visibility.params.is_hashed())
@@ -123,9 +122,6 @@ impl GraphModules {
 
         let (num_constraints_params, num_instances_params) =
             Self::num_constraint_given_shapes(visibility.params, params_shapes);
-
-        println!("num_constraints_params: {}", num_constraints_params);
-        println!("num_instances_params: {}", num_instances_params);
 
         let (num_constraints_output, num_instances_output) =
             Self::num_constraint_given_shapes(visibility.output, output_shapes);

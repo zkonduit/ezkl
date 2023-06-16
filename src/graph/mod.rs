@@ -189,7 +189,9 @@ impl GraphCircuit {
 
         let mut num_params = 0;
         if !model.const_shapes().is_empty() {
-            num_params += model.const_shapes().iter().flatten().product::<usize>();
+            for shape in model.const_shapes() {
+                num_params += shape.iter().product::<usize>();
+            }
         }
 
         let (module_constraints, module_instances) = GraphModules::num_constraints_and_instances(
@@ -308,6 +310,7 @@ impl GraphCircuit {
         let processed_inputs = GraphModules::forward(&self.inputs)?;
 
         let params = self.model.get_all_consts();
+
         let flattened_params = flatten_valtensors(params)?
             .get_int_evals()?
             .into_iter()
