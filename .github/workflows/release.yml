@@ -58,9 +58,8 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@v1
+      uses: dtolnay/rust-toolchain@nightly
       with:
-        toolchain: ${{ matrix.rust }}
         target: ${{ matrix.target }}
 
     - name: Use Cross
@@ -78,7 +77,7 @@ jobs:
         echo "target dir is: ${{ env.TARGET_DIR }}"
 
     - name: Build release binary
-      run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }}
+      run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry
 
     - name: Strip release binary (linux and macos)
       if: matrix.build == 'linux' || matrix.build == 'macos'
