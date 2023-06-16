@@ -24,7 +24,7 @@ jobs:
         id: release
         uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN}}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN}}
         with:
           tag_name: ${{ env.EZKL_VERSION }}
           release_name: ${{ env.EZKL_VERSION }}
@@ -123,7 +123,7 @@ jobs:
     - name: Upload release archive
       uses: actions/upload-release-asset@v1.0.2
       env:
-        GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN}}
+        RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN}}
       with:
         upload_url: ${{ needs.create-release.outputs.upload_url}}
         asset_path: ${{ env.ASSET }}
