@@ -67,8 +67,8 @@ jobs:
       run: | 
         cargo install cross -Z sparse-registry
         echo "CARGO=cross" >> $GITHUB_ENV
-        ECHO "TARGET_FLAGS=--target ${{ matrix.target }}" >> $GITHUB_ENV
-        ECHO "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
+        echo "TARGET_FLAGS=--target ${{ matrix.target }}" >> $GITHUB_ENV
+        echo "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
 
     - name: Show command used for Cargo
       run: |
