@@ -57,16 +57,6 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v3
 
-    - name: Install packages (Ubuntu)
-      if: matrix.os == 'ubuntu-22.04'
-      run: |
-        ci/ubuntu-install-packages
-      
-    - name: Install packages (macOS)
-      if: matrix.os == 'macos-13'
-      run: |
-        ci/macos-install-packages
-
     - name: Install Rust
       uses: dtolnay/rust-toolchain@v1
       with:
@@ -88,34 +78,27 @@ jobs:
         echo "target dir is: ${{ env.TARGET_DIR }}"
 
     - name: Build release binary
-      run: ${{ env.CARGO }} build --verbose --release ${{ env.TARGET_FLAGS }}
+      run: ezkl build --release --target ${{ env.TARGET_FLAGS }}
 
     - name: Strip release binary (linux and macos)
       if: matrix.build == 'linux' || matrix.build == 'macos'
       run: strip "target/${{ matrix.target }}/release/ezkl"
 
-    - name: Build archive
+    - name: Build archive (Linux/macOS)
+      if: matrix.build == 'linux' || matrix.build == 'macos'
       shell: bash
       run: |
-        outdir="$(ci/cargo-out-dir "${{ env.TARGET_DIR }}")"
-        staging="ripgrep-${{ needs.create-release.outputs.rg_version }}-${{ matrix.target }}"
-        mkdir -p "$staging"/{complete,doc}
-
-        cp {README.md,COPYING,UNLICENSE,LICENSE-MIT} "$staging/"
-        cp {CHANGELOG.md,FAQ.md,GUIDE.md} "$staging/doc/"
-        cp "$outdir"/{rg.bash,rg.fish,_rg.ps1} "$staging/complete/"
-        cp complete/_rg "$staging/complete/"
-
-        if [ "${{ matrix.os }}" = "windows-2023" ]; then
-          cp "target/${{ matrix.target }}/release/rg.exe" "$staging/"
-          7z a "$staging.zip" "$staging"
-          echo "ASSET=$staging.zip" >> $GITHUB_ENV
-        else
-          cp "$outdir"/rg.1 "$staging/doc/"
-          cp "target/${{ matrix.target }}/release/rg" "$staging/"
-          tar czf "$staging.tar.gz" "$staging"
-          echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
-        fi
+        mkdir -p build-artifacts
+        tar czvf build-artifacts/ezkl-${{ matrix.build }}.tar.gz -C "target/${{ matrix.target }}/release" ezkl
+        echo "ASSET=build-artifacts/ezkl-${{ matrix.build }}.tar.gz" >> $GITHUB_ENV
+    
+    - name: Build archive (Windows)
+      if: matrix.build == 'win-msvc'
+      shell: bash
+      run: |
+        mkdir -p build-artifacts
+        powershell.exe -Command "Compress-Archive -Path 'target/${{ matrix.target }}/release/ezkl.exe' -DestinationPath 'build-artifacts/ezkl-win.zip'"
+        echo "ASSET=build-artifacts/ezkl-win.zip" >> $GITHUB_ENV    
         
     - name: Upload release archive
       uses: actions/upload-release-asset@v1.0.2
