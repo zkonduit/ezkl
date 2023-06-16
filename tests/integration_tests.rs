@@ -1135,11 +1135,28 @@ mod native_tests {
     // prove-serialize-verify, the usual full path
     fn kzg_fuzz(example_name: String, scale: usize, bits: usize, logrows: usize, transcript: &str) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "forward",
+                "-D",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "-O",
+                format!("{}/{}/input_fuzz.json", test_dir, example_name).as_str(),
+                &format!("--scale={}", scale),
+                "--batch-size=1",
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "fuzz",
                 "-D",
-                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                format!("{}/{}/input_fuzz.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!("--bits={}", bits),
