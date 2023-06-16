@@ -20,14 +20,11 @@ jobs:
           echo "EZKL_VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
           echo "version is: ${{ env.EZKL_VERSION }}"
 
-      - name: Create GitHub release
-        id: release
-        uses: actions/create-release@v1
-        env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN}}
+      - name: Create Github Release
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ env.EZKL_VERSION }}
-          release_name: ${{ env.EZKL_VERSION }}
+          token: ${{ secrets.RELEASE_TOKEN }}
+
 
   build-release:
     name: build-release
