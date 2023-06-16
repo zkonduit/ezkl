@@ -827,8 +827,12 @@ pub(crate) fn prove(
             )?
         }
     };
-
-    info!("proof took {}", now.elapsed().as_secs());
+    let elapsed = now.elapsed();
+    info!(
+        "proof took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
 
     snark.save(&proof_path)?;
 
@@ -1170,7 +1174,12 @@ pub(crate) fn aggregate(
             check_mode,
         )?;
 
-        info!("Aggregation proof took {}", now.elapsed().as_secs());
+        let elapsed = now.elapsed();
+        info!(
+            "Aggregation proof took {}.{}",
+            elapsed.as_secs(),
+            elapsed.subsec_millis()
+        );
         snark.save(&proof_path)?;
         save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, agg_pk.get_vk())?;
     }
@@ -1194,7 +1203,12 @@ pub(crate) fn verify(
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_settings)?;
     let now = Instant::now();
     let result = verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, strategy);
-    info!("verify took {}", now.elapsed().as_secs());
+    let elapsed = now.elapsed();
+    info!(
+        "verify took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
     info!("verified: {}", result.is_ok());
     Ok(())
 }
@@ -1213,7 +1227,13 @@ pub(crate) fn verify_aggr(
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
     let now = Instant::now();
     let result = verify_proof_circuit_kzg(&params, proof, &vk, strategy);
-    info!("verify took {}", now.elapsed().as_secs());
+
+    let elapsed = now.elapsed();
+    info!(
+        "verify took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
     info!("verified: {}", result.is_ok());
     Ok(())
 }
