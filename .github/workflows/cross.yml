@@ -1,4 +1,3 @@
-# test
 name: ezkl-lib-release
 on:
   push:
@@ -23,10 +22,12 @@ jobs:
 
       - name: Create GitHub release
         id: release
-        uses: softprops/action-gh-release@v1
+        uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN}}
-
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN}}
+        with:
+          tag_name: ${{ env.EZKL_VERSION }}
+          release_name: ${{ env.EZKL_VERSION }}
 
   build-release:
     name: build-release
