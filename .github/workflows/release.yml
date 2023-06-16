@@ -21,6 +21,7 @@ jobs:
           echo "version is: ${{ env.EZKL_VERSION }}"
 
       - name: Create Github Release
+        id: create_release
         uses: softprops/action-gh-release@v1
         with:
           token: ${{ secrets.RELEASE_TOKEN }}
