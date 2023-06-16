@@ -399,7 +399,12 @@ pub fn runconv() {
     )
     .unwrap();
     prover.assert_satisfied();
-    println!("MOCK PROVING took {}", now.elapsed().as_secs());
+    let elapsed = now.elapsed();
+    println!(
+        "MOCK PROVING took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
 
     let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner]];
 
@@ -407,17 +412,36 @@ pub fn runconv() {
     println!("SRS GENERATION");
     let now = Instant::now();
     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(K as u32);
-    println!("SRS GENERATION took {}", now.elapsed().as_secs());
+    let elapsed = now.elapsed();
+    println!(
+        "SRS GENERATION took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
+
     let empty_circuit = circuit.without_witnesses();
+
     // Initialize the proving key
     println!("VK GENERATION");
     let now = Instant::now();
     let vk = keygen_vk(&params, &empty_circuit).expect("keygen_vk should not fail");
-    println!("VK GENERATION took {}", now.elapsed().as_secs());
+    let elapsed = now.elapsed();
+    println!(
+        "VK GENERATION took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
+
     println!("PK GENERATION");
     let now = Instant::now();
     let pk = keygen_pk(&params, vk, &empty_circuit).expect("keygen_pk should not fail");
-    println!("PK GENERATION took {}", now.elapsed().as_secs());
+    let elapsed = now.elapsed();
+    println!(
+        "PK GENERATION took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
+
     println!("PROOF GENERATION");
     let now = Instant::now();
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
@@ -432,8 +456,13 @@ pub fn runconv() {
     )
     .expect("proof generation should not fail");
     let proof = transcript.finalize();
-    //println!("{:?}", proof);
-    println!("PROOF GENERATION took {}", now.elapsed().as_secs());
+    let elapsed = now.elapsed();
+    println!(
+        "PROOF GENERATION took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
+
     let now = Instant::now();
     let strategy = SingleStrategy::new(&params);
     let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
@@ -445,7 +474,13 @@ pub fn runconv() {
         &mut transcript,
     );
     assert!(verify.is_ok());
-    println!("Verify took {}", now.elapsed().as_secs());
+
+    let elapsed = now.elapsed();
+    println!(
+        "Verify took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
 }
 
 fn main() {
