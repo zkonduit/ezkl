@@ -454,7 +454,11 @@ pub enum Commands {
         settings_path: PathBuf,
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = "safe")]
-        check_mode: CheckMode
+        check_mode: CheckMode,
+        /// Deploy a test contract that stores the input_data in data .json in its storage,
+        /// then reads from it. 
+        #[arg(long, default_value = "false")]
+        test_reads: bool
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for a single proof
@@ -592,6 +596,9 @@ pub enum Commands {
         /// The path to the Solidity code
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
+        /// The path to output the compiled Solidity bytecode
+        #[arg(long)]
+        sol_bytecode_path: Option<PathBuf>,
         /// The path to the .json data file, which should
         /// contain the necessary calldata and account addresses  
         /// needed need to read from all the on-chain
@@ -599,9 +606,6 @@ pub enum Commands {
         /// ingests as inputs. 
         #[arg(short = 'D', long)]
         data: Option<PathBuf>,
-        /// The path to output the compiled Solidity bytecode
-        #[arg(long)]
-        sol_bytecode_path: Option<PathBuf>,
     },
 
     /// Print the proof in hexadecimal

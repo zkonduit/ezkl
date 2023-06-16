@@ -2,8 +2,11 @@ use crate::circuit::CheckMode;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::commands::CalibrationTarget;
 use crate::commands::{Cli, Commands, RunArgs, StrategyType};
+use crate::eth::{setup_eth_backend, test_on_chain_inputs};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::eth::{fix_verifier_sol, verify_proof_with_data_attestation, read_on_chain_inputs, get_contract_artifacts, verify_proof_via_solidity};
+use crate::eth::{fix_verifier_sol, verify_proof_with_data_attestation, 
+    read_on_chain_inputs, get_contract_artifacts, verify_proof_via_solidity, evm_quantize
+};
 use crate::graph::{
     scale_to_multiplier, GraphCircuit, GraphInput, Model, GraphSettings, Visibility,
 };
@@ -190,7 +193,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             transcript,
             strategy,
             settings_path,
-            check_mode
+            check_mode,
+            test_reads
         } => prove(
             data,
             model,
@@ -200,7 +204,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             transcript,
             strategy,
             settings_path,
-            check_mode
+            check_mode,
+            test_reads
         ).await,
         Commands::Aggregate {
             settings_paths,
@@ -247,8 +252,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 proof_path,
                 deployment_code_path,
                 sol_code_path,
-                data,
                 sol_bytecode_path,
+                data,
             ).await
         }
         Commands::PrintProofHex { proof_path } => print_proof_hex(proof_path),
@@ -609,7 +614,7 @@ pub(crate) fn mock(
 
     let data = GraphInput::from_path(data)?;
     circuit.load_inputs(&data);
-    let public_inputs = circuit.prepare_public_inputs(&data)?;
+    let public_inputs = circuit.prepare_public_inputs(&data, None)?;
 
     info!("Mock proof");
 
@@ -716,15 +721,15 @@ pub(crate) fn create_evm_verifier(
 #[cfg(not(target_arch = "wasm32"))]
 fn create_evm_data_attestation_verifier(
     vk_path: PathBuf,
-    params_path: PathBuf,
-    circuit_params_path: PathBuf,
+    srs_path: PathBuf,
+    settings_path: PathBuf,
     sol_code_path: PathBuf,
     sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
     data: PathBuf
 ) -> Result<(), Box<dyn Error>> {
-    let model_circuit_params = GraphSettings::load(&circuit_params_path)?;
-    let params = load_params_cmd(params_path, model_circuit_params.run_args.logrows)?;
+    let model_circuit_params = GraphSettings::load(&settings_path)?;
+    let params = load_params_cmd(srs_path, model_circuit_params.run_args.logrows)?;
 
     let num_instance = model_circuit_params.total_instances();
 
@@ -763,8 +768,8 @@ pub(crate) async fn verify_evm (
     proof_path: PathBuf,
     deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
-    data: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
+    data: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
 
@@ -867,7 +872,7 @@ pub(crate) fn setup(
 }
 
 pub(crate) async fn prove(
-    data: PathBuf,
+    data_path: PathBuf,
     model_path: PathBuf,
     pk_path: PathBuf,
     proof_path: PathBuf,
@@ -876,14 +881,41 @@ pub(crate) async fn prove(
     strategy: StrategyType,
     settings_path: PathBuf,
     check_mode: CheckMode,
+    test_onchain_input: bool,
 ) -> Result<(), Box<dyn Error>> {
-    let mut data = GraphInput::from_path(data)?;
+    let data = GraphInput::from_path(data_path.clone())?;
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, check_mode)?;
-    if circuit.settings.run_args.on_chain_inputs {
-        data = read_on_chain_inputs(circuit.settings.run_args.scale, &mut data).await?;
-    }
-    let public_inputs = circuit.prepare_public_inputs(&data)?;
+    let public_inputs = if circuit.settings.run_args.on_chain_inputs {
+        let scale = circuit.settings.run_args.scale;
+        if let Some((_, rpc_url)) = &data.on_chain_input_data {
+            if test_onchain_input {
+                // Set up local anvil instance for reading on-chain data
+                let (anvil, client) = setup_eth_backend(None).await?;
+                let calls_to_accounts = test_on_chain_inputs(client.clone(), scale, &data, data_path, anvil.endpoint()).await?;
+                let inputs = read_on_chain_inputs(client.clone(), client.address(), &calls_to_accounts).await?;
+                let quantized_evm_inputs = evm_quantize(client, scale_to_multiplier(scale), &inputs).await?;
+                drop(anvil);
+                circuit.prepare_public_inputs(&data, Some(vec![quantized_evm_inputs]))?
+            } else {
+                // Set up anvil instance for reading on-chain data from RPC URL endpoint provided in data
+                let (anvil, client) = setup_eth_backend(Some(rpc_url)).await?;
+                let calls_to_accounts = test_on_chain_inputs(client.clone(), scale, &data, data_path, anvil.endpoint()).await?;
+                let inputs = read_on_chain_inputs(client.clone(), client.address(), &calls_to_accounts).await?;
+                drop(anvil);
+                // Set up local anvil instance for deploying QuantizeData.sol
+                let (anvil, client) = setup_eth_backend(None).await?;
+                let quantized_evm_inputs = evm_quantize(client, scale_to_multiplier(scale), &inputs).await?;
+                drop(anvil);
+                circuit.prepare_public_inputs(&data, Some(vec![quantized_evm_inputs]))?
+            }
+        } else {
+            panic!("No on_chain_input_data field found in .json data file")
+        }
+    } else {
+        circuit.prepare_public_inputs(&data, None)?
+    };
+    
 
     let circuit_settings = circuit.settings.clone();
 
@@ -961,7 +993,7 @@ pub(crate) fn fuzz(
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
         .map_err(Box::<dyn Error>::from)?;
 
-    let public_inputs = circuit.prepare_public_inputs(&data)?;
+    let public_inputs = circuit.prepare_public_inputs(&data, None)?;
 
     let strategy = KZGSingleStrategy::new(&params);
     std::mem::drop(_r);

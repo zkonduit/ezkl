@@ -1,6 +1,7 @@
-use crate::graph::{CallsToAccount, GraphInput};
+use crate::graph::{CallsToAccount, GraphInput, quantize_float};
 use crate::pfsys::evm::{DeploymentCode, EvmVerificationError};
 use crate::pfsys::Snark;
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use ethers::abi::Abi;
 use ethers::abi::Contract;
 use ethers::contract::abigen;
@@ -165,7 +166,6 @@ pub async fn verify_proof_with_data_attestation(
         client.clone()
     ).unwrap();
 
-    // TODO: Handle the floating point conversion on the EVM side. For now, we just convert to u256
     let (contract_addresses, call_data) = if let Some(data) = data {
         let mut contract_addresses = vec![];
         let mut call_data = vec![vec![]];
@@ -234,83 +234,141 @@ pub fn get_provider(rpc_url: &str) -> Result<Provider<Http>, Box<dyn Error>> {
     debug!("{:#?}", provider);
     Ok(provider)
 }
-/// Reads on-chain inputs, casts them as U256, then quantizes them to the specified scale.
-pub async fn read_on_chain_inputs (
+
+/// Tests on-chain inputs by deploying a contract that stores the data.input_data in its storage
+pub async fn test_on_chain_inputs<M: 'static + Middleware>(
+    client: Arc<M>,
     scale: u32,
-    data: &mut GraphInput
-) -> Result<GraphInput, Box<dyn Error>> {
-    // Iterate over all on-chain inputs
-    if let Some((on_chain_inputs, rpc_url)) = &data.on_chain_input_data {
-        // Set up anvil instance for reading on-chain data from desired RPC endpoint
-        let (anvil, client) = setup_eth_backend(Some(rpc_url)).await?;
+    data: &GraphInput,
+    data_path: PathBuf,
+    endpoint: String,
+) -> Result<Vec<CallsToAccount>, Box<dyn Error>> {
 
-        let mut fetched_inputs = vec![];
-        let mut decimals = vec![];
-        for on_chain_data in on_chain_inputs {
-            // Construct the address
-            let contract_address_bytes = hex::decode(on_chain_data.address.clone())?;
-            let contract_address = H160::from_slice(&contract_address_bytes);
+    let factory = get_sol_contract_factory(
+        PathBuf::from("./TestReads.sol"),
+        "TestReads.sol",
+        client.clone(),
+    ).unwrap();
 
-            for (call_data, decimal) in &on_chain_data.call_data {
-                let call_data_bytes = hex::decode(call_data.clone())?;
-                let tx: TypedTransaction = TransactionRequest::default()
-                    .to(contract_address)
-                    .from(client.address())
-                    .data(call_data_bytes)
-                    .into();
+    // Take the data in data.input_data, quantize them to the specified scale using QuantizeData.sol.
+    let quantized_data: Vec<i128>  = data.input_data[0]
+        .par_iter()
+        .map(|x| quantize_float(x, 0.0, scale).unwrap())
+        .collect();
+    
+    let contract = factory.deploy(quantized_data)?.send().await?;
 
-                info!("created tx");
-                debug!("transaction {:#?}", tx);
+    abigen!(TestReads, "./TestReads.json");
 
-                let result = client.call(&tx, None).await?;
-                debug!("return data {:#?}", result);
-                fetched_inputs.push(result);
-                decimals.push(decimal);
-            }
-        }
-        drop(anvil);
-        // Set up another anvil instance for deploying quantizationData contract to a local EVM instance.
-        let (anvil, client) = setup_eth_backend(None).await?;
-        let factory = get_sol_contract_factory(
-            PathBuf::from("./QuantizeData.sol"),
-            "DataAttestationVerifier",
-            client.clone(),
-        ).unwrap();
-        
-        
-        let contract = factory.deploy(())?.send().await?;
-        
-        abigen!(QuantizeData, "./QuantizeData.json");
-        
-        let contract = QuantizeData::new(contract.address(), client.clone());
+    let contract = TestReads::new(contract.address(), client.clone());
 
-        let fetched_inputs = fetched_inputs
-            .iter()
-            .map(|x| Result::<_, std::convert::Infallible>::Ok(ethers::types::Bytes::from(x.to_vec())))
-            .collect::<Result<Vec<Bytes>, _>>()?;
-
-        let decimals = decimals
-            .iter()
-            .map(|x| U256::from_dec_str(&x.to_string()))
-            .collect::<Result<Vec<U256>, _>>()?;
-
-        let result = contract
-            .quantize_data(
-                fetched_inputs, 
-                decimals,
-                U256::from_dec_str(&scale.to_string())?
-            )
-            .call()
-            .await;
-           
-        let result = result.unwrap();
-        data.input_data[0] = result.iter().map(|&x| U256::from(x).low_u128() as f32).collect();
-        drop(anvil);
-    } else {
-        panic!("No on_chain_input_data field found in .json data file")
+    // Get the encoded call data for each input
+    let mut calldata = vec![];
+    for(i, _) in data.input_data[0].iter().enumerate() {
+        let function = contract.method::<_, U256>("args", i as u32).unwrap();
+        let call = function.calldata().unwrap();
+        // Push (call, decimals) to the calldata vector, and set the decimals to 0.
+        calldata.push((call.to_string(), 0));
     }
-    Ok(data.clone())
+    // Instantiate a new CallsToAccount struct
+    let calls_to_account = CallsToAccount {
+        call_data: calldata,
+        address: contract.address().to_string(),
+    };
+    let calls_to_accounts = vec![calls_to_account];
+    // Fill the on_chain_input_data field of the GraphInput struct
+    let mut data = data.clone();
+    data.on_chain_input_data = Some((calls_to_accounts.clone(), endpoint));
+    // Save the updated GraphInput struct to the data_path
+    data.save(data_path)?;
+    Ok(calls_to_accounts)
 }
+
+
+/// Reads on-chain inputs, returning the raw encoded data returned from making all the calls in on_chain_input_data
+pub async fn read_on_chain_inputs<M: 'static + Middleware>(
+    client: Arc<M>,
+    address: H160,
+    data: &Vec<CallsToAccount>
+) -> Result<(Vec<Bytes>, Vec<u8>), Box<dyn Error>> {
+    
+    // Iterate over all on-chain inputs
+    let mut fetched_inputs = vec![];
+    let mut decimals = vec![];
+    for on_chain_data in data {
+        // Construct the address
+        let contract_address_bytes = hex::decode(on_chain_data.address.clone())?;
+        let contract_address = H160::from_slice(&contract_address_bytes);
+
+        for (call_data, decimal) in &on_chain_data.call_data {
+            let call_data_bytes = hex::decode(call_data.clone())?;
+            let tx: TypedTransaction = TransactionRequest::default()
+                .to(contract_address)
+                .from(address)
+                .data(call_data_bytes)
+                .into();
+            debug!("transaction {:#?}", tx);
+
+            let result = client.call(&tx, None).await?;
+            debug!("return data {:#?}", result);
+            fetched_inputs.push(result);
+            decimals.push(*decimal);
+        }
+    }
+    Ok((fetched_inputs, decimals))
+
+}
+
+///
+pub async fn evm_quantize <M: 'static + Middleware>(
+    client: Arc<M>,
+    scale: f64,
+    data: &(Vec<ethers::types::Bytes>, Vec<u8>),
+)-> Result<Vec<i128>, Box<dyn Error>> {
+
+    let factory = get_sol_contract_factory(
+        PathBuf::from("./QuantizeData.sol"),
+        "QuantizeData",
+        client.clone(),
+    ).unwrap();
+    
+    
+    let contract = factory.deploy(())?.send().await?;
+    
+    abigen!(QuantizeData, "./QuantizeData.json");
+    
+    let contract = QuantizeData::new(contract.address(), client.clone());
+
+    let fetched_inputs = data.0.clone();
+    let decimals = data.1.clone();
+
+    let fetched_inputs = fetched_inputs
+        .iter()
+        .map(|x| Result::<_, std::convert::Infallible>::Ok(ethers::types::Bytes::from(x.to_vec())))
+        .collect::<Result<Vec<Bytes>, _>>()?;
+
+    let decimals = decimals
+        .iter()
+        .map(|x| U256::from_dec_str(&x.to_string()))
+        .collect::<Result<Vec<U256>, _>>()?;
+
+    let results = contract
+        .quantize_data(
+            fetched_inputs, 
+            decimals,
+            U256::from_dec_str(&scale.to_string())?
+        )
+        .call()
+        .await;
+        
+    let results = results.unwrap();
+    info!(
+        "evm quantization results: {:#?}",
+        results,
+    );
+    return Ok(results.iter().map(|&x| i128::from(x)).collect());
+}
+
 
 /// Generates the contract factory for a solidity verifier, optionally compiling the code with optimizer runs set on the Solc compiler.
 fn get_sol_contract_factory<M: 'static + Middleware>(
@@ -623,7 +681,7 @@ pub fn fix_verifier_sol(
     let mut contract = if let Some(data) = data {
         let total_calls: usize = data.iter().map(|v| v.call_data.len()).sum();
         format!(
-            r#"// SPDX-License-Identifier: MIT
+            r#" // SPDX-License-Identifier: MIT
             pragma solidity ^0.8.17;
             
             contract DataAttestationVerifier {{
@@ -636,13 +694,16 @@ pub fn fix_verifier_sol(
                 struct AccountCall {{
                     address contractAddress;
                     mapping(uint256 => bytes) callData;
+                    mapping(uint256 => uint256) decimals;
                     uint callCount;
                 }}
                 AccountCall[{}] public accountCalls;
-
+            
                 uint constant public SCALE = 2<<{};
             
-                uint constan public TOTAL_CALLS = {};
+                uint256 constant SIZE_LIMIT = uint256(uint128(type(int128).max));
+            
+                uint256 constant TOTAL_CALLS = {};
             
                 /**
                  * @dev Initialize the contract with account calls the EZKL model will read from.
@@ -650,116 +711,77 @@ pub fn fix_verifier_sol(
                  * @param _callData - The abi encoded function calls to make to the `contractAddress` that EZKL reads storage from.
                  */
                 constructor(address[] memory _contractAddresses, bytes[][] memory _callData, uint256[] memory _decimals) {{
-                    require(_contractAddresses.length == _callData.length && accountCalls.length == _contractAddresses.length, "Invalid input length");
+                    require(_contractAddresses.length == _callData.length && TOTAL_CALLS == _contractAddresses.length, "Invalid input length");
                     // fill in the accountCalls storage array
+                    uint counter = 0;
                     for(uint256 i = 0; i < _contractAddresses.length; i++) {{
                         AccountCall storage accountCall = accountCalls[i];
                         accountCall.contractAddress = _contractAddresses[i];
                         accountCall.callCount = _callData[i].length;
                         for(uint256 j = 0; j < _callData[i].length; j++){{
                             accountCall.callData[j] = _callData[i][j];
-                            accountCall.decimals[j] = 10**_decimals[totalCalls + j];
+                            accountCall.decimals[j] = 10**_decimals[counter + j];
                         }}
                         // count the total number of storage reads across all of the accounts
-                        totalCalls += _callData[i].length;
+                        counter += _callData[i].length;
                     }}
                 }}
             
-                /**
-                 * @notice Calculates floor(x * y / denominator) with full precision. Throws if result overflows a uint256 or denominator == 0
-                 * @dev Original credit to Remco Bloemen under MIT license (https://xn--2-umb.com/21/muldiv)
-                 * with further edits by Uniswap Labs also under MIT license.
-                 */
                 function mulDiv(uint256 x, uint256 y, uint256 denominator) internal pure returns (uint256 result) {{
                     unchecked {{
-                        // 512-bit multiply [prod1 prod0] = x * y. Compute the product mod 2^256 and mod 2^256 - 1, then use
-                        // use the Chinese Remainder Theorem to reconstruct the 512 bit result. The result is stored in two 256
-                        // variables such that product = prod1 * 2^256 + prod0.
-                        uint256 prod0; // Least significant 256 bits of the product
-                        uint256 prod1; // Most significant 256 bits of the product
+                        uint256 prod0;
+                        uint256 prod1;
                         assembly {{
                             let mm := mulmod(x, y, not(0))
                             prod0 := mul(x, y)
                             prod1 := sub(sub(mm, prod0), lt(mm, prod0))
                         }}
             
-                        // Handle non-overflow cases, 256 by 256 division.
                         if (prod1 == 0) {{
-                            // Solidity will revert if denominator == 0, unlike the div opcode on its own.
-                            // The surrounding unchecked block does not change this fact.
-                            // See https://docs.soliditylang.org/en/latest/control-structures.html#checked-or-unchecked-arithmetic.
                             return prod0 / denominator;
                         }}
             
-                        // Make sure the result is less than 2^256. Also prevents denominator == 0.
                         require(denominator > prod1, "Math: mulDiv overflow");
             
-                        ///////////////////////////////////////////////
-                        // 512 by 256 division.
-                        ///////////////////////////////////////////////
-            
-                        // Make division exact by subtracting the remainder from [prod1 prod0].
                         uint256 remainder;
                         assembly {{
-                            // Compute remainder using mulmod.
                             remainder := mulmod(x, y, denominator)
-            
-                            // Subtract 256 bit number from 512 bit number.
                             prod1 := sub(prod1, gt(remainder, prod0))
                             prod0 := sub(prod0, remainder)
                         }}
             
-                        // Factor powers of two out of denominator and compute largest power of two divisor of denominator. Always >= 1.
-                        // See https://cs.stackexchange.com/q/138556/92363.
-            
-                        // Does not overflow because the denominator cannot be zero at this stage in the function.
                         uint256 twos = denominator & (~denominator + 1);
                         assembly {{
-                            // Divide denominator by twos.
                             denominator := div(denominator, twos)
-            
-                            // Divide [prod1 prod0] by twos.
                             prod0 := div(prod0, twos)
-            
-                            // Flip twos such that it is 2^256 / twos. If twos is zero, then it becomes one.
                             twos := add(div(sub(0, twos), twos), 1)
                         }}
             
-                        // Shift in bits from prod1 into prod0.
                         prod0 |= prod1 * twos;
             
-                        // Invert denominator mod 2^256. Now that denominator is an odd number, it has an inverse modulo 2^256 such
-                        // that denominator * inv = 1 mod 2^256. Compute the inverse by starting with a seed that is correct for
-                        // four bits. That is, denominator * inv = 1 mod 2^4.
                         uint256 inverse = (3 * denominator) ^ 2;
             
-                        // Use the Newton-Raphson iteration to improve the precision. Thanks to Hensel's lifting lemma, this also works
-                        // in modular arithmetic, doubling the correct bits in each step.
-                        inverse *= 2 - denominator * inverse; // inverse mod 2^8
-                        inverse *= 2 - denominator * inverse; // inverse mod 2^16
-                        inverse *= 2 - denominator * inverse; // inverse mod 2^32
-                        inverse *= 2 - denominator * inverse; // inverse mod 2^64
-                        inverse *= 2 - denominator * inverse; // inverse mod 2^128
-                        inverse *= 2 - denominator * inverse; // inverse mod 2^256
+                        inverse *= 2 - denominator * inverse;
+                        inverse *= 2 - denominator * inverse;
+                        inverse *= 2 - denominator * inverse;
+                        inverse *= 2 - denominator * inverse;
+                        inverse *= 2 - denominator * inverse;
+                        inverse *= 2 - denominator * inverse;
             
-                        // Because the division is now exact we can divide by multiplying with the modular inverse of denominator.
-                        // This will give us the correct result modulo 2^256. Since the preconditions guarantee that the outcome is
-                        // less than 2^256, this is the final result. We don't need to compute the high bits of the result and prod1
-                        // is no longer required.
                         result = prod0 * inverse;
                         return result;
                     }}
                 }}
-                function quantize_data(bytes memory data, uint256 decimals, uint256 scale) internal pure returns (uint256) {{
-                    return mulDiv(abi.decode(data, (uint256)), decimals, scale);
+                function quantize_data(bytes memory data, uint256 decimals) internal pure returns (uint128 quantized_data) {{
+                    uint output = mulDiv(abi.decode(data, (uint256)), SCALE, decimals);
+                    require(output < SIZE_LIMIT, "QuantizeData: overflow");
+                    quantized_data = uint128(output);
                 }}
             
                 function staticCall (address target, bytes memory data) internal view returns (bytes memory) {{
                     (bool success, bytes memory returndata) = target.staticcall(data);
                     if (success) {{
                         if (returndata.length == 0) {{
-                            // only check isContract if the call was successful and the return data is empty
-                            // otherwise we already know that it was a contract
                             require(target.code.length > 0, "Address: call to non-contract");
                         }}
                     return returndata;
@@ -769,16 +791,15 @@ pub fn fix_verifier_sol(
                 }}
             
                 function attestData(uint256[] memory pubInputs) internal view {{
-                    require(pubInputs.length >= totalCalls, "Invalid public inputs length");
+                    require(pubInputs.length >= TOTAL_CALLS, "Invalid public inputs length");
                     uint256 _accountCount = accountCalls.length;
                     uint counter = 0; 
-                    uint256[] memory data = new uint256[](totalCalls);
                     for (uint8 i = 0; i < _accountCount; ++i) {{
                         address account = accountCalls[i].contractAddress;
                         for (uint8 j = 0; j < accountCalls[i].callCount; j++) {{
                             bytes memory returnData = staticCall(account, accountCalls[i].callData[j]);
-                            uint256 quantize_data = quantize_data(returnData, accountCalls[i].decimals[j], SCALE);
-                            require(abi.decode(returnData, (uint256)) == pubInputs[counter], "Public input does not match");
+                            uint256 quantized_data = quantize_data(returnData, accountCalls[i].decimals[j]);
+                            require(quantized_data == pubInputs[counter], "Public input does not match");
                             counter++;
                         }}
                     }}
@@ -793,10 +814,10 @@ pub fn fix_verifier_sol(
                     attestData(pubInputs);
                     assembly {{ 
                 "#,
-            scale.unwrap(),
             data.len(),
-            max_transcript_addr,
-            total_calls
+            scale.unwrap(),
+            total_calls,
+            max_transcript_addr
         )
         .trim()
         .to_string()

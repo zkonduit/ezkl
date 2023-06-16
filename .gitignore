@@ -3,6 +3,7 @@ data
 *.ipynb_checkpoints
 *.sol
 !QuantizeData.sol
+!TestReads.sol
 *.pf
 *.vk
 *.pk

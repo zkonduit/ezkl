@@ -447,8 +447,9 @@ mod native_tests {
             use crate::native_tests::TESTS_EVM;
             use test_case::test_case;
             use crate::native_tests::kzg_evm_prove_and_verify;
+            use crate::native_tests::kzg_evm_on_chain_input_prove_and_verify;
             use crate::native_tests::kzg_evm_aggr_prove_and_verify;
-           use crate::native_tests::kzg_fuzz;
+            use crate::native_tests::kzg_fuzz;
 
             /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
             /// specify those that will
@@ -480,7 +481,15 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "public", 1);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "public", false, 1);
+                }
+
+                #(#[test_case(TESTS_SOLIDITY[N])])*
+                fn kzg_evm_on_chain_input_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params_17();
+                    crate::native_tests::mv_test_(test);
+                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -488,7 +497,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "hashed", "private", "private", 1);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "hashed", "private", "private", false, 1);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -496,7 +505,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "hashed", 1);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "hashed", false, 1);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -1167,6 +1176,7 @@ mod native_tests {
         input_visibility: &str,
         param_visibility: &str,
         output_visibility: &str,
+        on_chain_inputs: bool,
         num_runs: usize,
     ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
@@ -1183,6 +1193,7 @@ mod native_tests {
                 &format!("--input-visibility={}", input_visibility),
                 &format!("--param-visibility={}", param_visibility),
                 &format!("--output-visibility={}", output_visibility),
+                &format!("--on-chain-inputs={}", on_chain_inputs)
             ])
             .status()
             .expect("failed to execute process");
@@ -1329,6 +1340,140 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(!status.success());
     }
+
+    fn kzg_evm_on_chain_input_prove_and_verify(
+        example_name: String,
+        num_runs: usize,
+    ) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "gen-settings",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+                &format!("--input-visibility={}", "true"),
+                &format!("--param-visibility={}", "false"),
+                &format!("--output-visibility={}", "true"),
+                "--on-chain-inputs=true",
+                "--bits=16",
+                "-K=17"
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "setup",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--pk-path",
+                &format!("{}/{}/key.pk", test_dir, example_name),
+                "--vk-path",
+                &format!("{}/{}/key.vk", test_dir, example_name),
+                &format!("--srs-path={}/kzg17.srs", test_dir),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let data_path = format!("{}/{}/input.json", test_dir, example_name);
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "prove",
+                "-D",
+                data_path.as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--proof-path",
+                &format!("{}/{}/proof.pf", test_dir, example_name),
+                "--pk-path",
+                &format!("{}/{}/key.pk", test_dir, example_name),
+                &format!("--srs-path={}/kzg17.srs", TEST_DIR.path().to_str().unwrap()),
+                "--transcript=evm",
+                "--strategy=single",
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+                "test-reads=true"
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let circuit_settings = format!(
+            "--settings-path={}/{}/settings.json",
+            test_dir, example_name
+        );
+        let code_arg = format!("{}/{}/deployment.code", test_dir, example_name);
+        let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
+        let param_arg = format!("--srs-path={}/kzg17.srs", test_dir);
+
+        let opt_arg = format!("--optimizer-runs={}", num_runs);
+
+        let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
+        let sol_bytecode_arg = format!("{}/{}/kzg.code", test_dir, example_name);
+
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "create-evm-data-attestation-verifier",
+                circuit_settings.as_str(),
+                "--sol-code-path",
+                sol_arg.as_str(),
+                "--sol-bytecode-path",
+                sol_bytecode_arg.as_str(),
+                param_arg.as_str(),
+                "--vk-path",
+                vk_arg.as_str(),
+                "--data",
+                data_path.as_str(),
+                opt_arg.as_str()
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
+
+        let mut args = vec![
+            "verify-evm",
+            "--proof-path",
+            pf_arg.as_str(),
+            "--deployment-code-path",
+            code_arg.as_str(),
+            "--sol-code-path",
+            sol_arg.as_str(),
+            "--sol-bytecode-path",
+            sol_bytecode_arg.as_str(),
+            "--data",
+            data_path.as_str(),
+        ];
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(&args)
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+        // As sanity check, add example that should fail.
+        args[2] = PF_FAILURE;
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(args)
+            .status()
+            .expect("failed to execute process");
+        assert!(!status.success());
+    }
+
 
     fn build_ezkl() {
         let status = Command::new("cargo")

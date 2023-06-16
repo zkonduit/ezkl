@@ -4,6 +4,8 @@ pragma solidity ^0.8.17;
 
 contract QuantizeData {
 
+
+    uint256 constant SIZE_LIMIT = uint256(uint128(type(int128).max));
     /**
      * @notice Calculates floor(x * y / denominator) with full precision. Throws if result overflows a uint256 or denominator == 0
      * @dev Original credit to Remco Bloemen under MIT license (https://xn--2-umb.com/21/muldiv)
@@ -89,10 +91,12 @@ contract QuantizeData {
             return result;
         }
     }
-    function quantize_data(bytes[] memory data, uint256[] memory decimals, uint256 SCALE) external pure returns (uint256[] memory quantized_data) {
-        quantized_data = new uint[](data.length);
+    function quantize_data(bytes[] memory data, uint256[] memory decimals, uint256 SCALE) external pure returns (int128[] memory quantized_data) {
+        quantized_data = new int128[](data.length);
         for(uint i; i < data.length; i++){
-            quantized_data[i] = mulDiv(abi.decode(data[i], (uint256)), decimals[i], SCALE);
+            uint output = mulDiv(abi.decode(data[i], (uint256)), SCALE, decimals[i]);
+            require(output < SIZE_LIMIT, "QuantizeData: overflow");
+            quantized_data[i] = int128(uint128(output));
         }
     }
 }
