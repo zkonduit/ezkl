@@ -23,12 +23,10 @@ jobs:
 
       - name: Create GitHub release
         id: release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v1
         env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN}}
-        with:
-          tag_name: ${{ env.EZKL_VERSION }}
-          release_name: ${{ env.EZKL_VERSION }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN}}
+
 
   build-release:
     name: build-release
