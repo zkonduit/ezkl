@@ -1078,27 +1078,6 @@ mod tests {
     }
 
     #[test]
-    fn test_fr() {
-        let field = halo2curves::bn256::Fr::from(278);
-        let bytes = field.to_bytes();
-        let bytes_first_u64 = u64::from_le_bytes(bytes[0..8][..].try_into().unwrap());
-        let bytes_second_u64 = u64::from_le_bytes(bytes[8..16][..].try_into().unwrap());
-        let bytes_third_u64 = u64::from_le_bytes(bytes[16..24][..].try_into().unwrap());
-        let bytes_fourth_u64 = u64::from_le_bytes(bytes[24..32][..].try_into().unwrap());
-
-        let field_from_extracted_u64 =
-            halo2curves::bn256::Fr::from([first_u64, second_u64, third_u64, fourth_u64]);
-
-        let repr = field.to_repr();
-        let repr_first_u64 = u64::from_le_bytes(repr[0..8][..].try_into().unwrap());
-        let repr_second_u64 = u64::from_le_bytes(repr[8..16][..].try_into().unwrap());
-        let third_u64 = u64::from_le_bytes(repr[16..24][..].try_into().unwrap());
-        let fourth_u64 = u64::from_le_bytes(repr[24..32][..].try_into().unwrap());
-
-        println!("{:?}", field.to_bytes());
-    }
-
-    #[test]
     fn tensor_clone() {
         let x = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
         let clone = x.clone();
