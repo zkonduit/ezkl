@@ -15,7 +15,6 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::{Bn256, Fr};
 use rand::rngs::OsRng;
-use std::sync::{Arc, Mutex};
 
 static mut KERNEL_HEIGHT: usize = 2;
 static mut KERNEL_WIDTH: usize = 2;
@@ -61,12 +60,12 @@ impl Circuit<Fr> for MyCircuit {
     ) -> Result<(), Error> {
         layouter.assign_region(
             || "",
-            |mut region| {
+            |region| {
+                let mut region = region::RegionCtx::new(region, 0);
                 config
                     .layout(
-                        Arc::new(Mutex::new(Some(&mut region))),
+                        &mut region,
                         &[self.image.clone()],
-                        &mut 0,
                         Box::new(PolyOp::Conv {
                             kernel: self.kernel.clone(),
                             bias: Some(self.bias.clone()),

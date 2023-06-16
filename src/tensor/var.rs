@@ -191,14 +191,13 @@ impl VarTensor {
     /// Assigns [ValTensor] to the columns of the inner tensor.
     pub fn assign<F: PrimeField + TensorType + PartialOrd>(
         &self,
-        region: &mut Option<&mut Region<F>>,
+        region: &mut Option<Region<F>>,
         offset: usize,
         values: &ValTensor<F>,
     ) -> Result<ValTensor<F>, halo2_proofs::plonk::Error> {
    
         let mut res = match region {
             Some(region) => {
-
         match values {
             ValTensor::Instance {
                 inner: instance,
@@ -238,7 +237,7 @@ impl VarTensor {
                     },
                     ValType::PrevAssigned(v) => match &self {
                         VarTensor::Advice { inner: advices, .. } => {
-                            v.copy_advice(|| "k", *region, advices[x], y)
+                            v.copy_advice(|| "k", region, advices[x], y)
                         }
                         _ => {
                             error!("PrevAssigned is only supported for advice columns");
@@ -254,7 +253,7 @@ impl VarTensor {
                         _ => unimplemented!(),
                     },
                     ValType::Constant(v) => {
-                        self.assign_constant(*region, offset + coord, v)
+                        self.assign_constant(region, offset + coord, v)
                     }
                 }
             })?.into()),
@@ -272,7 +271,7 @@ impl VarTensor {
     /// Duplication occurs by copying the last cell of the column to the first cell next column and creating a copy constraint between the two. 
     pub fn assign_with_duplication<F: PrimeField + TensorType + PartialOrd>(
         &self,
-        region: &mut Option<&mut Region<F>>,
+        region: &mut Option<Region<F>>,
         offset: usize,
         values: &ValTensor<F>,
         check_mode: &CheckMode
@@ -308,7 +307,7 @@ impl VarTensor {
                         },
                         ValType::PrevAssigned(v) => match &self {
                             VarTensor::Advice { inner: advices, .. } => {
-                                v.copy_advice(|| "k", *region, advices[x], y)
+                                v.copy_advice(|| "k", region, advices[x], y)
                             }
                             _ => {
                                 error!("PrevAssigned is only supported for advice columns");
@@ -325,7 +324,7 @@ impl VarTensor {
                             _ => unimplemented!(),
                         },
                         ValType::Constant(v) => {
-                            self.assign_constant(*region, offset + coord, v)
+                            self.assign_constant(region, offset + coord, v)
                         }
                     }; 
                     match cell {

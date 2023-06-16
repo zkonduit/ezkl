@@ -170,4 +170,13 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
             instances,
         }
     }
+
+    /// Allocate all columns that will be assigned to by a model.
+    pub fn new_dummy() -> Self {
+        ModelVars {
+            advices: vec![],
+            fixed: vec![],
+            instances: vec![],
+        }
+    }
 }
