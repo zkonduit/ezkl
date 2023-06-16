@@ -66,10 +66,10 @@ impl GraphModules {
     /// Get the instances for the module
     fn instances_from_visibility(
         visibility: Visibility,
-        module_res: ModuleForwardResult,
+        module_res: &Option<ModuleForwardResult>,
     ) -> Vec<Fp> {
         if visibility.is_hashed() {
-            module_res.poseidon_hash
+            module_res.clone().unwrap().poseidon_hash
         } else {
             vec![]
         }
@@ -80,15 +80,15 @@ impl GraphModules {
         let mut pi = vec![];
         pi.extend(Self::instances_from_visibility(
             visibility.input,
-            data.processed_inputs.clone().unwrap(),
+            &data.processed_inputs,
         ));
         pi.extend(Self::instances_from_visibility(
             visibility.params,
-            data.processed_params.clone().unwrap(),
+            &data.processed_params,
         ));
         pi.extend(Self::instances_from_visibility(
             visibility.output,
-            data.processed_outputs.clone().unwrap(),
+            &data.processed_outputs,
         ));
         pi
     }
