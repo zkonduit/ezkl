@@ -41,14 +41,14 @@ jobs:
 
       - name: Create Release
         run: |
-          gh auth login --with-token <<< "${{ secrets.RELEASE_TOKEN }}"
-          gh release create 0.4.10 --title "Release 0.4.10" --notes "Release 0.4.10"
+          echo "${{ secrets.RELEASE_TOKEN }}" | gh auth login --with-token
+          gh release create 0.4.11 --title "Release 0.4.11" --notes "Release 0.4.11"
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Upload Release Asset
         run: |
-          gh release upload 0.4.10 ${{ steps.archive.outputs.path }}
+          gh release upload 0.4.11 ${{ steps.archive.outputs.path }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
@@ -77,15 +77,15 @@ jobs:
 
       - name: Create Release
         run: |
-          gh auth login --with-token <<< "${{ secrets.RELEASE_TOKEN }}"
-          gh release create 0.4.10 --title "Release 0.4.10" --notes "Release 0.4.10"
+          echo "${{ secrets.RELEASE_TOKEN }}" | gh auth login --with-token
+          gh release create 0.4.11 --title "Release 0.4.11" --notes "Release 0.4.11"
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Upload Release Asset
         run: |
-          gh release upload 0.4.10 ${{ steps.archive.outputs.path }}
+          gh release upload 0.4.11 ${{ steps.archive.outputs.path }}
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
@@ -119,13 +119,13 @@ jobs:
 
       - name: Create Release
         run: |
-          gh auth login --with-token <<< "${{ secrets.RELEASE_TOKEN }}"
-          gh release create 0.4.10 --title "Release 0.4.10" --notes "Release 0.4.10"
+          echo "${{ secrets.RELEASE_TOKEN }}" | gh auth login --with-token
+          gh release create 0.4.11 --title "Release 0.4.11" --notes "Release 0.4.11"
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Upload Release Asset
         run: |
-          gh release upload 0.4.10 ${{ steps.archive.outputs.path }}
+          gh release upload 0.4.11 ${{ steps.archive.outputs.path }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
