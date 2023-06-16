@@ -89,6 +89,9 @@ pub enum GraphError {
 
 const ASSUMED_BLINDING_FACTORS: usize = 6;
 
+/// 26
+const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;
+
 /// The input tensor data and shape, and output data for the computational graph (model) as floats.
 /// For example, the input might be the image data for a neural network, and the output class scores.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -432,7 +435,7 @@ impl GraphCircuit {
             let recommended_bits = (res.max_lookup_input as f64).log2().ceil() as usize + 1;
             assert!(res.max_lookup_input <= 2i128.pow(recommended_bits as u32 - 1));
 
-            if recommended_bits <= (bn256::Fr::S - 1) as usize {
+            if recommended_bits <= (MAX_PUBLIC_SRS - 1) as usize {
                 self.settings.run_args.bits = recommended_bits;
                 self.settings.run_args.logrows = (recommended_bits + 1) as u32;
                 info!(
@@ -463,7 +466,7 @@ impl GraphCircuit {
                 (ASSUMED_BLINDING_FACTORS as f64).ceil() as usize + 1,
             );
 
-            logrows = std::cmp::min(logrows, bn256::Fr::S as usize);
+            logrows = std::cmp::min(logrows, MAX_PUBLIC_SRS as usize);
 
             info!(
                 "setting bits to: {}, setting logrows to: {}",
