@@ -65,6 +65,10 @@ jobs:
     - name: Install Rust targets
       run: rustup target add ${{ matrix.target }}
       
+    - name: Install musl-tools (Ubuntu)
+      if: matrix.os == 'ubuntu-22.04'
+      run: sudo apt-get install -y musl-tools
+    
     - name: Use Cross
       shell: bash
       run: | 
