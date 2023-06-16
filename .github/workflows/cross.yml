@@ -1,3 +1,4 @@
+# test
 name: ezkl-lib-release
 on:
   push:
@@ -26,7 +27,6 @@ jobs:
         env:
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN}}
         with:
-          token: ${{ secrets.RELEASE_TOKEN}}
           tag_name: ${{ env.EZKL_VERSION }}
           release_name: ${{ env.EZKL_VERSION }}
 
