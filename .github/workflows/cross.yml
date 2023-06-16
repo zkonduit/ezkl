@@ -42,13 +42,13 @@ jobs:
       - name: Create Release
         run: |
           gh auth login --with-token <<< "${{ secrets.RELEASE_TOKEN }}"
-          gh release create 0.4.8 --title "Release 0.4.8" --notes "Release 0.4.8"
+          gh release create 0.4.9 --title "Release 0.4.9" --notes "Release 0.4.9"
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Upload Release Asset
         run: |
-          gh release upload 0.4.8 ${{ steps.archive.outputs.path }}
+          gh release upload 0.4.9 ${{ steps.archive.outputs.path }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
@@ -78,14 +78,14 @@ jobs:
       - name: Create Release
         run: |
           gh auth login --with-token <<< "${{ secrets.RELEASE_TOKEN }}"
-          gh release create 0.4.8 --title "Release 0.4.8" --notes "Release 0.4.8"
+          gh release create 0.4.9 --title "Release 0.4.9" --notes "Release 0.4.9"
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Upload Release Asset
         run: |
-          gh release upload 0.4.8 ${{ steps.archive.outputs.path }}
+          gh release upload 0.4.9 ${{ steps.archive.outputs.path }}
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
@@ -120,12 +120,12 @@ jobs:
       - name: Create Release
         run: |
           gh auth login --with-token <<< "${{ secrets.RELEASE_TOKEN }}"
-          gh release create 0.4.8 --title "Release 0.4.8" --notes "Release 0.4.8"
+          gh release create 0.4.9 --title "Release 0.4.9" --notes "Release 0.4.9"
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Upload Release Asset
         run: |
-          gh release upload 0.4.8 ${{ steps.archive.outputs.path }}
+          gh release upload 0.4.9 ${{ steps.archive.outputs.path }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
