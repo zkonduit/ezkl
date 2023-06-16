@@ -66,7 +66,7 @@ jobs:
     - name: Use Cross
       shell: bash
       run: | 
-        cargo install cross
+        cargo install cross -Z sparse-registry
         echo "CARGO=cross" >> $GITHUB_ENV
         ECHO "TARGET_FLAGS=--target ${{ matrix.target }}" >> $GITHUB_ENV
         ECHO "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
