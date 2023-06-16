@@ -42,13 +42,14 @@ jobs:
       - name: Create Release
         run: |
           echo "${{ secrets.RELEASE_TOKEN }}" | gh auth login --with-token
-          gh release create 0.4.11 --title "Release 0.4.11" --notes "Release 0.4.11"
+          gh auth status
+          gh release create 0.4.12 --title "Release 0.4.12" --notes "Release 0.4.12"
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Upload Release Asset
         run: |
-          gh release upload 0.4.11 ${{ steps.archive.outputs.path }}
+          gh release upload 0.4.12 ${{ steps.archive.outputs.path }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
@@ -78,14 +79,15 @@ jobs:
       - name: Create Release
         run: |
           echo "${{ secrets.RELEASE_TOKEN }}" | gh auth login --with-token
-          gh release create 0.4.11 --title "Release 0.4.11" --notes "Release 0.4.11"
+          gh auth status
+          gh release create 0.4.12 --title "Release 0.4.12" --notes "Release 0.4.12"
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Upload Release Asset
         run: |
-          gh release upload 0.4.11 ${{ steps.archive.outputs.path }}
+          gh release upload 0.4.12 ${{ steps.archive.outputs.path }}
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
@@ -120,12 +122,13 @@ jobs:
       - name: Create Release
         run: |
           echo "${{ secrets.RELEASE_TOKEN }}" | gh auth login --with-token
-          gh release create 0.4.11 --title "Release 0.4.11" --notes "Release 0.4.11"
+          gh auth status
+          gh release create 0.4.12 --title "Release 0.4.12" --notes "Release 0.4.12"
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Upload Release Asset
         run: |
-          gh release upload 0.4.11 ${{ steps.archive.outputs.path }}
+          gh release upload 0.4.12 ${{ steps.archive.outputs.path }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
