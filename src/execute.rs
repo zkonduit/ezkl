@@ -5,7 +5,7 @@ use crate::commands::{Cli, Commands, RunArgs, StrategyType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{fix_verifier_sol, get_contract_artifacts, verify_proof_via_solidity};
 use crate::graph::{
-    scale_to_multiplier, GraphCircuit, GraphInput, GraphSettings, Model, Visibility,
+    input::GraphInput, scale_to_multiplier, GraphCircuit, GraphSettings, Model, Visibility,
 };
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
@@ -413,8 +413,9 @@ pub(crate) fn forward(
         .collect();
     trace!("forward pass output: {:?}", float_res);
     data.output_data = float_res;
-    data.input_hashes = Some(res.input_hashes);
-    data.output_hashes = Some(res.output_hashes);
+    data.processed_inputs = Some(res.processed_inputs);
+    data.processed_params = Some(res.processed_params);
+    data.processed_outputs = Some(res.processed_outputs);
 
     serde_json::to_writer(&File::create(output)?, &data)?;
     Ok(())
@@ -488,7 +489,7 @@ pub(crate) fn calibrate(
     debug!("num of calibration batches: {}", chunks.len(),);
 
     let found_params: Vec<GraphSettings> = (4..12)
-        .map(|scale| {
+        .filter_map(|scale| {
             pb.set_message(format!("Calibrating with scale {}", scale));
             std::thread::sleep(Duration::from_millis(100));
 
@@ -523,7 +524,6 @@ pub(crate) fn calibrate(
                 None
             }
         })
-        .flatten()
         .collect();
     pb.finish_with_message("Calibration Done.");
 

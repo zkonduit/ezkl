@@ -1,3 +1,4 @@
+use super::extract_const_quantized_values;
 use super::node::*;
 use super::scale_to_multiplier;
 use super::vars::*;
@@ -10,7 +11,7 @@ use crate::circuit::Input;
 use crate::circuit::Tolerance;
 use crate::circuit::Unknown;
 use crate::{
-    circuit::{lookup::LookupOp, ops::poly::PolyOp, BaseConfig as PolyConfig, CheckMode, Op},
+    circuit::{lookup::LookupOp, BaseConfig as PolyConfig, CheckMode, Op},
     commands::RunArgs,
     tensor::{Tensor, ValTensor},
 };
@@ -269,7 +270,7 @@ impl Model {
         Ok(GraphSettings {
             run_args,
             model_instance_shapes: instance_shapes,
-            num_hashes: 0,
+            num_module_instances: 0,
             num_constraints,
             required_lookups: lookup_ops,
             check_mode,
@@ -612,33 +613,12 @@ impl Model {
             |region| {
                 let mut thread_safe_region = RegionCtx::new(region, 0);
 
-                let mut outputs = self
+                let outputs = self
                     .layout_nodes(&mut config, &mut thread_safe_region, &mut results)
                     .map_err(|e| {
                         error!("{}", e);
                         halo2_proofs::plonk::Error::Synthesis
                     })?;
-
-                // pack outputs if need be
-                if run_args.pack_base > 1 {
-                    for i in 0..outputs.len() {
-                        debug!("packing outputs...");
-                        outputs[i] = config
-                            .base
-                            .layout(
-                                &mut thread_safe_region,
-                                &outputs[i..i + 1],
-                                Box::new(PolyOp::Pack(run_args.pack_base, run_args.scale)),
-                            )
-                            .map_err(|e| {
-                                error!("{}", e);
-                                halo2_proofs::plonk::Error::Synthesis
-                            })?
-                            .unwrap();
-                        // only use with mock prover
-                        trace!("------------ packed output {:?}", outputs[i].show());
-                    }
-                }
 
                 match run_args.output_visibility {
                     Visibility::Public => {
@@ -771,25 +751,7 @@ impl Model {
 
         let mut region = RegionCtx::new_dummy(0);
 
-        let mut outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
-
-        // pack outputs if need be
-        if run_args.pack_base > 1 {
-            for i in 0..outputs.len() {
-                debug!("packing outputs...");
-                outputs[i] = dummy_config
-                    .layout(
-                        &mut region,
-                        &outputs[i..i + 1],
-                        Box::new(PolyOp::Pack(run_args.pack_base, run_args.scale)),
-                    )
-                    .map_err(|e| {
-                        error!("{}", e);
-                        halo2_proofs::plonk::Error::Synthesis
-                    })?
-                    .unwrap();
-            }
-        }
+        let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 
         match run_args.output_visibility {
             Visibility::Public => {
@@ -811,6 +773,69 @@ impl Model {
         }
 
         Ok(region.offset())
+    }
+
+    /// Retrieves all constants from the model.
+    pub fn get_all_consts(&self) -> Vec<ValTensor<Fp>> {
+        let mut consts = vec![];
+        for node in self.graph.nodes.values() {
+            match node {
+                NodeType::Node(n) => {
+                    let boxed_op = n.opkind.clone_dyn();
+                    if let Some(constant) = extract_const_quantized_values(&boxed_op) {
+                        consts.push(constant);
+                    };
+                }
+                NodeType::SubGraph { model, .. } => {
+                    consts.extend(model.get_all_consts());
+                }
+            }
+        }
+        consts
+    }
+
+    /// Replaces all constants in the model with the provided values (in order of indexing)
+    pub fn replace_consts(&mut self, consts: Vec<ValTensor<Fp>>) {
+        let mut const_idx = 0;
+        for node in self.graph.nodes.values_mut() {
+            match node {
+                NodeType::Node(n) => {
+                    let boxed_op = n.opkind.clone_dyn();
+                    if let Some(constant) = boxed_op
+                        .as_any()
+                        .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
+                    {
+                        n.opkind = Box::new(crate::circuit::Constant::new(
+                            consts[const_idx].clone(),
+                            constant.raw_values.clone(),
+                        ));
+                        const_idx += 1;
+                    };
+                }
+                NodeType::SubGraph { model, .. } => {
+                    model.replace_consts(consts.clone());
+                }
+            }
+        }
+    }
+
+    /// Shapes of the computational graph's constants
+    pub fn const_shapes(&self) -> Vec<Vec<usize>> {
+        let mut const_shapes = vec![];
+        for node in self.graph.nodes.values() {
+            match node {
+                NodeType::Node(n) => {
+                    let boxed_op = n.opkind.clone_dyn();
+                    if let Some(constant) = extract_const_quantized_values(&boxed_op) {
+                        const_shapes.push(constant.dims().to_vec());
+                    };
+                }
+                NodeType::SubGraph { model, .. } => {
+                    const_shapes.extend(model.const_shapes());
+                }
+            }
+        }
+        const_shapes
     }
 
     /// Shapes of the computational graph's public inputs (if any)

@@ -1050,7 +1050,7 @@ pub fn get_broadcasted_shape(
 ) -> Result<Vec<usize>, Box<dyn Error>> {
     let num_dims_a = shape_a.len();
     let num_dims_b = shape_b.len();
-
+    
     if num_dims_a == num_dims_b {
         let mut broadcasted_shape = Vec::with_capacity(num_dims_a);
         for (dim_a, dim_b) in shape_a.iter().zip(shape_b.iter()) {
