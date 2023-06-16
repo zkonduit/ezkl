@@ -259,7 +259,6 @@ impl GraphCircuit {
         let max_range = 2i128.pow(self.settings.run_args.bits as u32 - 1);
         if res.max_lookup_input > max_range {
             let recommended_bits = (res.max_lookup_input as f64).log2().ceil() as usize + 1;
-            assert!(res.max_lookup_input <= 2i128.pow(recommended_bits as u32 - 1));
 
             if recommended_bits <= (MAX_PUBLIC_SRS - 1) as usize {
                 self.settings.run_args.bits = recommended_bits;
