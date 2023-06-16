@@ -12,7 +12,7 @@ mod native_tests {
     static COMPILE: Once = Once::new();
     static KZG17: Once = Once::new();
     static KZG23: Once = Once::new();
-    static KZG24: Once = Once::new();
+    static KZG26: Once = Once::new();
     //Sure to run this once
 
     lazy_static! {
@@ -59,8 +59,8 @@ mod native_tests {
         })
     }
 
-    fn init_params_24() {
-        KZG24.call_once(|| {
+    fn init_params_26() {
+        KZG26.call_once(|| {
             let status = Command::new("curl")
                 .args([
                     "-o",
@@ -68,7 +68,7 @@ mod native_tests {
                         "{}/kzg24.srs",
                         TEST_DIR.path().to_str().unwrap()
                     ),
-                    "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/perpetual-powers-of-tau-raw-24",
+                    "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/perpetual-powers-of-tau-raw-26",
                 ])
                 .status()
                 .expect("failed to execute process");
@@ -390,7 +390,7 @@ mod native_tests {
             #[ignore]
             fn large_kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::init_params_24();
+                crate::native_tests::init_params_26();
                 crate::native_tests::mv_test_(test);
                 kzg_prove_and_verify(test.to_string(), 24,"unsafe");
             }
