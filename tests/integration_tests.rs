@@ -354,7 +354,8 @@ mod native_tests {
             fn mock_hashed_input_params_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(),7, 16, 17,"hashed", "hashed", "public", 1);
+                // needs an extra row for the large model
+                mock(test.to_string(),7, 16, 18,"hashed", "hashed", "public", 1);
             }
 
             #(#[test_case(TESTS[N])])*
