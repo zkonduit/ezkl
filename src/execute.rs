@@ -1,11 +1,11 @@
 use crate::circuit::CheckMode;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::commands::CalibrationTarget;
-use crate::commands::{Cli, Commands, RunArgs, StrategyType};
-use crate::eth::{setup_eth_backend, test_on_chain_inputs};
+use crate::commands::{CalibrationTarget, StrategyType};
+use crate::commands::{Cli, Commands, RunArgs};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{fix_verifier_sol, verify_proof_with_data_attestation, 
-    read_on_chain_inputs, get_contract_artifacts, verify_proof_via_solidity, evm_quantize
+    read_on_chain_inputs, get_contract_artifacts, verify_proof_via_solidity, evm_quantize,
+    setup_eth_backend, test_on_chain_inputs
 };
 use crate::graph::{
     scale_to_multiplier, GraphCircuit, GraphInput, Model, GraphSettings, Visibility,
@@ -18,7 +18,7 @@ use crate::pfsys::evm::{
     aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier, DeploymentCode, YulCode,
 };
 use crate::pfsys::{
-    create_keys, load_params, load_pk, load_vk, save_params, save_pk, Snark, TranscriptType,
+    create_keys, load_params, load_vk, save_params, save_pk, Snark, TranscriptType,
 };
 use crate::pfsys::{create_proof_circuit, gen_srs, save_vk, verify_proof_circuit};
 #[cfg(not(target_arch = "wasm32"))]
@@ -143,18 +143,19 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             sol_bytecode_path,
             optimizer_runs
         ),
+        #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMDataAttestationVerifier {
             vk_path,
-            params_path,
-            circuit_params_path,
+            srs_path,
+            settings_path,
             sol_code_path,
             sol_bytecode_path,
             optimizer_runs,
             data,
         } => create_evm_data_attestation_verifier(
             vk_path,
-            params_path,
-            circuit_params_path,
+            srs_path,
+            settings_path,
             sol_code_path,
             sol_bytecode_path,
             optimizer_runs,
@@ -183,6 +184,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             vk_path,
             pk_path,
         } => setup(model, srs_path, settings_path, vk_path, pk_path),
+        #[cfg(not(target_arch = "wasm32"))]
         Commands::Prove {
             data,
             model,
@@ -511,7 +513,7 @@ pub(crate) fn calibrate(
     debug!("num of calibration batches: {}", chunks.len(),);
 
     let found_params: Vec<GraphSettings> = (4..12)
-        .map(|scale| {
+        .filter_map(|scale| {
             pb.set_message(format!("Calibrating with scale {}", scale));
             std::thread::sleep(Duration::from_millis(100));
 
@@ -546,7 +548,6 @@ pub(crate) fn calibrate(
                 None
             }
         })
-        .flatten()
         .collect();
     pb.finish_with_message("Calibration Done.");
 
@@ -640,9 +641,10 @@ pub(crate) fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, B
 #[cfg(not(target_arch = "wasm32"))]
 pub fn gen_sol_bytecode(
     sol_code_path: PathBuf,
+    contract_name: &str,
     runs: Option<usize>,
 ) -> Result<DeploymentCode, Box<dyn Error>> {
-    let (_, bytecode, _) = get_contract_artifacts(sol_code_path, "Verifier", runs)?;
+    let (_, bytecode, _) = get_contract_artifacts(sol_code_path, contract_name, runs)?;
     Ok(DeploymentCode {
         code: bytecode.to_vec(),
     })
@@ -704,7 +706,7 @@ pub(crate) fn create_evm_verifier(
 
         if sol_bytecode_path.is_some() {
             let sol_bytecode =
-                gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), runs).unwrap();
+                gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), "Verifier", runs).unwrap();
             sol_bytecode.save(&sol_bytecode_path.unwrap())?;
         }
     }
@@ -750,7 +752,7 @@ fn create_evm_data_attestation_verifier(
         panic!("No on_chain_input_data field found in .json data file")
     }
     if sol_bytecode_path.is_some() {
-        let sol_bytecode = gen_sol_bytecode(sol_code_path.clone(), runs).unwrap();
+        let sol_bytecode = gen_sol_bytecode(sol_code_path, "DataAttestationVerifier", runs).unwrap();
         sol_bytecode.save(&sol_bytecode_path.unwrap())?;
     }
     Ok(())
@@ -772,7 +774,7 @@ pub(crate) async fn verify_evm (
     }
 
     if sol_code_path.is_some() {
-        let result = if let Some(data) = data {
+        let result = if let Some(data) = data.clone() {
             verify_proof_with_data_attestation(
                 proof.clone(), 
                 sol_code_path.unwrap(),
@@ -789,7 +791,7 @@ pub(crate) async fn verify_evm (
 
         assert!(result);
 
-        if sol_bytecode_path.is_some() {
+        if sol_bytecode_path.is_some() && data.is_none() {
             let result = verify_proof_via_solidity(proof, None, sol_bytecode_path).await?;
 
             info!("Solidity bytecode verification result: {}", result);
@@ -837,7 +839,7 @@ pub(crate) fn create_evm_aggregate_verifier(
 
         if sol_bytecode_path.is_some() {
             let sol_bytecode =
-                gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), runs).unwrap();
+                gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), "Verifier", runs).unwrap();
             sol_bytecode.save(&sol_bytecode_path.unwrap())?;
         }
     }
@@ -864,6 +866,7 @@ pub(crate) fn setup(
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn prove(
     data_path: PathBuf,
     model_path: PathBuf,
@@ -876,32 +879,33 @@ pub(crate) async fn prove(
     check_mode: CheckMode,
     test_onchain_input: bool,
 ) -> Result<(), Box<dyn Error>> {
+    use crate::pfsys::load_pk;
+
     let data = GraphInput::from_path(data_path.clone())?;
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, check_mode)?;
     let public_inputs = if circuit.settings.run_args.on_chain_inputs {
         let scale = circuit.settings.run_args.scale;
-        if let Some((_, rpc_url)) = &data.on_chain_input_data {
-            if test_onchain_input {
-                // Set up local anvil instance for reading on-chain data
-                let (anvil, client) = setup_eth_backend(None).await?;
-                let calls_to_accounts = test_on_chain_inputs(client.clone(), scale, &data, data_path, anvil.endpoint()).await?;
-                let inputs = read_on_chain_inputs(client.clone(), client.address(), &calls_to_accounts).await?;
-                let quantized_evm_inputs = evm_quantize(client, scale_to_multiplier(scale), &inputs).await?;
-                drop(anvil);
-                circuit.prepare_public_inputs(&data, Some(vec![quantized_evm_inputs]))?
-            } else {
-                // Set up anvil instance for reading on-chain data from RPC URL endpoint provided in data
-                let (anvil, client) = setup_eth_backend(Some(rpc_url)).await?;
-                let calls_to_accounts = test_on_chain_inputs(client.clone(), scale, &data, data_path, anvil.endpoint()).await?;
-                let inputs = read_on_chain_inputs(client.clone(), client.address(), &calls_to_accounts).await?;
-                drop(anvil);
-                // Set up local anvil instance for deploying QuantizeData.sol
-                let (anvil, client) = setup_eth_backend(None).await?;
-                let quantized_evm_inputs = evm_quantize(client, scale_to_multiplier(scale), &inputs).await?;
-                drop(anvil);
-                circuit.prepare_public_inputs(&data, Some(vec![quantized_evm_inputs]))?
-            }
+        if test_onchain_input {
+            // Set up local anvil instance for reading on-chain data
+            let (anvil, client) = setup_eth_backend(None).await?;
+            let calls_to_accounts = test_on_chain_inputs(client.clone(), &data, data_path, anvil.endpoint()).await?;
+            info!("Calls to accounts: {:?}", calls_to_accounts);
+            let inputs = read_on_chain_inputs(client.clone(), client.address(), &calls_to_accounts).await?;
+            info!("Inputs: {:?}", inputs);
+            let quantized_evm_inputs = evm_quantize(client, scale_to_multiplier(scale), &inputs).await?;
+            drop(anvil);
+            circuit.prepare_public_inputs(&data, Some(vec![quantized_evm_inputs]))?
+        } else if let Some((calls_to_accounts, rpc_url)) = &data.on_chain_input_data {
+            // Set up anvil instance for reading on-chain data from RPC URL endpoint provided in data
+            let (anvil, client) = setup_eth_backend(Some(rpc_url)).await?;
+            let inputs = read_on_chain_inputs(client.clone(), client.address(), calls_to_accounts).await?;
+            drop(anvil);
+            // Set up local anvil instance for deploying QuantizeData.sol
+            let (anvil, client) = setup_eth_backend(None).await?;
+            let quantized_evm_inputs = evm_quantize(client, scale_to_multiplier(scale), &inputs).await?;
+            drop(anvil);
+            circuit.prepare_public_inputs(&data, Some(vec![quantized_evm_inputs]))?
         } else {
             panic!("No on_chain_input_data field found in .json data file")
         }

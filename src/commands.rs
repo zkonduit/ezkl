@@ -411,6 +411,7 @@ pub enum Commands {
         settings_path: Option<PathBuf>,
     },
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// Loads model, data, and creates proof
     #[command(arg_required_else_help = true)]
     Prove {
@@ -454,8 +455,8 @@ pub enum Commands {
         check_mode: CheckMode,
         /// Deploy a test contract that stores the input_data in data .json in its storage,
         /// then reads from it. 
-        #[arg(long, default_value = "false")]
-        test_reads: bool
+        #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
+        test_reads: bool,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for a single proof
@@ -486,16 +487,16 @@ pub enum Commands {
         optimizer_runs: Option<usize>,
         // todo, optionally allow supplying proving key
     },
-
+    #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier that attests to on-chain inputs for a single proof
     #[command(name = "create-evm-data-attestation-verifier", arg_required_else_help = true)]
     CreateEVMDataAttestationVerifier {
         /// The path to load the desired params file
         #[arg(long)]
-        params_path: PathBuf,
+        srs_path: PathBuf,
         /// The path to save circuit params to
         #[arg(long)]
-        circuit_params_path: PathBuf,
+        settings_path: PathBuf,
         /// The path to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
@@ -508,6 +509,7 @@ pub enum Commands {
         /// The number of runs set to the SOLC optimizer.
         /// Lower values optimze for deployment size while higher values optimize for execution cost.
         /// If not set will just use the default unoptimized SOLC configuration.
+        #[arg(long)]
         optimizer_runs: Option<usize>,
         /// The path to the .json data file, which should
         /// contain the necessary calldata and accoount addresses  

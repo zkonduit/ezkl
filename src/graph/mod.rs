@@ -561,7 +561,7 @@ impl GraphCircuit {
             if let Some(on_chain_inputs) = on_chain_inputs {
                 self.load_on_chain_inputs(on_chain_inputs)
             } else {
-                self.load_inputs(&data);
+                self.load_inputs(data);
             }
 
             // quantize the supplied data using the provided scale.

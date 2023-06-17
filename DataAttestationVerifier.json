@@ -1,225 +1,84 @@
-{
-    "abi": [
-        {
-            "inputs": [
-                {
-                    "internalType": "address[]",
-                    "name": "_contractAddresses",
-                    "type": "address[]"
-                },
-                {
-                    "internalType": "bytes[][]",
-                    "name": "_callData",
-                    "type": "bytes[][]"
-                }
-            ],
-            "stateMutability": "nonpayable",
-            "type": "constructor"
-        },
-        {
-            "inputs": [
-                {
-                    "internalType": "uint256",
-                    "name": "",
-                    "type": "uint256"
-                }
-            ],
-            "name": "accountCalls",
-            "outputs": [
-                {
-                    "internalType": "address",
-                    "name": "contractAddress",
-                    "type": "address"
-                },
-                {
-                    "internalType": "uint256",
-                    "name": "callCount",
-                    "type": "uint256"
-                }
-            ],
-            "stateMutability": "view",
-            "type": "function"
-        },
-        {
-            "inputs": [],
-            "name": "totalCalls",
-            "outputs": [
-                {
-                    "internalType": "uint256",
-                    "name": "",
-                    "type": "uint256"
-                }
-            ],
-            "stateMutability": "view",
-            "type": "function"
-        },
-        {
-            "inputs": [
-                {
-                    "internalType": "uint256[]",
-                    "name": "pubInputs",
-                    "type": "uint256[]"
-                },
-                {
-                    "internalType": "bytes",
-                    "name": "proof",
-                    "type": "bytes"
-                }
-            ],
-            "name": "verifyWithDataAttestation",
-            "outputs": [
-                {
-                    "internalType": "bool",
-                    "name": "",
-                    "type": "bool"
-                }
-            ],
-            "stateMutability": "view",
-            "type": "function"
-        }
-    ],
-    "methodIdentifiers": {
-        "accountCalls(uint256)": "bd3742ef",
-        "totalCalls()": "3af3f24f",
-        "verifyWithDataAttestation(uint256[],bytes)": "676220d3"
-    },
-    "rawMetadata": "{\"compiler\":{\"version\":\"0.8.20+commit.a1b79de6\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address[]\",\"name\":\"_contractAddresses\",\"type\":\"address[]\"},{\"internalType\":\"bytes[][]\",\"name\":\"_callData\",\"type\":\"bytes[][]\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"name\":\"accountCalls\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"contractAddress\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"callCount\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"totalCalls\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256[]\",\"name\":\"pubInputs\",\"type\":\"uint256[]\"},{\"internalType\":\"bytes\",\"name\":\"proof\",\"type\":\"bytes\"}],\"name\":\"verifyWithDataAttestation\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{\"constructor\":{\"details\":\"Initialize the contract with account calls the EZKL model will read from.\",\"params\":{\"_callData\":\"- The abi encoded function calls to make to the `contractAddress` that EZKL reads storage from.\",\"_contractAddresses\":\"- The calls to all the contracts EZKL reads storage from.\"}}},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"src/DataAttestationVerifier.sol\":\"DataAttestationVerifier\"},\"evmVersion\":\"paris\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[\":@openzeppelin/=lib/openzeppelin-contracts/\",\":ds-test/=lib/forge-std/lib/ds-test/src/\",\":erc4626-tests/=lib/openzeppelin-contracts/lib/erc4626-tests/\",\":forge-std/=lib/forge-std/src/\",\":openzeppelin-contracts/=lib/openzeppelin-contracts/\",\":openzeppelin/=lib/openzeppelin-contracts/contracts/\"]},\"sources\":{\"src/DataAttestationVerifier.sol\":{\"keccak256\":\"0xf7010aa79ee81c318bbb07f9e13cfd7879483937449649c2a5f311443bb7ba49\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://8998d9aa8eda045a086c5d4c9cd740f008b145741f9286ed29c210ca4d03474e\",\"dweb:/ipfs/QmZXZx3Ziiru2vrCTjLqNp2mH6p7Xq6jMN8yERHe3YJrSA\"]}},\"version\":1}",
-    "metadata": {
-        "compiler": {
-            "version": "0.8.20+commit.a1b79de6"
-        },
-        "language": "Solidity",
-        "output": {
-            "abi": [
-                {
-                    "inputs": [
-                        {
-                            "internalType": "address[]",
-                            "name": "_contractAddresses",
-                            "type": "address[]"
-                        },
-                        {
-                            "internalType": "bytes[][]",
-                            "name": "_callData",
-                            "type": "bytes[][]"
-                        }
-                    ],
-                    "stateMutability": "nonpayable",
-                    "type": "constructor"
-                },
-                {
-                    "inputs": [
-                        {
-                            "internalType": "uint256",
-                            "name": "",
-                            "type": "uint256"
-                        }
-                    ],
-                    "stateMutability": "view",
-                    "type": "function",
-                    "name": "accountCalls",
-                    "outputs": [
-                        {
-                            "internalType": "address",
-                            "name": "contractAddress",
-                            "type": "address"
-                        },
-                        {
-                            "internalType": "uint256",
-                            "name": "callCount",
-                            "type": "uint256"
-                        }
-                    ]
-                },
-                {
-                    "inputs": [],
-                    "stateMutability": "view",
-                    "type": "function",
-                    "name": "totalCalls",
-                    "outputs": [
-                        {
-                            "internalType": "uint256",
-                            "name": "",
-                            "type": "uint256"
-                        }
-                    ]
-                },
-                {
-                    "inputs": [
-                        {
-                            "internalType": "uint256[]",
-                            "name": "pubInputs",
-                            "type": "uint256[]"
-                        },
-                        {
-                            "internalType": "bytes",
-                            "name": "proof",
-                            "type": "bytes"
-                        }
-                    ],
-                    "stateMutability": "view",
-                    "type": "function",
-                    "name": "verifyWithDataAttestation",
-                    "outputs": [
-                        {
-                            "internalType": "bool",
-                            "name": "",
-                            "type": "bool"
-                        }
-                    ]
-                }
-            ],
-            "devdoc": {
-                "kind": "dev",
-                "methods": {
-                    "constructor": {
-                        "details": "Initialize the contract with account calls the EZKL model will read from.",
-                        "params": {
-                            "_callData": "- The abi encoded function calls to make to the `contractAddress` that EZKL reads storage from.",
-                            "_contractAddresses": "- The calls to all the contracts EZKL reads storage from."
-                        }
-                    }
-                },
-                "version": 1
-            },
-            "userdoc": {
-                "kind": "user",
-                "methods": {},
-                "version": 1
-            }
-        },
-        "settings": {
-            "remappings": [
-                ":@openzeppelin/=lib/openzeppelin-contracts/",
-                ":ds-test/=lib/forge-std/lib/ds-test/src/",
-                ":erc4626-tests/=lib/openzeppelin-contracts/lib/erc4626-tests/",
-                ":forge-std/=lib/forge-std/src/",
-                ":openzeppelin-contracts/=lib/openzeppelin-contracts/",
-                ":openzeppelin/=lib/openzeppelin-contracts/contracts/"
-            ],
-            "optimizer": {
-                "enabled": true,
-                "runs": 200
-            },
-            "metadata": {
-                "bytecodeHash": "ipfs"
-            },
-            "compilationTarget": {
-                "src/DataAttestationVerifier.sol": "DataAttestationVerifier"
-            },
-            "libraries": {}
-        },
-        "sources": {
-            "src/DataAttestationVerifier.sol": {
-                "keccak256": "0xf7010aa79ee81c318bbb07f9e13cfd7879483937449649c2a5f311443bb7ba49",
-                "urls": [
-                    "bzz-raw://8998d9aa8eda045a086c5d4c9cd740f008b145741f9286ed29c210ca4d03474e",
-                    "dweb:/ipfs/QmZXZx3Ziiru2vrCTjLqNp2mH6p7Xq6jMN8yERHe3YJrSA"
-                ],
-                "license": "MIT"
-            }
-        },
-        "version": 1
-    },
-    "id": 0
-}
+[
+	{
+		"inputs": [
+			{
+				"internalType": "address[]",
+				"name": "_contractAddresses",
+				"type": "address[]"
+			},
+			{
+				"internalType": "bytes[][]",
+				"name": "_callData",
+				"type": "bytes[][]"
+			},
+			{
+				"internalType": "uint256[]",
+				"name": "_decimals",
+				"type": "uint256[]"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"inputs": [],
+		"name": "SCALE",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "accountCalls",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "contractAddress",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "callCount",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256[]",
+				"name": "pubInputs",
+				"type": "uint256[]"
+			},
+			{
+				"internalType": "bytes",
+				"name": "proof",
+				"type": "bytes"
+			}
+		],
+		"name": "verifyWithDataAttestation",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+]

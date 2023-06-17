@@ -211,6 +211,8 @@ jobs:
         run: cargo test --release --verbose tests_evm::kzg_evm_hashed_input_prove_and_verify -- --test-threads 4
       - name: KZG prove and verify tests (EVM + hashed outputs)
         run: cargo test --release --verbose tests_evm::kzg_evm_hashed_output_prove_and_verify -- --test-threads 4
+      - name: KZG prove and verify tests (EVM + on chain inputs)
+        run: cargo test --release --verbose tests_evm::kzg_evm_on_chain_input_prove_and_verify -- --test-threads 4
 
   prove-and-verify-tests:
     runs-on: ubuntu-latest-32-cores

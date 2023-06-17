@@ -127,7 +127,7 @@ def test_forward():
     with open(output_path, "r") as f:
         data = json.load(f)
     assert data == {"input_data": [[0.053262424, 0.074970566, 0.052355476, 0.028825462, 0.058487028, 0.008225823, 0.07530029, 0.0821458, 0.06227987, 0.024306035, 0.05793174, 0.04044203]], "output_data": [[0.053222656, 0.12841797, 0.07519531, 0.10546875, 0.20947266, 0.104003906, 0.052246094, 0.08105469, 0.028808594, 0.05859375, 0.06689453, 0.008300781, 0.13378906, 0.2241211,
-                                                                                                                                                                                                             0.09033203, 0.07519531, 0.15722656, 0.08203125, 0.0625, 0.08691406, 0.024414062, 0.12060547, 0.18554688, 0.064941406, 0.05810547, 0.09863281, 0.040527344]], "input_hashes": [[8270957937025516140, 11801026918842104328, 2203849898884507041, 140307258138425306]], "output_hashes": [[4554067273356176515, 2525802612124249168, 5413776662459769622, 1194961624936436872]]}
+                                                                                                                                                                                                             0.09033203, 0.07519531, 0.15722656, 0.08203125, 0.0625, 0.08691406, 0.024414062, 0.12060547, 0.18554688, 0.064941406, 0.05810547, 0.09863281, 0.040527344]], "input_hashes": [[5883008292853527761, 16344936326680188734, 7529539907556951814, 2506820067758849985]], "output_hashes": [[17318878830008156274, 17853694641094589135, 11002490390081162421, 1713541200774309672]], 'on_chain_input_data': None}
 
 
 def test_mock():
@@ -252,6 +252,7 @@ def test_prove_and_verify():
         "poseidon",
         "single",
         settings_path,
+        False
     )
     assert res == True
     assert os.path.isfile(proof_path)
@@ -293,6 +294,7 @@ def test_prove_evm():
         "evm",
         "single",
         settings_path,
+        False
     )
     assert res == True
     assert os.path.isfile(proof_path)
@@ -397,6 +399,7 @@ def test_aggregate_and_verify_aggr():
         "poseidon",
         "accum",
         settings_path,
+        False
     )
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')
@@ -481,6 +484,7 @@ def test_evm_aggregate_and_verify_aggr():
         "poseidon",
         "accum",
         settings_path,
+        False
     )
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')

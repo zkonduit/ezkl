@@ -456,6 +456,16 @@ mod native_tests {
                 "max",
             ];
 
+            seq!(N in 0..= 15 {
+                #(#[test_case(TESTS_SOLIDITY[N])])*
+                fn kzg_evm_on_chain_input_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params_17();
+                    crate::native_tests::mv_test_(test);
+                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200);
+                }
+            });
+
 
             seq!(N in 0..=17 {
 
@@ -465,14 +475,6 @@ mod native_tests {
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "public", false, 1);
-                }
-
-                #(#[test_case(TESTS_SOLIDITY[N])])*
-                fn kzg_evm_on_chain_input_prove_and_verify_(test: &str) {
-                    crate::native_tests::init_binary();
-                    crate::native_tests::init_params_17();
-                    crate::native_tests::mv_test_(test);
-                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -1357,9 +1359,9 @@ mod native_tests {
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
-                &format!("--input-visibility={}", "true"),
-                &format!("--param-visibility={}", "false"),
-                &format!("--output-visibility={}", "true"),
+                "--input-visibility=public",
+                "--param-visibility=private",
+                "--output-visibility=public",
                 "--on-chain-inputs=true",
                 "--bits=16",
                 "-K=17"
@@ -1407,7 +1409,7 @@ mod native_tests {
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
-                "test-reads=true"
+                "--test-reads=true"
             ])
             .status()
             .expect("failed to execute process");
@@ -1417,13 +1419,12 @@ mod native_tests {
             "--settings-path={}/{}/settings.json",
             test_dir, example_name
         );
-        let code_arg = format!("{}/{}/deployment.code", test_dir, example_name);
         let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
         let param_arg = format!("--srs-path={}/kzg17.srs", test_dir);
 
         let opt_arg = format!("--optimizer-runs={}", num_runs);
 
-        let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
+        let sol_arg = format!("kzg_{}.sol", example_name);
         let sol_bytecode_arg = format!("{}/{}/kzg.code", test_dir, example_name);
 
 
@@ -1452,8 +1453,6 @@ mod native_tests {
             "verify-evm",
             "--proof-path",
             pf_arg.as_str(),
-            "--deployment-code-path",
-            code_arg.as_str(),
             "--sol-code-path",
             sol_arg.as_str(),
             "--sol-bytecode-path",

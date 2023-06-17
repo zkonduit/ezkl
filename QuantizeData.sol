@@ -94,7 +94,7 @@ contract QuantizeData {
     function quantize_data(bytes[] memory data, uint256[] memory decimals, uint256 SCALE) external pure returns (int128[] memory quantized_data) {
         quantized_data = new int128[](data.length);
         for(uint i; i < data.length; i++){
-            uint output = mulDiv(abi.decode(data[i], (uint256)), SCALE, decimals[i]);
+            uint output = mulDiv(abi.decode(data[i], (uint256)), SCALE, 10**decimals[i]);
             require(output < SIZE_LIMIT, "QuantizeData: overflow");
             quantized_data[i] = int128(uint128(output));
         }

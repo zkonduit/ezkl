@@ -219,8 +219,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             }
             PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?)?,
             PolyOp::Einsum { equation } => {
-                let out = layouts::einsum(config, region, &mut values, equation)?;
-                out
+                layouts::einsum(config, region, &mut values, equation)?
             }
             PolyOp::Gather { dim, index } => {
                 tensor::ops::gather(&values[0].get_inner_tensor()?, *dim, index)?.into()
