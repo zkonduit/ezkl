@@ -5,7 +5,7 @@ use crate::commands::{Cli, Commands, RunArgs, StrategyType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{fix_verifier_sol, get_contract_artifacts, verify_proof_via_solidity};
 use crate::graph::{
-    scale_to_multiplier, GraphCircuit, GraphInput, GraphSettings, Model, Visibility,
+    scale_to_multiplier, GraphCircuit, GraphInput, GraphSettings, Model, Visibility
 };
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]

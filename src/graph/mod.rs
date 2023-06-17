@@ -201,12 +201,26 @@ impl GraphInput {
     }
 }
 
-#[cfg(feature = "python-bindings")]
-fn fp_to_string(fp: &Fp) -> String {
-    format!("{:#?}", fp)
-}
+/// converts a Fr from halo2curves into string
+/// TODO: Uncomment when needed
+// #[cfg(feature = "python-bindings")]
+// pub fn fp_to_string(fp: &Fp) -> String {
+//     format!("{:#?}", fp)
+// }
 
 #[cfg(feature = "python-bindings")]
+
+#[cfg(feature = "python-bindings")]
+pub fn fp_to_vecu64(fp: &Fp) -> Vec<u64> {
+    let bytes = fp.to_bytes();
+    let bytes_first_u64 = u64::from_le_bytes(bytes[0..8][..].try_into().unwrap());
+    let bytes_second_u64 = u64::from_le_bytes(bytes[8..16][..].try_into().unwrap());
+    let bytes_third_u64 = u64::from_le_bytes(bytes[16..24][..].try_into().unwrap());
+    let bytes_fourth_u64 = u64::from_le_bytes(bytes[24..32][..].try_into().unwrap());
+
+    [bytes_first_u64, bytes_second_u64, bytes_third_u64, bytes_fourth_u64].to_vec()
+}
+
 impl ToPyObject for GraphInput {
     fn to_object(&self, py: Python) -> PyObject {
         // Create a Python dictionary
@@ -214,36 +228,36 @@ impl ToPyObject for GraphInput {
         let input_data_mut = &self.input_data;
         let output_data_mut = &self.output_data;
 
-        dict.set_item("input_data", truncate_nested_vector(&input_data_mut))
+        dict.set_item("input_data", &input_data_mut)
             .unwrap();
-        dict.set_item("output_data", truncate_nested_vector(&output_data_mut))
+        dict.set_item("output_data", &output_data_mut)
             .unwrap();
 
         if let Some(input_hashes) = &self.input_hashes {
-            let input_hashes_str: Vec<String> = input_hashes.iter().map(fp_to_string).collect();
-            dict.set_item("input_hashes", input_hashes_str).unwrap();
+            let input_hashes_u64: Vec<Vec<u64>> = input_hashes.iter().map(fp_to_vecu64).collect();
+            dict.set_item("input_hashes", input_hashes_u64).unwrap();
         }
 
         if let Some(output_hashes) = &self.output_hashes {
-            let output_hashes_str: Vec<String> = output_hashes.iter().map(fp_to_string).collect();
-            dict.set_item("output_hashes", output_hashes_str).unwrap();
+            let output_hashes_u64: Vec<Vec<u64>> = output_hashes.iter().map(fp_to_vecu64).collect();
+            dict.set_item("output_hashes", output_hashes_u64).unwrap();
         }
         dict.to_object(py)
     }
 }
 
 /// Truncates nested vector due to omit junk floating point values in python
-#[cfg(feature = "python-bindings")]
-fn truncate_nested_vector(input: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {
-    let mut input_mut = input.clone();
-    for inner_vec in input_mut.iter_mut() {
-        for value in inner_vec.iter_mut() {
-            // truncate 6 decimal places
-            *value = (*value * 10000000.0).trunc() / 10000000.0;
-        }
-    }
-    input_mut
-}
+// #[cfg(feature = "python-bindings")]
+// fn truncate_nested_vector(input: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {
+//     let mut input_mut = input.clone();
+//     for inner_vec in input_mut.iter_mut() {
+//         for value in inner_vec.iter_mut() {
+//             // truncate 6 decimal places
+//             *value = (*value * 10000000.0).trunc() / 10000000.0;
+//         }
+//     }
+//     input_mut
+// }
 
 const POSEIDON_LEN_GRAPH: usize = 10;
 // TODO: make this a function of the number of constraints this is a bit of a hack
