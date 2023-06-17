@@ -38,7 +38,7 @@ jobs:
       PCRE2_SYS_STATIC: 1
     strategy:
       matrix:
-        build: ['windows-msvc', 'linux-musl', 'linux-aarch64', 'macos', 'macos-aarch64', 'debian', 'wasm-wasi', 'wasm-unknown']
+        build: [windows-msvc, linux-musl, linux-aarch64, macos, macos-aarch64, debian, wasm-wasi, wasm-unknown, linux-gnu]
         include:
         - build: windows (x86_64-pc-windows-msvc)
           os: windows-latest
