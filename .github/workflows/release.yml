@@ -51,7 +51,7 @@ jobs:
           rust: nightly
           target: x86_64-apple-darwin
         - build: win-msvc
-          os: windows-2023
+          os: windows-2022
           rust: nightly
           target: x86_64-pc-windows-msvc
 
