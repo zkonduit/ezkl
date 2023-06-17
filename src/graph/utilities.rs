@@ -747,26 +747,18 @@ pub fn new_op_from_onnx(
 
 /// Extracts the raw values from a [Constant] op.
 pub fn extract_const_raw_values(boxed_op: &Box<dyn crate::circuit::Op<Fp>>) -> Option<Tensor<f32>> {
-    match boxed_op
+    boxed_op
         .as_any()
-        .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
-    {
-        Some(c) => Some(c.raw_values.clone()),
-        None => None,
-    }
+        .downcast_ref::<crate::circuit::ops::Constant<Fp>>().map(|c| c.raw_values.clone())
 }
 
 /// Extracts the quantized values from a [Constant] op.
 pub fn extract_const_quantized_values(
     boxed_op: &Box<dyn crate::circuit::Op<Fp>>,
 ) -> Option<ValTensor<Fp>> {
-    match boxed_op
+    boxed_op
         .as_any()
-        .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
-    {
-        Some(c) => Some(c.quantized_values.clone()),
-        None => None,
-    }
+        .downcast_ref::<crate::circuit::ops::Constant<Fp>>().map(|c| c.quantized_values.clone())
 }
 
 /// Converts a tensor to a [ValTensor] with a given scale.
@@ -799,7 +791,7 @@ pub fn tensor_to_valtensor<F: PrimeField + TensorType + PartialOrd>(
 pub(crate) fn flatten_valtensors(
     tensors: Vec<ValTensor<Fp>>,
 ) -> Result<ValTensor<Fp>, Box<dyn std::error::Error>> {
-    if tensors.len() == 0 {
+    if tensors.is_empty() {
         return Ok(Tensor::<Fp>::new(None, &[0])?.into());
     }
 

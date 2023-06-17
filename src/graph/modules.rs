@@ -200,8 +200,7 @@ impl ModuleSizes {
         self.poseidon
             .1
             .iter()
-            .chain(self.elgamal.1.iter())
-            .map(|x| *x)
+            .chain(self.elgamal.1.iter()).copied()
             .collect_vec()
     }
 }
@@ -230,11 +229,9 @@ impl GraphModules {
                 .ciphertexts;
             if instances.elgamal.is_empty() {
                 instances.elgamal = ciphers;
-            } else {
-                if !ciphers[2].is_empty() {
-                    for i in 0..instances.elgamal.len() {
-                        instances.elgamal[i].extend(ciphers[i].clone());
-                    }
+            } else if !ciphers[2].is_empty() {
+                for i in 0..instances.elgamal.len() {
+                    instances.elgamal[i].extend(ciphers[i].clone());
                 }
             }
         }
@@ -341,7 +338,7 @@ impl GraphModules {
         module_settings: &ModuleVarSettings,
     ) -> Result<(), Error> {
         // If the module is hashed, then we need to hash the inputs
-        if element_visibility.is_hashed() && values.len() > 0 {
+        if element_visibility.is_hashed() && !values.is_empty() {
             // reserve module 0 for poseidon modules
             layouter.assign_region(|| "_enter_module_0", |_| Ok(()))?;
             // config for poseidon
@@ -363,7 +360,7 @@ impl GraphModules {
             });
 
         // If the module is encrypted, then we need to encrypt the inputs
-        } else if element_visibility.is_encrypted() && values.len() > 0 {
+        } else if element_visibility.is_encrypted() && !values.is_empty() {
             // reserve module 1 for elgamal modules
             layouter.assign_region(|| "_enter_module_1", |_| Ok(()))?;
             // config for elgamal
@@ -407,7 +404,7 @@ impl GraphModules {
         let poseidon_hash = inputs.iter().fold(vec![], |mut acc, x| {
             let field_elements = x.iter().map(|x| i128_to_felt::<Fp>(*x)).collect();
             let res = ModulePoseidon::run(field_elements).unwrap()[0].clone();
-            acc.extend(res.clone());
+            acc.extend(res);
             acc
         });
 
@@ -415,7 +412,7 @@ impl GraphModules {
             let field_elements = x.iter().map(|x| i128_to_felt::<Fp>(*x)).collect();
             let ciphers = ElGamalGadget::run((field_elements, variables.clone()))
                 .unwrap()
-                .clone();
+                ;
 
             if acc.is_empty() {
                 ciphers

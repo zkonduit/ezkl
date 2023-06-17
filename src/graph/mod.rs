@@ -327,7 +327,7 @@ impl GraphCircuit {
             .into_iter()
             .into();
 
-        let processed_params = GraphModules::forward(&vec![flattened_params])?;
+        let processed_params = GraphModules::forward(&[flattened_params])?;
 
         let outputs = self.model.forward(&self.inputs)?;
         let processed_outputs = GraphModules::forward(&outputs.outputs)?;

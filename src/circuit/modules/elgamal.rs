@@ -1,3 +1,8 @@
+/*
+An easy-to-use implementation of the ElGamal Encryption in the form of a Halo2 Chip.
+Huge thank you to https://github.com/timoftime/ for providing the inspiration and launching point for this <3 .
+*/
+
 ///
 mod add_chip;
 
@@ -96,7 +101,7 @@ impl ElGamalChip {
     /// Create a new `ElGamalChip`.
     pub fn new(p: ElGamalConfig) -> ElGamalChip {
         ElGamalChip {
-            ecc: BaseFieldEccChip::new(p.ecc_chip_config().clone()),
+            ecc: BaseFieldEccChip::new(p.ecc_chip_config()),
             poseidon: PoseidonChip::construct(p.poseidon_config.clone()),
             add: AddChip::construct(p.add_config.clone()),
             config: p,
@@ -216,7 +221,7 @@ impl ElGamalVariables {
         // With BN256, we create the private key from a random number. This is a private key value (sk
         //  and a public key mapped to the G2 curve:: pk=sk.G2
         let mut pk = G1::generator();
-        pk.mul_assign(sk.clone());
+        pk.mul_assign(sk);
 
         Self {
             r: Fr::random(&mut rng),
@@ -259,7 +264,7 @@ impl ElGamalGadget {
         let y = Integer::from_fe(*coords.y(), Self::rns());
 
         let hasher = poseidon::Hash::<Fr, PoseidonSpec, ConstantLength<2>, 2, 1>::init();
-        let dh = hasher.hash([x.native().clone(), y.native().clone()]); // this is Fq now :( (we need Fr)
+        let dh = hasher.hash([x.native(), y.native()]); // this is Fq now :( (we need Fr)
 
         let mut c2 = vec![];
 
@@ -267,19 +272,19 @@ impl ElGamalGadget {
             c2.push(msg[i] + dh);
         }
 
-        return (c1, c2);
+        (c1, c2)
     }
 
     /// Hash the secret key to be used as a public input.
     pub fn hash_sk(sk: Fr) -> Fr {
         let hasher = poseidon::Hash::<Fr, PoseidonSpec, ConstantLength<2>, 2, 1>::init();
-        let dh = hasher.hash([sk.clone(), sk.clone()]); // this is Fq now :( (we need Fr)
-        dh
+        // this is Fq now :( (we need Fr)
+        hasher.hash([sk, sk])
     }
 
     /// Decrypt a ciphertext using the secret key.
     pub fn decrypt(cipher: &(G1, Vec<Fr>), sk: Fr) -> Vec<Fr> {
-        let c1 = cipher.0.clone();
+        let c1 = cipher.0;
         let c2 = cipher.1.clone();
 
         let s = c1.mul(sk).to_affine().coordinates().unwrap();
@@ -288,14 +293,14 @@ impl ElGamalGadget {
         let y = Integer::from_fe(*s.y(), Self::rns());
 
         let hasher = poseidon::Hash::<Fr, PoseidonSpec, ConstantLength<2>, 2, 1>::init();
-        let dh = hasher.hash([x.native().clone(), y.native().clone()]); // this is Fq now :( (we need Fr)
+        let dh = hasher.hash([x.native(), y.native()]); // this is Fq now :( (we need Fr)
 
         let mut msg = vec![];
         for i in 0..c2.len() {
             msg.push(c2[i] - dh);
         }
 
-        return msg;
+        msg
     }
 
     /// Get the public inputs for the circuit.
@@ -308,7 +313,7 @@ impl ElGamalGadget {
                 let x = Integer::from_fe(*c.x(), Self::rns());
                 let y = Integer::from_fe(*c.y(), Self::rns());
 
-                vec![x.native().clone(), y.native().clone()]
+                vec![x.native(), y.native()]
             })
             .unwrap();
 
@@ -353,7 +358,7 @@ impl ElGamalGadget {
         };
 
         // compute s = randomness*pk
-        let s = variables.pk.clone().mul(variables.r).to_affine();
+        let s = variables.pk.mul(variables.r).to_affine();
         let c1 = g.mul(variables.r).to_affine();
 
         let (s, c1) = layouter.assign_region(
@@ -452,10 +457,10 @@ impl Module<Fr> for ElGamalGadget {
     fn run(input: Self::RunInputs) -> Result<Vec<Vec<Fr>>, Box<dyn std::error::Error>> {
         let (input, var) = input;
 
-        let cipher = Self::encrypt(var.pk, input.clone(), var.r.clone());
+        let cipher = Self::encrypt(var.pk, input, var.r);
         // keep 1 empty (maingate instance variable).
         let mut public_inputs: Vec<Vec<Fr>> = vec![vec![]];
-        public_inputs.extend(Self::get_instances(&cipher, Self::hash_sk(var.sk.clone())));
+        public_inputs.extend(Self::get_instances(&cipher, Self::hash_sk(var.sk)));
         Ok(public_inputs)
     }
 
