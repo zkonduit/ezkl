@@ -26,8 +26,6 @@ jobs:
         with:
           token: ${{ secrets.RELEASE_TOKEN }}
         
-
-
   build-release:
     name: build-release
     needs: ['create-release']
@@ -40,7 +38,7 @@ jobs:
       PCRE2_SYS_STATIC: 1
     strategy:
       matrix:
-        build: [linux, macos, win-msvc, linux-aarch64, macos-aarch64]
+        build: [linux, macos, win-msvc, linux-aarch64, macos-aarch64, debian]
         include:
         - build: linux
           os: ubuntu-22.04
@@ -62,6 +60,10 @@ jobs:
           os: macos-13
           rust: nightly
           target: aarch64-apple-darwin
+        - build: debian
+          os: ubuntu-22.04
+          rust: nightly
+          target: x86_64-unknown-linux-gnu
 
     steps:
     - name: Checkout repo
@@ -76,7 +78,7 @@ jobs:
       run: rustup target add ${{ matrix.target }}
       
     - name: Install musl-tools (Ubuntu)
-      if: matrix.os == 'ubuntu-22.04'
+      if: matrix.os == 'ubuntu-22.04' && (matrix.target == 'x86_64-unknown-linux-musl' || matrix.target == 'aarch64-unknown-linux-musl')
       run: sudo apt-get install -y musl-tools
     
     - name: Use Cross
@@ -96,12 +98,12 @@ jobs:
     - name: Build release binary
       run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry
 
-    - name: Strip release binary (linux and macos)
-      if: matrix.build == 'linux' || matrix.build == 'macos' || matrix.build == 'linux-aarch64' || matrix.build == 'macos-aarch64'
+    - name: Strip release binary
+      if: matrix.build != 'win-msvc'
       run: strip "target/${{ matrix.target }}/release/ezkl"
 
-    - name: Build archive (Linux/macOS)
-      if: matrix.build == 'linux' || matrix.build == 'macos' || matrix.build == 'linux-aarch64' || matrix.build == 'macos-aarch64'
+    - name: Build archive
+      if: matrix.build != 'win-msvc'
       shell: bash
       run: |
         mkdir -p build-artifacts
