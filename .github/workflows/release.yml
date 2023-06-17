@@ -40,7 +40,7 @@ jobs:
       PCRE2_SYS_STATIC: 1
     strategy:
       matrix:
-        build: [linux, macos, win-msvc]
+        build: [linux, macos, win-msvc, linux-aarch64, macos-aarch64]
         include:
         - build: linux
           os: ubuntu-22.04
@@ -54,6 +54,14 @@ jobs:
           os: windows-2022
           rust: nightly
           target: x86_64-pc-windows-msvc
+        - build: linux-aarch64
+          os: ubuntu-22.04
+          rust: nightly
+          target: aarch64-unknown-linux-musl
+        - build: macos-aarch64
+          os: macos-13
+          rust: nightly
+          target: aarch64-apple-darwin
 
     steps:
     - name: Checkout repo
@@ -89,11 +97,11 @@ jobs:
       run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry
 
     - name: Strip release binary (linux and macos)
-      if: matrix.build == 'linux' || matrix.build == 'macos'
+      if: matrix.build == 'linux' || matrix.build == 'macos' || matrix.build == 'linux-aarch64' || matrix.build == 'macos-aarch64'
       run: strip "target/${{ matrix.target }}/release/ezkl"
 
     - name: Build archive (Linux/macOS)
-      if: matrix.build == 'linux' || matrix.build == 'macos'
+      if: matrix.build == 'linux' || matrix.build == 'macos' || matrix.build == 'linux-aarch64' || matrix.build == 'macos-aarch64'
       shell: bash
       run: |
         mkdir -p build-artifacts
