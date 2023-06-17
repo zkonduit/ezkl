@@ -38,32 +38,44 @@ jobs:
       PCRE2_SYS_STATIC: 1
     strategy:
       matrix:
-        build: [linux, macos, win-msvc, linux-aarch64, macos-aarch64, debian]
+        build: ['windows-msvc', 'linux-musl', 'linux-aarch64', 'macos', 'macos-aarch64', 'debian', 'wasm-wasi', 'wasm-unknown']
         include:
-        - build: linux
-          os: ubuntu-latest
-          rust: nightly
-          target: x86_64-unknown-linux-musl
-        - build: macos
-          os: macos-13
-          rust: nightly
-          target: x86_64-apple-darwin
-        - build: win-msvc
-          os: windows-2022
+        - build: windows (x86_64-pc-windows-msvc)
+          os: windows-latest
           rust: nightly
           target: x86_64-pc-windows-msvc
-        - build: linux-aarch64
-          os: ubuntu-latest
+        - build: linux (aarch64-unknown-linux-musl)
+          os: ubuntu-20.04
           rust: nightly
           target: aarch64-unknown-linux-musl
-        - build: macos-aarch64
+        - build: apple (aarch64-apple-darwin)
           os: macos-13
           rust: nightly
           target: aarch64-apple-darwin
-        - build: debian
-          os: ubuntu-latest
+        - build: apple (x86_64-apple-darwin)
+          os: macos-13
+          rust: nightly
+          target: x86_64-apple-darwin
+        - build: debian (x86_64-unknown-linux-musl)
+          os: ubuntu-20.04
           rust: nightly
           target: x86_64-unknown-linux-musl
+        - build: linux (x86_64-unknown-linux-musl)
+          os: ubuntu-20.04
+          rust: nightly
+          target: x86_64-unknown-linux-musl
+        - build: linux (wasm32-wasi)
+          os: ubuntu-20.04
+          rust: nightly
+          target: wasm32-wasi
+        - build: linux (wasm32-unknown-unknown)
+          os: ubuntu-20.04
+          rust: nightly
+          target: wasm32-unknown-unknown
+        - build: linux (x86_64-unknown-linux-gnu)
+          os: ubuntu-20.04
+          rust: nightly
+          target: x86_64-unknown-linux-gnu
 
     steps:
     - name: Checkout repo
