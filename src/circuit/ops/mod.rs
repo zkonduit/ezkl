@@ -1,12 +1,9 @@
-use std::{any::Any, error::Error, marker::PhantomData};
+use std::{any::Any, error::Error};
 
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    graph::{quantize_float, Visibility},
-    tensor::{self, Tensor, TensorError, TensorType, ValTensor},
-};
+use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor};
 use halo2curves::ff::PrimeField;
 
 use self::{lookup::LookupOp, region::RegionCtx};
@@ -249,22 +246,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
 #[derive(Clone, Debug)]
 pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
     ///
-    pub values: Tensor<f32>,
-    /// scale to quantize with
-    pub scale: u32,
-    /// is public ?
-    pub visibility: Visibility,
-    _marker: PhantomData<F>,
+    pub quantized_values: ValTensor<F>,
+    ///
+    pub raw_values: Tensor<f32>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
     ///
-    pub fn new(values: Tensor<f32>, scale: u32, visibility: Visibility) -> Self {
+    pub fn new(quantized_values: ValTensor<F>, raw_values: Tensor<f32>) -> Self {
         Self {
-            values,
-            scale,
-            visibility,
-            _marker: PhantomData,
+            quantized_values,
+            raw_values,
         }
     }
 }
@@ -274,10 +266,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
         self
     }
     fn f(&self, _: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
+        let values = self.quantized_values.clone();
+        let int_values = values.get_int_evals().unwrap();
+        let output = Tensor::new(Some(&int_values), values.dims().clone())?;
+
         Ok(ForwardResult {
-            output: self
-                .values
-                .map(|x| quantize_float(&x, 0., self.scale).unwrap()),
+            output,
             intermediate_lookups: vec![],
         })
     }
@@ -291,11 +285,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
         _: &mut RegionCtx<F>,
         _: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        Ok(Some(tensor_to_valtensor(
-            self.values.clone(),
-            self.scale,
-            self.visibility,
-        )?))
+        Ok(Some(self.quantized_values.clone()))
     }
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
         Box::new(self.clone())
@@ -343,31 +333,4 @@ fn homogenize_input_scales<F: PrimeField + TensorType + PartialOrd>(
     } else {
         Ok(Box::new(op))
     }
-}
-
-/// Converts a tensor to a [ValTensor] with a given scale.
-pub fn tensor_to_valtensor<F: PrimeField + TensorType + PartialOrd>(
-    const_value: Tensor<f32>,
-    scale: u32,
-    visibility: Visibility,
-) -> Result<ValTensor<F>, Box<dyn std::error::Error>> {
-    let mut value: ValTensor<F> = match visibility {
-        Visibility::Public => const_value
-            .map(|x| {
-                crate::tensor::ValType::Constant(crate::fieldutils::i128_to_felt::<F>(
-                    quantize_float(&x, 0.0, scale).unwrap(),
-                ))
-            })
-            .into(),
-        Visibility::Private => const_value
-            .map(|x| {
-                crate::tensor::ValType::Value(halo2_proofs::circuit::Value::known(
-                    crate::fieldutils::i128_to_felt::<F>(quantize_float(&x, 0.0, scale).unwrap()),
-                ))
-            })
-            .into(),
-        Visibility::Hashed => unimplemented!("hashed visibility not supported yet"),
-    };
-    value.set_scale(scale);
-    Ok(value)
 }

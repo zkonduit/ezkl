@@ -4,9 +4,9 @@ use super::{GraphError, Visibility};
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::poly::PolyOp;
-use crate::circuit::tensor_to_valtensor;
-use crate::tensor::{Tensor, TensorError};
+use crate::tensor::{Tensor, TensorError, TensorType, ValTensor, ValType};
 use halo2curves::bn256::Fr as Fp;
+use halo2curves::ff::PrimeField;
 use log::{debug, warn};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::array::Gather;
@@ -238,11 +238,9 @@ pub fn new_op_from_onnx(
             let axis = op.axis;
 
             let boxed_op = inputs[1].clone().opkind();
-            let index: Tensor<usize> = match boxed_op
-                .as_any()
-                .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
-            {
-                Some(c) => c.values.map(|e| e as usize),
+
+            let index: Tensor<usize> = match extract_const_raw_values(&boxed_op) {
+                Some(c) => c.map(|e| e as usize),
                 None => {
                     warn!("assuming the gather window is over a context variable");
                     // offset by 1
@@ -274,12 +272,17 @@ pub fn new_op_from_onnx(
         "Const" => {
             let op: Const = load_const(node.op(), idx, node.op().name().to_string())?;
             let dt = op.0.datum_type();
-            let value = extract_tensor_value(op.0)?;
+            // Raw values are always f32
+            let raw_value = extract_tensor_value(op.0)?;
+            // If bool then don't scale
             let constant_scale = if dt == DatumType::Bool { 0 } else { scale };
+            // Quantize the raw value
+            let quantized_value =
+                tensor_to_valtensor(raw_value.clone(), constant_scale, param_visibility)?;
+            // Create a constant op
             Box::new(crate::circuit::ops::Constant::new(
-                value,
-                constant_scale,
-                param_visibility,
+                quantized_value,
+                raw_value,
             ))
         }
         "Reduce<Min>" => {
@@ -309,19 +312,18 @@ pub fn new_op_from_onnx(
 
             Box::new(PolyOp::Sum { axes })
         }
-        // TODO: this is a hack to get around the fact that onnx replace ReLU with Max(0, x) -- we should probably implement
         "Max" => {
             // Extract the slope layer hyperparams
 
             let boxed_op = inputs[1].clone().opkind();
-            let unit = match boxed_op
-                .as_any()
-                .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
-            {
-                Some(c) => c.values[0],
-                None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "Max".to_string())));
+            let unit = if let Some(c) = extract_const_raw_values(&boxed_op) {
+                if c.len() == 1 {
+                    c[0]
+                } else {
+                    todo!()
                 }
+            } else {
+                return Err(Box::new(GraphError::OpMismatch(idx, "Max".to_string())));
             };
 
             if inputs.len() == 2 && unit == 0. {
@@ -377,60 +379,28 @@ pub fn new_op_from_onnx(
 
             for (idx, inp) in inputs.clone().iter().enumerate() {
                 let boxed_op = &inp.opkind();
-                if let Some(c) = boxed_op
-                    .as_any()
-                    .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
-                {
+                if let Some(c) = extract_const_raw_values(boxed_op) {
                     inputs.remove(idx);
-                    params = Some(tensor_to_valtensor(
-                        c.values.clone(),
-                        max_scale,
-                        param_visibility,
-                    )?);
+                    params = Some(tensor_to_valtensor(c, max_scale, param_visibility)?);
                 }
             }
 
             Box::new(PolyOp::Add { a: params })
         }
         "Sub" => Box::new(PolyOp::Sub),
-        "Mul" => {
-            let mut params = None;
-
-            for (idx, inp) in inputs.clone().iter().enumerate() {
-                let boxed_op = &inp.opkind();
-                if let Some(c) = boxed_op
-                    .as_any()
-                    .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
-                {
-                    inputs.remove(idx);
-                    params = Some(tensor_to_valtensor(
-                        c.values.clone(),
-                        scale,
-                        param_visibility,
-                    )?);
-                }
-            }
-
-            Box::new(PolyOp::Mult { a: params })
-        }
+        "Mul" => Box::new(PolyOp::Mult { a: None }),
         "Iff" => Box::new(PolyOp::Iff),
         "Greater" => {
             // Extract the slope layer hyperparams
             let boxed_op = inputs[0].clone().opkind();
-            let unit = match boxed_op
-                .as_any()
-                .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
-            {
-                Some(c) => {
-                    if c.values.len() == 1 {
-                        c.values[0]
-                    } else {
-                        todo!()
-                    }
+            let unit = if let Some(c) = extract_const_raw_values(&boxed_op) {
+                if c.len() == 1 {
+                    c[0]
+                } else {
+                    todo!()
                 }
-                None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "greater".to_string())));
-                }
+            } else {
+                return Err(Box::new(GraphError::OpMismatch(idx, "greater".to_string())));
             };
 
             if inputs.len() == 2 {
@@ -659,18 +629,10 @@ pub fn new_op_from_onnx(
                 unimplemented!("Only nearest neighbor interpolation is supported")
             }
             let boxed_op = inputs[2].clone().opkind();
-            let scale_factor = match boxed_op
-                .as_any()
-                .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
-            {
-                Some(c) => c
-                    .values
-                    .map(|x| x as usize)
-                    .into_iter()
-                    .collect::<Vec<usize>>(),
-                None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "Resize".to_string())));
-                }
+            let scale_factor = if let Some(c) = extract_const_raw_values(&boxed_op) {
+                c.map(|x| x as usize).into_iter().collect::<Vec<usize>>()
+            } else {
+                return Err(Box::new(GraphError::OpMismatch(idx, "Resize".to_string())));
             };
 
             // remove the resize node from the inputs
@@ -781,4 +743,121 @@ pub fn new_op_from_onnx(
             Box::new(crate::circuit::ops::Unknown)
         }
     })
+}
+
+/// Extracts the raw values from a [Constant] op.
+pub fn extract_const_raw_values(boxed_op: &Box<dyn crate::circuit::Op<Fp>>) -> Option<Tensor<f32>> {
+    match boxed_op
+        .as_any()
+        .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
+    {
+        Some(c) => Some(c.raw_values.clone()),
+        None => None,
+    }
+}
+
+/// Extracts the quantized values from a [Constant] op.
+pub fn extract_const_quantized_values(
+    boxed_op: &Box<dyn crate::circuit::Op<Fp>>,
+) -> Option<ValTensor<Fp>> {
+    match boxed_op
+        .as_any()
+        .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
+    {
+        Some(c) => Some(c.quantized_values.clone()),
+        None => None,
+    }
+}
+
+/// Converts a tensor to a [ValTensor] with a given scale.
+pub fn tensor_to_valtensor<F: PrimeField + TensorType + PartialOrd>(
+    const_value: Tensor<f32>,
+    scale: u32,
+    visibility: Visibility,
+) -> Result<ValTensor<F>, Box<dyn std::error::Error>> {
+    let mut value: ValTensor<F> = match visibility {
+        Visibility::Public => const_value
+            .map(|x| {
+                crate::tensor::ValType::Constant(crate::fieldutils::i128_to_felt::<F>(
+                    quantize_float(&x, 0.0, scale).unwrap(),
+                ))
+            })
+            .into(),
+        Visibility::Private | Visibility::Hashed => const_value
+            .map(|x| {
+                crate::tensor::ValType::Value(halo2_proofs::circuit::Value::known(
+                    crate::fieldutils::i128_to_felt::<F>(quantize_float(&x, 0.0, scale).unwrap()),
+                ))
+            })
+            .into(),
+    };
+    value.set_scale(scale);
+    Ok(value)
+}
+
+/// Flatten a vector of [ValTensor]s into a single [ValTensor].
+pub(crate) fn flatten_valtensors(
+    tensors: Vec<ValTensor<Fp>>,
+) -> Result<ValTensor<Fp>, Box<dyn std::error::Error>> {
+    if tensors.len() == 0 {
+        return Ok(Tensor::<Fp>::new(None, &[0])?.into());
+    }
+
+    let mut merged: Vec<ValType<Fp>> = tensors[0]
+        .get_inner_tensor()?
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    for tensor in tensors.iter().skip(1) {
+        let vals = tensor.get_inner_tensor()?.into_iter();
+        merged.extend(vals);
+    }
+
+    let tensor = Tensor::new(Some(&merged), &[merged.len()])?;
+    Ok(tensor.into())
+}
+
+/// Split a [ValTensor] into a vector of [ValTensor]s.
+pub(crate) fn split_valtensor(
+    values: ValTensor<Fp>,
+    shapes: Vec<Vec<usize>>,
+) -> Result<Vec<ValTensor<Fp>>, Box<dyn std::error::Error>> {
+    let mut tensors: Vec<ValTensor<Fp>> = Vec::new();
+    let mut start = 0;
+    for shape in shapes {
+        let end = start + shape.iter().product::<usize>();
+        let mut tensor = values.get_slice(&[start..end])?;
+        tensor.reshape(&shape)?;
+        tensors.push(tensor);
+        start = end;
+    }
+    Ok(tensors)
+}
+
+#[cfg(test)]
+pub mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_flatten_valtensors() {
+        let tensor1: Tensor<Fp> = (0..10).into_iter().map(|x| x.into()).into();
+        let tensor2: Tensor<Fp> = (10..20).into_iter().map(|x| x.into()).into();
+        let tensor3: Tensor<Fp> = (20..30).into_iter().map(|x| x.into()).into();
+
+        let flattened =
+            flatten_valtensors(vec![tensor1.into(), tensor2.into(), tensor3.into()]).unwrap();
+
+        assert_eq!(flattened.len(), 30);
+
+        let split = split_valtensor(flattened, vec![vec![2, 5], vec![10], vec![5, 2]]).unwrap();
+
+        assert_eq!(split.len(), 3);
+        assert_eq!(split[0].len(), 10);
+        assert_eq!(split[0].dims(), vec![2, 5]);
+        assert_eq!(split[1].len(), 10);
+        assert_eq!(split[1].dims(), vec![10]);
+        assert_eq!(split[2].dims(), vec![5, 2]);
+        assert_eq!(split[2].len(), 10);
+    }
 }
