@@ -30,7 +30,7 @@ jobs:
     name: build-release
     needs: ['create-release']
     runs-on: ${{ matrix.os }}
-    env: 
+    env:
       CARGO: cargo
       TARGET_FLAGS: ""
       TARGET_DIR: ./target
@@ -38,44 +38,44 @@ jobs:
       PCRE2_SYS_STATIC: 1
     strategy:
       matrix:
-        build: [windows-msvc, linux-musl, linux-aarch64, macos, macos-aarch64, debian, wasm-wasi, wasm-unknown, linux-gnu]
+        build: [windows-msvc, macos, macos-aarch64, debian, linux-musl, wasm32-wasi, wasm32-unknown, linux-gnu, linux-aarch64,]
         include:
-        - build: windows (x86_64-pc-windows-msvc)
+        - build: windows-msvc
           os: windows-latest
           rust: nightly
           target: x86_64-pc-windows-msvc
-        - build: linux (aarch64-unknown-linux-musl)
-          os: ubuntu-20.04
-          rust: nightly
-          target: aarch64-unknown-linux-musl
-        - build: apple (aarch64-apple-darwin)
-          os: macos-13
-          rust: nightly
-          target: aarch64-apple-darwin
-        - build: apple (x86_64-apple-darwin)
+        - build: macos
           os: macos-13
           rust: nightly
           target: x86_64-apple-darwin
-        - build: debian (x86_64-unknown-linux-musl)
+        - build: macos-aarch64
+          os: macos-13
+          rust: nightly
+          target: aarch64-apple-darwin
+        - build: debian
           os: ubuntu-20.04
           rust: nightly
           target: x86_64-unknown-linux-musl
-        - build: linux (x86_64-unknown-linux-musl)
+        - build: linux-musl
           os: ubuntu-20.04
           rust: nightly
           target: x86_64-unknown-linux-musl
-        - build: linux (wasm32-wasi)
+        - build: wasm32-wasi
           os: ubuntu-20.04
           rust: nightly
           target: wasm32-wasi
-        - build: linux (wasm32-unknown-unknown)
+        - build: wasm32-unknown
           os: ubuntu-20.04
           rust: nightly
           target: wasm32-unknown-unknown
-        - build: linux (x86_64-unknown-linux-gnu)
+        - build: linux-gnu
           os: ubuntu-20.04
           rust: nightly
           target: x86_64-unknown-linux-gnu
+        - build: linux-aarch64
+          os: ubuntu-20.04
+          rust: nightly
+          target: aarch64-unknown-linux-musl
 
     steps:
     - name: Checkout repo
