@@ -37,12 +37,13 @@ use super::Module;
 // Absolute offsets for public inputs.
 const C1_X: usize = 0;
 const C1_Y: usize = 1;
+const SK_H: usize = 2;
 
 ///
 const NUMBER_OF_LIMBS: usize = 4;
 const BIT_LEN_LIMB: usize = 64;
 /// The number of instance columns used by the ElGamal circuit.
-pub const NUM_INSTANCE_COLUMNS: usize = 4;
+pub const NUM_INSTANCE_COLUMNS: usize = 3;
 
 type CircuitHash = PoseidonHash<Fr, PoseidonChip<Fr, 2, 1>, PoseidonSpec, ConstantLength<2>, 2, 1>;
 
@@ -69,7 +70,6 @@ pub struct ElGamalConfig {
     plaintext_col: Column<Advice>,
     ciphertext_c1_exp_col: Column<Instance>,
     ciphertext_c2_exp_col: Column<Instance>,
-    sk_commitment_col: Column<Instance>,
 }
 
 impl ElGamalConfig {
@@ -161,9 +161,6 @@ impl ElGamalChip {
         let ciphertext_c2_exp_col = meta.instance_column();
         meta.enable_equality(ciphertext_c2_exp_col);
 
-        let sk_commitment_col = meta.instance_column();
-        meta.enable_equality(sk_commitment_col);
-
         let plaintext_col = advices[1];
 
         ElGamalConfig {
@@ -174,7 +171,6 @@ impl ElGamalChip {
             plaintext_col,
             ciphertext_c1_exp_col,
             ciphertext_c2_exp_col,
-            sk_commitment_col,
         }
     }
 }
@@ -305,7 +301,7 @@ impl ElGamalGadget {
 
     /// Get the public inputs for the circuit.
     pub fn get_instances(cipher: &(G1, Vec<Fr>), sk_hash: Fr) -> Vec<Vec<Fr>> {
-        let c1_coordinates = cipher
+        let mut c1_and_sk = cipher
             .0
             .to_affine()
             .coordinates()
@@ -317,7 +313,9 @@ impl ElGamalGadget {
             })
             .unwrap();
 
-        vec![c1_coordinates, cipher.1.clone(), vec![sk_hash]]
+        c1_and_sk.push(sk_hash);
+
+        vec![c1_and_sk, cipher.1.clone()]
     }
 
     /// Hash the secret key to be used as a public input.
@@ -442,7 +440,7 @@ impl Module<Fr> for ElGamalGadget {
         // 2. c1
         // 3. c2
         // 4. sk_hash
-        vec![0, 0, var_len[0], 0]
+        vec![0, 0, var_len[0]]
     }
 
     fn instance_increment_module(&self) -> Vec<usize> {
@@ -451,7 +449,7 @@ impl Module<Fr> for ElGamalGadget {
         // 2. c1
         // 3. c2
         // 4. sk_hash
-        vec![0, 2, 0, 1]
+        vec![0, 3, 0]
     }
 
     fn run(input: Self::RunInputs) -> Result<Vec<Vec<Fr>>, Box<dyn std::error::Error>> {
@@ -539,22 +537,11 @@ impl Module<Fr> for ElGamalGadget {
                 &s,
             )?;
 
-            layouter
-                .constrain_instance(
-                    c1.x().native().cell(),
-                    self.config.ciphertext_c1_exp_col,
-                    C1_X + row_offsets[1],
-                )
-                .and(layouter.constrain_instance(
-                    c1.y().native().cell(),
-                    self.config.ciphertext_c1_exp_col,
-                    C1_Y + row_offsets[1],
-                ))
-                .and(layouter.constrain_instance(
-                    c2.cell(),
-                    self.config.ciphertext_c2_exp_col,
-                    i + row_offsets[2],
-                ))?;
+            layouter.constrain_instance(
+                c2.cell(),
+                self.config.ciphertext_c2_exp_col,
+                i + row_offsets[2],
+            )?;
         }
 
         // Force the public input to be the hash of the secret key so that we can ascertain decryption can happen
@@ -564,11 +551,22 @@ impl Module<Fr> for ElGamalGadget {
             &sk_var,
         )?;
 
-        layouter.constrain_instance(
-            sk_hash.cell(),
-            self.config.sk_commitment_col,
-            row_offsets[3],
-        )?;
+        layouter
+            .constrain_instance(
+                c1.x().native().cell(),
+                self.config.ciphertext_c1_exp_col,
+                C1_X + row_offsets[1],
+            )
+            .and(layouter.constrain_instance(
+                c1.y().native().cell(),
+                self.config.ciphertext_c1_exp_col,
+                C1_Y + row_offsets[1],
+            ))
+            .and(layouter.constrain_instance(
+                sk_hash.cell(),
+                self.config.ciphertext_c1_exp_col,
+                SK_H + row_offsets[1],
+            ))?;
 
         let assigned_input: Tensor<ValType<Fr>> =
             msg_var.iter().map(|e| ValType::from(e.clone())).into();

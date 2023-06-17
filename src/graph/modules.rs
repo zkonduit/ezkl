@@ -200,7 +200,8 @@ impl ModuleSizes {
         self.poseidon
             .1
             .iter()
-            .chain(self.elgamal.1.iter()).copied()
+            .chain(self.elgamal.1.iter())
+            .copied()
             .collect_vec()
     }
 }
@@ -265,10 +266,11 @@ impl GraphModules {
                 .iter()
                 .map(|x| x.iter().product::<usize>())
                 .sum::<usize>();
+            // 3 constraints for each ciphertext c1 and sk
             if total_len > 0 {
-                sizes.elgamal.1[1] += 1;
-                sizes.elgamal.1[3] += 1;
+                sizes.elgamal.1[1] += 3;
             }
+            // 1 constraint for each ciphertext c2 elem
             for shape in shapes {
                 let total_len = shape.iter().product::<usize>();
                 sizes.elgamal.0 += POSEIDON_CONSTRAINTS_ESTIMATE * total_len;
@@ -410,9 +412,7 @@ impl GraphModules {
 
         let elgamal_outputs = inputs.iter().fold(vec![], |mut acc: Vec<Vec<Fp>>, x| {
             let field_elements = x.iter().map(|x| i128_to_felt::<Fp>(*x)).collect();
-            let ciphers = ElGamalGadget::run((field_elements, variables.clone()))
-                .unwrap()
-                ;
+            let ciphers = ElGamalGadget::run((field_elements, variables.clone())).unwrap();
 
             if acc.is_empty() {
                 ciphers
