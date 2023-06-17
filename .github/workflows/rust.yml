@@ -170,6 +170,8 @@ jobs:
         run: cargo test --release --verbose tests::mock_encrypted_input_params_::t  -- --test-threads 32
       - name: Mock proving tests (encrypted inputs + params + outputs)
         run: cargo test --release --verbose tests::mock_encrypted_all_::t  -- --test-threads 32
+      - name: Mock proving tests (encrypted inputs + hashed params)
+        run: cargo test --release --verbose tests::mock_encrypted_input_hashed_params_::t  -- --test-threads 32
 
   mock-proving-tests-wasi:
     runs-on: ubuntu-latest-32-cores

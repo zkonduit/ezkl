@@ -247,8 +247,6 @@ impl GraphModules {
         Self::instances_from_visibility(visibility.params, &data.processed_params, &mut instances);
         Self::instances_from_visibility(visibility.output, &data.processed_outputs, &mut instances);
 
-        println!("instances: {:?}", instances.flatten());
-
         instances.flatten()
     }
 
