@@ -70,7 +70,7 @@ impl<'a, F: Field, CS: Assignment<F>> ModuleLayouter<'a, F, CS> {
         let ret = ModuleLayouter {
             cs,
             constants,
-            regions: HashMap::from([(0, HashMap::default())]),
+            regions: HashMap::from([(0, HashMap::default()), (1, HashMap::default())]),
             columns: HashMap::default(),
             region_idx: HashMap::default(),
             table_columns: vec![],

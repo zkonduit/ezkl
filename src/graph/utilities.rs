@@ -783,7 +783,7 @@ pub fn tensor_to_valtensor<F: PrimeField + TensorType + PartialOrd>(
                 ))
             })
             .into(),
-        Visibility::Private | Visibility::Hashed => const_value
+        Visibility::Private | Visibility::Hashed | Visibility::Encrypted => const_value
             .map(|x| {
                 crate::tensor::ValType::Value(halo2_proofs::circuit::Value::known(
                     crate::fieldutils::i128_to_felt::<F>(quantize_float(&x, 0.0, scale).unwrap()),

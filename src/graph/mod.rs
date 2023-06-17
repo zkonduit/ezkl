@@ -18,6 +18,7 @@ use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
 use crate::commands::RunArgs;
 use crate::fieldutils::i128_to_felt;
+use crate::graph::modules::ModuleInstanceOffset;
 use crate::tensor::{Tensor, ValTensor};
 use halo2_proofs::{
     circuit::{Layouter, Value},
@@ -35,7 +36,9 @@ use thiserror::Error;
 pub use utilities::*;
 pub use vars::*;
 
-use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult};
+use self::modules::{
+    GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSettings, ModuleSizes,
+};
 
 /// circuit related errors.
 #[derive(Debug, Error)]
@@ -116,7 +119,7 @@ pub struct GraphSettings {
     /// the shape of public inputs to the model (in order of appearance)
     pub model_instance_shapes: Vec<Vec<usize>>,
     /// the of instance cells used by modules
-    pub num_module_instances: usize,
+    pub module_sizes: ModuleSizes,
     /// required_lookups
     pub required_lookups: Vec<LookupOp>,
     /// check mode
@@ -131,9 +134,8 @@ impl GraphSettings {
             .iter()
             .map(|x| x.iter().product())
             .collect();
-        if self.num_module_instances > 0 {
-            instances.push(self.num_module_instances)
-        }
+        instances.extend(self.module_sizes.num_instances());
+
         instances
     }
 
@@ -169,6 +171,8 @@ pub struct GraphCircuit {
     pub inputs: Vec<Tensor<i128>>,
     /// The settings of the model / graph of computations.
     pub settings: GraphSettings,
+    /// The settings of the model's modules.
+    pub module_settings: ModuleSettings,
 }
 
 impl GraphCircuit {
@@ -185,6 +189,9 @@ impl GraphCircuit {
             inputs.push(t);
         }
 
+        // dummy module settings, must load from GraphInput after
+        let module_settings = ModuleSettings::default();
+
         let mut settings = model.gen_params(run_args, check_mode)?;
 
         let mut num_params = 0;
@@ -194,7 +201,7 @@ impl GraphCircuit {
             }
         }
 
-        let (module_constraints, module_instances) = GraphModules::num_constraints_and_instances(
+        let sizes = GraphModules::num_constraints_and_instances(
             model.graph.input_shapes(),
             vec![vec![num_params]],
             model.graph.output_shapes(),
@@ -202,15 +209,16 @@ impl GraphCircuit {
         );
 
         // number of instances used by modules
-        settings.num_module_instances = module_instances;
+        settings.module_sizes = sizes.clone();
 
         // as they occupy independent rows
-        settings.num_constraints = std::cmp::max(settings.num_constraints, module_constraints);
+        settings.num_constraints = std::cmp::max(settings.num_constraints, sizes.max_constraints());
 
         Ok(GraphCircuit {
             model,
             inputs,
             settings,
+            module_settings,
         })
     }
 
@@ -227,12 +235,16 @@ impl GraphCircuit {
             inputs.push(t);
         }
 
+        // dummy module settings, must load from GraphInput after
+        let module_settings = ModuleSettings::default();
+
         settings.check_mode = check_mode;
 
         Ok(GraphCircuit {
             model,
             inputs,
             settings,
+            module_settings,
         })
     }
     ///
@@ -357,7 +369,10 @@ impl GraphCircuit {
     ) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
         let out_scales = self.model.graph.get_output_scales();
 
+        // load the inputs
         self.load_inputs(data);
+        // load the module settings
+        self.module_settings = ModuleSettings::from(data);
 
         // quantize the supplied data using the provided scale.
         // the ordering here is important, we want the inputs to come before the outputs
@@ -400,7 +415,7 @@ impl GraphCircuit {
             GraphModules::public_inputs(data, VarVisibility::from_args(self.settings.run_args)?);
 
         if !module_instances.is_empty() {
-            pi_inner.push(module_instances);
+            pi_inner.extend(module_instances);
         }
 
         Ok(pi_inner)
@@ -445,8 +460,7 @@ impl Circuit<Fp> for GraphCircuit {
 
         let model_config = ModelConfig { base, vars };
 
-        let module_configs =
-            ModuleConfigs::from_visibility(cs, visibility, params.num_module_instances);
+        let module_configs = ModuleConfigs::from_visibility(cs, visibility, params.module_sizes);
 
         GraphConfig {
             model_config,
@@ -470,14 +484,16 @@ impl Circuit<Fp> for GraphCircuit {
             .map(|i| ValTensor::from(<Tensor<i128> as Into<Tensor<Value<Fp>>>>::into(i.clone())))
             .collect::<Vec<ValTensor<Fp>>>();
 
-        let mut instance_offset = 0;
-        // we reserve module 0 for input, params, and output processing modules
+        let mut instance_offset = ModuleInstanceOffset::new();
+        // we reserve module 0 for poseidon
+        // we reserve module 1 for elgamal
         GraphModules::layout(
             &mut layouter,
             &config.module_configs,
             &mut inputs,
             self.settings.run_args.input_visibility,
             &mut instance_offset,
+            &self.module_settings.input,
         )?;
 
         // now we need to flatten the params
@@ -499,8 +515,10 @@ impl Circuit<Fp> for GraphCircuit {
             &mut flattened_params,
             self.settings.run_args.param_visibility,
             &mut instance_offset,
+            &self.module_settings.params,
         )?;
 
+        // now we need to assign the flattened params to the model
         let mut model = self.model.clone();
         if !self.model.get_all_consts().is_empty() {
             // now the flattened_params have been assigned to and we-assign them to the model consts such that they are constrained to be equal
@@ -514,7 +532,7 @@ impl Circuit<Fp> for GraphCircuit {
             );
         }
 
-        // create a new module for the model
+        // create a new module for the model (space 2)
         layouter.assign_region(|| "_new_module", |_| Ok(()))?;
         trace!("Laying out model");
         let mut outputs = model
@@ -537,6 +555,7 @@ impl Circuit<Fp> for GraphCircuit {
             &mut outputs,
             self.settings.run_args.output_visibility,
             &mut instance_offset,
+            &self.module_settings.output,
         )?;
 
         Ok(())

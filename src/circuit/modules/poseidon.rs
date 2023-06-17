@@ -20,8 +20,10 @@ use crate::tensor::{Tensor, ValTensor, ValType};
 
 use super::Module;
 
-#[derive(Debug, Clone)]
+/// The number of instance columns used by the Poseidon hash function
+pub const NUM_INSTANCE_COLUMNS: usize = 1;
 
+#[derive(Debug, Clone)]
 /// WIDTH, RATE and L are const generics for the struct, which represent the width, rate, and number of inputs for the Poseidon hash function, respectively.
 /// This means they are values that are known at compile time and can be used to specialize the implementation of the struct.
 /// The actual chip provided by halo2_gadgets is added to the parent Chip.
@@ -53,13 +55,18 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
 {
     type Config = PoseidonConfig<WIDTH, RATE>;
     type InputAssignments = InputAssignments;
+    type RunInputs = Vec<Fp>;
 
     fn name(&self) -> &'static str {
         "Poseidon"
     }
 
-    fn num_instances(&self) -> usize {
-        1
+    fn instance_increment_input(&self, _: Vec<usize>) -> Vec<usize> {
+        vec![1]
+    }
+
+    fn instance_increment_module(&self) -> Vec<usize> {
+        vec![0]
     }
 
     /// Constructs a new PoseidonChip
@@ -108,8 +115,11 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
     fn layout_inputs(
         &self,
         layouter: &mut impl Layouter<Fp>,
-        message: &ValTensor<Fp>,
+        message: &[ValTensor<Fp>],
     ) -> Result<Self::InputAssignments, Error> {
+        assert_eq!(message.len(), 1);
+        let message = message[0].clone();
+
         layouter.assign_region(
             || "load message",
             |mut region| {
@@ -156,8 +166,8 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
     fn layout(
         &self,
         layouter: &mut impl Layouter<Fp>,
-        input: &ValTensor<Fp>,
-        row_offset: usize,
+        input: &[ValTensor<Fp>],
+        row_offset: Vec<usize>,
     ) -> Result<ValTensor<Fp>, Error> {
         let (input, zero_val) = self.layout_inputs(layouter, input)?;
 
@@ -206,7 +216,7 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
                 let expected_var = region.assign_advice_from_instance(
                     || "pub input anchor",
                     self.config.instance,
-                    row_offset,
+                    row_offset[0],
                     self.config.hash_inputs[0],
                     0,
                 )?;
@@ -222,7 +232,7 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
     }
 
     ///
-    fn run(message: Vec<Fp>) -> Result<Vec<Fp>, Box<dyn std::error::Error>> {
+    fn run(message: Vec<Fp>) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
         let mut hash_inputs = message;
         // do the Tree dance baby
         while hash_inputs.len() > 1 {
@@ -246,7 +256,7 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
             hash_inputs = hashes;
         }
 
-        Ok(hash_inputs)
+        Ok(vec![hash_inputs])
     }
 }
 
@@ -301,7 +311,11 @@ mod tests {
             mut layouter: impl Layouter<Fp>,
         ) -> Result<(), Error> {
             let chip: PoseidonChip<PoseidonSpec, WIDTH, RATE, L> = PoseidonChip::new(config);
-            chip.layout(&mut layouter, &self.message, 0)?;
+            chip.layout(
+                &mut layouter,
+                &[self.message.clone()],
+                vec![0; NUM_INSTANCE_COLUMNS],
+            )?;
             Ok(())
         }
     }
@@ -321,7 +335,7 @@ mod tests {
             message: message.into(),
             _spec: PhantomData,
         };
-        let prover = halo2_proofs::dev::MockProver::run(k, &circuit, vec![output]).unwrap();
+        let prover = halo2_proofs::dev::MockProver::run(k, &circuit, output).unwrap();
         assert_eq!(prover.verify(), Ok(()))
     }
 
@@ -340,7 +354,7 @@ mod tests {
             message: message.into(),
             _spec: PhantomData,
         };
-        let prover = halo2_proofs::dev::MockProver::run(k, &circuit, vec![output]).unwrap();
+        let prover = halo2_proofs::dev::MockProver::run(k, &circuit, output).unwrap();
         assert_eq!(prover.verify(), Ok(()))
     }
 
@@ -361,7 +375,7 @@ mod tests {
             message: message.into(),
             _spec: PhantomData,
         };
-        let prover = halo2_proofs::dev::MockProver::run(k, &circuit, vec![output]).unwrap();
+        let prover = halo2_proofs::dev::MockProver::run(k, &circuit, output).unwrap();
         assert_eq!(prover.verify(), Ok(()))
     }
 }

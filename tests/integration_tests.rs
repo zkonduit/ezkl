@@ -330,6 +330,13 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
+            fn mock_encrypted_input_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 18,"encrypted", "private", "public", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
             fn mock_hashed_params_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
@@ -337,10 +344,47 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
+            fn mock_encrypted_params_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 18,"private", "hashed", "public", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
             fn mock_hashed_output_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
                 mock(test.to_string(),7, 16, 17,"public", "private", "hashed", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_encrypted_output_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 19,"public", "private", "encrypted", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_encrypted_input_params_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 19,"encrypted", "encrypted", "public", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_encrypted_all_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 20,"encrypted", "encrypted", "encrypted", 1);
+            }
+
+
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_encrypted_input_hashed_params_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 19,"encrypted", "hashed", "public", 1);
             }
 
             #(#[test_case(TESTS[N])])*
