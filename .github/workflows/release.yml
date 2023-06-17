@@ -41,7 +41,7 @@ jobs:
         build: [linux, macos, win-msvc, linux-aarch64, macos-aarch64, debian]
         include:
         - build: linux
-          os: ubuntu-22.04
+          os: ubuntu-latest
           rust: nightly
           target: x86_64-unknown-linux-musl
         - build: macos
@@ -53,15 +53,15 @@ jobs:
           rust: nightly
           target: x86_64-pc-windows-msvc
         - build: linux-aarch64
-          os: ubuntu-22.04
+          os: ubuntu-latest
           rust: nightly
-          target: aarch64-unknown-linux-gnu
+          target: aarch64-unknown-linux-musl
         - build: macos-aarch64
           os: macos-13
           rust: nightly
           target: aarch64-apple-darwin
         - build: debian
-          os: ubuntu-22.04
+          os: ubuntu-latest
           rust: nightly
           target: x86_64-unknown-linux-musl
 
