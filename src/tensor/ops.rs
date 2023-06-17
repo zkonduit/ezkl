@@ -1863,7 +1863,24 @@ pub mod nonlinearities {
     /// ).unwrap();
     /// let result = sigmoid(&x, 1, 1);
     /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 1, 1, 1]), &[2, 3]).unwrap();
+    ///
     /// assert_eq!(result, expected);
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[65536]),
+    ///   &[1],
+    /// ).unwrap();
+    /// let result = sigmoid(&x, 65536, 256);
+    /// let expected = Tensor::<i128>::new(Some(&[187]), &[1]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    /// /// assert_eq!(result, expected);
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[256]),
+    ///   &[1],
+    /// ).unwrap();
+    /// let result = sigmoid(&x, 256, 256);
+    /// let expected = Tensor::<i128>::new(Some(&[187]), &[1]).unwrap();
+    ///
     /// ```
     pub fn sigmoid(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
         // calculate value of output
@@ -2023,17 +2040,17 @@ pub mod nonlinearities {
     ///    Some(&[103, 204, 303, 404, 505, 607]),
     ///   &[2, 3],
     /// ).unwrap();
-    /// let result = range_check_percent(&[x, y], 1024, 1.0); // 1% tolerance
+    /// let result = range_check_percent(&[x, y], 1024, 1024, 1.0); // 1% tolerance
     /// let expected = Tensor::<i128>::new(Some(&[1, 1, 0, 0, 0, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn range_check_percent(t: &[Tensor<i128>], scale: usize, tol: f32) -> Tensor<i128> {
+    pub fn range_check_percent(t: &[Tensor<i128>], input_scale: usize, output_scale: usize, tol: f32) -> Tensor<i128> {
         // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
-        let _double_scale = scale.pow(2);
+        let scale = input_scale*output_scale;
         let diff: Tensor<i128> = sub(t).unwrap();
-        let recip = recip(&t[0], _double_scale as u32);
+        let recip = recip(&t[0], scale as u32);
         let product = mult(&[diff, recip]).unwrap();
-        let _tol = ((tol / 100.0) * _double_scale as f32).round() as f64;
+        let _tol = ((tol / 100.0) * scale as f32).round() as f64;
         let upper_bound = greater_than(&product, _tol);
         let neg_product =
             mult(&[product, Tensor::<i128>::new(Some(&[-1]), &[1]).unwrap()]).unwrap();

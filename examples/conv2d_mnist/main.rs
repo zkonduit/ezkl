@@ -1,3 +1,4 @@
+use ezkl_lib::circuit::region::RegionCtx;
 use ezkl_lib::circuit::{
     ops::lookup::LookupOp, ops::poly::PolyOp, BaseConfig as PolyConfig, CheckMode,
 };
@@ -30,7 +31,6 @@ use halo2curves::pasta::Fp as F;
 use mnist::*;
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
-use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 mod params;
@@ -174,9 +174,9 @@ where
         let x = layouter
             .assign_region(
                 || "mlp_4d",
-                |mut region| {
-                    let mut offset = 0;
-                    let region = Arc::new(Mutex::new(Some(&mut region)));
+                |region| {
+                    let mut region = RegionCtx::new(region, 0);
+
                     let op = PolyOp::Conv {
                         kernel: self.l0_params[0].clone(),
                         bias: Some(self.l0_params[1].clone()),
@@ -185,20 +185,14 @@ where
                     };
                     let x = config
                         .layer_config
-                        .layout(
-                            region.clone(),
-                            &[self.input.clone()],
-                            &mut offset,
-                            Box::new(op),
-                        )
+                        .layout(&mut region, &[self.input.clone()], Box::new(op))
                         .unwrap();
 
                     let mut x = config
                         .layer_config
                         .layout(
-                            region.clone(),
+                            &mut region,
                             &[x.unwrap()],
-                            &mut offset,
                             Box::new(LookupOp::ReLU { scale: 32 }),
                         )
                         .unwrap()
@@ -208,9 +202,8 @@ where
                     let x = config
                         .layer_config
                         .layout(
-                            region.clone(),
+                            &mut region,
                             &[self.l2_params[0].clone(), x],
-                            &mut offset,
                             Box::new(PolyOp::Einsum {
                                 equation: "ij,j->ik".to_string(),
                             }),
@@ -221,9 +214,8 @@ where
                     let x: ValTensor<F> = config
                         .layer_config
                         .layout(
-                            region,
+                            &mut region,
                             &[x],
-                            &mut offset,
                             Box::new(PolyOp::Add {
                                 a: Some(self.l2_params[1].clone()),
                             }),
@@ -407,7 +399,12 @@ pub fn runconv() {
     )
     .unwrap();
     prover.assert_satisfied();
-    println!("MOCK PROVING took {}", now.elapsed().as_secs());
+    let elapsed = now.elapsed();
+    println!(
+        "MOCK PROVING took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
 
     let pi_for_real_prover: &[&[&[F]]] = &[&[&pi_inner]];
 
@@ -415,17 +412,36 @@ pub fn runconv() {
     println!("SRS GENERATION");
     let now = Instant::now();
     let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(K as u32);
-    println!("SRS GENERATION took {}", now.elapsed().as_secs());
+    let elapsed = now.elapsed();
+    println!(
+        "SRS GENERATION took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
+
     let empty_circuit = circuit.without_witnesses();
+
     // Initialize the proving key
     println!("VK GENERATION");
     let now = Instant::now();
     let vk = keygen_vk(&params, &empty_circuit).expect("keygen_vk should not fail");
-    println!("VK GENERATION took {}", now.elapsed().as_secs());
+    let elapsed = now.elapsed();
+    println!(
+        "VK GENERATION took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
+
     println!("PK GENERATION");
     let now = Instant::now();
     let pk = keygen_pk(&params, vk, &empty_circuit).expect("keygen_pk should not fail");
-    println!("PK GENERATION took {}", now.elapsed().as_secs());
+    let elapsed = now.elapsed();
+    println!(
+        "PK GENERATION took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
+
     println!("PROOF GENERATION");
     let now = Instant::now();
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
@@ -440,8 +456,13 @@ pub fn runconv() {
     )
     .expect("proof generation should not fail");
     let proof = transcript.finalize();
-    //println!("{:?}", proof);
-    println!("PROOF GENERATION took {}", now.elapsed().as_secs());
+    let elapsed = now.elapsed();
+    println!(
+        "PROOF GENERATION took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
+
     let now = Instant::now();
     let strategy = SingleStrategy::new(&params);
     let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
@@ -453,7 +474,13 @@ pub fn runconv() {
         &mut transcript,
     );
     assert!(verify.is_ok());
-    println!("Verify took {}", now.elapsed().as_secs());
+
+    let elapsed = now.elapsed();
+    println!(
+        "Verify took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
 }
 
 fn main() {

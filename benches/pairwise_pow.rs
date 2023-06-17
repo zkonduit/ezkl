@@ -1,5 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use ezkl_lib::circuit::poly::PolyOp;
+use ezkl_lib::circuit::region::RegionCtx;
 use ezkl_lib::circuit::*;
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::TranscriptType;
@@ -15,7 +16,6 @@ use halo2_proofs::{
 use halo2curves::bn256::{Bn256, Fr};
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
-use std::sync::{Arc, Mutex};
 
 static mut LEN: usize = 4;
 const K: usize = 16;
@@ -52,14 +52,10 @@ impl Circuit<Fr> for MyCircuit {
     ) -> Result<(), Error> {
         layouter.assign_region(
             || "",
-            |mut region| {
+            |region| {
+                let mut region = RegionCtx::new(region, 0);
                 config
-                    .layout(
-                        Arc::new(Mutex::new(Some(&mut region))),
-                        &self.inputs,
-                        &mut 0,
-                        Box::new(PolyOp::Pow(4)),
-                    )
+                    .layout(&mut region, &self.inputs, Box::new(PolyOp::Pow(4)))
                     .unwrap();
                 Ok(())
             },

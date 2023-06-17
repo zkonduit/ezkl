@@ -214,14 +214,18 @@ where
     //	Real proof
     let empty_circuit = <C as Circuit<F>>::without_witnesses(circuit);
 
-    // Initialize the proving key
+    // Initialize verifying key
     let now = Instant::now();
     trace!("preparing VK");
     let vk = keygen_vk(params, &empty_circuit)?;
-    info!("VK took {}", now.elapsed().as_secs());
+    let elapsed = now.elapsed();
+    info!("VK took {}.{}", elapsed.as_secs(), elapsed.subsec_millis());
+
+    // Initialize the proving key
     let now = Instant::now();
     let pk = keygen_pk(params, vk, &empty_circuit)?;
-    info!("PK took {}", now.elapsed().as_secs());
+    let elapsed = now.elapsed();
+    info!("PK took {}.{}", elapsed.as_secs(), elapsed.subsec_millis());
     Ok(pk)
 }
 

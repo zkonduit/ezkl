@@ -4,11 +4,29 @@ mod wasi_tests {
     use std::env::var;
     use std::process::Command;
     use std::sync::Once;
+    use tempdir::TempDir;
     static COMPILE: Once = Once::new();
 
     lazy_static! {
         static ref CARGO_TARGET_DIR: String =
             var("CARGO_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
+        static ref TEST_DIR: TempDir = TempDir::new("example").unwrap();
+    }
+
+    fn mv_test_(test: &str) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
+        let path: std::path::PathBuf = format!("{}/{}", test_dir, test).into();
+        if !path.exists() {
+            let status = Command::new("cp")
+                .args([
+                    "-R",
+                    &format!("./examples/onnx/{}", test),
+                    &format!("{}/{}", test_dir, test),
+                ])
+                .status()
+                .expect("failed to execute process");
+            assert!(status.success());
+        }
     }
 
     fn init() {
@@ -40,53 +58,6 @@ mod wasi_tests {
         "4l_relu_conv_fc",
     ];
 
-    const PACKING_TESTS: [&str; 10] = [
-        "1l_mlp",
-        "1l_div",
-        "1l_reshape",
-        "1l_sigmoid",
-        "1l_sqrt",
-        "1l_leakyrelu",
-        "1l_relu",
-        "2l_relu_sigmoid_small",
-        "2l_relu_fc",
-        "2l_relu_small",
-    ];
-
-    const NEG_TESTS: [(&str, &str); 2] = [
-        ("2l_relu_sigmoid_small", "2l_relu_small"),
-        ("2l_relu_small", "2l_relu_sigmoid_small"),
-    ];
-
-    macro_rules! wasi_test_packed_func {
-    () => {
-        #[cfg(test)]
-        mod packed_tests_wasi {
-            use seq_macro::seq;
-            use test_case::test_case;
-            use crate::wasi_tests::PACKING_TESTS;
-            use crate::wasi_tests::mock_packed_outputs;
-            use crate::wasi_tests::mock_everything;
-
-            seq!(N in 0..=9 {
-            #(#[test_case(PACKING_TESTS[N])])*
-            fn mock_packed_outputs_(test: &str) {
-                crate::wasi_tests::init();
-                mock_packed_outputs(test.to_string());
-            }
-
-            #(#[test_case(PACKING_TESTS[N])])*
-            fn mock_everything_(test: &str) {
-                crate::wasi_tests::init();
-                mock_everything(test.to_string());
-            }
-
-            });
-
-    }
-    };
-}
-
     macro_rules! wasi_test_func {
     () => {
         #[cfg(test)]
@@ -95,35 +66,30 @@ mod wasi_tests {
             use crate::wasi_tests::TESTS;
             use test_case::test_case;
             use crate::wasi_tests::mock;
-            use crate::wasi_tests::mock_public_inputs;
-            use crate::wasi_tests::mock_public_params;
-            use crate::wasi_tests::forward_pass;
 
             seq!(N in 0..=18 {
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
                 crate::wasi_tests::init();
-                mock(test.to_string());
+                crate::wasi_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 17, "private", "private", "public", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_inputs_(test: &str) {
                 crate::wasi_tests::init();
-                mock_public_inputs(test.to_string());
+                crate::wasi_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 17, "public", "private", "private", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_params_(test: &str) {
                 crate::wasi_tests::init();
-                mock_public_params(test.to_string());
+                crate::wasi_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 17, "private", "public", "private", 1);
             }
 
-            #(#[test_case(TESTS[N])])*
-            fn forward_pass_(test: &str) {
-                crate::wasi_tests::init();
-                forward_pass(test.to_string());
-            }
 
             });
 
@@ -131,199 +97,71 @@ mod wasi_tests {
     };
 }
 
-    macro_rules! wasi_test_neg_examples {
-    () => {
-        #[cfg(test)]
-        mod neg_tests_wasi {
-            use seq_macro::seq;
-            use crate::wasi_tests::NEG_TESTS;
-            use test_case::test_case;
-            use crate::wasi_tests::neg_mock as run;
-            seq!(N in 0..=1 {
-            #(#[test_case(NEG_TESTS[N])])*
-            fn neg_examples_(test: (&str, &str)) {
-                crate::wasi_tests::init();
-                run(test.0.to_string(), test.1.to_string());
-            }
-
-            });
-    }
-    };
-}
     wasi_test_func!();
-    wasi_test_neg_examples!();
-    wasi_test_packed_func!();
 
     // Mock prove (fast, but does not cover some potential issues)
-    fn neg_mock(example_name: String, counter_example: String) {
-        let status = Command::new("wasmtime")
+    fn mock(
+        example_name: String,
+        scale: usize,
+        bits: usize,
+        logrows: usize,
+        input_visibility: &str,
+        param_visibility: &str,
+        output_visibility: &str,
+        batch_size: usize,
+    ) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                &format!("{}/wasm32-wasi/release/ezkl.wasm", *CARGO_TARGET_DIR),
-                "--dir",
-                ".",
-                "--",
-                "mock",
-                "-D",
-                format!("./examples/onnx/{}/input.json", counter_example).as_str(),
+                "gen-settings",
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--bits=16",
-                "-K=20",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+                &format!("--bits={}", bits),
+                &format!("--logrows={}", logrows),
+                &format!("--scale={}", scale),
+                &format!("--batch-size={}", batch_size),
+                &format!("--input-visibility={}", input_visibility),
+                &format!("--param-visibility={}", param_visibility),
+                &format!("--output-visibility={}", output_visibility),
             ])
             .status()
             .expect("failed to execute process");
-        assert!(!status.success());
-    }
+        assert!(status.success());
 
-    // Mock prove (fast, but does not cover some potential issues)
-    fn forward_pass(example_name: String) {
-        let status = Command::new("wasmtime")
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                &format!("{}/wasm32-wasi/release/ezkl.wasm", *CARGO_TARGET_DIR),
-                "--dir",
-                ".",
-                "--",
                 "forward",
                 "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
+                &format!("{}/{}/input.json", test_dir, example_name),
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
+                &format!("{}/{}/network.onnx", test_dir, example_name),
                 "-O",
-                format!("./examples/onnx/{}/input_forward.json", example_name).as_str(),
-                "--bits=16",
-                "-K=20",
-                // "-K",
-                // "2",  //causes failure
+                &format!("{}/{}/input_forward.json", test_dir, example_name),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
             ])
             .status()
             .expect("failed to execute process");
         assert!(status.success());
 
-        let status = Command::new("wasmtime")
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                &format!("{}/wasm32-wasi/release/ezkl.wasm", *CARGO_TARGET_DIR),
-                "--dir",
-                ".",
-                "--",
                 "mock",
                 "-D",
-                format!("./examples/onnx/{}/input_forward.json", example_name).as_str(),
+                format!("{}/{}/input_forward.json", test_dir, example_name).as_str(),
                 "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--bits=16",
-                "-K=20",
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
-
-    // Mock prove (fast, but does not cover some potential issues)
-    fn mock(example_name: String) {
-        let status = Command::new("wasmtime")
-            .args([
-                &format!("{}/wasm32-wasi/release/ezkl.wasm", *CARGO_TARGET_DIR),
-                "--dir",
-                ".",
-                "--",
-                "mock",
-                "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
-                "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--bits=16",
-                "-K=20",
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
-
-    // Mock prove (fast, but does not cover some potential issues)
-    fn mock_packed_outputs(example_name: String) {
-        let status = Command::new("wasmtime")
-            .args([
-                &format!("{}/wasm32-wasi/release/ezkl.wasm", *CARGO_TARGET_DIR),
-                "--dir",
-                ".",
-                "--",
-                "mock",
-                "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
-                "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--bits=16",
-                "-K=20",
-                "--pack-base=2",
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
-
-    // Mock prove (fast, but does not cover some potential issues)
-    fn mock_everything(example_name: String) {
-        let status = Command::new("wasmtime")
-            .args([
-                &format!("{}/wasm32-wasi/release/ezkl.wasm", *CARGO_TARGET_DIR),
-                "--dir",
-                ".",
-                "--",
-                "mock",
-                "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
-                "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--bits=16",
-                "-K=20",
-                "--input-visibility=public",
-                "--pack-base=2",
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
-
-    // Mock prove (fast, but does not cover some potential issues)
-    fn mock_public_inputs(example_name: String) {
-        let status = Command::new("wasmtime")
-            .args([
-                &format!("{}/wasm32-wasi/release/ezkl.wasm", *CARGO_TARGET_DIR),
-                "--dir",
-                ".",
-                "--",
-                "mock",
-                "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
-                "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--input-visibility=public",
-                "--output-visibility=private",
-                "--bits=16",
-                "-K=20",
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
-
-    // Mock prove (fast, but does not cover some potential issues)
-    fn mock_public_params(example_name: String) {
-        let status = Command::new("wasmtime")
-            .args([
-                &format!("{}/wasm32-wasi/release/ezkl.wasm", *CARGO_TARGET_DIR),
-                "--dir",
-                ".",
-                "--",
-                "mock",
-                "-D",
-                format!("./examples/onnx/{}/input.json", example_name).as_str(),
-                "-M",
-                format!("./examples/onnx/{}/network.onnx", example_name).as_str(),
-                "--param-visibility=public",
-                "--output-visibility=private",
-                "--bits=16",
-                "-K=20",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
             ])
             .status()
             .expect("failed to execute process");

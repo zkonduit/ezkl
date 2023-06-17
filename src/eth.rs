@@ -60,13 +60,12 @@ pub async fn verify_proof_via_solidity(
     proof: Snark<Fr, G1Affine>,
     sol_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
-    runs: Option<usize>,
 ) -> Result<bool, Box<dyn Error>> {
     let (anvil, client) = setup_eth_backend().await?;
 
     // sol code supercedes deployment code
     let factory = match sol_code_path {
-        Some(path) => get_sol_contract_factory(path, client.clone(), runs).unwrap(),
+        Some(path) => get_sol_contract_factory(path, client.clone()).unwrap(),
         None => match sol_bytecode_path {
             Some(path) => {
                 let bytecode = DeploymentCode::load(&path)?;
@@ -134,11 +133,10 @@ pub async fn verify_proof_via_solidity(
 fn get_sol_contract_factory<M: 'static + Middleware>(
     sol_code_path: PathBuf,
     client: Arc<M>,
-    runs: Option<usize>,
 ) -> Result<ContractFactory<M>, Box<dyn Error>> {
     const MAX_RUNTIME_BYTECODE_SIZE: usize = 24577;
     // call get_contract_artificacts to get the abi and bytecode
-    let (abi, bytecode, runtime_bytecode) = get_contract_artifacts(sol_code_path, runs)?;
+    let (abi, bytecode, runtime_bytecode) = get_contract_artifacts(sol_code_path, None)?;
     let size = runtime_bytecode.len();
     debug!("runtime bytecode size: {:#?}", size);
     if size > MAX_RUNTIME_BYTECODE_SIZE {
@@ -146,7 +144,7 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
         panic!(
             "Solidity runtime bytecode size is: {:#?}, 
             which exceeds 24577 bytes limit.
-            Try setting '--optimzer-runs 1' 
+            Try setting '--optimzer-runs 1' when generating the verifier
             so SOLC can optimize for the smallest deployment",
             size
         );

@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 
 use crate::tensor::{Tensor, ValTensor, ValType};
 
-use self::spec::PoseidonSpec;
+use super::Module;
 
 #[derive(Debug, Clone)]
 
@@ -34,6 +34,8 @@ pub struct PoseidonConfig<const WIDTH: usize, const RATE: usize> {
     pub pow5_config: Pow5Config<Fp, WIDTH, RATE>,
 }
 
+type InputAssignments = (Vec<AssignedCell<Fp, Fp>>, AssignedCell<Fp, Fp>);
+
 /// PoseidonChip is a wrapper around the Pow5Chip that adds a set of advice columns to the gadget Chip to store the inputs of the hash
 #[derive(Debug, Clone)]
 pub struct PoseidonChip<
@@ -46,11 +48,22 @@ pub struct PoseidonChip<
     _marker: PhantomData<S>,
 }
 
-impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: usize>
-    PoseidonChip<S, WIDTH, RATE, L>
+impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: usize> Module<Fp>
+    for PoseidonChip<S, WIDTH, RATE, L>
 {
+    type Config = PoseidonConfig<WIDTH, RATE>;
+    type InputAssignments = InputAssignments;
+
+    fn name(&self) -> &'static str {
+        "Poseidon"
+    }
+
+    fn num_instances(&self) -> usize {
+        1
+    }
+
     /// Constructs a new PoseidonChip
-    pub fn construct(config: PoseidonConfig<WIDTH, RATE>) -> Self {
+    fn new(config: Self::Config) -> Self {
         Self {
             config,
             _marker: PhantomData,
@@ -58,7 +71,7 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
     }
 
     /// Configuration of the PoseidonChip
-    pub fn configure(meta: &mut ConstraintSystem<Fp>) -> PoseidonConfig<WIDTH, RATE> {
+    fn configure(meta: &mut ConstraintSystem<Fp>) -> Self::Config {
         //  instantiate the required columns
         let hash_inputs = (0..WIDTH).map(|_| meta.advice_column()).collect::<Vec<_>>();
         for input in &hash_inputs {
@@ -96,53 +109,51 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
         &self,
         layouter: &mut impl Layouter<Fp>,
         message: &ValTensor<Fp>,
-    ) -> Result<(Vec<AssignedCell<Fp, Fp>>, AssignedCell<Fp, Fp>), Error> {
-        layouter
-            .assign_region(
-                || "load message",
-                |mut region| {
-                    let message_word = |i: usize| {
-                        let value = &message.get_inner_tensor().unwrap()[i];
-                        let x = i % WIDTH;
-                        let y = i / WIDTH;
+    ) -> Result<Self::InputAssignments, Error> {
+        layouter.assign_region(
+            || "load message",
+            |mut region| {
+                let message_word = |i: usize| {
+                    let value = &message.get_inner_tensor().unwrap()[i];
+                    let x = i % WIDTH;
+                    let y = i / WIDTH;
 
-                        match value {
-                            ValType::Value(v) => region.assign_advice(
-                                || format!("load message_{}", i),
-                                self.config.hash_inputs[x],
-                                y,
-                                || *v,
-                            ),
-                            ValType::PrevAssigned(v) => Ok(v.clone()),
-                            _ => panic!("wrong input type, must be previously assigned"),
-                        }
-                    };
+                    match value {
+                        ValType::Value(v) => region.assign_advice(
+                            || format!("load message_{}", i),
+                            self.config.hash_inputs[x],
+                            y,
+                            || *v,
+                        ),
+                        ValType::PrevAssigned(v) => Ok(v.clone()),
+                        _ => panic!("wrong input type, must be previously assigned"),
+                    }
+                };
 
-                    let message: Result<Vec<AssignedCell<Fp, Fp>>, Error> =
-                        (0..message.len()).map(message_word).collect();
-                    let message = message?;
+                let message: Result<Vec<AssignedCell<Fp, Fp>>, Error> =
+                    (0..message.len()).map(message_word).collect();
+                let message = message?;
 
-                    let offset = message.len() / WIDTH + 1;
+                let offset = message.len() / WIDTH + 1;
 
-                    let zero_val = region
-                        .assign_advice_from_constant(
-                            || "",
-                            self.config.hash_inputs[0],
-                            offset,
-                            Fp::ZERO,
-                        )
-                        .unwrap();
+                let zero_val = region
+                    .assign_advice_from_constant(
+                        || "",
+                        self.config.hash_inputs[0],
+                        offset,
+                        Fp::ZERO,
+                    )
+                    .unwrap();
 
-                    Ok((message, zero_val))
-                },
-            )
-            .map_err(|_| Error::Synthesis)
+                Ok((message, zero_val))
+            },
+        )
     }
 
     /// L is the number of inputs to the hash function
     /// Takes the cells containing the input values of the hash function and return the cell containing the hash output
     /// It uses the pow5_chip to compute the hash
-    pub fn hash(
+    fn layout(
         &self,
         layouter: &mut impl Layouter<Fp>,
         input: &ValTensor<Fp>,
@@ -209,36 +220,34 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
 
         Ok(assigned_input.into())
     }
-}
 
-///
-pub fn witness_hash<const L: usize>(message: Vec<Fp>) -> Result<Fp, Box<dyn std::error::Error>> {
-    let mut hash_inputs = message;
-    // do the Tree dance baby
-    while hash_inputs.len() > 1 {
-        let mut hashes: Vec<Fp> = vec![];
-        for block in hash_inputs.chunks(L) {
-            let mut block = block.to_vec();
-            let remainder = block.len() % L;
-            if remainder != 0 {
-                block.extend(vec![Fp::ZERO; L - remainder].iter());
+    ///
+    fn run(message: Vec<Fp>) -> Result<Vec<Fp>, Box<dyn std::error::Error>> {
+        let mut hash_inputs = message;
+        // do the Tree dance baby
+        while hash_inputs.len() > 1 {
+            let mut hashes: Vec<Fp> = vec![];
+            for block in hash_inputs.chunks(L) {
+                let mut block = block.to_vec();
+                let remainder = block.len() % L;
+                if remainder != 0 {
+                    block.extend(vec![Fp::ZERO; L - remainder].iter());
+                }
+                let hash = halo2_gadgets::poseidon::primitives::Hash::<
+                    _,
+                    S,
+                    ConstantLength<L>,
+                    { WIDTH },
+                    { RATE },
+                >::init()
+                .hash(block.clone().try_into().unwrap());
+                hashes.push(hash);
             }
-            let hash = halo2_gadgets::poseidon::primitives::Hash::<
-                _,
-                PoseidonSpec,
-                ConstantLength<L>,
-                { spec::POSEIDON_WIDTH },
-                { spec::POSEIDON_RATE },
-            >::init()
-            .hash(block.clone().try_into().unwrap());
-            hashes.push(hash);
+            hash_inputs = hashes;
         }
-        hash_inputs = hashes;
+
+        Ok(hash_inputs)
     }
-
-    let output = hash_inputs[0];
-
-    Ok(output)
 }
 
 #[allow(unused)]
@@ -291,8 +300,8 @@ mod tests {
             config: PoseidonConfig<WIDTH, RATE>,
             mut layouter: impl Layouter<Fp>,
         ) -> Result<(), Error> {
-            let chip: PoseidonChip<PoseidonSpec, WIDTH, RATE, L> = PoseidonChip::construct(config);
-            chip.hash(&mut layouter, &self.message, 0)?;
+            let chip: PoseidonChip<PoseidonSpec, WIDTH, RATE, L> = PoseidonChip::new(config);
+            chip.layout(&mut layouter, &self.message, 0)?;
             Ok(())
         }
     }
@@ -302,7 +311,7 @@ mod tests {
         let rng = rand::rngs::OsRng;
 
         let message = [Fp::random(rng), Fp::random(rng)];
-        let output = witness_hash::<2>(message.to_vec()).unwrap();
+        let output = PoseidonChip::<PoseidonSpec, WIDTH, RATE, 2>::run(message.to_vec()).unwrap();
 
         let mut message: Tensor<ValType<Fp>> =
             message.into_iter().map(|m| Value::known(m).into()).into();
@@ -312,7 +321,7 @@ mod tests {
             message: message.into(),
             _spec: PhantomData,
         };
-        let prover = halo2_proofs::dev::MockProver::run(k, &circuit, vec![vec![output]]).unwrap();
+        let prover = halo2_proofs::dev::MockProver::run(k, &circuit, vec![output]).unwrap();
         assert_eq!(prover.verify(), Ok(()))
     }
 
@@ -321,7 +330,7 @@ mod tests {
         let rng = rand::rngs::OsRng;
 
         let message = [Fp::random(rng), Fp::random(rng), Fp::random(rng)];
-        let output = witness_hash::<3>(message.to_vec()).unwrap();
+        let output = PoseidonChip::<PoseidonSpec, WIDTH, RATE, 3>::run(message.to_vec()).unwrap();
 
         let mut message: Tensor<ValType<Fp>> =
             message.into_iter().map(|m| Value::known(m).into()).into();
@@ -331,7 +340,7 @@ mod tests {
             message: message.into(),
             _spec: PhantomData,
         };
-        let prover = halo2_proofs::dev::MockProver::run(k, &circuit, vec![vec![output]]).unwrap();
+        let prover = halo2_proofs::dev::MockProver::run(k, &circuit, vec![output]).unwrap();
         assert_eq!(prover.verify(), Ok(()))
     }
 
@@ -342,7 +351,7 @@ mod tests {
 
         let mut message: Vec<Fp> = (0..2048).map(|_| Fp::random(rng)).collect::<Vec<_>>();
 
-        let output = witness_hash::<25>(message.clone()).unwrap();
+        let output = PoseidonChip::<PoseidonSpec, WIDTH, RATE, 25>::run(message.clone()).unwrap();
 
         let mut message: Tensor<ValType<Fp>> =
             message.into_iter().map(|m| Value::known(m).into()).into();
@@ -352,7 +361,7 @@ mod tests {
             message: message.into(),
             _spec: PhantomData,
         };
-        let prover = halo2_proofs::dev::MockProver::run(k, &circuit, vec![vec![output]]).unwrap();
+        let prover = halo2_proofs::dev::MockProver::run(k, &circuit, vec![output]).unwrap();
         assert_eq!(prover.verify(), Ok(()))
     }
 }

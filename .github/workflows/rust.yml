@@ -101,21 +101,6 @@ jobs:
       - name: Run wasm verifier tests
         run: wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std"
 
-  forward-pass-tests:
-    runs-on: ubuntu-latest-16-cores
-    needs: [build, build-wasm, library-tests, docs]
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2022-11-03
-          override: true
-          components: rustfmt, clippy
-      - name: Forward Pass
-        run: cargo test --release --verbose tests::forward_pass_
-      - name: Forward Pass (batch-size=10)
-        run: cargo test --release --verbose tests::forward_large_batch_pass_
-
   render-circuit:
     runs-on: ubuntu-latest-32-cores
     needs: [build, build-wasm, library-tests, docs]
@@ -159,18 +144,22 @@ jobs:
         run: cargo test --release --verbose tests::mock_public_outputs_ -- --test-threads 32
       - name: Mock proving tests (public outputs + batch size == 10)
         run: cargo test --release --verbose tests::mock_large_batch_public_outputs_ -- --test-threads 32
-      - name: Mock proving tests (public and packed outputs)
-        run: cargo test --release --verbose packed_tests::mock_packed_outputs_ -- --test-threads 32
       - name: Mock proving tests (public inputs)
         run: cargo test --release --verbose tests::mock_public_inputs_ -- --test-threads 32
       - name: Mock proving tests (public params)
         run: cargo test --release --verbose tests::mock_public_params_ -- --test-threads 32
-      - name: Mock 'everything' tests (public and packed outputs, public inputs)
-        run: cargo test --release --verbose packed_tests::mock_everything_ -- --test-threads 32
       - name: Mock proving tests (hashed inputs)
         run: cargo test --release --verbose tests::mock_hashed_input_::t  -- --test-threads 32
+      - name: Mock proving tests (hashed params)
+        run: cargo test --release --verbose tests::mock_hashed_params_::t  -- --test-threads 32
       - name: Mock proving tests (hashed outputs)
         run: cargo test --release --verbose tests::mock_hashed_output_::t  -- --test-threads 32
+      - name: Mock proving tests (hashed inputs + outputs)
+        run: cargo test --release --verbose tests::mock_hashed_input_output_::t  -- --test-threads 32
+      - name: Mock proving tests (hashed inputs + params)
+        run: cargo test --release --verbose tests::mock_hashed_input_params_::t  -- --test-threads 32
+      - name: Mock proving tests (hashed inputs + params + outputs)
+        run: cargo test --release --verbose tests::mock_hashed_all_::t  -- --test-threads 32
 
   mock-proving-tests-wasi:
     runs-on: ubuntu-latest-32-cores
@@ -189,14 +178,10 @@ jobs:
         run: rustup target add wasm32-wasi
       - name: Mock proving tests (WASI) (public outputs)
         run: cargo test --release --verbose tests_wasi::mock_public_outputs_ -- --test-threads 32
-      - name: Mock proving tests (WASI) (public and packed outputs)
-        run: cargo test --release --verbose packed_tests_wasi::mock_packed_outputs_ -- --test-threads 32
       - name: Mock proving tests (WASI) (public inputs)
         run: cargo test --release --verbose tests_wasi::mock_public_inputs_ -- --test-threads 32
       - name: Mock proving tests (WASI) (public params)
         run: cargo test --release --verbose tests_wasi::mock_public_params_ -- --test-threads 32
-      - name: Mock 'everything' tests (WASI) (public and packed outputs, public inputs)
-        run: cargo test --release --verbose packed_tests_wasi::mock_everything_ -- --test-threads 32
 
   prove-and-verify-evm-tests:
     runs-on: ubuntu-latest-16-cores
@@ -346,15 +331,8 @@ jobs:
           toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
-      - uses: mwilliamson/setup-wasmtime-action@v2
-        with:
-          wasmtime-version: "3.0.1"
-      - name: Install wasm32-wasi
-        run: rustup target add wasm32-wasi
       - name: Mock proving tests (should fail)
         run: cargo test neg_tests::neg_examples_
-      - name: Mock proving tests (WASI) (should fail)
-        run: cargo test neg_tests_wasi::neg_examples_
 
   python-tests:
     runs-on: ubuntu-latest-32-cores

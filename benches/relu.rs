@@ -1,6 +1,5 @@
-use std::sync::{Arc, Mutex};
-
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use ezkl_lib::circuit::region::RegionCtx;
 use ezkl_lib::circuit::{ops::lookup::LookupOp, BaseConfig as Config, CheckMode};
 use ezkl_lib::execute::create_proof_circuit_kzg;
 use ezkl_lib::pfsys::TranscriptType;
@@ -59,12 +58,12 @@ impl Circuit<Fr> for NLCircuit {
         config.layout_tables(&mut layouter).unwrap();
         layouter.assign_region(
             || "",
-            |mut region| {
+            |region| {
+                let mut region = RegionCtx::new(region, 0);
                 config
                     .layout(
-                        Arc::new(Mutex::new(Some(&mut region))),
+                        &mut region,
                         &[self.input.clone()],
-                        &mut 0,
                         Box::new(LookupOp::ReLU { scale: 128 }),
                     )
                     .unwrap();
