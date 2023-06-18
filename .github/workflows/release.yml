@@ -85,10 +85,15 @@ jobs:
       shell: bash
       run: | 
         cargo install cross -Z sparse-registry
-        echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+        if [[ "${{ matrix.os }}" == "macos-13" ]]; then
+          echo "CC=clang" >> $GITHUB_ENV
+        else
+          echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+        fi
         echo "CARGO=cross" >> $GITHUB_ENV
         echo "TARGET_FLAGS=--target ${{ matrix.target }}" >> $GITHUB_ENV
         echo "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
+    
 
 
 
