@@ -73,12 +73,6 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v3
 
-    - name: Install musl-tools (Ubuntu)
-      if: matrix.os == 'ubuntu-20.04'
-      run: | 
-        sudo apt-get update
-        sudo apt-get install -y musl-tools
-        sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
     - name: Install Rust
       uses: dtolnay/rust-toolchain@nightly
       with:
@@ -87,10 +81,6 @@ jobs:
     - name: Install Rust targets
       run: rustup target add ${{ matrix.target }}
       
-    - name: Install musl-tools (Ubuntu)
-      if: matrix.os == 'ubuntu-22.04' && (matrix.target == 'x86_64-unknown-linux-musl' || matrix.target == 'aarch64-unknown-linux-musl')
-      run: sudo apt-get install -y musl-tools
-    
     - name: Use Cross
       shell: bash
       run: | 
@@ -98,6 +88,7 @@ jobs:
         echo "CARGO=cross" >> $GITHUB_ENV
         echo "TARGET_FLAGS=--target ${{ matrix.target }}" >> $GITHUB_ENV
         echo "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
+
 
     - name: Show command used for Cargo
       run: |
