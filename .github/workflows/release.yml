@@ -79,8 +79,6 @@ jobs:
         cargo install cross -Z sparse-registry
         if [[ "${{ matrix.os }}" == "macos-13" ]]; then
           echo "CC=clang" >> $GITHUB_ENV
-        elif [[ "${{ matrix.target }}" == "aarch64-unknown-linux-musl" ]]; then
-          echo "CC=/usr/bin/aarch64-linux-gnu-gcc" >> $GITHUB_ENV
         else
           echo "CC=gcc" >> $GITHUB_ENV
         fi
