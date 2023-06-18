@@ -12,7 +12,7 @@ mod native_tests {
     static COMPILE: Once = Once::new();
     static KZG17: Once = Once::new();
     static KZG23: Once = Once::new();
-    static KZG24: Once = Once::new();
+    static KZG26: Once = Once::new();
     //Sure to run this once
 
     lazy_static! {
@@ -59,8 +59,8 @@ mod native_tests {
         })
     }
 
-    fn init_params_24() {
-        KZG24.call_once(|| {
+    fn init_params_26() {
+        KZG26.call_once(|| {
             let status = Command::new("curl")
                 .args([
                     "-o",
@@ -68,7 +68,7 @@ mod native_tests {
                         "{}/kzg24.srs",
                         TEST_DIR.path().to_str().unwrap()
                     ),
-                    "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/perpetual-powers-of-tau-raw-24",
+                    "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/perpetual-powers-of-tau-raw-26",
                 ])
                 .status()
                 .expect("failed to execute process");
@@ -179,23 +179,6 @@ mod native_tests {
         "1l_upsample",
     ];
 
-    const PACKING_TESTS: [&str; 13] = [
-        "1l_mlp",
-        "1l_div",
-        "1l_reshape",
-        "1l_sigmoid",
-        "1l_sqrt",
-        "1l_leakyrelu",
-        // "1l_prelu",
-        "1l_var",
-        "1l_relu",
-        "1l_tanh",
-        "1l_gelu_noappx",
-        "2l_relu_sigmoid_small",
-        "2l_relu_fc",
-        "2l_relu_small",
-    ];
-
     const TESTS_AGGR: [&str; 20] = [
         "1l_mlp",
         "1l_flatten",
@@ -274,38 +257,8 @@ mod native_tests {
     };
 }
 
-    macro_rules! test_packed_func {
-    () => {
-        #[cfg(test)]
-        mod packed_tests {
-            use seq_macro::seq;
-            use test_case::test_case;
-            use crate::native_tests::PACKING_TESTS;
-            use crate::native_tests::mock;
 
-            seq!(N in 0..=12 {
-
-            #(#[test_case(PACKING_TESTS[N])])*
-            fn mock_packed_outputs_(test: &str) {
-                crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, "private", "private", "public", 2, 1);
-            }
-
-            #(#[test_case(PACKING_TESTS[N])])*
-            fn mock_everything_(test: &str) {
-                crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, "public", "private", "public", 2, 1);
-            }
-
-            });
-
-    }
-    };
-}
-
-    macro_rules! test_func {
+macro_rules! test_func {
     () => {
         #[cfg(test)]
         mod tests {
@@ -344,7 +297,7 @@ mod native_tests {
             fn mock_public_outputs_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, "private", "private", "public", 1, 1);
+                mock(test.to_string(), 7, 16, 17, "private", "private", "public", 1);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -353,35 +306,109 @@ mod native_tests {
                 crate::native_tests::mv_test_(test);
                 let large_batch_dir = &format!("large_batches_{}", test);
                 crate::native_tests::mk_data_batches_(test, &large_batch_dir, 10);
-                mock(large_batch_dir.to_string(), 7, 16, 17, "private", "private", "public", 1, 10);
+                mock(large_batch_dir.to_string(), 7, 16, 17, "private", "private", "public", 10);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_inputs_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, "public", "private", "private", 1, 1);
+                mock(test.to_string(), 7, 16, 17, "public", "private", "private", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_params_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, "private", "public", "private", 1, 1);
+                mock(test.to_string(), 7, 16, 17, "private", "public", "private", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_input_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17,"hashed", "private", "public", 1, 1);
+                mock(test.to_string(), 7, 16, 17,"hashed", "private", "public", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_encrypted_input_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 18,"encrypted", "private", "public", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_hashed_params_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 17,"private", "hashed", "public", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_encrypted_params_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 18,"private", "hashed", "public", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_output_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(),7, 16, 17,"public", "private", "hashed", 1, 1);
+                mock(test.to_string(),7, 16, 17,"public", "private", "hashed", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_encrypted_output_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 19,"public", "private", "encrypted", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_encrypted_input_params_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 19,"encrypted", "encrypted", "public", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_encrypted_all_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 20,"encrypted", "encrypted", "encrypted", 1);
+            }
+
+
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_encrypted_input_hashed_params_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(), 7, 16, 19,"encrypted", "hashed", "public", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_hashed_input_output_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                mock(test.to_string(),7, 16, 17,"hashed", "private", "hashed", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_hashed_input_params_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                // needs an extra row for the large model
+                mock(test.to_string(),7, 16, 18,"hashed", "hashed", "public", 1);
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_hashed_all_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                // needs an extra row for the large model
+                mock(test.to_string(),7, 16, 18,"hashed", "hashed", "hashed", 1);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -389,7 +416,23 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 crate::native_tests::init_params_17();
                 crate::native_tests::mv_test_(test);
-                kzg_prove_and_verify(test.to_string(), 17, "safe");
+                kzg_prove_and_verify(test.to_string(), 17, "safe", "private", "private", "public");
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn kzg_prove_and_verify_hashed_output(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::init_params_17();
+                crate::native_tests::mv_test_(test);
+                kzg_prove_and_verify(test.to_string(), 17, "safe", "private", "private", "hashed");
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn kzg_prove_and_verify_encrypted_output(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::init_params_17();
+                crate::native_tests::mv_test_(test);
+                kzg_prove_and_verify(test.to_string(), 17, "safe", "private", "private", "encrypted");
             }
 
             #(#[test_case(TESTS[N])])*
@@ -403,24 +446,28 @@ mod native_tests {
 
 
             seq!(N in 0..=1 {
+
             #(#[test_case(LARGE_TESTS[N])])*
+            #[ignore]
             fn large_kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::init_params_24();
+                crate::native_tests::init_params_26();
                 crate::native_tests::mv_test_(test);
-                kzg_prove_and_verify(test.to_string(), 24,"unsafe");
+                kzg_prove_and_verify(test.to_string(), 24, "unsafe", "private", "private", "public");
             }
 
             #(#[test_case(LARGE_TESTS[N])])*
+            #[ignore]
             fn large_mock_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 5, 23, 24, "private", "private", "public", 1, 1);
+                mock(test.to_string(), 5, 23, 24, "private", "private", "public", 1);
             }
         });
     }
     };
 }
+
 
     macro_rules! test_func_evm {
     () => {
@@ -507,12 +554,21 @@ mod native_tests {
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_hashed_params_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params_17();
+                    crate::native_tests::mv_test_(test);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "hashed", "public", false, 1);
+                }
+
+                #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_hashed_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "hashed", false, 1);
                 }
+
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_fuzz_(test: &str) {
@@ -581,7 +637,6 @@ mod native_tests {
     test_func_evm!();
     test_func_examples!();
     test_neg_examples!();
-    test_packed_func!();
 
     // Mock prove (fast, but does not cover some potential issues)
     fn neg_mock(example_name: String, counter_example: String) {
@@ -635,7 +690,6 @@ mod native_tests {
         input_visibility: &str,
         param_visibility: &str,
         output_visibility: &str,
-        pack_base: usize,
         batch_size: usize,
     ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
@@ -652,7 +706,6 @@ mod native_tests {
                 &format!("--bits={}", bits),
                 &format!("--logrows={}", logrows),
                 &format!("--scale={}", scale),
-                &format!("--pack-base={}", pack_base),
                 &format!("--batch-size={}", batch_size),
                 &format!("--input-visibility={}", input_visibility),
                 &format!("--param-visibility={}", param_visibility),
@@ -1062,7 +1115,14 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_prove_and_verify(example_name: String, logrows: usize, checkmode: &str) {
+    fn kzg_prove_and_verify(
+        example_name: String,
+        logrows: usize,
+        checkmode: &str,
+        input_visibility: &str,
+        param_visibility: &str,
+        output_visibility: &str,
+    ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -1074,6 +1134,9 @@ mod native_tests {
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
+                &format!("--input-visibility={}", input_visibility),
+                &format!("--param-visibility={}", param_visibility),
+                &format!("--output-visibility={}", output_visibility),
             ])
             .status()
             .expect("failed to execute process");

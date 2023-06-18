@@ -976,7 +976,7 @@ mod add_with_overflow_and_poseidon {
             spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
             PoseidonChip, PoseidonConfig,
         },
-        ModulePlanner,
+        Module, ModulePlanner,
     };
 
     use super::*;
@@ -1024,10 +1024,12 @@ mod add_with_overflow_and_poseidon {
             mut layouter: impl Layouter<Fr>,
         ) -> Result<(), Error> {
             let poseidon_chip: PoseidonChip<PoseidonSpec, WIDTH, RATE, WIDTH> =
-                PoseidonChip::construct(config.poseidon.clone());
+                PoseidonChip::new(config.poseidon.clone());
 
-            let assigned_inputs_a = poseidon_chip.hash(&mut layouter, &self.inputs[0], 0)?;
-            let assigned_inputs_b = poseidon_chip.hash(&mut layouter, &self.inputs[1], 1)?;
+            let assigned_inputs_a =
+                poseidon_chip.layout(&mut layouter, &self.inputs[0..1], vec![0])?;
+            let assigned_inputs_b =
+                poseidon_chip.layout(&mut layouter, &self.inputs[1..2], vec![1])?;
 
             layouter.assign_region(|| "_new_module", |_| Ok(()))?;
 
@@ -1057,10 +1059,10 @@ mod add_with_overflow_and_poseidon {
             .map(|i| halo2curves::bn256::Fr::from(i as u64 + 1))
             .collect::<Vec<_>>();
         let commitment_a =
-            crate::circuit::modules::poseidon::witness_hash::<WIDTH>(a.clone()).unwrap();
+            PoseidonChip::<PoseidonSpec, WIDTH, RATE, WIDTH>::run(a.clone()).unwrap()[0][0];
 
         let commitment_b =
-            crate::circuit::modules::poseidon::witness_hash::<WIDTH>(b.clone()).unwrap();
+            PoseidonChip::<PoseidonSpec, WIDTH, RATE, WIDTH>::run(b.clone()).unwrap()[0][0];
 
         // parameters
         let a = Tensor::from(a.into_iter().map(Value::known));
@@ -1082,12 +1084,12 @@ mod add_with_overflow_and_poseidon {
         let b = (0..LEN)
             .map(|i| halo2curves::bn256::Fr::from(i as u64 + 1))
             .collect::<Vec<_>>();
-        let commitment_a = crate::circuit::modules::poseidon::witness_hash::<WIDTH>(a.clone())
-            .unwrap()
+        let commitment_a = PoseidonChip::<PoseidonSpec, WIDTH, RATE, WIDTH>::run(a.clone())
+            .unwrap()[0][0]
             + Fr::one();
 
-        let commitment_b = crate::circuit::modules::poseidon::witness_hash::<WIDTH>(b.clone())
-            .unwrap()
+        let commitment_b = PoseidonChip::<PoseidonSpec, WIDTH, RATE, WIDTH>::run(b.clone())
+            .unwrap()[0][0]
             + Fr::one();
 
         // parameters

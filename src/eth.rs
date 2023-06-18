@@ -1,4 +1,4 @@
-use crate::graph::{CallsToAccount, GraphInput};
+use crate::graph::input::{GraphInput, CallsToAccount};
 use crate::pfsys::evm::{DeploymentCode, EvmVerificationError};
 use crate::pfsys::Snark;
 use ethers::prelude::ContractInstance;

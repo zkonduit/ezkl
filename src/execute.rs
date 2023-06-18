@@ -438,8 +438,9 @@ pub(crate) fn forward(
         .collect();
     trace!("forward pass output: {:?}", float_res);
     data.output_data = float_res;
-    data.input_hashes = Some(res.input_hashes);
-    data.output_hashes = Some(res.output_hashes);
+    data.processed_inputs = Some(res.processed_inputs);
+    data.processed_params = Some(res.processed_params);
+    data.processed_outputs = Some(res.processed_outputs);
 
     serde_json::to_writer(&File::create(output)?, &data)?;
     Ok(())
