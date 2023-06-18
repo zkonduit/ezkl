@@ -15,8 +15,11 @@ use super::{VarVisibility, Visibility};
 
 const POSEIDON_LEN_GRAPH: usize = 10;
 
-// TODO: make this a function of the number of constraints this is a bit of a hack
+// TODO: Need a dummy pass module to get the exact size of each module, this is a rough estimate
 const POSEIDON_CONSTRAINTS_ESTIMATE: usize = 44;
+const ELGAMAL_CONSTRAINTS_ESTIMATE: usize = 44;
+// 2^15
+const ELGAMAL_FIXED_COST_ESTIMATE: usize = 32768;
 
 /// Poseidon module type
 pub type ModulePoseidon =
@@ -61,7 +64,7 @@ impl ModuleConfigs {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 /// Module variable settings
 pub struct ModuleVarSettings {
     ///
@@ -76,6 +79,16 @@ impl ModuleVarSettings {
         }
     }
 }
+
+impl Default for ModuleVarSettings {
+    fn default() -> Self {
+        let dummy_elgamal = ElGamalVariables::default();
+        ModuleVarSettings {
+            elgamal: Some(dummy_elgamal),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 /// Module input settings
 pub struct ModuleSettings {
@@ -184,7 +197,7 @@ impl ModuleSizes {
                 vec![0; crate::circuit::modules::poseidon::NUM_INSTANCE_COLUMNS],
             ),
             elgamal: (
-                0,
+                ELGAMAL_FIXED_COST_ESTIMATE,
                 vec![0; crate::circuit::modules::elgamal::NUM_INSTANCE_COLUMNS],
             ),
         }
@@ -273,7 +286,7 @@ impl GraphModules {
             // 1 constraint for each ciphertext c2 elem
             for shape in shapes {
                 let total_len = shape.iter().product::<usize>();
-                sizes.elgamal.0 += POSEIDON_CONSTRAINTS_ESTIMATE * total_len;
+                sizes.elgamal.0 += ELGAMAL_CONSTRAINTS_ESTIMATE * total_len;
                 if total_len > 0 {
                     sizes.elgamal.1[2] += 1;
                 }

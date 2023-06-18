@@ -113,27 +113,16 @@ impl ElGamalChip {
         let main_gate_config = MainGate::<Fr>::configure(meta);
         let advices = main_gate_config.advices();
 
-        // let table_idx = meta.lookup_table_column();
-
-        // Poseidon requires four advice columns, while ECC incomplete addition requires
-        // six, so we could choose to configure them in parallel. However, we only use a
-        // single Poseidon invocation, and we have the rows to accommodate it serially.
-        // Instead, we reduce the proof size by sharing fixed columns between the ECC and
-        // Poseidon chips.
-        let lagrange_coeffs = [
+        let fixed_columns = [
             meta.fixed_column(),
             meta.fixed_column(),
             meta.fixed_column(),
             meta.fixed_column(),
         ];
-        let rc_a = lagrange_coeffs[0..2].try_into().unwrap();
-        let rc_b = lagrange_coeffs[2..4].try_into().unwrap();
+        let rc_a = fixed_columns[0..2].try_into().unwrap();
+        let rc_b = fixed_columns[2..4].try_into().unwrap();
 
-        // Also use the first Lagrange coefficient column for loading global constants.
-        // It's free real estate :)
-        meta.enable_constant(lagrange_coeffs[3]);
-
-        let rns = Rns::<Fq, Fr, NUMBER_OF_LIMBS, BIT_LEN_LIMB>::construct();
+s        let rns = Rns::<Fq, Fr, NUMBER_OF_LIMBS, BIT_LEN_LIMB>::construct();
 
         let overflow_bit_lens = rns.overflow_lengths();
         let composition_bit_lens = vec![BIT_LEN_LIMB / NUMBER_OF_LIMBS];
@@ -203,7 +192,7 @@ impl ElGamalVariables {
             r: Fr::zero(),
             pk: G1Affine::identity(),
             sk: Fr::zero(),
-            window_size: 1,
+            window_size: 4,
             aux_generator: G1Affine::identity(),
         }
     }
@@ -223,7 +212,7 @@ impl ElGamalVariables {
             r: Fr::random(&mut rng),
             pk: pk.to_affine(),
             sk,
-            window_size: 1,
+            window_size: 4,
             aux_generator: <G1Affine as CurveAffine>::CurveExt::random(rng).to_affine(),
         }
     }
@@ -437,18 +426,16 @@ impl Module<Fr> for ElGamalGadget {
     fn instance_increment_input(&self, var_len: Vec<usize>) -> Vec<usize> {
         // in order
         // 1. empty maingate instance
-        // 2. c1
+        // 2. c1, sk_hash
         // 3. c2
-        // 4. sk_hash
         vec![0, 0, var_len[0]]
     }
 
     fn instance_increment_module(&self) -> Vec<usize> {
         // in order
         // 1. empty maingate instance
-        // 2. c1
+        // 2. c1, sk_hash
         // 3. c2
-        // 4. sk_hash
         vec![0, 3, 0]
     }
 
@@ -652,7 +639,7 @@ mod tests {
 
         let mut msg = vec![];
         //
-        for _ in 0..2 {
+        for _ in 0..32 {
             msg.push(Fr::random(&mut rng));
         }
 
@@ -666,7 +653,7 @@ mod tests {
             variables: var,
         };
 
-        let res = MockProver::run(17, &circuit, public_inputs).unwrap();
+        let res = MockProver::run(18, &circuit, public_inputs).unwrap();
         res.assert_satisfied_par();
     }
 }

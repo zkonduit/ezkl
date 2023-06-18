@@ -221,6 +221,8 @@ jobs:
         run: cargo test --release --verbose tests_evm::kzg_evm_prove_and_verify -- --test-threads 4
       - name: KZG prove and verify tests (EVM + hashed inputs)
         run: cargo test --release --verbose tests_evm::kzg_evm_hashed_input_prove_and_verify -- --test-threads 4
+      - name: KZG prove and verify tests (EVM + hashed params)
+        run: cargo test --release --verbose tests_evm::kzg_evm_hashed_params_prove_and_verify -- --test-threads 4
       - name: KZG prove and verify tests (EVM + hashed outputs)
         run: cargo test --release --verbose tests_evm::kzg_evm_hashed_output_prove_and_verify -- --test-threads 4
 
@@ -243,6 +245,8 @@ jobs:
           override: true
           components: rustfmt, clippy
       - name: KZG prove and verify tests
+        run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 8
+      - name: KZG prove and verify tests (hashed outputs)
         run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 8
 
   fuzz-tests:

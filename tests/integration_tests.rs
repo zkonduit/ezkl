@@ -415,7 +415,23 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 crate::native_tests::init_params_17();
                 crate::native_tests::mv_test_(test);
-                kzg_prove_and_verify(test.to_string(), 17, "safe");
+                kzg_prove_and_verify(test.to_string(), 17, "safe", "private", "private", "public");
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn kzg_prove_and_verify_hashed_output(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::init_params_17();
+                crate::native_tests::mv_test_(test);
+                kzg_prove_and_verify(test.to_string(), 17, "safe", "private", "private", "hashed");
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn kzg_prove_and_verify_encrypted_output(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::init_params_17();
+                crate::native_tests::mv_test_(test);
+                kzg_prove_and_verify(test.to_string(), 17, "safe", "private", "private", "encrypted");
             }
 
             #(#[test_case(TESTS[N])])*
@@ -436,7 +452,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 crate::native_tests::init_params_26();
                 crate::native_tests::mv_test_(test);
-                kzg_prove_and_verify(test.to_string(), 24,"unsafe");
+                kzg_prove_and_verify(test.to_string(), 24, "unsafe", "private", "private", "public");
             }
 
             #(#[test_case(LARGE_TESTS[N])])*
@@ -504,12 +520,21 @@ mod native_tests {
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_hashed_params_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params_17();
+                    crate::native_tests::mv_test_(test);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "hashed", "public", 1);
+                }
+
+                #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_hashed_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "hashed", 1);
                 }
+
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_fuzz_(test: &str) {
@@ -1071,7 +1096,14 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_prove_and_verify(example_name: String, logrows: usize, checkmode: &str) {
+    fn kzg_prove_and_verify(
+        example_name: String,
+        logrows: usize,
+        checkmode: &str,
+        input_visibility: &str,
+        param_visibility: &str,
+        output_visibility: &str,
+    ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -1083,6 +1115,9 @@ mod native_tests {
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
+                &format!("--input-visibility={}", input_visibility),
+                &format!("--param-visibility={}", param_visibility),
+                &format!("--output-visibility={}", output_visibility),
             ])
             .status()
             .expect("failed to execute process");
