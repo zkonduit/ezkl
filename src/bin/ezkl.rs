@@ -1,3 +1,4 @@
+use clap::Parser;
 use colored::*;
 use colored_json::prelude::*;
 use env_logger::Builder;
@@ -91,7 +92,7 @@ pub fn init_logger() {
 
 #[tokio::main(flavor = "current_thread")]
 pub async fn main() -> Result<(), Box<dyn Error>> {
-    let args = Cli::create().unwrap();
+    let args = Cli::parse();
     init_logger();
     banner();
     info!("command: \n {}", &args.as_json()?.to_colored_json_auto()?);

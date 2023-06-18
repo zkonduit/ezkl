@@ -5,7 +5,7 @@ use crate::commands::{Cli, Commands, RunArgs, StrategyType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{fix_verifier_sol, get_contract_artifacts, verify_proof_via_solidity};
 use crate::graph::{
-    scale_to_multiplier, GraphCircuit, GraphInput, GraphSettings, Model, Visibility
+    input::GraphInput, scale_to_multiplier, GraphCircuit, GraphSettings, Model, Visibility,
 };
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
@@ -413,16 +413,12 @@ pub(crate) fn forward(
         .collect();
     trace!("forward pass output: {:?}", float_res);
     data.output_data = float_res;
-    data.input_hashes = Some(res.input_hashes);
-    data.output_hashes = Some(res.output_hashes);
+    data.processed_inputs = Some(res.processed_inputs);
+    data.processed_params = Some(res.processed_params);
+    data.processed_outputs = Some(res.processed_outputs);
 
     if let Some(output_path) = output {
         serde_json::to_writer(&File::create(output_path)?, &data)?;
-        // let output_file = File::create(output_path)?;
-        // let mut serializer = Serializer::with_formatter(output_file, <dyn Formatter>::with_indent(b"  "));
-        // serializer.ser().serialize(&data)?;
-        // let output_string = serde_json::to_string_pretty(&data);
-        // output_file.write_all(output_string.as_bytes())?;
     }
     Ok(data)
 }
@@ -495,7 +491,7 @@ pub(crate) fn calibrate(
     debug!("num of calibration batches: {}", chunks.len(),);
 
     let found_params: Vec<GraphSettings> = (4..12)
-        .map(|scale| {
+        .filter_map(|scale| {
             pb.set_message(format!("Calibrating with scale {}", scale));
             std::thread::sleep(Duration::from_millis(100));
 
@@ -530,7 +526,6 @@ pub(crate) fn calibrate(
                 None
             }
         })
-        .flatten()
         .collect();
     pb.finish_with_message("Calibration Done.");
 
@@ -834,8 +829,12 @@ pub(crate) fn prove(
             )?
         }
     };
-
-    info!("proof took {}", now.elapsed().as_secs());
+    let elapsed = now.elapsed();
+    info!(
+        "proof took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
 
     snark.save(&proof_path)?;
 
@@ -1177,7 +1176,12 @@ pub(crate) fn aggregate(
             check_mode,
         )?;
 
-        info!("Aggregation proof took {}", now.elapsed().as_secs());
+        let elapsed = now.elapsed();
+        info!(
+            "Aggregation proof took {}.{}",
+            elapsed.as_secs(),
+            elapsed.subsec_millis()
+        );
         snark.save(&proof_path)?;
         save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, agg_pk.get_vk())?;
     }
@@ -1201,7 +1205,12 @@ pub(crate) fn verify(
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_settings)?;
     let now = Instant::now();
     let result = verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, strategy);
-    info!("verify took {}", now.elapsed().as_secs());
+    let elapsed = now.elapsed();
+    info!(
+        "verify took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
     info!("verified: {}", result.is_ok());
     Ok(())
 }
@@ -1220,7 +1229,13 @@ pub(crate) fn verify_aggr(
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
     let now = Instant::now();
     let result = verify_proof_circuit_kzg(&params, proof, &vk, strategy);
-    info!("verify took {}", now.elapsed().as_secs());
+
+    let elapsed = now.elapsed();
+    info!(
+        "verify took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
     info!("verified: {}", result.is_ok());
     Ok(())
 }

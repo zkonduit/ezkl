@@ -121,19 +121,21 @@ def test_forward():
 
     res = ezkl_lib.forward(data_path, model_path,
                            output_path, settings_path=settings_path)
+    print(res)
     assert res["input_data"] == [[0.05326242372393608, 0.07497056573629379, 0.05235547572374344, 0.028825461864471436, 0.05848702788352966, 0.008225822821259499, 0.07530029118061066, 0.0821458026766777, 0.06227986887097359, 0.024306034669280052, 0.05793173983693123, 0.040442030876874924]]
     assert res["output_data"] == [[0.05322265625, 0.12841796875, 0.0751953125, 0.10546875, 0.20947265625, 0.10400390625, 0.05224609375, 0.0810546875, 0.02880859375, 0.05859375, 0.06689453125, 0.00830078125, 0.1337890625, 0.22412109375, 0.09033203125, 0.0751953125, 0.1572265625, 0.08203125, 0.0625, 0.0869140625, 0.0244140625, 0.12060546875, 0.185546875, 0.06494140625, 0.05810546875, 0.0986328125, 0.04052734375]]
-    assert res["input_hashes"] == [[13250656787953244331, 6427599703873277537, 10144505220959691175, 292751733201779167]]
-    assert res["output_hashes"] == [[12652505662889675846, 5609103816932831989, 7270433874688716388, 2874826183531284668]]
+    assert res["processed_inputs"] == {'poseidon_hash': [[13250656787953244331, 6427599703873277537, 10144505220959691175, 292751733201779167]]}
+    assert res["processed_params"] == {'poseidon_hash': []}
+    assert res["processed_outputs"] == {'poseidon_hash': [[12652505662889675846, 5609103816932831989, 7270433874688716388, 2874826183531284668]]}
 
     with open(output_path, "r") as f:
         data = json.load(f)
-    assert data == {
-        "input_data": [[0.05326242372393608, 0.07497056573629379, 0.05235547572374344, 0.028825461864471436, 0.05848702788352966, 0.008225822821259499, 0.07530029118061066, 0.0821458026766777, 0.06227986887097359, 0.024306034669280052, 0.05793173983693123, 0.040442030876874924]],
-        "output_data": [[0.05322265625, 0.12841796875, 0.0751953125, 0.10546875, 0.20947265625, 0.10400390625, 0.05224609375, 0.0810546875, 0.02880859375, 0.05859375, 0.06689453125, 0.00830078125, 0.1337890625, 0.22412109375, 0.09033203125, 0.0751953125, 0.1572265625, 0.08203125, 0.0625, 0.0869140625, 0.0244140625, 0.12060546875, 0.185546875, 0.06494140625, 0.05810546875, 0.0986328125, 0.04052734375]],
-        "input_hashes": [[13250656787953244331, 6427599703873277537, 10144505220959691175, 292751733201779167]],
-        "output_hashes": [[12652505662889675846, 5609103816932831989, 7270433874688716388, 2874826183531284668]]
-    }
+
+    assert data["input_data"] == [[0.05326242372393608, 0.07497056573629379, 0.05235547572374344, 0.028825461864471436, 0.05848702788352966, 0.008225822821259499, 0.07530029118061066, 0.0821458026766777, 0.06227986887097359, 0.024306034669280052, 0.05793173983693123, 0.040442030876874924]]
+    assert data["output_data"] == [[0.05322265625, 0.12841796875, 0.0751953125, 0.10546875, 0.20947265625, 0.10400390625, 0.05224609375, 0.0810546875, 0.02880859375, 0.05859375, 0.06689453125, 0.00830078125, 0.1337890625, 0.22412109375, 0.09033203125, 0.0751953125, 0.1572265625, 0.08203125, 0.0625, 0.0869140625, 0.0244140625, 0.12060546875, 0.185546875, 0.06494140625, 0.05810546875, 0.0986328125, 0.04052734375]]
+    assert data["processed_inputs"] == {'poseidon_hash': [[13250656787953244331, 6427599703873277537, 10144505220959691175, 292751733201779167]]}
+    assert data["processed_params"] == {'poseidon_hash': []}
+    assert data["processed_outputs"] == {'poseidon_hash': [[12652505662889675846, 5609103816932831989, 7270433874688716388, 2874826183531284668]]}
 
 
 def test_mock():
@@ -198,11 +200,6 @@ def test_setup_evm():
     """
     Test for setup
     """
-
-    data_path = os.path.join(
-        folder_path,
-        'input_forward.json'
-    )
 
     model_path = os.path.join(
         examples_path,
@@ -363,6 +360,11 @@ def test_aggregate_and_verify_aggr():
         'input.json'
     )
 
+    forward_data_path = os.path.join(
+        folder_path,
+        '1l_relu_forward.json'
+    )
+
     model_path = os.path.join(
         examples_path,
         'onnx',
@@ -384,6 +386,10 @@ def test_aggregate_and_verify_aggr():
     assert res == True
     assert os.path.isfile(settings_path)
 
+    # TODO: Dictionary outputs
+    res = ezkl_lib.forward(data_path, model_path,
+                           forward_data_path, settings_path=settings_path)
+
     ezkl_lib.setup(
         model_path,
         vk_path,
@@ -395,7 +401,7 @@ def test_aggregate_and_verify_aggr():
     proof_path = os.path.join(folder_path, '1l_relu.pf')
 
     ezkl_lib.prove(
-        data_path,
+        forward_data_path,
         model_path,
         pk_path,
         proof_path,
@@ -444,6 +450,11 @@ def test_evm_aggregate_and_verify_aggr():
         'input.json'
     )
 
+    forward_data_path = os.path.join(
+        folder_path,
+        '1l_relu_forward.json'
+    )
+
     model_path = os.path.join(
         examples_path,
         'onnx',
@@ -468,6 +479,10 @@ def test_evm_aggregate_and_verify_aggr():
         "resources",
     )
 
+    # TODO: Dictionary outputs
+    res = ezkl_lib.forward(data_path, model_path,
+                           forward_data_path, settings_path=settings_path)
+
     ezkl_lib.setup(
         model_path,
         vk_path,
@@ -479,7 +494,7 @@ def test_evm_aggregate_and_verify_aggr():
     proof_path = os.path.join(folder_path, '1l_relu.pf')
 
     ezkl_lib.prove(
-        data_path,
+        forward_data_path,
         model_path,
         pk_path,
         proof_path,
