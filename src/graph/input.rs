@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde::ser::SerializeStruct;
 use std::io::Read;
 use halo2curves::bn256::Fr as Fp;
-use std::collections::HashMap;
+// use std::collections::HashMap;
 
 use super::{modules::ModuleForwardResult, GraphError};
 
@@ -203,24 +203,15 @@ impl Serialize for GraphInput {
         state.serialize_field("output_data", &output_data_f64)?;
 
         if let Some(processed_inputs) = &self.processed_inputs {
-            let processed_inputs_poseidon: Vec<Vec<u64>> = processed_inputs.poseidon_hash.iter().map(fp_to_vecu64).collect();
-            let mut hash_map = HashMap::new();
-            hash_map.insert("poseidon_hash", processed_inputs_poseidon);
-            state.serialize_field("processed_inputs", &hash_map)?;
+            state.serialize_field("processed_inputs", &processed_inputs)?;
         }
 
         if let Some(processed_params) = &self.processed_params {
-            let processed_params_poseidon: Vec<Vec<u64>> = processed_params.poseidon_hash.iter().map(fp_to_vecu64).collect();
-            let mut hash_map = HashMap::new();
-            hash_map.insert("poseidon_hash", processed_params_poseidon);
-            state.serialize_field("processed_params", &hash_map)?;
+            state.serialize_field("processed_params", &processed_params)?;
         }
 
         if let Some(processed_outputs) = &self.processed_outputs {
-            let processed_outputs_poseidon: Vec<Vec<u64>> = processed_outputs.poseidon_hash.iter().map(fp_to_vecu64).collect();
-            let mut hash_map = HashMap::new();
-            hash_map.insert("poseidon_hash", processed_outputs_poseidon);
-            state.serialize_field("processed_outputs", &hash_map)?;
+            state.serialize_field("processed_outputs", &processed_outputs)?;
         }
         state.end()
     }
