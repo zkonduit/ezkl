@@ -13,6 +13,9 @@ defaults:
 jobs:
   macos:
     runs-on: macos-latest
+    strategy:
+      matrix:
+        target: [x86_64, universal2-apple-darwin]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
@@ -25,22 +28,12 @@ jobs:
           override: true
           components: rustfmt, clippy
 
-      - name: Build wheels - x86_64
+      - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
-          target: x86_64
+          target: ${{ matrix.target }}
           args: --release --out dist --features python-bindings
-      - name: Install built wheel - x86_64
-        run: |
-          pip install ezkl_lib --no-index --find-links dist --force-reinstall
-          python -c "import ezkl_lib"
-
-      - name: Build wheels - universal2
-        uses: PyO3/maturin-action@v1
-        with:
-          target: universal2-apple-darwin
-          args: --release --out dist --features python-bindings
-      - name: Install built wheel - universal2
+      - name: Install built wheel
         run: |
           pip install ezkl_lib --no-index --find-links dist --force-reinstall
           python -c "import ezkl_lib"
@@ -258,6 +251,24 @@ jobs:
       - uses: actions/download-artifact@v3
         with:
           name: wheels
+      - name: List Files
+        run: ls -R
+
+      # Both publish steps will fail if there is no trusted publisher setup
+      # On failure the publish step will then simply continue to the next one
+
+      # publishes to PyPI
       - name: Publish package distributions to PyPI
+        continue-on-error: true
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ./
+
+      # publishes to TestPyPI
+      - name: Publish package distribution to TestPyPI
+        continue-on-error: true
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: ./
 

@@ -1,10 +1,6 @@
 use super::*;
-use halo2_proofs::circuit::Region;
 use serde::{Deserialize, Serialize};
-use std::{
-    error::Error,
-    sync::{Arc, Mutex},
-};
+use std::error::Error;
 
 use crate::{
     circuit::{layouts, utils},
@@ -39,7 +35,7 @@ impl LookupOp {
         let x = vec![0_i128].into_iter().into();
         (
             <F as TensorType>::zero().unwrap(),
-            i128_to_felt(Op::<F>::f(self, &[x]).unwrap()[0]),
+            i128_to_felt(Op::<F>::f(self, &[x]).unwrap().output[0]),
         )
     }
 }
@@ -49,8 +45,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
         self
     }
     /// Matches a [Op] to an operation in the `tensor::ops` module.
-    fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
-        match &self {
+    fn f(&self, x: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
+        let res = match &self {
             LookupOp::GreaterThan { a } => Ok(tensor::ops::nonlinearities::greater_than(
                 &x[0],
                 f32::from(*a).into(),
@@ -89,7 +85,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::Exp { scales } => {
                 Ok(tensor::ops::nonlinearities::exp(&x[0], scales.0, scales.1))
             }
-        }
+        }?;
+
+        Ok(ForwardResult {
+            output: res,
+            intermediate_lookups: vec![],
+        })
     }
 
     /// Returns the name of the operation
@@ -113,16 +114,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: Arc<Mutex<Option<&mut Region<F>>>>,
+        region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
-        offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         Ok(Some(layouts::nonlinearity(
             config,
             region,
             values[..].try_into()?,
             self,
-            offset,
         )?))
     }
 

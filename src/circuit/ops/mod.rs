@@ -1,24 +1,17 @@
-use std::{
-    any::Any,
-    error::Error,
-    marker::PhantomData,
-    sync::{Arc, Mutex},
-};
+use std::{any::Any, error::Error};
 
-use halo2_proofs::circuit::Region;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    graph::quantize_float,
-    tensor::{self, Tensor, TensorError, TensorType, ValTensor},
-};
+use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor};
 use halo2curves::ff::PrimeField;
 
-use self::lookup::LookupOp;
+use self::{lookup::LookupOp, region::RegionCtx};
 
 ///
 pub mod base;
+///
+pub mod chip;
 ///
 pub mod hybrid;
 /// Layouts for specific functions (composed of base ops)
@@ -27,11 +20,20 @@ pub mod layouts;
 pub mod lookup;
 ///
 pub mod poly;
+///
+pub mod region;
+
+/// A struct representing the result of a forward pass.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct ForwardResult {
+    pub(crate) output: Tensor<i128>,
+    pub(crate) intermediate_lookups: Vec<Tensor<i128>>,
+}
 
 /// An enum representing operations that can be represented as constraints in a circuit.
 pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + Sync + Any {
     /// Matches a [Op] to an operation in the `tensor::ops` module.
-    fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError>;
+    fn f(&self, x: &[Tensor<i128>]) -> Result<ForwardResult, TensorError>;
     /// Returns a string representation of the operation.
     fn as_string(&self) -> String;
 
@@ -39,9 +41,8 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: Arc<Mutex<Option<&mut Region<F>>>>,
+        region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
-        offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>>;
 
     /// Returns the scale of the output of the operation.
@@ -96,8 +97,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
         self
     }
 
-    fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
-        Ok(x[0].clone())
+    fn f(&self, x: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
+        Ok(ForwardResult {
+            output: x[0].clone(),
+            intermediate_lookups: vec![],
+        })
     }
 
     fn as_string(&self) -> String {
@@ -107,9 +111,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
     fn layout(
         &self,
         _: &mut crate::circuit::BaseConfig<F>,
-        _: Arc<Mutex<Option<&mut Region<F>>>>,
+        _: &mut RegionCtx<F>,
         _: &[ValTensor<F>],
-        _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         Ok(None)
     }
@@ -140,7 +143,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn f(&self, x: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
+    fn f(&self, x: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
         if self.scale.len() != x.len() {
             return Err(TensorError::DimMismatch("rescaled inputs".to_string()));
         }
@@ -189,9 +192,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: Arc<Mutex<Option<&mut Region<F>>>>,
+        region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
-        offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         if self.scale.len() != values.len() {
             return Err(Box::new(TensorError::DimMismatch(
@@ -199,14 +201,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
             )));
         }
 
-        let res = &layouts::rescale(
-            config,
-            region.clone(),
-            values[..].try_into()?,
-            &self.scale,
-            offset,
-        )?[..];
-        self.inner.layout(config, region, res, offset)
+        let res = &layouts::rescale(config, region, values[..].try_into()?, &self.scale)?[..];
+        self.inner.layout(config, region, res)
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
@@ -222,7 +218,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn f(&self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
+    fn f(&self, _: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
         Err(TensorError::WrongMethod)
     }
 
@@ -232,9 +228,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
     fn layout(
         &self,
         _: &mut crate::circuit::BaseConfig<F>,
-        _: Arc<Mutex<Option<&mut Region<F>>>>,
+        _: &mut RegionCtx<F>,
         _: &[ValTensor<F>],
-        _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         Err(Box::new(super::CircuitError::UnsupportedOp))
     }
@@ -251,22 +246,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
 #[derive(Clone, Debug)]
 pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
     ///
-    pub values: Tensor<f32>,
-    /// scale to quantize with
-    pub scale: u32,
-    /// is public ?
-    pub public: bool,
-    _marker: PhantomData<F>,
+    pub quantized_values: ValTensor<F>,
+    ///
+    pub raw_values: Tensor<f32>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
     ///
-    pub fn new(values: Tensor<f32>, scale: u32, public: bool) -> Self {
+    pub fn new(quantized_values: ValTensor<F>, raw_values: Tensor<f32>) -> Self {
         Self {
-            values,
-            scale,
-            public,
-            _marker: PhantomData,
+            quantized_values,
+            raw_values,
         }
     }
 }
@@ -275,10 +265,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn f(&self, _: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
-        Ok(self
-            .values
-            .map(|x| quantize_float(&x, 0., self.scale).unwrap()))
+    fn f(&self, _: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
+        let values = self.quantized_values.clone();
+        let int_values = values.get_int_evals().unwrap();
+        let output = Tensor::new(Some(&int_values), values.dims().clone())?;
+
+        Ok(ForwardResult {
+            output,
+            intermediate_lookups: vec![],
+        })
     }
 
     fn as_string(&self) -> String {
@@ -287,15 +282,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
     fn layout(
         &self,
         _: &mut crate::circuit::BaseConfig<F>,
-        _: Arc<Mutex<Option<&mut Region<F>>>>,
+        _: &mut RegionCtx<F>,
         _: &[ValTensor<F>],
-        _: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        Ok(Some(crate::graph::tensor_to_valtensor(
-            self.values.clone(),
-            self.scale,
-            self.public,
-        )?))
+        Ok(Some(self.quantized_values.clone()))
     }
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
         Box::new(self.clone())

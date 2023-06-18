@@ -1,6 +1,5 @@
 //use crate::onnx::OnnxModel;
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use log::{debug, info};
 #[cfg(feature = "python-bindings")]
 use pyo3::{
     conversion::{FromPyObject, PyTryFrom},
@@ -9,14 +8,11 @@ use pyo3::{
     types::PyString,
 };
 use serde::{Deserialize, Serialize};
-use std::env;
 use std::error::Error;
-use std::fs::File;
-use std::io::{stdin, stdout, Read, Write};
 use std::path::PathBuf;
 
 use crate::circuit::{CheckMode, Tolerance};
-use crate::graph::{VarVisibility, Visibility};
+use crate::graph::Visibility;
 use crate::pfsys::TranscriptType;
 
 impl std::fmt::Display for TranscriptType {
@@ -91,8 +87,53 @@ impl<'source> FromPyObject<'source> for StrategyType {
     }
 }
 
+#[derive(clap::ValueEnum, Debug, Default, Copy, Clone, Serialize, Deserialize)]
+/// Determines what the calibration pass should optimize for
+pub enum CalibrationTarget {
+    /// Optimizes for reducing cpu and memory usage
+    #[default]
+    Resources,
+    /// Optimizes for numerical accuracy given the fixed point representation
+    Accuracy,
+}
+
+impl From<&str> for CalibrationTarget {
+    fn from(s: &str) -> Self {
+        match s {
+            "resources" => CalibrationTarget::Resources,
+            "accuracy" => CalibrationTarget::Accuracy,
+            _ => panic!("invalid calibration target"),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Converts CalibrationTarget into a PyObject (Required for CalibrationTarget to be compatible with Python)
+impl IntoPy<PyObject> for CalibrationTarget {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            CalibrationTarget::Resources => "resources".to_object(py),
+            CalibrationTarget::Accuracy => "accuracy".to_object(py),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Obtains CalibrationTarget from PyObject (Required for CalibrationTarget to be compatible with Python)
+impl<'source> FromPyObject<'source> for CalibrationTarget {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let trystr = <PyString as PyTryFrom>::try_from(ob)?;
+        let strval = trystr.to_string();
+        match strval.to_lowercase().as_str() {
+            "resources" => Ok(CalibrationTarget::Resources),
+            "accuracy" => Ok(CalibrationTarget::Accuracy),
+            _ => Err(PyValueError::new_err("Invalid value for CalibrationTarget")),
+        }
+    }
+}
+
 /// Parameters specific to a proving run
-#[derive(Debug, Args, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Copy, Args, Deserialize, Serialize, Clone, Default, PartialEq, PartialOrd)]
 pub struct RunArgs {
     /// The tolerance for error on model outputs
     #[arg(short = 'T', long, default_value = "0")]
@@ -108,49 +149,20 @@ pub struct RunArgs {
     pub logrows: u32,
     /// The number of batches to split the input data into
     #[arg(long, default_value = "1")]
-    pub batch_size: u32,
-    /// Flags whether inputs are public
-    #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
-    pub public_inputs: bool,
-    /// Flags whether outputs are public
-    #[arg(long, default_value = "true", action = clap::ArgAction::Set)]
-    pub public_outputs: bool,
-    /// Flags whether params are public
-    #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
-    pub public_params: bool,
-    /// Base used to pack the public-inputs to the circuit. (value > 1) to pack instances as a single int.
-    /// Useful when verifying on the EVM. Note that this will often break for very long inputs. Use with caution, still experimental.
-    #[arg(long, default_value = "1")]
-    pub pack_base: u32,
+    pub batch_size: usize,
+    /// Flags whether inputs are public, private, hashed
+    #[arg(long, default_value = "private")]
+    pub input_visibility: Visibility,
+    /// Flags whether outputs are public, private, hashed
+    #[arg(long, default_value = "public")]
+    pub output_visibility: Visibility,
+    /// Flags whether params are public, private, hashed
+    #[arg(long, default_value = "private")]
+    pub param_visibility: Visibility,
     /// the number of constraints the circuit might use. If not specified, this will be calculated using a 'dummy layout' pass.
     #[arg(long)]
     pub allocated_constraints: Option<usize>,
 }
-
-#[allow(missing_docs)]
-impl RunArgs {
-    pub fn to_var_visibility(&self) -> VarVisibility {
-        VarVisibility {
-            input: if self.public_inputs {
-                Visibility::Public
-            } else {
-                Visibility::Private
-            },
-            params: if self.public_params {
-                Visibility::Public
-            } else {
-                Visibility::Private
-            },
-            output: if self.public_outputs {
-                Visibility::Public
-            } else {
-                Visibility::Private
-            },
-        }
-    }
-}
-
-const EZKLCONF: &str = "EZKLCONF";
 
 #[allow(missing_docs)]
 #[derive(Parser, Debug, Clone, Deserialize, Serialize)]
@@ -176,20 +188,6 @@ impl Cli {
     pub fn from_json(arg_json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(arg_json)
     }
-    /// Create an ezkl configuration: if there is an EZKLCONF env variable, parse its value, else read it from the command line.
-    pub fn create() -> Result<Self, Box<dyn Error>> {
-        match env::var(EZKLCONF) {
-            Ok(path) => {
-                debug!("loading ezkl conf from {}", path);
-                let mut file = File::open(path).map_err(Box::<dyn Error>::from)?;
-                let mut data = String::new();
-                file.read_to_string(&mut data)
-                    .map_err(Box::<dyn Error>::from)?;
-                Self::from_json(&data).map_err(Box::<dyn Error>::from)
-            }
-            Err(_e) => Ok(Cli::parse()),
-        }
-    }
 }
 
 #[allow(missing_docs)]
@@ -200,7 +198,7 @@ pub enum Commands {
     Table {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
-        model: String,
+        model: PathBuf,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
@@ -212,10 +210,10 @@ pub enum Commands {
     RenderCircuit {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
-        model: String,
+        model: PathBuf,
         /// Path to save the .png circuit render
         #[arg(short = 'O', long)]
-        output: String,
+        output: PathBuf,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
@@ -226,24 +224,62 @@ pub enum Commands {
     Forward {
         /// The path to the .json data file
         #[arg(short = 'D', long)]
-        data: String,
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
-        model: String,
+        model: PathBuf,
         /// Path to the new .json file
         #[arg(short = 'O', long)]
-        output: String,
+        output: PathBuf,
+        /// Scale to use for quantization
+        #[arg(short = 'S', long, conflicts_with = "settings_path")]
+        scale: Option<u32>,
+        /// The number of batches to split the input data into
+        #[arg(short = 'B', long, conflicts_with = "settings_path")]
+        batch_size: Option<usize>,
+        /// optional circuit params path
+        #[arg(long)]
+        settings_path: Option<PathBuf>,
+    },
+
+    /// Produces the proving hyperparameters, from run-args
+    #[command(arg_required_else_help = true)]
+    GenSettings {
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: PathBuf,
+        /// Path to circuit_settings file to output
+        #[arg(short = 'O', long, default_value = "settings.json")]
+        settings_path: PathBuf,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
     },
 
+    /// Calibrates the proving scale, lookup bits and logrows from a circuit settings file.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[command(arg_required_else_help = true)]
+    CalibrateSettings {
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: PathBuf,
+        /// Path to circuit_settings file to read in AND overwrite.
+        #[arg(short = 'O', long, default_value = "settings.json")]
+        settings_path: PathBuf,
+        /// The path to the .json calibration data file.
+        #[arg(short = 'D', long = "data")]
+        data: PathBuf,
+        #[arg(long = "target", default_value = "resources")]
+        /// Target for calibration.
+        target: CalibrationTarget,
+    },
+
     /// Generates a dummy SRS
     #[command(name = "gen-srs", arg_required_else_help = true)]
     GenSrs {
-        /// The path to output to the desired params file
-        #[arg(long)]
-        params_path: PathBuf,
+        /// The path to output to the desired srs file
+        #[arg(long, default_value = "kzg.srs")]
+        srs_path: PathBuf,
         /// number of logrows to use for srs
         #[arg(long)]
         logrows: usize,
@@ -253,21 +289,21 @@ pub enum Commands {
     Mock {
         /// The path to the .json data file
         #[arg(short = 'D', long)]
-        data: String,
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
-        model: String,
-        /// proving arguments
-        #[clap(flatten)]
-        args: RunArgs,
+        model: PathBuf,
+        /// circuit params path
+        #[arg(long)]
+        settings_path: PathBuf,
     },
 
     /// Aggregates proofs :)
     #[command(arg_required_else_help = true)]
     Aggregate {
-        /// The path to the params files.
+        /// The path to the settings files.
         #[arg(long)]
-        circuit_params_paths: Vec<PathBuf>,
+        settings_paths: Vec<PathBuf>,
         /// The path to the snarks to aggregate over
         #[arg(long)]
         aggregation_snarks: Vec<PathBuf>,
@@ -275,14 +311,14 @@ pub enum Commands {
         #[arg(long)]
         aggregation_vk_paths: Vec<PathBuf>,
         /// The path to save the desired verfication key file
-        #[arg(long)]
+        #[arg(long, default_value = "vk_aggr.key")]
         vk_path: PathBuf,
         /// The path to the desired output file
-        #[arg(long)]
+        #[arg(long, default_value = "proof_aggr.proof")]
         proof_path: PathBuf,
-        /// The transcript type
+        /// The path to SRS
         #[arg(long)]
-        params_path: PathBuf,
+        srs_path: PathBuf,
         #[arg(
             long,
             require_equals = true,
@@ -305,29 +341,27 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
-        /// The parameter path
+        /// The srs path
         #[arg(long)]
-        params_path: PathBuf,
+        srs_path: PathBuf,
         /// The path to output the verfication key file
-        #[arg(long)]
+        #[arg(long, default_value = "vk.key")]
         vk_path: PathBuf,
         /// The path to output the proving key file
-        #[arg(long)]
+        #[arg(long, default_value = "pk.key")]
         pk_path: PathBuf,
-        /// The path to save circuit params to
+        /// The path to load circuit params from
         #[arg(long)]
-        circuit_params_path: PathBuf,
-        /// proving arguments
-        #[clap(flatten)]
-        args: RunArgs,
+        settings_path: PathBuf,
     },
+
     #[cfg(not(target_arch = "wasm32"))]
-    /// Loads model, data, and creates proof
+    /// Fuzzes the proof pipeline with random inputs, random parameters, and random keys
     #[command(arg_required_else_help = true)]
     Fuzz {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long)]
-        data: String,
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
@@ -343,8 +377,11 @@ pub enum Commands {
         #[clap(flatten)]
         args: RunArgs,
         /// number of fuzz iterations
-        #[arg(long)]
+        #[arg(long, default_value = "10")]
         num_runs: usize,
+        /// optional circuit params path (overrides any run args set)
+        #[arg(long)]
+        settings_path: Option<PathBuf>,
     },
 
     /// Loads model, data, and creates proof
@@ -352,7 +389,7 @@ pub enum Commands {
     Prove {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long)]
-        data: String,
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
@@ -360,11 +397,11 @@ pub enum Commands {
         #[arg(long)]
         pk_path: PathBuf,
         /// The path to the desired output file
-        #[arg(long)]
+        #[arg(long, default_value = "proof.proof")]
         proof_path: PathBuf,
         /// The parameter path
         #[arg(long)]
-        params_path: PathBuf,
+        srs_path: PathBuf,
         #[arg(
             long,
             require_equals = true,
@@ -384,7 +421,7 @@ pub enum Commands {
         strategy: StrategyType,
         /// The path to load circuit params from
         #[arg(long)]
-        circuit_params_path: PathBuf,
+        settings_path: PathBuf,
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = "safe")]
         check_mode: CheckMode,
@@ -395,19 +432,27 @@ pub enum Commands {
     CreateEVMVerifier {
         /// The path to load the desired params file
         #[arg(long)]
-        params_path: PathBuf,
+        srs_path: PathBuf,
         /// The path to save circuit params to
         #[arg(long)]
-        circuit_params_path: PathBuf,
+        settings_path: PathBuf,
         /// The path to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
-        /// The path to output to the desired EVM bytecode file
-        #[arg(long)]
+        /// The path to the compiled yul bytecode code
+        #[arg(long, default_value = "evm_deploy.yul")]
         deployment_code_path: PathBuf,
         /// The path to output the Solidity code
-        #[arg(long)]
+        #[arg(long, default_value = "evm_deploy.sol")]
         sol_code_path: Option<PathBuf>,
+        /// The path to output the compiled Solidity bytecode
+        #[arg(long, default_value = "evm_deploy.sol.bin")]
+        sol_bytecode_path: Option<PathBuf>,
+        /// The number of runs set to the SOLC optimizer.
+        /// Lower values optimze for deployment size while higher values optimize for execution cost.
+        /// If not set will just use the default unoptimized SOLC configuration.
+        #[arg(long)]
+        optimizer_runs: Option<usize>,
         // todo, optionally allow supplying proving key
     },
 
@@ -417,34 +462,42 @@ pub enum Commands {
     CreateEVMVerifierAggr {
         /// The path to load the desired params file
         #[arg(long)]
-        params_path: PathBuf,
+        srs_path: PathBuf,
         /// The path to output to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
-        /// The path to the deployment code
-        #[arg(long)]
+        /// The path to the compiled yul bytecode code
+        #[arg(long, default_value = "evm_deploy_aggr.yul")]
         deployment_code_path: Option<PathBuf>,
         /// The path to the Solidity code
-        #[arg(long)]
+        #[arg(long, default_value = "evm_deploy_aggr.sol")]
         sol_code_path: Option<PathBuf>,
+        /// The path to output the compiled Solidity bytecode
+        #[arg(long, default_value = "evm_deploy_aggr.sol.bin")]
+        sol_bytecode_path: Option<PathBuf>,
+        /// The number of runs set to the SOLC optimizer.
+        /// Lower values optimze for deployment size while higher values optimize for execution cost.
+        /// If not set will just use the default unoptimized SOLC configuration.
+        #[arg(long)]
+        optimizer_runs: Option<usize>,
         // todo, optionally allow supplying proving key
     },
 
     /// Verifies a proof, returning accept or reject
     #[command(arg_required_else_help = true)]
     Verify {
-        /// The path to save circuit params to
+        /// The path to load circuit params from
         #[arg(long)]
-        circuit_params_path: PathBuf,
+        settings_path: PathBuf,
         /// The path to the proof file
         #[arg(long)]
         proof_path: PathBuf,
         /// The path to output the desired verfication key file (optional)
         #[arg(long)]
         vk_path: PathBuf,
-        /// The transcript type
+        /// The kzg srs path
         #[arg(long)]
-        params_path: PathBuf,
+        srs_path: PathBuf,
     },
 
     /// Verifies an aggregate proof, returning accept or reject
@@ -456,9 +509,9 @@ pub enum Commands {
         /// The path to output the desired verfication key file (optional)
         #[arg(long)]
         vk_path: PathBuf,
-        /// The path to load the desired verfication key file (optional)
+        /// The srs path
         #[arg(long)]
-        params_path: PathBuf,
+        srs_path: PathBuf,
         /// logrows used for aggregation circuit
         #[arg(long)]
         logrows: u32,
@@ -477,11 +530,9 @@ pub enum Commands {
         /// The path to the Solidity code
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
-        /// The number of runs set to the SOLC optimizer.
-        /// Lower values optimze for deployment size while higher values optimize for execution cost.
-        /// If not set will just use the default unoptimized SOLC configuration.
+        /// The path to output the compiled Solidity bytecode
         #[arg(long)]
-        optimizer_runs: Option<usize>,
+        sol_bytecode_path: Option<PathBuf>,
     },
 
     /// Print the proof in hexadecimal
@@ -491,24 +542,4 @@ pub enum Commands {
         #[arg(long)]
         proof_path: PathBuf,
     },
-}
-
-/// Loads the path to a path `data` represented as a [String]. If empty queries the user for an input.
-pub fn data_path(data: String) -> PathBuf {
-    let mut s = String::new();
-    match data.is_empty() {
-        false => {
-            info!("loading data from {}", data);
-            PathBuf::from(data)
-        }
-        true => {
-            info!("please enter a path to a .json file containing inputs for the model: ");
-            let _ = stdout().flush();
-            let _ = &stdin()
-                .read_line(&mut s)
-                .expect("did not enter a correct string");
-            s.truncate(s.len() - 1);
-            PathBuf::from(&s)
-        }
-    }
 }

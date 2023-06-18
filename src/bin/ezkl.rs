@@ -1,3 +1,4 @@
+use clap::Parser;
 use colored::*;
 use colored_json::prelude::*;
 use env_logger::Builder;
@@ -16,7 +17,7 @@ pub fn level_color(level: &log::Level, msg: &str) -> String {
     match level {
         Level::Error => msg.red(),
         Level::Warn => msg.yellow(),
-        Level::Info => msg.green(),
+        Level::Info => msg.blue(),
         Level::Debug => msg.green(),
         Level::Trace => msg.magenta(),
     }
@@ -78,7 +79,7 @@ pub fn init_logger() {
             start.elapsed().as_secs(),
             record.metadata().target(),
             level_text_color(&record.level(), &format!("{}", record.args()))
-            .replace('\n', &format!("\n{} ", " | ".white().bold()))
+                .replace('\n', &format!("\n{} ", " | ".white().bold()))
         )
     });
     builder.target(env_logger::Target::Stdout);
@@ -91,7 +92,7 @@ pub fn init_logger() {
 
 #[tokio::main(flavor = "current_thread")]
 pub async fn main() -> Result<(), Box<dyn Error>> {
-    let args = Cli::create().unwrap();
+    let args = Cli::parse();
     init_logger();
     banner();
     info!("command: \n {}", &args.as_json()?.to_colored_json_auto()?);

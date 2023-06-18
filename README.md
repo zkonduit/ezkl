@@ -26,6 +26,10 @@ EZKL
 
 In the backend we use [Halo2](https://github.com/privacy-scaling-explorations/halo2) as a proof system.
 
+
+- If you have any questions, we'd love for you to open up a discussion topic in [Discussions](https://github.com/zkonduit/ezkl/discussions). Alternatively, you can join the ✨[EZKL Community Telegram Group](https://t.me/+76OjHb5CwJtkMTBh)💫.
+
+
 ### resources 📖
 
 |  |  |
@@ -93,9 +97,6 @@ The EZKL project has several libraries and repos.
 
 
 
-
-
-
 ----------------------
 
 ## Contributing 🌎
@@ -106,8 +107,6 @@ If you're interested in contributing and are unsure where to start, reach out to
 * jason (jasonmorton)
 
 More broadly:
-
-- Feel free to open up a discussion topic in [Discussions](https://github.com/zkonduit/ezkl/discussions) to ask questions. Alternatively, you may join the [EZKL Community Telegram Group](https://t.me/+76OjHb5CwJtkMTBh) to ask questions.
 
 - See currently open issues for ideas on how to contribute.
 

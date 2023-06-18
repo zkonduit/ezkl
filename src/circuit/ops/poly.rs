@@ -2,7 +2,6 @@ use crate::{
     circuit::layouts,
     tensor::{self, Tensor, TensorError},
 };
-use std::sync::{Arc, Mutex};
 
 use super::{base::BaseOp, *};
 
@@ -99,9 +98,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     }
 
     /// Matches a [Op] to an operation in the `tensor::ops` module.
-    fn f(&self, inputs: &[Tensor<i128>]) -> Result<Tensor<i128>, TensorError> {
+    fn f(&self, inputs: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
         let mut inputs = inputs.to_vec();
-        match &self {
+        let res = match &self {
             PolyOp::Resize { scale_factor } => tensor::ops::resize(&inputs[0], scale_factor),
             PolyOp::Iff => tensor::ops::iff(&inputs[0], &inputs[1], &inputs[2]),
             PolyOp::Einsum { equation } => tensor::ops::einsum(equation, &inputs),
@@ -198,32 +197,36 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 }
                 Ok(tensor::ops::slice(&inputs[0], axis, start, end)?)
             }
-        }
+        }?;
+
+        Ok(ForwardResult {
+            output: res,
+            intermediate_lookups: vec![],
+        })
     }
 
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
-        region: Arc<Mutex<Option<&mut Region<F>>>>,
+        region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
-        offset: &mut usize,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         let mut values = values.to_vec();
 
         Ok(Some(match self {
             PolyOp::Resize { scale_factor } => {
-                layouts::resize(config, region, values[..].try_into()?, scale_factor, offset)?
+                layouts::resize(config, region, values[..].try_into()?, scale_factor)?
             }
-            PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?, offset)?,
+            PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?)?,
             PolyOp::Einsum { equation } => {
-                let out = layouts::einsum(config, region, &mut values, equation, offset)?;
+                let out = layouts::einsum(config, region, &mut values, equation)?;
                 out
             }
             PolyOp::Gather { dim, index } => {
                 tensor::ops::gather(&values[0].get_inner_tensor()?, *dim, index)?.into()
             }
             PolyOp::Sum { axes } => {
-                layouts::sum_axes(config, region, values[..].try_into()?, axes, offset)?
+                layouts::sum_axes(config, region, values[..].try_into()?, axes)?
             }
             PolyOp::Conv {
                 kernel,
@@ -235,14 +238,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 if let Some(bias) = bias {
                     values.push(bias.clone());
                 }
-                layouts::conv(
-                    config,
-                    region,
-                    values[..].try_into()?,
-                    *padding,
-                    *stride,
-                    offset,
-                )?
+                layouts::conv(config, region, values[..].try_into()?, *padding, *stride)?
             }
             PolyOp::DeConv {
                 kernel,
@@ -262,7 +258,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                     *padding,
                     *output_padding,
                     *stride,
-                    offset,
                 )?
             }
             PolyOp::SumPool {
@@ -276,25 +271,22 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 *padding,
                 *stride,
                 *kernel_shape,
-                offset,
             )?,
             PolyOp::Add { a } => {
                 if let Some(a) = a {
                     values.push(a.clone());
                 }
 
-                layouts::pairwise(config, region, values[..].try_into()?, offset, BaseOp::Add)?
+                layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Add)?
             }
-            PolyOp::Sub => {
-                layouts::pairwise(config, region, values[..].try_into()?, offset, BaseOp::Sub)?
-            }
+            PolyOp::Sub => layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Sub)?,
             PolyOp::Mult { a } => {
                 if let Some(a) = a {
                     values.push(a.clone());
                 }
-                layouts::pairwise(config, region, values[..].try_into()?, offset, BaseOp::Mult)?
+                layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Mult)?
             }
-            PolyOp::Identity => layouts::identity(config, region, values[..].try_into()?, offset)?,
+            PolyOp::Identity => layouts::identity(config, region, values[..].try_into()?)?,
             PolyOp::Reshape(d) | PolyOp::Flatten(d) => layouts::reshape(values[..].try_into()?, d)?,
             PolyOp::Pad(p1, p2) => {
                 if values.len() != 1 {
@@ -304,15 +296,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 input.pad((*p1, *p2))?;
                 input
             }
-            PolyOp::Pow(exp) => layouts::pow(config, region, values[..].try_into()?, *exp, offset)?,
-            PolyOp::Pack(base, scale) => layouts::pack(
-                config,
-                region,
-                values[..].try_into()?,
-                *base,
-                *scale,
-                offset,
-            )?,
+            PolyOp::Pow(exp) => layouts::pow(config, region, values[..].try_into()?, *exp)?,
+            PolyOp::Pack(base, scale) => {
+                layouts::pack(config, region, values[..].try_into()?, *base, *scale)?
+            }
             PolyOp::GlobalSumPool => unreachable!(),
             PolyOp::Concat { axis } => {
                 if values.len() < 2 {
@@ -320,15 +307,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 }
                 layouts::concat(values[..].try_into()?, axis)?
             }
-            PolyOp::Slice { axis, start, end } => layouts::slice(
-                config,
-                region,
-                values[..].try_into()?,
-                axis,
-                start,
-                end,
-                offset,
-            )?,
+            PolyOp::Slice { axis, start, end } => {
+                layouts::slice(config, region, values[..].try_into()?, axis, start, end)?
+            }
         }))
     }
 
