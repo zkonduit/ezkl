@@ -418,6 +418,11 @@ pub(crate) fn forward(
 
     if let Some(output_path) = output {
         serde_json::to_writer(&File::create(output_path)?, &data)?;
+        // let output_file = File::create(output_path)?;
+        // let mut serializer = Serializer::with_formatter(output_file, <dyn Formatter>::with_indent(b"  "));
+        // serializer.ser().serialize(&data)?;
+        // let output_string = serde_json::to_string_pretty(&data);
+        // output_file.write_all(output_string.as_bytes())?;
     }
     Ok(data)
 }

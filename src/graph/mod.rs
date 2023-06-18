@@ -2,7 +2,8 @@
 pub mod utilities;
 use halo2curves::ff::PrimeField;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
+use serde::ser::SerializeStruct;
 pub use utilities::*;
 /// Crate for defining a computational graph and building a ZK-circuit from it.
 pub mod model;
@@ -91,7 +92,7 @@ const ASSUMED_BLINDING_FACTORS: usize = 6;
 
 /// The input tensor data and shape, and output data for the computational graph (model) as floats.
 /// For example, the input might be the image data for a neural network, and the output class scores.
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Default)]
 pub struct GraphInput {
     /// Inputs to the model / computational graph (can be empty vectors if inputs are not being constrained).
     pub input_data: Vec<Vec<f32>>,
@@ -208,19 +209,17 @@ impl GraphInput {
 //     format!("{:#?}", fp)
 // }
 
-#[cfg(feature = "python-bindings")]
-
-#[cfg(feature = "python-bindings")]
 pub fn fp_to_vecu64(fp: &Fp) -> Vec<u64> {
-    let bytes = fp.to_bytes();
-    let bytes_first_u64 = u64::from_le_bytes(bytes[0..8][..].try_into().unwrap());
-    let bytes_second_u64 = u64::from_le_bytes(bytes[8..16][..].try_into().unwrap());
-    let bytes_third_u64 = u64::from_le_bytes(bytes[16..24][..].try_into().unwrap());
-    let bytes_fourth_u64 = u64::from_le_bytes(bytes[24..32][..].try_into().unwrap());
+    let repr = fp.to_repr();
+    let repr_first_u64 = u64::from_le_bytes(repr[0..8][..].try_into().unwrap());
+    let repr_second_u64 = u64::from_le_bytes(repr[8..16][..].try_into().unwrap());
+    let repr_third_u64 = u64::from_le_bytes(repr[16..24][..].try_into().unwrap());
+    let repr_fourth_u64 = u64::from_le_bytes(repr[24..32][..].try_into().unwrap());
 
-    [bytes_first_u64, bytes_second_u64, bytes_third_u64, bytes_fourth_u64].to_vec()
+    [repr_first_u64, repr_second_u64, repr_third_u64, repr_fourth_u64].to_vec()
 }
 
+#[cfg(feature = "python-bindings")]
 impl ToPyObject for GraphInput {
     fn to_object(&self, py: Python) -> PyObject {
         // Create a Python dictionary
@@ -246,18 +245,29 @@ impl ToPyObject for GraphInput {
     }
 }
 
-/// Truncates nested vector due to omit junk floating point values in python
-// #[cfg(feature = "python-bindings")]
-// fn truncate_nested_vector(input: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {
-//     let mut input_mut = input.clone();
-//     for inner_vec in input_mut.iter_mut() {
-//         for value in inner_vec.iter_mut() {
-//             // truncate 6 decimal places
-//             *value = (*value * 10000000.0).trunc() / 10000000.0;
-//         }
-//     }
-//     input_mut
-// }
+impl Serialize for GraphInput {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("GraphInput", 4)?;
+        let input_data_f64: Vec<Vec<f64>> = self.input_data.iter().map(|v| v.iter().map(|&f| f as f64).collect()).collect();
+        let output_data_f64: Vec<Vec<f64>> = self.output_data.iter().map(|v| v.iter().map(|&f| f as f64).collect()).collect();
+        state.serialize_field("input_data", &input_data_f64)?;
+        state.serialize_field("output_data", &output_data_f64)?;
+
+        if let Some(input_hashes) = &self.input_hashes {
+            let input_hashes_u64: Vec<Vec<u64>> = input_hashes.iter().map(fp_to_vecu64).collect();
+            state.serialize_field("input_hashes", &input_hashes_u64)?;
+        }
+
+        if let Some(output_hashes) = &self.output_hashes {
+            let output_hashes_u64: Vec<Vec<u64>> = output_hashes.iter().map(fp_to_vecu64).collect();
+            state.serialize_field("output_hashes", &output_hashes_u64)?;
+        }
+        state.end()
+    }
+}
 
 const POSEIDON_LEN_GRAPH: usize = 10;
 // TODO: make this a function of the number of constraints this is a bit of a hack
