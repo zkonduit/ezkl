@@ -72,8 +72,6 @@ jobs:
           sudo apt-get update && sudo apt-get install -y musl-tools
         fi
     
-    
-
     - name: Install Rust
       uses: dtolnay/rust-toolchain@nightly
       with:
@@ -88,7 +86,7 @@ jobs:
         cargo install cross -Z sparse-registry
         if [[ "${{ matrix.os }}" == "macos-13" ]]; then
           echo "CC=clang" >> $GITHUB_ENV
-        else
+        elseif [[ "${{ matrix.os }}" == "ubuntu-20.04" ]]; then
           echo "CC=gcc" >> $GITHUB_ENV
         fi
         echo "CARGO=cross" >> $GITHUB_ENV
