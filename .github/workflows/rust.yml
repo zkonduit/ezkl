@@ -248,6 +248,8 @@ jobs:
         run: cargo test --release --verbose tests::kzg_prove_and_verify_::t -- --test-threads 8
       - name: KZG prove and verify tests (hashed outputs)
         run: cargo test --release --verbose tests::kzg_prove_and_verify_hashed -- --test-threads 8
+      - name: KZG prove and verify tests (encrypted outputs)
+        run: cargo test --release --verbose tests::kzg_prove_and_verify_encrypted -- --test-threads 8
 
   fuzz-tests:
     runs-on: ubuntu-latest-32-cores
