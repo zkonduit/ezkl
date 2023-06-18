@@ -88,13 +88,14 @@ jobs:
         if [[ "${{ matrix.os }}" == "macos-13" ]]; then
           echo "CC=clang" >> $GITHUB_ENV
         elif [[ "${{ matrix.target }}" == "aarch64-unknown-linux-musl" ]]; then
-          echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CC=/usr/bin/aarch64-linux-gnu-gcc" >> $GITHUB_ENV
         else
           echo "CC=gcc" >> $GITHUB_ENV
         fi
         echo "CARGO=cross" >> $GITHUB_ENV
         echo "TARGET_FLAGS=--target ${{ matrix.target }}" >> $GITHUB_ENV
         echo "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
+    
     
     
 
