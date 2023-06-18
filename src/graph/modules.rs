@@ -19,6 +19,8 @@ const POSEIDON_LEN_GRAPH: usize = 10;
 const POSEIDON_CONSTRAINTS_ESTIMATE: usize = 44;
 const ELGAMAL_CONSTRAINTS_ESTIMATE: usize = 44;
 // 2^15
+const POSEIDOIN_FIXED_COST_ESTIMATE: usize = 128;
+// 2^15
 const ELGAMAL_FIXED_COST_ESTIMATE: usize = 32768;
 
 /// Poseidon module type
@@ -271,6 +273,8 @@ impl GraphModules {
                 let total_len = shape.iter().product::<usize>();
                 sizes.poseidon.0 += POSEIDON_CONSTRAINTS_ESTIMATE * total_len;
                 if total_len > 0 {
+                    sizes.poseidon.0 +=
+                        POSEIDOIN_FIXED_COST_ESTIMATE * ((sizes.elgamal.0 == 0) as usize);
                     sizes.poseidon.1[0] += 1;
                 }
             }
