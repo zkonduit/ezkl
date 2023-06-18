@@ -119,6 +119,9 @@ impl ElGamalChip {
             meta.fixed_column(),
             meta.fixed_column(),
         ];
+
+        meta.enable_constant(fixed_columns[0]);
+
         let rc_a = fixed_columns[0..2].try_into().unwrap();
         let rc_b = fixed_columns[2..4].try_into().unwrap();
 
