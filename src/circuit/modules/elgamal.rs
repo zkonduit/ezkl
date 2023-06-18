@@ -122,7 +122,7 @@ impl ElGamalChip {
         let rc_a = fixed_columns[0..2].try_into().unwrap();
         let rc_b = fixed_columns[2..4].try_into().unwrap();
 
-s        let rns = Rns::<Fq, Fr, NUMBER_OF_LIMBS, BIT_LEN_LIMB>::construct();
+        let rns = Rns::<Fq, Fr, NUMBER_OF_LIMBS, BIT_LEN_LIMB>::construct();
 
         let overflow_bit_lens = rns.overflow_lengths();
         let composition_bit_lens = vec![BIT_LEN_LIMB / NUMBER_OF_LIMBS];
