@@ -79,11 +79,6 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y musl-tools
         sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-        git clone https://github.com/richfelker/musl-cross-make.git
-        cd musl-cross-make
-        echo "ARCH = aarch64" > config.mak
-        make install -j$(nproc)
-        echo "/opt/cross/bin" >> $GITHUB_PATH
     - name: Install Rust
       uses: dtolnay/rust-toolchain@nightly
       with:
