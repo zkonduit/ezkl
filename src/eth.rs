@@ -819,7 +819,11 @@ pub fn fix_verifier_sol(
                     }}
                 }}
                 function quantize_data(bytes memory data, uint256 decimals) internal pure returns (uint128 quantized_data) {{
-                    uint output = mulDiv(abi.decode(data, (uint256)), SCALE, decimals);
+                    uint x = abi.decode(data, (uint256));
+                    uint output = mulDiv(x, SCALE, decimals);
+                    if (mulmod(x, SCALE, decimals)*2 >= decimals) {{
+                        output += 1;
+                    }}
                     require(output < SIZE_LIMIT, "QuantizeData: overflow");
                     quantized_data = uint128(output);
                 }}
