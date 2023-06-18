@@ -2,6 +2,9 @@
 pub mod poseidon;
 
 ///
+pub mod elgamal;
+
+///
 pub mod planner;
 use halo2_proofs::{
     circuit::Layouter,
@@ -18,6 +21,8 @@ pub trait Module<F: PrimeField + TensorType + PartialOrd> {
     type Config;
     /// The return type after an input assignment
     type InputAssignments;
+    /// The inputs used in the run function
+    type RunInputs;
 
     /// construct new module from config
     fn new(config: Self::Config) -> Self;
@@ -26,20 +31,22 @@ pub trait Module<F: PrimeField + TensorType + PartialOrd> {
     /// Name
     fn name(&self) -> &'static str;
     /// Run the operation the module represents
-    fn run(input: Vec<F>) -> Result<Vec<F>, Box<dyn std::error::Error>>;
+    fn run(input: Self::RunInputs) -> Result<Vec<Vec<F>>, Box<dyn std::error::Error>>;
     /// Layout inputs
     fn layout_inputs(
         &self,
         layouter: &mut impl Layouter<F>,
-        message: &ValTensor<F>,
+        input: &[ValTensor<F>],
     ) -> Result<Self::InputAssignments, Error>;
     /// Layout
     fn layout(
         &self,
         layouter: &mut impl Layouter<F>,
-        input: &ValTensor<F>,
-        row_offset: usize,
+        input: &[ValTensor<F>],
+        row_offsets: Vec<usize>,
     ) -> Result<ValTensor<F>, Error>;
     /// Number of instance values the module uses
-    fn num_instances(&self) -> usize;
+    fn instance_increment_input(&self, _: Vec<usize>) -> Vec<usize>;
+    /// How to increment when creating a new module
+    fn instance_increment_module(&self) -> Vec<usize>;
 }
