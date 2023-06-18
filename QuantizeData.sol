@@ -97,9 +97,9 @@ contract QuantizeData {
             uint x = abi.decode(data[i], (uint256));
             uint denom = 10**decimals[i];
             uint output = mulDiv(x, SCALE, denom);
-            if (mulmod(x, SCALE, denom)*2 >= denom) {{
+            if (mulmod(x, SCALE, denom)*2 >= denom) {
                 output += 1;
-            }}
+            }
             require(output < SIZE_LIMIT, "QuantizeData: overflow");
             quantized_data[i] = int128(uint128(output));
         }
