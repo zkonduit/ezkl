@@ -197,7 +197,7 @@ impl ModuleSizes {
                 vec![0; crate::circuit::modules::poseidon::NUM_INSTANCE_COLUMNS],
             ),
             elgamal: (
-                ELGAMAL_FIXED_COST_ESTIMATE,
+                0,
                 vec![0; crate::circuit::modules::elgamal::NUM_INSTANCE_COLUMNS],
             ),
         }
@@ -281,6 +281,8 @@ impl GraphModules {
                 .sum::<usize>();
             // 3 constraints for each ciphertext c1 and sk
             if total_len > 0 {
+                // add the 1 time fixed cost of maingate + ecc chips
+                sizes.elgamal.0 += ELGAMAL_FIXED_COST_ESTIMATE * ((sizes.elgamal.0 == 0) as usize);
                 sizes.elgamal.1[1] += 3;
             }
             // 1 constraint for each ciphertext c2 elem

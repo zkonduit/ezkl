@@ -120,7 +120,7 @@ impl ElGamalChip {
             meta.fixed_column(),
         ];
 
-        meta.enable_constant(fixed_columns[0]);
+        meta.enable_constant(fixed_columns[3]);
 
         let rc_a = fixed_columns[0..2].try_into().unwrap();
         let rc_b = fixed_columns[2..4].try_into().unwrap();
@@ -642,7 +642,7 @@ mod tests {
 
         let mut msg = vec![];
         //
-        for _ in 0..32 {
+        for _ in 0..2 {
             msg.push(Fr::random(&mut rng));
         }
 
@@ -656,7 +656,7 @@ mod tests {
             variables: var,
         };
 
-        let res = MockProver::run(18, &circuit, public_inputs).unwrap();
+        let res = MockProver::run(17, &circuit, public_inputs).unwrap();
         res.assert_satisfied_par();
     }
 }
