@@ -1,6 +1,3 @@
-/// Helper functions
-pub mod utilities;
-pub use utilities::*;
 /// Representations of a computational graph's inputs.
 pub mod input;
 /// Crate for defining a computational graph and building a ZK-circuit from it.

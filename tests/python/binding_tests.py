@@ -531,11 +531,14 @@ def test_evm_aggregate_and_verify_aggr():
         aggregate_vk_path,
         params_k20_path,
         aggregate_deploy_path,
-        sol_code_path
+        sol_code_path,
+        sol_bytecode_path
     )
 
     assert res == True
     assert os.path.isfile(aggregate_deploy_path)
+    assert os.path.isfile(sol_code_path)
+    assert os.path.isfile(sol_bytecode_path)
 
     res = ezkl_lib.verify_aggr(
         aggregate_proof_path,
