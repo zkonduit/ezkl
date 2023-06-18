@@ -6,6 +6,8 @@ pub mod model;
 pub mod modules;
 /// Inner elements of a computational graph that represent a single operation / constraints.
 pub mod node;
+/// Helper functions
+pub mod utilities;
 /// Representations of a computational graph's variables.
 pub mod vars;
 
