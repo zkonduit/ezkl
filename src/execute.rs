@@ -486,12 +486,13 @@ pub(crate) fn calibrate(
 
     debug!("num of calibration batches: {}", chunks.len(),);
 
-    let found_params: Vec<GraphSettings> = (4..12)
-        .filter_map(|scale| {
-            pb.set_message(format!("Calibrating with scale {}", scale));
-            std::thread::sleep(Duration::from_millis(100));
+    pb.set_message(format!("Calibrating ..."));
 
-            let _r = Gag::stdout().unwrap();
+    let _r = Gag::stdout().unwrap();
+
+    let found_params: Vec<GraphSettings> = (4..12)
+        .into_par_iter()
+        .filter_map(|scale| {
             let res: Result<Vec<GraphSettings>, &str> = chunks
                 .par_iter()
                 .map(|chunk| {
@@ -542,7 +543,7 @@ pub(crate) fn calibrate(
                     Ok(found_settings)
                 })
                 .collect();
-            std::mem::drop(_r);
+
             if let Ok(res) = res {
                 // pick the one with the largest logrows
                 Some(res.into_iter().max_by_key(|p| p.run_args.logrows).unwrap())
@@ -551,6 +552,7 @@ pub(crate) fn calibrate(
             }
         })
         .collect();
+    std::mem::drop(_r);
     pb.finish_with_message("Calibration Done.");
 
     if found_params.is_empty() {
