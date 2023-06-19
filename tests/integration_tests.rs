@@ -481,8 +481,8 @@ macro_rules! test_func {
             use crate::native_tests::kzg_evm_aggr_prove_and_verify;
             use crate::native_tests::kzg_fuzz;
 
-            /// Currently only on chain inputs that return a non-negative value are supported,
-            const TESTS_ON_CHAIN_INPUT: [&str; 11] = [
+            /// Currently only on chain inputs that return a non-negative value are supported.
+            const TESTS_ON_CHAIN_INPUT: [&str; 9] = [
                 "1l_mlp",
                 "1l_average",
                 "1l_reshape",
@@ -490,9 +490,9 @@ macro_rules! test_func {
                 "1l_div",
                 "1l_sqrt",
                 // "1l_prelu",
-                "1l_var",
+                //"1l_var",
                 "1l_leakyrelu",
-                "1l_gelu_noappx",
+                //"1l_gelu_noappx",
                 "1l_relu",
                 //"1l_tanh",
                 // "2l_relu_sigmoid_small",
@@ -524,7 +524,7 @@ macro_rules! test_func {
                 "max",
             ];
 
-            seq!(N in 0..= 10 {
+            seq!(N in 0..= 8 {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();

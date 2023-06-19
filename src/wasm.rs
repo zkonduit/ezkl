@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use halo2_proofs::plonk::*;
 use halo2_proofs::poly::commitment::{CommitmentScheme, ParamsProver};
 use halo2_proofs::poly::kzg::{
@@ -39,8 +37,7 @@ pub fn gen_circuit_settings_wasm(
     // Read in circuit
     let mut reader = std::io::BufReader::new(&model_ser[..]);
     let model = crate::graph::Model::new(&mut reader, run_args).unwrap();
-    let circuit =
-        GraphCircuit::new(Arc::new(model), run_args, crate::circuit::CheckMode::UNSAFE).unwrap();
+    let circuit = GraphCircuit::new(model, run_args, crate::circuit::CheckMode::UNSAFE).unwrap();
     let circuit_settings = circuit.settings;
     serde_json::to_vec(&circuit_settings).unwrap()
 }
@@ -64,7 +61,7 @@ pub fn gen_pk_wasm(
     let model = crate::graph::Model::new(&mut circuit_reader, circuit_settings.run_args).unwrap();
 
     let circuit = GraphCircuit::new(
-        Arc::new(model),
+        model,
         circuit_settings.run_args,
         crate::circuit::CheckMode::UNSAFE,
     )
@@ -205,7 +202,7 @@ pub fn prove_wasm(
     let model = crate::graph::Model::new(&mut reader, circuit_settings.run_args).unwrap();
 
     let mut circuit = GraphCircuit::new(
-        Arc::new(model),
+        model,
         circuit_settings.run_args,
         crate::circuit::CheckMode::UNSAFE,
     )
