@@ -1026,8 +1026,10 @@ mod add_with_overflow_and_poseidon {
             let poseidon_chip: PoseidonChip<PoseidonSpec, WIDTH, RATE, WIDTH> =
                 PoseidonChip::new(config.poseidon.clone());
 
-            let assigned_inputs_a = poseidon_chip.layout(&mut layouter, &self.inputs[0], 0)?;
-            let assigned_inputs_b = poseidon_chip.layout(&mut layouter, &self.inputs[1], 1)?;
+            let assigned_inputs_a =
+                poseidon_chip.layout(&mut layouter, &self.inputs[0..1], vec![0])?;
+            let assigned_inputs_b =
+                poseidon_chip.layout(&mut layouter, &self.inputs[1..2], vec![1])?;
 
             layouter.assign_region(|| "_new_module", |_| Ok(()))?;
 
@@ -1057,10 +1059,10 @@ mod add_with_overflow_and_poseidon {
             .map(|i| halo2curves::bn256::Fr::from(i as u64 + 1))
             .collect::<Vec<_>>();
         let commitment_a =
-            PoseidonChip::<PoseidonSpec, WIDTH, RATE, WIDTH>::run(a.clone()).unwrap();
+            PoseidonChip::<PoseidonSpec, WIDTH, RATE, WIDTH>::run(a.clone()).unwrap()[0][0];
 
         let commitment_b =
-            PoseidonChip::<PoseidonSpec, WIDTH, RATE, WIDTH>::run(b.clone()).unwrap();
+            PoseidonChip::<PoseidonSpec, WIDTH, RATE, WIDTH>::run(b.clone()).unwrap()[0][0];
 
         // parameters
         let a = Tensor::from(a.into_iter().map(Value::known));
@@ -1069,12 +1071,8 @@ mod add_with_overflow_and_poseidon {
             inputs: [ValTensor::from(a), ValTensor::from(b)],
         };
 
-        let prover = MockProver::run(
-            K as u32,
-            &circuit,
-            vec![vec![commitment_a[0], commitment_b[0]]],
-        )
-        .unwrap();
+        let prover =
+            MockProver::run(K as u32, &circuit, vec![vec![commitment_a, commitment_b]]).unwrap();
         prover.assert_satisfied();
     }
 
@@ -1087,11 +1085,11 @@ mod add_with_overflow_and_poseidon {
             .map(|i| halo2curves::bn256::Fr::from(i as u64 + 1))
             .collect::<Vec<_>>();
         let commitment_a = PoseidonChip::<PoseidonSpec, WIDTH, RATE, WIDTH>::run(a.clone())
-            .unwrap()[0]
+            .unwrap()[0][0]
             + Fr::one();
 
         let commitment_b = PoseidonChip::<PoseidonSpec, WIDTH, RATE, WIDTH>::run(b.clone())
-            .unwrap()[0]
+            .unwrap()[0][0]
             + Fr::one();
 
         // parameters

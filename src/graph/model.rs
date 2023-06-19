@@ -5,7 +5,6 @@ use super::vars::*;
 use super::GraphError;
 use super::GraphSettings;
 use crate::circuit::hybrid::HybridOp;
-
 use crate::circuit::region::RegionCtx;
 use crate::circuit::Input;
 use crate::circuit::Tolerance;
@@ -270,7 +269,7 @@ impl Model {
         Ok(GraphSettings {
             run_args,
             model_instance_shapes: instance_shapes,
-            num_module_instances: 0,
+            module_sizes: crate::graph::modules::ModuleSizes::default(),
             num_constraints,
             required_lookups: lookup_ops,
             check_mode,
@@ -756,7 +755,7 @@ impl Model {
         match run_args.output_visibility {
             Visibility::Public => {
                 let _ = outputs
-                    .clone()
+                    
                     .into_iter()
                     .map(|output| {
                         dummy_config

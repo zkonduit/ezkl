@@ -162,6 +162,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
 
 [[package]]
+name = "ark-std"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1df2c09229cbc5a028b1d70e00fdb2acee28b1055dfb5ca73eea49c5a25c4e7c"
+dependencies = [
+ "num-traits",
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1078,7 +1088,7 @@ checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#8d51cd23b2ea572ddc089aabe0f348dbbbee4547"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#7070cbc6cfa4bbee66ad5e06459a680d91210bcf"
 dependencies = [
  "integer",
  "num-bigint",
@@ -1536,6 +1546,7 @@ dependencies = [
 name = "ezkl-lib"
 version = "0.3.0-pre"
 dependencies = [
+ "ark-std",
  "bincode",
  "clap 4.3.3",
  "colored",
@@ -2037,7 +2048,7 @@ dependencies = [
 [[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#8d51cd23b2ea572ddc089aabe0f348dbbbee4547"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#7070cbc6cfa4bbee66ad5e06459a680d91210bcf"
 dependencies = [
  "halo2_proofs",
  "num-bigint",
@@ -2358,7 +2369,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#8d51cd23b2ea572ddc089aabe0f348dbbbee4547"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#7070cbc6cfa4bbee66ad5e06459a680d91210bcf"
 dependencies = [
  "maingate",
  "num-bigint",
@@ -2601,7 +2612,7 @@ checksum = "518ef76f2f87365916b142844c16d8fefd85039bc5699050210a7778ee1cd1de"
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#8d51cd23b2ea572ddc089aabe0f348dbbbee4547"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#7070cbc6cfa4bbee66ad5e06459a680d91210bcf"
 dependencies = [
  "halo2wrong",
  "num-bigint",
