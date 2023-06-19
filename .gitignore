@@ -8,6 +8,8 @@ data
 *.code
 *.key
 *.params
+*.bytecode
+*.bin
 *~
 \#*\#
 .DS_Store

@@ -160,6 +160,18 @@ jobs:
         run: cargo test --release --verbose tests::mock_hashed_input_params_::t  -- --test-threads 32
       - name: Mock proving tests (hashed inputs + params + outputs)
         run: cargo test --release --verbose tests::mock_hashed_all_::t  -- --test-threads 32
+      - name: Mock proving tests (encrypted inputs)
+        run: cargo test --release --verbose tests::mock_encrypted_input_::t  -- --test-threads 32
+      - name: Mock proving tests (encrypted params)
+        run: cargo test --release --verbose tests::mock_encrypted_params_::t  -- --test-threads 32
+      - name: Mock proving tests (encrypted outputs)
+        run: cargo test --release --verbose tests::mock_encrypted_output_::t  -- --test-threads 32
+      - name: Mock proving tests (encrypted inputs + params)
+        run: cargo test --release --verbose tests::mock_encrypted_input_params_::t  -- --test-threads 32
+      - name: Mock proving tests (encrypted inputs + params + outputs)
+        run: cargo test --release --verbose tests::mock_encrypted_all_::t  -- --test-threads 32
+      - name: Mock proving tests (encrypted inputs + hashed params)
+        run: cargo test --release --verbose tests::mock_encrypted_input_hashed_params_::t  -- --test-threads 32
 
   mock-proving-tests-wasi:
     runs-on: ubuntu-latest-32-cores
@@ -209,6 +221,8 @@ jobs:
         run: cargo test --release --verbose tests_evm::kzg_evm_prove_and_verify -- --test-threads 4
       - name: KZG prove and verify tests (EVM + hashed inputs)
         run: cargo test --release --verbose tests_evm::kzg_evm_hashed_input_prove_and_verify -- --test-threads 4
+      - name: KZG prove and verify tests (EVM + hashed params)
+        run: cargo test --release --verbose tests_evm::kzg_evm_hashed_params_prove_and_verify -- --test-threads 4
       - name: KZG prove and verify tests (EVM + hashed outputs)
         run: cargo test --release --verbose tests_evm::kzg_evm_hashed_output_prove_and_verify -- --test-threads 4
 
@@ -231,7 +245,11 @@ jobs:
           override: true
           components: rustfmt, clippy
       - name: KZG prove and verify tests
-        run: cargo test --release --verbose tests::kzg_prove_and_verify_ -- --test-threads 8
+        run: cargo test --release --verbose tests::kzg_prove_and_verify_::t -- --test-threads 8
+      - name: KZG prove and verify tests (hashed outputs)
+        run: cargo test --release --verbose tests::kzg_prove_and_verify_hashed -- --test-threads 8
+      - name: KZG prove and verify tests (encrypted outputs)
+        run: cargo test --release --verbose tests::kzg_prove_and_verify_encrypted -- --test-threads 8
 
   fuzz-tests:
     runs-on: ubuntu-latest-32-cores

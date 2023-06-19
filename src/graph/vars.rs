@@ -26,6 +26,8 @@ pub enum Visibility {
     Public,
     /// Mark an item as publicly committed to (hash sent in the proof submitted for verification)
     Hashed,
+    /// Mark an item as encrypted (public key and encrypted message sent in the proof submitted for verificatio)
+    Encrypted,
 }
 
 impl<'a> From<&'a str> for Visibility {
@@ -34,6 +36,7 @@ impl<'a> From<&'a str> for Visibility {
             "private" => Visibility::Private,
             "public" => Visibility::Public,
             "hashed" => Visibility::Hashed,
+            "encrypted" => Visibility::Encrypted,
             _ => panic!("Invalid visibility string"),
         }
     }
@@ -47,6 +50,7 @@ impl IntoPy<PyObject> for Visibility {
             Visibility::Private => "private".to_object(py),
             Visibility::Public => "public".to_object(py),
             Visibility::Hashed => "hashed".to_object(py),
+            Visibility::Encrypted => "encrypted".to_object(py),
         }
     }
 }
@@ -61,6 +65,7 @@ impl<'source> FromPyObject<'source> for Visibility {
             "private" => Ok(Visibility::Private),
             "public" => Ok(Visibility::Public),
             "hashed" => Ok(Visibility::Hashed),
+            "encrypted" => Ok(Visibility::Encrypted),
             _ => Err(PyValueError::new_err("Invalid value for Visibility")),
         }
     }
@@ -75,6 +80,10 @@ impl Visibility {
     pub fn is_hashed(&self) -> bool {
         matches!(&self, Visibility::Hashed)
     }
+    #[allow(missing_docs)]
+    pub fn is_encrypted(&self) -> bool {
+        matches!(&self, Visibility::Encrypted)
+    }
 }
 impl std::fmt::Display for Visibility {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -82,6 +91,7 @@ impl std::fmt::Display for Visibility {
             Visibility::Private => write!(f, "private"),
             Visibility::Public => write!(f, "public"),
             Visibility::Hashed => write!(f, "hashed"),
+            Visibility::Encrypted => write!(f, "encrypted"),
         }
     }
 }
@@ -119,6 +129,9 @@ impl VarVisibility {
             & !output_vis.is_hashed()
             & !params_vis.is_hashed()
             & !input_vis.is_hashed()
+            & !output_vis.is_encrypted()
+            & !params_vis.is_encrypted()
+            & !input_vis.is_encrypted()
         {
             return Err(Box::new(GraphError::Visibility));
         }
