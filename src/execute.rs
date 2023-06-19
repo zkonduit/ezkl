@@ -4,9 +4,9 @@ use crate::commands::CalibrationTarget;
 use crate::commands::{Cli, Commands, RunArgs, StrategyType};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{fix_verifier_sol, get_contract_artifacts, verify_proof_via_solidity};
-use crate::graph::{
-    input::GraphInput, scale_to_multiplier, GraphCircuit, GraphSettings, Model, Visibility,
-};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::graph::Visibility;
+use crate::graph::{input::GraphInput, scale_to_multiplier, GraphCircuit, GraphSettings, Model};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::evm_verify;
@@ -38,7 +38,9 @@ use halo2curves::ff::Field;
 #[cfg(not(target_arch = "wasm32"))]
 use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
-use log::{debug, info, trace};
+#[cfg(not(target_arch = "wasm32"))]
+use log::debug;
+use log::{info, trace};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
