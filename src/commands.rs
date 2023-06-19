@@ -1,6 +1,4 @@
-//use crate::onnx::OnnxModel;
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use log::debug;
 #[cfg(feature = "python-bindings")]
 use pyo3::{
     conversion::{FromPyObject, PyTryFrom},
@@ -9,10 +7,7 @@ use pyo3::{
     types::PyString,
 };
 use serde::{Deserialize, Serialize};
-use std::env;
 use std::error::Error;
-use std::fs::File;
-use std::io::Read;
 use std::path::PathBuf;
 
 use crate::circuit::{CheckMode, Tolerance};
@@ -166,16 +161,11 @@ pub struct RunArgs {
     /// Flags whether params are public, private, hashed
     #[arg(long, default_value = "private")]
     pub param_visibility: Visibility,
-    /// Base used to pack the public-inputs to the circuit. (value > 1) to pack instances as a single int.
-    /// Useful when verifying on the EVM. Note that this will often break for very long inputs. Use with caution, still experimental.
-    #[arg(long, default_value = "1")]
-    pub pack_base: u32,
     /// the number of constraints the circuit might use. If not specified, this will be calculated using a 'dummy layout' pass.
     #[arg(long)]
     pub allocated_constraints: Option<usize>,
 }
 
-const EZKLCONF: &str = "EZKLCONF";
 
 #[allow(missing_docs)]
 #[derive(Parser, Debug, Clone, Deserialize, Serialize)]
@@ -200,20 +190,6 @@ impl Cli {
     /// Parse an ezkl configuration from a json
     pub fn from_json(arg_json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(arg_json)
-    }
-    /// Create an ezkl configuration: if there is an EZKLCONF env variable, parse its value, else read it from the command line.
-    pub fn create() -> Result<Self, Box<dyn Error>> {
-        match env::var(EZKLCONF) {
-            Ok(path) => {
-                debug!("loading ezkl conf from {}", path);
-                let mut file = File::open(path).map_err(Box::<dyn Error>::from)?;
-                let mut data = String::new();
-                file.read_to_string(&mut data)
-                    .map_err(Box::<dyn Error>::from)?;
-                Self::from_json(&data).map_err(Box::<dyn Error>::from)
-            }
-            Err(_e) => Ok(Cli::parse()),
-        }
     }
 }
 

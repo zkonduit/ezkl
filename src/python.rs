@@ -35,8 +35,6 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub param_visibility: Visibility,
     #[pyo3(get, set)]
-    pub pack_base: u32,
-    #[pyo3(get, set)]
     pub batch_size: usize,
     #[pyo3(get, set)]
     pub allocated_constraints: Option<usize>,
@@ -56,7 +54,6 @@ impl PyRunArgs {
             input_visibility: "public".into(),
             output_visibility: "public".into(),
             param_visibility: "private".into(),
-            pack_base: 1,
             batch_size: 1,
             allocated_constraints: None,
         }
@@ -75,7 +72,6 @@ impl From<PyRunArgs> for RunArgs {
             input_visibility: py_run_args.input_visibility,
             output_visibility: py_run_args.output_visibility,
             param_visibility: py_run_args.param_visibility,
-            pack_base: py_run_args.pack_base,
             allocated_constraints: py_run_args.allocated_constraints,
             batch_size: py_run_args.batch_size,
         }

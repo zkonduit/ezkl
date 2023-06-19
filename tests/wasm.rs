@@ -86,7 +86,6 @@ mod wasm32 {
             input_visibility: "private".into(),
             output_visibility: "public".into(),
             param_visibility: "private".into(),
-            pack_base: 1,
             allocated_constraints: Some(1000), // assuming an arbitrary value here for the sake of the example
         };
 
@@ -143,7 +142,6 @@ mod wasm32 {
             input_visibility: "private".into(),
             output_visibility: "public".into(),
             param_visibility: "private".into(),
-            pack_base: 1,
             allocated_constraints: Some(1000), // assuming an arbitrary value here for the sake of the example
         };
 

@@ -58,49 +58,6 @@ mod wasi_tests {
         "4l_relu_conv_fc",
     ];
 
-    const PACKING_TESTS: [&str; 10] = [
-        "1l_mlp",
-        "1l_div",
-        "1l_reshape",
-        "1l_sigmoid",
-        "1l_sqrt",
-        "1l_leakyrelu",
-        "1l_relu",
-        "2l_relu_sigmoid_small",
-        "2l_relu_fc",
-        "2l_relu_small",
-    ];
-
-    macro_rules! wasi_test_packed_func {
-    () => {
-        #[cfg(test)]
-        mod packed_tests_wasi {
-            use seq_macro::seq;
-            use test_case::test_case;
-            use crate::wasi_tests::PACKING_TESTS;
-            use crate::wasi_tests::mock;
-
-            seq!(N in 0..=9 {
-            #(#[test_case(PACKING_TESTS[N])])*
-            fn mock_packed_outputs_(test: &str) {
-                crate::wasi_tests::init();
-                crate::wasi_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, "private", "private", "public", 2, 1);
-            }
-
-            #(#[test_case(PACKING_TESTS[N])])*
-            fn mock_everything_(test: &str) {
-                crate::wasi_tests::init();
-                crate::wasi_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, "public", "private", "public", 2, 1);
-            }
-
-            });
-
-    }
-    };
-}
-
     macro_rules! wasi_test_func {
     () => {
         #[cfg(test)]
@@ -116,21 +73,21 @@ mod wasi_tests {
             fn mock_public_outputs_(test: &str) {
                 crate::wasi_tests::init();
                 crate::wasi_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, "private", "private", "public", 1, 1);
+                mock(test.to_string(), 7, 16, 17, "private", "private", "public", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_inputs_(test: &str) {
                 crate::wasi_tests::init();
                 crate::wasi_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, "public", "private", "private", 1, 1);
+                mock(test.to_string(), 7, 16, 17, "public", "private", "private", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_params_(test: &str) {
                 crate::wasi_tests::init();
                 crate::wasi_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, "private", "public", "private", 1, 1);
+                mock(test.to_string(), 7, 16, 17, "private", "public", "private", 1);
             }
 
 
@@ -141,7 +98,6 @@ mod wasi_tests {
 }
 
     wasi_test_func!();
-    wasi_test_packed_func!();
 
     // Mock prove (fast, but does not cover some potential issues)
     fn mock(
@@ -152,7 +108,6 @@ mod wasi_tests {
         input_visibility: &str,
         param_visibility: &str,
         output_visibility: &str,
-        pack_base: usize,
         batch_size: usize,
     ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
@@ -169,7 +124,6 @@ mod wasi_tests {
                 &format!("--bits={}", bits),
                 &format!("--logrows={}", logrows),
                 &format!("--scale={}", scale),
-                &format!("--pack-base={}", pack_base),
                 &format!("--batch-size={}", batch_size),
                 &format!("--input-visibility={}", input_visibility),
                 &format!("--param-visibility={}", param_visibility),

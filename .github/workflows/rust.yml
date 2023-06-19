@@ -144,14 +144,10 @@ jobs:
         run: cargo test --release --verbose tests::mock_public_outputs_ -- --test-threads 32
       - name: Mock proving tests (public outputs + batch size == 10)
         run: cargo test --release --verbose tests::mock_large_batch_public_outputs_ -- --test-threads 32
-      - name: Mock proving tests (public and packed outputs)
-        run: cargo test --release --verbose packed_tests::mock_packed_outputs_ -- --test-threads 32
       - name: Mock proving tests (public inputs)
         run: cargo test --release --verbose tests::mock_public_inputs_ -- --test-threads 32
       - name: Mock proving tests (public params)
         run: cargo test --release --verbose tests::mock_public_params_ -- --test-threads 32
-      - name: Mock 'everything' tests (public and packed outputs, public inputs)
-        run: cargo test --release --verbose packed_tests::mock_everything_ -- --test-threads 32
       - name: Mock proving tests (hashed inputs)
         run: cargo test --release --verbose tests::mock_hashed_input_::t  -- --test-threads 32
       - name: Mock proving tests (hashed outputs)
