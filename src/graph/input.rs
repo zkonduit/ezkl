@@ -4,10 +4,9 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
 use pyo3::ToPyObject;
-use serde::{Deserialize, Serialize, Serializer};
 use serde::ser::SerializeStruct;
+use serde::{Deserialize, Serialize, Serializer};
 use std::io::Read;
-use halo2curves::bn256::Fr as Fp;
 // use std::collections::HashMap;
 
 use super::{modules::ModuleForwardResult, GraphError};
@@ -127,15 +126,15 @@ impl GraphInput {
     }
 }
 
-/// converts fp into Vec<u64>
-pub fn fp_to_vecu64(fp: &Fp) -> Vec<u64> {
-    let bytes = fp.to_bytes();
-    let bytes_first_u64 = u64::from_le_bytes(bytes[0..8][..].try_into().unwrap());
-    let bytes_second_u64 = u64::from_le_bytes(bytes[8..16][..].try_into().unwrap());
-    let bytes_third_u64 = u64::from_le_bytes(bytes[16..24][..].try_into().unwrap());
-    let bytes_fourth_u64 = u64::from_le_bytes(bytes[24..32][..].try_into().unwrap());
+#[cfg(feature = "python-bindings")]
+use halo2curves::bn256::Fr as Fp;
 
-    [bytes_first_u64, bytes_second_u64, bytes_third_u64, bytes_fourth_u64].to_vec()
+#[cfg(feature = "python-bindings")]
+/// converts fp into Vec<u64>
+fn fp_to_vecu64(fp: &Fp) -> Vec<u64> {
+    let repr = serde_json::to_string(&fp).unwrap();
+    let b: Vec<u64> = serde_json::from_str(&repr).unwrap();
+    b
 }
 
 #[cfg(feature = "python-bindings")]
@@ -150,28 +149,46 @@ impl ToPyObject for GraphInput {
         let input_data_mut = &self.input_data;
         let output_data_mut = &self.output_data;
 
-        dict.set_item("input_data", &input_data_mut)
-            .unwrap();
-        dict.set_item("output_data", &output_data_mut)
-            .unwrap();
+        dict.set_item("input_data", &input_data_mut).unwrap();
+        dict.set_item("output_data", &output_data_mut).unwrap();
 
         if let Some(processed_inputs) = &self.processed_inputs {
-            let processed_inputs_poseidon_hash: Vec<Vec<u64>> = processed_inputs.poseidon_hash.iter().map(fp_to_vecu64).collect();
-            dict_inputs.set_item("poseidon_hash", processed_inputs_poseidon_hash).unwrap();
+            //poseidon_hash
+            let processed_inputs_poseidon_hash: Vec<Vec<u64>> = processed_inputs
+                .poseidon_hash
+                .iter()
+                .map(fp_to_vecu64)
+                .collect();
+            dict_inputs
+                .set_item("poseidon_hash", processed_inputs_poseidon_hash)
+                .unwrap();
             dict.set_item("processed_inputs", dict_inputs).unwrap();
         }
 
         if let Some(processed_params) = &self.processed_params {
-            let processed_params_poseidon_hash: Vec<Vec<u64>> = processed_params.poseidon_hash.iter().map(fp_to_vecu64).collect();
-            dict_params.set_item("poseidon_hash", processed_params_poseidon_hash).unwrap();
+            let processed_params_poseidon_hash: Vec<Vec<u64>> = processed_params
+                .poseidon_hash
+                .iter()
+                .map(fp_to_vecu64)
+                .collect();
+            dict_params
+                .set_item("poseidon_hash", processed_params_poseidon_hash)
+                .unwrap();
             dict.set_item("processed_params", dict_params).unwrap();
         }
 
         if let Some(processed_outputs) = &self.processed_outputs {
-            let processed_outputs_poseidon_hash: Vec<Vec<u64>> = processed_outputs.poseidon_hash.iter().map(fp_to_vecu64).collect();
-            dict_outputs.set_item("poseidon_hash", processed_outputs_poseidon_hash).unwrap();
+            let processed_outputs_poseidon_hash: Vec<Vec<u64>> = processed_outputs
+                .poseidon_hash
+                .iter()
+                .map(fp_to_vecu64)
+                .collect();
+            dict_outputs
+                .set_item("poseidon_hash", processed_outputs_poseidon_hash)
+                .unwrap();
             dict.set_item("processed_outputs", dict_outputs).unwrap();
         }
+
         dict.to_object(py)
     }
 }
@@ -197,8 +214,16 @@ impl Serialize for GraphInput {
         S: Serializer,
     {
         let mut state = serializer.serialize_struct("GraphInput", 4)?;
-        let input_data_f64: Vec<Vec<f64>> = self.input_data.iter().map(|v| v.iter().map(|&f| f as f64).collect()).collect();
-        let output_data_f64: Vec<Vec<f64>> = self.output_data.iter().map(|v| v.iter().map(|&f| f as f64).collect()).collect();
+        let input_data_f64: Vec<Vec<f64>> = self
+            .input_data
+            .iter()
+            .map(|v| v.iter().map(|&f| f as f64).collect())
+            .collect();
+        let output_data_f64: Vec<Vec<f64>> = self
+            .output_data
+            .iter()
+            .map(|v| v.iter().map(|&f| f as f64).collect())
+            .collect();
         state.serialize_field("input_data", &input_data_f64)?;
         state.serialize_field("output_data", &output_data_f64)?;
 
