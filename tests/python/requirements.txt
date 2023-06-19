@@ -1,3 +1,0 @@
-torch==2.0.1
-ezkl_lib==0.1.0
-maturin==1.0.1
