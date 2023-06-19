@@ -151,17 +151,17 @@ fn calibrate_settings(
     data,
     model,
     output,
-    scale = 7, 
-    batch_size = 1,  
-    settings_path = None, 
+    settings_path, 
+    scale=None, 
+    batch_size=None,  
 ))]
 fn forward(
     data: PathBuf,
     model: PathBuf,
     output: Option<PathBuf>,
+    settings_path: PathBuf,
     scale: Option<u32>,
     batch_size: Option<usize>,
-    settings_path: Option<PathBuf>,
 ) -> PyResult<PyObject> {
     let output: GraphInput = crate::execute::forward(model, data, output, scale, batch_size, settings_path)
         .map_err(|e| {
