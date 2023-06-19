@@ -370,21 +370,17 @@ pub(crate) fn forward(
     output: Option<PathBuf>,
     scale: Option<u32>,
     batch_size: Option<usize>,
-    settings_path: Option<PathBuf>,
+    settings_path: PathBuf,
 ) -> Result<GraphInput, Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
 
-    let circuit_settings = match settings_path {
-        Some(path) => GraphSettings::load(&path)?,
-        None => {
-            let mut circuit_settings = GraphSettings::default();
-            circuit_settings.run_args.scale = scale.unwrap();
-            circuit_settings.run_args.batch_size = batch_size.unwrap();
-            circuit_settings.run_args.allocated_constraints = Some(0);
-            circuit_settings.run_args.output_visibility = Visibility::Public;
-            circuit_settings
-        }
-    };
+    let mut circuit_settings = GraphSettings::load(&settings_path)?;
+    if let Some(scale) = scale {
+        circuit_settings.run_args.scale = scale;
+    }
+    if let Some(batch_size) = batch_size {
+        circuit_settings.run_args.batch_size = batch_size;
+    }
 
     info!("set scale to {}", circuit_settings.run_args.scale);
 

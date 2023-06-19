@@ -231,15 +231,14 @@ pub enum Commands {
         /// Path to the new .json file
         #[arg(short = 'O', long)]
         output: PathBuf,
-        /// Scale to use for quantization
-        #[arg(short = 'S', long, conflicts_with = "settings_path")]
+        /// Scale to use for quantization overiding settings file
+        #[arg(short = 'S', long)]
         scale: Option<u32>,
-        /// The number of batches to split the input data into
-        #[arg(short = 'B', long, conflicts_with = "settings_path")]
+        /// The number of batches to split the input data into, overiding settings file
+        #[arg(short = 'B', long)]
         batch_size: Option<usize>,
-        /// optional circuit params path
         #[arg(long)]
-        settings_path: Option<PathBuf>,
+        settings_path: PathBuf,
     },
 
     /// Produces the proving hyperparameters, from run-args
