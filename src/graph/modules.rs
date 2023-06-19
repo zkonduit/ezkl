@@ -107,17 +107,17 @@ impl From<&GraphInput> for ModuleSettings {
         let mut settings = Self::default();
 
         if let Some(processed_inputs) = &graph_input.processed_inputs {
-            if let Some(elgamal_result) = &processed_inputs.elgmal_results {
+            if let Some(elgamal_result) = &processed_inputs.elgamal {
                 settings.input = ModuleVarSettings::new(elgamal_result.variables.clone());
             }
         }
         if let Some(processed_params) = &graph_input.processed_params {
-            if let Some(elgamal_result) = &processed_params.elgmal_results {
+            if let Some(elgamal_result) = &processed_params.elgamal {
                 settings.params = ModuleVarSettings::new(elgamal_result.variables.clone());
             }
         }
         if let Some(processed_outputs) = &graph_input.processed_outputs {
-            if let Some(elgamal_result) = &processed_outputs.elgmal_results {
+            if let Some(elgamal_result) = &processed_outputs.elgamal {
                 settings.output = ModuleVarSettings::new(elgamal_result.variables.clone());
             }
         }
@@ -129,8 +129,10 @@ impl From<&GraphInput> for ModuleSettings {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 /// Result from ElGamal
 pub struct ElGamalResult {
-    variables: ElGamalVariables,
-    ciphertexts: Vec<Vec<Fp>>,
+    /// ElGamal variables
+    pub variables: ElGamalVariables,
+    /// ElGamal ciphertexts
+    pub ciphertexts: Vec<Vec<Fp>>,
 }
 
 /// Result from a forward pass
@@ -139,7 +141,7 @@ pub struct ModuleForwardResult {
     /// The inputs of the forward pass for poseidon
     pub poseidon_hash: Option<Vec<Fp>>,
     /// The outputs of the forward pass for ElGamal
-    pub elgmal_results: Option<ElGamalResult>,
+    pub elgamal: Option<ElGamalResult>,
 }
 
 /// Result from a forward pass
@@ -237,12 +239,7 @@ impl GraphModules {
                 .poseidon
                 .extend(module_res.clone().unwrap().poseidon_hash.unwrap());
         } else if visibility.is_encrypted() {
-            let ciphers = module_res
-                .clone()
-                .unwrap()
-                .elgmal_results
-                .unwrap()
-                .ciphertexts;
+            let ciphers = module_res.clone().unwrap().elgamal.unwrap().ciphertexts;
             if instances.elgamal.is_empty() {
                 instances.elgamal = ciphers;
             } else if !ciphers[2].is_empty() {
@@ -445,7 +442,7 @@ impl GraphModules {
 
         Ok(ModuleForwardResult {
             poseidon_hash: Some(poseidon_hash),
-            elgmal_results: Some(ElGamalResult {
+            elgamal: Some(ElGamalResult {
                 variables,
                 ciphertexts: elgamal_outputs,
             }),
