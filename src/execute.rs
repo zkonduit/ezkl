@@ -38,7 +38,7 @@ use halo2curves::ff::Field;
 #[cfg(not(target_arch = "wasm32"))]
 use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
-use log::{info, trace};
+use log::{debug, info, trace};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
@@ -413,9 +413,9 @@ pub(crate) fn forward(
         .collect();
     trace!("forward pass output: {:?}", float_res);
     data.output_data = float_res;
-    data.processed_inputs = Some(res.processed_inputs);
-    data.processed_params = Some(res.processed_params);
-    data.processed_outputs = Some(res.processed_outputs);
+    data.processed_inputs = res.processed_inputs;
+    data.processed_params = res.processed_params;
+    data.processed_outputs = res.processed_outputs;
 
     if let Some(output_path) = output {
         serde_json::to_writer(&File::create(output_path)?, &data)?;
@@ -464,8 +464,6 @@ pub(crate) fn calibrate(
     settings_path: PathBuf,
     target: CalibrationTarget,
 ) -> Result<(), Box<dyn Error>> {
-    use log::debug;
-
     let data = GraphInput::from_path(data)?;
     // load the pre-generated settings
     let settings = GraphSettings::load(&settings_path)?;
@@ -499,14 +497,29 @@ pub(crate) fn calibrate(
             let res: Result<Vec<GraphSettings>, &str> = chunks
                 .par_iter()
                 .map(|chunk| {
-                    let run_args = RunArgs { scale, ..run_args };
-                    let mut circuit =
-                        GraphCircuit::from_run_args(&run_args, &model_path, CheckMode::SAFE)
-                            .map_err(|_| "failed to create circuit from run args")?;
+                    // we need to create a new run args for each chunk
+                    // time it
+                    let mut local_run_args = RunArgs { scale, ..run_args };
+                    // we need to set the allocated constraints to 0 to avoid dummy pass
+                    local_run_args.allocated_constraints = Some(settings.num_constraints);
+                    // we don't want to calculate the params here
+                    local_run_args.input_visibility = Visibility::Public;
+                    local_run_args.param_visibility = Visibility::Public;
+                    local_run_args.output_visibility = Visibility::Public;
+
+                    // we need to set the output visibility to public to avoid dummy pass
+                    let mut circuit = GraphCircuit::from_run_args(
+                        &local_run_args,
+                        &model_path,
+                        CheckMode::UNSAFE,
+                    )
+                    .map_err(|_| "failed to create circuit from run args")?;
+
                     circuit.load_inputs(chunk);
 
                     loop {
-                        // ensures we have converges
+                        //
+                        // ensures we have converged
                         let params_before = circuit.settings.clone();
                         circuit.calibrate().map_err(|_| "failed to calibrate")?;
                         let params_after = circuit.settings.clone();
@@ -515,7 +528,20 @@ pub(crate) fn calibrate(
                         }
                     }
 
-                    Ok(circuit.settings.clone())
+                    let found_run_args = RunArgs {
+                        scale: circuit.settings.run_args.scale,
+                        bits: circuit.settings.run_args.bits,
+                        logrows: circuit.settings.run_args.logrows,
+                        ..run_args
+                    };
+
+                    let found_settings = GraphSettings {
+                        run_args: found_run_args,
+                        required_lookups: circuit.settings.required_lookups,
+                        ..settings.clone()
+                    };
+
+                    Ok(found_settings)
                 })
                 .collect();
             std::mem::drop(_r);

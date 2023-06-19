@@ -415,37 +415,48 @@ impl GraphModules {
     /// Run forward pass
     pub fn forward(
         inputs: &[Tensor<i128>],
+        element_visibility: Visibility,
     ) -> Result<ModuleForwardResult, Box<dyn std::error::Error>> {
         let mut rng = &mut rand::thread_rng();
-        let variables = ElGamalVariables::gen_random(&mut rng);
+        let mut poseidon_hash = None;
+        let mut elgamal = None;
 
-        let poseidon_hash = inputs.iter().fold(vec![], |mut acc, x| {
-            let field_elements = x.iter().map(|x| i128_to_felt::<Fp>(*x)).collect();
-            let res = ModulePoseidon::run(field_elements).unwrap()[0].clone();
-            acc.extend(res);
-            acc
-        });
-
-        let elgamal_outputs = inputs.iter().fold(vec![], |mut acc: Vec<Vec<Fp>>, x| {
-            let field_elements = x.iter().map(|x| i128_to_felt::<Fp>(*x)).collect();
-            let ciphers = ElGamalGadget::run((field_elements, variables.clone())).unwrap();
-
-            if acc.is_empty() {
-                ciphers
-            } else {
-                for i in 0..acc.len() {
-                    acc[i].extend(ciphers[i].clone());
-                }
+        if element_visibility.is_hashed() {
+            let field_elements = inputs.iter().fold(vec![], |mut acc, x| {
+                let field_elements = x.iter().map(|x| i128_to_felt::<Fp>(*x)).collect();
+                let res = ModulePoseidon::run(field_elements).unwrap()[0].clone();
+                acc.extend(res);
                 acc
-            }
-        });
+            });
+            poseidon_hash = Some(field_elements);
+        }
 
-        Ok(ModuleForwardResult {
-            poseidon_hash: Some(poseidon_hash),
-            elgamal: Some(ElGamalResult {
+        if element_visibility.is_encrypted() {
+            let variables = ElGamalVariables::gen_random(&mut rng);
+
+            let elgamal_outputs = inputs.iter().fold(vec![], |mut acc: Vec<Vec<Fp>>, x| {
+                let field_elements = x.iter().map(|x| i128_to_felt::<Fp>(*x)).collect();
+                let ciphers = ElGamalGadget::run((field_elements, variables.clone())).unwrap();
+
+                if acc.is_empty() {
+                    ciphers
+                } else {
+                    for i in 0..acc.len() {
+                        acc[i].extend(ciphers[i].clone());
+                    }
+                    acc
+                }
+            });
+
+            elgamal = Some(ElGamalResult {
                 variables,
                 ciphertexts: elgamal_outputs,
-            }),
+            });
+        }
+
+        Ok(ModuleForwardResult {
+            poseidon_hash,
+            elgamal,
         })
     }
 }
