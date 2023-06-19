@@ -1,6 +1,6 @@
 use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::{CalibrationTarget, RunArgs, StrategyType};
-use crate::graph::{Model, Visibility};
+use crate::graph::{Model, Visibility, GraphInput};
 use crate::pfsys::{
     gen_srs as ezkl_gen_srs, save_params,
      Snark, TranscriptType,
@@ -158,16 +158,18 @@ fn calibrate_settings(
 fn forward(
     data: PathBuf,
     model: PathBuf,
-    output: PathBuf,
+    output: Option<PathBuf>,
     scale: Option<u32>,
     batch_size: Option<usize>,
     settings_path: Option<PathBuf>,
-) -> PyResult<()> {
-    crate::execute::forward(model, data, output, scale, batch_size, settings_path)
+) -> PyResult<PyObject> {
+    let output: GraphInput = crate::execute::forward(model, data, output, scale, batch_size, settings_path)
         .map_err(|e| {
             let err_str = format!("Failed to run forward: {}", e);
             PyRuntimeError::new_err(err_str)})?;
-    Ok(())
+    Python::with_gil(|py| {
+        Ok(output.to_object(py))
+    })
 }
 
 /// mocks the prover
