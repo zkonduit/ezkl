@@ -127,14 +127,77 @@ impl GraphInput {
 }
 
 #[cfg(feature = "python-bindings")]
-use halo2curves::bn256::Fr as Fp;
+use halo2curves::{
+    bn256::{Fr as Fp, G1Affine},
+    ff::PrimeField,
+    serde::SerdeObject,
+};
 
 #[cfg(feature = "python-bindings")]
 /// converts fp into Vec<u64>
-fn fp_to_vecu64(fp: &Fp) -> Vec<u64> {
+fn field_to_vecu64<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> Vec<u64> {
     let repr = serde_json::to_string(&fp).unwrap();
     let b: Vec<u64> = serde_json::from_str(&repr).unwrap();
     b
+}
+
+#[cfg(feature = "python-bindings")]
+fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) {
+    let poseidon_hash: Vec<Vec<u64>> = poseidon_hash.iter().map(field_to_vecu64).collect();
+    pydict.set_item("poseidon_hash", poseidon_hash).unwrap();
+}
+
+#[cfg(feature = "python-bindings")]
+fn g1affine_to_pydict(g1affine_dict: &PyDict, g1affine: &G1Affine) {
+    let g1affine_x = field_to_vecu64(&g1affine.x);
+    let g1affine_y = field_to_vecu64(&g1affine.y);
+    g1affine_dict.set_item("x", g1affine_x).unwrap();
+    g1affine_dict.set_item("y", g1affine_y).unwrap();
+}
+
+#[cfg(feature = "python-bindings")]
+use super::modules::ElGamalResult;
+#[cfg(feature = "python-bindings")]
+fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &ElGamalResult) {
+    let results_dict = PyDict::new(py);
+    let cipher_text: Vec<Vec<Vec<u64>>> = elgamal_results
+        .ciphertexts
+        .iter()
+        .map(|v| v.iter().map(field_to_vecu64).collect::<Vec<Vec<u64>>>())
+        .collect::<Vec<Vec<Vec<u64>>>>();
+    results_dict.set_item("ciphertexts", cipher_text).unwrap();
+
+    let variables_dict = PyDict::new(py);
+    let variables = &elgamal_results.variables;
+
+    let r = field_to_vecu64(&variables.r);
+    variables_dict.set_item("r", r).unwrap();
+    // elgamal secret key
+    let sk = field_to_vecu64(&variables.sk);
+    variables_dict.set_item("sk", sk).unwrap();
+
+    let pk_dict = PyDict::new(py);
+    // elgamal public key
+    g1affine_to_pydict(pk_dict, &variables.pk);
+    variables_dict.set_item("pk", pk_dict).unwrap();
+
+    let aux_generator_dict = PyDict::new(py);
+    // elgamal aux generator used in ecc chip
+    g1affine_to_pydict(aux_generator_dict, &variables.aux_generator);
+    variables_dict
+        .set_item("aux_generator", aux_generator_dict)
+        .unwrap();
+
+    // elgamal window size used in ecc chip
+    variables_dict
+        .set_item("window_size", variables.window_size)
+        .unwrap();
+
+    results_dict.set_item("variables", variables_dict).unwrap();
+
+    pydict.set_item("elgamal", results_dict).unwrap();
+
+    //elgamal
 }
 
 #[cfg(feature = "python-bindings")]
@@ -154,38 +217,35 @@ impl ToPyObject for GraphInput {
 
         if let Some(processed_inputs) = &self.processed_inputs {
             //poseidon_hash
-            let processed_inputs_poseidon_hash: Vec<Vec<u64>> = processed_inputs
-                .poseidon_hash
-                .iter()
-                .map(fp_to_vecu64)
-                .collect();
-            dict_inputs
-                .set_item("poseidon_hash", processed_inputs_poseidon_hash)
-                .unwrap();
+            if let Some(processed_inputs_poseidon_hash) = &processed_inputs.poseidon_hash {
+                insert_poseidon_hash_pydict(&dict_inputs, processed_inputs_poseidon_hash);
+            }
+            if let Some(processed_inputs_elgamal) = &processed_inputs.elgamal {
+                insert_elgamal_results_pydict(py, dict_inputs, processed_inputs_elgamal);
+            }
+
             dict.set_item("processed_inputs", dict_inputs).unwrap();
         }
 
         if let Some(processed_params) = &self.processed_params {
-            let processed_params_poseidon_hash: Vec<Vec<u64>> = processed_params
-                .poseidon_hash
-                .iter()
-                .map(fp_to_vecu64)
-                .collect();
-            dict_params
-                .set_item("poseidon_hash", processed_params_poseidon_hash)
-                .unwrap();
+            if let Some(processed_params_poseidon_hash) = &processed_params.poseidon_hash {
+                insert_poseidon_hash_pydict(dict_params, processed_params_poseidon_hash);
+            }
+            if let Some(processed_params_elgamal) = &processed_params.elgamal {
+                insert_elgamal_results_pydict(py, dict_params, processed_params_elgamal);
+            }
+
             dict.set_item("processed_params", dict_params).unwrap();
         }
 
         if let Some(processed_outputs) = &self.processed_outputs {
-            let processed_outputs_poseidon_hash: Vec<Vec<u64>> = processed_outputs
-                .poseidon_hash
-                .iter()
-                .map(fp_to_vecu64)
-                .collect();
-            dict_outputs
-                .set_item("poseidon_hash", processed_outputs_poseidon_hash)
-                .unwrap();
+            if let Some(processed_outputs_poseidon_hash) = &processed_outputs.poseidon_hash {
+                insert_poseidon_hash_pydict(dict_outputs, processed_outputs_poseidon_hash);
+            }
+            if let Some(processed_outputs_elgamal) = &processed_outputs.elgamal {
+                insert_elgamal_results_pydict(py, dict_outputs, processed_outputs_elgamal);
+            }
+
             dict.set_item("processed_outputs", dict_outputs).unwrap();
         }
 
