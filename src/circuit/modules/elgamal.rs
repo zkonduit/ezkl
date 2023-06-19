@@ -170,12 +170,16 @@ impl ElGamalChip {
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 /// The variables used in the ElGamal circuit.
 pub struct ElGamalVariables {
-    r: Fr,
-    pk: G1Affine,
+    /// The randomness used in the encryption.
+    pub r: Fr,
+    /// The public key.
+    pub pk: G1Affine,
     /// The secret key.
     pub sk: Fr,
-    window_size: usize,
-    aux_generator: G1Affine,
+    /// The window size used in the ECC chip.
+    pub window_size: usize,
+    /// The auxiliary generator used in the ECC chip.
+    pub aux_generator: G1Affine,
 }
 impl ElGamalVariables {
     /// Create new variables.

@@ -4,8 +4,10 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
 use pyo3::ToPyObject;
-use serde::{Deserialize, Serialize};
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Serialize, Serializer};
 use std::io::Read;
+// use std::collections::HashMap;
 
 use super::{modules::ModuleForwardResult, GraphError};
 
@@ -31,7 +33,7 @@ pub struct CallsToAccount {
 }
 /// The input tensor data and shape, and output data for the computational graph (model) as floats.
 /// For example, the input might be the image data for a neural network, and the output class scores.
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Default)]
 pub struct GraphInput {
     /// Inputs to the model / computational graph (can be empty vectors if inputs are coming from on-chain).
     /// TODO: Add retrieve from on-chain functionality
@@ -149,32 +151,130 @@ impl GraphInput {
 }
 
 #[cfg(feature = "python-bindings")]
+use halo2curves::{
+    bn256::{Fr as Fp, G1Affine},
+    ff::PrimeField,
+    serde::SerdeObject,
+};
+
+#[cfg(feature = "python-bindings")]
+/// converts fp into Vec<u64>
+fn field_to_vecu64<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> Vec<u64> {
+    let repr = serde_json::to_string(&fp).unwrap();
+    let b: Vec<u64> = serde_json::from_str(&repr).unwrap();
+    b
+}
+
+#[cfg(feature = "python-bindings")]
+fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) {
+    let poseidon_hash: Vec<Vec<u64>> = poseidon_hash.iter().map(field_to_vecu64).collect();
+    pydict.set_item("poseidon_hash", poseidon_hash).unwrap();
+}
+
+#[cfg(feature = "python-bindings")]
+fn g1affine_to_pydict(g1affine_dict: &PyDict, g1affine: &G1Affine) {
+    let g1affine_x = field_to_vecu64(&g1affine.x);
+    let g1affine_y = field_to_vecu64(&g1affine.y);
+    g1affine_dict.set_item("x", g1affine_x).unwrap();
+    g1affine_dict.set_item("y", g1affine_y).unwrap();
+}
+
+#[cfg(feature = "python-bindings")]
+use super::modules::ElGamalResult;
+#[cfg(feature = "python-bindings")]
+fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &ElGamalResult) {
+    let results_dict = PyDict::new(py);
+    let cipher_text: Vec<Vec<Vec<u64>>> = elgamal_results
+        .ciphertexts
+        .iter()
+        .map(|v| v.iter().map(field_to_vecu64).collect::<Vec<Vec<u64>>>())
+        .collect::<Vec<Vec<Vec<u64>>>>();
+    results_dict.set_item("ciphertexts", cipher_text).unwrap();
+
+    let variables_dict = PyDict::new(py);
+    let variables = &elgamal_results.variables;
+
+    let r = field_to_vecu64(&variables.r);
+    variables_dict.set_item("r", r).unwrap();
+    // elgamal secret key
+    let sk = field_to_vecu64(&variables.sk);
+    variables_dict.set_item("sk", sk).unwrap();
+
+    let pk_dict = PyDict::new(py);
+    // elgamal public key
+    g1affine_to_pydict(pk_dict, &variables.pk);
+    variables_dict.set_item("pk", pk_dict).unwrap();
+
+    let aux_generator_dict = PyDict::new(py);
+    // elgamal aux generator used in ecc chip
+    g1affine_to_pydict(aux_generator_dict, &variables.aux_generator);
+    variables_dict
+        .set_item("aux_generator", aux_generator_dict)
+        .unwrap();
+
+    // elgamal window size used in ecc chip
+    variables_dict
+        .set_item("window_size", variables.window_size)
+        .unwrap();
+
+    results_dict.set_item("variables", variables_dict).unwrap();
+
+    pydict.set_item("elgamal", results_dict).unwrap();
+
+    //elgamal
+}
+
+#[cfg(feature = "python-bindings")]
 impl ToPyObject for GraphInput {
     fn to_object(&self, py: Python) -> PyObject {
         // Create a Python dictionary
         let dict = PyDict::new(py);
+        let dict_inputs = PyDict::new(py);
+        let dict_params = PyDict::new(py);
+        let dict_outputs = PyDict::new(py);
+
         let input_data_mut = &self.input_data;
         let output_data_mut = &self.output_data;
-        dict.set_item("input_data", truncate_nested_vector(&input_data_mut))
-            .unwrap();
-        dict.set_item("output_data", truncate_nested_vector(&output_data_mut))
-            .unwrap();
+
+        dict.set_item("input_data", &input_data_mut).unwrap();
+        dict.set_item("output_data", &output_data_mut).unwrap();
+
+        if let Some(processed_inputs) = &self.processed_inputs {
+            //poseidon_hash
+            if let Some(processed_inputs_poseidon_hash) = &processed_inputs.poseidon_hash {
+                insert_poseidon_hash_pydict(&dict_inputs, processed_inputs_poseidon_hash);
+            }
+            if let Some(processed_inputs_elgamal) = &processed_inputs.elgamal {
+                insert_elgamal_results_pydict(py, dict_inputs, processed_inputs_elgamal);
+            }
+
+            dict.set_item("processed_inputs", dict_inputs).unwrap();
+        }
+
+        if let Some(processed_params) = &self.processed_params {
+            if let Some(processed_params_poseidon_hash) = &processed_params.poseidon_hash {
+                insert_poseidon_hash_pydict(dict_params, processed_params_poseidon_hash);
+            }
+            if let Some(processed_params_elgamal) = &processed_params.elgamal {
+                insert_elgamal_results_pydict(py, dict_params, processed_params_elgamal);
+            }
+
+            dict.set_item("processed_params", dict_params).unwrap();
+        }
+
+        if let Some(processed_outputs) = &self.processed_outputs {
+            if let Some(processed_outputs_poseidon_hash) = &processed_outputs.poseidon_hash {
+                insert_poseidon_hash_pydict(dict_outputs, processed_outputs_poseidon_hash);
+            }
+            if let Some(processed_outputs_elgamal) = &processed_outputs.elgamal {
+                insert_elgamal_results_pydict(py, dict_outputs, processed_outputs_elgamal);
+            }
+
+            dict.set_item("processed_outputs", dict_outputs).unwrap();
+        }
 
         dict.to_object(py)
     }
-}
-
-/// Truncates nested vector due to omit junk floating point values in python
-#[cfg(feature = "python-bindings")]
-fn truncate_nested_vector(input: &Vec<Vec<f32>>) -> Vec<Vec<f32>> {
-    let mut input_mut = input.clone();
-    for inner_vec in input_mut.iter_mut() {
-        for value in inner_vec.iter_mut() {
-            // truncate 6 decimal places
-            *value = (*value * 10000000.0).trunc() / 10000000.0;
-        }
-    }
-    input_mut
 }
 
 impl GraphInput {
@@ -189,5 +289,39 @@ impl GraphInput {
     /// Save the model input to a file
     pub fn save(&self, path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
         serde_json::to_writer(std::fs::File::create(path)?, &self).map_err(|e| e.into())
+    }
+}
+
+impl Serialize for GraphInput {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("GraphInput", 4)?;
+        let input_data_f64: Vec<Vec<f64>> = self
+            .input_data
+            .iter()
+            .map(|v| v.iter().map(|&f| f as f64).collect())
+            .collect();
+        let output_data_f64: Vec<Vec<f64>> = self
+            .output_data
+            .iter()
+            .map(|v| v.iter().map(|&f| f as f64).collect())
+            .collect();
+        state.serialize_field("input_data", &input_data_f64)?;
+        state.serialize_field("output_data", &output_data_f64)?;
+
+        if let Some(processed_inputs) = &self.processed_inputs {
+            state.serialize_field("processed_inputs", &processed_inputs)?;
+        }
+
+        if let Some(processed_params) = &self.processed_params {
+            state.serialize_field("processed_params", &processed_params)?;
+        }
+
+        if let Some(processed_outputs) = &self.processed_outputs {
+            state.serialize_field("processed_outputs", &processed_outputs)?;
+        }
+        state.end()
     }
 }
