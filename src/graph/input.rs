@@ -322,6 +322,10 @@ impl Serialize for GraphInput {
         if let Some(processed_outputs) = &self.processed_outputs {
             state.serialize_field("processed_outputs", &processed_outputs)?;
         }
+
+        if let Some(on_chain_input_data) = &self.on_chain_input_data {
+            state.serialize_field("on_chain_input_data", &on_chain_input_data)?;
+        }
         state.end()
     }
 }
