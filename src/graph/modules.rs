@@ -309,8 +309,6 @@ impl GraphModules {
         Self::num_constraint_given_shapes(visibility.params, params_shapes, &mut module_sizes);
         Self::num_constraint_given_shapes(visibility.output, output_shapes, &mut module_sizes);
 
-        println!("module_sizes: {:?}", module_sizes);
-
         module_sizes
     }
 
