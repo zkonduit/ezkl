@@ -117,15 +117,15 @@ def test_forward():
     )
     output_path = os.path.join(
         folder_path,
-        'input_forward.json'
+        'witness.json'
     )
     settings_path = os.path.join(
         folder_path,
         'settings.json'
     )
 
-    res = ezkl_lib.forward(data_path, model_path,
-                           output_path, settings_path=settings_path)
+    res = ezkl_lib.gen_witness(data_path, model_path,
+                               output_path, settings_path=settings_path)
 
     with open(output_path, "r") as f:
         data = json.load(f)
@@ -148,7 +148,7 @@ def test_mock():
 
     data_path = os.path.join(
         folder_path,
-        'input_forward.json'
+        'witness.json'
     )
 
     model_path = os.path.join(
@@ -172,7 +172,7 @@ def test_setup():
 
     data_path = os.path.join(
         folder_path,
-        'input_forward.json'
+        'witness.json'
     )
 
     model_path = os.path.join(
@@ -206,7 +206,7 @@ def test_setup_evm():
 
     data_path = os.path.join(
         folder_path,
-        'input_forward.json'
+        'witness.json'
     )
 
     model_path = os.path.join(
@@ -240,7 +240,7 @@ def test_prove_and_verify():
 
     data_path = os.path.join(
         folder_path,
-        'input_forward.json'
+        'witness.json'
     )
 
     model_path = os.path.join(
@@ -282,7 +282,7 @@ def test_prove_evm():
 
     data_path = os.path.join(
         folder_path,
-        'input_forward.json'
+        'witness.json'
     )
 
     model_path = os.path.join(

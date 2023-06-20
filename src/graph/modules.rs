@@ -10,7 +10,7 @@ use halo2curves::bn256::Fr as Fp;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use super::GraphInput;
+use super::GraphWitness;
 use super::{VarVisibility, Visibility};
 
 const POSEIDON_LEN_GRAPH: usize = 10;
@@ -102,8 +102,8 @@ pub struct ModuleSettings {
     pub output: ModuleVarSettings,
 }
 
-impl From<&GraphInput> for ModuleSettings {
-    fn from(graph_input: &GraphInput) -> Self {
+impl From<&GraphWitness> for ModuleSettings {
+    fn from(graph_input: &GraphWitness) -> Self {
         let mut settings = Self::default();
 
         if let Some(processed_inputs) = &graph_input.processed_inputs {
@@ -243,15 +243,15 @@ impl GraphModules {
             if instances.elgamal.is_empty() {
                 instances.elgamal = ciphers;
             } else if !ciphers[2].is_empty() {
-                for i in 0..instances.elgamal.len() {
-                    instances.elgamal[i].extend(ciphers[i].clone());
+                for (i, c) in ciphers.iter().enumerate().take(instances.elgamal.len()) {
+                    instances.elgamal[i].extend(c);
                 }
             }
         }
     }
 
     /// Generate the public inputs for the circuit
-    pub fn public_inputs(data: &GraphInput, visibility: VarVisibility) -> Vec<Vec<Fp>> {
+    pub fn public_inputs(data: &GraphWitness, visibility: VarVisibility) -> Vec<Vec<Fp>> {
         let mut instances = ModuleInstances::default();
         Self::instances_from_visibility(visibility.input, &data.processed_inputs, &mut instances);
         Self::instances_from_visibility(visibility.params, &data.processed_params, &mut instances);
@@ -317,7 +317,7 @@ impl GraphModules {
         module: &mut impl Module<Fp>,
         layouter: &mut impl Layouter<Fp>,
         values: &mut [Vec<ValTensor<Fp>>],
-        instance_offset: &mut Vec<usize>,
+        instance_offset: &mut [usize],
     ) -> Result<(), Error> {
         // reserve module 0 for ... modules
 
@@ -326,7 +326,7 @@ impl GraphModules {
             let cloned_x = (*x).clone();
             let dims = cloned_x[0].dims();
             x[0] = module
-                .layout(layouter, &cloned_x, instance_offset.clone())
+                .layout(layouter, &cloned_x, instance_offset.to_owned())
                 .unwrap();
             x[0].reshape(dims).unwrap();
             for (i, inc) in module

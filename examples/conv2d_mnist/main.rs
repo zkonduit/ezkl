@@ -28,10 +28,10 @@ use halo2_proofs::{
 use halo2curves::ff::PrimeField;
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp as F;
+use instant::Instant;
 use mnist::*;
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
-use std::time::Instant;
 
 mod params;
 
