@@ -146,7 +146,7 @@ impl GraphInput {
         // create a new GraphWitness for each batch
         let batches = input_batches
             .into_iter()
-            .map(|input| GraphInput::new(input))
+            .map(GraphInput::new)
             .collect::<Vec<GraphInput>>();
 
         Ok(batches)

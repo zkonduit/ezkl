@@ -99,6 +99,7 @@ mod wasi_tests {
 
     wasi_test_func!();
 
+    #[allow(clippy::too_many_arguments)]
     // Mock prove (fast, but does not cover some potential issues)
     fn mock(
         example_name: String,
@@ -135,13 +136,13 @@ mod wasi_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "forward",
+                "gen-witness",
                 "-D",
                 &format!("{}/{}/input.json", test_dir, example_name),
                 "-M",
                 &format!("{}/{}/network.onnx", test_dir, example_name),
                 "-O",
-                &format!("{}/{}/input_forward.json", test_dir, example_name),
+                &format!("{}/{}/witness.json", test_dir, example_name),
                 &format!(
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
@@ -155,7 +156,7 @@ mod wasi_tests {
             .args([
                 "mock",
                 "-D",
-                format!("{}/{}/input_forward.json", test_dir, example_name).as_str(),
+                format!("{}/{}/witness.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(

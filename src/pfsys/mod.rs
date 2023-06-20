@@ -133,6 +133,7 @@ impl<F: PrimeField + SerdeObject + FromUniformBytes<64>, C: CurveAffine> Snark<F
 
         trace!("instances {:?}", instances);
 
+        #[allow(clippy::unnecessary_unwrap)]
         if params.is_none() || vk.is_none() {
             Ok(Snark {
                 protocol: None,

@@ -674,6 +674,7 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
+    #[allow(clippy::too_many_arguments)]
     fn mock(
         example_name: String,
         scale: usize,

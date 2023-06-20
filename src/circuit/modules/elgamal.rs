@@ -167,7 +167,7 @@ impl ElGamalChip {
     }
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 /// The variables used in the ElGamal circuit.
 pub struct ElGamalVariables {
     /// The randomness used in the encryption.
@@ -181,6 +181,19 @@ pub struct ElGamalVariables {
     /// The auxiliary generator used in the ECC chip.
     pub aux_generator: G1Affine,
 }
+
+impl Default for ElGamalVariables {
+    fn default() -> Self {
+        Self {
+            r: Fr::zero(),
+            pk: G1Affine::identity(),
+            sk: Fr::zero(),
+            window_size: 4,
+            aux_generator: G1Affine::identity(),
+        }
+    }
+}
+
 impl ElGamalVariables {
     /// Create new variables.
     pub fn new(r: Fr, pk: G1Affine, sk: Fr, window_size: usize, aux_generator: G1Affine) -> Self {
@@ -190,17 +203,6 @@ impl ElGamalVariables {
             sk,
             window_size,
             aux_generator,
-        }
-    }
-
-    /// Create new variables with default values.
-    pub fn default() -> Self {
-        Self {
-            r: Fr::zero(),
-            pk: G1Affine::identity(),
-            sk: Fr::zero(),
-            window_size: 4,
-            aux_generator: G1Affine::identity(),
         }
     }
 
@@ -260,8 +262,8 @@ impl ElGamalGadget {
 
         let mut c2 = vec![];
 
-        for i in 0..msg.len() {
-            c2.push(msg[i] + dh);
+        for m in &msg {
+            c2.push(m + dh);
         }
 
         (c1, c2)
@@ -288,8 +290,8 @@ impl ElGamalGadget {
         let dh = hasher.hash([x.native(), y.native()]); // this is Fq now :( (we need Fr)
 
         let mut msg = vec![];
-        for i in 0..c2.len() {
-            msg.push(c2[i] - dh);
+        for encrypted_m in &c2 {
+            msg.push(encrypted_m - dh);
         }
 
         msg
@@ -535,11 +537,11 @@ impl Module<Fr> for ElGamalGadget {
             &sk_var,
         )?;
 
-        for i in 0..msg_var.len() {
+        for (i, m) in msg_var.iter().enumerate() {
             let c2 = self.verify_encryption(
                 layouter.namespace(|| "verify_encryption"),
                 &self.config,
-                &msg_var[i],
+                m,
                 &s,
             )?;
 

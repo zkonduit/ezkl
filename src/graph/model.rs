@@ -627,37 +627,34 @@ impl Model {
                         halo2_proofs::plonk::Error::Synthesis
                     })?;
 
-                match run_args.output_visibility {
-                    Visibility::Public => {
-                        let output_scales = self.graph.get_output_scales();
-                        let global_scale = scale_to_multiplier(run_args.scale) as usize;
-                        let _ = outputs
-                            .iter()
-                            .enumerate()
-                            .map(|(i, output)| {
-                                let tolerance = match run_args.tolerance {
-                                    Tolerance::Percentage { val, .. } => Tolerance::Percentage {
-                                        val,
-                                        scales: (
-                                            scale_to_multiplier(output_scales[i]) as usize,
-                                            global_scale,
-                                        ),
-                                    },
-                                    _ => run_args.tolerance,
-                                };
-                                let mut instance_offset = 0;
-                                if self.visibility.input.is_public() {
-                                    instance_offset += inputs.len();
-                                };
-                                config.base.layout(
-                                    &mut thread_safe_region,
-                                    &[output.clone(), vars.instances[instance_offset + i].clone()],
-                                    Box::new(HybridOp::RangeCheck(tolerance)),
-                                )
-                            })
-                            .collect_vec();
-                    }
-                    _ => {}
+                if run_args.output_visibility == Visibility::Public {
+                    let output_scales = self.graph.get_output_scales();
+                    let global_scale = scale_to_multiplier(run_args.scale) as usize;
+                    let _ = outputs
+                        .iter()
+                        .enumerate()
+                        .map(|(i, output)| {
+                            let tolerance = match run_args.tolerance {
+                                Tolerance::Percentage { val, .. } => Tolerance::Percentage {
+                                    val,
+                                    scales: (
+                                        scale_to_multiplier(output_scales[i]) as usize,
+                                        global_scale,
+                                    ),
+                                },
+                                _ => run_args.tolerance,
+                            };
+                            let mut instance_offset = 0;
+                            if self.visibility.input.is_public() {
+                                instance_offset += inputs.len();
+                            };
+                            config.base.layout(
+                                &mut thread_safe_region,
+                                &[output.clone(), vars.instances[instance_offset + i].clone()],
+                                Box::new(HybridOp::RangeCheck(tolerance)),
+                            )
+                        })
+                        .collect_vec();
                 }
                 info!("computing...");
                 Ok(outputs)
@@ -767,22 +764,19 @@ impl Model {
 
         let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 
-        match run_args.output_visibility {
-            Visibility::Public => {
-                let _ = outputs
-                    .into_iter()
-                    .map(|output| {
-                        dummy_config
-                            .layout(
-                                &mut region,
-                                &[output.clone(), output],
-                                Box::new(HybridOp::RangeCheck(run_args.tolerance)),
-                            )
-                            .unwrap()
-                    })
-                    .collect_vec();
-            }
-            _ => {}
+        if run_args.output_visibility == Visibility::Public {
+            let _ = outputs
+                .into_iter()
+                .map(|output| {
+                    dummy_config
+                        .layout(
+                            &mut region,
+                            &[output.clone(), output],
+                            Box::new(HybridOp::RangeCheck(run_args.tolerance)),
+                        )
+                        .unwrap()
+                })
+                .collect_vec();
         }
 
         let duration = start_time.elapsed();
@@ -798,7 +792,7 @@ impl Model {
             match node {
                 NodeType::Node(n) => {
                     let boxed_op = n.opkind.clone_dyn();
-                    if let Some(constant) = extract_const_quantized_values(&boxed_op) {
+                    if let Some(constant) = extract_const_quantized_values(boxed_op) {
                         consts.push(constant);
                     };
                 }
@@ -817,7 +811,7 @@ impl Model {
             match node {
                 NodeType::Node(n) => {
                     let boxed_op = n.opkind.clone_dyn();
-                    if let Some(constant) = extract_const_quantized_values(&boxed_op) {
+                    if let Some(constant) = extract_const_quantized_values(boxed_op) {
                         const_shapes.push(constant.dims().to_vec());
                     };
                 }

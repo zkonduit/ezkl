@@ -907,6 +907,7 @@ pub(crate) fn setup(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn prove(
     witness: PathBuf,
@@ -1300,6 +1301,7 @@ pub(crate) fn run_fuzz_fn(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn aggregate(
     proof_path: PathBuf,
     aggregation_snarks: Vec<PathBuf>,

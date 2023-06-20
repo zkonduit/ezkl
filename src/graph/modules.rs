@@ -243,8 +243,8 @@ impl GraphModules {
             if instances.elgamal.is_empty() {
                 instances.elgamal = ciphers;
             } else if !ciphers[2].is_empty() {
-                for i in 0..instances.elgamal.len() {
-                    instances.elgamal[i].extend(ciphers[i].clone());
+                for (i, c) in ciphers.iter().enumerate().take(instances.elgamal.len()) {
+                    instances.elgamal[i].extend(c);
                 }
             }
         }
@@ -317,7 +317,7 @@ impl GraphModules {
         module: &mut impl Module<Fp>,
         layouter: &mut impl Layouter<Fp>,
         values: &mut [Vec<ValTensor<Fp>>],
-        instance_offset: &mut Vec<usize>,
+        instance_offset: &mut [usize],
     ) -> Result<(), Error> {
         // reserve module 0 for ... modules
 
@@ -326,7 +326,7 @@ impl GraphModules {
             let cloned_x = (*x).clone();
             let dims = cloned_x[0].dims();
             x[0] = module
-                .layout(layouter, &cloned_x, instance_offset.clone())
+                .layout(layouter, &cloned_x, instance_offset.to_owned())
                 .unwrap();
             x[0].reshape(dims).unwrap();
             for (i, inc) in module

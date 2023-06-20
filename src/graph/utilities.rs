@@ -239,7 +239,7 @@ pub fn new_op_from_onnx(
 
             let boxed_op = inputs[1].clone().opkind();
 
-            let index: Tensor<usize> = match extract_const_raw_values(&boxed_op) {
+            let index: Tensor<usize> = match extract_const_raw_values(boxed_op) {
                 Some(c) => c.map(|e| e as usize),
                 None => {
                     warn!("assuming the gather window is over a context variable");
@@ -316,7 +316,7 @@ pub fn new_op_from_onnx(
             // Extract the slope layer hyperparams
 
             let boxed_op = inputs[1].clone().opkind();
-            let unit = if let Some(c) = extract_const_raw_values(&boxed_op) {
+            let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
                 if c.len() == 1 {
                     c[0]
                 } else {
@@ -378,7 +378,7 @@ pub fn new_op_from_onnx(
                 .ok_or_else(|| Box::new(GraphError::MissingParams("add".to_string())))?;
 
             for (idx, inp) in inputs.clone().iter().enumerate() {
-                let boxed_op = &inp.opkind();
+                let boxed_op = inp.opkind();
                 if let Some(c) = extract_const_raw_values(boxed_op) {
                     inputs.remove(idx);
                     params = Some(tensor_to_valtensor(c, max_scale, param_visibility)?);
@@ -393,7 +393,7 @@ pub fn new_op_from_onnx(
         "Greater" => {
             // Extract the slope layer hyperparams
             let boxed_op = inputs[0].clone().opkind();
-            let unit = if let Some(c) = extract_const_raw_values(&boxed_op) {
+            let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
                 if c.len() == 1 {
                     c[0]
                 } else {
@@ -629,7 +629,7 @@ pub fn new_op_from_onnx(
                 unimplemented!("Only nearest neighbor interpolation is supported")
             }
             let boxed_op = inputs[2].clone().opkind();
-            let scale_factor = if let Some(c) = extract_const_raw_values(&boxed_op) {
+            let scale_factor = if let Some(c) = extract_const_raw_values(boxed_op) {
                 c.map(|x| x as usize).into_iter().collect::<Vec<usize>>()
             } else {
                 return Err(Box::new(GraphError::OpMismatch(idx, "Resize".to_string())));
@@ -746,19 +746,21 @@ pub fn new_op_from_onnx(
 }
 
 /// Extracts the raw values from a [Constant] op.
-pub fn extract_const_raw_values(boxed_op: &Box<dyn crate::circuit::Op<Fp>>) -> Option<Tensor<f32>> {
+pub fn extract_const_raw_values(boxed_op: Box<dyn crate::circuit::Op<Fp>>) -> Option<Tensor<f32>> {
     boxed_op
         .as_any()
-        .downcast_ref::<crate::circuit::ops::Constant<Fp>>().map(|c| c.raw_values.clone())
+        .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
+        .map(|c| c.raw_values.clone())
 }
 
 /// Extracts the quantized values from a [Constant] op.
 pub fn extract_const_quantized_values(
-    boxed_op: &Box<dyn crate::circuit::Op<Fp>>,
+    boxed_op: Box<dyn crate::circuit::Op<Fp>>,
 ) -> Option<ValTensor<Fp>> {
     boxed_op
         .as_any()
-        .downcast_ref::<crate::circuit::ops::Constant<Fp>>().map(|c| c.quantized_values.clone())
+        .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
+        .map(|c| c.quantized_values.clone())
 }
 
 /// Converts a tensor to a [ValTensor] with a given scale.
@@ -833,9 +835,9 @@ pub mod tests {
 
     #[test]
     fn test_flatten_valtensors() {
-        let tensor1: Tensor<Fp> = (0..10).into_iter().map(|x| x.into()).into();
-        let tensor2: Tensor<Fp> = (10..20).into_iter().map(|x| x.into()).into();
-        let tensor3: Tensor<Fp> = (20..30).into_iter().map(|x| x.into()).into();
+        let tensor1: Tensor<Fp> = (0..10).map(|x| x.into()).into();
+        let tensor2: Tensor<Fp> = (10..20).map(|x| x.into()).into();
+        let tensor3: Tensor<Fp> = (20..30).map(|x| x.into()).into();
 
         let flattened =
             flatten_valtensors(vec![tensor1.into(), tensor2.into(), tensor3.into()]).unwrap();

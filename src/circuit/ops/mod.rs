@@ -268,7 +268,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
     fn f(&self, _: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
         let values = self.quantized_values.clone();
         let int_values = values.get_int_evals().unwrap();
-        let output = Tensor::new(Some(&int_values), values.dims().clone())?;
+        let output = Tensor::new(Some(&int_values), values.dims())?;
 
         Ok(ForwardResult {
             output,

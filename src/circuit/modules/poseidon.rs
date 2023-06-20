@@ -181,10 +181,11 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         input: &[ValTensor<Fp>],
         row_offset: Vec<usize>,
     ) -> Result<ValTensor<Fp>, Error> {
-        let (input, zero_val) = self.layout_inputs(layouter, input)?;
-
-        // iterate over the input cells in blocks of L
-        let mut input_cells = input.clone();
+        let (mut input_cells, zero_val) = self.layout_inputs(layouter, input)?;
+        // extract the values from the input cells
+        let assigned_input: Tensor<ValType<Fp>> =
+            input_cells.iter().map(|e| ValType::from(e.clone())).into();
+        let len = assigned_input.len();
 
         let start_time = instant::Instant::now();
 
@@ -228,7 +229,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         }
 
         let duration = start_time.elapsed();
-        log::trace!("layout (N={:?}) took: {:?}", input.len(), duration);
+        log::trace!("layout (N={:?}) took: {:?}", len, duration);
 
         let result = Tensor::from(input_cells.iter().map(|e| ValType::from(e.clone())));
 
@@ -251,9 +252,6 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                 region.constrain_equal(output.cell(), expected_var.cell())
             },
         )?;
-
-        let assigned_input: Tensor<ValType<Fp>> =
-            input.iter().map(|e| ValType::from(e.clone())).into();
 
         Ok(assigned_input.into())
     }
