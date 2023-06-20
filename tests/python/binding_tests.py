@@ -204,6 +204,11 @@ def test_setup_evm():
     Test for setup
     """
 
+    data_path = os.path.join(
+        folder_path,
+        'input_forward.json'
+    )
+
     model_path = os.path.join(
         examples_path,
         'onnx',
@@ -258,6 +263,7 @@ def test_prove_and_verify():
         "poseidon",
         "single",
         settings_path,
+        False
     )
     assert res == True
     assert os.path.isfile(proof_path)
@@ -299,6 +305,7 @@ def test_prove_evm():
         "evm",
         "single",
         settings_path,
+        False
     )
     assert res == True
     assert os.path.isfile(proof_path)
@@ -363,11 +370,6 @@ def test_aggregate_and_verify_aggr():
         'input.json'
     )
 
-    forward_data_path = os.path.join(
-        folder_path,
-        '1l_relu_forward.json'
-    )
-
     model_path = os.path.join(
         examples_path,
         'onnx',
@@ -389,10 +391,6 @@ def test_aggregate_and_verify_aggr():
     assert res == True
     assert os.path.isfile(settings_path)
 
-    # TODO: Dictionary outputs
-    res = ezkl_lib.forward(data_path, model_path,
-                           forward_data_path, settings_path=settings_path)
-
     ezkl_lib.setup(
         model_path,
         vk_path,
@@ -404,7 +402,7 @@ def test_aggregate_and_verify_aggr():
     proof_path = os.path.join(folder_path, '1l_relu.pf')
 
     ezkl_lib.prove(
-        forward_data_path,
+        data_path,
         model_path,
         pk_path,
         proof_path,
@@ -412,6 +410,7 @@ def test_aggregate_and_verify_aggr():
         "poseidon",
         "accum",
         settings_path,
+        False
     )
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')
@@ -453,11 +452,6 @@ def test_evm_aggregate_and_verify_aggr():
         'input.json'
     )
 
-    forward_data_path = os.path.join(
-        folder_path,
-        '1l_relu_forward.json'
-    )
-
     model_path = os.path.join(
         examples_path,
         'onnx',
@@ -482,10 +476,6 @@ def test_evm_aggregate_and_verify_aggr():
         "resources",
     )
 
-    # TODO: Dictionary outputs
-    res = ezkl_lib.forward(data_path, model_path,
-                           forward_data_path, settings_path=settings_path)
-
     ezkl_lib.setup(
         model_path,
         vk_path,
@@ -497,7 +487,7 @@ def test_evm_aggregate_and_verify_aggr():
     proof_path = os.path.join(folder_path, '1l_relu.pf')
 
     ezkl_lib.prove(
-        forward_data_path,
+        data_path,
         model_path,
         pk_path,
         proof_path,
@@ -505,6 +495,7 @@ def test_evm_aggregate_and_verify_aggr():
         "poseidon",
         "accum",
         settings_path,
+        False
     )
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')

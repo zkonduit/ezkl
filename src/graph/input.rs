@@ -11,12 +11,33 @@ use std::io::Read;
 
 use super::{modules::ModuleForwardResult, GraphError};
 
+
+type Decimals = u8;
+type Call = String;
+type RPCUrl = String;
+/// Defines the view only calls to accounts to fetch the on-chain input data.
+/// This data will be included as part of the first elements in the publicInputs
+/// for the sol evm verifier and will be  verifyWithDataAttestation.sol
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+
+pub struct CallsToAccount {
+    /// A vector of tuples, where index 0 of tuples
+    /// are the byte strings representing the ABI encoded function calls to 
+    /// read the data from the address. This call must return a single
+    /// elementary type (https://docs.soliditylang.org/en/v0.8.20/abi-spec.html#types).
+    /// The second index of the tuple is the number of decimals for f32 conversion.
+    /// We don't support dynamic types currently.
+    pub call_data: Vec<(Call, Decimals)>,
+    /// Address of the contract to read the data from.
+    pub address: String,
+}
 /// The input tensor data and shape, and output data for the computational graph (model) as floats.
 /// For example, the input might be the image data for a neural network, and the output class scores.
 #[derive(Clone, Debug, Deserialize, Default)]
 pub struct GraphInput {
-    /// Inputs to the model / computational graph (can be empty vectors if inputs are not being constrained).
-    pub input_data: Vec<Vec<f32>>,
+    /// Inputs to the model / computational graph (can be empty vectors if inputs are coming from on-chain).
+    /// TODO: Add retrieve from on-chain functionality
+    pub input_data: Vec<Vec<f32>>, 
     /// The expected output of the model (can be empty vectors if outputs are not being constrained).
     pub output_data: Vec<Vec<f32>>,
     /// Optional hashes of the inputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
@@ -25,6 +46,8 @@ pub struct GraphInput {
     pub processed_params: Option<ModuleForwardResult>,
     /// Optional hashes of the outputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
     pub processed_outputs: Option<ModuleForwardResult>,
+    /// Optional on-chain inputs. (can be None if there are no on-chain inputs). Wrapped as Option for backwards compatibility
+    pub on_chain_input_data: Option<(Vec<CallsToAccount>, RPCUrl)>,
 }
 
 impl GraphInput {
@@ -36,6 +59,7 @@ impl GraphInput {
             processed_inputs: None,
             processed_params: None,
             processed_outputs: None,
+            on_chain_input_data: None
         }
     }
     ///
@@ -297,6 +321,10 @@ impl Serialize for GraphInput {
 
         if let Some(processed_outputs) = &self.processed_outputs {
             state.serialize_field("processed_outputs", &processed_outputs)?;
+        }
+
+        if let Some(on_chain_input_data) = &self.on_chain_input_data {
+            state.serialize_field("on_chain_input_data", &on_chain_input_data)?;
         }
         state.end()
     }

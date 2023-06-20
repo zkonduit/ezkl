@@ -1,4 +1,3 @@
-//use crate::onnx::OnnxModel;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 #[cfg(feature = "python-bindings")]
 use pyo3::{
@@ -150,6 +149,9 @@ pub struct RunArgs {
     /// The number of batches to split the input data into
     #[arg(long, default_value = "1")]
     pub batch_size: usize,
+    /// Flags whether the inputs are on-chain and should be attested to
+    #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
+    pub on_chain_inputs: bool,
     /// Flags whether inputs are public, private, hashed
     #[arg(long, default_value = "private")]
     pub input_visibility: Visibility,
@@ -163,6 +165,7 @@ pub struct RunArgs {
     #[arg(long)]
     pub allocated_constraints: Option<usize>,
 }
+
 
 #[allow(missing_docs)]
 #[derive(Parser, Debug, Clone, Deserialize, Serialize)]
@@ -383,6 +386,7 @@ pub enum Commands {
         settings_path: Option<PathBuf>,
     },
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// Loads model, data, and creates proof
     #[command(arg_required_else_help = true)]
     Prove {
@@ -424,6 +428,10 @@ pub enum Commands {
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = "safe")]
         check_mode: CheckMode,
+        /// Deploy a test contract that stores the input_data in data .json in its storage,
+        /// then reads from it. 
+        #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
+        test_reads: bool,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for a single proof
@@ -452,6 +460,39 @@ pub enum Commands {
         /// If not set will just use the default unoptimized SOLC configuration.
         #[arg(long)]
         optimizer_runs: Option<usize>,
+        // todo, optionally allow supplying proving key
+    },
+    #[cfg(not(target_arch = "wasm32"))]
+    /// Creates an EVM verifier that attests to on-chain inputs for a single proof
+    #[command(name = "create-evm-data-attestation-verifier", arg_required_else_help = true)]
+    CreateEVMDataAttestationVerifier {
+        /// The path to load the desired params file
+        #[arg(long)]
+        srs_path: PathBuf,
+        /// The path to save circuit params to
+        #[arg(long)]
+        settings_path: PathBuf,
+        /// The path to load the desired verfication key file
+        #[arg(long)]
+        vk_path: PathBuf,
+        /// The path to output the Solidity code
+        #[arg(long)]
+        sol_code_path: PathBuf,
+        /// The path to output the compiled Solidity bytecode
+        #[arg(long)]
+        sol_bytecode_path: Option<PathBuf>,
+        /// The number of runs set to the SOLC optimizer.
+        /// Lower values optimze for deployment size while higher values optimize for execution cost.
+        /// If not set will just use the default unoptimized SOLC configuration.
+        #[arg(long)]
+        optimizer_runs: Option<usize>,
+        /// The path to the .json data file, which should
+        /// contain the necessary calldata and accoount addresses  
+        /// needed need to read from all the on-chain
+        /// view functions that return the data that the network
+        /// ingests as inputs. 
+        #[arg(short = 'D', long)]
+        data: PathBuf,
         // todo, optionally allow supplying proving key
     },
 
@@ -525,13 +566,20 @@ pub enum Commands {
         proof_path: PathBuf,
         /// The path to verifier contract's deployment code
         #[arg(long)]
-        deployment_code_path: PathBuf,
+        deployment_code_path: Option<PathBuf>,
         /// The path to the Solidity code
         #[arg(long)]
         sol_code_path: Option<PathBuf>,
         /// The path to output the compiled Solidity bytecode
         #[arg(long)]
         sol_bytecode_path: Option<PathBuf>,
+        /// The path to the .json data file, which should
+        /// contain the necessary calldata and account addresses  
+        /// needed need to read from all the on-chain
+        /// view functions that return the data that the network
+        /// ingests as inputs. 
+        #[arg(short = 'D', long)]
+        data: Option<PathBuf>,
     },
 
     /// Print the proof in hexadecimal

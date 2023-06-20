@@ -264,6 +264,17 @@ impl GraphCircuit {
         }
         self.inputs = inputs;
     }
+    ///
+    pub fn load_on_chain_inputs(&mut self, data: Vec<Vec<i128>>) {
+        // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
+        let mut inputs: Vec<Tensor<i128>> = vec![];
+        for (input, shape) in data.iter().zip(self.model.graph.input_shapes()) {
+            let mut t: Tensor<i128> = input.iter().cloned().collect();
+            t.reshape(&shape);
+            inputs.push(t);
+        }
+        self.inputs = inputs;
+    }
 
     /// Calibrate the circuit to the supplied data.
     pub fn calibrate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -379,11 +390,16 @@ impl GraphCircuit {
     pub fn prepare_public_inputs(
         &mut self,
         data: &GraphInput,
+        on_chain_inputs: Option<Vec<Vec<i128>>>
     ) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
         let out_scales = self.model.graph.get_output_scales();
 
-        // load the inputs
-        self.load_inputs(data);
+        // quantize the supplied data using the provided scale.
+        if let Some(on_chain_inputs) = on_chain_inputs {
+            self.load_on_chain_inputs(on_chain_inputs)
+        } else {
+            self.load_inputs(data);
+        }
         // load the module settings
         self.module_settings = ModuleSettings::from(data);
 
@@ -574,5 +590,3 @@ impl Circuit<Fp> for GraphCircuit {
         Ok(())
     }
 }
-
-////////////////////////

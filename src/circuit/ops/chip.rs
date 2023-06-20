@@ -71,7 +71,7 @@ impl From<String> for CheckMode {
 #[derive(Clone, Debug, PartialEq, PartialOrd, Serialize, Deserialize, Copy)]
 pub enum Tolerance {
     Abs { val: usize },
-    Percentage { val: f32, scales: (usize, usize) },
+    Percentage { val: f32, scales: (usize, usize) }
 }
 
 impl Default for Tolerance {
