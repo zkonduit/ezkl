@@ -465,7 +465,7 @@ pub enum Commands {
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier that attests to on-chain inputs for a single proof
-    #[command(name = "create-evm-data-attestation-verifier", arg_required_else_help = true)]
+    #[command(name = "create-evm-da-verifier", arg_required_else_help = true)]
     CreateEVMDataAttestationVerifier {
         /// The path to load the desired params file
         #[arg(long)]

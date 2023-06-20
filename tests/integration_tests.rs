@@ -482,49 +482,49 @@ macro_rules! test_func {
             use crate::native_tests::kzg_fuzz;
 
             /// Currently only on chain inputs that return a non-negative value are supported.
-            const TESTS_ON_CHAIN_INPUT: [&str; 1] = [
+            const TESTS_ON_CHAIN_INPUT: [&str; 11] = [
                 "1l_mlp",
-                // "1l_average",
-                // "1l_reshape",
-                // // "1l_sigmoid",
-                // "1l_div",
-                // "1l_sqrt",
-                // // "1l_prelu",
-                // "1l_var",
-                // "1l_leakyrelu",
-                // "1l_gelu_noappx",
-                // "1l_relu",
-                // //"1l_tanh",
-                // // "2l_relu_sigmoid_small",
-                // // "2l_relu_small",
-                // // "2l_relu_fc",
-                // "min",
-                // "max",
+                "1l_average",
+                "1l_reshape",
+                // "1l_sigmoid",
+                "1l_div",
+                "1l_sqrt",
+                // "1l_prelu",
+                "1l_var",
+                "1l_leakyrelu",
+                "1l_gelu_noappx",
+                "1l_relu",
+                //"1l_tanh",
+                // "2l_relu_sigmoid_small",
+                // "2l_relu_small",
+                // "2l_relu_fc",
+                "min",
+                "max",
             ];
 
             /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
             /// specify those that will
-            const TESTS_SOLIDITY: [&str; 1] = [
+            const TESTS_SOLIDITY: [&str; 16] = [
                 "1l_mlp",
-                // "1l_average",
-                // "1l_reshape",
-                // "1l_sigmoid",
-                // "1l_div",
-                // "1l_sqrt",
-                // // "1l_prelu",
-                // "1l_var",
-                // "1l_leakyrelu",
-                // "1l_gelu_noappx",
-                // "1l_relu",
-                // "1l_tanh",
-                // "2l_relu_sigmoid_small",
-                // "2l_relu_small",
-                // "2l_relu_fc",
-                // "min",
-                // "max",
+                "1l_average",
+                "1l_reshape",
+                "1l_sigmoid",
+                "1l_div",
+                "1l_sqrt",
+                // "1l_prelu",
+                "1l_var",
+                "1l_leakyrelu",
+                "1l_gelu_noappx",
+                "1l_relu",
+                "1l_tanh",
+                "2l_relu_sigmoid_small",
+                "2l_relu_small",
+                "2l_relu_fc",
+                "min",
+                "max",
             ];
 
-            seq!(N in 0..= 0 {
+            seq!(N in 0..= 10 {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
@@ -535,7 +535,7 @@ macro_rules! test_func {
             });
 
 
-            seq!(N in 0..=0 {
+            seq!(N in 0..=17 {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
@@ -1564,7 +1564,7 @@ macro_rules! test_func {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "create-evm-data-attestation-verifier",
+                "create-evm-da-verifier",
                 circuit_settings.as_str(),
                 "--sol-code-path",
                 sol_arg.as_str(),
