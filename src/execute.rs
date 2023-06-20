@@ -486,16 +486,10 @@ pub(crate) fn init_spinner() -> ProgressBar {
     pb.set_draw_target(indicatif::ProgressDrawTarget::stdout());
     pb.enable_steady_tick(Duration::from_millis(200));
     pb.set_style(
-        ProgressStyle::with_template("{spinner:.blue} {msg}")
+        ProgressStyle::with_template("[{elapsed_precise}] {spinner:.blue} {msg}")
             .unwrap()
             .tick_strings(&[
-                "-------------------------------- - ✨ ",
-                "-------------------------------- - ⏳ ",
-                "-------------------------------- - 🌎 ",
-                "-------------------------------- - 🔎 ",
-                "-------------------------------- - 🥹 ",
-                "-------------------------------- - 🫠 ",
-                "-------------------------------- - 👾 ",
+                " - ✨ ", " - ⏳ ", " - 🌎 ", " - 🔎 ", " - 🥹 ", " - 🫠 ", " - 👾 ",
             ]),
     );
     pb
