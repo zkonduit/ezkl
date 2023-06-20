@@ -755,7 +755,6 @@ impl Model {
         match run_args.output_visibility {
             Visibility::Public => {
                 let _ = outputs
-                    
                     .into_iter()
                     .map(|output| {
                         dummy_config

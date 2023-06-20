@@ -100,11 +100,11 @@ pub struct ForwardResult {
     /// The output of the forward pass
     pub outputs: Vec<Tensor<i128>>,
     /// Any hashes of inputs generated during the forward pass
-    pub processed_inputs: ModuleForwardResult,
+    pub processed_inputs: Option<ModuleForwardResult>,
     /// Any hashes of params generated during the forward pass
-    pub processed_params: ModuleForwardResult,
+    pub processed_params: Option<ModuleForwardResult>,
     /// Any hashes of outputs generated during the forward pass
-    pub processed_outputs: ModuleForwardResult,
+    pub processed_outputs: Option<ModuleForwardResult>,
     /// max lookup input
     pub max_lookup_input: i128,
 }
@@ -329,19 +329,32 @@ impl GraphCircuit {
 
     /// Runs the forward pass of the model / graph of computations and any associated hashing.
     pub fn forward(&self) -> Result<ForwardResult, Box<dyn std::error::Error>> {
-        let processed_inputs = GraphModules::forward(&self.inputs)?;
+        let visibility = VarVisibility::from_args(self.settings.run_args)?;
+        let mut processed_inputs = None;
+        let mut processed_params = None;
+        let mut processed_outputs = None;
 
-        let params = self.model.get_all_consts();
+        if visibility.input.requires_processing() {
+            processed_inputs = Some(GraphModules::forward(&self.inputs, visibility.input)?);
+        }
 
-        let flattened_params = flatten_valtensors(params)?
-            .get_int_evals()?
-            .into_iter()
-            .into();
-
-        let processed_params = GraphModules::forward(&[flattened_params])?;
+        if visibility.params.requires_processing() {
+            let params = self.model.get_all_consts();
+            let flattened_params = flatten_valtensors(params)?
+                .get_int_evals()?
+                .into_iter()
+                .into();
+            processed_params = Some(GraphModules::forward(
+                &[flattened_params],
+                visibility.params,
+            )?);
+        }
 
         let outputs = self.model.forward(&self.inputs)?;
-        let processed_outputs = GraphModules::forward(&outputs.outputs)?;
+
+        if visibility.output.requires_processing() {
+            processed_outputs = Some(GraphModules::forward(&outputs.outputs, visibility.output)?);
+        }
 
         Ok(ForwardResult {
             inputs: self.inputs.clone(),

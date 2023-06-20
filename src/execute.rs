@@ -3,13 +3,14 @@ use crate::circuit::CheckMode;
 use crate::commands::{CalibrationTarget, StrategyType};
 use crate::commands::{Cli, Commands, RunArgs};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::eth::{fix_verifier_sol, verify_proof_with_data_attestation, 
-    read_on_chain_inputs, get_contract_artifacts, verify_proof_via_solidity, evm_quantize,
-    setup_eth_backend, test_on_chain_inputs
+use crate::eth::{
+    evm_quantize, fix_verifier_sol, get_contract_artifacts, read_on_chain_inputs,
+    setup_eth_backend, test_on_chain_inputs, verify_proof_via_solidity,
+    verify_proof_with_data_attestation,
 };
-use crate::graph::{
-    scale_to_multiplier, GraphCircuit, GraphInput, Model, GraphSettings, Visibility,
-};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::graph::Visibility;
+use crate::graph::{scale_to_multiplier, GraphCircuit, GraphInput, GraphSettings, Model};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::evm_verify;
@@ -41,6 +42,8 @@ use halo2curves::ff::Field;
 #[cfg(not(target_arch = "wasm32"))]
 use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Itertools;
+#[cfg(not(target_arch = "wasm32"))]
+use log::debug;
 use log::{info, trace};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
@@ -141,7 +144,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             deployment_code_path,
             sol_code_path,
             sol_bytecode_path,
-            optimizer_runs
+            optimizer_runs,
         ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMDataAttestationVerifier {
@@ -195,19 +198,22 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             strategy,
             settings_path,
             check_mode,
-            test_reads
-        } => prove(
-            data,
-            model,
-            pk_path,
-            proof_path,
-            srs_path,
-            transcript,
-            strategy,
-            settings_path,
-            check_mode,
-            test_reads
-        ).await,
+            test_reads,
+        } => {
+            prove(
+                data,
+                model,
+                pk_path,
+                proof_path,
+                srs_path,
+                transcript,
+                strategy,
+                settings_path,
+                check_mode,
+                test_reads,
+            )
+            .await
+        }
         Commands::Aggregate {
             settings_paths,
             proof_path,
@@ -255,7 +261,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 sol_code_path,
                 sol_bytecode_path,
                 data,
-            ).await
+            )
+            .await
         }
         Commands::PrintProofHex { proof_path } => print_proof_hex(proof_path),
     }
@@ -395,21 +402,17 @@ pub(crate) fn forward(
     output: Option<PathBuf>,
     scale: Option<u32>,
     batch_size: Option<usize>,
-    settings_path: Option<PathBuf>,
+    settings_path: PathBuf,
 ) -> Result<GraphInput, Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
 
-    let circuit_settings = match settings_path {
-        Some(path) => GraphSettings::load(&path)?,
-        None => {
-            let mut circuit_settings = GraphSettings::default();
-            circuit_settings.run_args.scale = scale.unwrap();
-            circuit_settings.run_args.batch_size = batch_size.unwrap();
-            circuit_settings.run_args.allocated_constraints = Some(0);
-            circuit_settings.run_args.output_visibility = Visibility::Public;
-            circuit_settings
-        }
-    };
+    let mut circuit_settings = GraphSettings::load(&settings_path)?;
+    if let Some(scale) = scale {
+        circuit_settings.run_args.scale = scale;
+    }
+    if let Some(batch_size) = batch_size {
+        circuit_settings.run_args.batch_size = batch_size;
+    }
 
     info!("set scale to {}", circuit_settings.run_args.scale);
 
@@ -438,9 +441,9 @@ pub(crate) fn forward(
         .collect();
     trace!("forward pass output: {:?}", float_res);
     data.output_data = float_res;
-    data.processed_inputs = Some(res.processed_inputs);
-    data.processed_params = Some(res.processed_params);
-    data.processed_outputs = Some(res.processed_outputs);
+    data.processed_inputs = res.processed_inputs;
+    data.processed_params = res.processed_params;
+    data.processed_outputs = res.processed_outputs;
 
     if let Some(output_path) = output {
         serde_json::to_writer(&File::create(output_path)?, &data)?;
@@ -489,8 +492,6 @@ pub(crate) fn calibrate(
     settings_path: PathBuf,
     target: CalibrationTarget,
 ) -> Result<(), Box<dyn Error>> {
-    use log::debug;
-
     let data = GraphInput::from_path(data)?;
     // load the pre-generated settings
     let settings = GraphSettings::load(&settings_path)?;
@@ -524,14 +525,29 @@ pub(crate) fn calibrate(
             let res: Result<Vec<GraphSettings>, &str> = chunks
                 .par_iter()
                 .map(|chunk| {
-                    let run_args = RunArgs { scale, ..run_args };
-                    let mut circuit =
-                        GraphCircuit::from_run_args(&run_args, &model_path, CheckMode::SAFE)
-                            .map_err(|_| "failed to create circuit from run args")?;
+                    // we need to create a new run args for each chunk
+                    // time it
+                    let mut local_run_args = RunArgs { scale, ..run_args };
+                    // we need to set the allocated constraints to 0 to avoid dummy pass
+                    local_run_args.allocated_constraints = Some(settings.num_constraints);
+                    // we don't want to calculate the params here
+                    local_run_args.input_visibility = Visibility::Public;
+                    local_run_args.param_visibility = Visibility::Public;
+                    local_run_args.output_visibility = Visibility::Public;
+
+                    // we need to set the output visibility to public to avoid dummy pass
+                    let mut circuit = GraphCircuit::from_run_args(
+                        &local_run_args,
+                        &model_path,
+                        CheckMode::UNSAFE,
+                    )
+                    .map_err(|_| "failed to create circuit from run args")?;
+
                     circuit.load_inputs(chunk);
 
                     loop {
-                        // ensures we have converges
+                        //
+                        // ensures we have converged
                         let params_before = circuit.settings.clone();
                         circuit.calibrate().map_err(|_| "failed to calibrate")?;
                         let params_after = circuit.settings.clone();
@@ -540,7 +556,20 @@ pub(crate) fn calibrate(
                         }
                     }
 
-                    Ok(circuit.settings.clone())
+                    let found_run_args = RunArgs {
+                        scale: circuit.settings.run_args.scale,
+                        bits: circuit.settings.run_args.bits,
+                        logrows: circuit.settings.run_args.logrows,
+                        ..run_args
+                    };
+
+                    let found_settings = GraphSettings {
+                        run_args: found_run_args,
+                        required_lookups: circuit.settings.required_lookups,
+                        ..settings.clone()
+                    };
+
+                    Ok(found_settings)
                 })
                 .collect();
             std::mem::drop(_r);
@@ -698,18 +727,15 @@ pub(crate) fn create_evm_verifier(
         let mut f = File::create(sol_code_path.as_ref().unwrap())?;
         let _ = f.write(yul_code.as_bytes());
 
-        let output = fix_verifier_sol(
-            sol_code_path.as_ref().unwrap().clone(),
-            None,
-            None
-        )?;
+        let output = fix_verifier_sol(sol_code_path.as_ref().unwrap().clone(), None, None)?;
 
         let mut f = File::create(sol_code_path.as_ref().unwrap())?;
         let _ = f.write(output.as_bytes());
 
         if sol_bytecode_path.is_some() {
             let sol_bytecode =
-                gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), "Verifier", runs).unwrap();
+                gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), "Verifier", runs)
+                    .unwrap();
             sol_bytecode.save(&sol_bytecode_path.unwrap())?;
         }
     }
@@ -724,19 +750,21 @@ fn create_evm_data_attestation_verifier(
     sol_code_path: PathBuf,
     sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
-    data: PathBuf
+    data: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
     let model_circuit_params = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, model_circuit_params.run_args.logrows)?;
 
     let num_instance = model_circuit_params.total_instances();
 
-    let vk =
-        load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, model_circuit_params.clone())?;
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
+        vk_path,
+        model_circuit_params.clone(),
+    )?;
     trace!("params computed");
 
     let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
-    
+
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(yul_code.as_bytes());
 
@@ -746,23 +774,24 @@ fn create_evm_data_attestation_verifier(
         let output = fix_verifier_sol(
             sol_code_path.clone(),
             Some(model_circuit_params.run_args.scale),
-            Some(data.0)
+            Some(data.0),
         )?;
-        
+
         let mut f = File::create(sol_code_path.clone())?;
         let _ = f.write(output.as_bytes());
     } else {
         panic!("No on_chain_input_data field found in .json data file")
     }
     if sol_bytecode_path.is_some() {
-        let sol_bytecode = gen_sol_bytecode(sol_code_path, "DataAttestationVerifier", runs).unwrap();
+        let sol_bytecode =
+            gen_sol_bytecode(sol_code_path, "DataAttestationVerifier", runs).unwrap();
         sol_bytecode.save(&sol_bytecode_path.unwrap())?;
     }
     Ok(())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) async fn verify_evm (
+pub(crate) async fn verify_evm(
     proof_path: PathBuf,
     deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
@@ -778,17 +807,9 @@ pub(crate) async fn verify_evm (
 
     if sol_code_path.is_some() {
         let result = if let Some(data) = data.clone() {
-            verify_proof_with_data_attestation(
-                proof.clone(), 
-                sol_code_path.unwrap(),
-                data,
-            ).await?
-        } else {            
-            verify_proof_via_solidity(
-                proof.clone(), 
-                sol_code_path,
-                None
-            ).await?
+            verify_proof_with_data_attestation(proof.clone(), sol_code_path.unwrap(), data).await?
+        } else {
+            verify_proof_via_solidity(proof.clone(), sol_code_path, None).await?
         };
         info!("Solidity verification result: {}", result);
 
@@ -831,18 +852,15 @@ pub(crate) fn create_evm_aggregate_verifier(
         let mut f = File::create(sol_code_path.as_ref().unwrap())?;
         let _ = f.write(yul_code.as_bytes());
 
-        let output = fix_verifier_sol(
-            sol_code_path.as_ref().unwrap().clone(),
-            None,
-            None
-        )?;
+        let output = fix_verifier_sol(sol_code_path.as_ref().unwrap().clone(), None, None)?;
 
         let mut f = File::create(sol_code_path.as_ref().unwrap())?;
         let _ = f.write(output.as_bytes());
 
         if sol_bytecode_path.is_some() {
             let sol_bytecode =
-                gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), "Verifier", runs).unwrap();
+                gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), "Verifier", runs)
+                    .unwrap();
             sol_bytecode.save(&sol_bytecode_path.unwrap())?;
         }
     }
@@ -892,21 +910,26 @@ pub(crate) async fn prove(
         if test_onchain_input {
             // Set up local anvil instance for reading on-chain data
             let (anvil, client) = setup_eth_backend(None).await?;
-            let calls_to_accounts = test_on_chain_inputs(client.clone(), &data, data_path, anvil.endpoint()).await?;
+            let calls_to_accounts =
+                test_on_chain_inputs(client.clone(), &data, data_path, anvil.endpoint()).await?;
             info!("Calls to accounts: {:?}", calls_to_accounts);
-            let inputs = read_on_chain_inputs(client.clone(), client.address(), &calls_to_accounts).await?;
+            let inputs =
+                read_on_chain_inputs(client.clone(), client.address(), &calls_to_accounts).await?;
             info!("Inputs: {:?}", inputs);
-            let quantized_evm_inputs = evm_quantize(client, scale_to_multiplier(scale), &inputs).await?;
+            let quantized_evm_inputs =
+                evm_quantize(client, scale_to_multiplier(scale), &inputs).await?;
             drop(anvil);
             circuit.prepare_public_inputs(&data, Some(vec![quantized_evm_inputs]))?
         } else if let Some((calls_to_accounts, rpc_url)) = &data.on_chain_input_data {
             // Set up anvil instance for reading on-chain data from RPC URL endpoint provided in data
             let (anvil, client) = setup_eth_backend(Some(rpc_url)).await?;
-            let inputs = read_on_chain_inputs(client.clone(), client.address(), calls_to_accounts).await?;
+            let inputs =
+                read_on_chain_inputs(client.clone(), client.address(), calls_to_accounts).await?;
             drop(anvil);
             // Set up local anvil instance for deploying QuantizeData.sol
             let (anvil, client) = setup_eth_backend(None).await?;
-            let quantized_evm_inputs = evm_quantize(client, scale_to_multiplier(scale), &inputs).await?;
+            let quantized_evm_inputs =
+                evm_quantize(client, scale_to_multiplier(scale), &inputs).await?;
             drop(anvil);
             circuit.prepare_public_inputs(&data, Some(vec![quantized_evm_inputs]))?
         } else {
@@ -915,7 +938,6 @@ pub(crate) async fn prove(
     } else {
         circuit.prepare_public_inputs(&data, None)?
     };
-    
 
     let circuit_settings = circuit.settings.clone();
 
