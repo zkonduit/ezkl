@@ -385,9 +385,12 @@ pub fn create_proof_circuit_kzg<
 
 pub(crate) fn gen_srs_cmd(srs_path: PathBuf, logrows: u32) -> Result<(), Box<dyn Error>> {
     // progressbar
+    #[cfg(not(target_arch = "wasm32"))]
     let pb = init_spinner();
+    #[cfg(not(target_arch = "wasm32"))]
     pb.set_message("Generating SRS (this may take a while) ...");
     let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
+    #[cfg(not(target_arch = "wasm32"))]
     pb.finish_with_message("SRS generated");
     save_params::<KZGCommitmentScheme<Bn256>>(&srs_path, &params)?;
     Ok(())

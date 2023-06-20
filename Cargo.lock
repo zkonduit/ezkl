@@ -1995,7 +1995,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/public-cells#ac425ba75960c325310a488b1db7da26cc6b9f18"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/public-cells#25e834025bb13573c5a6ddc7911875e01c152b92"
 dependencies = [
  "arrayvec 0.7.2",
  "bitvec 1.0.1",
@@ -2012,7 +2012,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/public-cells#ac425ba75960c325310a488b1db7da26cc6b9f18"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/public-cells#25e834025bb13573c5a6ddc7911875e01c152b92"
 dependencies = [
  "blake2b_simd",
  "ff",

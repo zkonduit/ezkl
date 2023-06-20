@@ -492,6 +492,11 @@ impl Circuit<Fp> for GraphCircuit {
 
         let module_configs = ModuleConfigs::from_visibility(cs, visibility, params.module_sizes);
 
+        trace!(
+            "log2_ceil of degree: {:?}",
+            (cs.degree() as f32).log2().ceil()
+        );
+
         GraphConfig {
             model_config,
             module_configs,
