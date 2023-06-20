@@ -1,0 +1,150 @@
+name: ezkl-lib-release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'The tag to release' 
+        required: true
+  push:
+    tags:
+      - '*'
+jobs:
+  create-release:
+    name: create-release
+    runs-on: ubuntu-22.04
+    if: startsWith(github.ref, 'refs/tags/')
+
+    outputs:
+      upload_url: ${{ steps.create-release.outputs.upload_url}}
+      ezkl_version: ${{ env.EZKL_VERSION }}
+
+    steps:
+      - name: Get release version from tag
+        shell: bash
+        run: |
+          if [[ -z "${{ github.event.inputs.tag }}" ]]; then
+            echo "EZKL_VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          else
+            echo "EZKL_VERSION=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+          fi
+          echo "version is: ${{ env.EZKL_VERSION }}"
+
+      - name: Create Github Release
+        id: create-release
+        uses: softprops/action-gh-release@v1
+        with:
+          token: ${{ secrets.RELEASE_TOKEN }}
+          tag_name: ${{ env.EZKL_VERSION }}
+        
+  build-release:
+    name: build-release
+    needs: ['create-release']
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO: cargo
+      TARGET_FLAGS: ""
+      TARGET_DIR: ./target
+      RUST_BACKTRACE: 1
+      PCRE2_SYS_STATIC: 1
+    strategy:
+      matrix:
+        build: [windows-msvc, macos, macos-aarch64, linux-musl, linux-gnu]
+        include:
+        - build: windows-msvc
+          os: windows-latest
+          rust: nightly
+          target: x86_64-pc-windows-msvc
+        - build: macos
+          os: macos-13
+          rust: nightly
+          target: x86_64-apple-darwin
+        - build: macos-aarch64
+          os: macos-13
+          rust: nightly
+          target: aarch64-apple-darwin
+        - build: linux-musl
+          os: ubuntu-20.04
+          rust: nightly
+          target: x86_64-unknown-linux-musl
+        - build: linux-gnu
+          os: ubuntu-20.04
+          rust: nightly
+          target: x86_64-unknown-linux-gnu
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        if [[ "${{ runner.os }}" == "Linux" ]]; then
+          sudo apt-get update && sudo apt-get install -y musl-tools
+        fi
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@nightly
+      with:
+        target: ${{ matrix.target }}
+
+    - name: Install Rust targets
+      run: rustup target add ${{ matrix.target }}
+      
+    - name: Use Cross
+      shell: bash
+      run: | 
+        cargo install cross -Z sparse-registry
+        if [[ "${{ matrix.os }}" == "macos-13" ]]; then
+          echo "CC=clang" >> $GITHUB_ENV
+        elif [[ "${{ matrix.os }}" == "ubuntu-20.04" ]]; then
+          echo "CC=gcc" >> $GITHUB_ENV
+        fi
+        echo "CARGO=cross" >> $GITHUB_ENV
+        echo "TARGET_FLAGS=--target ${{ matrix.target }}" >> $GITHUB_ENV
+        echo "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
+    
+
+    - name: Show command used for Cargo
+      run: |
+        echo "cargo command is: ${{ env.CARGO }}"
+        echo "target flag is: ${{ env.TARGET_FLAGS }}"
+        echo "target dir is: ${{ env.TARGET_DIR }}"
+
+    - name: Build release binary
+      run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry
+
+    - name: Strip release binary
+      if: matrix.build != 'windows-msvc'
+      run: strip "target/${{ matrix.target }}/release/ezkl"
+    
+    - name: Strip release binary (Windows)
+      if: matrix.build == 'windows-msvc'
+      run: strip "target/${{ matrix.target }}/release/ezkl.exe"
+    
+
+    - name: Build archive
+      if: matrix.build != 'win-msvc'
+      shell: bash
+      run: |
+        mkdir -p build-artifacts
+        tar czvf build-artifacts/ezkl-${{ matrix.build }}.tar.gz -C "target/${{ matrix.target }}/release" ezkl
+        echo "ASSET=build-artifacts/ezkl-${{ matrix.build }}.tar.gz" >> $GITHUB_ENV
+    
+    - name: Build archive (Windows)
+      if: matrix.build == 'win-msvc'
+      shell: bash
+      run: |
+        mkdir -p build-artifacts
+        powershell.exe -Command "Compress-Archive -Path 'target/${{ matrix.target }}/release/ezkl.exe' -DestinationPath 'build-artifacts/ezkl-win.zip'"
+        echo "ASSET=build-artifacts/ezkl-win.zip" >> $GITHUB_ENV    
+        
+    - name: Upload release archive
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ${{ env.ASSET }}
+        asset_name: ${{ env.ASSET }}
+        asset_content_type: application/octet-stream
+

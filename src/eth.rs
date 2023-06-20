@@ -237,7 +237,6 @@ pub async fn verify_proof_with_data_attestation(
 
     let contract = factory.deploy((contract_addresses, call_data, decimals))?.send().await?;
     info!("hello, past deploy");
-
     abigen!(DataAttestationVerifier, "./abis/DataAttestationVerifier.json");
     let contract = DataAttestationVerifier::new(contract.address(), client.clone());
 
@@ -301,7 +300,6 @@ pub async fn test_on_chain_inputs<M: 'static + Middleware>(
     let (contract, decimals) = setup_test_contract(client.clone(), data).await?;
 
     abigen!(TestReads, "./abis/TestReads.json");
-
 
     let contract = TestReads::new(contract.address(), client.clone());
 
@@ -765,6 +763,7 @@ pub fn fix_verifier_sol(
     let  contract_slice = &contract[..end_index];
 
     let mut contract_slice_string = contract_slice.to_string();
+
 
     // using a boxed Write trait object here to show it works for any Struct impl'ing Write
     // you may also use a std::fs::File here
