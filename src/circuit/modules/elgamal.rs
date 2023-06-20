@@ -447,12 +447,18 @@ impl Module<Fr> for ElGamalGadget {
     }
 
     fn run(input: Self::RunInputs) -> Result<Vec<Vec<Fr>>, Box<dyn std::error::Error>> {
+        let start_time = instant::Instant::now();
+
         let (input, var) = input;
+        let len = input.len();
 
         let cipher = Self::encrypt(var.pk, input, var.r);
         // keep 1 empty (maingate instance variable).
         let mut public_inputs: Vec<Vec<Fr>> = vec![vec![]];
         public_inputs.extend(Self::get_instances(&cipher, Self::hash_sk(var.sk)));
+
+        log::trace!("run (N={:?}) took: {:?}", len, start_time.elapsed());
+
         Ok(public_inputs)
     }
 
@@ -465,6 +471,7 @@ impl Module<Fr> for ElGamalGadget {
         let message = inputs[0].clone();
         let sk = inputs[1].clone();
 
+        let start_time = instant::Instant::now();
         let (msg_var, sk_var) = layouter.assign_region(
             || "plaintext",
             |mut region| {
@@ -501,6 +508,9 @@ impl Module<Fr> for ElGamalGadget {
                 Ok((msg_var?, sk_var))
             },
         )?;
+        let duration = start_time.elapsed();
+        log::trace!("layout inputs took: {:?}", duration);
+
         Ok((msg_var, sk_var))
     }
 
@@ -510,6 +520,8 @@ impl Module<Fr> for ElGamalGadget {
         inputs: &[ValTensor<Fr>],
         row_offsets: Vec<usize>,
     ) -> Result<ValTensor<Fr>, Error> {
+        let start_time = instant::Instant::now();
+
         // if all equivalent to 0, then we are in the first row of the circuit
         if row_offsets.iter().all(|&x| x == 0) {
             self.config.config_range(layouter)?;
@@ -564,6 +576,12 @@ impl Module<Fr> for ElGamalGadget {
 
         let assigned_input: Tensor<ValType<Fr>> =
             msg_var.iter().map(|e| ValType::from(e.clone())).into();
+
+        log::trace!(
+            "layout (N={:?}) took: {:?}",
+            msg_var.len(),
+            start_time.elapsed()
+        );
 
         Ok(assigned_input.into())
     }

@@ -1,6 +1,6 @@
 use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::{CalibrationTarget, RunArgs, StrategyType};
-use crate::graph::{Model, Visibility, GraphInput};
+use crate::graph::{Model, Visibility, GraphWitness};
 use crate::pfsys::{
     gen_srs as ezkl_gen_srs, save_params,
      Snark, TranscriptType,
@@ -127,7 +127,7 @@ fn gen_settings(
 }
 
 
-/// generates the circuit settings
+/// calibrates the circuit settings
 #[pyfunction(signature = (
     data, 
     model,
@@ -135,7 +135,7 @@ fn gen_settings(
     target,
 ))]
 fn calibrate_settings(
-    data: PathBuf,
+    data:  PathBuf,
     model: PathBuf,
     settings: PathBuf,
     target: Option<CalibrationTarget>,
@@ -159,7 +159,7 @@ fn calibrate_settings(
     scale=None, 
     batch_size=None,  
 ))]
-fn forward(
+fn gen_witness(
     data: PathBuf,
     model: PathBuf,
     output: Option<PathBuf>,
@@ -167,7 +167,7 @@ fn forward(
     scale: Option<u32>,
     batch_size: Option<usize>,
 ) -> PyResult<PyObject> {
-    let output: GraphInput = crate::execute::forward(model, data, output, scale, batch_size, settings_path)
+    let output: GraphWitness = crate::execute::gen_witness(model, data, output, scale, batch_size, settings_path)
         .map_err(|e| {
             let err_str = format!("Failed to run forward: {}", e);
             PyRuntimeError::new_err(err_str)})?;
@@ -178,12 +178,12 @@ fn forward(
 
 /// mocks the prover
 #[pyfunction(signature = (
-    data,
+    witness,
     model,
     settings_path,
 ))]
-fn mock(data: PathBuf, model: PathBuf, settings_path: PathBuf) -> PyResult<bool> {
-    crate::execute::mock(model, data, settings_path).map_err(|e| {
+fn mock(witness: PathBuf, model: PathBuf, settings_path: PathBuf) -> PyResult<bool> {
+    crate::execute::mock(model, witness, settings_path).map_err(|e| {
         let err_str = format!("Failed to run setup: {}", e);
         PyRuntimeError::new_err(err_str)})?;
 
@@ -215,7 +215,7 @@ fn setup(
 
 /// runs the prover on a set of inputs
 #[pyfunction(signature = (
-    data,
+    witness,
     model,
     pk_path,
     proof_path,
@@ -226,7 +226,7 @@ fn setup(
     test_reads
 ))]
 fn prove(
-    data: PathBuf,
+    witness:  PathBuf,
     model: PathBuf,
     pk_path: PathBuf,
     proof_path: PathBuf,
@@ -239,7 +239,7 @@ fn prove(
     Runtime::new()
             .unwrap()
             .block_on(crate::execute::prove(
-                data, model, pk_path, proof_path, srs_path, transcript, strategy, settings_path, CheckMode::UNSAFE, test_reads
+                witness, model, pk_path, proof_path, srs_path, transcript, strategy, settings_path, CheckMode::UNSAFE, test_reads
             )).map_err(|e| {
         let err_str = format!("Failed to run prove: {}", e);
         PyRuntimeError::new_err(err_str)})?;
@@ -369,14 +369,14 @@ fn create_evm_verifier(
     deployment_code_path,
     sol_code_path=None,
     sol_bytecode_path=None,
-    data=None,
+    witness=None,
 ))]
 fn verify_evm(
     proof_path: PathBuf,
     deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
-    data: Option<PathBuf>,
+    witness: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
 
     Runtime::new()
@@ -386,7 +386,7 @@ fn verify_evm(
         deployment_code_path,
         sol_code_path,
         sol_bytecode_path,
-        data,
+        witness,
     )).map_err(|e| {
         let err_str = format!("Failed to run verify_evm: {}", e);
         PyRuntimeError::new_err(err_str)})?;
@@ -447,12 +447,12 @@ fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     pyo3_log::init();
     m.add_class::<PyRunArgs>()?;
     m.add_function(wrap_pyfunction!(table, m)?)?;
-    m.add_function(wrap_pyfunction!(gen_srs, m)?)?;
-    m.add_function(wrap_pyfunction!(forward, m)?)?;
     m.add_function(wrap_pyfunction!(mock, m)?)?;
     m.add_function(wrap_pyfunction!(setup, m)?)?;
     m.add_function(wrap_pyfunction!(prove, m)?)?;
     m.add_function(wrap_pyfunction!(verify, m)?)?;
+    m.add_function(wrap_pyfunction!(gen_srs, m)?)?;
+    m.add_function(wrap_pyfunction!(gen_witness, m)?)?;
     m.add_function(wrap_pyfunction!(gen_settings, m)?)?;
     m.add_function(wrap_pyfunction!(calibrate_settings, m)?)?;
     m.add_function(wrap_pyfunction!(aggregate, m)?)?;

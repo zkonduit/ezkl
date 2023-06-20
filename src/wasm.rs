@@ -170,7 +170,7 @@ pub fn verify_wasm(
 /// Prove in browser using wasm
 #[wasm_bindgen]
 pub fn prove_wasm(
-    data: wasm_bindgen::Clamped<Vec<u8>>,
+    witness: wasm_bindgen::Clamped<Vec<u8>>,
     pk: wasm_bindgen::Clamped<Vec<u8>>,
     circuit_ser: wasm_bindgen::Clamped<Vec<u8>>,
     circuit_settings_ser: wasm_bindgen::Clamped<Vec<u8>>,
@@ -182,7 +182,7 @@ pub fn prove_wasm(
         halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).unwrap();
 
     // read in model input
-    let data: crate::graph::GraphInput = serde_json::from_slice(&data[..]).unwrap();
+    let data: crate::graph::GraphWitness = serde_json::from_slice(&witness[..]).unwrap();
 
     // read in circuit params
     let circuit_settings: GraphSettings =

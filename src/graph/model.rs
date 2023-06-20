@@ -237,9 +237,9 @@ impl Model {
         // Then number of columns in the circuits
         info!(
             "{} {} {}",
-            "The model generates".blue(),
+            "model generates".blue(),
             num_constraints.to_string().blue(),
-            "constraints (does not include modules)".blue()
+            "constraints (excluding modules)".blue()
         );
 
         // extract the requisite lookup ops from the model
@@ -364,6 +364,8 @@ impl Model {
         run_args: &RunArgs,
         visibility: &VarVisibility,
     ) -> Result<ParsedNodes, Box<dyn Error>> {
+        let start_time = instant::Instant::now();
+
         let mut model = tract_onnx::onnx().model_for_read(reader).map_err(|e| {
             error!("Error loading model: {}", e);
             GraphError::ModelLoad
@@ -424,6 +426,9 @@ impl Model {
             inputs: model.inputs.iter().map(|o| o.node).collect(),
             outputs: model.outputs.iter().map(|o| o.node).collect(),
         };
+
+        let duration = start_time.elapsed();
+        trace!("model loading took: {:?}", duration);
 
         Ok(parsed_nodes)
     }
@@ -595,6 +600,9 @@ impl Model {
         vars: &ModelVars<Fp>,
     ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
         info!("model layout...");
+
+        let start_time = instant::Instant::now();
+
         let mut results = BTreeMap::<usize, ValTensor<Fp>>::new();
 
         for (i, input_idx) in self.graph.inputs.iter().enumerate() {
@@ -655,6 +663,10 @@ impl Model {
                 Ok(outputs)
             },
         )?;
+
+        let duration = start_time.elapsed();
+        trace!("model layout took: {:?}", duration);
+
         Ok(outputs)
     }
 
@@ -728,6 +740,9 @@ impl Model {
         input_shapes: &[Vec<usize>],
     ) -> Result<usize, Box<dyn Error>> {
         info!("calculating num of constraints using dummy model layout...");
+
+        let start_time = instant::Instant::now();
+
         let mut results = BTreeMap::<usize, ValTensor<Fp>>::new();
 
         let inputs: Vec<ValTensor<Fp>> = input_shapes
@@ -769,6 +784,9 @@ impl Model {
             }
             _ => {}
         }
+
+        let duration = start_time.elapsed();
+        trace!("dummy model layout took: {:?}", duration);
 
         Ok(region.offset())
     }
