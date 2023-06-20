@@ -29,6 +29,8 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub input_visibility: Visibility,
     #[pyo3(get, set)]
+    pub on_chain_inputs: bool,
+    #[pyo3(get, set)]
     pub output_visibility: Visibility,
     #[pyo3(get, set)]
     pub param_visibility: Visibility,
@@ -48,6 +50,7 @@ impl PyRunArgs {
             scale: 7,
             bits: 16,
             logrows: 17,
+            on_chain_inputs: false,
             input_visibility: "public".into(),
             output_visibility: "public".into(),
             param_visibility: "private".into(),
@@ -65,6 +68,7 @@ impl From<PyRunArgs> for RunArgs {
             scale: py_run_args.scale,
             bits: py_run_args.bits,
             logrows: py_run_args.logrows,
+            on_chain_inputs: py_run_args.on_chain_inputs,
             input_visibility: py_run_args.input_visibility,
             output_visibility: py_run_args.output_visibility,
             param_visibility: py_run_args.param_visibility,
@@ -219,6 +223,7 @@ fn setup(
     transcript,
     strategy,
     settings_path,
+    test_reads
 ))]
 fn prove(
     data: PathBuf,
@@ -229,9 +234,13 @@ fn prove(
     transcript: TranscriptType,
     strategy: StrategyType,
     settings_path: PathBuf,
+    test_reads: bool
 ) -> Result<bool, PyErr> {
-    
-    crate::execute::prove(data, model, pk_path, proof_path, srs_path, transcript, strategy, settings_path, CheckMode::UNSAFE).map_err(|e| {
+    Runtime::new()
+            .unwrap()
+            .block_on(crate::execute::prove(
+                data, model, pk_path, proof_path, srs_path, transcript, strategy, settings_path, CheckMode::UNSAFE, test_reads
+            )).map_err(|e| {
         let err_str = format!("Failed to run prove: {}", e);
         PyRuntimeError::new_err(err_str)})?;
 
@@ -360,12 +369,14 @@ fn create_evm_verifier(
     deployment_code_path,
     sol_code_path=None,
     sol_bytecode_path=None,
+    data=None,
 ))]
 fn verify_evm(
     proof_path: PathBuf,
-    deployment_code_path: PathBuf,
+    deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
+    data: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
 
     Runtime::new()
@@ -375,6 +386,7 @@ fn verify_evm(
         deployment_code_path,
         sol_code_path,
         sol_bytecode_path,
+        data,
     )).map_err(|e| {
         let err_str = format!("Failed to run verify_evm: {}", e);
         PyRuntimeError::new_err(err_str)})?;

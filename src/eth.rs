@@ -1,5 +1,7 @@
+use crate::graph::input::{GraphInput, CallsToAccount};
 use crate::pfsys::evm::{DeploymentCode, EvmVerificationError};
 use crate::pfsys::Snark;
+use ethers::prelude::ContractInstance;
 use ethers::abi::Abi;
 use ethers::abi::Contract;
 use ethers::contract::abigen;
@@ -11,9 +13,12 @@ use ethers::prelude::Wallet;
 use ethers::providers::Middleware;
 use ethers::providers::{Http, Provider};
 use ethers::signers::Signer;
+use ethers::types::H160;
+use ethers::types::TransactionRequest;
 use ethers::solc::{CompilerInput, Solc};
 use ethers::types::Bytes;
 use ethers::types::U256;
+use ethers::types::transaction::eip2718::TypedTransaction;
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::{
     prelude::{LocalWallet, Wallet},
@@ -32,18 +37,27 @@ use std::{convert::TryFrom, sync::Arc};
 /// A local ethers-rs based client
 pub type EthersClient = Arc<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>;
 
-/// Return an instance of Anvil and a local client
+/// Return an instance of Anvil and a client for the given RPC URL. If none is provided, a local client is used.
 #[cfg(not(target_arch = "wasm32"))]
-pub async fn setup_eth_backend() -> Result<(AnvilInstance, EthersClient), Box<dyn Error>> {
+pub async fn setup_eth_backend(rpc_url: Option<&str>) -> Result<(AnvilInstance, EthersClient), Box<dyn Error>> {
     // Launch anvil
     let anvil = Anvil::new().spawn();
 
     // Instantiate the wallet
     let wallet: LocalWallet = anvil.keys()[0].clone().into();
 
+    let endpoint = if let Some(rpc_url) = rpc_url {
+        rpc_url.to_string()
+    } else {
+        anvil.endpoint()
+    };
+
     // Connect to the network
     let provider =
-        Provider::<Http>::try_from(anvil.endpoint())?.interval(Duration::from_millis(10u64));
+        Provider::<Http>::try_from(endpoint)?.interval(Duration::from_millis(10u64));
+
+    let chain_id = provider.get_chainid().await?;
+    info!("using chain {}", chain_id);
 
     // Instantiate the client with the wallet
     let client = Arc::new(SignerMiddleware::new(
@@ -54,6 +68,7 @@ pub async fn setup_eth_backend() -> Result<(AnvilInstance, EthersClient), Box<dy
     Ok((anvil, client))
 }
 
+
 /// Verify a proof using a Solidity verifier contract
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn verify_proof_via_solidity(
@@ -61,11 +76,17 @@ pub async fn verify_proof_via_solidity(
     sol_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
 ) -> Result<bool, Box<dyn Error>> {
-    let (anvil, client) = setup_eth_backend().await?;
+    let (anvil, client) = setup_eth_backend(None).await?;
 
     // sol code supercedes deployment code
     let factory = match sol_code_path {
-        Some(path) => get_sol_contract_factory(path, client.clone()).unwrap(),
+        Some(path) => {
+            get_sol_contract_factory(
+                path,
+                "Verifier",
+                client.clone(),
+            ).unwrap()
+        } 
         None => match sol_bytecode_path {
             Some(path) => {
                 let bytecode = DeploymentCode::load(&path)?;
@@ -129,14 +150,280 @@ pub async fn verify_proof_via_solidity(
     Ok(result)
 }
 
+fn count_decimal_places(num: f32) -> usize {
+    // Convert the number to a string
+    let s = num.to_string();
+
+    // Find the decimal point
+    match s.find('.') {
+        Some(index) => {
+            // Count the number of characters after the decimal point
+            s[index+1..].len()
+        },
+        None => 0,
+    }
+}
+
+///
+pub async fn setup_test_contract<M: 'static + Middleware>(
+    client: Arc<M>,
+    data: &GraphInput,
+) -> Result<(ContractInstance<Arc<M>, M>, Vec<u8>), Box<dyn Error>> {
+
+    let factory = get_sol_contract_factory(
+        PathBuf::from("TestReads.sol"),
+        "TestReads",
+        client.clone(),
+    ).unwrap();
+
+    let mut decimals = vec![];
+    let mut scaled_by_decimals_data = vec![];
+    for input in &data.input_data[0] {
+        let decimal_places = count_decimal_places(*input) as u8;
+        let scaled_by_decimals = input*f32::powf(10., decimal_places.into());
+        scaled_by_decimals_data.push(scaled_by_decimals as u128);
+        decimals.push(decimal_places);
+    }
+    
+    let contract = factory.deploy(scaled_by_decimals_data)?.send().await?;
+    Ok((contract, decimals))
+}
+
+/// Verify a proof using a Solidity DataAttestationVerifier contract
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn verify_proof_with_data_attestation(
+    proof: Snark<Fr, G1Affine>,
+    sol_code_path: PathBuf,
+    data: PathBuf,
+) -> Result<bool, Box<dyn Error>> {
+
+    let (anvil, client) = setup_eth_backend(None).await?;
+    
+    let data = GraphInput::from_path(data)?;
+
+    let (contract, _) = setup_test_contract(client.clone(), &data).await?;
+
+    info!("contract address: {:#?}", contract.address());
+
+    let data = data.on_chain_input_data;
+    let factory = get_sol_contract_factory(
+        sol_code_path,
+        "DataAttestationVerifier",
+        client.clone()
+    ).unwrap();
+
+    let (contract_addresses, call_data, decimals) = if let Some(data) = data {
+        let mut contract_addresses = vec![];
+        let mut call_data = vec![];
+        let mut decimals: Vec<u8> = vec![];
+        for (i, val) in data.0.iter().enumerate() {
+            let contract_address_bytes = hex::decode(val.address.clone())?;
+            let contract_address = H160::from_slice(&contract_address_bytes);
+            contract_addresses.push(contract_address);
+            call_data.push(vec![]);
+            for (call, decimal) in &val.call_data {
+                let call_data_bytes = hex::decode(call)?;
+                call_data[i].push(ethers::types::Bytes::from(call_data_bytes));
+                decimals.push(*decimal);
+            }
+        }
+        (contract_addresses, call_data, decimals)
+    } else {
+        panic!("No on_chain_input_data field found in .json data file")
+    };
+
+    info!("call_data length: {:#?}", call_data);
+    info!("contract_addresses length: {:#?}", contract_addresses);
+
+    let contract = factory.deploy((contract_addresses, call_data, decimals))?.send().await?;
+    info!("hello, past deploy");
+
+    abigen!(DataAttestationVerifier, "./DataAttestationVerifier.json");
+    let contract = DataAttestationVerifier::new(contract.address(), client.clone());
+
+    let mut public_inputs = vec![];
+    let flattened_instances = proof.instances.into_iter().flatten();
+
+    for val in flattened_instances {
+        let bytes = val.to_repr();
+        let u = U256::from_little_endian(bytes.as_slice());
+        public_inputs.push(u);
+    }
+
+    let tx = contract
+        .verify_with_data_attestation(
+            public_inputs.clone(),
+            ethers::types::Bytes::from(proof.proof.to_vec()),
+        )
+        .tx;
+
+    info!(
+        "estimated verify gas cost: {:#?}",
+        client.estimate_gas(&tx, None).await?
+    );
+
+    info!("public_inputs: {:#?}", public_inputs);
+
+    let result = contract
+        .verify_with_data_attestation(
+            public_inputs,
+            ethers::types::Bytes::from(proof.proof.to_vec()),
+        )
+        .call()
+        .await;
+
+    if result.is_err() {
+        return Err(Box::new(EvmVerificationError::SolidityExecution));
+    }
+    let result = result.unwrap();
+    if !result {
+        return Err(Box::new(EvmVerificationError::InvalidProof));
+    }
+    drop(anvil);
+    Ok(result)
+}
+
+/// get_provider returns a JSON RPC HTTP Provider
+pub fn get_provider(rpc_url: &str) -> Result<Provider<Http>, Box<dyn Error>> {
+    let provider = Provider::<Http>::try_from(rpc_url)?;
+    debug!("{:#?}", provider);
+    Ok(provider)
+}
+
+/// Tests on-chain inputs by deploying a contract that stores the data.input_data in its storage
+pub async fn test_on_chain_inputs<M: 'static + Middleware>(
+    client: Arc<M>,
+    data: &GraphInput,
+    data_path: PathBuf,
+    endpoint: String,
+) -> Result<Vec<CallsToAccount>, Box<dyn Error>> {
+
+    let (contract, decimals) = setup_test_contract(client.clone(), data).await?;
+
+    abigen!(TestReads, "./TestReads.json");
+
+
+    let contract = TestReads::new(contract.address(), client.clone());
+
+    // Get the encoded call data for each input
+    let mut calldata = vec![];
+    for(i, _) in data.input_data[0].iter().enumerate() {
+        let function = contract.method::<_, U256>("arr", i as u32).unwrap();
+        let call = function.calldata().unwrap();
+        // Push (call, decimals) to the calldata vector, and set the decimals to 0.
+        calldata.push((hex::encode(call), decimals[i]));
+    }
+    // Instantiate a new CallsToAccount struct
+    let calls_to_account = CallsToAccount {
+        call_data: calldata,
+        address: hex::encode(contract.address().as_bytes())
+    };
+    info!("calls_to_account: {:#?}", calls_to_account);
+    let calls_to_accounts = vec![calls_to_account];
+    // Fill the on_chain_input_data field of the GraphInput struct
+    let mut data = data.clone();
+    data.on_chain_input_data = Some((calls_to_accounts.clone(), endpoint));
+    // Save the updated GraphInput struct to the data_path
+    data.save(data_path)?;
+    Ok(calls_to_accounts)
+}
+
+
+/// Reads on-chain inputs, returning the raw encoded data returned from making all the calls in on_chain_input_data
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn read_on_chain_inputs<M: 'static + Middleware>(
+    client: Arc<M>,
+    address: H160,
+    data: &Vec<CallsToAccount>
+) -> Result<(Vec<Bytes>, Vec<u8>), Box<dyn Error>> {
+    
+    // Iterate over all on-chain inputs
+    let mut fetched_inputs = vec![];
+    let mut decimals = vec![];
+    for on_chain_data in data {
+        // Construct the address
+        let contract_address_bytes = hex::decode(on_chain_data.address.clone())?;
+        let contract_address = H160::from_slice(&contract_address_bytes);
+        for (call_data, decimal) in &on_chain_data.call_data {
+            let call_data_bytes = hex::decode(call_data.clone())?;
+            let tx: TypedTransaction = TransactionRequest::default()
+                .to(contract_address)
+                .from(address)
+                .data(call_data_bytes)
+                .into();
+            debug!("transaction {:#?}", tx);
+
+            let result = client.call(&tx, None).await?;
+            debug!("return data {:#?}", result);
+            fetched_inputs.push(result);
+            decimals.push(*decimal);
+        }
+    }
+    Ok((fetched_inputs, decimals))
+
+}
+
+///
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn evm_quantize <M: 'static + Middleware>(
+    client: Arc<M>,
+    scale: f64,
+    data: &(Vec<ethers::types::Bytes>, Vec<u8>),
+)-> Result<Vec<i128>, Box<dyn Error>> {
+
+    let factory = get_sol_contract_factory(
+        PathBuf::from("./QuantizeData.sol"),
+        "QuantizeData",
+        client.clone(),
+    ).unwrap();
+    
+    
+    let contract = factory.deploy(())?.send().await?;
+    
+    abigen!(QuantizeData, "./QuantizeData.json");
+    
+    let contract = QuantizeData::new(contract.address(), client.clone());
+
+    let fetched_inputs = data.0.clone();
+    let decimals = data.1.clone();
+
+    let fetched_inputs = fetched_inputs
+        .iter()
+        .map(|x| Result::<_, std::convert::Infallible>::Ok(ethers::types::Bytes::from(x.to_vec())))
+        .collect::<Result<Vec<Bytes>, _>>()?;
+
+    let decimals = decimals
+        .iter()
+        .map(|x| U256::from_dec_str(&x.to_string()))
+        .collect::<Result<Vec<U256>, _>>()?;
+
+    let results = contract
+        .quantize_data(
+            fetched_inputs, 
+            decimals,
+            U256::from_dec_str(&scale.to_string())?
+        )
+        .call()
+        .await;
+        
+    let results = results.unwrap();
+    info!(
+        "evm quantization results: {:#?}",
+        results,
+    );
+    Ok(results.to_vec())
+}
+
+
 /// Generates the contract factory for a solidity verifier, optionally compiling the code with optimizer runs set on the Solc compiler.
 fn get_sol_contract_factory<M: 'static + Middleware>(
     sol_code_path: PathBuf,
+    contract_name: &str,
     client: Arc<M>,
 ) -> Result<ContractFactory<M>, Box<dyn Error>> {
     const MAX_RUNTIME_BYTECODE_SIZE: usize = 24577;
     // call get_contract_artificacts to get the abi and bytecode
-    let (abi, bytecode, runtime_bytecode) = get_contract_artifacts(sol_code_path, None)?;
+    let (abi, bytecode, runtime_bytecode) = get_contract_artifacts(sol_code_path, contract_name, None)?;
     let size = runtime_bytecode.len();
     debug!("runtime bytecode size: {:#?}", size);
     if size > MAX_RUNTIME_BYTECODE_SIZE {
@@ -156,6 +443,7 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
 #[cfg(not(target_arch = "wasm32"))]
 pub fn get_contract_artifacts(
     sol_code_path: PathBuf,
+    contract_name: &str,
     runs: Option<usize>,
 ) -> Result<(Contract, Bytes, Bytes), Box<dyn Error>> {
     // Create the compiler input, enabling the optimizer and setting the optimzer runs.
@@ -168,7 +456,7 @@ pub fn get_contract_artifacts(
     };
     let compiled = Solc::default().compile(&input).unwrap();
     let (abi, bytecode, runtime_bytecode) = compiled
-        .find("Verifier")
+        .find(contract_name)
         .expect("could not find contract")
         .into_parts_or_default();
     Ok((abi, bytecode, runtime_bytecode))
@@ -179,7 +467,12 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 /// Reads in raw bytes code and generates equivalent .sol file
-pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
+/// Can optionally attest to on-chain inputs
+pub fn fix_verifier_sol(
+    input_file: PathBuf, 
+    scale: Option<u32>,
+    data: Option<Vec<CallsToAccount>>
+) -> Result<String, Box<dyn Error>> {
     let file = File::open(input_file.clone())?;
     let reader = BufReader::new(file);
 
@@ -428,23 +721,175 @@ pub fn fix_verifier_sol(input_file: PathBuf) -> Result<String, Box<dyn Error>> {
 
     // get the max transcript addr
     let max_transcript_addr = transcript_addrs.iter().max().unwrap() / 32;
-    let mut contract = format!(
-        "// SPDX-License-Identifier: MIT
-    pragma solidity ^0.8.17;
-    
-    contract Verifier {{
-        function verify(
-            uint256[] memory pubInputs,
-            bytes memory proof
-        ) public view returns (bool) {{
-            bool success = true;
-            bytes32[{}] memory transcript;
-            assembly {{
-        ",
-        max_transcript_addr
-    )
-    .trim()
-    .to_string();
+
+
+    let mut contract = if let Some(data) = data {
+        let total_calls: usize = data.iter().map(|v| v.call_data.len()).sum();
+        format!(
+            r#" // SPDX-License-Identifier: MIT
+            pragma solidity ^0.8.17;
+            
+            contract DataAttestationVerifier {{
+            
+                /**
+                 * @notice Struct used to make view only calls to accounts to fetch the data that EZKL reads from.
+                 * @param the address of the account to make calls to
+                 * @param the abi encoded function calls to make to the `contractAddress`
+                 */
+                struct AccountCall {{
+                    address contractAddress;
+                    mapping(uint256 => bytes) callData;
+                    mapping(uint256 => uint256) decimals;
+                    uint callCount;
+                }}
+                AccountCall[{}] public accountCalls;
+            
+                uint constant public SCALE = 1<<{};
+            
+                uint256 constant SIZE_LIMIT = uint256(uint128(type(int128).max));
+            
+                uint256 constant TOTAL_CALLS = {};
+            
+                /**
+                 * @dev Initialize the contract with account calls the EZKL model will read from.
+                 * @param _contractAddresses - The calls to all the contracts EZKL reads storage from.
+                 * @param _callData - The abi encoded function calls to make to the `contractAddress` that EZKL reads storage from.
+                 */
+                constructor(address[] memory _contractAddresses, bytes[][] memory _callData, uint256[] memory _decimals) {{
+                    require(_contractAddresses.length == _callData.length && accountCalls.length == _contractAddresses.length, "Invalid input length");
+                    require(TOTAL_CALLS == _decimals.length, "Invalid number of decimals");
+                    // fill in the accountCalls storage array
+                    uint counter = 0;
+                    for(uint256 i = 0; i < _contractAddresses.length; i++) {{
+                        AccountCall storage accountCall = accountCalls[i];
+                        accountCall.contractAddress = _contractAddresses[i];
+                        accountCall.callCount = _callData[i].length;
+                        for(uint256 j = 0; j < _callData[i].length; j++){{
+                            accountCall.callData[j] = _callData[i][j];
+                            accountCall.decimals[j] = 10**_decimals[counter + j];
+                        }}
+                        // count the total number of storage reads across all of the accounts
+                        counter += _callData[i].length;
+                    }}
+                }}
+            
+                function mulDiv(uint256 x, uint256 y, uint256 denominator) internal pure returns (uint256 result) {{
+                    unchecked {{
+                        uint256 prod0;
+                        uint256 prod1;
+                        assembly {{
+                            let mm := mulmod(x, y, not(0))
+                            prod0 := mul(x, y)
+                            prod1 := sub(sub(mm, prod0), lt(mm, prod0))
+                        }}
+            
+                        if (prod1 == 0) {{
+                            return prod0 / denominator;
+                        }}
+            
+                        require(denominator > prod1, "Math: mulDiv overflow");
+            
+                        uint256 remainder;
+                        assembly {{
+                            remainder := mulmod(x, y, denominator)
+                            prod1 := sub(prod1, gt(remainder, prod0))
+                            prod0 := sub(prod0, remainder)
+                        }}
+            
+                        uint256 twos = denominator & (~denominator + 1);
+                        assembly {{
+                            denominator := div(denominator, twos)
+                            prod0 := div(prod0, twos)
+                            twos := add(div(sub(0, twos), twos), 1)
+                        }}
+            
+                        prod0 |= prod1 * twos;
+            
+                        uint256 inverse = (3 * denominator) ^ 2;
+            
+                        inverse *= 2 - denominator * inverse;
+                        inverse *= 2 - denominator * inverse;
+                        inverse *= 2 - denominator * inverse;
+                        inverse *= 2 - denominator * inverse;
+                        inverse *= 2 - denominator * inverse;
+                        inverse *= 2 - denominator * inverse;
+            
+                        result = prod0 * inverse;
+                        return result;
+                    }}
+                }}
+                function quantize_data(bytes memory data, uint256 decimals) internal pure returns (uint128 quantized_data) {{
+                    uint x = abi.decode(data, (uint256));
+                    uint output = mulDiv(x, SCALE, decimals);
+                    if (mulmod(x, SCALE, decimals)*2 >= decimals) {{
+                        output += 1;
+                    }}
+                    require(output < SIZE_LIMIT, "QuantizeData: overflow");
+                    quantized_data = uint128(output);
+                }}
+            
+                function staticCall (address target, bytes memory data) internal view returns (bytes memory) {{
+                    (bool success, bytes memory returndata) = target.staticcall(data);
+                    if (success) {{
+                        if (returndata.length == 0) {{
+                            require(target.code.length > 0, "Address: call to non-contract");
+                        }}
+                    return returndata;
+                    }} else {{
+                        revert("Address: low-level call failed");
+                    }}
+                }}
+            
+                function attestData(uint256[] memory pubInputs) internal view {{
+                    require(pubInputs.length >= TOTAL_CALLS, "Invalid public inputs length");
+                    uint256 _accountCount = accountCalls.length;
+                    uint counter = 0; 
+                    for (uint8 i = 0; i < _accountCount; ++i) {{
+                        address account = accountCalls[i].contractAddress;
+                        for (uint8 j = 0; j < accountCalls[i].callCount; j++) {{
+                            bytes memory returnData = staticCall(account, accountCalls[i].callData[j]);
+                            uint256 quantized_data = quantize_data(returnData, accountCalls[i].decimals[j]);
+                            require(quantized_data == pubInputs[counter], "Public input does not match");
+                            counter++;
+                        }}
+                    }}
+                }}
+            
+                function verifyWithDataAttestation(
+                    uint256[] memory pubInputs,
+                    bytes memory proof
+                ) public view returns (bool) {{
+                    bool success = true;
+                    bytes32[{}] memory transcript;
+                    attestData(pubInputs);
+                    assembly {{ 
+                "#,
+            data.len(),
+            scale.unwrap(),
+            total_calls,
+            max_transcript_addr
+        )
+        .trim()
+        .to_string()
+    } else {
+        format!(
+            "// SPDX-License-Identifier: MIT
+        pragma solidity ^0.8.17;
+        
+        contract Verifier {{
+            function verify(
+                uint256[] memory pubInputs,
+                bytes memory proof
+            ) public view returns (bool) {{
+                bool success = true;
+                bytes32[{}] memory transcript;
+                assembly {{
+            ",
+            max_transcript_addr
+        )
+        .trim()
+        .to_string()
+    };
 
     // using a boxed Write trait object here to show it works for any Struct impl'ing Write
     // you may also use a std::fs::File here

@@ -45,7 +45,7 @@ pub enum TensorError {
     WrongMethod,
     /// Significant bit truncation when instantiating
     #[error("Significant bit truncation when instantiating")]
-    SigBitTruncatioError,
+    SigBitTruncationError,
 }
 
 /// The (inner) type of tensor elements.
