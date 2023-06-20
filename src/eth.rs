@@ -106,7 +106,7 @@ pub async fn verify_proof_via_solidity(
     let contract = factory.deploy(())?.send().await?;
     let addr = contract.address();
 
-    abigen!(Verifier, "./Verifier.json");
+    abigen!(Verifier, "./abis/Verifier.json");
     let contract = Verifier::new(addr, client.clone());
 
     let mut public_inputs = vec![];
@@ -171,7 +171,7 @@ pub async fn setup_test_contract<M: 'static + Middleware>(
 ) -> Result<(ContractInstance<Arc<M>, M>, Vec<u8>), Box<dyn Error>> {
 
     let factory = get_sol_contract_factory(
-        PathBuf::from("TestReads.sol"),
+        PathBuf::from("./contracts/TestReads.sol"),
         "TestReads",
         client.clone(),
     ).unwrap();
@@ -238,7 +238,7 @@ pub async fn verify_proof_with_data_attestation(
     let contract = factory.deploy((contract_addresses, call_data, decimals))?.send().await?;
     info!("hello, past deploy");
 
-    abigen!(DataAttestationVerifier, "./DataAttestationVerifier.json");
+    abigen!(DataAttestationVerifier, "./abis/DataAttestationVerifier.json");
     let contract = DataAttestationVerifier::new(contract.address(), client.clone());
 
     let mut public_inputs = vec![];
@@ -300,7 +300,7 @@ pub async fn test_on_chain_inputs<M: 'static + Middleware>(
 
     let (contract, decimals) = setup_test_contract(client.clone(), data).await?;
 
-    abigen!(TestReads, "./TestReads.json");
+    abigen!(TestReads, "./abis/TestReads.json");
 
 
     let contract = TestReads::new(contract.address(), client.clone());
@@ -372,7 +372,7 @@ pub async fn evm_quantize <M: 'static + Middleware>(
 )-> Result<Vec<i128>, Box<dyn Error>> {
 
     let factory = get_sol_contract_factory(
-        PathBuf::from("./QuantizeData.sol"),
+        PathBuf::from("./contracts/QuantizeData.sol"),
         "QuantizeData",
         client.clone(),
     ).unwrap();
@@ -380,7 +380,7 @@ pub async fn evm_quantize <M: 'static + Middleware>(
     
     let contract = factory.deploy(())?.send().await?;
     
-    abigen!(QuantizeData, "./QuantizeData.json");
+    abigen!(QuantizeData, "./abis/QuantizeData.json");
     
     let contract = QuantizeData::new(contract.address(), client.clone());
 
@@ -722,178 +722,53 @@ pub fn fix_verifier_sol(
     // get the max transcript addr
     let max_transcript_addr = transcript_addrs.iter().max().unwrap() / 32;
 
-
     let mut contract = if let Some(data) = data {
         let total_calls: usize = data.iter().map(|v| v.call_data.len()).sum();
-        format!(
-            r#" // SPDX-License-Identifier: MIT
-            pragma solidity ^0.8.17;
-            
-            contract DataAttestationVerifier {{
-            
-                /**
-                 * @notice Struct used to make view only calls to accounts to fetch the data that EZKL reads from.
-                 * @param the address of the account to make calls to
-                 * @param the abi encoded function calls to make to the `contractAddress`
-                 */
-                struct AccountCall {{
-                    address contractAddress;
-                    mapping(uint256 => bytes) callData;
-                    mapping(uint256 => uint256) decimals;
-                    uint callCount;
-                }}
-                AccountCall[{}] public accountCalls;
-            
-                uint constant public SCALE = 1<<{};
-            
-                uint256 constant SIZE_LIMIT = uint256(uint128(type(int128).max));
-            
-                uint256 constant TOTAL_CALLS = {};
-            
-                /**
-                 * @dev Initialize the contract with account calls the EZKL model will read from.
-                 * @param _contractAddresses - The calls to all the contracts EZKL reads storage from.
-                 * @param _callData - The abi encoded function calls to make to the `contractAddress` that EZKL reads storage from.
-                 */
-                constructor(address[] memory _contractAddresses, bytes[][] memory _callData, uint256[] memory _decimals) {{
-                    require(_contractAddresses.length == _callData.length && accountCalls.length == _contractAddresses.length, "Invalid input length");
-                    require(TOTAL_CALLS == _decimals.length, "Invalid number of decimals");
-                    // fill in the accountCalls storage array
-                    uint counter = 0;
-                    for(uint256 i = 0; i < _contractAddresses.length; i++) {{
-                        AccountCall storage accountCall = accountCalls[i];
-                        accountCall.contractAddress = _contractAddresses[i];
-                        accountCall.callCount = _callData[i].length;
-                        for(uint256 j = 0; j < _callData[i].length; j++){{
-                            accountCall.callData[j] = _callData[i][j];
-                            accountCall.decimals[j] = 10**_decimals[counter + j];
-                        }}
-                        // count the total number of storage reads across all of the accounts
-                        counter += _callData[i].length;
-                    }}
-                }}
-            
-                function mulDiv(uint256 x, uint256 y, uint256 denominator) internal pure returns (uint256 result) {{
-                    unchecked {{
-                        uint256 prod0;
-                        uint256 prod1;
-                        assembly {{
-                            let mm := mulmod(x, y, not(0))
-                            prod0 := mul(x, y)
-                            prod1 := sub(sub(mm, prod0), lt(mm, prod0))
-                        }}
-            
-                        if (prod1 == 0) {{
-                            return prod0 / denominator;
-                        }}
-            
-                        require(denominator > prod1, "Math: mulDiv overflow");
-            
-                        uint256 remainder;
-                        assembly {{
-                            remainder := mulmod(x, y, denominator)
-                            prod1 := sub(prod1, gt(remainder, prod0))
-                            prod0 := sub(prod0, remainder)
-                        }}
-            
-                        uint256 twos = denominator & (~denominator + 1);
-                        assembly {{
-                            denominator := div(denominator, twos)
-                            prod0 := div(prod0, twos)
-                            twos := add(div(sub(0, twos), twos), 1)
-                        }}
-            
-                        prod0 |= prod1 * twos;
-            
-                        uint256 inverse = (3 * denominator) ^ 2;
-            
-                        inverse *= 2 - denominator * inverse;
-                        inverse *= 2 - denominator * inverse;
-                        inverse *= 2 - denominator * inverse;
-                        inverse *= 2 - denominator * inverse;
-                        inverse *= 2 - denominator * inverse;
-                        inverse *= 2 - denominator * inverse;
-            
-                        result = prod0 * inverse;
-                        return result;
-                    }}
-                }}
-                function quantize_data(bytes memory data, uint256 decimals) internal pure returns (uint128 quantized_data) {{
-                    uint x = abi.decode(data, (uint256));
-                    uint output = mulDiv(x, SCALE, decimals);
-                    if (mulmod(x, SCALE, decimals)*2 >= decimals) {{
-                        output += 1;
-                    }}
-                    require(output < SIZE_LIMIT, "QuantizeData: overflow");
-                    quantized_data = uint128(output);
-                }}
-            
-                function staticCall (address target, bytes memory data) internal view returns (bytes memory) {{
-                    (bool success, bytes memory returndata) = target.staticcall(data);
-                    if (success) {{
-                        if (returndata.length == 0) {{
-                            require(target.code.length > 0, "Address: call to non-contract");
-                        }}
-                    return returndata;
-                    }} else {{
-                        revert("Address: low-level call failed");
-                    }}
-                }}
-            
-                function attestData(uint256[] memory pubInputs) internal view {{
-                    require(pubInputs.length >= TOTAL_CALLS, "Invalid public inputs length");
-                    uint256 _accountCount = accountCalls.length;
-                    uint counter = 0; 
-                    for (uint8 i = 0; i < _accountCount; ++i) {{
-                        address account = accountCalls[i].contractAddress;
-                        for (uint8 j = 0; j < accountCalls[i].callCount; j++) {{
-                            bytes memory returnData = staticCall(account, accountCalls[i].callData[j]);
-                            uint256 quantized_data = quantize_data(returnData, accountCalls[i].decimals[j]);
-                            require(quantized_data == pubInputs[counter], "Public input does not match");
-                            counter++;
-                        }}
-                    }}
-                }}
-            
-                function verifyWithDataAttestation(
-                    uint256[] memory pubInputs,
-                    bytes memory proof
-                ) public view returns (bool) {{
-                    bool success = true;
-                    bytes32[{}] memory transcript;
-                    attestData(pubInputs);
-                    assembly {{ 
-                "#,
-            data.len(),
-            scale.unwrap(),
-            total_calls,
-            max_transcript_addr
-        )
-        .trim()
-        .to_string()
+        let contract = match std::fs::read_to_string("./contracts/AttestData.sol") {
+            Ok(file_content) => file_content,
+            Err(err) => {
+                panic!("Error reading VerifierBase.sol: {}", err);
+            }
+        };
+        // fill in the quantization params and total calls
+        // as constants to the contract to save on gas
+        let contract = contract.replace("AccountCall[]", &format!("AccountCall[{}]", data.len()));
+        let contract = contract.replace(
+            "uint constant public SCALE = 1<<0;",
+            &format!("uint constant public SCALE = 1<<{};", scale.unwrap()));
+        contract.replace(
+            "uint256 constant TOTAL_CALLS = 0;",
+            &format!("uint256 constant TOTAL_CALLS = {};", total_calls))
     } else {
-        format!(
-            "// SPDX-License-Identifier: MIT
-        pragma solidity ^0.8.17;
-        
-        contract Verifier {{
-            function verify(
-                uint256[] memory pubInputs,
-                bytes memory proof
-            ) public view returns (bool) {{
-                bool success = true;
-                bytes32[{}] memory transcript;
-                assembly {{
-            ",
-            max_transcript_addr
-        )
-        .trim()
-        .to_string()
+        match std::fs::read_to_string("./contracts/VerifierBase.sol") {
+            Ok(file_content) => file_content,
+            Err(err) => {
+                panic!("Error reading VerifierBase.sol: {}", err);
+            }
+        }
     };
+
+    // Insert the max_transcript_addr into the contract string at the correct position.
+    _ = contract.replace(
+        "bytes32[] memory transcript",
+        &format!("bytes32[{}] memory transcript", max_transcript_addr));
+
+    // Find the index of "assembly {"
+    let end_index = match contract.find("assembly {") {
+        Some(index) => index,
+        None => {
+            panic!("assembly {{ not found in the contract");
+        }
+    };
+
+    // Take a slice from the start of the contract string up to the "assembly {" position
+    let  contract_slice = &contract[..end_index];
+
+    let mut contract_slice_string = contract_slice.to_string();
 
     // using a boxed Write trait object here to show it works for any Struct impl'ing Write
     // you may also use a std::fs::File here
-    let write: Box<&mut dyn Write> = Box::new(&mut contract);
+    let write: Box<&mut dyn Write> = Box::new(&mut contract_slice_string);
 
     for line in modified_lines[16..modified_lines.len() - 7].iter() {
         write!(write, "{}", line).unwrap();
