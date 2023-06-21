@@ -120,7 +120,7 @@ fn gen_settings(
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
 
     crate::execute::gen_circuit_settings(model, output, run_args).map_err(|e| {
-        let err_str = format!("Failed to generate circuit params: {}", e);
+        let err_str = format!("Failed to generate settings: {}", e);
         PyRuntimeError::new_err(err_str)})?;
 
     Ok(true)
@@ -144,7 +144,7 @@ fn calibrate_settings(
     let target = target.unwrap_or(CalibrationTarget::Resources);
 
     crate::execute::calibrate(model, data, settings, target).map_err(|e| {
-        let err_str = format!("Failed to generate circuit params: {}", e);
+        let err_str = format!("Failed to calibrate settings: {}", e);
         PyRuntimeError::new_err(err_str)})?;
 
     Ok(true)
@@ -169,7 +169,7 @@ fn gen_witness(
 ) -> PyResult<PyObject> {
     let output: GraphWitness = crate::execute::gen_witness(model, data, output, scale, batch_size, settings_path)
         .map_err(|e| {
-            let err_str = format!("Failed to run forward: {}", e);
+            let err_str = format!("Failed to run generate witness: {}", e);
             PyRuntimeError::new_err(err_str)})?;
     Python::with_gil(|py| {
         Ok(output.to_object(py))
@@ -184,7 +184,7 @@ fn gen_witness(
 ))]
 fn mock(witness: PathBuf, model: PathBuf, settings_path: PathBuf) -> PyResult<bool> {
     crate::execute::mock(model, witness, settings_path).map_err(|e| {
-        let err_str = format!("Failed to run setup: {}", e);
+        let err_str = format!("Failed to run mock: {}", e);
         PyRuntimeError::new_err(err_str)})?;
 
     Ok(true)
