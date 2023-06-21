@@ -155,19 +155,15 @@ fn calibrate_settings(
     data,
     model,
     output,
-    settings_path, 
-    scale=None, 
-    batch_size=None,  
+    settings_path,  
 ))]
 fn gen_witness(
     data: PathBuf,
     model: PathBuf,
     output: Option<PathBuf>,
     settings_path: PathBuf,
-    scale: Option<u32>,
-    batch_size: Option<usize>,
 ) -> PyResult<PyObject> {
-    let output: GraphWitness = crate::execute::gen_witness(model, data, output, scale, batch_size, settings_path)
+    let output: GraphWitness = crate::execute::gen_witness(model, data, output, settings_path)
         .map_err(|e| {
             let err_str = format!("Failed to run generate witness: {}", e);
             PyRuntimeError::new_err(err_str)})?;
