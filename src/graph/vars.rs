@@ -84,6 +84,10 @@ impl Visibility {
     pub fn is_encrypted(&self) -> bool {
         matches!(&self, Visibility::Encrypted)
     }
+    #[allow(missing_docs)]
+    pub fn requires_processing(&self) -> bool {
+        matches!(&self, Visibility::Encrypted) | matches!(&self, Visibility::Hashed)
+    }
 }
 impl std::fmt::Display for Visibility {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {

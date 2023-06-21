@@ -12,6 +12,7 @@ pub mod utilities;
 pub mod vars;
 
 pub use input::GraphInput;
+pub use input::GraphWitness;
 
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
@@ -100,11 +101,11 @@ pub struct ForwardResult {
     /// The output of the forward pass
     pub outputs: Vec<Tensor<i128>>,
     /// Any hashes of inputs generated during the forward pass
-    pub processed_inputs: ModuleForwardResult,
+    pub processed_inputs: Option<ModuleForwardResult>,
     /// Any hashes of params generated during the forward pass
-    pub processed_params: ModuleForwardResult,
+    pub processed_params: Option<ModuleForwardResult>,
     /// Any hashes of outputs generated during the forward pass
-    pub processed_outputs: ModuleForwardResult,
+    pub processed_outputs: Option<ModuleForwardResult>,
     /// max lookup input
     pub max_lookup_input: i128,
 }
@@ -248,10 +249,10 @@ impl GraphCircuit {
         })
     }
     ///
-    pub fn load_inputs(&mut self, data: &GraphInput) {
+    pub fn load_inputs(&mut self, data: &[Vec<f32>]) {
         // quantize the supplied data using the provided scale.
         let mut inputs: Vec<Tensor<i128>> = vec![];
-        for (input, shape) in data.input_data.iter().zip(self.model.graph.input_shapes()) {
+        for (input, shape) in data.iter().zip(self.model.graph.input_shapes()) {
             let t: Vec<i128> = input
                 .par_iter()
                 .map(|x| quantize_float(x, 0.0, self.settings.run_args.scale).unwrap())
@@ -260,6 +261,17 @@ impl GraphCircuit {
             let mut t: Tensor<i128> = t.into_iter().into();
             t.reshape(&shape);
 
+            inputs.push(t);
+        }
+        self.inputs = inputs;
+    }
+    ///
+    pub fn load_on_chain_inputs(&mut self, data: Vec<Vec<i128>>) {
+        // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
+        let mut inputs: Vec<Tensor<i128>> = vec![];
+        for (input, shape) in data.iter().zip(self.model.graph.input_shapes()) {
+            let mut t: Tensor<i128> = input.iter().cloned().collect();
+            t.reshape(&shape);
             inputs.push(t);
         }
         self.inputs = inputs;
@@ -318,19 +330,32 @@ impl GraphCircuit {
 
     /// Runs the forward pass of the model / graph of computations and any associated hashing.
     pub fn forward(&self) -> Result<ForwardResult, Box<dyn std::error::Error>> {
-        let processed_inputs = GraphModules::forward(&self.inputs)?;
+        let visibility = VarVisibility::from_args(self.settings.run_args)?;
+        let mut processed_inputs = None;
+        let mut processed_params = None;
+        let mut processed_outputs = None;
 
-        let params = self.model.get_all_consts();
+        if visibility.input.requires_processing() {
+            processed_inputs = Some(GraphModules::forward(&self.inputs, visibility.input)?);
+        }
 
-        let flattened_params = flatten_valtensors(params)?
-            .get_int_evals()?
-            .into_iter()
-            .into();
-
-        let processed_params = GraphModules::forward(&[flattened_params])?;
+        if visibility.params.requires_processing() {
+            let params = self.model.get_all_consts();
+            let flattened_params = flatten_valtensors(params)?
+                .get_int_evals()?
+                .into_iter()
+                .into();
+            processed_params = Some(GraphModules::forward(
+                &[flattened_params],
+                visibility.params,
+            )?);
+        }
 
         let outputs = self.model.forward(&self.inputs)?;
-        let processed_outputs = GraphModules::forward(&outputs.outputs)?;
+
+        if visibility.output.requires_processing() {
+            processed_outputs = Some(GraphModules::forward(&outputs.outputs, visibility.output)?);
+        }
 
         Ok(ForwardResult {
             inputs: self.inputs.clone(),
@@ -365,12 +390,17 @@ impl GraphCircuit {
     /// Prepare the public inputs for the circuit.
     pub fn prepare_public_inputs(
         &mut self,
-        data: &GraphInput,
+        data: &GraphWitness,
+        on_chain_inputs: Option<Vec<Vec<i128>>>,
     ) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
         let out_scales = self.model.graph.get_output_scales();
 
-        // load the inputs
-        self.load_inputs(data);
+        // quantize the supplied data using the provided scale.
+        if let Some(on_chain_inputs) = on_chain_inputs {
+            self.load_on_chain_inputs(on_chain_inputs)
+        } else {
+            self.load_inputs(&data.input_data);
+        }
         // load the module settings
         self.module_settings = ModuleSettings::from(data);
 
@@ -452,7 +482,6 @@ impl Circuit<Fp> for GraphCircuit {
             cs,
             &mut vars,
             params.run_args.bits,
-            params.run_args.tolerance,
             params.required_lookups,
             params.check_mode,
         )
@@ -461,6 +490,11 @@ impl Circuit<Fp> for GraphCircuit {
         let model_config = ModelConfig { base, vars };
 
         let module_configs = ModuleConfigs::from_visibility(cs, visibility, params.module_sizes);
+
+        trace!(
+            "log2_ceil of degree: {:?}",
+            (cs.degree() as f32).log2().ceil()
+        );
 
         GraphConfig {
             model_config,
@@ -477,7 +511,7 @@ impl Circuit<Fp> for GraphCircuit {
         config: Self::Config,
         mut layouter: impl Layouter<Fp>,
     ) -> Result<(), PlonkError> {
-        trace!("Setting input in synthesize");
+        trace!("setting input in synthesize");
         let mut inputs = self
             .inputs
             .iter()
@@ -485,6 +519,8 @@ impl Circuit<Fp> for GraphCircuit {
             .collect::<Vec<ValTensor<Fp>>>();
 
         let mut instance_offset = ModuleInstanceOffset::new();
+
+        trace!("running input module layout");
         // we reserve module 0 for poseidon
         // we reserve module 1 for elgamal
         GraphModules::layout(
@@ -496,6 +532,7 @@ impl Circuit<Fp> for GraphCircuit {
             &self.module_settings.input,
         )?;
 
+        trace!("flattening params");
         // now we need to flatten the params
         let mut flattened_params = vec![];
         if !self.model.get_all_consts().is_empty() {
@@ -508,6 +545,7 @@ impl Circuit<Fp> for GraphCircuit {
                 ];
         }
 
+        trace!("running params module layout");
         // now do stuff to the model params
         GraphModules::layout(
             &mut layouter,
@@ -518,6 +556,7 @@ impl Circuit<Fp> for GraphCircuit {
             &self.module_settings.params,
         )?;
 
+        trace!("replacing params");
         // now we need to assign the flattened params to the model
         let mut model = self.model.clone();
         if !self.model.get_all_consts().is_empty() {
@@ -548,6 +587,7 @@ impl Circuit<Fp> for GraphCircuit {
                 PlonkError::Synthesis
             })?;
 
+        trace!("running output module layout");
         // this will re-enter module 0
         GraphModules::layout(
             &mut layouter,
@@ -561,5 +601,3 @@ impl Circuit<Fp> for GraphCircuit {
         Ok(())
     }
 }
-
-////////////////////////

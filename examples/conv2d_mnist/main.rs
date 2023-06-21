@@ -28,10 +28,10 @@ use halo2_proofs::{
 use halo2curves::ff::PrimeField;
 use halo2curves::pasta::vesta;
 use halo2curves::pasta::Fp as F;
+use instant::Instant;
 use mnist::*;
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
-use std::time::Instant;
 
 mod params;
 
@@ -149,7 +149,7 @@ where
         println!("INPUT COL {:#?}", input);
 
         let mut layer_config =
-            PolyConfig::configure(cs, &[input.clone(), params], &output, CheckMode::SAFE, 0);
+            PolyConfig::configure(cs, &[input.clone(), params], &output, CheckMode::SAFE);
 
         layer_config
             .configure_lookup(cs, &input, &output, BITS, &LookupOp::ReLU { scale: 32 })

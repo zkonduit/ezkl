@@ -14,10 +14,10 @@ mod wasm32 {
     wasm_bindgen_test_configure!(run_in_browser);
 
     pub const KZG_PARAMS: &[u8] = include_bytes!("../tests/wasm/kzg");
-    pub const CIRCUIT_PARAMS: &[u8] = include_bytes!("../tests/wasm/circuit");
+    pub const CIRCUIT_PARAMS: &[u8] = include_bytes!("../tests/wasm/settings.json");
     pub const VK: &[u8] = include_bytes!("../tests/wasm/test.key");
     pub const PK: &[u8] = include_bytes!("../tests/wasm/test.provekey");
-    pub const INPUT: &[u8] = include_bytes!("../tests/wasm/test.input.json");
+    pub const WITNESS: &[u8] = include_bytes!("../tests/wasm/test.witness.json");
     pub const PROOF: &[u8] = include_bytes!("../tests/wasm/test.proof");
     pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/test.onnx");
 
@@ -56,7 +56,7 @@ mod wasm32 {
     async fn prove_pass() {
         // prove
         let proof = prove_wasm(
-            wasm_bindgen::Clamped(INPUT.to_vec()),
+            wasm_bindgen::Clamped(WITNESS.to_vec()),
             wasm_bindgen::Clamped(PK.to_vec()),
             wasm_bindgen::Clamped(NETWORK.to_vec()),
             wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
@@ -82,6 +82,7 @@ mod wasm32 {
             bits: 16,
             logrows: 17,
             batch_size: 1,
+            on_chain_inputs: false,
             input_visibility: "private".into(),
             output_visibility: "public".into(),
             param_visibility: "private".into(),
@@ -137,6 +138,7 @@ mod wasm32 {
             bits: 5,
             logrows: 7,
             batch_size: 1,
+            on_chain_inputs: false,
             input_visibility: "private".into(),
             output_visibility: "public".into(),
             param_visibility: "private".into(),
@@ -174,7 +176,7 @@ mod wasm32 {
 
         // prove
         let proof = prove_wasm(
-            wasm_bindgen::Clamped(INPUT.to_vec()),
+            wasm_bindgen::Clamped(WITNESS.to_vec()),
             wasm_bindgen::Clamped(pk.clone()),
             wasm_bindgen::Clamped(NETWORK.to_vec()),
             wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),

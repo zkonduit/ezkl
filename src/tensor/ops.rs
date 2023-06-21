@@ -2044,9 +2044,14 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[1, 1, 0, 0, 0, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn range_check_percent(t: &[Tensor<i128>], input_scale: usize, output_scale: usize, tol: f32) -> Tensor<i128> {
+    pub fn range_check_percent(
+        t: &[Tensor<i128>],
+        input_scale: usize,
+        output_scale: usize,
+        tol: f32,
+    ) -> Tensor<i128> {
         // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
-        let scale = input_scale*output_scale;
+        let scale = input_scale * output_scale;
         let diff: Tensor<i128> = sub(t).unwrap();
         let recip = recip(&t[0], scale as u32);
         let product = mult(&[diff, recip]).unwrap();

@@ -106,19 +106,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 scales.0,
                 scales.1,
             )?,
-            HybridOp::RangeCheck(tol) => match tol {
-                Tolerance::Abs { val } => {
-                    layouts::range_check(config, region, values[..].try_into()?, *val as i32)?
-                }
-                Tolerance::Percentage { val, scales } => layouts::range_check_percent(
-                    config,
-                    region,
-                    values[..].try_into()?,
-                    scales.0,
-                    scales.1,
-                    *val,
-                )?,
-            },
+            HybridOp::RangeCheck(tol) => layouts::range_check_percent(
+                config,
+                region,
+                values[..].try_into()?,
+                tol.scales.0,
+                tol.scales.1,
+                tol.val,
+            )?,
         }))
     }
 
@@ -154,18 +149,19 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     },
                 ]
             }
-            HybridOp::RangeCheck(tol) => match tol {
-                Tolerance::Percentage { val, scales } => {
-                    let scale = scales.0 * scales.1;
-                    vec![
+            HybridOp::RangeCheck(tol) => {
+                let mut lookups = vec![];
+                if tol.val > 0.0 {
+                    let scale = tol.scales.0 * tol.scales.1;
+                    lookups.extend([
                         LookupOp::Recip { scale },
                         LookupOp::GreaterThan {
-                            a: circuit::utils::F32((val * scale as f32) / 100.0),
+                            a: circuit::utils::F32((tol.val * scale as f32) / 100.0),
                         },
-                    ]
+                    ]);
                 }
-                _ => vec![],
-            },
+                lookups
+            }
         }
     }
 

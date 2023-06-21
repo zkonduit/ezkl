@@ -55,7 +55,7 @@ impl<F: PrimeField + TensorType + PartialOrd, const LEN: usize, const BITS: usiz
         // tells the config layer to add an affine op to the circuit gate
 
         let mut layer_config =
-            PolyConfig::<F>::configure(cs, &[input.clone(), params], &output, CheckMode::SAFE, 0);
+            PolyConfig::<F>::configure(cs, &[input.clone(), params], &output, CheckMode::SAFE);
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
         layer_config

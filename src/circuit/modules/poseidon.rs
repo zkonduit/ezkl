@@ -13,6 +13,9 @@ use halo2_gadgets::poseidon::{primitives::*, Hash, Pow5Chip, Pow5Config};
 use halo2_proofs::arithmetic::Field;
 use halo2_proofs::halo2curves::bn256::Fr as Fp;
 use halo2_proofs::{circuit::*, plonk::*};
+// use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator};
+use rayon::prelude::ParallelIterator;
+use rayon::slice::ParallelSlice;
 
 use std::marker::PhantomData;
 
@@ -41,7 +44,7 @@ type InputAssignments = (Vec<AssignedCell<Fp, Fp>>, AssignedCell<Fp, Fp>);
 /// PoseidonChip is a wrapper around the Pow5Chip that adds a set of advice columns to the gadget Chip to store the inputs of the hash
 #[derive(Debug, Clone)]
 pub struct PoseidonChip<
-    S: Spec<Fp, WIDTH, RATE>,
+    S: Spec<Fp, WIDTH, RATE> + Sync,
     const WIDTH: usize,
     const RATE: usize,
     const L: usize,
@@ -50,8 +53,8 @@ pub struct PoseidonChip<
     _marker: PhantomData<S>,
 }
 
-impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: usize> Module<Fp>
-    for PoseidonChip<S, WIDTH, RATE, L>
+impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, const L: usize>
+    Module<Fp> for PoseidonChip<S, WIDTH, RATE, L>
 {
     type Config = PoseidonConfig<WIDTH, RATE>;
     type InputAssignments = InputAssignments;
@@ -120,29 +123,32 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
         assert_eq!(message.len(), 1);
         let message = message[0].clone();
 
-        layouter.assign_region(
+        let start_time = instant::Instant::now();
+
+        let res = layouter.assign_region(
             || "load message",
             |mut region| {
-                let message_word = |i: usize| {
-                    let value = &message.get_inner_tensor().unwrap()[i];
-                    let x = i % WIDTH;
-                    let y = i / WIDTH;
+                let assigned_message: Result<Vec<AssignedCell<Fp, Fp>>, Error> = message
+                    .get_inner_tensor()
+                    .map_err(|_| Error::Synthesis)?
+                    .iter()
+                    .enumerate()
+                    .map(|(i, value)| {
+                        let x = i % WIDTH;
+                        let y = i / WIDTH;
 
-                    match value {
-                        ValType::Value(v) => region.assign_advice(
-                            || format!("load message_{}", i),
-                            self.config.hash_inputs[x],
-                            y,
-                            || *v,
-                        ),
-                        ValType::PrevAssigned(v) => Ok(v.clone()),
-                        _ => panic!("wrong input type, must be previously assigned"),
-                    }
-                };
-
-                let message: Result<Vec<AssignedCell<Fp, Fp>>, Error> =
-                    (0..message.len()).map(message_word).collect();
-                let message = message?;
+                        match value {
+                            ValType::Value(v) => region.assign_advice(
+                                || format!("load message_{}", i),
+                                self.config.hash_inputs[x],
+                                y,
+                                || *v,
+                            ),
+                            ValType::PrevAssigned(v) => Ok(v.clone()),
+                            _ => panic!("wrong input type, must be previously assigned"),
+                        }
+                    })
+                    .collect();
 
                 let offset = message.len() / WIDTH + 1;
 
@@ -155,9 +161,15 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
                     )
                     .unwrap();
 
-                Ok((message, zero_val))
+                Ok((assigned_message?, zero_val))
             },
-        )
+        );
+        log::trace!(
+            "input (N={:?}) layout took: {:?}",
+            message.len(),
+            start_time.elapsed()
+        );
+        res
     }
 
     /// L is the number of inputs to the hash function
@@ -169,39 +181,55 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
         input: &[ValTensor<Fp>],
         row_offset: Vec<usize>,
     ) -> Result<ValTensor<Fp>, Error> {
-        let (input, zero_val) = self.layout_inputs(layouter, input)?;
+        let (mut input_cells, zero_val) = self.layout_inputs(layouter, input)?;
+        // extract the values from the input cells
+        let assigned_input: Tensor<ValType<Fp>> =
+            input_cells.iter().map(|e| ValType::from(e.clone())).into();
+        let len = assigned_input.len();
 
-        // iterate over the input cells in blocks of L
-        let mut input_cells = input.clone();
+        let start_time = instant::Instant::now();
 
         // do the Tree dance baby
         while input_cells.len() > 1 {
-            let mut hashes = vec![];
-            for block in input_cells.chunks(L) {
-                let mut block = block.to_vec();
-                let remainder = block.len() % L;
+            let hashes: Result<Vec<AssignedCell<Fp, Fp>>, Error> = input_cells
+                .chunks(L)
+                .enumerate()
+                .map(|(i, block)| {
+                    let _start_time = instant::Instant::now();
 
-                if remainder != 0 {
-                    block.extend(vec![zero_val.clone(); L - remainder].into_iter());
-                }
+                    let mut block = block.to_vec();
+                    let remainder = block.len() % L;
 
-                let pow5_chip = Pow5Chip::construct(self.config.pow5_config.clone());
-                // initialize the hasher
-                let hasher = Hash::<_, _, S, ConstantLength<L>, WIDTH, RATE>::init(
-                    pow5_chip,
-                    layouter.namespace(|| "block_hasher"),
-                )?;
+                    if remainder != 0 {
+                        block.extend(vec![zero_val.clone(); L - remainder].into_iter());
+                    }
 
-                // you may need to 0 pad the inputs so they fit
-                let hash = hasher.hash(
-                    layouter.namespace(|| "hash"),
-                    block.to_vec().try_into().map_err(|_| Error::Synthesis)?,
-                );
+                    let pow5_chip = Pow5Chip::construct(self.config.pow5_config.clone());
+                    // initialize the hasher
+                    let hasher = Hash::<_, _, S, ConstantLength<L>, WIDTH, RATE>::init(
+                        pow5_chip,
+                        layouter.namespace(|| "block_hasher"),
+                    )?;
 
-                hashes.push(hash?);
-            }
-            input_cells = hashes;
+                    // you may need to 0 pad the inputs so they fit
+                    let hash = hasher.hash(
+                        layouter.namespace(|| "hash"),
+                        block.to_vec().try_into().map_err(|_| Error::Synthesis)?,
+                    );
+
+                    if i == 0 {
+                        log::trace!("block (L={:?}) took: {:?}", L, _start_time.elapsed());
+                    }
+
+                    hash
+                })
+                .collect();
+
+            input_cells = hashes?;
         }
+
+        let duration = start_time.elapsed();
+        log::trace!("layout (N={:?}) took: {:?}", len, duration);
 
         let result = Tensor::from(input_cells.iter().map(|e| ValType::from(e.clone())));
 
@@ -225,36 +253,42 @@ impl<S: Spec<Fp, WIDTH, RATE>, const WIDTH: usize, const RATE: usize, const L: u
             },
         )?;
 
-        let assigned_input: Tensor<ValType<Fp>> =
-            input.iter().map(|e| ValType::from(e.clone())).into();
-
         Ok(assigned_input.into())
     }
 
     ///
     fn run(message: Vec<Fp>) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
         let mut hash_inputs = message;
+        let len = hash_inputs.len();
+
+        let start_time = instant::Instant::now();
+
         // do the Tree dance baby
         while hash_inputs.len() > 1 {
-            let mut hashes: Vec<Fp> = vec![];
-            for block in hash_inputs.chunks(L) {
-                let mut block = block.to_vec();
-                let remainder = block.len() % L;
-                if remainder != 0 {
-                    block.extend(vec![Fp::ZERO; L - remainder].iter());
-                }
-                let hash = halo2_gadgets::poseidon::primitives::Hash::<
-                    _,
-                    S,
-                    ConstantLength<L>,
-                    { WIDTH },
-                    { RATE },
-                >::init()
-                .hash(block.clone().try_into().unwrap());
-                hashes.push(hash);
-            }
+            let hashes: Vec<Fp> = hash_inputs
+                .par_chunks(L)
+                .map(|block| {
+                    let mut block = block.to_vec();
+                    let remainder = block.len() % L;
+                    if remainder != 0 {
+                        block.extend(vec![Fp::ZERO; L - remainder].iter());
+                    }
+                    halo2_gadgets::poseidon::primitives::Hash::<
+                        _,
+                        S,
+                        ConstantLength<L>,
+                        { WIDTH },
+                        { RATE },
+                    >::init()
+                    .hash(block.clone().try_into().unwrap())
+                })
+                .collect();
+
             hash_inputs = hashes;
         }
+
+        let duration = start_time.elapsed();
+        log::trace!("run (N={:?}) took: {:?}", len, duration);
 
         Ok(vec![hash_inputs])
     }

@@ -22,6 +22,7 @@ fn display_vector<T: fmt::Debug>(v: &Vec<T>) -> String {
     }
 }
 
+#[allow(clippy::borrowed_box)]
 fn display_opkind(v: &Box<dyn Op<Fp>>) -> String {
     v.as_string()
 }

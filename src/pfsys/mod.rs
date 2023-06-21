@@ -15,6 +15,7 @@ use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer, Transcrip
 use halo2curves::ff::{FromUniformBytes, PrimeField, WithSmallOrderMulGroup};
 use halo2curves::serde::SerdeObject;
 use halo2curves::CurveAffine;
+use instant::Instant;
 use log::{debug, info, trace};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -25,7 +26,6 @@ use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Cursor, Write};
 use std::ops::Deref;
 use std::path::PathBuf;
-use std::time::Instant;
 use thiserror::Error as thisError;
 
 #[derive(thisError, Debug)]
@@ -133,6 +133,7 @@ impl<F: PrimeField + SerdeObject + FromUniformBytes<64>, C: CurveAffine> Snark<F
 
         trace!("instances {:?}", instances);
 
+        #[allow(clippy::unnecessary_unwrap)]
         if params.is_none() || vk.is_none() {
             Ok(Snark {
                 protocol: None,
@@ -385,10 +386,10 @@ where
 }
 
 /// Loads the [CommitmentScheme::ParamsVerifier] at `path`.
-pub fn load_params<Scheme: CommitmentScheme>(
+pub fn load_srs<Scheme: CommitmentScheme>(
     path: PathBuf,
 ) -> Result<Scheme::ParamsVerifier, Box<dyn Error>> {
-    info!("loading params from {:?}", path);
+    info!("loading srs from {:?}", path);
     let f = File::open(path).map_err(Box::<dyn Error>::from)?;
     let mut reader = BufReader::new(f);
     Params::<'_, Scheme::Curve>::read(&mut reader).map_err(Box::<dyn Error>::from)
@@ -472,7 +473,7 @@ mod tests {
         let mut dest = File::create(fname.clone()).unwrap();
         let content = response.bytes().await.unwrap();
         copy(&mut &content[..], &mut dest).unwrap();
-        let res = load_params::<KZGCommitmentScheme<Bn256>>(fname);
+        let res = load_srs::<KZGCommitmentScheme<Bn256>>(fname);
         assert!(res.is_ok())
     }
 
@@ -483,7 +484,7 @@ mod tests {
         let srs = gen_srs::<KZGCommitmentScheme<Bn256>>(1);
         let res = save_params::<KZGCommitmentScheme<Bn256>>(&fname, &srs);
         assert!(res.is_ok());
-        let res = load_params::<KZGCommitmentScheme<Bn256>>(fname);
+        let res = load_srs::<KZGCommitmentScheme<Bn256>>(fname);
         assert!(res.is_ok())
     }
 }

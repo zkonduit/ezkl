@@ -4,13 +4,13 @@ use colored_json::prelude::*;
 use env_logger::Builder;
 use ezkl_lib::commands::Cli;
 use ezkl_lib::execute::run;
+use instant::Instant;
 use log::{error, info, Level, LevelFilter, Record};
 use rand::seq::SliceRandom;
 use std::env;
 use std::error::Error;
 use std::fmt::Formatter;
 use std::io::Write;
-use std::time::Instant;
 
 #[allow(dead_code)]
 pub fn level_color(level: &log::Level, msg: &str) -> String {
