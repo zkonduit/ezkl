@@ -46,7 +46,7 @@ impl PyRunArgs {
     #[new]
     fn new() -> Self {
         PyRunArgs {
-            tolerance: Tolerance::Abs { val: 0 },
+            tolerance: Tolerance::default(),
             scale: 7,
             bits: 16,
             logrows: 17,

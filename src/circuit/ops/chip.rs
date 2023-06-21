@@ -68,30 +68,26 @@ impl From<String> for CheckMode {
 
 #[allow(missing_docs)]
 /// An enum representing the tolerance we can accept for the accumulated arguments, either absolute or percentage
-#[derive(Clone, Debug, PartialEq, PartialOrd, Serialize, Deserialize, Copy)]
-pub enum Tolerance {
-    Abs { val: usize },
-    Percentage { val: f32, scales: (usize, usize) }
+#[derive(Clone, Default, Debug, PartialEq, PartialOrd, Serialize, Deserialize, Copy)]
+pub struct Tolerance {
+    pub val: f32,
+    pub scales: (usize, usize),
 }
 
-impl Default for Tolerance {
-    fn default() -> Self {
-        Tolerance::Abs { val: 0 }
-    }
-}
 impl FromStr for Tolerance {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Ok(val) = s.parse::<usize>() {
-            Ok(Tolerance::Abs { val })
-        } else if let Ok(val) = s.parse::<f32>() {
-            Ok(Tolerance::Percentage {
+        if let Ok(val) = s.parse::<f32>() {
+            Ok(Tolerance {
                 val,
                 scales: (1, 1),
             })
         } else {
-            Err("Invalid tolerance value provided. It should be either an absolute value (usize) or a percentage (f32).".to_string())
+            Err(
+                "Invalid tolerance value provided. It should expressed as a percentage (f32)."
+                    .to_string(),
+            )
         }
     }
 }
@@ -125,12 +121,7 @@ impl<'source> FromPyObject<'source> for CheckMode {
 /// Converts Tolerance into a PyObject (Required for Tolerance to be compatible with Python)
 impl IntoPy<PyObject> for Tolerance {
     fn into_py(self, py: Python) -> PyObject {
-        match self {
-            Tolerance::Abs { val } => (String::from("abs"), val).to_object(py),
-            Tolerance::Percentage { val, scales } => {
-                (String::from("percentage"), val, scales).to_object(py)
-            }
-        }
+        (self.val, self.scales).to_object(py)
     }
 }
 
@@ -138,20 +129,10 @@ impl IntoPy<PyObject> for Tolerance {
 /// Obtains Tolerance from PyObject (Required for Tolerance to be compatible with Python)
 impl<'source> FromPyObject<'source> for Tolerance {
     fn extract(ob: &'source PyAny) -> PyResult<Self> {
-        if let Ok((mode, val)) = ob.extract::<(String, usize)>() {
-            match mode.to_lowercase().as_str() {
-                "abs" => Ok(Tolerance::Abs { val }),
-                _ => Err(PyValueError::new_err("Invalid value for Tolerance")),
-            }
-        } else if let Ok((mode, val, scales)) = ob.extract::<(String, f32, (usize, usize))>() {
-            match mode.to_lowercase().as_str() {
-                "percentage" => Ok(Tolerance::Percentage { val, scales }),
-                _ => Err(PyValueError::new_err("Invalid value for Tolerance")),
-            }
+        if let Ok((val, scales)) = ob.extract::<(f32, (usize, usize))>() {
+            Ok(Tolerance { val, scales })
         } else {
-            Err(PyValueError::new_err(
-                "Invalid tolerance value provided. It should be either an absolute value (usize) or a percentage (f32).",
-            ))
+            Err(PyValueError::new_err("Invalid tolerance value provided. "))
         }
     }
 }
@@ -202,13 +183,11 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     /// * `inputs` - The explicit inputs to the operations.
     /// * `output` - The variable representing the (currently singular) output of the operations.
     /// * `check_mode` - The variable representing the (currently singular) output of the operations.
-    /// * `tol` - The tolerance for the range check.
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         inputs: &[VarTensor; 2],
         output: &VarTensor,
         check_mode: CheckMode,
-        tol: i32,
     ) -> Self {
         // setup a selector per base op
         let mut selectors = BTreeMap::new();
@@ -223,14 +202,12 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             selectors.insert((BaseOp::Sum, i), meta.selector());
             selectors.insert((BaseOp::Neg, i), meta.selector());
             selectors.insert((BaseOp::Mult, i), meta.selector());
-            selectors.insert((BaseOp::Range { tol }, i), meta.selector());
+            selectors.insert((BaseOp::Range { tol: 0 }, i), meta.selector());
             selectors.insert((BaseOp::IsZero, i), meta.selector());
             selectors.insert((BaseOp::Identity, i), meta.selector());
             selectors.insert((BaseOp::IsBoolean, i), meta.selector());
         }
 
-        // Given a range R and a value v, returns the expression
-        // (v) * (1 - v) * (2 - v) * ... * (R - 1 - v)
         let range_check = |tol: i32, value: Expression<F>| {
             (-tol..tol).fold(value.clone(), |expr, i| {
                 expr * (Expression::Constant(i32_to_felt(i)) - value.clone())

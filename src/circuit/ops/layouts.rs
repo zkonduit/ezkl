@@ -1344,7 +1344,6 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-
     tol: i32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // assigns the instance to the advice.
@@ -1716,9 +1715,13 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 2],
     input_scale: usize,
     output_scale: usize,
-
     tol: f32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    if tol == 0.0 {
+        // regular equality constraint
+        return range_check(config, region, values, 0);
+    }
+
     // Calculate the difference between the expected output and actual output
     let diff = pairwise(config, region, values, BaseOp::Sub)?;
 
