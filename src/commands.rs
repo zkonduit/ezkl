@@ -166,6 +166,7 @@ pub struct RunArgs {
     pub allocated_constraints: Option<usize>,
 }
 
+
 #[allow(missing_docs)]
 #[derive(Parser, Debug, Clone, Deserialize, Serialize)]
 #[command(author, version, about, long_about = None)]
@@ -221,17 +222,17 @@ pub enum Commands {
         args: RunArgs,
     },
 
-    /// Generates the witness from an input file.
+    /// Runs a vanilla forward pass, produces a quantized output, and saves it to a .json file
     #[command(arg_required_else_help = true)]
-    GenWitness {
+    Forward {
         /// The path to the .json data file
         #[arg(short = 'D', long)]
         data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
-        /// Path to the witness (public and private inputs) .json file
-        #[arg(short = 'O', long, default_value = "witness.json")]
+        /// Path to the new .json file
+        #[arg(short = 'O', long)]
         output: PathBuf,
         /// Scale to use for quantization overiding settings file
         #[arg(short = 'S', long)]
@@ -288,9 +289,9 @@ pub enum Commands {
     /// Loads model and input and runs mock prover (for testing)
     #[command(arg_required_else_help = true)]
     Mock {
-        /// The path to the .json witness file
-        #[arg(short = 'W', long)]
-        witness: PathBuf,
+        /// The path to the .json data file
+        #[arg(short = 'D', long)]
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
@@ -360,9 +361,9 @@ pub enum Commands {
     /// Fuzzes the proof pipeline with random inputs, random parameters, and random keys
     #[command(arg_required_else_help = true)]
     Fuzz {
-        /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'W', long)]
-        witness: PathBuf,
+        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'D', long)]
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
@@ -389,9 +390,9 @@ pub enum Commands {
     /// Loads model, data, and creates proof
     #[command(arg_required_else_help = true)]
     Prove {
-        /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'W', long)]
-        witness: PathBuf,
+        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'D', long)]
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
@@ -427,10 +428,19 @@ pub enum Commands {
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = "safe")]
         check_mode: CheckMode,
+        /// For testing purposes only. The optional path to the .json data file that will be generated that contains the OnChain data storage information
+        /// derived from the file information in the data .json file.
+        ///  Should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'D', long)]
+        test_on_chain_data_path: Option<PathBuf>,
         /// Deploy a test contract that stores the input_data in data .json in its storage,
-        /// then reads from it.
+        /// then reads from it. For testing purposes only.
         #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
-        test_reads: bool,
+        test_onchain_inputs: bool,
+        /// Deploy a test contract that stores the output_data in data .json in its storage,
+        /// then reads from it. For testing purposes only.
+        #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
+        test_onchain_outputs: bool,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for a single proof
@@ -463,10 +473,7 @@ pub enum Commands {
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier that attests to on-chain inputs for a single proof
-    #[command(
-        name = "create-evm-data-attestation-verifier",
-        arg_required_else_help = true
-    )]
+    #[command(name = "create-evm-da-verifier", arg_required_else_help = true)]
     CreateEVMDataAttestationVerifier {
         /// The path to load the desired params file
         #[arg(long)]
@@ -488,13 +495,13 @@ pub enum Commands {
         /// If not set will just use the default unoptimized SOLC configuration.
         #[arg(long)]
         optimizer_runs: Option<usize>,
-        /// The path to the .json witness file, which should
+        /// The path to the .json data file, which should
         /// contain the necessary calldata and accoount addresses  
         /// needed need to read from all the on-chain
         /// view functions that return the data that the network
-        /// ingests as inputs.
-        #[arg(short = 'W', long)]
-        witness: PathBuf,
+        /// ingests as inputs. 
+        #[arg(short = 'D', long)]
+        data: PathBuf,
         // todo, optionally allow supplying proving key
     },
 
@@ -575,13 +582,13 @@ pub enum Commands {
         /// The path to output the compiled Solidity bytecode
         #[arg(long)]
         sol_bytecode_path: Option<PathBuf>,
-        /// The path to the .json witness file, which should
+        /// The path to the .json data file, which should
         /// contain the necessary calldata and account addresses  
         /// needed need to read from all the on-chain
         /// view functions that return the data that the network
-        /// ingests as inputs.
-        #[arg(short = 'W', long)]
-        witness: Option<PathBuf>,
+        /// ingests as inputs. 
+        #[arg(short = 'D', long)]
+        data: Option<PathBuf>,
     },
 
     /// Print the proof in hexadecimal

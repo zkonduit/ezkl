@@ -12,9 +12,9 @@
 				"type": "uint256[]"
 			},
 			{
-				"internalType": "uint256",
-				"name": "SCALE",
-				"type": "uint256"
+				"internalType": "uint256[]",
+				"name": "scales",
+				"type": "uint256[]"
 			}
 		],
 		"name": "quantize_data",

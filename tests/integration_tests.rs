@@ -9,10 +9,12 @@ mod native_tests {
     use std::process::Command;
     use std::sync::Once;
     use tempdir::TempDir;
+    use ezkl_lib::graph::DataSource;
     static COMPILE: Once = Once::new();
     static KZG17: Once = Once::new();
     static KZG23: Once = Once::new();
     static KZG26: Once = Once::new();
+
     //Sure to run this once
 
     lazy_static! {
@@ -113,13 +115,30 @@ mod native_tests {
             let data = GraphInput::from_path(format!("{}/{}/input.json", test_dir, test).into())
                 .expect("failed to load input data");
 
-            let duplicated_input_data: Vec<Vec<f32>> = data
-                .input_data
+            let input_data = match data.input_data {
+                DataSource::File(data) => data,
+                DataSource::OnChain(_, _) => panic!("Only File data sources support batching"),
+            };
+
+            let output_data = match data.output_data {
+                DataSource::File(data) => data,
+                DataSource::OnChain(_, _) => panic!("Only File data sources support batching"),
+            };
+
+            let duplicated_input_data: Vec<Vec<f32>> = input_data
                 .iter()
                 .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
                 .collect();
 
-            let duplicated_data = GraphInput::new(duplicated_input_data);
+            let duplicated_output_data: Vec<Vec<f32>> = output_data
+                .iter()
+                .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
+                .collect();
+
+            let duplicated_data = GraphInput::new(
+                DataSource::File(duplicated_input_data), 
+                DataSource::File(duplicated_output_data)
+            );
 
             let res =
                 duplicated_data.save(format!("{}/{}/input.json", test_dir, output_dir).into());
@@ -251,7 +270,8 @@ mod native_tests {
     };
 }
 
-    macro_rules! test_func {
+
+macro_rules! test_func {
     () => {
         #[cfg(test)]
         mod tests {
@@ -461,6 +481,7 @@ mod native_tests {
     };
 }
 
+
     macro_rules! test_func_evm {
     () => {
         #[cfg(test)]
@@ -650,7 +671,7 @@ mod native_tests {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "mock",
-                "-W",
+                "-D",
                 format!("{}/{}/input.json", test_dir, counter_example).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -674,7 +695,6 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
-    #[allow(clippy::too_many_arguments)]
     fn mock(
         example_name: String,
         scale: usize,
@@ -710,13 +730,13 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "gen-witness",
+                "forward",
                 "-D",
                 &format!("{}/{}/input.json", test_dir, example_name),
                 "-M",
                 &format!("{}/{}/network.onnx", test_dir, example_name),
                 "-O",
-                &format!("{}/{}/witness.json", test_dir, example_name),
+                &format!("{}/{}/input_forward.json", test_dir, example_name),
                 &format!(
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
@@ -729,8 +749,8 @@ mod native_tests {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "mock",
-                "-W",
-                format!("{}/{}/witness.json", test_dir, example_name).as_str(),
+                "-D",
+                format!("{}/{}/input_forward.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
@@ -782,13 +802,13 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "gen-witness",
+                "forward",
                 "-D",
                 &format!("{}/tutorial/input.json", test_dir),
                 "-M",
                 &format!("{}/tutorial/network.onnx", test_dir),
                 "-O",
-                &format!("{}/tutorial/witness.json", test_dir),
+                &format!("{}/tutorial/input_forward.json", test_dir),
                 &format!("--settings-path={}/tutorial/settings.json", test_dir),
             ])
             .status()
@@ -798,8 +818,8 @@ mod native_tests {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "mock",
-                "-W",
-                format!("{}/tutorial/witness.json", test_dir).as_str(),
+                "-D",
+                format!("{}/tutorial/input_forward.json", test_dir).as_str(),
                 "-M",
                 format!("{}/tutorial/network.onnx", test_dir).as_str(),
                 &format!("--settings-path={}/tutorial/settings.json", test_dir),
@@ -846,7 +866,7 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "gen-witness",
+                "forward",
                 "-D",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
@@ -883,7 +903,7 @@ mod native_tests {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "prove",
-                "-W",
+                "-D",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -974,7 +994,7 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "gen-witness",
+                "forward",
                 "-D",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
@@ -1012,7 +1032,7 @@ mod native_tests {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "prove",
-                "-W",
+                "-D",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -1168,7 +1188,7 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "gen-witness",
+                "forward",
                 "-D",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
@@ -1205,7 +1225,7 @@ mod native_tests {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "prove",
-                "-W",
+                "-D",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -1263,7 +1283,7 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "gen-witness",
+                "forward",
                 "-D",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
@@ -1271,7 +1291,7 @@ mod native_tests {
                 "--settings-path",
                 format!("{}/{}/settings_fuzz.json", test_dir, example_name).as_str(),
                 "-O",
-                format!("{}/{}/witness_fuzz.json", test_dir, example_name).as_str(),
+                format!("{}/{}/input_fuzz.json", test_dir, example_name).as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -1280,8 +1300,8 @@ mod native_tests {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "fuzz",
-                "-W",
-                format!("{}/{}/witness_fuzz.json", test_dir, example_name).as_str(),
+                "-D",
+                format!("{}/{}/input_fuzz.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!("--bits={}", bits),
@@ -1319,7 +1339,7 @@ mod native_tests {
                 &format!("--input-visibility={}", input_visibility),
                 &format!("--param-visibility={}", param_visibility),
                 &format!("--output-visibility={}", output_visibility),
-                &format!("--on-chain-inputs={}", on_chain_inputs),
+                &format!("--on-chain-inputs={}", on_chain_inputs)
             ])
             .status()
             .expect("failed to execute process");
@@ -1343,7 +1363,7 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "gen-witness",
+                "forward",
                 "-D",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
@@ -1381,7 +1401,7 @@ mod native_tests {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "prove",
-                "-W",
+                "-D",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -1467,7 +1487,10 @@ mod native_tests {
         assert!(!status.success());
     }
 
-    fn kzg_evm_on_chain_input_prove_and_verify(example_name: String, num_runs: usize) {
+    fn kzg_evm_on_chain_input_prove_and_verify(
+        example_name: String,
+        num_runs: usize,
+    ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -1484,7 +1507,7 @@ mod native_tests {
                 "--output-visibility=public",
                 "--on-chain-inputs=true",
                 "--bits=16",
-                "-K=17",
+                "-K=17"
             ])
             .status()
             .expect("failed to execute process");
@@ -1492,7 +1515,7 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "gen-witness",
+                "forward",
                 "-D",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
@@ -1502,7 +1525,7 @@ mod native_tests {
                     test_dir, example_name
                 ),
                 "-O",
-                format!("{}/{}/witness.json", test_dir, example_name).as_str(),
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -1527,12 +1550,12 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let data_path = format!("{}/{}/witness.json", test_dir, example_name);
+        let data_path = format!("{}/{}/input.json", test_dir, example_name);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "prove",
-                "-W",
+                "-D",
                 data_path.as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -1547,7 +1570,7 @@ mod native_tests {
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
-                "--test-reads=true",
+                "--test-reads=true"
             ])
             .status()
             .expect("failed to execute process");
@@ -1565,9 +1588,10 @@ mod native_tests {
         let sol_arg = format!("kzg_{}.sol", example_name);
         let sol_bytecode_arg = format!("{}/{}/kzg.code", test_dir, example_name);
 
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "create-evm-data-attestation-verifier",
+                "create-evm-da-verifier",
                 circuit_settings.as_str(),
                 "--sol-code-path",
                 sol_arg.as_str(),
@@ -1576,9 +1600,9 @@ mod native_tests {
                 param_arg.as_str(),
                 "--vk-path",
                 vk_arg.as_str(),
-                "--witness",
+                "--data",
                 data_path.as_str(),
-                opt_arg.as_str(),
+                opt_arg.as_str()
             ])
             .status()
             .expect("failed to execute process");
@@ -1594,7 +1618,7 @@ mod native_tests {
             sol_arg.as_str(),
             "--sol-bytecode-path",
             sol_bytecode_arg.as_str(),
-            "--witness",
+            "--data",
             data_path.as_str(),
         ];
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
