@@ -118,10 +118,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             data,
             model,
             output,
-            scale,
-            batch_size,
             settings_path,
-        } => gen_witness(model, data, Some(output), scale, batch_size, settings_path).map(|_| ()),
+        } => gen_witness(model, data, Some(output), settings_path).map(|_| ()),
         Commands::Mock {
             model,
             witness,
@@ -406,21 +404,11 @@ pub(crate) fn gen_witness(
     model_path: PathBuf,
     data: PathBuf,
     output: Option<PathBuf>,
-    scale: Option<u32>,
-    batch_size: Option<usize>,
     settings_path: PathBuf,
 ) -> Result<GraphWitness, Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
 
-    let mut circuit_settings = GraphSettings::load(&settings_path)?;
-    if let Some(scale) = scale {
-        circuit_settings.run_args.scale = scale;
-    }
-    if let Some(batch_size) = batch_size {
-        circuit_settings.run_args.batch_size = batch_size;
-    }
-
-    info!("set scale to {}", circuit_settings.run_args.scale);
+    let circuit_settings = GraphSettings::load(&settings_path)?;
 
     let mut circuit =
         GraphCircuit::from_settings(&circuit_settings, &model_path, CheckMode::UNSAFE)?;
