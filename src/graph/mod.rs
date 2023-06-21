@@ -633,7 +633,6 @@ impl Circuit<Fp> for GraphCircuit {
             cs,
             &mut vars,
             params.run_args.bits,
-            params.run_args.tolerance,
             params.required_lookups,
             params.check_mode,
         )

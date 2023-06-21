@@ -7,7 +7,6 @@ use super::GraphSettings;
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::region::RegionCtx;
 use crate::circuit::Input;
-use crate::circuit::Tolerance;
 use crate::circuit::Unknown;
 use crate::{
     circuit::{lookup::LookupOp, BaseConfig as PolyConfig, CheckMode, Op},
@@ -246,15 +245,14 @@ impl Model {
         let mut lookup_ops: Vec<LookupOp> = self.required_lookups();
 
         // if we're using percentage tolerance, we need to add the necessary range check ops for it.
-        if let Tolerance::Percentage { val, .. } = run_args.tolerance {
+
+        if run_args.tolerance.val > 0.0 {
             for scale in self.graph.get_output_scales() {
-                let tolerance = Tolerance::Percentage {
-                    val,
-                    scales: (
-                        scale_to_multiplier(scale) as usize,
-                        scale_to_multiplier(run_args.scale) as usize,
-                    ),
-                };
+                let mut tolerance = run_args.tolerance;
+                tolerance.scales = (
+                    scale_to_multiplier(scale) as usize,
+                    scale_to_multiplier(run_args.scale) as usize,
+                );
                 let opkind: Box<dyn Op<Fp>> = Box::new(HybridOp::RangeCheck(tolerance));
                 lookup_ops.extend(opkind.required_lookups());
             }
@@ -558,22 +556,16 @@ impl Model {
         meta: &mut ConstraintSystem<Fp>,
         vars: &mut ModelVars<Fp>,
         num_bits: usize,
-        tolerance: Tolerance,
         required_lookups: Vec<LookupOp>,
         check_mode: CheckMode,
     ) -> Result<PolyConfig<Fp>, Box<dyn Error>> {
         info!("configuring model");
-        // Extract the abs tolerance value for the baseop range check. Will be zero if percentage tolerance is used.
-        let tol_abs = match tolerance {
-            Tolerance::Abs { val } => val,
-            _ => 0,
-        };
+
         let mut base_gate = PolyConfig::configure(
             meta,
             vars.advices[0..2].try_into()?,
             &vars.advices[2],
             check_mode,
-            tol_abs as i32,
         );
         // set scale for HybridOp::RangeCheck and call self.conf_lookup on that op for percentage tolerance case
         let input = &vars.advices[0];
@@ -634,16 +626,10 @@ impl Model {
                         .iter()
                         .enumerate()
                         .map(|(i, output)| {
-                            let tolerance = match run_args.tolerance {
-                                Tolerance::Percentage { val, .. } => Tolerance::Percentage {
-                                    val,
-                                    scales: (
-                                        scale_to_multiplier(output_scales[i]) as usize,
-                                        global_scale,
-                                    ),
-                                },
-                                _ => run_args.tolerance,
-                            };
+                            let mut tolerance = run_args.tolerance.clone();
+                            tolerance.scales =
+                                (scale_to_multiplier(output_scales[i]) as usize, global_scale);
+
                             let mut instance_offset = 0;
                             if self.visibility.input.is_public() {
                                 instance_offset += inputs.len();

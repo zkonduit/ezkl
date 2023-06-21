@@ -289,8 +289,6 @@ macro_rules! test_func {
             #[test]
             fn tutorial_() {
                 crate::native_tests::mv_test_("tutorial");
-                // absolute tolerance test
-                run_tutorial("2");
                 // percent tolerance test
                 run_tutorial("1.0");
             }
