@@ -60,7 +60,6 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
-use std::time::Instant;
 use thiserror::Error;
 
 /// A wrapper for tensor related errors.
@@ -849,7 +848,7 @@ pub(crate) fn create_evm_aggregate_verifier(
     sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
-    let params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(srs_path)?;
+    let params: ParamsKZG<Bn256> = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)?;
 
     let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
 
@@ -1385,7 +1384,7 @@ pub(crate) fn load_params_cmd(
     srs_path: PathBuf,
     logrows: u32,
 ) -> Result<ParamsKZG<Bn256>, Box<dyn Error>> {
-    let mut params: ParamsKZG<Bn256> = load_params::<KZGCommitmentScheme<Bn256>>(srs_path)?;
+    let mut params: ParamsKZG<Bn256> = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)?;
     info!("downsizing params to {} logrows", logrows);
     if logrows < params.k() {
         params.downsize(logrows);

@@ -3,7 +3,7 @@
 mod native_tests {
 
     use core::panic;
-    use ezkl_lib::graph::GraphInput;
+    use ezkl_lib::graph::GraphWitness;
     use lazy_static::lazy_static;
     use std::env::var;
     use std::process::Command;
@@ -112,7 +112,7 @@ mod native_tests {
 
             assert!(status.success());
 
-            let data = GraphInput::from_path(format!("{}/{}/input.json", test_dir, test).into())
+            let data = GraphWitness::from_path(format!("{}/{}/input.json", test_dir, test).into())
                 .expect("failed to load input data");
 
             let input_data = match data.input_data {
@@ -135,7 +135,7 @@ mod native_tests {
                 .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
                 .collect();
 
-            let duplicated_data = GraphInput::new(
+            let duplicated_data = GraphWitness::new(
                 DataSource::File(duplicated_input_data), 
                 DataSource::File(duplicated_output_data)
             );
