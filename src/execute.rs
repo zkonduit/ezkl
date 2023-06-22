@@ -35,7 +35,7 @@ use halo2_proofs::poly::kzg::{
 use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
-use halo2curves::bn256::{Bn256, Fr, G1Affine, G2Affine};
+use halo2curves::bn256::{Bn256, Fr, G1Affine};
 #[cfg(not(target_arch = "wasm32"))]
 use halo2curves::ff::Field;
 #[cfg(not(target_arch = "wasm32"))]
@@ -400,32 +400,20 @@ pub(crate) fn gen_srs_cmd(srs_path: PathBuf, logrows: u32) -> Result<(), Box<dyn
     Ok(())
 }
 
-async fn fetch(uri: &str, offset: usize, length: usize) -> Result<Vec<u8>, Box<dyn Error>> {
+async fn fetch(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+    #[cfg(not(target_arch = "wasm32"))]
+    let pb = init_spinner();
+    #[cfg(not(target_arch = "wasm32"))]
+    pb.set_message("Downloading SRS (this may take a while) ...");
     let client = reqwest::Client::new();
-    Ok(client
-        .get(uri)
-        .header("Range", format!("bytes={offset}-{}", offset + length))
-        .send()
-        .await?
-        .json::<Vec<u8>>()
-        .await?)
-}
-
-async fn fetch_perpetual_powers_of_tau_g2() -> Result<[G2Affine; 2], Box<dyn Error>> {
-    const K: u32 = 28;
-
-    let g2_offset = g2_offset::<Bn256>(K) as usize;
-    let mut reader = Cursor::new(
-        fetch(
-            PUBLIC_G2_URL,
-            g2_offset,
-            2 * ec_point_repr_size::<G2Affine>(),
-        )
-        .await?,
-    );
-    Ok(read_g2s::<Bn256, _, true>(&mut reader, K, 2)
-        .try_into()
-        .unwrap())
+    let mut resp = client.get(uri).body(vec![]).send().await?;
+    #[cfg(not(target_arch = "wasm32"))]
+    let mut buf = Vec::new();
+    while let Some(chunk) = resp.chunk().await? {
+        buf.extend(chunk.to_vec());
+    }
+    pb.finish_with_message("SRS downloaded.");
+    Ok(buf.drain(..buf.len()).collect())
 }
 
 pub(crate) async fn get_srs_cmd(
@@ -436,25 +424,18 @@ pub(crate) async fn get_srs_cmd(
     if settings_path.exists() {
         let settings = GraphSettings::load(&settings_path)?;
         let k = settings.run_args.logrows;
-        let max_k = 16;
-        // length of the SRS is the size of the G1 elements in the SRS
-        let length = G1_OFFSET as usize + ec_point_raw_size::<G1Affine>() << k.min(max_k);
-        //
-        #[cfg(not(target_arch = "wasm32"))]
-        let pb = init_spinner();
-        #[cfg(not(target_arch = "wasm32"))]
-        pb.set_message("Validating SRS (this may take a while) ...");
+
         let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
-        let mut reader = Cursor::new(fetch(&srs_uri, 0, length).await?);
+        let mut reader = Cursor::new(fetch(&srs_uri).await?);
         // check the SRS
         if matches!(check_mode, CheckMode::SAFE) {
-            let g1s = read_g1s::<Bn256, _>(&mut reader, k.min(max_k) as usize);
-            let [g2, s_g2] = fetch_perpetual_powers_of_tau_g2().await?;
-
-            if !same_ratio::<Bn256>(&g1s, g2, s_g2) {
-                let err_string = format!("SRS is not valid.");
-                return Err(err_string.into());
-            }
+            #[cfg(not(target_arch = "wasm32"))]
+            let pb = init_spinner();
+            #[cfg(not(target_arch = "wasm32"))]
+            pb.set_message("Validating SRS (this may take a while) ...");
+            ParamsKZG::<Bn256>::read(&mut reader)?;
+            #[cfg(not(target_arch = "wasm32"))]
+            pb.finish_with_message("SRS validated");
         }
 
         let mut file = std::fs::File::create(srs_path)?;
