@@ -281,6 +281,7 @@ pub enum Commands {
         logrows: usize,
     },
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// Gets an SRS from a circuit settings file.
     #[command(name = "get-srs", arg_required_else_help = true)]
     GetSrs {

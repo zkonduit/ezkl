@@ -57,6 +57,7 @@ use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
 use std::fs::File;
+#[cfg(not(target_arch = "wasm32"))]
 use std::io::{Cursor, Write};
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
@@ -94,6 +95,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             settings_path,
         ),
         Commands::GenSrs { srs_path, logrows } => gen_srs_cmd(srs_path, logrows as u32),
+        #[cfg(not(target_arch = "wasm32"))]
         Commands::GetSrs {
             srs_path,
             settings_path,
@@ -398,8 +400,8 @@ pub(crate) fn gen_srs_cmd(srs_path: PathBuf, logrows: u32) -> Result<(), Box<dyn
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
-    #[cfg(not(target_arch = "wasm32"))]
     let pb = {
         let pb = init_spinner();
         pb.set_message("Downloading SRS (this may take a while) ...");
@@ -410,18 +412,15 @@ async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
     #[allow(unused_mut)]
     let mut resp = client.get(uri).body(vec![]).send().await?;
     let mut buf = vec![];
-    #[cfg(not(target_arch = "wasm32"))]
     while let Some(chunk) = resp.chunk().await? {
         buf.extend(chunk.to_vec());
     }
-    #[cfg(target_arch = "wasm32")]
-    buf.extend(resp.bytes().await?.to_vec());
 
-    #[cfg(not(target_arch = "wasm32"))]
     pb.finish_with_message("SRS downloaded.");
     Ok(buf.drain(..buf.len()).collect())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn get_srs_cmd(
     srs_path: PathBuf,
     settings_path: PathBuf,
