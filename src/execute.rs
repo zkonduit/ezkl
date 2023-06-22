@@ -20,7 +20,7 @@ use crate::pfsys::evm::{
     aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier, DeploymentCode, YulCode,
 };
 use crate::pfsys::{create_keys, load_srs, load_vk, save_params, save_pk, Snark, TranscriptType};
-use crate::pfsys::{create_proof_circuit, gen_srs, save_vk, verify_proof_circuit};
+use crate::pfsys::{create_proof_circuit, save_vk, srs::*, verify_proof_circuit};
 #[cfg(not(target_arch = "wasm32"))]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
@@ -35,7 +35,7 @@ use halo2_proofs::poly::kzg::{
 use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
 use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
-use halo2curves::bn256::{Bn256, Fr, G1Affine};
+use halo2curves::bn256::{Bn256, Fr, G1Affine, G2Affine};
 #[cfg(not(target_arch = "wasm32"))]
 use halo2curves::ff::Field;
 #[cfg(not(target_arch = "wasm32"))]
@@ -57,6 +57,7 @@ use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
 use std::fs::File;
+use std::io::Cursor;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
 use std::path::PathBuf;
@@ -95,6 +96,11 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             settings_path,
         ),
         Commands::GenSrs { srs_path, logrows } => gen_srs_cmd(srs_path, logrows as u32),
+        Commands::GetSrs {
+            srs_path,
+            settings_path,
+            check,
+        } => get_srs_cmd(srs_path, settings_path, check).await,
         Commands::Table { model, args } => table(model, args),
         #[cfg(feature = "render")]
         Commands::RenderCircuit {
@@ -392,6 +398,76 @@ pub(crate) fn gen_srs_cmd(srs_path: PathBuf, logrows: u32) -> Result<(), Box<dyn
     pb.finish_with_message("SRS generated");
     save_params::<KZGCommitmentScheme<Bn256>>(&srs_path, &params)?;
     Ok(())
+}
+
+async fn fetch(uri: &str, offset: usize, length: usize) -> Result<Vec<u8>, Box<dyn Error>> {
+    let client = reqwest::Client::new();
+    Ok(client
+        .get(uri)
+        .header("Range", format!("bytes={offset}-{}", offset + length))
+        .send()
+        .await?
+        .json::<Vec<u8>>()
+        .await?)
+}
+
+async fn fetch_perpetual_powers_of_tau_g2() -> Result<[G2Affine; 2], Box<dyn Error>> {
+    const K: u32 = 28;
+
+    let g2_offset = g2_offset::<Bn256>(K) as usize;
+    let mut reader = Cursor::new(
+        fetch(
+            PUBLIC_G2_URL,
+            g2_offset,
+            2 * ec_point_repr_size::<G2Affine>(),
+        )
+        .await?,
+    );
+    Ok(read_g2s::<Bn256, _, true>(&mut reader, K, 2)
+        .try_into()
+        .unwrap())
+}
+
+pub(crate) async fn get_srs_cmd(
+    srs_path: PathBuf,
+    settings_path: PathBuf,
+    check_mode: CheckMode,
+) -> Result<(), Box<dyn Error>> {
+    if settings_path.exists() {
+        let settings = GraphSettings::load(&settings_path)?;
+        let k = settings.run_args.logrows;
+        let max_k = 16;
+        // length of the SRS is the size of the G1 elements in the SRS
+        let length = G1_OFFSET as usize + ec_point_raw_size::<G1Affine>() << k.min(max_k);
+        //
+        #[cfg(not(target_arch = "wasm32"))]
+        let pb = init_spinner();
+        #[cfg(not(target_arch = "wasm32"))]
+        pb.set_message("Validating SRS (this may take a while) ...");
+        let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
+        let mut reader = Cursor::new(fetch(&srs_uri, 0, length).await?);
+        // check the SRS
+        if matches!(check_mode, CheckMode::SAFE) {
+            let g1s = read_g1s::<Bn256, _>(&mut reader, k.min(max_k) as usize);
+            let [g2, s_g2] = fetch_perpetual_powers_of_tau_g2().await?;
+
+            if !same_ratio::<Bn256>(&g1s, g2, s_g2) {
+                let err_string = format!("SRS is not valid.");
+                return Err(err_string.into());
+            }
+        }
+
+        let mut file = std::fs::File::create(srs_path)?;
+        file.write_all(reader.get_ref())?;
+
+        info!("SRS downloaded");
+        Ok(())
+    } else {
+        let err_string = format!(
+            "Settings file not found, you should run gen-settings (and calibrate-settings to pick optimal logrows)."
+        );
+        Err(err_string.into())
+    }
 }
 
 pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<(), Box<dyn Error>> {

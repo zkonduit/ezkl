@@ -280,6 +280,20 @@ pub enum Commands {
         #[arg(long)]
         logrows: usize,
     },
+
+    /// Gets an SRS from a circuit settings file.
+    #[command(name = "gen-srs", arg_required_else_help = true)]
+    GetSrs {
+        /// The path to output to the desired srs file
+        #[arg(long, default_value = "kzg.srs")]
+        srs_path: PathBuf,
+        /// Path to circuit_settings file to read in
+        #[arg(long)]
+        settings_path: PathBuf,
+        /// check mode for srs. verifies downloaded srs is valid. set to unsafe for speed.
+        #[arg(long, default_value = "safe")]
+        check: CheckMode,
+    },
     /// Loads model and input and runs mock prover (for testing)
     #[command(arg_required_else_help = true)]
     Mock {
