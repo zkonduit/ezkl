@@ -2,6 +2,7 @@ import ezkl_lib
 import os
 import pytest
 import json
+import asyncio
 
 folder_path = os.path.abspath(
     os.path.join(
@@ -20,6 +21,7 @@ examples_path = os.path.abspath(
 )
 
 srs_path = os.path.join(folder_path, 'kzg_test.params')
+params_k17_path = os.path.join(folder_path, 'kzg_test_k17.params')
 params_k20_path = os.path.join(folder_path, 'kzg_test_k20.params')
 
 
@@ -56,8 +58,8 @@ def test_gen_srs():
     test for gen_srs() with 17 logrows and 20 logrows.
     You may want to comment this test as it takes a long time to run
     """
-    ezkl_lib.gen_srs(srs_path, 17)
-    assert os.path.isfile(srs_path)
+    ezkl_lib.gen_srs(params_k17_path, 17)
+    assert os.path.isfile(params_k17_path)
 
     ezkl_lib.gen_srs(params_k20_path, 20)
     assert os.path.isfile(params_k20_path)
@@ -139,7 +141,22 @@ def test_forward():
         8270957937025516140, 11801026918842104328, 2203849898884507041, 140307258138425306]]
     assert data["processed_outputs"]["poseidon_hash"] == res["processed_outputs"]["poseidon_hash"] == [[4554067273356176515, 2525802612124249168,
                                                                                                         5413776662459769622, 1194961624936436872]]
+async def get_srs():
+    """
+    Test for get_srs
+    """
+    settings_path = os.path.join(folder_path, 'settings.json')
+    res = await ezkl_lib.get_srs(srs_path, settings_path)
 
+    assert res == True
+
+    assert os.path.isfile(srs_path)
+
+def test_get_srs():
+    """
+    Test for get_srs
+    """
+    asyncio.run(get_srs())
 
 def test_mock():
     """
@@ -203,11 +220,6 @@ def test_setup_evm():
     """
     Test for setup
     """
-
-    data_path = os.path.join(
-        folder_path,
-        'witness.json'
-    )
 
     model_path = os.path.join(
         examples_path,
