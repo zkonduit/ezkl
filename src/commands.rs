@@ -281,9 +281,9 @@ pub enum Commands {
     /// Loads model and input and runs mock prover (for testing)
     #[command(arg_required_else_help = true)]
     Mock {
-        /// The path to the .json data file
-        #[arg(short = 'D', long)]
-        data: PathBuf,
+        /// The path to the .json witness file
+        #[arg(short = 'W', long)]
+        witness: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
@@ -353,9 +353,9 @@ pub enum Commands {
     /// Fuzzes the proof pipeline with random inputs, random parameters, and random keys
     #[command(arg_required_else_help = true)]
     Fuzz {
-        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'D', long)]
-        data: PathBuf,
+        /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'W', long)]
+        witness: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
@@ -382,9 +382,9 @@ pub enum Commands {
     /// Loads model, data, and creates proof
     #[command(arg_required_else_help = true)]
     Prove {
-        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'D', long)]
-        data: PathBuf,
+        /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'W', long)]
+        witness: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
@@ -492,7 +492,7 @@ pub enum Commands {
         /// needed need to read from all the on-chain
         /// view functions that return the data that the network
         /// ingests as inputs. 
-        #[arg(short = 'D', long)]
+        #[arg(short = 'W', long)]
         data: PathBuf,
         // todo, optionally allow supplying proving key
     },
@@ -580,14 +580,14 @@ pub enum Commands {
         /// purposes. The on_chain_data file will contain 
         /// the call data and account addresses needed to read from
         /// evm quantized data in this file.
-        #[arg(short = 'D', long)]
+        #[arg(short = 'W', long)]
         file_witness: Option<PathBuf>,
         /// The path to the .json data file, which should
         /// contain the necessary calldata and account addresses  
         /// needed need to read from all the on-chain
         /// view functions that return the data that the network
         /// ingests as inputs. 
-        #[arg(short = 'D', long)]
+        #[arg(short = 'W', long)]
         on_chain_witness: Option<PathBuf>,
     },
 

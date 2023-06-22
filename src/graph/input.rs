@@ -113,8 +113,8 @@ impl GraphInput {
     pub fn save(&self, path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
         serde_json::to_writer(std::fs::File::create(path)?, &self).map_err(|e| e.into())
     }
+
     ///
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn split_into_batches(
         &self,
         batch_size: usize,
@@ -168,6 +168,7 @@ impl GraphInput {
         Ok(batches)
     }
 }
+
 
 #[cfg(feature = "python-bindings")]
 use halo2curves::{

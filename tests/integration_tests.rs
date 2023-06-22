@@ -146,6 +146,7 @@ mod native_tests {
             assert!(res.is_ok());
         }
     }
+    
 
     const PF_FAILURE: &str = "examples/test_failure.proof";
 
@@ -674,7 +675,7 @@ macro_rules! test_func {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "mock",
-                "-D",
+                "-W",
                 format!("{}/{}/input.json", test_dir, counter_example).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -739,7 +740,7 @@ macro_rules! test_func {
                 "-M",
                 &format!("{}/{}/network.onnx", test_dir, example_name),
                 "-O",
-                &format!("{}/{}/input_forward.json", test_dir, example_name),
+                &format!("{}/{}/witness_mock.json", test_dir, example_name),
                 &format!(
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
@@ -752,8 +753,8 @@ macro_rules! test_func {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "mock",
-                "-D",
-                format!("{}/{}/input_forward.json", test_dir, example_name).as_str(),
+                "-W",
+                format!("{}/{}/witness_mock.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
@@ -812,7 +813,7 @@ macro_rules! test_func {
                 "-M",
                 &format!("{}/tutorial/network.onnx", test_dir),
                 "-O",
-                &format!("{}/tutorial/input_forward.json", test_dir),
+                &format!("{}/tutorial/witness_tutorial.json", test_dir),
                 &format!("--settings-path={}/tutorial/settings.json", test_dir),
             ])
             .status()
@@ -822,8 +823,8 @@ macro_rules! test_func {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "mock",
-                "-D",
-                format!("{}/tutorial/input_forward.json", test_dir).as_str(),
+                "-W",
+                format!("{}/tutorial/witness_tutorial.json", test_dir).as_str(),
                 "-M",
                 format!("{}/tutorial/network.onnx", test_dir).as_str(),
                 &format!("--settings-path={}/tutorial/settings.json", test_dir),
@@ -907,7 +908,7 @@ macro_rules! test_func {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "prove",
-                "-D",
+                "-W",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -1036,7 +1037,7 @@ macro_rules! test_func {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "prove",
-                "-D",
+                "-W",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -1229,7 +1230,7 @@ macro_rules! test_func {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "prove",
-                "-D",
+                "-W",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -1295,7 +1296,7 @@ macro_rules! test_func {
                 "--settings-path",
                 format!("{}/{}/settings_fuzz.json", test_dir, example_name).as_str(),
                 "-O",
-                format!("{}/{}/input_fuzz.json", test_dir, example_name).as_str(),
+                format!("{}/{}/witness_fuzz.json", test_dir, example_name).as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -1304,8 +1305,8 @@ macro_rules! test_func {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "fuzz",
-                "-D",
-                format!("{}/{}/input_fuzz.json", test_dir, example_name).as_str(),
+                "-W",
+                format!("{}/{}/witness_fuzz.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!("--bits={}", bits),
@@ -1403,7 +1404,7 @@ macro_rules! test_func {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "prove",
-                "-D",
+                "-W",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -1561,7 +1562,7 @@ macro_rules! test_func {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "prove",
-                "-D",
+                "-W",
                 data_path.as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),

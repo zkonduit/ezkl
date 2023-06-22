@@ -75,7 +75,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
     match cli.command {
         #[cfg(not(target_arch = "wasm32"))]
         Commands::Fuzz {
-            data,
+            witness,
             model,
             transcript,
             args,
@@ -84,7 +84,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => fuzz(
             model,
             args.logrows,
-            data,
+            witness,
             transcript,
             num_runs,
             args,
@@ -118,9 +118,9 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => gen_witness(model, data, Some(output), settings_path).map(|_| ()),
         Commands::Mock {
             model,
-            data,
+            witness,
             settings_path,
-        } => mock(model, data, settings_path),
+        } => mock(model, witness, settings_path),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
             vk_path,
@@ -182,7 +182,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => setup(model, srs_path, settings_path, vk_path, pk_path),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::Prove {
-            data,
+            witness,
             model,
             pk_path,
             proof_path,
@@ -195,7 +195,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             test_on_chain_inputs,
             test_on_chain_outputs
         } => prove(
-            data,
+            witness,
             model,
             pk_path,
             proof_path,
