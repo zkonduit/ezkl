@@ -45,48 +45,6 @@ impl Default for DataSource {
         )
     }
 }
-
-
-/// The input tensor data and shape, and output data for the computational graph (model) as floats.
-/// For example, the input might be the image data for a neural network, and the output class scores.
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-pub struct GraphWitnessOld {
-    /// Inputs to the model / computational graph (can be empty vectors if inputs are coming from on-chain).
-    pub input_data: Vec<Vec<f32>>, 
-    /// The expected output of the model (can be empty vectors if outputs are not being constrained).
-    pub output_data: Vec<Vec<f32>>,
-    /// Optional hashes of the inputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
-    pub processed_inputs: Option<ModuleForwardResult>,
-    /// Optional hashes of the params (can be None if there are no commitments). Wrapped as Option for backwards compatibility
-    pub processed_params: Option<ModuleForwardResult>,
-    /// Optional hashes of the outputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
-    pub processed_outputs: Option<ModuleForwardResult>
-}
-
-impl GraphWitnessOld {
-    ///
-    pub fn new(input_data: Vec<Vec<f32>>, output_data: Vec<Vec<f32>>) -> Self {
-        GraphWitnessOld {
-            input_data,
-            output_data,
-            processed_inputs: None,
-            processed_params: None,
-            processed_outputs: None,
-        }
-    }
-    /// Load the model input from a file
-    pub fn from_path(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut file = std::fs::File::open(path)?;
-        let mut data = String::new();
-        file.read_to_string(&mut data)?;
-        serde_json::from_str(&data).map_err(|e| e.into())
-    }
-
-    /// Save the model input to a file
-    pub fn save(&self, path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-        serde_json::to_writer(std::fs::File::create(path)?, &self).map_err(|e| e.into())
-    }
-}
 /// The input tensor data and shape, and output data for the computational graph (model) as floats.
 /// For example, the input might be the image data for a neural network, and the output class scores.
 #[derive(Clone, Debug, Deserialize, Default)]

@@ -280,6 +280,8 @@ pub async fn verify_proof_with_data_attestation(
         let u = U256::from_little_endian(bytes.as_slice());
         public_inputs.push(u);
     }
+    
+    info!("public_inputs: {:#?}", public_inputs);
 
     let tx = contract
         .verify_with_data_attestation(
@@ -425,6 +427,8 @@ pub async fn evm_quantize <M: 'static + Middleware>(
         .iter()
         .map(|x| U256::from_dec_str(&x.to_string()))
         .collect::<Result<Vec<U256>, _>>()?;
+
+    info!("scales: {:#?}", scales);
 
     let results = contract
         .quantize_data(

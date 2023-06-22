@@ -322,16 +322,16 @@ impl GraphCircuit {
                 drop(anvil);
                 // Set up local anvil instance for deploying QuantizeData.sol
                 let (anvil, client) = setup_eth_backend(None).await?;
+                
                 let quantized_evm_inputs = evm_quantize(
                     client,
-                    out_scales.iter().map(|x| scale_to_multiplier(*x)).collect(), 
+                    vec![scale_to_multiplier(out_scales[0]); inputs.0.len()], // TODO: May need to flatten out_scales. 
                     &inputs).await?;
                 drop(anvil);
                 // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
                 let mut inputs: Vec<Tensor<i128>> = vec![];
-                for (input, shape) in vec![quantized_evm_inputs].iter().zip(self.model.graph.input_shapes()) {
-                    let mut t: Tensor<i128> = input.iter().cloned().collect();
-                    t.reshape(&shape);
+                for input in vec![quantized_evm_inputs].iter() {
+                    let t: Tensor<i128> = input.iter().cloned().collect();
                     inputs.push(t);
                 }
                 self.inputs = inputs;
@@ -364,6 +364,7 @@ impl GraphCircuit {
         address: H160,
         data: &Vec<Vec<f32>>,
         scales: Vec<f64>,
+        reshape: bool,
     ) -> Result<(Vec<Tensor<i128>>, Vec<input::CallsToAccount>), Box<dyn std::error::Error>> {
 
         use crate::eth::{test_on_chain_data, read_on_chain_inputs, evm_quantize};
@@ -381,7 +382,9 @@ impl GraphCircuit {
         let mut inputs: Vec<Tensor<i128>> = vec![];
         for (input, shape) in vec![quantized_evm_inputs].iter().zip(self.model.graph.input_shapes()) {
             let mut t: Tensor<i128> = input.iter().cloned().collect();
-            t.reshape(&shape);
+            if reshape {
+                t.reshape(&shape);
+            }
             inputs.push(t);
         }
         Ok((inputs, calls_to_accounts))
@@ -507,7 +510,11 @@ impl GraphCircuit {
     ) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
         let out_scales = self.model.graph.get_output_scales();
 
+
         let data = if let Some(test_on_chain_data_path) = test_on_chain_data_path {
+            if !test_onchain_input && !test_onchain_output {
+                panic!("Must specify input or outuput for on-chain test");
+            }
             // Set up local anvil instance for reading on-chain data
             let (anvil, client) = crate::eth::setup_eth_backend(None).await?;
             let mut data = data.clone();
@@ -524,13 +531,18 @@ impl GraphCircuit {
                     client.clone(), 
                     client.address(), 
                     &input_data,
-                    vec![scale_to_multiplier(self.settings.run_args.scale); input_data[0].len()]
+                    vec![scale_to_multiplier(self.settings.run_args.scale); input_data[0].len()],
+                    true,
                 ).await?;
                 self.inputs = chain_data.0;
                 let calls_to_accounts = chain_data.1;
                 // Fill the nput_data field of the GraphInput struct
                 data.input_data = DataSource::OnChain(calls_to_accounts.clone(), anvil.endpoint());
-            } else if test_onchain_output {
+                self.load_outputs(&data).await?;
+            } else {
+                self.load_inputs(&data).await?;
+            } 
+            if test_onchain_output {
                 let output_data = match data.output_data{
                     DataSource::File(output_data) => output_data,
                     DataSource::OnChain(_, _) => 
@@ -543,14 +555,15 @@ impl GraphCircuit {
                     client.clone(), 
                     client.address(), 
                     &output_data,
-                    out_scales.iter().map(|x| scale_to_multiplier(*x)).collect()
+                    vec![scale_to_multiplier(out_scales[0]); output_data[0].len()],
+                    false
                 ).await?;
                 self.outputs = chain_data.0;
                 let calls_to_accounts = chain_data.1;
                 // Fill the on_chain_output_data field of the GraphInput struct
                 data.output_data = DataSource::OnChain(calls_to_accounts.clone(), anvil.endpoint());
             } else {
-                panic!("Must specify input or output")
+                self.load_outputs(&data).await?;
             }
             // Drop the anvil
             drop(anvil);
