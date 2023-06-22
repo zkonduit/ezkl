@@ -1,6 +1,9 @@
 /// EVM related proving and verification
 pub mod evm;
 
+/// SRS generation, processing, verification and downloading
+pub mod srs;
+
 use crate::circuit::CheckMode;
 use crate::tensor::TensorType;
 use clap::ValueEnum;
@@ -103,8 +106,8 @@ impl<F: PrimeField + SerdeObject + FromUniformBytes<64>, C: CurveAffine> Snark<F
     /// Saves the Proof to a specified `proof_path`.
     pub fn save(&self, proof_path: &PathBuf) -> Result<(), Box<dyn Error>> {
         let self_i128 = self.to_bytes();
-        let serialized = bincode::serialize(&self_i128).map_err(Box::<dyn Error>::from)?;
-        let mut file = std::fs::File::create(proof_path).map_err(Box::<dyn Error>::from)?;
+        let serialized = bincode::serialize(&self_i128)?;
+        let mut file = std::fs::File::create(proof_path)?;
         file.write_all(&serialized).map_err(Box::<dyn Error>::from)
     }
 
@@ -118,7 +121,7 @@ impl<F: PrimeField + SerdeObject + FromUniformBytes<64>, C: CurveAffine> Snark<F
         <C as CurveAffine>::ScalarExt: FromUniformBytes<64>,
     {
         trace!("reading proof");
-        let file = File::open(proof_path).map_err(Box::<dyn Error>::from)?;
+        let file = File::open(proof_path)?;
         let snark_bytes: Snarkbytes = bincode::deserialize_from(file).unwrap();
 
         let instances = snark_bytes
@@ -198,11 +201,6 @@ impl<F: PrimeField + SerdeObject, C: CurveAffine> From<Snark<F, C>> for SnarkWit
     }
 }
 
-/// Helper function for generating SRS. !!! Only use for testing
-pub fn gen_srs<Scheme: CommitmentScheme>(k: u32) -> Scheme::ParamsProver {
-    Scheme::ParamsProver::new(k)
-}
-
 /// Creates a [VerifyingKey] and [ProvingKey] for a [ModelCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`).
 pub fn create_keys<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
     circuit: &C,
@@ -260,8 +258,7 @@ where
     // quickly mock prove as a sanity check
     if check_mode == CheckMode::SAFE {
         debug!("running mock prover");
-        let prover = MockProver::run(params.k(), &circuit, instances.clone())
-            .map_err(Box::<dyn Error>::from)?;
+        let prover = MockProver::run(params.k(), &circuit, instances.clone())?;
         prover
             .verify()
             .map_err(|e| Box::<dyn Error>::from(crate::execute::ExecutionError::VerifyError(e)))?;
@@ -354,7 +351,7 @@ where
     Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {
     info!("loading verification key from {:?}", path);
-    let f = File::open(path).map_err(Box::<dyn Error>::from)?;
+    let f = File::open(path)?;
     let mut reader = BufReader::new(f);
     VerifyingKey::<Scheme::Curve>::read::<_, C>(
         &mut reader,
@@ -375,7 +372,7 @@ where
     Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {
     info!("loading proving key from {:?}", path);
-    let f = File::open(path).map_err(Box::<dyn Error>::from)?;
+    let f = File::open(path)?;
     let mut reader = BufReader::new(f);
     ProvingKey::<Scheme::Curve>::read::<_, C>(
         &mut reader,
@@ -383,16 +380,6 @@ where
         params,
     )
     .map_err(Box::<dyn Error>::from)
-}
-
-/// Loads the [CommitmentScheme::ParamsVerifier] at `path`.
-pub fn load_srs<Scheme: CommitmentScheme>(
-    path: PathBuf,
-) -> Result<Scheme::ParamsVerifier, Box<dyn Error>> {
-    info!("loading srs from {:?}", path);
-    let f = File::open(path).map_err(Box::<dyn Error>::from)?;
-    let mut reader = BufReader::new(f);
-    Params::<'_, Scheme::Curve>::read(&mut reader).map_err(Box::<dyn Error>::from)
 }
 
 /// Saves a [ProvingKey] to `path`.
@@ -445,6 +432,7 @@ pub fn save_params<Scheme: CommitmentScheme>(
 ////////////////////////
 
 #[cfg(test)]
+#[cfg(not(target_arch = "wasm32"))]
 mod tests {
     use std::io::copy;
 
@@ -473,7 +461,7 @@ mod tests {
         let mut dest = File::create(fname.clone()).unwrap();
         let content = response.bytes().await.unwrap();
         copy(&mut &content[..], &mut dest).unwrap();
-        let res = load_srs::<KZGCommitmentScheme<Bn256>>(fname);
+        let res = srs::load_srs::<KZGCommitmentScheme<Bn256>>(fname);
         assert!(res.is_ok())
     }
 
@@ -481,10 +469,10 @@ mod tests {
     async fn test_can_load_saved_srs() {
         let tmp_dir = Builder::new().prefix("example").tempdir().unwrap();
         let fname = tmp_dir.path().join("kzg.params");
-        let srs = gen_srs::<KZGCommitmentScheme<Bn256>>(1);
+        let srs = srs::gen_srs::<KZGCommitmentScheme<Bn256>>(1);
         let res = save_params::<KZGCommitmentScheme<Bn256>>(&fname, &srs);
         assert!(res.is_ok());
-        let res = load_srs::<KZGCommitmentScheme<Bn256>>(fname);
+        let res = srs::load_srs::<KZGCommitmentScheme<Bn256>>(fname);
         assert!(res.is_ok())
     }
 }

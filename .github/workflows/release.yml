@@ -35,7 +35,7 @@ jobs:
         with:
           token: ${{ secrets.RELEASE_TOKEN }}
           tag_name: ${{ env.EZKL_VERSION }}
-        
+
   build-release:
     name: build-release
     needs: ['create-release']
@@ -81,7 +81,7 @@ jobs:
         if [[ "${{ runner.os }}" == "Linux" ]]; then
           sudo apt-get update && sudo apt-get install -y musl-tools
         fi
-    
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@nightly
       with:
@@ -89,10 +89,10 @@ jobs:
 
     - name: Install Rust targets
       run: rustup target add ${{ matrix.target }}
-      
+
     - name: Use Cross
       shell: bash
-      run: | 
+      run: |
         cargo install cross -Z sparse-registry
         if [[ "${{ matrix.os }}" == "macos-13" ]]; then
           echo "CC=clang" >> $GITHUB_ENV
@@ -102,7 +102,7 @@ jobs:
         echo "CARGO=cross" >> $GITHUB_ENV
         echo "TARGET_FLAGS=--target ${{ matrix.target }}" >> $GITHUB_ENV
         echo "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
-    
+
 
     - name: Show command used for Cargo
       run: |
