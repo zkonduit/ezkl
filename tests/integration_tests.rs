@@ -552,7 +552,7 @@ macro_rules! test_func {
             });
 
 
-            seq!(N in 0..=0 {
+            seq!(N in 0..= 17 {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
