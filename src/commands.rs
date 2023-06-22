@@ -234,7 +234,7 @@ pub enum Commands {
         #[arg(short = 'O', long, default_value = "witness.json")]
         output: PathBuf,
         /// Path to circuit_settings .json file to read in
-        #[arg(long)]
+        #[arg(short = 'S', long)]
         settings_path: PathBuf,
     },
 
@@ -289,7 +289,7 @@ pub enum Commands {
         #[arg(long, default_value = "kzg.srs")]
         srs_path: PathBuf,
         /// Path to circuit_settings file to read in
-        #[arg(long)]
+        #[arg(short = 'S', long)]
         settings_path: PathBuf,
         /// check mode for srs. verifies downloaded srs is valid. set to unsafe for speed.
         #[arg(long, default_value = "safe")]
@@ -305,7 +305,7 @@ pub enum Commands {
         #[arg(short = 'M', long)]
         model: PathBuf,
         /// circuit params path
-        #[arg(long)]
+        #[arg(short = 'S', long)]
         settings_path: PathBuf,
     },
 
@@ -362,7 +362,7 @@ pub enum Commands {
         #[arg(long, default_value = "pk.key")]
         pk_path: PathBuf,
         /// The path to load circuit params from
-        #[arg(long)]
+        #[arg(short = 'S', long)]
         settings_path: PathBuf,
     },
 
@@ -391,7 +391,7 @@ pub enum Commands {
         #[arg(long, default_value = "10")]
         num_runs: usize,
         /// optional circuit params path (overrides any run args set)
-        #[arg(long)]
+        #[arg(short = 'S', long)]
         settings_path: Option<PathBuf>,
     },
 
@@ -432,7 +432,7 @@ pub enum Commands {
         )]
         strategy: StrategyType,
         /// The path to load circuit params from
-        #[arg(long)]
+        #[arg(short = 'S', long)]
         settings_path: PathBuf,
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = "safe")]
@@ -449,8 +449,8 @@ pub enum Commands {
         /// The path to load the desired params file
         #[arg(long)]
         srs_path: PathBuf,
-        /// The path to save circuit params to
-        #[arg(long)]
+        /// The path to load circuit settings from
+        #[arg(short = 'S', long)]
         settings_path: PathBuf,
         /// The path to load the desired verfication key file
         #[arg(long)]
@@ -478,11 +478,11 @@ pub enum Commands {
         arg_required_else_help = true
     )]
     CreateEVMDataAttestationVerifier {
-        /// The path to load the desired params file
+        /// The path to load the desired srs file from
         #[arg(long)]
         srs_path: PathBuf,
-        /// The path to save circuit params to
-        #[arg(long)]
+        /// The path to load circuit settings from
+        #[arg(short = 'S', long)]
         settings_path: PathBuf,
         /// The path to load the desired verfication key file
         #[arg(long)]
@@ -512,7 +512,7 @@ pub enum Commands {
     /// Creates an EVM verifier for an aggregate proof
     #[command(name = "create-evm-verifier-aggr", arg_required_else_help = true)]
     CreateEVMVerifierAggr {
-        /// The path to load the desired params file
+        /// The path to load the desired srs file from
         #[arg(long)]
         srs_path: PathBuf,
         /// The path to output to load the desired verfication key file
@@ -539,7 +539,7 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     Verify {
         /// The path to load circuit params from
-        #[arg(long)]
+        #[arg(short = 'S', long)]
         settings_path: PathBuf,
         /// The path to the proof file
         #[arg(long)]
