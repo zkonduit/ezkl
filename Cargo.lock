@@ -1544,7 +1544,7 @@ dependencies = [
 
 [[package]]
 name = "ezkl-lib"
-version = "0.3.0"
+version = "0.4.0-pre"
 dependencies = [
  "ark-std",
  "bincode",
@@ -1570,6 +1570,7 @@ dependencies = [
  "mnist",
  "plotters",
  "pyo3",
+ "pyo3-asyncio",
  "pyo3-log",
  "rand 0.8.5",
  "rayon",
@@ -2924,9 +2925,9 @@ dependencies = [
 
 [[package]]
 name = "openssl"
-version = "0.10.54"
+version = "0.10.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69b3f656a17a6cbc115b5c7a40c616947d213ba182135b014d6051b73ab6f019"
+checksum = "345df152bc43501c5eb9e4654ff05f794effb78d4efe3d53abc158baddc0703d"
 dependencies = [
  "bitflags",
  "cfg-if",
@@ -2956,9 +2957,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.88"
+version = "0.9.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2ce0f250f34a308dcfdbb351f511359857d4ed2134ba715a4eadd46e1ffd617"
+checksum = "374533b0e45f3a7ced10fcaeccca020e66656bc03dac384f852e4e5a7a8104a6"
 dependencies = [
  "cc",
  "libc",
@@ -3462,6 +3463,31 @@ dependencies = [
  "pyo3-ffi",
  "pyo3-macros",
  "unindent",
+]
+
+[[package]]
+name = "pyo3-asyncio"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3564762e37035cfc486228e10b0528460fa026d681b5763873c693aa0d5c260"
+dependencies = [
+ "futures",
+ "once_cell",
+ "pin-project-lite",
+ "pyo3",
+ "pyo3-asyncio-macros",
+ "tokio",
+]
+
+[[package]]
+name = "pyo3-asyncio-macros"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be72d4cd43a27530306bd0d20d3932182fbdd072c6b98d3638bc37efb9d559dd"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]

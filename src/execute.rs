@@ -15,8 +15,8 @@ use crate::pfsys::evm::evm_verify;
 use crate::pfsys::evm::{
     aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier, DeploymentCode, YulCode,
 };
-use crate::pfsys::{create_keys, load_srs, load_vk, save_params, save_pk, Snark, TranscriptType};
-use crate::pfsys::{create_proof_circuit, gen_srs, save_vk, verify_proof_circuit};
+use crate::pfsys::{create_keys, load_vk, save_params, save_pk, Snark, TranscriptType};
+use crate::pfsys::{create_proof_circuit, save_vk, srs::*, verify_proof_circuit};
 #[cfg(not(target_arch = "wasm32"))]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
@@ -54,7 +54,7 @@ use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
-use std::io::Write;
+use std::io::{Cursor, Write};
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
@@ -91,6 +91,12 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             settings_path,
         ).await,
         Commands::GenSrs { srs_path, logrows } => gen_srs_cmd(srs_path, logrows as u32),
+        #[cfg(not(target_arch = "wasm32"))]
+        Commands::GetSrs {
+            srs_path,
+            settings_path,
+            check,
+        } => get_srs_cmd(srs_path, settings_path, check).await,
         Commands::Table { model, args } => table(model, args),
         #[cfg(feature = "render")]
         Commands::RenderCircuit {
@@ -383,6 +389,62 @@ pub(crate) fn gen_srs_cmd(srs_path: PathBuf, logrows: u32) -> Result<(), Box<dyn
     let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
     save_params::<KZGCommitmentScheme<Bn256>>(&srs_path, &params)?;
     Ok(())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+    let pb = {
+        let pb = init_spinner();
+        pb.set_message("Downloading SRS (this may take a while) ...");
+        pb
+    };
+    let client = reqwest::Client::new();
+    // wasm doesn't require it to be mutable
+    #[allow(unused_mut)]
+    let mut resp = client.get(uri).body(vec![]).send().await?;
+    let mut buf = vec![];
+    while let Some(chunk) = resp.chunk().await? {
+        buf.extend(chunk.to_vec());
+    }
+
+    pb.finish_with_message("SRS downloaded.");
+    Ok(buf.drain(..buf.len()).collect())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) async fn get_srs_cmd(
+    srs_path: PathBuf,
+    settings_path: PathBuf,
+    check_mode: CheckMode,
+) -> Result<(), Box<dyn Error>> {
+    if settings_path.exists() {
+        let settings = GraphSettings::load(&settings_path)?;
+        let k = settings.run_args.logrows;
+
+        let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
+        let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
+        // check the SRS
+        if matches!(check_mode, CheckMode::SAFE) {
+            #[cfg(not(target_arch = "wasm32"))]
+            let pb = init_spinner();
+            #[cfg(not(target_arch = "wasm32"))]
+            pb.set_message("Validating SRS (this may take a while) ...");
+            ParamsKZG::<Bn256>::read(&mut reader)?;
+            #[cfg(not(target_arch = "wasm32"))]
+            pb.finish_with_message("SRS validated");
+        }
+
+        let mut file = std::fs::File::create(srs_path)?;
+        file.write_all(reader.get_ref())?;
+
+        info!("SRS downloaded");
+        Ok(())
+    } else {
+        let err_string = format!(
+            "Settings file not found, you should run gen-settings (and calibrate-settings to pick optimal logrows)."
+        );
+        Err(err_string.into())
+    }
 }
 
 pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<(), Box<dyn Error>> {

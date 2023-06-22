@@ -1,10 +1,7 @@
 use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::{CalibrationTarget, RunArgs, StrategyType};
-use crate::graph::{Model, Visibility, GraphWitness};
-use crate::pfsys::{
-    gen_srs as ezkl_gen_srs, save_params,
-     Snark, TranscriptType,
-};
+use crate::graph::{GraphWitness, Model, Visibility};
+use crate::pfsys::{save_params, srs::gen_srs as ezkl_gen_srs, Snark, TranscriptType};
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2curves::bn256::Bn256;
 use pyo3::exceptions::{PyIOError, PyRuntimeError};
@@ -74,7 +71,6 @@ impl From<PyRunArgs> for RunArgs {
     }
 }
 
-
 /// Displays the table as a string in python
 #[pyfunction(signature = (
     model,
@@ -102,6 +98,23 @@ fn gen_srs(srs_path: PathBuf, logrows: usize) -> PyResult<()> {
     Ok(())
 }
 
+/// gets a public srs
+#[pyfunction(signature = (
+    srs_path,
+    settings_path,
+))]
+fn get_srs(py: Python, srs_path: PathBuf, settings_path: PathBuf) -> PyResult<&pyo3::PyAny> {
+    pyo3_asyncio::tokio::future_into_py(py, async {
+        crate::execute::get_srs_cmd(srs_path, settings_path, CheckMode::SAFE)
+            .await
+            .map_err(|e| {
+                let err_str = format!("Failed to get srs: {}", e);
+                PyRuntimeError::new_err(err_str)
+            })?;
+        Ok(true)
+    })
+}
+
 /// generates the circuit settings
 #[pyfunction(signature = (
     model,
@@ -117,31 +130,31 @@ fn gen_settings(
 
     crate::execute::gen_circuit_settings(model, output, run_args).map_err(|e| {
         let err_str = format!("Failed to generate settings: {}", e);
-        PyRuntimeError::new_err(err_str)})?;
+        PyRuntimeError::new_err(err_str)
+    })?;
 
     Ok(true)
 }
 
-
 /// calibrates the circuit settings
 #[pyfunction(signature = (
-    data, 
+    data,
     model,
     settings,
     target,
 ))]
 fn calibrate_settings(
-    data:  PathBuf,
+    data: PathBuf,
     model: PathBuf,
     settings: PathBuf,
     target: Option<CalibrationTarget>,
 ) -> Result<bool, PyErr> {
-
     let target = target.unwrap_or(CalibrationTarget::Resources);
 
     crate::execute::calibrate(model, data, settings, target).map_err(|e| {
         let err_str = format!("Failed to calibrate settings: {}", e);
-        PyRuntimeError::new_err(err_str)})?;
+        PyRuntimeError::new_err(err_str)
+    })?;
 
     Ok(true)
 }
@@ -151,7 +164,7 @@ fn calibrate_settings(
     data,
     model,
     output,
-    settings_path,  
+    settings_path,
 ))]
 fn gen_witness(
     data: PathBuf,
@@ -162,10 +175,9 @@ fn gen_witness(
     let output: GraphWitness = crate::execute::gen_witness(model, data, output, settings_path)
         .map_err(|e| {
             let err_str = format!("Failed to run generate witness: {}", e);
-            PyRuntimeError::new_err(err_str)})?;
-    Python::with_gil(|py| {
-        Ok(output.to_object(py))
-    })
+            PyRuntimeError::new_err(err_str)
+        })?;
+    Python::with_gil(|py| Ok(output.to_object(py)))
 }
 
 /// mocks the prover
@@ -177,7 +189,8 @@ fn gen_witness(
 fn mock(witness: PathBuf, model: PathBuf, settings_path: PathBuf) -> PyResult<bool> {
     crate::execute::mock(model, witness, settings_path).map_err(|e| {
         let err_str = format!("Failed to run mock: {}", e);
-        PyRuntimeError::new_err(err_str)})?;
+        PyRuntimeError::new_err(err_str)
+    })?;
 
     Ok(true)
 }
@@ -197,10 +210,10 @@ fn setup(
     srs_path: PathBuf,
     settings_path: PathBuf,
 ) -> Result<bool, PyErr> {
-
     crate::execute::setup(model, srs_path, settings_path, vk_path, pk_path).map_err(|e| {
-            let err_str = format!("Failed to run setup: {}", e);
-            PyRuntimeError::new_err(err_str)})?;
+        let err_str = format!("Failed to run setup: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
 
     Ok(true)
 }
@@ -220,7 +233,7 @@ fn setup(
     test_on_chain_outputs,
 ))]
 fn prove(
-    witness:  PathBuf,
+    witness: PathBuf,
     model: PathBuf,
     pk_path: PathBuf,
     proof_path: PathBuf,
@@ -267,13 +280,12 @@ fn verify(
     vk_path: PathBuf,
     srs_path: PathBuf,
 ) -> Result<bool, PyErr> {
-
     crate::execute::verify(proof_path, settings_path, vk_path, srs_path).map_err(|e| {
         let err_str = format!("Failed to run verify: {}", e);
-        PyRuntimeError::new_err(err_str)})?;
+        PyRuntimeError::new_err(err_str)
+    })?;
 
     Ok(true)
-
 }
 
 /// creates an aggregated proof
@@ -300,7 +312,8 @@ fn aggregate(
     check_mode: CheckMode,
 ) -> Result<bool, PyErr> {
     // the K used for the aggregation circuit
-    crate::execute::aggregate(proof_path,
+    crate::execute::aggregate(
+        proof_path,
         aggregation_snarks,
         settings_paths,
         aggregation_vk_paths,
@@ -308,10 +321,13 @@ fn aggregate(
         srs_path,
         transcript,
         logrows,
-        check_mode).map_err(|e| {
+        check_mode,
+    )
+    .map_err(|e| {
         let err_str = format!("Failed to run aggregate: {}", e);
-        PyRuntimeError::new_err(err_str)})?;
-    
+        PyRuntimeError::new_err(err_str)
+    })?;
+
     Ok(true)
 }
 
@@ -328,10 +344,10 @@ fn verify_aggr(
     srs_path: PathBuf,
     logrows: u32,
 ) -> Result<bool, PyErr> {
-
     crate::execute::verify_aggr(proof_path, vk_path, srs_path, logrows).map_err(|e| {
         let err_str = format!("Failed to run verify_aggr: {}", e);
-        PyRuntimeError::new_err(err_str)})?;
+        PyRuntimeError::new_err(err_str)
+    })?;
 
     Ok(true)
 }
@@ -361,11 +377,13 @@ fn create_evm_verifier(
         settings_path,
         deployment_code_path,
         sol_code_path,
-        sol_bytecode_path, 
+        sol_bytecode_path,
         runs,
-    ).map_err(|e| {
+    )
+    .map_err(|e| {
         let err_str = format!("Failed to run create_evm_verifier: {}", e);
-        PyRuntimeError::new_err(err_str)})?;
+        PyRuntimeError::new_err(err_str)
+    })?;
 
     Ok(true)
 }
@@ -387,7 +405,6 @@ fn verify_evm(
     file_witness: Option<PathBuf>,
     on_chain_witness: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
-
     Runtime::new()
             .unwrap()
             .block_on(crate::execute::verify_evm(
@@ -428,9 +445,11 @@ fn create_evm_verifier_aggr(
         sol_code_path,
         sol_bytecode_path,
         runs,
-    ).map_err(|e| {
+    )
+    .map_err(|e| {
         let err_str = format!("Failed to run create_evm_verifier_aggr: {}", e);
-        PyRuntimeError::new_err(err_str)})?;
+        PyRuntimeError::new_err(err_str)
+    })?;
     Ok(true)
 }
 
@@ -462,6 +481,7 @@ fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(prove, m)?)?;
     m.add_function(wrap_pyfunction!(verify, m)?)?;
     m.add_function(wrap_pyfunction!(gen_srs, m)?)?;
+    m.add_function(wrap_pyfunction!(get_srs, m)?)?;
     m.add_function(wrap_pyfunction!(gen_witness, m)?)?;
     m.add_function(wrap_pyfunction!(gen_settings, m)?)?;
     m.add_function(wrap_pyfunction!(calibrate_settings, m)?)?;
