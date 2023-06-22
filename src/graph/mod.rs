@@ -11,15 +11,15 @@ pub mod utilities;
 /// Representations of a computational graph's variables.
 pub mod vars;
 
-use ethers::providers::Middleware;
-use ethers::types::H160;
 pub use input::{GraphWitness, DataSource};
 
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
 use crate::commands::RunArgs;
-use crate::eth::{setup_eth_backend, read_on_chain_inputs, evm_quantize, test_on_chain_data};
+//use crate::eth::{setup_eth_backend, read_on_chain_inputs, evm_quantize, test_on_chain_data};
+#[cfg(not(target_arch = "wasm32"))]
+use ethers::types::H160;
 use crate::fieldutils::i128_to_felt;
 use crate::graph::modules::ModuleInstanceOffset;
 use crate::tensor::{Tensor, ValTensor};
@@ -29,19 +29,16 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::{self, Fr as Fp};
 use halo2curves::ff::PrimeField;
-use log::{error, info, trace, debug};
+use log::{error, info, trace};
 pub use model::*;
 pub use node::*;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
-use std::path::PathBuf;
-use std::sync::Arc;
 use thiserror::Error;
 pub use utilities::*;
 pub use vars::*;
 
-use self::input::CallsToAccount;
 use self::modules::{
     GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSettings, ModuleSizes,
 };
@@ -257,9 +254,11 @@ impl GraphCircuit {
             module_settings,
         })
     }
+    #[cfg(not(target_arch = "wasm32"))]
     ///
     pub async fn load_inputs(&mut self, data: &GraphWitness)
     -> Result<(), Box<dyn std::error::Error>> {
+        use crate::eth::{setup_eth_backend, read_on_chain_inputs, evm_quantize};
         match &data.input_data {
             DataSource::OnChain(calls_to_accounts, rpc_url) => {
                 // Set up anvil instance for reading on-chain data from RPC URL endpoint provided in data
@@ -307,13 +306,14 @@ impl GraphCircuit {
         }
         self.inputs = inputs;
     }
-
+    #[cfg(not(target_arch = "wasm32"))]
     ///
     pub async fn load_outputs(
         &mut self, 
         data: &GraphWitness
     ) -> Result<(), Box<dyn std::error::Error>> {
         let out_scales = self.model.graph.get_output_scales();
+        use crate::eth::{setup_eth_backend, read_on_chain_inputs, evm_quantize};
         match &data.output_data {
             DataSource::OnChain(calls_to_accounts, rpc_url) => {
                 // Set up anvil instance for reading on-chain data from RPC URL endpoint provided in data
@@ -356,14 +356,18 @@ impl GraphCircuit {
 
         Ok(())
     }
+    #[cfg(not(target_arch = "wasm32"))]
     ///
-    pub async fn load_test_on_chain_data<M: 'static + Middleware>(
+    pub async fn load_test_on_chain_data<M: 'static + ethers::providers::Middleware>(
         &mut self,
-        client: Arc<M>,
+        client: std::sync::Arc<M>,
         address: H160,
         data: &Vec<Vec<f32>>,
         scales: Vec<f64>,
-    ) -> Result<(Vec<Tensor<i128>>, Vec<CallsToAccount>), Box<dyn std::error::Error>> {
+    ) -> Result<(Vec<Tensor<i128>>, Vec<input::CallsToAccount>), Box<dyn std::error::Error>> {
+
+        use crate::eth::{test_on_chain_data, read_on_chain_inputs, evm_quantize};
+        use log::debug;
         let calls_to_accounts  = test_on_chain_data(client.clone(), data).await?;
         debug!("Calls to accounts: {:?}", calls_to_accounts);
         let inputs = read_on_chain_inputs(client.clone(), address, &calls_to_accounts).await?;
@@ -492,12 +496,12 @@ impl GraphCircuit {
         let model = Model::from_run_args(&params.run_args, model_path)?;
         Self::new_from_settings(model, params.clone(), check_mode)
     }
-
+    #[cfg(not(target_arch = "wasm32"))]
     /// Prepare the public inputs for the circuit.
     pub async fn prepare_public_inputs(
         &mut self,
         data: &GraphWitness,
-        test_on_chain_data_path: Option<PathBuf>,
+        test_on_chain_data_path: Option<std::path::PathBuf>,
         test_onchain_input: bool,
         test_onchain_output: bool,
     ) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
@@ -505,7 +509,7 @@ impl GraphCircuit {
 
         let data = if let Some(test_on_chain_data_path) = test_on_chain_data_path {
             // Set up local anvil instance for reading on-chain data
-            let (anvil, client) = setup_eth_backend(None).await?;
+            let (anvil, client) = crate::eth::setup_eth_backend(None).await?;
             let mut data = data.clone();
             if test_onchain_input {
                 let input_data = match data.input_data {
@@ -524,7 +528,7 @@ impl GraphCircuit {
                 ).await?;
                 self.inputs = chain_data.0;
                 let calls_to_accounts = chain_data.1;
-                // Fill the on_chain_input_data field of the GraphInput struct
+                // Fill the nput_data field of the GraphInput struct
                 data.input_data = DataSource::OnChain(calls_to_accounts.clone(), anvil.endpoint());
             } else if test_onchain_output {
                 let output_data = match data.output_data{
@@ -592,6 +596,81 @@ impl GraphCircuit {
 
         let module_instances =
             GraphModules::public_inputs(&data, VarVisibility::from_args(self.settings.run_args)?);
+
+        if !module_instances.is_empty() {
+            pi_inner.extend(module_instances);
+        }
+
+        Ok(pi_inner)
+    }
+
+    /// Prepare the public inputs for wasm circuit.
+    pub fn prepare_file_public_inputs(
+        &mut self,
+        data: &GraphWitness
+    ) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
+        let out_scales = self.model.graph.get_output_scales();
+
+        let input_data = match &data.input_data {
+            DataSource::File(input_data) => input_data,
+            _ => 
+                panic!(
+                "Cannot use on-chain data source as input for on-chain test. 
+                Will manually populate on-chain data from file source instead"
+            )
+        };
+        
+        self.load_file_inputs(input_data);
+        // load the module settings
+        self.module_settings = ModuleSettings::from(data);
+        
+        // quantize the supplied data using the provided scale.
+        // the ordering here is important, we want the inputs to come before the outputs
+        // as they are configured in that order as Column<Instances>
+        let mut public_inputs = vec![];
+        if self.settings.run_args.input_visibility.is_public() {
+            public_inputs = self.inputs.clone();
+        }
+        if self.settings.run_args.output_visibility.is_public() {
+            let output_data = match &data.output_data {
+                DataSource::File(output_data) => output_data,
+                _ => 
+                    panic!(
+                    "Cannot use on-chain data source as input for on-chain test. 
+                    Will manually populate on-chain data from file source instead"
+                )
+            };
+            for (idx, v) in output_data.iter().enumerate() {
+                let t: Vec<i128> = v
+                    .par_iter()
+                    .map(|x| quantize_float(x, 0.0, out_scales[idx]).unwrap())
+                    .collect();
+
+                let t: Tensor<i128> = t.into_iter().into();
+
+                public_inputs.push(t);
+            }
+        }
+        info!(
+            "public inputs lengths: {:?}",
+            public_inputs
+                .iter()
+                .map(|i| i.len())
+                .collect::<Vec<usize>>()
+        );
+        trace!("{:?}", public_inputs);
+
+        let mut pi_inner: Vec<Vec<Fp>> = public_inputs
+            .iter()
+            .map(|i| {
+                i.iter()
+                    .map(|e| i128_to_felt::<Fp>(*e))
+                    .collect::<Vec<Fp>>()
+            })
+            .collect::<Vec<Vec<Fp>>>();
+
+        let module_instances =
+            GraphModules::public_inputs(data, VarVisibility::from_args(self.settings.run_args)?);
 
         if !module_instances.is_empty() {
             pi_inner.extend(module_instances);

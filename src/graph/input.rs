@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use std::io::Read;
 // use std::collections::HashMap;
 
-use super::{modules::ModuleForwardResult, GraphError};
+use super::modules::ModuleForwardResult;
 
 
 type Decimals = u8;
@@ -45,6 +45,48 @@ impl Default for DataSource {
         )
     }
 }
+
+
+/// The input tensor data and shape, and output data for the computational graph (model) as floats.
+/// For example, the input might be the image data for a neural network, and the output class scores.
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct GraphWitnessOld {
+    /// Inputs to the model / computational graph (can be empty vectors if inputs are coming from on-chain).
+    pub input_data: Vec<Vec<f32>>, 
+    /// The expected output of the model (can be empty vectors if outputs are not being constrained).
+    pub output_data: Vec<Vec<f32>>,
+    /// Optional hashes of the inputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
+    pub processed_inputs: Option<ModuleForwardResult>,
+    /// Optional hashes of the params (can be None if there are no commitments). Wrapped as Option for backwards compatibility
+    pub processed_params: Option<ModuleForwardResult>,
+    /// Optional hashes of the outputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
+    pub processed_outputs: Option<ModuleForwardResult>
+}
+
+impl GraphWitnessOld {
+    ///
+    pub fn new(input_data: Vec<Vec<f32>>, output_data: Vec<Vec<f32>>) -> Self {
+        GraphWitnessOld {
+            input_data,
+            output_data,
+            processed_inputs: None,
+            processed_params: None,
+            processed_outputs: None,
+        }
+    }
+    /// Load the model input from a file
+    pub fn from_path(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut file = std::fs::File::open(path)?;
+        let mut data = String::new();
+        file.read_to_string(&mut data)?;
+        serde_json::from_str(&data).map_err(|e| e.into())
+    }
+
+    /// Save the model input to a file
+    pub fn save(&self, path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+        serde_json::to_writer(std::fs::File::create(path)?, &self).map_err(|e| e.into())
+    }
+}
 /// The input tensor data and shape, and output data for the computational graph (model) as floats.
 /// For example, the input might be the image data for a neural network, and the output class scores.
 #[derive(Clone, Debug, Deserialize, Default)]
@@ -59,9 +101,7 @@ pub struct GraphWitness {
     /// Optional hashes of the params (can be None if there are no commitments). Wrapped as Option for backwards compatibility
     pub processed_params: Option<ModuleForwardResult>,
     /// Optional hashes of the outputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
-    pub processed_outputs: Option<ModuleForwardResult>,
-    /// Optional on-chain inputs. (can be None if there are no on-chain inputs). Wrapped as Option for backwards compatibility
-    pub on_chain_input_data: Option<(Vec<CallsToAccount>, RPCUrl)>,
+    pub processed_outputs: Option<ModuleForwardResult>
 }
 
 impl GraphWitness {
@@ -73,15 +113,54 @@ impl GraphWitness {
             processed_inputs: None,
             processed_params: None,
             processed_outputs: None,
-            on_chain_input_data: None
         }
     }
+    /// Load the model input from a file
+    pub fn from_path(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut file = std::fs::File::open(path)?;
+        let mut data = String::new();
+        file.read_to_string(&mut data)?;
+        serde_json::from_str(&data).map_err(|e| e.into())
+    }
+
+    /// Save the model input to a file
+    pub fn save(&self, path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+        serde_json::to_writer(std::fs::File::create(path)?, &self).map_err(|e| e.into())
+    }
+}
+/// The input tensor data and shape, and output data for the computational graph (model) as floats.
+/// For example, the input might be the image data for a neural network, and the output class scores.
+#[derive(Clone, Debug, Deserialize, Default, Serialize)]
+pub struct GraphInput {
+    /// Inputs to the model / computational graph (can be empty vectors if inputs are coming from on-chain).
+    /// TODO: Add retrieve from on-chain functionality
+    pub input_data: DataSource,
+}
+
+impl GraphInput {
     ///
+    pub fn new(input_data: DataSource) -> Self {
+        GraphInput { input_data }
+    }
+
+    /// Load the model input from a file
+    pub fn from_path(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut file = std::fs::File::open(path)?;
+        let mut data = String::new();
+        file.read_to_string(&mut data)?;
+        serde_json::from_str(&data).map_err(|e| e.into())
+    }
+
+    /// Save the model input to a file
+    pub fn save(&self, path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+        serde_json::to_writer(std::fs::File::create(path)?, &self).map_err(|e| e.into())
+    }
+    ///
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn split_into_batches(
         &self,
         batch_size: usize,
         input_shapes: Vec<Vec<usize>>,
-        output_shapes: Vec<Vec<usize>>,
     ) -> Result<Vec<Self>, Box<dyn std::error::Error>> {
         // split input data into batches
         let mut batched_inputs = vec![];
@@ -91,7 +170,7 @@ impl GraphWitness {
                 for (i, input) in input_data.iter().enumerate() {
                     // ensure the input is devenly divisible by batch_size
                     if input.len() % batch_size != 0 {
-                        return Err(Box::new(GraphError::InvalidDims(
+                        return Err(Box::new(super::GraphError::InvalidDims(
                             0,
                             "input data length must be evenly divisible by batch size".to_string(),
                         )));
@@ -119,56 +198,14 @@ impl GraphWitness {
             for input in batched_inputs.iter() {
                 batch.push(input[i].clone());
             }
-            input_batches.push(batch);
+            input_batches.push(DataSource::File(batch));
         }
 
-        // split output data into batches
-        let mut batched_outputs = vec![];
-
-        match &self.output_data {
-            DataSource::File(output_data) => {
-                for (i, output) in output_data.iter().enumerate() {
-                    // ensure the input is devenly divisible by batch_size
-                    if output.len() % batch_size != 0 {
-                        return Err(Box::new(GraphError::InvalidDims(
-                            0,
-                            "output data length must be evenly divisible by batch size".to_string(),
-                        )));
-                    }
-        
-                    let output_size = output_shapes[i].clone().iter().product::<usize>();
-                    let mut batches = vec![];
-                    for batch in output.chunks(batch_size * output_size) {
-                        batches.push(batch.to_vec());
-                    }
-                    batched_outputs.push(batches);
-                }
-            },
-            DataSource::OnChain(_, _) => panic!("Only File data sources support batching")
-        };
-
-        // now merge all the batches for each output into a vector of batches
-        // first assert each output has the same number of batches
-        let num_batches = batched_outputs[0].len();
-        for output in batched_outputs.iter() {
-            assert_eq!(output.len(), num_batches);
-        }
-        // now merge the batches
-        let mut output_batches = vec![];
-        for i in 0..num_batches {
-            let mut batch = vec![];
-            for output in batched_outputs.iter() {
-                batch.push(output[i].clone());
-            }
-            output_batches.push(batch);
-        }
-
-        // create a new GraphInput for each batch
+        // create a new GraphWitness for each batch
         let batches = input_batches
             .into_iter()
-            .zip(output_batches.into_iter())
-            .map(|(input, output)| GraphWitness::new(DataSource::File(input), DataSource::File(output)))
-            .collect::<Vec<GraphWitness>>();
+            .map(GraphInput::new)
+            .collect::<Vec<GraphInput>>();
 
         Ok(batches)
     }
@@ -249,7 +286,36 @@ fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &
 }
 
 #[cfg(feature = "python-bindings")]
-impl ToPyObject for GraphInput {
+impl ToPyObject for CallsToAccount {
+    fn to_object (&self, py: Python) -> PyObject {
+        let dict = PyDict::new(py);
+        dict.set_item("account", &self.address).unwrap();
+        dict.set_item("call_data", &self.call_data).unwrap();
+        dict.to_object(py)
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+impl ToPyObject for DataSource{
+    fn to_object (&self, py: Python) -> PyObject {
+        let dict = PyDict::new(py);
+        match self {
+            DataSource::File(data) => {
+                dict.set_item("File", &data).unwrap();
+            },
+            DataSource::OnChain(data, rpc_url) => {
+                let dict_on_chain = PyDict::new(py);
+                dict_on_chain.set_item("rpc_url", &rpc_url).unwrap();
+                dict_on_chain.set_item("calls_to_accounts", &data).unwrap();
+                dict.set_item("OnChain", &dict_on_chain).unwrap();
+            }
+        }
+        dict.to_object(py)
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+impl ToPyObject for GraphWitness {
     fn to_object(&self, py: Python) -> PyObject {
         // Create a Python dictionary
         let dict = PyDict::new(py);
@@ -301,21 +367,6 @@ impl ToPyObject for GraphInput {
     }
 }
 
-impl GraphWitness {
-    /// Load the model input from a file
-    pub fn from_path(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut file = std::fs::File::open(path)?;
-        let mut data = String::new();
-        file.read_to_string(&mut data)?;
-        serde_json::from_str(&data).map_err(|e| e.into())
-    }
-
-    /// Save the model input to a file
-    pub fn save(&self, path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-        serde_json::to_writer(std::fs::File::create(path)?, &self).map_err(|e| e.into())
-    }
-}
-
 /// Enum that defines source of the inputs/outputs to the EZKL model
 /// used for f32 to f64 conversion
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -363,10 +414,6 @@ impl Serialize for GraphWitness {
 
         if let Some(processed_outputs) = &self.processed_outputs {
             state.serialize_field("processed_outputs", &processed_outputs)?;
-        }
-
-        if let Some(on_chain_input_data) = &self.on_chain_input_data {
-            state.serialize_field("on_chain_input_data", &on_chain_input_data)?;
         }
         state.end()
     }

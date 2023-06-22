@@ -14,7 +14,7 @@ contract DataAttestationVerifier {
         mapping(uint256 => uint256) decimals;
         uint callCount;
     }
-    AccountCall[1] public accountCalls;
+    AccountCall[] public accountCalls;
 
     uint constant public SCALE = 1<<0;
 

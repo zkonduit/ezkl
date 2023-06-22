@@ -149,9 +149,6 @@ pub struct RunArgs {
     /// The number of batches to split the input data into
     #[arg(long, default_value = "1")]
     pub batch_size: usize,
-    /// Flags whether the inputs are on-chain and should be attested to
-    #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
-    pub on_chain_inputs: bool,
     /// Flags whether inputs are public, private, hashed
     #[arg(long, default_value = "private")]
     pub input_visibility: Visibility,
@@ -222,17 +219,17 @@ pub enum Commands {
         args: RunArgs,
     },
 
-    /// Runs a vanilla forward pass, produces a quantized output, and saves it to a .json file
+    /// Generates the witness from an input file.
     #[command(arg_required_else_help = true)]
-    Forward {
+    GenWitness {
         /// The path to the .json data file
         #[arg(short = 'D', long)]
         data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
-        /// Path to the new .json file
-        #[arg(short = 'O', long)]
+        /// Path to the witness (public and private inputs) .json file
+        #[arg(short = 'O', long, default_value = "witness.json")]
         output: PathBuf,
         /// Scale to use for quantization overiding settings file
         #[arg(short = 'S', long)]
@@ -432,15 +429,15 @@ pub enum Commands {
         /// derived from the file information in the data .json file.
         ///  Should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long)]
-        test_on_chain_data_path: Option<PathBuf>,
+        test_on_chain_witness: Option<PathBuf>,
         /// Deploy a test contract that stores the input_data in data .json in its storage,
         /// then reads from it. For testing purposes only.
         #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
-        test_onchain_inputs: bool,
+        test_on_chain_inputs: bool,
         /// Deploy a test contract that stores the output_data in data .json in its storage,
         /// then reads from it. For testing purposes only.
         #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
-        test_onchain_outputs: bool,
+        test_on_chain_outputs: bool,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for a single proof
@@ -583,12 +580,20 @@ pub enum Commands {
         #[arg(long)]
         sol_bytecode_path: Option<PathBuf>,
         /// The path to the .json data file, which should
+        /// contain the floating point data that will 
+        /// get deploy on-chain by a test contract for testing
+        /// purposes. The on_chain_data file will contain 
+        /// the call data and account addresses needed to read from
+        /// evm quantized data in this file.
+        #[arg(short = 'D', long)]
+        file_witness: Option<PathBuf>,
+        /// The path to the .json data file, which should
         /// contain the necessary calldata and account addresses  
         /// needed need to read from all the on-chain
         /// view functions that return the data that the network
         /// ingests as inputs. 
         #[arg(short = 'D', long)]
-        data: Option<PathBuf>,
+        on_chain_witness: Option<PathBuf>,
     },
 
     /// Print the proof in hexadecimal

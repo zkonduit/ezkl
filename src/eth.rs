@@ -195,34 +195,54 @@ pub async fn setup_test_contract<M: 'static + Middleware>(
 pub async fn verify_proof_with_data_attestation(
     proof: Snark<Fr, G1Affine>,
     sol_code_path: PathBuf,
-    data: PathBuf,
+    file_data: PathBuf,
+    on_chain_data: PathBuf,
 ) -> Result<bool, Box<dyn Error>> {
 
     let (anvil, client) = setup_eth_backend(None).await?;
-    
-    let data = GraphWitness::from_path(data)?;
 
-    let input_data = match data.input_data.clone() {
-        DataSource::OnChain(_, _) => panic!("Data source must come from File"),
-        DataSource::File(input_data) => input_data,
+    let on_chain_witness = GraphWitness::from_path(on_chain_data)?;
+
+    let file_witness = GraphWitness::from_path(file_data)?;
+
+    // The data that will be stored in the test contracts that will eventually be read from. 
+    let mut calls_to_accounts = vec![];
+     
+    match on_chain_witness.input_data {
+        DataSource::OnChain(cta, _) => {
+            for call in cta {
+                calls_to_accounts.push(call);
+            }
+            if let DataSource::File(floating_points) = file_witness.input_data {
+                let (contract, _) = setup_test_contract(client.clone(), &floating_points).await?;
+                info!("contract address: {:#?}", contract.address());
+            } else {
+                panic!("Data source for file_data must be File");
+            }
+        },
+        _ => (),
+    };
+    match on_chain_witness.output_data {
+        DataSource::OnChain(cta, _) => {
+            for call in cta {
+                calls_to_accounts.push(call);
+            }
+            if let DataSource::File(floating_points) = file_witness.output_data {
+                let (contract, _) = setup_test_contract(client.clone(), &floating_points).await?;
+                info!("contract address: {:#?}", contract.address());
+            } else {
+                panic!("Data source for file_data must be File");
+            }
+        },
+        _ => (),
     };
 
-    let (contract, _) = setup_test_contract(client.clone(), &input_data).await?;
-
-    info!("contract address: {:#?}", contract.address());
-
-    let data = data.on_chain_input_data;
-    let factory = get_sol_contract_factory(
-        sol_code_path,
-        "DataAttestationVerifier",
-        client.clone()
-    ).unwrap();
-
-    let (contract_addresses, call_data, decimals) = if let Some(data) = data {
+    
+    let (contract_addresses, call_data, decimals) = if calls_to_accounts.len() > 0 {
         let mut contract_addresses = vec![];
         let mut call_data = vec![];
         let mut decimals: Vec<u8> = vec![];
-        for (i, val) in data.0.iter().enumerate() {
+        for (i, val) in calls_to_accounts.iter().enumerate() {
             let contract_address_bytes = hex::decode(val.address.clone())?;
             let contract_address = H160::from_slice(&contract_address_bytes);
             contract_addresses.push(contract_address);
@@ -235,14 +255,19 @@ pub async fn verify_proof_with_data_attestation(
         }
         (contract_addresses, call_data, decimals)
     } else {
-        panic!("No on_chain_input_data field found in .json data file")
+        panic!("Data source for either input_data or output_data must be OnChain")
     };
+
+    let factory = get_sol_contract_factory(
+        sol_code_path,
+        "DataAttestationVerifier",
+        client.clone()
+    ).unwrap();
 
     info!("call_data length: {:#?}", call_data);
     info!("contract_addresses length: {:#?}", contract_addresses);
 
     let contract = factory.deploy((contract_addresses, call_data, decimals))?.send().await?;
-    info!("hello, past deploy");
 
     abigen!(DataAttestationVerifier, "./abis/DataAttestationVerifier.json");
     let contract = DataAttestationVerifier::new(contract.address(), client.clone());

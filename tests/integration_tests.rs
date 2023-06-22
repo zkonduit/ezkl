@@ -3,8 +3,11 @@
 mod native_tests {
 
     use core::panic;
+    use std::fs;
     use ezkl_lib::graph::GraphWitness;
+    use ezkl_lib::graph::input::GraphWitnessOld;
     use lazy_static::lazy_static;
+    use serde_json::json;
     use std::env::var;
     use std::process::Command;
     use std::sync::Once;
@@ -283,6 +286,7 @@ macro_rules! test_func {
             use crate::native_tests::kzg_prove_and_verify;
             use crate::native_tests::kzg_fuzz;
             use crate::native_tests::render_circuit;
+            use crate::native_tests::reformat_data;
             use crate::native_tests::tutorial as run_tutorial;
 
 
@@ -296,6 +300,12 @@ macro_rules! test_func {
 
 
             seq!(N in 0..=33 {
+               
+            #(#[test_case(TESTS[N])])*
+            fn reformat_data_(test: &str) {
+                crate::native_tests::init_binary();
+                reformat_data(test.to_string());
+            }
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
@@ -541,7 +551,9 @@ macro_rules! test_func {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
-                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200);
+                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, true, false);
+                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, false, true);
+                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, true, true);
                 }
             });
 
@@ -553,7 +565,7 @@ macro_rules! test_func {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "public", false, 1);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "public", 1);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -561,7 +573,7 @@ macro_rules! test_func {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "hashed", "private", "private", false, 1);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "hashed", "private", "private", 1);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -569,7 +581,7 @@ macro_rules! test_func {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "hashed", "public", false, 1);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "hashed", "public", 1);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -577,7 +589,7 @@ macro_rules! test_func {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "hashed", false, 1);
+                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "hashed", 1);
                 }
 
 
@@ -778,6 +790,43 @@ macro_rules! test_func {
             .expect("failed to execute process");
         assert!(status.success());
     }
+
+    fn reformat_data(test: String) {
+       
+        let data = GraphWitnessOld::from_path(format!("./examples/onnx/{}/input.json", test).into())
+        .expect("failed to load input data");
+
+        // let input_data = match data.input_data {
+        //     DataSource::File(data) => data,
+        //     DataSource::OnChain(_, _) => panic!("Only File data sources support batching"),
+        // };
+
+        // let output_data = match data.output_data {
+        //     DataSource::File(data) => data,
+        //     DataSource::OnChain(_, _) => panic!("Only File data sources support batching"),
+        // };
+
+        // let duplicated_input_data: Vec<Vec<f32>> = input_data
+        //     .iter()
+        //     .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
+        //     .collect();
+
+        // let duplicated_output_data: Vec<Vec<f32>> = output_data
+        //     .iter()
+        //     .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
+        //     .collect();
+
+        let formatted_data = GraphWitness::new(
+            DataSource::File(data.input_data), 
+            DataSource::File(data.output_data)
+        );
+
+        let res =
+            formatted_data.save(format!("./examples/onnx/{}/input.json", test).into());
+
+        assert!(res.is_ok());
+    }
+    
 
     // Mock prove (fast, but does not cover some potential issues)
     fn tutorial(tolerance: &str) {
@@ -1320,7 +1369,6 @@ macro_rules! test_func {
         input_visibility: &str,
         param_visibility: &str,
         output_visibility: &str,
-        on_chain_inputs: bool,
         num_runs: usize,
     ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
@@ -1337,7 +1385,6 @@ macro_rules! test_func {
                 &format!("--input-visibility={}", input_visibility),
                 &format!("--param-visibility={}", param_visibility),
                 &format!("--output-visibility={}", output_visibility),
-                &format!("--on-chain-inputs={}", on_chain_inputs)
             ])
             .status()
             .expect("failed to execute process");
@@ -1488,6 +1535,8 @@ macro_rules! test_func {
     fn kzg_evm_on_chain_input_prove_and_verify(
         example_name: String,
         num_runs: usize,
+        test_on_chain_inputs: bool,
+        test_on_chain_outputs: bool
     ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
 
@@ -1549,7 +1598,8 @@ macro_rules! test_func {
         assert!(status.success());
 
         let data_path = format!("{}/{}/input.json", test_dir, example_name);
-
+        let test_on_chain_data_path = format!("{}/{}/on_chain_input.json", test_dir, example_name);
+        
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "prove",
@@ -1568,7 +1618,11 @@ macro_rules! test_func {
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
-                "--test-reads=true"
+                "--test-reads=true",
+                "--test-on-chain-data-path",
+                test_on_chain_data_path.as_str(),
+                &format!("--test-on-chain-inputs={}", test_on_chain_inputs),
+                &format!("--test-on-chain-outputs={}", test_on_chain_outputs),
             ])
             .status()
             .expect("failed to execute process");
@@ -1599,7 +1653,7 @@ macro_rules! test_func {
                 "--vk-path",
                 vk_arg.as_str(),
                 "--data",
-                data_path.as_str(),
+                test_on_chain_data_path.as_str(),
                 opt_arg.as_str()
             ])
             .status()
@@ -1616,8 +1670,10 @@ macro_rules! test_func {
             sol_arg.as_str(),
             "--sol-bytecode-path",
             sol_bytecode_arg.as_str(),
-            "--data",
+            "--file-data",
             data_path.as_str(),
+            "--on-chain-data",
+            test_on_chain_data_path.as_str(),
         ];
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(&args)

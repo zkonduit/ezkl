@@ -29,8 +29,6 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub input_visibility: Visibility,
     #[pyo3(get, set)]
-    pub on_chain_inputs: bool,
-    #[pyo3(get, set)]
     pub output_visibility: Visibility,
     #[pyo3(get, set)]
     pub param_visibility: Visibility,
@@ -50,7 +48,6 @@ impl PyRunArgs {
             scale: 7,
             bits: 16,
             logrows: 17,
-            on_chain_inputs: false,
             input_visibility: "public".into(),
             output_visibility: "public".into(),
             param_visibility: "private".into(),
@@ -68,7 +65,6 @@ impl From<PyRunArgs> for RunArgs {
             scale: py_run_args.scale,
             bits: py_run_args.bits,
             logrows: py_run_args.logrows,
-            on_chain_inputs: py_run_args.on_chain_inputs,
             input_visibility: py_run_args.input_visibility,
             output_visibility: py_run_args.output_visibility,
             param_visibility: py_run_args.param_visibility,
@@ -223,7 +219,9 @@ fn setup(
     transcript,
     strategy,
     settings_path,
-    test_reads
+    test_on_chain_witness,
+    test_on_chain_inputs,
+    test_on_chain_outputs,
 ))]
 fn prove(
     witness:  PathBuf,
@@ -234,12 +232,25 @@ fn prove(
     transcript: TranscriptType,
     strategy: StrategyType,
     settings_path: PathBuf,
-    test_reads: bool
+    test_on_chain_witness: Option<PathBuf>,
+    test_on_chain_inputs: bool,
+    test_on_chain_outputs: bool
 ) -> Result<bool, PyErr> {
     Runtime::new()
             .unwrap()
             .block_on(crate::execute::prove(
-                witness, model, pk_path, proof_path, srs_path, transcript, strategy, settings_path, CheckMode::UNSAFE, test_reads
+                witness, 
+                model, 
+                pk_path, 
+                proof_path, 
+                srs_path, 
+                transcript, 
+                strategy, 
+                settings_path, 
+                CheckMode::UNSAFE, 
+                test_on_chain_witness, 
+                test_on_chain_inputs,
+                test_on_chain_outputs
             )).map_err(|e| {
         let err_str = format!("Failed to run prove: {}", e);
         PyRuntimeError::new_err(err_str)})?;
@@ -369,14 +380,16 @@ fn create_evm_verifier(
     deployment_code_path,
     sol_code_path=None,
     sol_bytecode_path=None,
-    witness=None,
+    file_witness=None,
+    on_chain_witness=None,
 ))]
 fn verify_evm(
     proof_path: PathBuf,
     deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
-    witness: Option<PathBuf>,
+    file_witness: Option<PathBuf>,
+    on_chain_witness: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
 
     Runtime::new()
@@ -386,7 +399,8 @@ fn verify_evm(
         deployment_code_path,
         sol_code_path,
         sol_bytecode_path,
-        witness,
+        file_witness,
+        on_chain_witness
     )).map_err(|e| {
         let err_str = format!("Failed to run verify_evm: {}", e);
         PyRuntimeError::new_err(err_str)})?;

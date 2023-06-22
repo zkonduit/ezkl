@@ -7,7 +7,7 @@ use crate::eth::{fix_verifier_sol, verify_proof_with_data_attestation, get_contr
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::Visibility;
 use crate::graph::{scale_to_multiplier, GraphCircuit, GraphWitness, GraphSettings, Model};
-use crate::graph::input::DataSource;
+use crate::graph::input::{DataSource, GraphInput};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::evm_verify;
@@ -30,7 +30,7 @@ use halo2_proofs::poly::kzg::{
 };
 use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
-use halo2_proofs::{dev::MockProver, poly::commitment::ParamsProver};
+use halo2_proofs::poly::commitment::ParamsProver;
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 #[cfg(not(target_arch = "wasm32"))]
 use halo2curves::ff::Field;
@@ -110,19 +110,19 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             data,
             target,
         } => calibrate(model, data, settings_path, target),
-        Commands::Forward {
+        Commands::GenWitness {
             data,
             model,
             output,
             scale,
             batch_size,
             settings_path,
-        } => forward(model, data, Some(output), scale, batch_size, settings_path).map(|_| ()),
+        } => gen_witness(model, data, Some(output), scale, batch_size, settings_path).map(|_| ()),
         Commands::Mock {
             model,
             data,
             settings_path,
-        } => mock(model, data, settings_path).await,
+        } => mock(model, data, settings_path),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
             vk_path,
@@ -193,9 +193,9 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             strategy,
             settings_path,
             check_mode,
-            test_on_chain_data_path,
-            test_onchain_inputs,
-            test_onchain_outputs
+            test_on_chain_witness,
+            test_on_chain_inputs,
+            test_on_chain_outputs
         } => prove(
             data,
             model,
@@ -206,9 +206,9 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             strategy,
             settings_path,
             check_mode,
-            test_on_chain_data_path,
-            test_onchain_inputs,
-            test_onchain_outputs
+            test_on_chain_witness,
+            test_on_chain_inputs,
+            test_on_chain_outputs
         ).await,
         Commands::Aggregate {
             settings_paths,
@@ -248,15 +248,17 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             proof_path,
             deployment_code_path,
             sol_code_path,
-            data,
             sol_bytecode_path,
+            file_witness,
+            on_chain_witness
         } => {
             verify_evm(
                 proof_path,
                 deployment_code_path,
                 sol_code_path,
                 sol_bytecode_path,
-                data,
+                file_witness,
+                on_chain_witness
             ).await
         }
         Commands::PrintProofHex { proof_path } => print_proof_hex(proof_path),
@@ -391,7 +393,7 @@ pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<(), Box<dyn Err
     Ok(())
 }
 
-pub(crate) fn forward(
+pub(crate) fn gen_witness(
     model_path: PathBuf,
     data: PathBuf,
     output: Option<PathBuf>,
@@ -413,7 +415,7 @@ pub(crate) fn forward(
 
     let mut circuit =
         GraphCircuit::from_settings(&circuit_settings, &model_path, CheckMode::UNSAFE)?;
-    let mut data = GraphWitness::from_path(data)?;
+    let data = GraphInput::from_path(data)?;
 
     let file_data = match data.input_data {
         DataSource::File(ref data) => data.clone(),
@@ -422,10 +424,18 @@ pub(crate) fn forward(
 
     circuit.load_file_inputs(&file_data);
 
+    let start_time = Instant::now();
+
     let res = circuit.forward()?;
 
     trace!(
-        "forward pass output shapes: {:?}",
+        "witness generation (B={:?}) took {:?}",
+        circuit_settings.run_args.batch_size,
+        start_time.elapsed()
+    );
+
+    trace!(
+        "model forward pass output shapes: {:?}",
         res.outputs.iter().map(|t| t.dims()).collect_vec()
     );
 
@@ -440,16 +450,20 @@ pub(crate) fn forward(
         .zip(output_scales)
         .map(|(t, scale)| t.iter().map(|e| ((*e as f64 / scale) as f32)).collect_vec())
         .collect();
-    trace!("forward pass output: {:?}", float_res);
-    data.output_data = DataSource::File(float_res);
-    data.processed_inputs = res.processed_inputs;
-    data.processed_params = res.processed_params;
-    data.processed_outputs = res.processed_outputs;
+    trace!("model forward pass output: {:?}", float_res);
+
+    let witness = GraphWitness {
+        input_data: data.input_data,
+        output_data: DataSource::File(float_res),
+        processed_inputs: res.processed_inputs,
+        processed_params: res.processed_params,
+        processed_outputs: res.processed_outputs,
+    };
 
     if let Some(output_path) = output {
-        serde_json::to_writer(&File::create(output_path)?, &data)?;
+        serde_json::to_writer(&File::create(output_path)?, &witness)?;
     }
-    Ok(data)
+    Ok(witness)
 }
 
 /// Generate a circuit settings file
@@ -493,7 +507,7 @@ pub(crate) fn calibrate(
     settings_path: PathBuf,
     target: CalibrationTarget,
 ) -> Result<(), Box<dyn Error>> {
-    let data = GraphWitness::from_path(data)?;
+    let data = GraphInput::from_path(data)?;
     // load the pre-generated settings
     let settings = GraphSettings::load(&settings_path)?;
     // now retrieve the run args
@@ -511,7 +525,6 @@ pub(crate) fn calibrate(
         .split_into_batches(
             run_args.batch_size,
             model.graph.input_shapes(),
-            model.graph.output_shapes(),
         )
         .unwrap();
 
@@ -634,23 +647,29 @@ pub(crate) fn calibrate(
     Ok(())
 }
 
-pub(crate) async fn mock(
+
+pub(crate) fn mock(
     model_path: PathBuf,
     data_path: PathBuf,
     settings_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
     // mock should catch any issues by default so we set it to safe
-
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, CheckMode::SAFE)?;
 
     let data = GraphWitness::from_path(data_path.clone())?;
-    circuit.load_inputs(&data).await?;
-    let public_inputs = circuit.prepare_public_inputs(&data, None, false, false).await?;
+
+    let input_data = match data.input_data {
+        DataSource::File(ref data) => data.clone(),
+        _ => todo!(),
+    };
+
+    circuit.load_file_inputs(&input_data);
+    let public_inputs = circuit.prepare_file_public_inputs(&data)?;
 
     info!("Mock proof");
 
-    let prover = MockProver::run(circuit.settings.run_args.logrows, &circuit, public_inputs)
+    let prover =  halo2_proofs::dev::MockProver::run(circuit.settings.run_args.logrows, &circuit, public_inputs)
         .map_err(Box::<dyn Error>::from)?;
     prover.assert_satisfied();
     prover
@@ -761,6 +780,7 @@ fn create_evm_data_attestation_verifier(
     runs: Option<usize>,
     data: PathBuf
 ) -> Result<(), Box<dyn Error>> {
+
     let model_circuit_params = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, model_circuit_params.run_args.logrows)?;
 
@@ -775,19 +795,38 @@ fn create_evm_data_attestation_verifier(
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(yul_code.as_bytes());
 
-    let data = GraphWitness::from_path(data)?.on_chain_input_data;
+    let data = GraphWitness::from_path(data)?;
 
-    if let Some(data) = data {
+    let mut on_chain_data = vec![];
+     
+    match data.input_data {
+        DataSource::OnChain(calls_to_accounts, _) => {
+            for call in calls_to_accounts {
+                on_chain_data.push(call);
+            }
+        },
+        _ => (),
+    };
+    match data.output_data {
+        DataSource::OnChain(calls_to_accounts, _) => {
+            for call in calls_to_accounts {
+                on_chain_data.push(call);
+            }
+        },
+        _ => (),
+    };
+
+    if on_chain_data.len() > 0 {
         let output = fix_verifier_sol(
             sol_code_path.clone(),
             Some(model_circuit_params.run_args.scale),
-            Some(data.0)
+            Some(on_chain_data)
         )?;
         
         let mut f = File::create(sol_code_path.clone())?;
         let _ = f.write(output.as_bytes());
     } else {
-        panic!("No on_chain_input_data field found in .json data file")
+        panic!("Neither input or output data source is on-chain. Atleast one must be on chain.")
     }
     if sol_bytecode_path.is_some() {
         let sol_bytecode = gen_sol_bytecode(sol_code_path, "DataAttestationVerifier", runs).unwrap();
@@ -802,7 +841,8 @@ pub(crate) async fn verify_evm (
     deployment_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
-    data: Option<PathBuf>,
+    file_data: Option<PathBuf>,
+    on_chain_data: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
 
@@ -811,11 +851,12 @@ pub(crate) async fn verify_evm (
         evm_verify(deployment_code, proof.clone())?;
     }
     if sol_code_path.is_some() {
-        let result = if let Some(data) = data.clone() {
+        let result = if file_data.is_some() && on_chain_data.is_some() {
             verify_proof_with_data_attestation(
                 proof.clone(), 
                 sol_code_path.unwrap(),
-                data,
+                file_data.clone().unwrap(),
+                on_chain_data.clone().unwrap()
             ).await?
         } else {            
             verify_proof_via_solidity(
@@ -828,7 +869,7 @@ pub(crate) async fn verify_evm (
 
         assert!(result);
 
-        if sol_bytecode_path.is_some() && data.is_none() {
+        if sol_bytecode_path.is_some() && file_data.is_none() {
             let result = verify_proof_via_solidity(proof, None, sol_bytecode_path).await?;
 
             info!("Solidity bytecode verification result: {}", result);
@@ -915,7 +956,7 @@ pub(crate) async fn prove(
     strategy: StrategyType,
     settings_path: PathBuf,
     check_mode: CheckMode,
-    test_on_chain_data_path: Option<PathBuf>,
+    test_on_chain_witness: Option<PathBuf>,
     test_onchain_input: bool,
     test_onchain_output: bool
 ) -> Result<(), Box<dyn Error>> {
@@ -925,7 +966,7 @@ pub(crate) async fn prove(
     let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, check_mode)?;
     let public_inputs = circuit.prepare_public_inputs(
         &data,
-        test_on_chain_data_path,
+        test_on_chain_witness,
         test_onchain_input,
         test_onchain_output
     ).await?;
