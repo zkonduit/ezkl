@@ -400,7 +400,7 @@ pub(crate) fn gen_srs_cmd(srs_path: PathBuf, logrows: u32) -> Result<(), Box<dyn
     Ok(())
 }
 
-async fn fetch(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
     #[cfg(not(target_arch = "wasm32"))]
     let pb = init_spinner();
     #[cfg(not(target_arch = "wasm32"))]
@@ -426,7 +426,7 @@ pub(crate) async fn get_srs_cmd(
         let k = settings.run_args.logrows;
 
         let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
-        let mut reader = Cursor::new(fetch(&srs_uri).await?);
+        let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
         // check the SRS
         if matches!(check_mode, CheckMode::SAFE) {
             #[cfg(not(target_arch = "wasm32"))]
