@@ -14,6 +14,10 @@ jobs:
           toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
+      - name: mobilenet Mock
+        run: cargo test --release --verbose tests::large_mock_::large_tests_2_expects
+      - name: mobilenet KZG prove and verify large tests
+        run: cargo test --release --verbose tests::large_kzg_prove_and_verify_::large_tests_2_expects
       - name: nanoGPT Mock
         run: cargo test --release --verbose tests::large_mock_::large_tests_1_expects
       - name: nanoGPT KZG prove and verify large tests
