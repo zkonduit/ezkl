@@ -19,7 +19,7 @@ use crate::pfsys::evm::evm_verify;
 use crate::pfsys::evm::{
     aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier, DeploymentCode, YulCode,
 };
-use crate::pfsys::{create_keys, load_srs, load_vk, save_params, save_pk, Snark, TranscriptType};
+use crate::pfsys::{create_keys, load_vk, save_params, save_pk, Snark, TranscriptType};
 use crate::pfsys::{create_proof_circuit, save_vk, srs::*, verify_proof_circuit};
 #[cfg(not(target_arch = "wasm32"))]
 use gag::Gag;

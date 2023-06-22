@@ -382,16 +382,6 @@ where
     .map_err(Box::<dyn Error>::from)
 }
 
-/// Loads the [CommitmentScheme::ParamsVerifier] at `path`.
-pub fn load_srs<Scheme: CommitmentScheme>(
-    path: PathBuf,
-) -> Result<Scheme::ParamsVerifier, Box<dyn Error>> {
-    info!("loading srs from {:?}", path);
-    let f = File::open(path)?;
-    let mut reader = BufReader::new(f);
-    Params::<'_, Scheme::Curve>::read(&mut reader).map_err(Box::<dyn Error>::from)
-}
-
 /// Saves a [ProvingKey] to `path`.
 pub fn save_pk<Scheme: CommitmentScheme>(
     path: &PathBuf,
@@ -442,6 +432,7 @@ pub fn save_params<Scheme: CommitmentScheme>(
 ////////////////////////
 
 #[cfg(test)]
+#[cfg(not(target_arch = "wasm32"))]
 mod tests {
     use std::io::copy;
 
@@ -470,7 +461,7 @@ mod tests {
         let mut dest = File::create(fname.clone()).unwrap();
         let content = response.bytes().await.unwrap();
         copy(&mut &content[..], &mut dest).unwrap();
-        let res = load_srs::<KZGCommitmentScheme<Bn256>>(fname);
+        let res = srs::load_srs::<KZGCommitmentScheme<Bn256>>(fname);
         assert!(res.is_ok())
     }
 
@@ -481,7 +472,7 @@ mod tests {
         let srs = srs::gen_srs::<KZGCommitmentScheme<Bn256>>(1);
         let res = save_params::<KZGCommitmentScheme<Bn256>>(&fname, &srs);
         assert!(res.is_ok());
-        let res = load_srs::<KZGCommitmentScheme<Bn256>>(fname);
+        let res = srs::load_srs::<KZGCommitmentScheme<Bn256>>(fname);
         assert!(res.is_ok())
     }
 }
