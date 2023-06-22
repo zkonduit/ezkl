@@ -231,12 +231,7 @@ pub enum Commands {
         /// Path to the witness (public and private inputs) .json file
         #[arg(short = 'O', long, default_value = "witness.json")]
         output: PathBuf,
-        /// Scale to use for quantization overiding settings file
-        #[arg(short = 'S', long)]
-        scale: Option<u32>,
-        /// The number of batches to split the input data into, overiding settings file
-        #[arg(short = 'B', long)]
-        batch_size: Option<usize>,
+        /// Path to circuit_settings .json file to read in
         #[arg(long)]
         settings_path: PathBuf,
     },
