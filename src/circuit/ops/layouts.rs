@@ -1063,7 +1063,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     .multi_cartesian_product()
     .collect::<Vec<_>>();
 
-    output.iter_mut().enumerate().for_each(|(idx, o)| {
+    output.par_iter_mut().enumerate().for_each(|(idx, o)| {
         let cartesian_coord_per_group = &cartesian_coord[idx];
         let (batch, group, i, j, k) = (
             cartesian_coord_per_group[0],
@@ -1106,6 +1106,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
 
         let mut local_region = RegionCtx::from_wrapped_region(region.region(), local_offset);
 
+        // this is dot product notation in einsum format
         let mut res = einsum(
             config,
             &mut local_region,
