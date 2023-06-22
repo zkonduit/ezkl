@@ -282,7 +282,7 @@ pub enum Commands {
     },
 
     /// Gets an SRS from a circuit settings file.
-    #[command(name = "gen-srs", arg_required_else_help = true)]
+    #[command(name = "get-srs", arg_required_else_help = true)]
     GetSrs {
         /// The path to output to the desired srs file
         #[arg(long, default_value = "kzg.srs")]
