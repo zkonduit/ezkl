@@ -65,10 +65,7 @@ def test_gen_srs():
     assert os.path.isfile(params_k20_path)
 
 
-def test_calibrate():
-    """
-    Test for calibration pass
-    """
+async def calibrate():
     data_path = os.path.join(
         examples_path,
         'onnx',
@@ -95,10 +92,17 @@ def test_calibrate():
         model_path, output_path, py_run_args=run_args)
     assert res == True
 
-    res = ezkl_lib.calibrate_settings(
+    res = await ezkl_lib.calibrate_settings(
         data_path, model_path, output_path, "resources")
     assert res == True
     assert os.path.isfile(output_path)
+
+
+def test_calibrate():
+    """
+    Test for calibrate
+    """
+    asyncio.run(calibrate())
 
 
 def test_forward():
@@ -132,29 +136,28 @@ def test_forward():
     with open(output_path, "r") as f:
         data = json.load(f)
 
-    assert data["input_data"] == res["input_data"] == {"File":[[0.05326242372393608,0.07497056573629379,0.05235547572374344,0.028825461864471436,0.05848702788352966,0.008225822821259499,0.07530029118061066,0.0821458026766777,0.06227986887097359,0.024306034669280052,0.05793173983693123,0.040442030876874924]]}
-    assert data["output_data"] == res["output_data"] == {"File":[[0.05322265625,0.12841796875,0.0751953125,0.10546875,0.20947265625,0.10400390625,0.05224609375,0.0810546875,0.02880859375,0.05859375,0.06689453125,0.00830078125,0.1337890625,0.22412109375,0.09033203125,0.0751953125,0.1572265625,0.08203125,0.0625,0.0869140625,0.0244140625,0.12060546875,0.185546875,0.06494140625,0.05810546875,0.0986328125,0.04052734375]]}
+    assert data["input_data"] == res["input_data"] == [[0.05326242372393608, 0.07497056573629379, 0.05235547572374344, 0.028825461864471436, 0.05848702788352966,
+                                                        0.008225822821259499, 0.07530029118061066, 0.0821458026766777, 0.06227986887097359, 0.024306034669280052, 0.05793173983693123, 0.040442030876874924]]
+    assert data["output_data"] == res["output_data"] == [[0.05322265625, 0.12841796875, 0.0751953125, 0.10546875, 0.20947265625, 0.10400390625, 0.05224609375, 0.0810546875, 0.02880859375, 0.05859375, 0.06689453125,
+                                                          0.00830078125, 0.1337890625, 0.22412109375, 0.09033203125, 0.0751953125, 0.1572265625, 0.08203125, 0.0625, 0.0869140625, 0.0244140625, 0.12060546875, 0.185546875, 0.06494140625, 0.05810546875, 0.0986328125, 0.04052734375]]
 
     assert data["processed_inputs"]["poseidon_hash"] == res["processed_inputs"]["poseidon_hash"] == [[
         8270957937025516140, 11801026918842104328, 2203849898884507041, 140307258138425306]]
     assert data["processed_outputs"]["poseidon_hash"] == res["processed_outputs"]["poseidon_hash"] == [[4554067273356176515, 2525802612124249168,
                                                                                                         5413776662459769622, 1194961624936436872]]
-async def get_srs():
-    """
-    Test for get_srs
-    """
-    settings_path = os.path.join(folder_path, 'settings.json')
-    res = await ezkl_lib.get_srs(srs_path, settings_path)
 
-    assert res == True
-
-    assert os.path.isfile(srs_path)
 
 def test_get_srs():
     """
     Test for get_srs
     """
-    asyncio.run(get_srs())
+    settings_path = os.path.join(folder_path, 'settings.json')
+    res = ezkl_lib.get_srs(srs_path, settings_path)
+
+    assert res == True
+
+    assert os.path.isfile(srs_path)
+
 
 def test_mock():
     """
@@ -369,10 +372,7 @@ def test_verify_evm():
     assert res == True
 
 
-def test_aggregate_and_verify_aggr():
-    """
-    Tests for aggregated proof and verifying aggregate proof
-    """
+async def aggregate_and_verify_aggr():
     data_path = os.path.join(
         examples_path,
         'onnx',
@@ -390,13 +390,13 @@ def test_aggregate_and_verify_aggr():
     pk_path = os.path.join(folder_path, '1l_relu.pk')
     vk_path = os.path.join(folder_path, '1l_relu.vk')
     settings_path = os.path.join(
-        folder_path, '1l_relu_settings.json')
+        folder_path, '1l_relu_aggr_settings.json')
 
    # TODO: Dictionary outputs
     res = ezkl_lib.gen_settings(model_path, settings_path)
     assert res == True
 
-    res = ezkl_lib.calibrate_settings(
+    res = await ezkl_lib.calibrate_settings(
         data_path, model_path, settings_path, "resources")
     assert res == True
     assert os.path.isfile(settings_path)
@@ -451,10 +451,14 @@ def test_aggregate_and_verify_aggr():
     assert res == True
 
 
-def test_evm_aggregate_and_verify_aggr():
+def test_aggregate_and_verify_aggr():
     """
-    Tests for EVM aggregated proof and verifying aggregate proof
+    Tests for aggregated proof and verifying aggregate proof
     """
+    asyncio.run(aggregate_and_verify_aggr())
+
+
+async def evm_aggregate_and_verify_aggr():
     data_path = os.path.join(
         examples_path,
         'onnx',
@@ -472,14 +476,14 @@ def test_evm_aggregate_and_verify_aggr():
     pk_path = os.path.join(folder_path, '1l_relu.pk')
     vk_path = os.path.join(folder_path, '1l_relu.vk')
     settings_path = os.path.join(
-        folder_path, '1l_relu_settings.json')
+        folder_path, '1l_relu_evm_aggr_settings.json')
 
     ezkl_lib.gen_settings(
         model_path,
         settings_path,
     )
 
-    ezkl_lib.calibrate_settings(
+    await ezkl_lib.calibrate_settings(
         data_path,
         model_path,
         settings_path,
@@ -551,3 +555,10 @@ def test_evm_aggregate_and_verify_aggr():
         20,
     )
     assert res == True
+
+
+def test_evm_aggregate_and_verify_aggr():
+    """
+    Tests for aggregated proof and verifying aggregate proof
+    """
+    asyncio.run(evm_aggregate_and_verify_aggr())

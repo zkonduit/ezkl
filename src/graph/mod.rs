@@ -11,15 +11,15 @@ pub mod utilities;
 /// Representations of a computational graph's variables.
 pub mod vars;
 
-pub use input::{GraphWitness, DataSource};
+pub use input::{DataSource, GraphWitness};
 
+#[cfg(not(target_arch = "wasm32"))]
+use self::input::OnChainSourceInner;
+use self::input::{FileSourceInner, GraphInput};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
 use crate::commands::RunArgs;
-//use crate::eth::{setup_eth_backend, read_on_chain_inputs, evm_quantize, test_on_chain_data};
-#[cfg(not(target_arch = "wasm32"))]
-use ethers::types::H160;
 use crate::fieldutils::i128_to_felt;
 use crate::graph::modules::ModuleInstanceOffset;
 use crate::tensor::{Tensor, ValTensor};
@@ -254,140 +254,218 @@ impl GraphCircuit {
             module_settings,
         })
     }
-    #[cfg(not(target_arch = "wasm32"))]
-    ///
-    pub async fn load_inputs(&mut self, data: &GraphWitness)
-    -> Result<(), Box<dyn std::error::Error>> {
-        use crate::eth::{setup_eth_backend, read_on_chain_inputs, evm_quantize};
-        match &data.input_data {
-            DataSource::OnChain(calls_to_accounts, rpc_url) => {
-                // Set up anvil instance for reading on-chain data from RPC URL endpoint provided in data
-                let (anvil, client) = setup_eth_backend(Some(&rpc_url)).await?;
-                let inputs = read_on_chain_inputs(client.clone(), client.address(), &calls_to_accounts).await?;
-                drop(anvil);
-                // Set up local anvil instance for deploying QuantizeData.sol
-                let (anvil, client) = setup_eth_backend(None).await?;
-                let quantized_evm_inputs = evm_quantize(
-                    client,
-                    vec![scale_to_multiplier(self.settings.run_args.scale); inputs.0.len()], 
-                    &inputs).await?;
-                drop(anvil);
-                // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
-                let mut inputs: Vec<Tensor<i128>> = vec![];
-                for (input, shape) in vec![quantized_evm_inputs].iter().zip(self.model.graph.input_shapes()) {
-                    let mut t: Tensor<i128> = input.iter().cloned().collect();
-                    t.reshape(&shape);
-                    inputs.push(t);
-                }
-                self.inputs = inputs;
-            },
-            DataSource::File(file_data) => {
-                self.load_file_inputs(file_data);
-            },
-        };
+
+    #[cfg(target_arch = "wasm32")]
+    /// load inputs and outputs for the model
+    pub fn load_data(&mut self, data: &GraphWitness) -> Result<(), Box<dyn std::error::Error>> {
+        self.load_inputs(&data.clone().into())?;
+        self.load_outputs(data)?;
+        // load the module settings
+        self.module_settings = ModuleSettings::from(data);
 
         Ok(())
     }
 
-    ///
-    pub fn load_file_inputs(&mut self, file_data: &Vec<Vec<f32>>) {
+    #[cfg(not(target_arch = "wasm32"))]
+    /// load inputs and outputs for the model
+    pub async fn load_data(
+        &mut self,
+        data: &GraphWitness,
+        test_on_chain_data_path: Option<std::path::PathBuf>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut data = data.clone();
+
+        // mutate it if need be
+        if let Some(test_path) = test_on_chain_data_path {
+            self.populate_on_chain_test_data(&mut data, test_path)
+                .await?;
+        }
+
+        self.load_inputs(&data.clone().into()).await?;
+        self.load_outputs(&data).await?;
+
+        // load the module settings
+        self.module_settings = ModuleSettings::from(&data);
+
+        Ok(())
+    }
+
+    /// Prepare the public inputs for the circuit.
+    pub fn prepare_public_inputs(
+        &mut self,
+        data: &GraphWitness,
+    ) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
         // quantize the supplied data using the provided scale.
+        // the ordering here is important, we want the inputs to come before the outputs
+        // as they are configured in that order as Column<Instances>
+        let mut public_inputs = vec![];
+        if self.settings.run_args.input_visibility.is_public() {
+            public_inputs = self.inputs.clone();
+        }
+        if self.settings.run_args.output_visibility.is_public() {
+            public_inputs.extend(self.outputs.clone());
+        }
+        info!(
+            "public inputs lengths: {:?}",
+            public_inputs
+                .iter()
+                .map(|i| i.len())
+                .collect::<Vec<usize>>()
+        );
+        trace!("{:?}", public_inputs);
+
+        let mut pi_inner: Vec<Vec<Fp>> = public_inputs
+            .iter()
+            .map(|i| {
+                i.iter()
+                    .map(|e| i128_to_felt::<Fp>(*e))
+                    .collect::<Vec<Fp>>()
+            })
+            .collect::<Vec<Vec<Fp>>>();
+
+        let module_instances =
+            GraphModules::public_inputs(&data, VarVisibility::from_args(self.settings.run_args)?);
+
+        if !module_instances.is_empty() {
+            pi_inner.extend(module_instances);
+        }
+
+        Ok(pi_inner)
+    }
+
+    ///
+    #[cfg(target_arch = "wasm32")]
+    pub fn load_inputs(&mut self, data: &GraphInput) -> Result<(), Box<dyn std::error::Error>> {
+        let shapes = self.model.graph.input_shapes();
+        let scales = vec![self.settings.run_args.scale; shapes.len()];
+        self.inputs = self.process_data_source(&data.input_data, shapes, scales)?;
+        Ok(())
+    }
+
+    ///
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn load_inputs(
+        &mut self,
+        data: &GraphInput,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let shapes = self.model.graph.input_shapes();
+        let scales = vec![self.settings.run_args.scale; shapes.len()];
+        self.inputs = self
+            .process_data_source(&data.input_data, shapes, scales)
+            .await?;
+        Ok(())
+    }
+
+    ///
+    #[cfg(target_arch = "wasm32")]
+    pub fn load_outputs(&mut self, data: &GraphWitness) -> Result<(), Box<dyn std::error::Error>> {
+        let out_scales = self.model.graph.get_output_scales();
+        let shapes = self.model.graph.output_shapes();
+        self.outputs = self.process_data_source(&data.output_data, shapes, out_scales)?;
+        Ok(())
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    ///
+    pub async fn load_outputs(
+        &mut self,
+        data: &GraphWitness,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let out_scales = self.model.graph.get_output_scales();
+        let shapes = self.model.graph.output_shapes();
+        self.outputs = self
+            .process_data_source(&data.output_data, shapes, out_scales)
+            .await?;
+        Ok(())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    /// Process the data source for the model
+    fn process_data_source(
+        &mut self,
+        data: &DataSource,
+        shapes: Vec<Vec<usize>>,
+        scales: Vec<u32>,
+    ) -> Result<Vec<Tensor<i128>>, Box<dyn std::error::Error>> {
+        match &data {
+            DataSource::OnChain(_) => {
+                panic!("Cannot use on-chain data source as input for wasm rn.")
+            }
+            DataSource::File(file_data) => self.load_file_data(file_data, &shapes, scales),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    /// Process the data source for the model
+    async fn process_data_source(
+        &mut self,
+        data: &DataSource,
+        shapes: Vec<Vec<usize>>,
+        scales: Vec<u32>,
+    ) -> Result<Vec<Tensor<i128>>, Box<dyn std::error::Error>> {
+        match &data {
+            DataSource::OnChain(source) => {
+                self.load_on_chain_data(source.clone(), &shapes, scales)
+                    .await
+            }
+            DataSource::File(file_data) => self.load_file_data(file_data, &shapes, scales),
+        }
+    }
+
+    /// Prepare on chain test data
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn load_on_chain_data(
+        &mut self,
+        source: OnChainSourceInner,
+        shapes: &Vec<Vec<usize>>,
+        scales: Vec<u32>,
+    ) -> Result<Vec<Tensor<i128>>, Box<dyn std::error::Error>> {
+        use crate::eth::{evm_quantize, read_on_chain_inputs, setup_eth_backend};
+        // Set up anvil instance for reading on-chain data from RPC URL endpoint provided in data
+        let (anvil, client) = setup_eth_backend(Some(&source.rpc)).await?;
+        let inputs = read_on_chain_inputs(client.clone(), client.address(), &source.calls).await?;
+        drop(anvil);
+        // Set up local anvil instance for deploying QuantizeData.sol
+        let (anvil, client) = setup_eth_backend(None).await?;
+        let quantized_evm_inputs = evm_quantize(
+            client,
+            scales.into_iter().map(scale_to_multiplier).collect(),
+            &inputs,
+        )
+        .await?;
+        drop(anvil);
+        // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
         let mut inputs: Vec<Tensor<i128>> = vec![];
-        for (input, shape) in file_data.iter().zip(self.model.graph.input_shapes()) {
-            let t: Vec<i128> = input
+        for (input, shape) in vec![quantized_evm_inputs].iter().zip(shapes) {
+            let mut t: Tensor<i128> = input.iter().cloned().collect();
+            t.reshape(&shape);
+            inputs.push(t);
+        }
+
+        Ok(inputs)
+    }
+
+    ///
+    pub fn load_file_data(
+        &mut self,
+        file_data: &FileSourceInner,
+        shapes: &Vec<Vec<usize>>,
+        scales: Vec<u32>,
+    ) -> Result<Vec<Tensor<i128>>, Box<dyn std::error::Error>> {
+        // quantize the supplied data using the provided scale.
+        let mut data: Vec<Tensor<i128>> = vec![];
+        for ((d, shape), scale) in file_data.iter().zip(shapes).zip(scales) {
+            let t: Vec<i128> = d
                 .par_iter()
-                .map(|x| quantize_float(x, 0.0, self.settings.run_args.scale).unwrap())
+                .map(|x| quantize_float(x, 0.0, scale).unwrap())
                 .collect();
 
             let mut t: Tensor<i128> = t.into_iter().into();
             t.reshape(&shape);
 
-            inputs.push(t);
+            data.push(t);
         }
-        self.inputs = inputs;
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    ///
-    pub async fn load_outputs(
-        &mut self, 
-        data: &GraphWitness
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let out_scales = self.model.graph.get_output_scales();
-        use crate::eth::{setup_eth_backend, read_on_chain_inputs, evm_quantize};
-        match &data.output_data {
-            DataSource::OnChain(calls_to_accounts, rpc_url) => {
-                // Set up anvil instance for reading on-chain data from RPC URL endpoint provided in data
-                let (anvil, client) = setup_eth_backend(Some(&rpc_url)).await?;
-                let inputs = read_on_chain_inputs(client.clone(), client.address(), &calls_to_accounts).await?;
-                drop(anvil);
-                // Set up local anvil instance for deploying QuantizeData.sol
-                let (anvil, client) = setup_eth_backend(None).await?;
-                
-                let quantized_evm_inputs = evm_quantize(
-                    client,
-                    vec![scale_to_multiplier(out_scales[0]); inputs.0.len()], // TODO: May need to flatten out_scales. 
-                    &inputs).await?;
-                drop(anvil);
-                // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
-                let mut inputs: Vec<Tensor<i128>> = vec![];
-                for input in vec![quantized_evm_inputs].iter() {
-                    let t: Tensor<i128> = input.iter().cloned().collect();
-                    inputs.push(t);
-                }
-                self.inputs = inputs;
-            },
-            DataSource::File(output_data) => {
-                // quantize the supplied data using the provided scale.
-                self.outputs = vec![];
-                if self.settings.run_args.output_visibility.is_public() {
-                    for (idx, v) in output_data.iter().enumerate() {
-                        let t: Vec<i128> = v
-                            .par_iter()
-                            .map(|x| quantize_float(x, 0.0, out_scales[idx]).unwrap())
-                            .collect();
-        
-                        let t: Tensor<i128> = t.into_iter().into();
-        
-                        self.outputs.push(t);
-                    }
-                }
-            },
-        };
-
-        Ok(())
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    ///
-    pub async fn load_test_on_chain_data<M: 'static + ethers::providers::Middleware>(
-        &mut self,
-        client: std::sync::Arc<M>,
-        address: H160,
-        data: &Vec<Vec<f32>>,
-        scales: Vec<f64>,
-        reshape: bool,
-    ) -> Result<(Vec<Tensor<i128>>, Vec<input::CallsToAccount>), Box<dyn std::error::Error>> {
-
-        use crate::eth::{test_on_chain_data, read_on_chain_inputs, evm_quantize};
-        use log::debug;
-        let calls_to_accounts  = test_on_chain_data(client.clone(), data).await?;
-        debug!("Calls to accounts: {:?}", calls_to_accounts);
-        let inputs = read_on_chain_inputs(client.clone(), address, &calls_to_accounts).await?;
-        debug!("Inputs: {:?}", inputs);
-        let quantized_evm_inputs = evm_quantize(
-            client,
-            scales, 
-            &inputs
-        ).await?;
-        // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
-        let mut inputs: Vec<Tensor<i128>> = vec![];
-        for (input, shape) in vec![quantized_evm_inputs].iter().zip(self.model.graph.input_shapes()) {
-            let mut t: Tensor<i128> = input.iter().cloned().collect();
-            if reshape {
-                t.reshape(&shape);
-            }
-            inputs.push(t);
-        }
-        Ok((inputs, calls_to_accounts))
+        Ok(data)
     }
 
     /// Calibrate the circuit to the supplied data.
@@ -499,196 +577,57 @@ impl GraphCircuit {
         let model = Model::from_run_args(&params.run_args, model_path)?;
         Self::new_from_settings(model, params.clone(), check_mode)
     }
+
+    ///
     #[cfg(not(target_arch = "wasm32"))]
-    /// Prepare the public inputs for the circuit.
-    pub async fn prepare_public_inputs(
+    async fn populate_on_chain_test_data(
         &mut self,
-        data: &GraphWitness,
-        test_on_chain_data_path: Option<std::path::PathBuf>,
-    ) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
-        let out_scales = self.model.graph.get_output_scales();
-
-
-        let data = if let Some(test_on_chain_data_path) = test_on_chain_data_path {
-            // Set up local anvil instance for reading on-chain data
-            let (anvil, client) = crate::eth::setup_eth_backend(None).await?;
-            let mut data = data.clone();
-            if self.settings.run_args.input_visibility.is_public() {
-                let input_data = match data.input_data {
-                    DataSource::File(input_data) => input_data,
-                    DataSource::OnChain(_, _) => 
-                        panic!(
-                        "Cannot use on-chain data source as input for on-chain test. 
-                        Will manually populate on-chain data from file source instead"
-                    )
-                };
-                let chain_data = self.load_test_on_chain_data(
-                    client.clone(), 
-                    client.address(), 
-                    &input_data,
-                    vec![scale_to_multiplier(self.settings.run_args.scale); input_data[0].len()],
-                    true,
-                ).await?;
-                self.inputs = chain_data.0;
-                let calls_to_accounts = chain_data.1;
-                // Fill the nput_data field of the GraphInput struct
-                data.input_data = DataSource::OnChain(calls_to_accounts.clone(), anvil.endpoint());
-                self.load_outputs(&data).await?;
-            } else {
-                self.load_inputs(&data).await?;
-            } 
-            if self.settings.run_args.output_visibility.is_public() {
-                let output_data = match data.output_data{
-                    DataSource::File(output_data) => output_data,
-                    DataSource::OnChain(_, _) => 
-                        panic!(
-                        "Cannot use on-chain data source as output for on-chain test. 
-                        Will manually populate on-chain data from file source instead"
-                    )
-                };
-                let chain_data = self.load_test_on_chain_data(
-                    client.clone(), 
-                    client.address(), 
-                    &output_data,
-                    vec![scale_to_multiplier(out_scales[0]); output_data[0].len()],
-                    false
-                ).await?;
-                self.outputs = chain_data.0;
-                let calls_to_accounts = chain_data.1;
-                // Fill the on_chain_output_data field of the GraphInput struct
-                data.output_data = DataSource::OnChain(calls_to_accounts.clone(), anvil.endpoint());
-            } else {
-                self.load_outputs(&data).await?;
-            }
-            // Drop the anvil
-            drop(anvil);
-            // Save the updated GraphInput struct to the data_path
-            data.save(test_on_chain_data_path)?;
-            data
-        } else {
-            self.load_inputs(data).await?;
-            self.load_outputs(data).await?;
-            data.clone()
-        };
-
-        // load the module settings
-        self.module_settings = ModuleSettings::from(&data);
-
-        // quantize the supplied data using the provided scale.
-        // the ordering here is important, we want the inputs to come before the outputs
-        // as they are configured in that order as Column<Instances>
-        let mut public_inputs = vec![];
+        data: &mut GraphWitness,
+        test_on_chain_data_path: std::path::PathBuf,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // Set up local anvil instance for reading on-chain data
         if self.settings.run_args.input_visibility.is_public() {
-            public_inputs = self.inputs.clone();
-        }
-        if self.settings.run_args.output_visibility.is_public() {
-            public_inputs.extend(self.outputs.clone());
-        }
-        info!(
-            "public inputs lengths: {:?}",
-            public_inputs
-                .iter()
-                .map(|i| i.len())
-                .collect::<Vec<usize>>()
-        );
-        trace!("{:?}", public_inputs);
-
-        let mut pi_inner: Vec<Vec<Fp>> = public_inputs
-            .iter()
-            .map(|i| {
-                i.iter()
-                    .map(|e| i128_to_felt::<Fp>(*e))
-                    .collect::<Vec<Fp>>()
-            })
-            .collect::<Vec<Vec<Fp>>>();
-
-        let module_instances =
-            GraphModules::public_inputs(&data, VarVisibility::from_args(self.settings.run_args)?);
-
-        if !module_instances.is_empty() {
-            pi_inner.extend(module_instances);
-        }
-
-        Ok(pi_inner)
-    }
-
-    /// Prepare the public inputs for wasm circuit.
-    pub fn prepare_file_public_inputs(
-        &mut self,
-        data: &GraphWitness
-    ) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
-        let out_scales = self.model.graph.get_output_scales();
-
-        let input_data = match &data.input_data {
-            DataSource::File(input_data) => input_data,
-            _ => 
-                panic!(
-                "Cannot use on-chain data source as input for on-chain test. 
-                Will manually populate on-chain data from file source instead"
+            let input_data = match &data.input_data {
+                DataSource::File(input_data) => input_data,
+                DataSource::OnChain(_) => panic!(
+                    "Cannot use on-chain data source as input for on-chain test. 
+                    Will manually populate on-chain data from file source instead"
+                ),
+            };
+            let scales = vec![self.settings.run_args.scale; input_data.len()];
+            data.input_data = OnChainSourceInner::test_from_file_data(
+                input_data,
+                scales,
+                self.model.graph.input_shapes(),
             )
-        };
-        
-        self.load_file_inputs(input_data);
-        // load the module settings
-        self.module_settings = ModuleSettings::from(data);
-        
-        // quantize the supplied data using the provided scale.
-        // the ordering here is important, we want the inputs to come before the outputs
-        // as they are configured in that order as Column<Instances>
-        let mut public_inputs = vec![];
-        if self.settings.run_args.input_visibility.is_public() {
-            public_inputs = self.inputs.clone();
+            .await?
+            .into();
+        } else {
+            self.load_inputs(&data.clone().into()).await?;
         }
         if self.settings.run_args.output_visibility.is_public() {
             let output_data = match &data.output_data {
                 DataSource::File(output_data) => output_data,
-                _ => 
-                    panic!(
-                    "Cannot use on-chain data source as input for on-chain test. 
+                DataSource::OnChain(_) => panic!(
+                    "Cannot use on-chain data source as output for on-chain test. 
                     Will manually populate on-chain data from file source instead"
-                )
+                ),
             };
-            for (idx, v) in output_data.iter().enumerate() {
-                let t: Vec<i128> = v
-                    .par_iter()
-                    .map(|x| quantize_float(x, 0.0, out_scales[idx]).unwrap())
-                    .collect();
-
-                let t: Tensor<i128> = t.into_iter().into();
-
-                public_inputs.push(t);
-            }
+            data.output_data = OnChainSourceInner::test_from_file_data(
+                output_data,
+                self.model.graph.get_output_scales(),
+                self.model.graph.output_shapes(),
+            )
+            .await?
+            .into();
+        } else {
+            self.load_outputs(&data).await?;
         }
-        info!(
-            "public inputs lengths: {:?}",
-            public_inputs
-                .iter()
-                .map(|i| i.len())
-                .collect::<Vec<usize>>()
-        );
-        trace!("{:?}", public_inputs);
-
-        let mut pi_inner: Vec<Vec<Fp>> = public_inputs
-            .iter()
-            .map(|i| {
-                i.iter()
-                    .map(|e| i128_to_felt::<Fp>(*e))
-                    .collect::<Vec<Fp>>()
-            })
-            .collect::<Vec<Vec<Fp>>>();
-
-        let module_instances =
-            GraphModules::public_inputs(data, VarVisibility::from_args(self.settings.run_args)?);
-
-        if !module_instances.is_empty() {
-            pi_inner.extend(module_instances);
-        }
-
-        Ok(pi_inner)
+        // Save the updated GraphInput struct to the data_path
+        data.save(test_on_chain_data_path)?;
+        Ok(())
     }
 }
-
-
 
 impl Circuit<Fp> for GraphCircuit {
     type Config = GraphConfig;
@@ -729,7 +668,10 @@ impl Circuit<Fp> for GraphCircuit {
 
         let module_configs = ModuleConfigs::from_visibility(cs, visibility, params.module_sizes);
 
-        trace!("log2_ceil of degrees {:?}",(cs.degree() as f32).log2().ceil());
+        trace!(
+            "log2_ceil of degrees {:?}",
+            (cs.degree() as f32).log2().ceil()
+        );
 
         GraphConfig {
             model_config,
@@ -817,7 +759,7 @@ impl Circuit<Fp> for GraphCircuit {
                 log::error!("{}", e);
                 PlonkError::Synthesis
             })?;
-            trace!("running output module layout");
+        trace!("running output module layout");
 
         // this will re-enter module 0
         GraphModules::layout(

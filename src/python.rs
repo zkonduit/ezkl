@@ -1,6 +1,6 @@
 use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::{CalibrationTarget, RunArgs, StrategyType};
-use crate::graph::{GraphWitness, Model, Visibility};
+use crate::graph::{Model, Visibility};
 use crate::pfsys::{save_params, srs::gen_srs as ezkl_gen_srs, Snark, TranscriptType};
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2curves::bn256::Bn256;
@@ -103,16 +103,19 @@ fn gen_srs(srs_path: PathBuf, logrows: usize) -> PyResult<()> {
     srs_path,
     settings_path,
 ))]
-fn get_srs(py: Python, srs_path: PathBuf, settings_path: PathBuf) -> PyResult<&pyo3::PyAny> {
-    pyo3_asyncio::tokio::future_into_py(py, async {
-        crate::execute::get_srs_cmd(srs_path, settings_path, CheckMode::SAFE)
-            .await
-            .map_err(|e| {
-                let err_str = format!("Failed to get srs: {}", e);
-                PyRuntimeError::new_err(err_str)
-            })?;
-        Ok(true)
-    })
+fn get_srs(srs_path: PathBuf, settings_path: PathBuf) -> PyResult<bool> {
+    Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::get_srs_cmd(
+            srs_path,
+            settings_path,
+            CheckMode::SAFE,
+        ))
+        .map_err(|e| {
+            let err_str = format!("Failed to get srs: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
+    Ok(true)
 }
 
 /// generates the circuit settings
@@ -144,19 +147,22 @@ fn gen_settings(
     target,
 ))]
 fn calibrate_settings(
+    py: Python,
     data: PathBuf,
     model: PathBuf,
     settings: PathBuf,
     target: Option<CalibrationTarget>,
-) -> Result<bool, PyErr> {
+) -> PyResult<&pyo3::PyAny> {
     let target = target.unwrap_or(CalibrationTarget::Resources);
-
-    crate::execute::calibrate(model, data, settings, target).map_err(|e| {
-        let err_str = format!("Failed to calibrate settings: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
-
-    Ok(true)
+    pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::execute::calibrate(model, data, settings, target)
+            .await
+            .map_err(|e| {
+                let err_str = format!("Failed to calibrate settings: {}", e);
+                PyRuntimeError::new_err(err_str)
+            })?;
+        Ok(true)
+    })
 }
 
 /// runs the forward pass operation
@@ -172,7 +178,14 @@ fn gen_witness(
     output: Option<PathBuf>,
     settings_path: PathBuf,
 ) -> PyResult<PyObject> {
-    let output: GraphWitness = crate::execute::gen_witness(model, data, output, settings_path)
+    let output = Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::gen_witness(
+            model,
+            data,
+            output,
+            settings_path,
+        ))
         .map_err(|e| {
             let err_str = format!("Failed to run generate witness: {}", e);
             PyRuntimeError::new_err(err_str)
@@ -187,10 +200,13 @@ fn gen_witness(
     settings_path,
 ))]
 fn mock(witness: PathBuf, model: PathBuf, settings_path: PathBuf) -> PyResult<bool> {
-    crate::execute::mock(model, witness, settings_path).map_err(|e| {
-        let err_str = format!("Failed to run mock: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
+    Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::mock(model, witness, settings_path))
+        .map_err(|e| {
+            let err_str = format!("Failed to run mock: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
 
     Ok(true)
 }
@@ -242,21 +258,23 @@ fn prove(
     test_on_chain_witness: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     Runtime::new()
-            .unwrap()
-            .block_on(crate::execute::prove(
-                witness, 
-                model, 
-                pk_path, 
-                proof_path, 
-                srs_path, 
-                transcript, 
-                strategy, 
-                settings_path, 
-                CheckMode::UNSAFE, 
-                test_on_chain_witness
-            )).map_err(|e| {
-        let err_str = format!("Failed to run prove: {}", e);
-        PyRuntimeError::new_err(err_str)})?;
+        .unwrap()
+        .block_on(crate::execute::prove(
+            witness,
+            model,
+            pk_path,
+            proof_path,
+            srs_path,
+            transcript,
+            strategy,
+            settings_path,
+            CheckMode::UNSAFE,
+            test_on_chain_witness,
+        ))
+        .map_err(|e| {
+            let err_str = format!("Failed to run prove: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
 
     Ok(true)
 }
@@ -400,17 +418,19 @@ fn verify_evm(
     on_chain_witness: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     Runtime::new()
-            .unwrap()
-            .block_on(crate::execute::verify_evm(
-        proof_path,
-        deployment_code_path,
-        sol_code_path,
-        sol_bytecode_path,
-        file_witness,
-        on_chain_witness
-    )).map_err(|e| {
-        let err_str = format!("Failed to run verify_evm: {}", e);
-        PyRuntimeError::new_err(err_str)})?;
+        .unwrap()
+        .block_on(crate::execute::verify_evm(
+            proof_path,
+            deployment_code_path,
+            sol_code_path,
+            sol_bytecode_path,
+            file_witness,
+            on_chain_witness,
+        ))
+        .map_err(|e| {
+            let err_str = format!("Failed to run verify_evm: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
 
     Ok(true)
 }

@@ -163,7 +163,6 @@ pub struct RunArgs {
     pub allocated_constraints: Option<usize>,
 }
 
-
 #[allow(missing_docs)]
 #[derive(Parser, Debug, Clone, Deserialize, Serialize)]
 #[command(author, version, about, long_about = None)]
@@ -494,7 +493,7 @@ pub enum Commands {
         /// If not set will just use the default unoptimized SOLC configuration.
         #[arg(long)]
         optimizer_runs: Option<usize>,
-        /// The path to the .onnx model file. Optional b/c only needs to be passed when 
+        /// The path to the .onnx model file. Optional b/c only needs to be passed when
         /// the public input visbility is set to public in order to fetch the output scales.
         #[arg(short = 'M', long)]
         model: Option<PathBuf>,
@@ -502,7 +501,7 @@ pub enum Commands {
         /// contain the necessary calldata and accoount addresses  
         /// needed need to read from all the on-chain
         /// view functions that return the data that the network
-        /// ingests as inputs. 
+        /// ingests as inputs.
         #[arg(short = 'W', long)]
         data: PathBuf,
         // todo, optionally allow supplying proving key
@@ -586,9 +585,9 @@ pub enum Commands {
         #[arg(long)]
         sol_bytecode_path: Option<PathBuf>,
         /// The path to the .json data file, which should
-        /// contain the floating point data that will 
+        /// contain the floating point data that will
         /// get deploy on-chain by a test contract for testing
-        /// purposes. The on_chain_data file will contain 
+        /// purposes. The on_chain_data file will contain
         /// the call data and account addresses needed to read from
         /// evm quantized data in this file.
         #[arg(short = 'W', long)]
@@ -597,7 +596,7 @@ pub enum Commands {
         /// contain the necessary calldata and account addresses  
         /// needed need to read from all the on-chain
         /// view functions that return the data that the network
-        /// ingests as inputs. 
+        /// ingests as inputs.
         #[arg(short = 'W', long)]
         on_chain_witness: Option<PathBuf>,
     },
