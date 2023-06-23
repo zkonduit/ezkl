@@ -274,8 +274,6 @@ def test_prove_and_verify():
         "single",
         settings_path,
         None,
-        False,
-        False
     )
     assert res == True
     assert os.path.isfile(proof_path)
@@ -318,8 +316,6 @@ def test_prove_evm():
         "single",
         settings_path,
         None,
-        False,
-        False
     )
     assert res == True
     assert os.path.isfile(proof_path)
@@ -425,8 +421,6 @@ def test_aggregate_and_verify_aggr():
         "accum",
         settings_path,
         None,
-        False,
-        False
     )
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')
@@ -511,9 +505,7 @@ def test_evm_aggregate_and_verify_aggr():
         "poseidon",
         "accum",
         settings_path,
-        None, 
-        False,
-        False
+        None
     )
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')

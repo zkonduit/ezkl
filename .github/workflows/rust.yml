@@ -140,7 +140,7 @@ jobs:
           toolchain: nightly-2022-11-03
           override: true
           components: rustfmt, clippy
-      - name: Circuit Render
+      - name: Deserialize
         run: cargo test --release --verbose tests::test_can_deserialize_
 
   mock-proving-tests:

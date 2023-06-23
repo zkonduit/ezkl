@@ -229,8 +229,6 @@ fn setup(
     strategy,
     settings_path,
     test_on_chain_witness,
-    test_on_chain_inputs,
-    test_on_chain_outputs,
 ))]
 fn prove(
     witness: PathBuf,
@@ -242,8 +240,6 @@ fn prove(
     strategy: StrategyType,
     settings_path: PathBuf,
     test_on_chain_witness: Option<PathBuf>,
-    test_on_chain_inputs: bool,
-    test_on_chain_outputs: bool
 ) -> Result<bool, PyErr> {
     Runtime::new()
             .unwrap()
@@ -257,9 +253,7 @@ fn prove(
                 strategy, 
                 settings_path, 
                 CheckMode::UNSAFE, 
-                test_on_chain_witness, 
-                test_on_chain_inputs,
-                test_on_chain_outputs
+                test_on_chain_witness
             )).map_err(|e| {
         let err_str = format!("Failed to run prove: {}", e);
         PyRuntimeError::new_err(err_str)})?;
