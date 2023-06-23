@@ -599,6 +599,12 @@ pub enum Commands {
         /// ingests as inputs.
         #[arg(short = 'W', long)]
         on_chain_witness: Option<PathBuf>,
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: Option<PathBuf>,
+        /// Path to circuit_settings .json file to read in
+        #[arg(long)]
+        settings_path: Option<PathBuf>,
     },
 
     /// Print the proof in hexadecimal

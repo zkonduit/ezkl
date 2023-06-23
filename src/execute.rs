@@ -264,6 +264,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             sol_bytecode_path,
             file_witness,
             on_chain_witness,
+            model,
+            settings_path,
         } => {
             verify_evm(
                 proof_path,
@@ -272,6 +274,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 sol_bytecode_path,
                 file_witness,
                 on_chain_witness,
+                model,
+                settings_path
             )
             .await
         }
@@ -927,6 +931,8 @@ pub(crate) async fn verify_evm(
     sol_bytecode_path: Option<PathBuf>,
     file_data: Option<PathBuf>,
     on_chain_data: Option<PathBuf>,
+    model_path: Option<PathBuf>,
+    settings_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
 
@@ -941,6 +947,8 @@ pub(crate) async fn verify_evm(
                 sol_code_path.unwrap(),
                 file_data.clone().unwrap(),
                 on_chain_data.clone().unwrap(),
+                model_path.clone().unwrap(),
+                settings_path.clone().unwrap(),
             )
             .await?
         } else {

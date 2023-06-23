@@ -8,6 +8,8 @@ use pyo3::ToPyObject;
 // use serde::de::{Visitor, MapAccess};
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::tensor::Tensor;
 // use std::collections::HashMap;
 use std::io::Read;
 // use std::collections::HashMap;
@@ -43,10 +45,9 @@ impl OnChainSourceInner {
         data: &FileSourceInner,
         scales: Vec<u32>,
         shapes: Vec<Vec<usize>>,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<(Vec<Tensor<i128>>, Self), Box<dyn std::error::Error>> {
         use crate::eth::{evm_quantize, read_on_chain_inputs, test_on_chain_data};
         use crate::graph::scale_to_multiplier;
-        use crate::tensor::Tensor;
         use log::debug;
 
         // Set up local anvil instance for reading on-chain data
@@ -58,12 +59,22 @@ impl OnChainSourceInner {
         debug!("Calls to accounts: {:?}", calls_to_accounts);
         let inputs = read_on_chain_inputs(client.clone(), address, &calls_to_accounts).await?;
         debug!("Inputs: {:?}", inputs);
-        let quantized_evm_inputs = evm_quantize(
-            client,
-            scales.into_iter().map(scale_to_multiplier).collect(),
-            &inputs,
-        )
-        .await?;
+
+        let mut quantized_evm_inputs = vec![];
+        let scales: Vec<f64> = scales.into_iter().map(scale_to_multiplier).collect();
+
+        let mut prev = 0;
+        for (idx, i) in data.iter().enumerate() {
+            quantized_evm_inputs.extend(
+                evm_quantize(
+                    client.clone(),
+                    vec![scales[idx]; i.len()],
+                    &(inputs.0[prev..i.len()].to_vec(), inputs.1[prev..i.len()].to_vec()),
+                ).await?
+            );
+            prev += i.len();
+        }
+
         // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
         let mut inputs: Vec<Tensor<i128>> = vec![];
         for (input, shape) in vec![quantized_evm_inputs].iter().zip(shapes) {
@@ -71,11 +82,13 @@ impl OnChainSourceInner {
             t.reshape(&shape);
             inputs.push(t);
         }
-
-        // Fill the nput_data field of the GraphInput struct
-        Ok(OnChainSourceInner::new(
-            calls_to_accounts.clone(),
-            anvil.endpoint(),
+        // Fill the input_data field of the GraphInput struct
+        Ok((
+            inputs,
+            OnChainSourceInner::new(
+                calls_to_accounts.clone(),
+                anvil.endpoint(),
+            )
         ))
     }
 }

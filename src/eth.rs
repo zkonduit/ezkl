@@ -191,12 +191,23 @@ pub async fn verify_proof_with_data_attestation(
     sol_code_path: PathBuf,
     file_data: PathBuf,
     on_chain_data: PathBuf,
+    model_path: PathBuf,
+    settings_path: PathBuf,
 ) -> Result<bool, Box<dyn Error>> {
+    use crate::graph::{GraphSettings, GraphCircuit};
+
     let (anvil, client) = setup_eth_backend(None).await?;
 
     let on_chain_witness = GraphWitness::from_path(on_chain_data)?;
 
     let file_witness = GraphWitness::from_path(file_data)?;
+
+    let settings = GraphSettings::load(&settings_path)?;
+
+    let circuit = GraphCircuit::from_settings(&settings, &model_path, crate::circuit::CheckMode::UNSAFE)?;
+
+
+    let mut scales = vec![];
 
     // The data that will be stored in the test contracts that will eventually be read from.
     let mut calls_to_accounts = vec![];
@@ -217,10 +228,15 @@ pub async fn verify_proof_with_data_attestation(
     };
     match on_chain_witness.output_data {
         DataSource::OnChain(source) => {
+            let output_scales = circuit.model.graph.get_output_scales();
             for call in source.calls {
                 calls_to_accounts.push(call);
             }
             if let DataSource::File(floating_points) = file_witness.output_data {
+                for (i,arr) in floating_points.iter().enumerate() {
+                    let scale = output_scales[i];
+                    scales.extend(vec![scale; arr.len()])
+                }
                 let (contract, _) = setup_test_contract(client.clone(), &floating_points).await?;
                 info!("contract address: {:#?}", contract.address());
             } else {
@@ -229,6 +245,7 @@ pub async fn verify_proof_with_data_attestation(
         }
         _ => (),
     };
+    print!("scales: {:#?}", scales);
 
     let (contract_addresses, call_data, decimals) = if calls_to_accounts.len() > 0 {
         let mut contract_addresses = vec![];
@@ -259,7 +276,7 @@ pub async fn verify_proof_with_data_attestation(
     info!("decimals length: {:#?}", decimals);
 
     let contract = factory
-        .deploy((contract_addresses, call_data, decimals))?
+        .deploy((contract_addresses, call_data, decimals, scales))?
         .send()
         .await?;
 
@@ -335,7 +352,7 @@ pub async fn test_on_chain_data<M: 'static + Middleware>(
 
     // Get the encoded call data for each input
     let mut calldata = vec![];
-    for (i, _) in data[0].iter().enumerate() {
+    for (i, _) in data.iter().flatten().enumerate() {
         let function = contract.method::<_, U256>("arr", i as u32).unwrap();
         let call = function.calldata().unwrap();
         // Push (call, decimals) to the calldata vector, and set the decimals to 0.
@@ -421,6 +438,8 @@ pub async fn evm_quantize<M: 'static + Middleware>(
         .collect::<Result<Vec<U256>, _>>()?;
 
     info!("scales: {:#?}", scales);
+    info!("decimals: {:#?}", decimals);
+    info!("fetched_inputs: {:#?}", fetched_inputs);
 
     let results = contract
         .quantize_data(fetched_inputs, decimals, scales)

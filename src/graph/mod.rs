@@ -279,10 +279,11 @@ impl GraphCircuit {
         if let Some(test_path) = test_on_chain_data_path {
             self.populate_on_chain_test_data(&mut data, test_path)
                 .await?;
+        } else {
+            self.load_inputs(&data.clone().into()).await?;
+            self.load_outputs(&data).await?;
         }
 
-        self.load_inputs(&data.clone().into()).await?;
-        self.load_outputs(&data).await?;
 
         // load the module settings
         self.module_settings = ModuleSettings::from(&data);
@@ -594,14 +595,21 @@ impl GraphCircuit {
                     Will manually populate on-chain data from file source instead"
                 ),
             };
-            let scales = vec![self.settings.run_args.scale; input_data.len()];
-            data.input_data = OnChainSourceInner::test_from_file_data(
+            // Get the flatten length of input_data
+            let length = input_data
+                .iter()
+                .map(|x| x.len())
+                .fold(0, |acc, x| acc + x);
+            let scales = vec![self.settings.run_args.scale; length];
+            let datam:(Vec<Tensor<i128>>, OnChainSourceInner)  = OnChainSourceInner::test_from_file_data(
                 input_data,
                 scales,
                 self.model.graph.input_shapes(),
             )
             .await?
             .into();
+            self.inputs = datam.0;
+            data.input_data = datam.1.into();
         } else {
             self.load_inputs(&data.clone().into()).await?;
         }
@@ -613,13 +621,15 @@ impl GraphCircuit {
                     Will manually populate on-chain data from file source instead"
                 ),
             };
-            data.output_data = OnChainSourceInner::test_from_file_data(
+            let datum: (Vec<Tensor<i128>>, OnChainSourceInner) = OnChainSourceInner::test_from_file_data(
                 output_data,
                 self.model.graph.get_output_scales(),
                 self.model.graph.output_shapes(),
             )
             .await?
             .into();
+            self.outputs = datum.0;
+            data.output_data = datum.1.into();
         } else {
             self.load_outputs(&data).await?;
         }

@@ -408,6 +408,8 @@ fn create_evm_verifier(
     sol_bytecode_path=None,
     file_witness=None,
     on_chain_witness=None,
+    model=None,
+    settings_path=None,
 ))]
 fn verify_evm(
     proof_path: PathBuf,
@@ -416,6 +418,8 @@ fn verify_evm(
     sol_bytecode_path: Option<PathBuf>,
     file_witness: Option<PathBuf>,
     on_chain_witness: Option<PathBuf>,
+    model: Option<PathBuf>,
+    settings_path: Option<PathBuf>
 ) -> Result<bool, PyErr> {
     Runtime::new()
         .unwrap()
@@ -426,6 +430,8 @@ fn verify_evm(
             sol_bytecode_path,
             file_witness,
             on_chain_witness,
+            model,
+            settings_path,
         ))
         .map_err(|e| {
             let err_str = format!("Failed to run verify_evm: {}", e);

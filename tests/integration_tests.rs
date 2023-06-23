@@ -1501,16 +1501,18 @@ mod native_tests {
         } else {
             "private"
         };
+        let model_path = format!("{}/{}/network.onnx", test_dir, example_name);
+        let circuit_settings = format!(
+            "--settings-path={}/{}/settings.json",
+            test_dir, example_name
+        );
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "gen-settings",
                 "-M",
-                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
+                model_path.as_str(),
+                circuit_settings.as_str(),
                 &format!("--input-visibility={}", input_visbility),
                 &format!("--output-visibility={}", output_visbility),
                 "--param-visibility=private",
@@ -1527,11 +1529,8 @@ mod native_tests {
                 "-D",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
-                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
+                model_path.as_str(),
+                circuit_settings.as_str(),
                 "-O",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
             ])
@@ -1543,16 +1542,13 @@ mod native_tests {
             .args([
                 "setup",
                 "-M",
-                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                model_path.as_str(),
                 "--pk-path",
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
                 &format!("--srs-path={}/kzg17.srs", test_dir),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
+                circuit_settings.as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -1567,7 +1563,7 @@ mod native_tests {
                 "-W",
                 data_path.as_str(),
                 "-M",
-                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                model_path.as_str(),
                 "--proof-path",
                 &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--pk-path",
@@ -1575,10 +1571,7 @@ mod native_tests {
                 &format!("--srs-path={}/kzg17.srs", TEST_DIR.path().to_str().unwrap()),
                 "--transcript=evm",
                 "--strategy=single",
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
+                circuit_settings.as_str(),
                 "--test-on-chain-witness",
                 test_on_chain_data_path.as_str(),
             ])
@@ -1633,6 +1626,9 @@ mod native_tests {
             data_path.as_str(),
             "--on-chain-witness",
             test_on_chain_data_path.as_str(),
+            "-M",
+            model_path.as_str(),
+            circuit_settings.as_str(),
         ];
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(&args)

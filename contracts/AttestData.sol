@@ -17,13 +17,15 @@ contract DataAttestationVerifier {
     AccountCall[] public accountCalls;
 
     uint constant public INPUT_SCALE = 1<<0;
-    uint constant public OUTPUT_SCALE = 1<<0;
+    uint[] public outputScales;
 
     uint256 constant SIZE_LIMIT = uint256(uint128(type(int128).max));
 
     uint256 constant INPUT_CALLS = 0;
 
     uint256 constant OUTPUT_CALLS = 0;
+
+    //bytes[] constant output_scales = bytes(0x000);
 
     /**
      * @dev Initialize the contract with account calls the EZKL model will read from.
@@ -33,8 +35,12 @@ contract DataAttestationVerifier {
     constructor(
         address[] memory _contractAddresses, 
         bytes[][] memory _callData, 
-        uint256[][] memory _decimals
+        uint256[][] memory _decimals,
+        uint[] memory _outputScales
     ) {
+        for(uint i; i < _outputScales.length; i++){
+            outputScales.push(1<<_outputScales[i]);
+        }
         require(_contractAddresses.length == _callData.length && accountCalls.length == _contractAddresses.length, "Invalid input length");
         require(_decimals.length == _contractAddresses.length, "Invalid number of decimals");
         uint total_calls = INPUT_CALLS + OUTPUT_CALLS;
@@ -131,7 +137,7 @@ contract DataAttestationVerifier {
                 bytes memory returnData = staticCall(account, accountCalls[i].callData[j]);
                 uint256 scale = INPUT_SCALE;
                 if (counter >= INPUT_CALLS) {
-                    scale = OUTPUT_SCALE;
+                    scale = outputScales[counter - INPUT_CALLS];
                 }
                 uint256 quantized_data = quantize_data(returnData, accountCalls[i].decimals[j], scale);
                 require(quantized_data == pubInputs[counter], "Public input does not match");
