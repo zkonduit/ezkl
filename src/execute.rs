@@ -153,6 +153,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             sol_code_path,
             sol_bytecode_path,
             optimizer_runs,
+            model,
             data,
         } => create_evm_data_attestation_verifier(
             vk_path,
@@ -161,6 +162,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             sol_code_path,
             sol_bytecode_path,
             optimizer_runs,
+            model,
             data,
         ),
         #[cfg(not(target_arch = "wasm32"))]
@@ -828,6 +830,7 @@ fn create_evm_data_attestation_verifier(
     sol_code_path: PathBuf,
     sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
+    model_path: Option<PathBuf>,
     data: PathBuf
 ) -> Result<(), Box<dyn Error>> {
 
@@ -847,30 +850,48 @@ fn create_evm_data_attestation_verifier(
 
     let data = GraphWitness::from_path(data)?;
 
-    let mut on_chain_data = vec![];
-     
-    match data.input_data {
-        DataSource::OnChain(calls_to_accounts, _) => {
-            for call in calls_to_accounts {
-                on_chain_data.push(call);
-            }
-        },
-        _ => (),
-    };
-    match data.output_data {
-        DataSource::OnChain(calls_to_accounts, _) => {
-            for call in calls_to_accounts {
-                on_chain_data.push(call);
-            }
-        },
-        _ => (),
+
+    let output_data = if model_circuit_params.run_args.output_visibility == Visibility::Public {
+        let mut on_chain_output_data = vec![];
+        match data.output_data {
+            DataSource::OnChain(calls_to_accounts, _) => {
+                for call in calls_to_accounts {
+                    on_chain_output_data.push(call);
+                }
+            },
+            _ => panic!("data source of output_data must be from on-chain for public output data."),
+        };
+        if model_path.is_none() {
+            panic!("Model must be provided for public output data.")
+        }
+        let circuit =
+            GraphCircuit::from_settings(&model_circuit_params, &model_path.unwrap(), CheckMode::UNSAFE)?;
+        let output_scales = circuit.model.graph.get_output_scales();
+        Some((output_scales[0], on_chain_output_data))
+    } else {
+        None
     };
 
-    if on_chain_data.len() > 0 {
+    let input_data = if model_circuit_params.run_args.input_visibility == Visibility::Public {
+        let mut on_chain_input_data = vec![];
+        match data.input_data {
+            DataSource::OnChain(calls_to_accounts, _) => {
+                for call in calls_to_accounts {
+                    on_chain_input_data.push(call);
+                }
+            },
+            _ => panic!("data source of input_data must be from on-chain for public input data."),
+        };
+        Some((model_circuit_params.run_args.scale, on_chain_input_data))
+    } else {
+        None
+    };
+
+    if input_data.is_some() || output_data.is_some() {
         let output = fix_verifier_sol(
             sol_code_path.clone(),
-            Some(model_circuit_params.run_args.scale),
-            Some(on_chain_data)
+            input_data,
+            output_data
         )?;
         
         let mut f = File::create(sol_code_path.clone())?;
@@ -959,7 +980,7 @@ pub(crate) fn create_evm_aggregate_verifier(
         let output = fix_verifier_sol(
             sol_code_path.as_ref().unwrap().clone(),
             None,
-            None
+            None,
         )?;
 
         let mut f = File::create(sol_code_path.as_ref().unwrap())?;

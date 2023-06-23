@@ -206,7 +206,7 @@ pub async fn verify_proof_with_data_attestation(
     let file_witness = GraphWitness::from_path(file_data)?;
 
     // The data that will be stored in the test contracts that will eventually be read from. 
-    let mut calls_to_accounts = vec![];
+    let mut calls_to_accounts = vec![];   
      
     match on_chain_witness.input_data {
         DataSource::OnChain(cta, _) => {
@@ -241,16 +241,17 @@ pub async fn verify_proof_with_data_attestation(
     let (contract_addresses, call_data, decimals) = if calls_to_accounts.len() > 0 {
         let mut contract_addresses = vec![];
         let mut call_data = vec![];
-        let mut decimals: Vec<u8> = vec![];
+        let mut decimals: Vec<Vec<u8>> = vec![];
         for (i, val) in calls_to_accounts.iter().enumerate() {
             let contract_address_bytes = hex::decode(val.address.clone())?;
             let contract_address = H160::from_slice(&contract_address_bytes);
             contract_addresses.push(contract_address);
             call_data.push(vec![]);
+            decimals.push(vec![]);
             for (call, decimal) in &val.call_data {
                 let call_data_bytes = hex::decode(call)?;
                 call_data[i].push(ethers::types::Bytes::from(call_data_bytes));
-                decimals.push(*decimal);
+                decimals[i].push(*decimal);
             }
         }
         (contract_addresses, call_data, decimals)
@@ -266,8 +267,11 @@ pub async fn verify_proof_with_data_attestation(
 
     info!("call_data length: {:#?}", call_data);
     info!("contract_addresses length: {:#?}", contract_addresses);
+    info!("decimals length: {:#?}", decimals);
 
-    let contract = factory.deploy((contract_addresses, call_data, decimals))?.send().await?;
+    let contract = factory.deploy((
+        contract_addresses, call_data, decimals
+    ))?.send().await?;
 
     abigen!(DataAttestationVerifier, "./abis/DataAttestationVerifier.json");
     let contract = DataAttestationVerifier::new(contract.address(), client.clone());
@@ -503,8 +507,8 @@ use std::io::{BufRead, BufReader};
 /// Can optionally attest to on-chain inputs
 pub fn fix_verifier_sol(
     input_file: PathBuf, 
-    scale: Option<u32>,
-    data: Option<Vec<CallsToAccount>>
+    input_data: Option<(u32, Vec<CallsToAccount>)>,
+    output_data: Option<(u32, Vec<CallsToAccount>)>,
 ) -> Result<String, Box<dyn Error>> {
     let file = File::open(input_file.clone())?;
     let reader = BufReader::new(file);
@@ -755,9 +759,9 @@ pub fn fix_verifier_sol(
     // get the max transcript addr
     let max_transcript_addr = transcript_addrs.iter().max().unwrap() / 32;
 
-    let mut contract = if let Some(data) = data {
-        let total_calls: usize = data.iter().map(|v| v.call_data.len()).sum();
-        let contract = match std::fs::read_to_string("./contracts/AttestData.sol") {
+    let mut contract = if input_data.is_some() || output_data.is_some() {
+        let mut accounts_len = 0;
+        let mut contract = match std::fs::read_to_string("./contracts/AttestData.sol") {
             Ok(file_content) => file_content,
             Err(err) => {
                 panic!("Error reading VerifierBase.sol: {}", err);
@@ -765,13 +769,29 @@ pub fn fix_verifier_sol(
         };
         // fill in the quantization params and total calls
         // as constants to the contract to save on gas
-        let contract = contract.replace("AccountCall[]", &format!("AccountCall[{}]", data.len()));
-        let contract = contract.replace(
-            "uint constant public SCALE = 1<<0;",
-            &format!("uint constant public SCALE = 1<<{};", scale.unwrap()));
-        contract.replace(
-            "uint256 constant TOTAL_CALLS = 0;",
-            &format!("uint256 constant TOTAL_CALLS = {};", total_calls))
+        if let Some(input_data) = input_data {
+            let input_calls: usize = input_data.1.iter().map(|v| v.call_data.len()).sum();
+            let input_scale = input_data.0;
+            accounts_len = input_data.1.len();
+            contract = contract.replace(
+                "uint constant public INPUT_SCALE = 1<<0;",
+                &format!("uint constant public INPUT_SCALE = 1<<{};", input_scale));
+            contract = contract.replace(
+                "uint256 constant INPUT_CALLS = 0;",
+                &format!("uint256 constant INPUT_CALLS = {};", input_calls));
+        }
+        if let Some(output_data) = output_data {
+            let output_calls: usize = output_data.1.iter().map(|v| v.call_data.len()).sum();
+            let output_scale = output_data.0;
+            accounts_len += output_data.1.len();
+            contract = contract.replace(
+                "uint constant public OUTPUT_SCALE = 1<<0;",
+                &format!("uint constant public OUTPUT_SCALE = 1<<{};", output_scale));
+            contract = contract.replace(
+                "uint256 constant OUTPUT_CALLS = 0;",
+                &format!("uint256 constant OUTPUT_CALLS = {};", output_calls));
+        }
+        contract.replace("AccountCall[]", &format!("AccountCall[{}]", accounts_len))
     } else {
         match std::fs::read_to_string("./contracts/VerifierBase.sol") {
             Ok(file_content) => file_content,

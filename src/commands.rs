@@ -502,6 +502,10 @@ pub enum Commands {
         /// If not set will just use the default unoptimized SOLC configuration.
         #[arg(long)]
         optimizer_runs: Option<usize>,
+        /// The path to the .onnx model file. Optional b/c only needs to be passed when 
+        /// the public input visbility is set to public in order to fetch the output scales.
+        #[arg(short = 'M', long)]
+        model: Option<PathBuf>,
         /// The path to the .json data file, which should
         /// contain the necessary calldata and accoount addresses  
         /// needed need to read from all the on-chain

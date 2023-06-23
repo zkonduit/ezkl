@@ -1610,6 +1610,8 @@ macro_rules! test_func {
                 param_arg.as_str(),
                 "--vk-path",
                 vk_arg.as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--data",
                 test_on_chain_data_path.as_str(),
                 opt_arg.as_str()

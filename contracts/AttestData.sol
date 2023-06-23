@@ -16,20 +16,28 @@ contract DataAttestationVerifier {
     }
     AccountCall[] public accountCalls;
 
-    uint constant public SCALE = 1<<0;
+    uint constant public INPUT_SCALE = 1<<0;
+    uint constant public OUTPUT_SCALE = 1<<0;
 
     uint256 constant SIZE_LIMIT = uint256(uint128(type(int128).max));
 
-    uint256 constant TOTAL_CALLS = 0;
+    uint256 constant INPUT_CALLS = 0;
+
+    uint256 constant OUTPUT_CALLS = 0;
 
     /**
      * @dev Initialize the contract with account calls the EZKL model will read from.
      * @param _contractAddresses - The calls to all the contracts EZKL reads storage from.
      * @param _callData - The abi encoded function calls to make to the `contractAddress` that EZKL reads storage from.
      */
-    constructor(address[] memory _contractAddresses, bytes[][] memory _callData, uint256[] memory _decimals) {
+    constructor(
+        address[] memory _contractAddresses, 
+        bytes[][] memory _callData, 
+        uint256[][] memory _decimals
+    ) {
         require(_contractAddresses.length == _callData.length && accountCalls.length == _contractAddresses.length, "Invalid input length");
-        require(TOTAL_CALLS == _decimals.length, "Invalid number of decimals");
+        require(_decimals.length == _contractAddresses.length, "Invalid number of decimals");
+        uint total_calls = INPUT_CALLS + OUTPUT_CALLS;
         // fill in the accountCalls storage array
         uint counter = 0;
         for(uint256 i = 0; i < _contractAddresses.length; i++) {
@@ -38,11 +46,12 @@ contract DataAttestationVerifier {
             accountCall.callCount = _callData[i].length;
             for(uint256 j = 0; j < _callData[i].length; j++){
                 accountCall.callData[j] = _callData[i][j];
-                accountCall.decimals[j] = 10**_decimals[counter + j];
+                accountCall.decimals[j] = 10**_decimals[i][j];
             }
             // count the total number of storage reads across all of the accounts
             counter += _callData[i].length;
         }
+        require(counter == total_calls, "Invalid number of calls");
     }
 
     function mulDiv(uint256 x, uint256 y, uint256 denominator) internal pure returns (uint256 result) {
@@ -90,10 +99,10 @@ contract DataAttestationVerifier {
             return result;
         }
     }
-    function quantize_data(bytes memory data, uint256 decimals) internal pure returns (uint128 quantized_data) {
+    function quantize_data(bytes memory data, uint256 decimals, uint256 scale) internal pure returns (uint128 quantized_data) {
         uint x = abi.decode(data, (uint256));
-        uint output = mulDiv(x, SCALE, decimals);
-        if (mulmod(x, SCALE, decimals)*2 >= decimals) {
+        uint output = mulDiv(x, scale, decimals);
+        if (mulmod(x, scale, decimals)*2 >= decimals) {
             output += 1;
         }
         require(output < SIZE_LIMIT, "QuantizeData: overflow");
@@ -113,14 +122,18 @@ contract DataAttestationVerifier {
     }
 
     function attestData(uint256[] memory pubInputs) internal view {
-        require(pubInputs.length >= TOTAL_CALLS, "Invalid public inputs length");
+        require(pubInputs.length >= INPUT_CALLS + OUTPUT_CALLS, "Invalid public inputs length");
         uint256 _accountCount = accountCalls.length;
-        uint counter = 0; 
+        uint counter = 0;
         for (uint8 i = 0; i < _accountCount; ++i) {
             address account = accountCalls[i].contractAddress;
             for (uint8 j = 0; j < accountCalls[i].callCount; j++) {
                 bytes memory returnData = staticCall(account, accountCalls[i].callData[j]);
-                uint256 quantized_data = quantize_data(returnData, accountCalls[i].decimals[j]);
+                uint256 scale = INPUT_SCALE;
+                if (counter >= INPUT_CALLS) {
+                    scale = OUTPUT_SCALE;
+                }
+                uint256 quantized_data = quantize_data(returnData, accountCalls[i].decimals[j], scale);
                 require(quantized_data == pubInputs[counter], "Public input does not match");
                 counter++;
             }
