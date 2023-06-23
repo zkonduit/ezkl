@@ -4,13 +4,15 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
 use pyo3::ToPyObject;
+// use serde::de::{Visitor, MapAccess};
+// use serde::de::{Visitor, MapAccess};
 use serde::ser::SerializeStruct;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+// use std::collections::HashMap;
 use std::io::Read;
 // use std::collections::HashMap;
 
-use super::modules::ModuleForwardResult;
-
+use super::{modules::ModuleForwardResult, GraphError};
 
 type Decimals = u8;
 type Call = String;
@@ -88,16 +90,16 @@ impl GraphWitness {
 }
 /// The input tensor data and shape, and output data for the computational graph (model) as floats.
 /// For example, the input might be the image data for a neural network, and the output class scores.
-#[derive(Clone, Debug, Deserialize, Default, Serialize)]
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct GraphInput {
     /// Inputs to the model / computational graph (can be empty vectors if inputs are coming from on-chain).
     /// TODO: Add retrieve from on-chain functionality
-    pub input_data: DataSource,
+    pub input_data: Vec<Vec<f32>>,
 }
 
 impl GraphInput {
     ///
-    pub fn new(input_data: DataSource) -> Self {
+    pub fn new(input_data: Vec<Vec<f32>>) -> Self {
         GraphInput { input_data }
     }
 
@@ -123,26 +125,21 @@ impl GraphInput {
         // split input data into batches
         let mut batched_inputs = vec![];
 
-        match &self.input_data {
-            DataSource::File(input_data) => {
-                for (i, input) in input_data.iter().enumerate() {
-                    // ensure the input is devenly divisible by batch_size
-                    if input.len() % batch_size != 0 {
-                        return Err(Box::new(super::GraphError::InvalidDims(
-                            0,
-                            "input data length must be evenly divisible by batch size".to_string(),
-                        )));
-                    }
-                    let input_size = input_shapes[i].clone().iter().product::<usize>();
-                    let mut batches = vec![];
-                    for batch in input.chunks(batch_size * input_size) {
-                        batches.push(batch.to_vec());
-                    }
-                    batched_inputs.push(batches)
-                }
-            },
-            DataSource::OnChain(_, _) => panic!("Only File data sources support batching")
-        };
+        for (i, input) in self.input_data.iter().enumerate() {
+            // ensure the input is devenly divisible by batch_size
+            if input.len() % batch_size != 0 {
+                return Err(Box::new(GraphError::InvalidDims(
+                    0,
+                    "input data length must be evenly divisible by batch size".to_string(),
+                )));
+            }
+            let input_size = input_shapes[i].clone().iter().product::<usize>();
+            let mut batches = vec![];
+            for batch in input.chunks(batch_size * input_size) {
+                batches.push(batch.to_vec());
+            }
+            batched_inputs.push(batches);
+        }
         // now merge all the batches for each input into a vector of batches
         // first assert each input has the same number of batches
         let num_batches = batched_inputs[0].len();
@@ -156,7 +153,7 @@ impl GraphInput {
             for input in batched_inputs.iter() {
                 batch.push(input[i].clone());
             }
-            input_batches.push(DataSource::File(batch));
+            input_batches.push(batch);
         }
 
         // create a new GraphWitness for each batch
@@ -325,6 +322,30 @@ impl ToPyObject for GraphWitness {
         dict.to_object(py)
     }
 }
+
+
+impl<'de> Deserialize<'de> for GraphInput {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Debug, Deserialize)]
+        struct InnerGraphInput {
+            input_data: DataSource,
+        }
+
+        let inner: InnerGraphInput = InnerGraphInput::deserialize(deserializer)?;
+        let nested_input_data = match inner.input_data {
+            DataSource::OnChain(_, _) => vec![],
+            DataSource::File(data) => data,
+        };
+
+        Ok(GraphInput {
+            input_data: nested_input_data,
+        })
+    }
+}
+
 
 /// Enum that defines source of the inputs/outputs to the EZKL model
 /// used for f32 to f64 conversion

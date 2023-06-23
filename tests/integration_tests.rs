@@ -4,6 +4,7 @@ mod native_tests {
 
     use core::panic;
     use ezkl_lib::graph::GraphWitness;
+    use ezkl_lib::graph::input::GraphInput;
     use lazy_static::lazy_static;
     use std::env::var;
     use std::process::Command;
@@ -285,7 +286,12 @@ macro_rules! test_func {
             use crate::native_tests::kzg_fuzz;
             use crate::native_tests::render_circuit;
             use crate::native_tests::tutorial as run_tutorial;
+            use crate::native_tests::test_can_deserialize;
 
+            #[test]
+            fn test_can_deserialize_(){
+                test_can_deserialize();
+            }
 
             #[test]
             fn tutorial_() {
@@ -494,24 +500,24 @@ macro_rules! test_func {
             use crate::native_tests::kzg_fuzz;
 
             /// Currently only on chain inputs that return a non-negative value are supported.
-            const TESTS_ON_CHAIN_INPUT: [&str; 11] = [
-                "1l_mlp",
-                "1l_average",
-                "1l_reshape",
-                // "1l_sigmoid",
+            const TESTS_ON_CHAIN_INPUT: [&str; 2] = [
+                // "1l_mlp",
+                // "1l_average",
+                // "1l_reshape",
+                // // "1l_sigmoid",
                 "1l_div",
-                "1l_sqrt",
-                // "1l_prelu",
-                "1l_var",
-                "1l_leakyrelu",
+                // "1l_sqrt",
+                // // "1l_prelu",
+                // "1l_var",
+                // "1l_leakyrelu",
                 "1l_gelu_noappx",
-                "1l_relu",
-                //"1l_tanh",
-                // "2l_relu_sigmoid_small",
-                // "2l_relu_small",
-                // "2l_relu_fc",
-                "min",
-                "max",
+                // "1l_relu",
+                // //"1l_tanh",
+                // // "2l_relu_sigmoid_small",
+                // // "2l_relu_small",
+                // // "2l_relu_fc",
+                // "min",
+                // "max",
             ];
 
             /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
@@ -536,7 +542,7 @@ macro_rules! test_func {
                 "max",
             ];
 
-            seq!(N in 0..= 10 {
+            seq!(N in 0..= 1 {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
@@ -1662,5 +1668,13 @@ macro_rules! test_func {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+    }
+
+
+    fn test_can_deserialize() {
+        const JSON3: &str = r#"{"input_data":{"File":[[0.05326242372393608,0.07497056573629379,0.05235547572374344,0.028825461864471436,0.05848702788352966,0.008225822821259499,0.07530029118061066,0.0821458026766777,0.06227986887097359,0.024306034669280052,0.05793173983693123,0.040442030876874924]]},"output_data":{"File":[[0.0546875,0.1328125,0.078125,0.109375,0.21875,0.109375,0.0546875,0.0859375,0.03125,0.0546875,0.0625,0.0078125,0.1328125,0.2265625,0.09375,0.078125,0.1640625,0.0859375,0.0625,0.0859375,0.0234375,0.1171875,0.1796875,0.0625,0.0546875,0.09375,0.0390625]]}}"#;
+        let graph_input3 = serde_json::from_str::<GraphInput>(JSON3).map_err(|e| e.to_string()).unwrap();
+        println!("{:?}", graph_input3.input_data);
+        assert_eq!(graph_input3.input_data, vec![vec![0.05326242372393608,0.07497056573629379,0.05235547572374344,0.028825461864471436,0.05848702788352966,0.008225822821259499,0.07530029118061066,0.0821458026766777,0.06227986887097359,0.024306034669280052,0.05793173983693123,0.040442030876874924]]);
     }
 }

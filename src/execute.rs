@@ -469,10 +469,7 @@ pub(crate) fn gen_witness(
         GraphCircuit::from_settings(&circuit_settings, &model_path, CheckMode::UNSAFE)?;
     let data = GraphInput::from_path(data)?;
 
-    let file_data = match data.input_data {
-        DataSource::File(ref data) => data.clone(),
-        _ => todo!(),
-    };
+    let file_data = data.input_data;
 
     circuit.load_file_inputs(&file_data);
 
@@ -505,7 +502,7 @@ pub(crate) fn gen_witness(
     trace!("model forward pass output: {:?}", float_res);
 
     let witness = GraphWitness {
-        input_data: data.input_data,
+        input_data: DataSource::File(file_data),
         output_data: DataSource::File(float_res),
         processed_inputs: res.processed_inputs,
         processed_params: res.processed_params,
@@ -609,12 +606,8 @@ pub(crate) fn calibrate(
                     )
                     .map_err(|_| "failed to create circuit from run args")?;
 
-                    let chunk = match chunk.input_data {
-                        DataSource::File(ref data) => data.clone(),
-                        _ => todo!(),
-                    };
-
-                    circuit.load_file_inputs(&chunk);
+                    let chunk = &chunk.input_data;
+                    circuit.load_file_inputs(chunk);
 
                     loop {
                         //
