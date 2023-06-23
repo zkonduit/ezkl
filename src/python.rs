@@ -228,7 +228,7 @@ fn setup(
     transcript,
     strategy,
     settings_path,
-    test_on_chain_witness,
+    test_on_chain_witness=None,
 ))]
 fn prove(
     witness: PathBuf,
