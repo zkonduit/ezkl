@@ -505,20 +505,15 @@ impl GraphCircuit {
         &mut self,
         data: &GraphWitness,
         test_on_chain_data_path: Option<std::path::PathBuf>,
-        test_onchain_input: bool,
-        test_onchain_output: bool,
     ) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
         let out_scales = self.model.graph.get_output_scales();
 
 
         let data = if let Some(test_on_chain_data_path) = test_on_chain_data_path {
-            if !test_onchain_input && !test_onchain_output {
-                panic!("Must specify input or outuput for on-chain test");
-            }
             // Set up local anvil instance for reading on-chain data
             let (anvil, client) = crate::eth::setup_eth_backend(None).await?;
             let mut data = data.clone();
-            if test_onchain_input {
+            if self.settings.run_args.input_visibility.is_public() {
                 let input_data = match data.input_data {
                     DataSource::File(input_data) => input_data,
                     DataSource::OnChain(_, _) => 
@@ -542,7 +537,7 @@ impl GraphCircuit {
             } else {
                 self.load_inputs(&data).await?;
             } 
-            if test_onchain_output {
+            if self.settings.run_args.output_visibility.is_public() {
                 let output_data = match data.output_data{
                     DataSource::File(output_data) => output_data,
                     DataSource::OnChain(_, _) => 

@@ -200,8 +200,6 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             settings_path,
             check_mode,
             test_on_chain_witness,
-            test_on_chain_inputs,
-            test_on_chain_outputs
         } => prove(
             witness,
             model,
@@ -212,9 +210,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             strategy,
             settings_path,
             check_mode,
-            test_on_chain_witness,
-            test_on_chain_inputs,
-            test_on_chain_outputs
+            test_on_chain_witness
         ).await,
         Commands::Aggregate {
             settings_paths,
@@ -1021,8 +1017,6 @@ pub(crate) async fn prove(
     settings_path: PathBuf,
     check_mode: CheckMode,
     test_on_chain_witness: Option<PathBuf>,
-    test_onchain_input: bool,
-    test_onchain_output: bool
 ) -> Result<(), Box<dyn Error>> {
     let data = GraphWitness::from_path(data_path)?;
     use crate::pfsys::load_pk;
@@ -1030,9 +1024,7 @@ pub(crate) async fn prove(
     let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, check_mode)?;
     let public_inputs = circuit.prepare_public_inputs(
         &data,
-        test_on_chain_witness,
-        test_onchain_input,
-        test_onchain_output
+        test_on_chain_witness
     ).await?;
     
     let circuit_settings = circuit.settings.clone();
@@ -1115,7 +1107,7 @@ pub(crate) async fn fuzz(
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
         .map_err(Box::<dyn Error>::from)?;
 
-    let public_inputs = circuit.prepare_public_inputs(&data, None, false, false).await?;
+    let public_inputs = circuit.prepare_public_inputs(&data, None).await?;
 
     let strategy = KZGSingleStrategy::new(&params);
     std::mem::drop(_r);
