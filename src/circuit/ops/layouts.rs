@@ -997,8 +997,18 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     stride: (usize, usize),
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let has_bias = values.len() == 3;
-    let (image, kernel) = (values[0].clone(), values[1].clone());
+    let (mut image, kernel) = (values[0].clone(), values[1].clone());
+    let og_dims = image.dims().to_vec();
 
+    // ensure inputs are 4D tensors
+    if og_dims.len() == 3 {
+        // adds a dummy batch dimension
+        let mut new_dims = vec![1];
+        new_dims.extend_from_slice(image.dims());
+        image.reshape(&new_dims)?;
+    }
+
+    // if not 4D then error
     if (image.dims().len() != 4)
         || (kernel.dims().len() != 4)
         || ((image.dims()[1] != kernel.dims()[1]) && (kernel.dims()[1] != 1))
@@ -1053,7 +1063,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     .multi_cartesian_product()
     .collect::<Vec<_>>();
 
-    output.iter_mut().enumerate().for_each(|(idx, o)| {
+    output.par_iter_mut().enumerate().for_each(|(idx, o)| {
         let cartesian_coord_per_group = &cartesian_coord[idx];
         let (batch, group, i, j, k) = (
             cartesian_coord_per_group[0],
@@ -1096,6 +1106,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
 
         let mut local_region = RegionCtx::from_wrapped_region(region.region(), local_offset);
 
+        // this is dot product notation in einsum format
         let mut res = einsum(
             config,
             &mut local_region,
@@ -1116,14 +1127,21 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
         *o = res.get_inner_tensor().unwrap()[0].clone();
     });
 
+    // calculate the total number of constraints we added
     let mut total_len = output.len() * kernel_height * kernel_width * input_channels_per_group;
     if has_bias {
         total_len += output.len();
     }
+    // calculate the number of constraints that overflowed into a subsequent column
     let overflowed_len = overflowed_len(region.offset(), total_len, config.output.col_size());
     region.increment(overflowed_len);
 
-    output.reshape(&[batch_size, output_channels, vert_slides, horz_slides]);
+    // remove dummy batch dimension if we added one
+    if og_dims.len() == 3 {
+        output.reshape(&[output_channels, vert_slides, horz_slides]);
+    } else {
+        output.reshape(&[batch_size, output_channels, vert_slides, horz_slides]);
+    }
 
     let output: ValTensor<_> = output.into();
 

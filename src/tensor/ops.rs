@@ -1024,7 +1024,16 @@ pub fn conv<
     stride: (usize, usize),
 ) -> Result<Tensor<T>, TensorError> {
     let has_bias = inputs.len() == 3;
-    let (image, kernel) = (&inputs[0], &inputs[1]);
+    let (image, kernel) = (&mut inputs[0].clone(), &inputs[1]);
+    let og_dims = image.dims().to_vec();
+
+    // ensure inputs are 4D tensors
+    if og_dims.len() == 3 {
+        // adds a dummy batch dimension
+        let mut new_dims = vec![1];
+        new_dims.extend_from_slice(image.dims());
+        image.reshape(&new_dims);
+    }
 
     if (image.dims().len() != 4)
         || (kernel.dims().len() != 4)
@@ -1125,7 +1134,12 @@ pub fn conv<
         }
     });
 
-    output.reshape(&[batch_size, output_channels, vert_slides, horz_slides]);
+    // remove dummy batch dimension if we added one
+    if og_dims.len() == 3 {
+        output.reshape(&[output_channels, vert_slides, horz_slides]);
+    } else {
+        output.reshape(&[batch_size, output_channels, vert_slides, horz_slides]);
+    }
 
     Ok(output)
 }

@@ -500,7 +500,8 @@ pub fn new_op_from_onnx(
                 }
             }
 
-            if (conv_node.pool_spec.data_format != DataFormat::NCHW)
+            if ((conv_node.pool_spec.data_format != DataFormat::NCHW)
+                && (conv_node.pool_spec.data_format != DataFormat::CHW))
                 || (conv_node.kernel_fmt != KernelFormat::OIHW)
             {
                 return Err(Box::new(GraphError::MisformedParams(
