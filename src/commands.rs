@@ -1,4 +1,5 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use ethers::types::H160;
 #[cfg(feature = "python-bindings")]
 use pyo3::{
     conversion::{FromPyObject, PyTryFrom},
@@ -392,6 +393,25 @@ pub enum Commands {
         settings_path: Option<PathBuf>,
     },
 
+    SetupTestEVMWitness {
+        /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'W', long)]
+        witness: PathBuf,
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: PathBuf,
+        /// The path to load circuit params from
+        #[arg(long)]
+        settings_path: PathBuf,
+        /// For testing purposes only. The optional path to the .json data file that will be generated that contains the OnChain data storage information
+        /// derived from the file information in the data .json file.
+        ///  Should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'D', long)]
+        test_witness: PathBuf,
+        #[arg(short = 'U', long)]
+        rpc_url: String,
+    },
+
     #[cfg(not(target_arch = "wasm32"))]
     /// Loads model, data, and creates proof
     #[command(arg_required_else_help = true)]
@@ -434,11 +454,6 @@ pub enum Commands {
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = "safe")]
         check_mode: CheckMode,
-        /// For testing purposes only. The optional path to the .json data file that will be generated that contains the OnChain data storage information
-        /// derived from the file information in the data .json file.
-        ///  Should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'D', long)]
-        test_on_chain_witness: Option<PathBuf>,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for a single proof
@@ -447,7 +462,7 @@ pub enum Commands {
         /// The path to load the desired params file
         #[arg(long)]
         srs_path: PathBuf,
-        /// The path to save circuit params to
+        /// The path to the circuit settings
         #[arg(long)]
         settings_path: PathBuf,
         /// The path to load the desired verfication key file
@@ -493,10 +508,6 @@ pub enum Commands {
         /// If not set will just use the default unoptimized SOLC configuration.
         #[arg(long)]
         optimizer_runs: Option<usize>,
-        /// The path to the .onnx model file. Optional b/c only needs to be passed when
-        /// the public input visbility is set to public in order to fetch the output scales.
-        #[arg(short = 'M', long)]
-        model: Option<PathBuf>,
         /// The path to the .json data file, which should
         /// contain the necessary calldata and accoount addresses  
         /// needed need to read from all the on-chain
@@ -533,7 +544,6 @@ pub enum Commands {
         optimizer_runs: Option<usize>,
         // todo, optionally allow supplying proving key
     },
-
     /// Verifies a proof, returning accept or reject
     #[command(arg_required_else_help = true)]
     Verify {
@@ -550,7 +560,6 @@ pub enum Commands {
         #[arg(long)]
         srs_path: PathBuf,
     },
-
     /// Verifies an aggregate proof, returning accept or reject
     #[command(arg_required_else_help = true)]
     VerifyAggr {
@@ -567,7 +576,43 @@ pub enum Commands {
         #[arg(long)]
         logrows: u32,
     },
-
+    #[cfg(not(target_arch = "wasm32"))]
+    DeployEvmVerifier {
+        /// The path to verifier contract's deployment code
+        #[arg(long, conflicts_with_all = ["sol_bytecode_path", "sol_code_path"])]
+        deployment_code_path: Option<PathBuf>,
+        /// The path to the Solidity code
+        #[arg(long, conflicts_with_all = ["sol_bytecode_path"])]
+        sol_code_path: Option<PathBuf>,
+        /// The path to output the compiled Solidity bytecode
+        #[arg(long)]
+        sol_bytecode_path: Option<PathBuf>,
+        /// rpc url
+        #[arg(short = 'U', long)]
+        rpc_url: Option<String>,
+        #[arg(long, default_value = "contract.address")]
+        /// The path to output the contract address
+        addr_path: PathBuf,
+    },
+    #[cfg(not(target_arch = "wasm32"))]
+    #[command(name = "deploy-evm-da-verifier", arg_required_else_help = true)]
+    DeployEvmDataAttestationVerifier {
+        /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'W', long)]
+        witness: PathBuf,
+        /// The path to load circuit params from
+        #[arg(long)]
+        settings_path: PathBuf,
+        /// The path to the Solidity code
+        #[arg(long)]
+        sol_code_path: PathBuf,
+        /// rpc url
+        #[arg(short = 'U', long)]
+        rpc_url: Option<String>,
+        #[arg(long, default_value = "contract_da.address")]
+        /// The path to output the contract address
+        addr_path: PathBuf,
+    },
     #[cfg(not(target_arch = "wasm32"))]
     /// Verifies a proof using a local EVM executor, returning accept or reject
     #[command(name = "verify-evm", arg_required_else_help = true)]
@@ -575,36 +620,15 @@ pub enum Commands {
         /// The path to the proof file
         #[arg(long)]
         proof_path: PathBuf,
-        /// The path to verifier contract's deployment code
+        /// The path to verfier contract's address
         #[arg(long)]
-        deployment_code_path: Option<PathBuf>,
-        /// The path to the Solidity code
-        #[arg(long)]
-        sol_code_path: Option<PathBuf>,
-        /// The path to output the compiled Solidity bytecode
-        #[arg(long)]
-        sol_bytecode_path: Option<PathBuf>,
-        /// The path to the .json data file, which should
-        /// contain the floating point data that will
-        /// get deploy on-chain by a test contract for testing
-        /// purposes. The on_chain_data file will contain
-        /// the call data and account addresses needed to read from
-        /// evm quantized data in this file.
-        #[arg(short = 'W', long)]
-        file_witness: Option<PathBuf>,
-        /// The path to the .json data file, which should
-        /// contain the necessary calldata and account addresses  
-        /// needed need to read from all the on-chain
-        /// view functions that return the data that the network
-        /// ingests as inputs.
-        #[arg(short = 'W', long)]
-        on_chain_witness: Option<PathBuf>,
-        /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
-        model: Option<PathBuf>,
-        /// Path to circuit_settings .json file to read in
-        #[arg(long)]
-        settings_path: Option<PathBuf>,
+        addr: H160,
+        /// rpc url
+        #[arg(short = 'U', long)]
+        rpc_url: Option<String>,
+        /// does the verifier use data attestation ?
+        #[arg(long, default_value = "false")]
+        data_attestation: bool,
     },
 
     /// Print the proof in hexadecimal

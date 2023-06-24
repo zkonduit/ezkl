@@ -40,7 +40,6 @@ ark-std = { version = "^0.3.0", default-features = false }
 
 
 
-
 # python binding related deps
 pyo3 = { version = "0.18.3", features = ["extension-module", "abi3-py37", "macros"],  default_features = false, optional = true }
 pyo3-asyncio = { version = "0.18.0",  features = ["attributes", "tokio-runtime"],  default_features = false, optional = true }

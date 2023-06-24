@@ -2,11 +2,11 @@ use crate::circuit::CheckMode;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::commands::{CalibrationTarget, StrategyType};
 use crate::commands::{Cli, Commands, RunArgs};
-#[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{
-    fix_verifier_sol, get_contract_artifacts, verify_proof_via_solidity,
-    verify_proof_with_data_attestation,
+    deploy_da_verifier_via_solidity, deploy_verifier_via_solidity, deploy_verifier_via_yul,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use crate::eth::{fix_verifier_sol, get_contract_artifacts, verify_proof_via_solidity};
 use crate::graph::input::{DataSource, GraphInput};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::Visibility;
@@ -20,6 +20,8 @@ use crate::pfsys::evm::{
 };
 use crate::pfsys::{create_keys, load_vk, save_params, save_pk, Snark, TranscriptType};
 use crate::pfsys::{create_proof_circuit, save_vk, srs::*, verify_proof_circuit};
+#[cfg(not(target_arch = "wasm32"))]
+use ethers::types::H160;
 #[cfg(not(target_arch = "wasm32"))]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
@@ -64,7 +66,6 @@ use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
 use thiserror::Error;
-
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
 pub enum ExecutionError {
@@ -161,7 +162,6 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             sol_code_path,
             sol_bytecode_path,
             optimizer_runs,
-            model,
             data,
         } => create_evm_data_attestation_verifier(
             vk_path,
@@ -170,7 +170,6 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             sol_code_path,
             sol_bytecode_path,
             optimizer_runs,
-            model,
             data,
         ),
         #[cfg(not(target_arch = "wasm32"))]
@@ -197,6 +196,14 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             pk_path,
         } => setup(model, srs_path, settings_path, vk_path, pk_path),
         #[cfg(not(target_arch = "wasm32"))]
+        Commands::SetupTestEVMWitness {
+            witness,
+            model,
+            settings_path,
+            test_witness,
+            rpc_url,
+        } => setup_test_evm_witness(witness, model, settings_path, test_witness, rpc_url).await,
+        #[cfg(not(target_arch = "wasm32"))]
         Commands::Prove {
             witness,
             model,
@@ -207,7 +214,6 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             strategy,
             settings_path,
             check_mode,
-            test_on_chain_witness,
         } => {
             prove(
                 witness,
@@ -219,7 +225,6 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 strategy,
                 settings_path,
                 check_mode,
-                test_on_chain_witness,
             )
             .await
         }
@@ -257,28 +262,36 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             logrows,
         } => verify_aggr(proof_path, vk_path, srs_path, logrows),
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::VerifyEVM {
-            proof_path,
+        Commands::DeployEvmVerifier {
             deployment_code_path,
             sol_code_path,
             sol_bytecode_path,
-            file_witness,
-            on_chain_witness,
-            model,
-            settings_path,
+            rpc_url,
+            addr_path,
         } => {
-            verify_evm(
-                proof_path,
+            deploy_evm(
                 deployment_code_path,
                 sol_code_path,
                 sol_bytecode_path,
-                file_witness,
-                on_chain_witness,
-                model,
-                settings_path
+                rpc_url,
+                addr_path,
             )
             .await
         }
+        Commands::DeployEvmDataAttestationVerifier {
+            witness,
+            settings_path,
+            sol_code_path,
+            rpc_url,
+            addr_path,
+        } => deploy_da_evm(witness, settings_path, sol_code_path, rpc_url, addr_path).await,
+        #[cfg(not(target_arch = "wasm32"))]
+        Commands::VerifyEVM {
+            proof_path,
+            addr,
+            rpc_url,
+            data_attestation,
+        } => verify_evm(proof_path, addr, rpc_url, data_attestation).await,
         Commands::PrintProofHex { proof_path } => print_proof_hex(proof_path),
     }
 }
@@ -648,6 +661,7 @@ pub(crate) async fn calibrate(
                     let found_settings = GraphSettings {
                         run_args: found_run_args,
                         required_lookups: circuit.settings.required_lookups,
+                        model_output_scales: circuit.settings.model_output_scales,
                         ..original_settings.clone()
                     };
 
@@ -847,18 +861,18 @@ fn create_evm_data_attestation_verifier(
     sol_code_path: PathBuf,
     sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
-    model_path: Option<PathBuf>,
     data: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
-    let model_circuit_params = GraphSettings::load(&settings_path)?;
-    let params = load_params_cmd(srs_path, model_circuit_params.run_args.logrows)?;
+    use crate::graph::VarVisibility;
 
-    let num_instance = model_circuit_params.total_instances();
+    let settings = GraphSettings::load(&settings_path)?;
+    let params = load_params_cmd(srs_path, settings.run_args.logrows)?;
 
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
-        vk_path,
-        model_circuit_params.clone(),
-    )?;
+    let visibility = VarVisibility::from_args(settings.run_args)?;
+
+    let num_instance = settings.total_instances();
+
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, settings.clone())?;
     trace!("params computed");
 
     let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
@@ -868,7 +882,7 @@ fn create_evm_data_attestation_verifier(
 
     let data = GraphWitness::from_path(data)?;
 
-    let output_data = if model_circuit_params.run_args.output_visibility == Visibility::Public {
+    let output_data = if visibility.output.is_public() {
         let mut on_chain_output_data = vec![];
         match data.output_data {
             DataSource::OnChain(source) => {
@@ -878,21 +892,15 @@ fn create_evm_data_attestation_verifier(
             }
             _ => panic!("data source of output_data must be from on-chain for public output data."),
         };
-        if model_path.is_none() {
-            panic!("Model must be provided for public output data.")
-        }
-        let circuit = GraphCircuit::from_settings(
-            &model_circuit_params,
-            &model_path.unwrap(),
-            CheckMode::UNSAFE,
-        )?;
-        let output_scales = circuit.model.graph.get_output_scales();
+
+        let output_scales = settings.model_output_scales;
+
         Some((output_scales[0], on_chain_output_data))
     } else {
         None
     };
 
-    let input_data = if model_circuit_params.run_args.input_visibility == Visibility::Public {
+    let input_data = if visibility.input.is_public() {
         let mut on_chain_input_data = vec![];
         match data.input_data {
             DataSource::OnChain(source) => {
@@ -902,7 +910,7 @@ fn create_evm_data_attestation_verifier(
             }
             _ => panic!("data source of input_data must be from on-chain for public input data."),
         };
-        Some((model_circuit_params.run_args.scale, on_chain_input_data))
+        Some((settings.run_args.scale, on_chain_input_data))
     } else {
         None
     };
@@ -923,49 +931,68 @@ fn create_evm_data_attestation_verifier(
     Ok(())
 }
 
+pub(crate) async fn deploy_da_evm(
+    witness: PathBuf,
+    settings_path: PathBuf,
+    sol_code_path: PathBuf,
+    rpc_url: Option<String>,
+    addr_path: PathBuf,
+) -> Result<(), Box<dyn Error>> {
+    let contract_address =
+        deploy_da_verifier_via_solidity(settings_path, witness, sol_code_path, rpc_url.as_deref())
+            .await?;
+    info!("Contract deployed at: {}", contract_address);
+
+    let mut f = File::create(addr_path)?;
+    write!(f, "{:#?}", contract_address)?;
+
+    Ok(())
+}
+
+pub(crate) async fn deploy_evm(
+    yul_code_path: Option<PathBuf>,
+    sol_code_path: Option<PathBuf>,
+    sol_bytecode_path: Option<PathBuf>,
+    rpc_url: Option<String>,
+    addr_path: PathBuf,
+) -> Result<(), Box<dyn Error>> {
+    // if all none
+    if yul_code_path.is_none() && sol_code_path.is_none() && sol_bytecode_path.is_none() {
+        return Err("Either deployment_code_path or sol_code_path must be provided.".into());
+    }
+    let contract_address = if let Some(path) = yul_code_path {
+        deploy_verifier_via_yul(path, rpc_url.as_deref()).await?
+    } else {
+        deploy_verifier_via_solidity(sol_code_path, sol_bytecode_path, rpc_url.as_deref()).await?
+    };
+    info!("Contract deployed at: {:#?}", contract_address);
+
+    let mut f = File::create(addr_path)?;
+    write!(f, "{:#?}", contract_address)?;
+    Ok(())
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn verify_evm(
     proof_path: PathBuf,
-    deployment_code_path: Option<PathBuf>,
-    sol_code_path: Option<PathBuf>,
-    sol_bytecode_path: Option<PathBuf>,
-    file_data: Option<PathBuf>,
-    on_chain_data: Option<PathBuf>,
-    model_path: Option<PathBuf>,
-    settings_path: Option<PathBuf>,
+    addr: H160,
+    rpc_url: Option<String>,
+    uses_data_attestation: bool,
 ) -> Result<(), Box<dyn Error>> {
+    use crate::eth::verify_proof_with_data_attestation;
+
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
 
-    if deployment_code_path.is_some() {
-        let deployment_code = DeploymentCode::load(&deployment_code_path.unwrap())?;
-        evm_verify(deployment_code, proof.clone())?;
-    }
-    if sol_code_path.is_some() {
-        let result = if file_data.is_some() && on_chain_data.is_some() {
-            verify_proof_with_data_attestation(
-                proof.clone(),
-                sol_code_path.unwrap(),
-                file_data.clone().unwrap(),
-                on_chain_data.clone().unwrap(),
-                model_path.clone().unwrap(),
-                settings_path.clone().unwrap(),
-            )
-            .await?
-        } else {
-            verify_proof_via_solidity(proof.clone(), sol_code_path, None).await?
-        };
-        info!("Solidity verification result: {}", result);
+    let result = if !uses_data_attestation {
+        verify_proof_via_solidity(proof.clone(), addr, rpc_url.as_deref()).await?
+    } else {
+        verify_proof_with_data_attestation(proof.clone(), addr, rpc_url.as_deref()).await?
+    };
 
-        assert!(result);
+    info!("Solidity verification result: {}", result);
 
-        if sol_bytecode_path.is_some() && file_data.is_none() {
-            let result = verify_proof_via_solidity(proof, None, sol_bytecode_path).await?;
+    assert!(result);
 
-            info!("Solidity bytecode verification result: {}", result);
-
-            assert!(result);
-        }
-    }
     Ok(())
 }
 
@@ -1031,6 +1058,33 @@ pub(crate) fn setup(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+pub(crate) async fn setup_test_evm_witness(
+    data_path: PathBuf,
+    model_path: PathBuf,
+    settings_path: PathBuf,
+    test_witness: PathBuf,
+    rpc_url: String,
+) -> Result<(), Box<dyn Error>> {
+    use crate::graph::TestOnChainData;
+
+    info!("run this command in background to keep the instance running for testing");
+    let data = GraphWitness::from_path(data_path)?;
+    let circuit_settings = GraphSettings::load(&settings_path)?;
+    let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, CheckMode::SAFE)?;
+
+    let test_on_chain_witness = TestOnChainData {
+        data: test_witness.clone(),
+        rpc: rpc_url,
+    };
+
+    circuit
+        .load_data(&data, Some(test_on_chain_witness))
+        .await?;
+
+    Ok(())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn prove(
     data_path: PathBuf,
     model_path: PathBuf,
@@ -1041,14 +1095,13 @@ pub(crate) async fn prove(
     strategy: StrategyType,
     settings_path: PathBuf,
     check_mode: CheckMode,
-    test_on_chain_witness: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     let data = GraphWitness::from_path(data_path)?;
     use crate::pfsys::load_pk;
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, check_mode)?;
 
-    circuit.load_data(&data, test_on_chain_witness).await?;
+    circuit.load_data(&data, None).await?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     let circuit_settings = circuit.settings.clone();

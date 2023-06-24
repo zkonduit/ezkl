@@ -121,6 +121,8 @@ pub struct GraphSettings {
     pub num_constraints: usize,
     /// the shape of public inputs to the model (in order of appearance)
     pub model_instance_shapes: Vec<Vec<usize>>,
+    /// model output scales
+    pub model_output_scales: Vec<u32>,
     /// the of instance cells used by modules
     pub module_sizes: ModuleSizes,
     /// required_lookups
@@ -178,6 +180,15 @@ pub struct GraphCircuit {
     pub settings: GraphSettings,
     /// The settings of the model's modules.
     pub module_settings: ModuleSettings,
+}
+
+///
+#[derive(Clone, Debug, Default)]
+pub struct TestOnChainData {
+    /// The path to the test witness
+    pub data: std::path::PathBuf,
+    /// The path to the params file
+    pub rpc: String,
 }
 
 impl GraphCircuit {
@@ -271,19 +282,18 @@ impl GraphCircuit {
     pub async fn load_data(
         &mut self,
         data: &GraphWitness,
-        test_on_chain_data_path: Option<std::path::PathBuf>,
+        test_on_chain_data: Option<TestOnChainData>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut data = data.clone();
 
         // mutate it if need be
-        if let Some(test_path) = test_on_chain_data_path {
+        if let Some(test_path) = test_on_chain_data {
             self.populate_on_chain_test_data(&mut data, test_path)
                 .await?;
         } else {
             self.load_inputs(&data.clone().into()).await?;
             self.load_outputs(&data).await?;
         }
-
 
         // load the module settings
         self.module_settings = ModuleSettings::from(&data);
@@ -325,7 +335,7 @@ impl GraphCircuit {
             .collect::<Vec<Vec<Fp>>>();
 
         let module_instances =
-            GraphModules::public_inputs(&data, VarVisibility::from_args(self.settings.run_args)?);
+            GraphModules::public_inputs(data, VarVisibility::from_args(self.settings.run_args)?);
 
         if !module_instances.is_empty() {
             pi_inner.extend(module_instances);
@@ -406,7 +416,11 @@ impl GraphCircuit {
     ) -> Result<Vec<Tensor<i128>>, Box<dyn std::error::Error>> {
         match &data {
             DataSource::OnChain(source) => {
-                self.load_on_chain_data(source.clone(), &shapes, scales)
+                let mut per_item_scale = vec![];
+                for (i, shape) in shapes.iter().enumerate() {
+                    per_item_scale.extend(vec![scales[i]; shape.iter().product::<usize>()]);
+                }
+                self.load_on_chain_data(source.clone(), &shapes, per_item_scale)
                     .await
             }
             DataSource::File(file_data) => self.load_file_data(file_data, &shapes, scales),
@@ -422,24 +436,20 @@ impl GraphCircuit {
         scales: Vec<u32>,
     ) -> Result<Vec<Tensor<i128>>, Box<dyn std::error::Error>> {
         use crate::eth::{evm_quantize, read_on_chain_inputs, setup_eth_backend};
-        // Set up anvil instance for reading on-chain data from RPC URL endpoint provided in data
-        let (anvil, client) = setup_eth_backend(Some(&source.rpc)).await?;
+        let (_, client) = setup_eth_backend(Some(&source.rpc)).await?;
         let inputs = read_on_chain_inputs(client.clone(), client.address(), &source.calls).await?;
-        drop(anvil);
-        // Set up local anvil instance for deploying QuantizeData.sol
-        let (anvil, client) = setup_eth_backend(None).await?;
+        // quantize the supplied data using the provided scale + QuantizeData.sol
         let quantized_evm_inputs = evm_quantize(
             client,
             scales.into_iter().map(scale_to_multiplier).collect(),
             &inputs,
         )
         .await?;
-        drop(anvil);
         // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
         let mut inputs: Vec<Tensor<i128>> = vec![];
         for (input, shape) in vec![quantized_evm_inputs].iter().zip(shapes) {
             let mut t: Tensor<i128> = input.iter().cloned().collect();
-            t.reshape(&shape);
+            t.reshape(shape);
             inputs.push(t);
         }
 
@@ -462,7 +472,7 @@ impl GraphCircuit {
                 .collect();
 
             let mut t: Tensor<i128> = t.into_iter().into();
-            t.reshape(&shape);
+            t.reshape(shape);
 
             data.push(t);
         }
@@ -584,7 +594,7 @@ impl GraphCircuit {
     async fn populate_on_chain_test_data(
         &mut self,
         data: &mut GraphWitness,
-        test_on_chain_data_path: std::path::PathBuf,
+        test_on_chain_data: TestOnChainData,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Set up local anvil instance for reading on-chain data
         if self.settings.run_args.input_visibility.is_public() {
@@ -596,18 +606,16 @@ impl GraphCircuit {
                 ),
             };
             // Get the flatten length of input_data
-            let length = input_data
-                .iter()
-                .map(|x| x.len())
-                .fold(0, |acc, x| acc + x);
+            let length = input_data.iter().map(|x| x.len()).sum();
             let scales = vec![self.settings.run_args.scale; length];
-            let datam:(Vec<Tensor<i128>>, OnChainSourceInner)  = OnChainSourceInner::test_from_file_data(
-                input_data,
-                scales,
-                self.model.graph.input_shapes(),
-            )
-            .await?
-            .into();
+            let datam: (Vec<Tensor<i128>>, OnChainSourceInner) =
+                OnChainSourceInner::test_from_file_data(
+                    input_data,
+                    scales,
+                    self.model.graph.input_shapes(),
+                    &test_on_chain_data.rpc,
+                )
+                .await?;
             self.inputs = datam.0;
             data.input_data = datam.1.into();
         } else {
@@ -621,20 +629,21 @@ impl GraphCircuit {
                     Will manually populate on-chain data from file source instead"
                 ),
             };
-            let datum: (Vec<Tensor<i128>>, OnChainSourceInner) = OnChainSourceInner::test_from_file_data(
-                output_data,
-                self.model.graph.get_output_scales(),
-                self.model.graph.output_shapes(),
-            )
-            .await?
-            .into();
+            let datum: (Vec<Tensor<i128>>, OnChainSourceInner) =
+                OnChainSourceInner::test_from_file_data(
+                    output_data,
+                    self.model.graph.get_output_scales(),
+                    self.model.graph.output_shapes(),
+                    &test_on_chain_data.rpc,
+                )
+                .await?;
             self.outputs = datum.0;
             data.output_data = datum.1.into();
         } else {
-            self.load_outputs(&data).await?;
+            self.load_outputs(data).await?;
         }
         // Save the updated GraphInput struct to the data_path
-        data.save(test_on_chain_data_path)?;
+        data.save(test_on_chain_data.data)?;
         Ok(())
     }
 }

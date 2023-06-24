@@ -6,10 +6,10 @@ use pyo3::types::PyDict;
 use pyo3::ToPyObject;
 // use serde::de::{Visitor, MapAccess};
 // use serde::de::{Visitor, MapAccess};
-use serde::ser::SerializeStruct;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::tensor::Tensor;
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 // use std::collections::HashMap;
 use std::io::Read;
 // use std::collections::HashMap;
@@ -45,17 +45,18 @@ impl OnChainSourceInner {
         data: &FileSourceInner,
         scales: Vec<u32>,
         shapes: Vec<Vec<usize>>,
+        rpc: &RPCUrl,
     ) -> Result<(Vec<Tensor<i128>>, Self), Box<dyn std::error::Error>> {
         use crate::eth::{evm_quantize, read_on_chain_inputs, test_on_chain_data};
         use crate::graph::scale_to_multiplier;
         use log::debug;
 
         // Set up local anvil instance for reading on-chain data
-        let (anvil, client) = crate::eth::setup_eth_backend(None).await?;
+        let (_, client) = crate::eth::setup_eth_backend(Some(rpc)).await?;
 
         let address = client.address();
 
-        let calls_to_accounts = test_on_chain_data(client.clone(), &data).await?;
+        let calls_to_accounts = test_on_chain_data(client.clone(), data).await?;
         debug!("Calls to accounts: {:?}", calls_to_accounts);
         let inputs = read_on_chain_inputs(client.clone(), address, &calls_to_accounts).await?;
         debug!("Inputs: {:?}", inputs);
@@ -69,8 +70,12 @@ impl OnChainSourceInner {
                 evm_quantize(
                     client.clone(),
                     vec![scales[idx]; i.len()],
-                    &(inputs.0[prev..i.len()].to_vec(), inputs.1[prev..i.len()].to_vec()),
-                ).await?
+                    &(
+                        inputs.0[prev..i.len()].to_vec(),
+                        inputs.1[prev..i.len()].to_vec(),
+                    ),
+                )
+                .await?,
             );
             prev += i.len();
         }
@@ -82,13 +87,11 @@ impl OnChainSourceInner {
             t.reshape(&shape);
             inputs.push(t);
         }
+
         // Fill the input_data field of the GraphInput struct
         Ok((
             inputs,
-            OnChainSourceInner::new(
-                calls_to_accounts.clone(),
-                anvil.endpoint(),
-            )
+            OnChainSourceInner::new(calls_to_accounts.clone(), rpc.clone()),
         ))
     }
 }
@@ -516,11 +519,7 @@ mod tests {
     #[test]
     // this is for backwards compatibility with the old format
     fn test_data_source_serialization_round_trip() {
-        let source = DataSource::File(vec![vec![
-            0.05326242372393608,
-            0.07497056573629379,
-            0.05235547572374344,
-        ]]);
+        let source = DataSource::File(vec![vec![0.053_262_424, 0.074_970_566, 0.052_355_476]]);
 
         let serialized = serde_json::to_string(&source).unwrap();
 
@@ -541,9 +540,9 @@ mod tests {
     // this is for backwards compatibility with the old format
     fn test_graph_input_serialization_round_trip() {
         let file = GraphInput::new(DataSource::File(vec![vec![
-            0.05326242372393608,
-            0.07497056573629379,
-            0.05235547572374344,
+            0.053_262_424,
+            0.074_970_566,
+            0.052_355_476,
         ]]));
 
         let serialized = serde_json::to_string(&file).unwrap();
@@ -555,7 +554,7 @@ mod tests {
 
         println!("serialized {:?}", serialized);
 
-        let graph_input3 = serde_json::from_str::<GraphInput>(&JSON)
+        let graph_input3 = serde_json::from_str::<GraphInput>(JSON)
             .map_err(|e| e.to_string())
             .unwrap();
         println!("{:?}", graph_input3.input_data);

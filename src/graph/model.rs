@@ -270,6 +270,7 @@ impl Model {
             module_sizes: crate::graph::modules::ModuleSizes::default(),
             num_constraints,
             required_lookups: lookup_ops,
+            model_output_scales: self.graph.get_output_scales(),
             check_mode,
         })
     }
@@ -626,7 +627,7 @@ impl Model {
                         .iter()
                         .enumerate()
                         .map(|(i, output)| {
-                            let mut tolerance = run_args.tolerance.clone();
+                            let mut tolerance = run_args.tolerance;
                             tolerance.scales =
                                 (scale_to_multiplier(output_scales[i]) as usize, global_scale);
 

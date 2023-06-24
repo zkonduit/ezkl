@@ -14,6 +14,7 @@ mod native_tests {
     static KZG17: Once = Once::new();
     static KZG23: Once = Once::new();
     static KZG26: Once = Once::new();
+    static START_ANVIL: Once = Once::new();
 
     //Sure to run this once
 
@@ -21,6 +22,19 @@ mod native_tests {
         static ref CARGO_TARGET_DIR: String =
             var("CARGO_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
         static ref TEST_DIR: TempDir = TempDir::new("example").unwrap();
+        static ref ANVIL_URL: String = "http://localhost:3030".to_string();
+    }
+
+    fn start_anvil() {
+        START_ANVIL.call_once(|| {
+            let _ = Command::new("anvil")
+                .args(["-p", "3030"])
+                // .stdout(Stdio::piped())
+                .spawn()
+                .expect("failed to start anvil process");
+
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        });
     }
 
     fn init_binary() {
@@ -537,6 +551,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
+                    crate::native_tests::start_anvil();
                     kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, true, false);
                     kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, false, true);
                     // TODO: This test is currently failing because need to find a way to
@@ -554,6 +569,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
+                    crate::native_tests::start_anvil();
                     kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "public", 1);
                 }
 
@@ -562,6 +578,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
+                    crate::native_tests::start_anvil();
                     kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "hashed", "private", "private", 1);
                 }
 
@@ -570,6 +587,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
+                    crate::native_tests::start_anvil();
                     kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "hashed", "public", 1);
                 }
 
@@ -578,6 +596,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
+                    crate::native_tests::start_anvil();
                     kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "hashed", 1);
                 }
 
@@ -586,6 +605,7 @@ mod native_tests {
                 fn kzg_evm_fuzz_(test: &str) {
                     crate::native_tests::init_binary();
                     crate::native_tests::mv_test_(test);
+                    crate::native_tests::start_anvil();
                     kzg_fuzz(test.to_string(), 7, 16, 17, "evm");
                 }
 
@@ -596,6 +616,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::init_params_23();
                     crate::native_tests::mv_test_(test);
+                    crate::native_tests::start_anvil();
                     kzg_evm_aggr_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test));
                 }
 
@@ -1324,6 +1345,7 @@ mod native_tests {
         num_runs: usize,
     ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
+        let anvil_url = ANVIL_URL.as_str();
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1425,18 +1447,18 @@ mod native_tests {
         let code_arg = format!("{}/{}/deployment.code", test_dir, example_name);
         let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
         let param_arg = format!("--srs-path={}/kzg17.srs", test_dir);
-
         let opt_arg = format!("--optimizer-runs={}", num_runs);
+        let rpc_arg = format!("--rpc-url={}", anvil_url);
+        let addr_path_arg = format!("--addr-path={}/{}/addr.txt", test_dir, example_name);
 
+        // create the verifier
         let mut args = vec![
             "create-evm-verifier",
-            circuit_settings.as_str(),
-            "--deployment-code-path",
-            code_arg.as_str(),
             param_arg.as_str(),
             "--vk-path",
             vk_arg.as_str(),
             opt_arg.as_str(),
+            circuit_settings.as_str(),
         ];
 
         let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
@@ -1447,6 +1469,9 @@ mod native_tests {
             args.push(sol_arg.as_str());
             args.push("--sol-bytecode-path");
             args.push(sol_bytecode_arg.as_str());
+        } else {
+            args.push("--deployment-code-path");
+            args.push(code_arg.as_str());
         }
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -1455,21 +1480,43 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
+        // deploy the verifier
+        let mut args = vec![
+            "deploy-evm-verifier",
+            rpc_arg.as_str(),
+            addr_path_arg.as_str(),
+        ];
 
+        if with_solidity {
+            args.push("--sol-code-path");
+            args.push(sol_arg.as_str());
+        } else {
+            args.push("--deployment-code-path");
+            args.push(code_arg.as_str());
+        }
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(&args)
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        // read in the address
+        let addr = std::fs::read_to_string(format!("{}/{}/addr.txt", test_dir, example_name))
+            .expect("failed to read address file");
+
+        let deployed_addr_arg = format!("--addr={}", addr);
+
+        // now verify the proof
+        let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
         let mut args = vec![
             "verify-evm",
             "--proof-path",
             pf_arg.as_str(),
-            "--deployment-code-path",
-            code_arg.as_str(),
+            rpc_arg.as_str(),
+            deployed_addr_arg.as_str(),
         ];
-        if with_solidity {
-            args.push("--sol-code-path");
-            args.push(sol_arg.as_str());
-            args.push("--sol-bytecode-path");
-            args.push(sol_bytecode_arg.as_str());
-        }
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(&args)
             .status()
@@ -1556,12 +1603,29 @@ mod native_tests {
 
         let data_path = format!("{}/{}/input.json", test_dir, example_name);
         let test_on_chain_data_path = format!("{}/{}/on_chain_input.json", test_dir, example_name);
+        let rpc_arg = format!("--rpc-url={}", ANVIL_URL.as_str());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "setup-test-evm-witness",
+                "-W",
+                data_path.as_str(),
+                "-M",
+                model_path.as_str(),
+                circuit_settings.as_str(),
+                "--test-witness",
+                test_on_chain_data_path.as_str(),
+                rpc_arg.as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "prove",
                 "-W",
-                data_path.as_str(),
+                test_on_chain_data_path.as_str(),
                 "-M",
                 model_path.as_str(),
                 "--proof-path",
@@ -1572,8 +1636,6 @@ mod native_tests {
                 "--transcript=evm",
                 "--strategy=single",
                 circuit_settings.as_str(),
-                "--test-on-chain-witness",
-                test_on_chain_data_path.as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -1602,8 +1664,6 @@ mod native_tests {
                 param_arg.as_str(),
                 "--vk-path",
                 vk_arg.as_str(),
-                "-M",
-                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--data",
                 test_on_chain_data_path.as_str(),
                 opt_arg.as_str(),
@@ -1612,23 +1672,37 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
+        let addr_path_arg = format!("--addr-path={}/{}/addr.txt", test_dir, example_name);
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "deploy-evm-da-verifier",
+                circuit_settings.as_str(),
+                "-W",
+                test_on_chain_data_path.as_str(),
+                "--sol-code-path",
+                sol_arg.as_str(),
+                rpc_arg.as_str(),
+                addr_path_arg.as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
         let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
+        let uses_data_attestation = format!("--data-attestation");
+        // read in the address
+        let addr = std::fs::read_to_string(format!("{}/{}/addr.txt", test_dir, example_name))
+            .expect("failed to read address file");
+
+        let deployed_addr_arg = format!("--addr={}", addr);
 
         let mut args = vec![
             "verify-evm",
             "--proof-path",
             pf_arg.as_str(),
-            "--sol-code-path",
-            sol_arg.as_str(),
-            "--sol-bytecode-path",
-            sol_bytecode_arg.as_str(),
-            "--file-witness",
-            data_path.as_str(),
-            "--on-chain-witness",
-            test_on_chain_data_path.as_str(),
-            "-M",
-            model_path.as_str(),
-            circuit_settings.as_str(),
+            deployed_addr_arg.as_str(),
+            uses_data_attestation.as_str(),
+            rpc_arg.as_str(),
         ];
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(&args)
