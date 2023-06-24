@@ -82,7 +82,7 @@ pub async fn setup_eth_backend(
 
     Ok((anvil, client))
 }
-
+///
 pub async fn deploy_verifier_via_yul(
     yul_code_path: PathBuf,
     rpc_url: Option<&str>,
@@ -103,7 +103,7 @@ pub async fn deploy_verifier_via_yul(
     let addr = contract.address();
     Ok(addr)
 }
-
+///
 pub async fn deploy_verifier_via_solidity(
     sol_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
@@ -138,6 +138,7 @@ pub async fn deploy_verifier_via_solidity(
     Ok(addr)
 }
 
+///
 pub async fn deploy_da_verifier_via_solidity(
     settings_path: PathBuf,
     witness: PathBuf,
@@ -790,7 +791,7 @@ pub fn fix_verifier_sol(
     // get the max transcript addr
     let max_transcript_addr = transcript_addrs.iter().max().unwrap() / 32;
 
-    let mut contract = if input_data.is_some() || output_data.is_some() {
+    let contract = if input_data.is_some() || output_data.is_some() {
         let mut accounts_len = 0;
         let mut contract = match std::fs::read_to_string("./contracts/AttestData.sol") {
             Ok(file_content) => file_content,
@@ -843,8 +844,8 @@ pub fn fix_verifier_sol(
     );
 
     // Find the index of "assembly {"
-    let end_index = match contract.find("assembly {") {
-        Some(index) => index,
+    let end_index = match contract.find("assembly { /* This is where the proof verification happens*/ }") {
+        Some(index) => index + 10,
         None => {
             panic!("assembly {{ not found in the contract");
         }
@@ -864,23 +865,25 @@ pub fn fix_verifier_sol(
     }
     writeln!(write, "}} return success; }} }}")?;
 
+    print!("{}", contract_slice_string);
+
     // free memory pointer initialization
     let mut offset = 128;
 
     // replace all mload(add(pubInputs, 0x...))) with mload(0x...
-    contract = replace_vars_with_offset(&contract, r"add\(pubInputs, (0x[0-9a-fA-F]+)\)", offset);
+    contract_slice_string = replace_vars_with_offset(&contract_slice_string, r"add\(pubInputs, (0x[0-9a-fA-F]+)\)", offset);
 
     offset += 32 * num_pubinputs + 32;
 
     // replace all mload(add(proof, 0x...))) with mload(0x...
-    contract = replace_vars_with_offset(&contract, r"add\(proof, (0x[0-9a-fA-F]+)\)", offset);
+    contract_slice_string = replace_vars_with_offset(&contract_slice_string, r"add\(proof, (0x[0-9a-fA-F]+)\)", offset);
 
     offset += 32 * proof_size + 32;
 
     // replace all (add(transcript, 0x...))) with (0x...)
-    contract = replace_vars_with_offset(&contract, r"add\(transcript, (0x[0-9a-fA-F]+)\)", offset);
+    contract_slice_string = replace_vars_with_offset(&contract_slice_string, r"add\(transcript, (0x[0-9a-fA-F]+)\)", offset);
 
-    Ok(contract)
+    Ok(contract_slice_string)
 }
 
 fn replace_vars_with_offset(contract: &str, regex_pattern: &str, offset: u32) -> String {

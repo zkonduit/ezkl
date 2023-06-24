@@ -1650,7 +1650,7 @@ mod native_tests {
 
         let opt_arg = format!("--optimizer-runs={}", num_runs);
 
-        let sol_arg = format!("kzg_{}.sol", example_name);
+        let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
         let sol_bytecode_arg = format!("{}/{}/kzg.code", test_dir, example_name);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))

@@ -8,9 +8,7 @@ contract Verifier {
     ) public view returns (bool) {
         bool success = true;
         bytes32[] memory transcript;
-        assembly {
-            // This is where the proof verification happens
-        }
+        assembly { /* This is where the proof verification happens*/ }
         return success;
     }
 }

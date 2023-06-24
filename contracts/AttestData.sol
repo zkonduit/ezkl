@@ -153,9 +153,7 @@ contract DataAttestationVerifier {
         bool success = true;
         bytes32[758] memory transcript;
         attestData(pubInputs);
-        assembly {
-            // This is where the proof verification happens
-        }
+        assembly { /* This is where the proof verification happens*/ }
         return success;
     }
 }
