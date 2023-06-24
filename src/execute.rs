@@ -895,9 +895,7 @@ fn create_evm_data_attestation_verifier(
             _ => panic!("data source of output_data must be from on-chain for public output data."),
         };
 
-        let output_scales = settings.model_output_scales;
-
-        Some((output_scales[0], on_chain_output_data))
+        Some(on_chain_output_data)
     } else {
         None
     };

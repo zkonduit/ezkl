@@ -540,7 +540,7 @@ use std::io::{BufRead, BufReader};
 pub fn fix_verifier_sol(
     input_file: PathBuf,
     input_data: Option<(u32, Vec<CallsToAccount>)>,
-    output_data: Option<(u32, Vec<CallsToAccount>)>,
+    output_data: Option<Vec<CallsToAccount>>,
 ) -> Result<String, Box<dyn Error>> {
     let file = File::open(input_file.clone())?;
     let reader = BufReader::new(file);
@@ -815,13 +815,8 @@ pub fn fix_verifier_sol(
             );
         }
         if let Some(output_data) = output_data {
-            let output_calls: usize = output_data.1.iter().map(|v| v.call_data.len()).sum();
-            let output_scale = output_data.0;
-            accounts_len += output_data.1.len();
-            contract = contract.replace(
-                "uint constant public OUTPUT_SCALE = 1<<0;",
-                &format!("uint constant public OUTPUT_SCALE = 1<<{};", output_scale),
-            );
+            let output_calls: usize = output_data.iter().map(|v| v.call_data.len()).sum();
+            accounts_len += output_data.len();
             contract = contract.replace(
                 "uint256 constant OUTPUT_CALLS = 0;",
                 &format!("uint256 constant OUTPUT_CALLS = {};", output_calls),
