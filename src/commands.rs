@@ -1,4 +1,5 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
+#[cfg(not(target_arch = "wasm32"))]
 use ethers::types::H160;
 #[cfg(feature = "python-bindings")]
 use pyo3::{
@@ -392,7 +393,7 @@ pub enum Commands {
         #[arg(long)]
         settings_path: Option<PathBuf>,
     },
-
+    #[cfg(not(target_arch = "wasm32"))]
     SetupTestEVMWitness {
         /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'W', long)]

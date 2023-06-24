@@ -17,6 +17,9 @@
         "allocated_constraints": null
     },
     "num_constraints": 24,
+    "model_output_scales": [
+        7
+    ],
     "model_instance_shapes": [
         [
             1,

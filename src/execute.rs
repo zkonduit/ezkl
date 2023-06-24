@@ -2,6 +2,7 @@ use crate::circuit::CheckMode;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::commands::{CalibrationTarget, StrategyType};
 use crate::commands::{Cli, Commands, RunArgs};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{
     deploy_da_verifier_via_solidity, deploy_verifier_via_solidity, deploy_verifier_via_yul,
 };
@@ -278,6 +279,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             )
             .await
         }
+        #[cfg(not(target_arch = "wasm32"))]
         Commands::DeployEvmDataAttestationVerifier {
             witness,
             settings_path,
@@ -931,6 +933,7 @@ fn create_evm_data_attestation_verifier(
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn deploy_da_evm(
     witness: PathBuf,
     settings_path: PathBuf,
@@ -949,6 +952,7 @@ pub(crate) async fn deploy_da_evm(
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn deploy_evm(
     yul_code_path: Option<PathBuf>,
     sol_code_path: Option<PathBuf>,
