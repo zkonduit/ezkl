@@ -22,6 +22,7 @@
     missing_debug_implementations,
     unsafe_code
 )]
+#![feature(lint_reasons)]
 
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!
@@ -31,9 +32,11 @@ pub mod circuit;
 /// CLI commands.
 pub mod commands;
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(missing_docs, reason = "abigen doesn't generate docs for this module")]
 /// Utility functions for contracts
 pub mod eth;
 /// Command execution
+///
 pub mod execute;
 /// Utilities for converting from Halo2 Field types to integers (and vice-versa).
 pub mod fieldutils;

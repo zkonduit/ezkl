@@ -523,27 +523,7 @@ mod native_tests {
                 "max",
             ];
 
-            /// Not all models will pass VerifyEVM because their contract size exceeds the limit, so we only
-            /// specify those that will
-            const TESTS_SOLIDITY: [&str; 16] = [
-                "1l_mlp",
-                "1l_average",
-                "1l_reshape",
-                "1l_sigmoid",
-                "1l_div",
-                "1l_sqrt",
-                // "1l_prelu",
-                "1l_var",
-                "1l_leakyrelu",
-                "1l_gelu_noappx",
-                "1l_relu",
-                "1l_tanh",
-                "2l_relu_sigmoid_small",
-                "2l_relu_small",
-                "2l_relu_fc",
-                "min",
-                "max",
-            ];
+
 
             seq!(N in 0..= 10 {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
@@ -570,7 +550,7 @@ mod native_tests {
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "public", 1);
+                    kzg_evm_prove_and_verify(test.to_string(), "private", "private", "public", 1);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -579,7 +559,7 @@ mod native_tests {
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "hashed", "private", "private", 1);
+                    kzg_evm_prove_and_verify(test.to_string(), "hashed", "private", "private", 1);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -588,7 +568,7 @@ mod native_tests {
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "hashed", "public", 1);
+                    kzg_evm_prove_and_verify(test.to_string(), "private", "hashed", "public", 1);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -597,7 +577,7 @@ mod native_tests {
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test), "private", "private", "hashed", 1);
+                    kzg_evm_prove_and_verify(test.to_string(), "private", "private", "hashed", 1);
                 }
 
 
@@ -617,7 +597,7 @@ mod native_tests {
                     crate::native_tests::init_params_23();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_aggr_prove_and_verify(test.to_string(), TESTS_SOLIDITY.contains(&test));
+                    kzg_evm_aggr_prove_and_verify(test.to_string());
                 }
 
             });
@@ -980,7 +960,7 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_evm_aggr_prove_and_verify(example_name: String, with_solidity: bool) {
+    fn kzg_evm_aggr_prove_and_verify(example_name: String) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1099,24 +1079,24 @@ mod native_tests {
         let vk_arg = format!("{}/{}/evm_aggr.vk", test_dir, example_name);
 
         fn build_args<'a>(
-            with_solidity: bool,
             base_args: Vec<&'a str>,
             sol_arg: &'a str,
             sol_bytecode_arg: &'a str,
         ) -> Vec<&'a str> {
             let mut args = base_args;
 
-            if with_solidity {
-                args.push("--sol-code-path");
-                args.push(sol_arg);
-                args.push("--sol-bytecode-path");
-                args.push(sol_bytecode_arg);
-            }
+            args.push("--sol-code-path");
+            args.push(sol_arg);
+            args.push("--sol-bytecode-path");
+            args.push(sol_bytecode_arg);
+
             args
         }
 
         let sol_arg = format!("{}/{}/kzg_aggr.sol", test_dir, example_name);
         let sol_bytecode_arg = format!("{}/{}/kzg_aggr.code", test_dir, example_name);
+        let addr_path_arg = format!("--addr-path={}/{}/addr.txt", test_dir, example_name);
+        let rpc_arg = format!("--rpc-url={}", *ANVIL_URL);
 
         let base_args = vec![
             "create-evm-verifier-aggr",
@@ -1128,7 +1108,7 @@ mod native_tests {
             "--optimizer-runs=1",
         ];
 
-        let args = build_args(with_solidity, base_args, &sol_arg, &sol_bytecode_arg);
+        let args = build_args(base_args, &sol_arg, &sol_bytecode_arg);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(args)
@@ -1136,25 +1116,44 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let pf_arg = format!("{}/{}/evm_aggr.pf", test_dir, example_name);
-
-        let base_args = vec![
-            "verify-evm",
-            "--proof-path",
-            pf_arg.as_str(),
-            "--deployment-code-path",
-            code_arg.as_str(),
+        // deploy the verifier
+        let args = vec![
+            "deploy-evm-verifier",
+            rpc_arg.as_str(),
+            addr_path_arg.as_str(),
+            "--sol-code-path",
+            sol_arg.as_str(),
         ];
-
-        let mut args = build_args(with_solidity, base_args, &sol_arg, &sol_bytecode_arg);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(&args)
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+
+        // read in the address
+        let addr = std::fs::read_to_string(format!("{}/{}/addr.txt", test_dir, example_name))
+            .expect("failed to read address file");
+
+        let deployed_addr_arg = format!("--addr={}", addr);
+
+        let pf_arg = format!("{}/{}/evm_aggr.pf", test_dir, example_name);
+
+        let mut base_args = vec![
+            "verify-evm",
+            "--proof-path",
+            pf_arg.as_str(),
+            deployed_addr_arg.as_str(),
+            rpc_arg.as_str(),
+        ];
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(&base_args)
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
         // As sanity check, add example that should fail.
-        args[2] = PF_FAILURE_AGGR;
+        base_args[2] = PF_FAILURE_AGGR;
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(args)
             .status()
@@ -1338,7 +1337,6 @@ mod native_tests {
     // prove-serialize-verify, the usual full path
     fn kzg_evm_prove_and_verify(
         example_name: String,
-        with_solidity: bool,
         input_visibility: &str,
         param_visibility: &str,
         output_visibility: &str,
@@ -1464,15 +1462,13 @@ mod native_tests {
         let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
         let sol_bytecode_arg = format!("{}/{}/kzg.code", test_dir, example_name);
 
-        if with_solidity {
-            args.push("--sol-code-path");
-            args.push(sol_arg.as_str());
-            args.push("--sol-bytecode-path");
-            args.push(sol_bytecode_arg.as_str());
-        } else {
-            args.push("--deployment-code-path");
-            args.push(code_arg.as_str());
-        }
+        // create everything to test the pipeline
+        args.push("--sol-code-path");
+        args.push(sol_arg.as_str());
+        args.push("--sol-bytecode-path");
+        args.push(sol_bytecode_arg.as_str());
+        args.push("--deployment-code-path");
+        args.push(code_arg.as_str());
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(&args)
@@ -1487,13 +1483,8 @@ mod native_tests {
             addr_path_arg.as_str(),
         ];
 
-        if with_solidity {
-            args.push("--sol-code-path");
-            args.push(sol_arg.as_str());
-        } else {
-            args.push("--deployment-code-path");
-            args.push(code_arg.as_str());
-        }
+        args.push("--sol-code-path");
+        args.push(sol_arg.as_str());
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(&args)
@@ -1664,7 +1655,7 @@ mod native_tests {
                 param_arg.as_str(),
                 "--vk-path",
                 vk_arg.as_str(),
-                "--data",
+                "-W",
                 test_on_chain_data_path.as_str(),
                 opt_arg.as_str(),
             ])

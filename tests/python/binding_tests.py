@@ -3,6 +3,10 @@ import os
 import pytest
 import json
 import asyncio
+import subprocess
+
+# requries an anvil install
+proc = subprocess.Popen(["anvil", "-p", "3030"])
 
 folder_path = os.path.abspath(
     os.path.join(
@@ -23,6 +27,7 @@ examples_path = os.path.abspath(
 srs_path = os.path.join(folder_path, 'kzg_test.params')
 params_k17_path = os.path.join(folder_path, 'kzg_test_k17.params')
 params_k20_path = os.path.join(folder_path, 'kzg_test_k20.params')
+anvil_url = "http://localhost:3030"
 
 
 def test_table_1l_average():
@@ -276,7 +281,6 @@ def test_prove_and_verify():
         "poseidon",
         "single",
         settings_path,
-        None,
     )
     assert res == True
     assert os.path.isfile(proof_path)
@@ -318,7 +322,6 @@ def test_prove_evm():
         "evm",
         "single",
         settings_path,
-        None,
     )
     assert res == True
     assert os.path.isfile(proof_path)
@@ -351,20 +354,46 @@ def test_create_evm_verifier():
     assert os.path.isfile(sol_code_path)
 
 
+def test_deploy_evm():
+    """
+    Verifies an evm proof
+    In order to run this you will need to install solc in your environment
+    """
+    addr_path = os.path.join(folder_path, 'address.json')
+    sol_code_path = os.path.join(folder_path, 'test.sol')
+
+    # TODO: without optimization there will be out of gas errors
+    # sol_code_path = os.path.join(folder_path, 'test.sol')
+
+    res = ezkl_lib.deploy_evm(
+        addr_path,
+        sol_code_path,
+        rpc_url=anvil_url,
+    )
+
+    assert res == True
+
+
 def test_verify_evm():
     """
     Verifies an evm proof
     In order to run this you will need to install solc in your environment
     """
     proof_path = os.path.join(folder_path, 'test_evm.pf')
-    deployment_code_path = os.path.join(folder_path, 'deploy.code')
+    addr_path = os.path.join(folder_path, 'address.json')
+
+    with open(addr_path, 'r') as file:
+        addr = file.read().rstrip()
+
+    print(addr)
 
     # TODO: without optimization there will be out of gas errors
     # sol_code_path = os.path.join(folder_path, 'test.sol')
 
     res = ezkl_lib.verify_evm(
         proof_path,
-        deployment_code_path,
+        addr,
+        rpc_url=anvil_url,
         # sol_code_path
         # optimizer_runs
     )
@@ -420,7 +449,6 @@ async def aggregate_and_verify_aggr():
         "poseidon",
         "accum",
         settings_path,
-        None,
     )
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')
@@ -509,7 +537,6 @@ async def evm_aggregate_and_verify_aggr():
         "poseidon",
         "accum",
         settings_path,
-        None
     )
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')
@@ -548,12 +575,23 @@ async def evm_aggregate_and_verify_aggr():
     assert os.path.isfile(sol_code_path)
     assert os.path.isfile(sol_bytecode_path)
 
-    res = ezkl_lib.verify_aggr(
-        aggregate_proof_path,
-        aggregate_vk_path,
-        params_k20_path,
-        20,
+    addr_path = os.path.join(folder_path, 'address_aggr.json')
+
+    res = ezkl_lib.deploy_evm(
+        addr_path,
+        sol_code_path,
+        rpc_url=anvil_url,
     )
+
+    with open(addr_path, 'r') as file:
+        addr_aggr = file.read().rstrip()
+
+    res = ezkl_lib.verify_evm(
+        proof_path,
+        addr_aggr,
+        rpc_url=anvil_url,
+    )
+
     assert res == True
 
 
@@ -562,3 +600,6 @@ def test_evm_aggregate_and_verify_aggr():
     Tests for aggregated proof and verifying aggregate proof
     """
     asyncio.run(evm_aggregate_and_verify_aggr())
+
+
+proc.terminate()

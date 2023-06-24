@@ -2,15 +2,16 @@ use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::{CalibrationTarget, RunArgs, StrategyType};
 use crate::graph::{Model, Visibility};
 use crate::pfsys::{save_params, srs::gen_srs as ezkl_gen_srs, Snark, TranscriptType};
+use ethers::types::H160;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2curves::bn256::Bn256;
 use pyo3::exceptions::{PyIOError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3_log;
+use std::str::FromStr;
 use std::{fs::File, path::PathBuf};
 use tokio::runtime::Runtime;
-
 /// pyclass containing the struct used for run_args
 #[pyclass]
 #[derive(Clone)]
@@ -244,7 +245,6 @@ fn setup(
     transcript,
     strategy,
     settings_path,
-    test_on_chain_witness=None,
 ))]
 fn prove(
     witness: PathBuf,
@@ -255,7 +255,6 @@ fn prove(
     transcript: TranscriptType,
     strategy: StrategyType,
     settings_path: PathBuf,
-    test_on_chain_witness: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     Runtime::new()
         .unwrap()
@@ -269,7 +268,6 @@ fn prove(
             strategy,
             settings_path,
             CheckMode::UNSAFE,
-            test_on_chain_witness,
         ))
         .map_err(|e| {
             let err_str = format!("Failed to run prove: {}", e);
@@ -369,8 +367,8 @@ fn verify_aggr(
     vk_path,
     srs_path,
     settings_path,
-    deployment_code_path,
-    sol_code_path=None,
+    sol_code_path,
+    deployment_code_path = None,
     sol_bytecode_path=None,
     runs=None,
 ))]
@@ -378,8 +376,8 @@ fn create_evm_verifier(
     vk_path: PathBuf,
     srs_path: PathBuf,
     settings_path: PathBuf,
-    deployment_code_path: PathBuf,
-    sol_code_path: Option<PathBuf>,
+    sol_code_path: PathBuf,
+    deployment_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
 ) -> Result<bool, PyErr> {
@@ -387,8 +385,8 @@ fn create_evm_verifier(
         vk_path,
         srs_path,
         settings_path,
-        deployment_code_path,
         sol_code_path,
+        deployment_code_path,
         sol_bytecode_path,
         runs,
     )
@@ -400,38 +398,122 @@ fn create_evm_verifier(
     Ok(true)
 }
 
+// creates an EVM compatible data attestation verifier, you will need solc installed in your environment to run this
+#[pyfunction(signature = (
+    vk_path,
+    srs_path,
+    settings_path,
+    sol_code_path,
+    witness,
+    sol_bytecode_path=None,
+    runs=None,
+))]
+fn create_evm_data_attestation_verifier(
+    vk_path: PathBuf,
+    srs_path: PathBuf,
+    settings_path: PathBuf,
+    sol_code_path: PathBuf,
+    witness: PathBuf,
+    sol_bytecode_path: Option<PathBuf>,
+    runs: Option<usize>,
+) -> Result<bool, PyErr> {
+    crate::execute::create_evm_data_attestation_verifier(
+        vk_path,
+        srs_path,
+        settings_path,
+        sol_code_path,
+        witness,
+        sol_bytecode_path,
+        runs,
+    )
+    .map_err(|e| {
+        let err_str = format!("Failed to run create_evm_data_attestation_verifier: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
+
+    Ok(true)
+}
+
+#[pyfunction(signature = (
+    addr_path,
+    sol_code_path,
+    rpc_url=None,
+))]
+fn deploy_evm(
+    addr_path: PathBuf,
+    sol_code_path: PathBuf,
+    rpc_url: Option<String>,
+) -> Result<bool, PyErr> {
+    Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::deploy_evm(
+            sol_code_path,
+            rpc_url,
+            addr_path,
+        ))
+        .map_err(|e| {
+            let err_str = format!("Failed to run deploy_evm: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
+
+    Ok(true)
+}
+
+#[pyfunction(signature = (
+    addr_path,
+    witness,
+    settings_path,
+    sol_code_path,
+    rpc_url=None,
+))]
+fn deploy_da_evm(
+    addr_path: PathBuf,
+    witness: PathBuf,
+    settings_path: PathBuf,
+    sol_code_path: PathBuf,
+    rpc_url: Option<String>,
+) -> Result<bool, PyErr> {
+    Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::deploy_da_evm(
+            witness,
+            settings_path,
+            sol_code_path,
+            rpc_url,
+            addr_path,
+        ))
+        .map_err(|e| {
+            let err_str = format!("Failed to run deploy_da_evm: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
+
+    Ok(true)
+}
 /// verifies an evm compatible proof, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
     proof_path,
-    deployment_code_path,
-    sol_code_path=None,
-    sol_bytecode_path=None,
-    file_witness=None,
-    on_chain_witness=None,
-    model=None,
-    settings_path=None,
+    addr,
+    rpc_url=None,
+    data_attestation = false,
 ))]
 fn verify_evm(
     proof_path: PathBuf,
-    deployment_code_path: Option<PathBuf>,
-    sol_code_path: Option<PathBuf>,
-    sol_bytecode_path: Option<PathBuf>,
-    file_witness: Option<PathBuf>,
-    on_chain_witness: Option<PathBuf>,
-    model: Option<PathBuf>,
-    settings_path: Option<PathBuf>
+    addr: &str,
+    rpc_url: Option<String>,
+    data_attestation: bool,
 ) -> Result<bool, PyErr> {
+    let addr = H160::from_str(addr).map_err(|e| {
+        let err_str = format!("address is invalid: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
+
     Runtime::new()
         .unwrap()
         .block_on(crate::execute::verify_evm(
             proof_path,
-            deployment_code_path,
-            sol_code_path,
-            sol_bytecode_path,
-            file_witness,
-            on_chain_witness,
-            model,
-            settings_path,
+            addr,
+            rpc_url,
+            data_attestation,
         ))
         .map_err(|e| {
             let err_str = format!("Failed to run verify_evm: {}", e);
@@ -445,24 +527,24 @@ fn verify_evm(
 #[pyfunction(signature = (
     vk_path,
     srs_path,
-    deployment_code_path,
-    sol_code_path=None,
+    sol_code_path,
+    deployment_code_path=None,
     sol_bytecode_path=None,
     runs=None,
 ))]
 fn create_evm_verifier_aggr(
     vk_path: PathBuf,
     srs_path: PathBuf,
+    sol_code_path: PathBuf,
     deployment_code_path: Option<PathBuf>,
-    sol_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_aggregate_verifier(
         vk_path,
         srs_path,
-        deployment_code_path,
         sol_code_path,
+        deployment_code_path,
         sol_bytecode_path,
         runs,
     )
@@ -508,9 +590,12 @@ fn ezkl_lib(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(aggregate, m)?)?;
     m.add_function(wrap_pyfunction!(verify_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
+    m.add_function(wrap_pyfunction!(deploy_evm, m)?)?;
+    m.add_function(wrap_pyfunction!(deploy_da_evm, m)?)?;
     m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
-    m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(print_proof_hex, m)?)?;
+    m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
+    m.add_function(wrap_pyfunction!(create_evm_data_attestation_verifier, m)?)?;
 
     Ok(())
 }

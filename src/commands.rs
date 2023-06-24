@@ -469,12 +469,12 @@ pub enum Commands {
         /// The path to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
-        /// The path to the compiled yul bytecode code
-        #[arg(long, default_value = "evm_deploy.yul")]
-        deployment_code_path: PathBuf,
         /// The path to output the Solidity code
         #[arg(long, default_value = "evm_deploy.sol")]
-        sol_code_path: Option<PathBuf>,
+        sol_code_path: PathBuf,
+        /// The path to the compiled yul bytecode code
+        #[arg(long, default_value = "evm_deploy.yul")]
+        deployment_code_path: Option<PathBuf>,
         /// The path to output the compiled Solidity bytecode
         #[arg(long, default_value = "evm_deploy.sol.bin")]
         sol_bytecode_path: Option<PathBuf>,
@@ -509,13 +509,13 @@ pub enum Commands {
         /// If not set will just use the default unoptimized SOLC configuration.
         #[arg(long)]
         optimizer_runs: Option<usize>,
-        /// The path to the .json data file, which should
+        /// The path to the .json witness file, which should
         /// contain the necessary calldata and accoount addresses  
         /// needed need to read from all the on-chain
         /// view functions that return the data that the network
         /// ingests as inputs.
         #[arg(short = 'W', long)]
-        data: PathBuf,
+        witness: PathBuf,
         // todo, optionally allow supplying proving key
     },
 
@@ -529,12 +529,12 @@ pub enum Commands {
         /// The path to output to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
+        /// The path to the Solidity code
+        #[arg(long, default_value = "evm_deploy_aggr.sol")]
+        sol_code_path: PathBuf,
         /// The path to the compiled yul bytecode code
         #[arg(long, default_value = "evm_deploy_aggr.yul")]
         deployment_code_path: Option<PathBuf>,
-        /// The path to the Solidity code
-        #[arg(long, default_value = "evm_deploy_aggr.sol")]
-        sol_code_path: Option<PathBuf>,
         /// The path to output the compiled Solidity bytecode
         #[arg(long, default_value = "evm_deploy_aggr.sol.bin")]
         sol_bytecode_path: Option<PathBuf>,
@@ -579,15 +579,9 @@ pub enum Commands {
     },
     #[cfg(not(target_arch = "wasm32"))]
     DeployEvmVerifier {
-        /// The path to verifier contract's deployment code
-        #[arg(long, conflicts_with_all = ["sol_bytecode_path", "sol_code_path"])]
-        deployment_code_path: Option<PathBuf>,
         /// The path to the Solidity code
-        #[arg(long, conflicts_with_all = ["sol_bytecode_path"])]
-        sol_code_path: Option<PathBuf>,
-        /// The path to output the compiled Solidity bytecode
         #[arg(long)]
-        sol_bytecode_path: Option<PathBuf>,
+        sol_code_path: PathBuf,
         /// rpc url
         #[arg(short = 'U', long)]
         rpc_url: Option<String>,

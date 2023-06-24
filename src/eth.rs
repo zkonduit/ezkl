@@ -103,36 +103,38 @@ pub async fn deploy_verifier_via_yul(
     let addr = contract.address();
     Ok(addr)
 }
+
+// keep this for now in case we want to use solidity bytecode
+// async fn deploy_verifier_via_solidity_bytecode(
+//     sol_bytecode_path: PathBuf,
+//     rpc_url: Option<&str>,
+// ) -> Result<ethers::types::Address, Box<dyn Error>> {
+//     let (_, client) = setup_eth_backend(rpc_url).await?;
+
+//     let bytecode = DeploymentCode::load(&sol_bytecode_path)?;
+//     let factory = ContractFactory::new(
+//         // our constructor is empty and ContractFactory only uses the abi constructor -- so this should be safe
+//         Abi::default(),
+//         (bytecode.code().clone()).into(),
+//         client.clone(),
+//     );
+
+//     let contract = factory.deploy(())?.send().await?;
+//     let addr = contract.address();
+//     Ok(addr)
+// }
+
 ///
 pub async fn deploy_verifier_via_solidity(
-    sol_code_path: Option<PathBuf>,
-    sol_bytecode_path: Option<PathBuf>,
+    sol_code_path: PathBuf,
     rpc_url: Option<&str>,
 ) -> Result<ethers::types::Address, Box<dyn Error>> {
     let (_, client) = setup_eth_backend(rpc_url).await?;
 
-    // sol code supercedes deployment code
-    let factory = match sol_code_path {
-        Some(path) => {
-            let (abi, bytecode, runtime_bytecode) =
-                get_contract_artifacts(path, "Verifier", None).unwrap();
-            get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone()).unwrap()
-        }
-        None => match sol_bytecode_path {
-            Some(path) => {
-                let bytecode = DeploymentCode::load(&path)?;
-                ContractFactory::new(
-                    // our constructor is empty and ContractFactory only uses the abi constructor -- so this should be safe
-                    Abi::default(),
-                    (bytecode.code().clone()).into(),
-                    client.clone(),
-                )
-            }
-            None => {
-                panic!("at least one path should be set");
-            }
-        },
-    };
+    let (abi, bytecode, runtime_bytecode) =
+        get_contract_artifacts(sol_code_path, "Verifier", None)?;
+    let factory = get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone())?;
+
     let contract = factory.deploy(())?.send().await?;
     let addr = contract.address();
     Ok(addr)
@@ -180,7 +182,6 @@ pub async fn deploy_da_verifier_via_solidity(
         }
         _ => (),
     };
-    print!("scales: {:#?}", scales);
 
     let (contract_addresses, call_data, decimals) = if !calls_to_accounts.is_empty() {
         let mut contract_addresses = vec![];
@@ -267,8 +268,6 @@ pub async fn verify_proof_via_solidity(
     if !result {
         return Err(Box::new(EvmVerificationError::InvalidProof));
     }
-
-    println!("result: {:#?}", result);
 
     drop(anvil);
     Ok(result)
@@ -839,12 +838,13 @@ pub fn fix_verifier_sol(
     );
 
     // Find the index of "assembly {"
-    let end_index = match contract.find("assembly { /* This is where the proof verification happens*/ }") {
-        Some(index) => index + 10,
-        None => {
-            panic!("assembly {{ not found in the contract");
-        }
-    };
+    let end_index =
+        match contract.find("assembly { /* This is where the proof verification happens*/ }") {
+            Some(index) => index + 10,
+            None => {
+                panic!("assembly {{ not found in the contract");
+            }
+        };
 
     // Take a slice from the start of the contract string up to the "assembly {" position
     let contract_slice = &contract[..end_index];
@@ -860,23 +860,33 @@ pub fn fix_verifier_sol(
     }
     writeln!(write, "}} return success; }} }}")?;
 
-    print!("{}", contract_slice_string);
-
     // free memory pointer initialization
     let mut offset = 128;
 
     // replace all mload(add(pubInputs, 0x...))) with mload(0x...
-    contract_slice_string = replace_vars_with_offset(&contract_slice_string, r"add\(pubInputs, (0x[0-9a-fA-F]+)\)", offset);
+    contract_slice_string = replace_vars_with_offset(
+        &contract_slice_string,
+        r"add\(pubInputs, (0x[0-9a-fA-F]+)\)",
+        offset,
+    );
 
     offset += 32 * num_pubinputs + 32;
 
     // replace all mload(add(proof, 0x...))) with mload(0x...
-    contract_slice_string = replace_vars_with_offset(&contract_slice_string, r"add\(proof, (0x[0-9a-fA-F]+)\)", offset);
+    contract_slice_string = replace_vars_with_offset(
+        &contract_slice_string,
+        r"add\(proof, (0x[0-9a-fA-F]+)\)",
+        offset,
+    );
 
     offset += 32 * proof_size + 32;
 
     // replace all (add(transcript, 0x...))) with (0x...)
-    contract_slice_string = replace_vars_with_offset(&contract_slice_string, r"add\(transcript, (0x[0-9a-fA-F]+)\)", offset);
+    contract_slice_string = replace_vars_with_offset(
+        &contract_slice_string,
+        r"add\(transcript, (0x[0-9a-fA-F]+)\)",
+        offset,
+    );
 
     Ok(contract_slice_string)
 }

@@ -3,9 +3,7 @@ use crate::circuit::CheckMode;
 use crate::commands::{CalibrationTarget, StrategyType};
 use crate::commands::{Cli, Commands, RunArgs};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::eth::{
-    deploy_da_verifier_via_solidity, deploy_verifier_via_solidity, deploy_verifier_via_yul,
-};
+use crate::eth::{deploy_da_verifier_via_solidity, deploy_verifier_via_solidity};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{fix_verifier_sol, get_contract_artifacts, verify_proof_via_solidity};
 use crate::graph::input::{DataSource, GraphInput};
@@ -150,8 +148,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             vk_path,
             srs_path,
             settings_path,
-            deployment_code_path,
             sol_code_path,
+            deployment_code_path,
             sol_bytecode_path,
             optimizer_runs,
         ),
@@ -163,15 +161,15 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             sol_code_path,
             sol_bytecode_path,
             optimizer_runs,
-            data,
+            witness,
         } => create_evm_data_attestation_verifier(
             vk_path,
             srs_path,
             settings_path,
             sol_code_path,
+            witness,
             sol_bytecode_path,
             optimizer_runs,
-            data,
         ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifierAggr {
@@ -184,8 +182,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => create_evm_aggregate_verifier(
             vk_path,
             srs_path,
-            deployment_code_path,
             sol_code_path,
+            deployment_code_path,
             sol_bytecode_path,
             optimizer_runs,
         ),
@@ -264,21 +262,10 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => verify_aggr(proof_path, vk_path, srs_path, logrows),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::DeployEvmVerifier {
-            deployment_code_path,
             sol_code_path,
-            sol_bytecode_path,
             rpc_url,
             addr_path,
-        } => {
-            deploy_evm(
-                deployment_code_path,
-                sol_code_path,
-                sol_bytecode_path,
-                rpc_url,
-                addr_path,
-            )
-            .await
-        }
+        } => deploy_evm(sol_code_path, rpc_url, addr_path).await,
         #[cfg(not(target_arch = "wasm32"))]
         Commands::DeployEvmDataAttestationVerifier {
             witness,
@@ -819,8 +806,8 @@ pub(crate) fn create_evm_verifier(
     vk_path: PathBuf,
     srs_path: PathBuf,
     settings_path: PathBuf,
-    deployment_code_path: PathBuf,
-    sol_code_path: Option<PathBuf>,
+    sol_code_path: PathBuf,
+    deployment_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
@@ -833,37 +820,37 @@ pub(crate) fn create_evm_verifier(
     trace!("params computed");
 
     let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
-    let deployment_code = gen_deployment_code(yul_code.clone()).unwrap();
-    deployment_code.save(&deployment_code_path)?;
 
-    if sol_code_path.is_some() {
-        let mut f = File::create(sol_code_path.as_ref().unwrap())?;
-        let _ = f.write(yul_code.as_bytes());
-
-        let output = fix_verifier_sol(sol_code_path.as_ref().unwrap().clone(), None, None)?;
-
-        let mut f = File::create(sol_code_path.as_ref().unwrap())?;
-        let _ = f.write(output.as_bytes());
-
-        if sol_bytecode_path.is_some() {
-            let sol_bytecode =
-                gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), "Verifier", runs)
-                    .unwrap();
-            sol_bytecode.save(&sol_bytecode_path.unwrap())?;
-        }
+    if let Some(deployment_code_path) = deployment_code_path {
+        let deployment_code = gen_deployment_code(yul_code.clone()).unwrap();
+        deployment_code.save(&deployment_code_path)?;
     }
+
+    let mut f = File::create(sol_code_path.clone())?;
+    let _ = f.write(yul_code.as_bytes());
+
+    let output = fix_verifier_sol(sol_code_path.clone(), None, None)?;
+
+    let mut f = File::create(sol_code_path.clone())?;
+    let _ = f.write(output.as_bytes());
+
+    if sol_bytecode_path.is_some() {
+        let sol_bytecode = gen_sol_bytecode(sol_code_path, "Verifier", runs).unwrap();
+        sol_bytecode.save(&sol_bytecode_path.unwrap())?;
+    }
+
     Ok(())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn create_evm_data_attestation_verifier(
+pub(crate) fn create_evm_data_attestation_verifier(
     vk_path: PathBuf,
     srs_path: PathBuf,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
+    witness: PathBuf,
     sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
-    data: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
     use crate::graph::VarVisibility;
 
@@ -882,7 +869,7 @@ fn create_evm_data_attestation_verifier(
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(yul_code.as_bytes());
 
-    let data = GraphWitness::from_path(data)?;
+    let data = GraphWitness::from_path(witness)?;
 
     let output_data = if visibility.output.is_public() {
         let mut on_chain_output_data = vec![];
@@ -952,21 +939,12 @@ pub(crate) async fn deploy_da_evm(
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn deploy_evm(
-    yul_code_path: Option<PathBuf>,
-    sol_code_path: Option<PathBuf>,
-    sol_bytecode_path: Option<PathBuf>,
+    sol_code_path: PathBuf,
     rpc_url: Option<String>,
     addr_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
-    // if all none
-    if yul_code_path.is_none() && sol_code_path.is_none() && sol_bytecode_path.is_none() {
-        return Err("Either deployment_code_path or sol_code_path must be provided.".into());
-    }
-    let contract_address = if let Some(path) = yul_code_path {
-        deploy_verifier_via_yul(path, rpc_url.as_deref()).await?
-    } else {
-        deploy_verifier_via_solidity(sol_code_path, sol_bytecode_path, rpc_url.as_deref()).await?
-    };
+    let contract_address = deploy_verifier_via_solidity(sol_code_path, rpc_url.as_deref()).await?;
+
     info!("Contract deployed at: {:#?}", contract_address);
 
     let mut f = File::create(addr_path)?;
@@ -1002,8 +980,8 @@ pub(crate) async fn verify_evm(
 pub(crate) fn create_evm_aggregate_verifier(
     vk_path: PathBuf,
     srs_path: PathBuf,
+    sol_code_path: PathBuf,
     deployment_code_path: Option<PathBuf>,
-    sol_code_path: Option<PathBuf>,
     sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
@@ -1017,25 +995,25 @@ pub(crate) fn create_evm_aggregate_verifier(
         AggregationCircuit::num_instance(),
         AggregationCircuit::accumulator_indices(),
     )?;
-    let deployment_code = gen_deployment_code(yul_code.clone()).unwrap();
-    deployment_code.save(deployment_code_path.as_ref().unwrap())?;
 
-    if sol_code_path.is_some() {
-        let mut f = File::create(sol_code_path.as_ref().unwrap())?;
-        let _ = f.write(yul_code.as_bytes());
-
-        let output = fix_verifier_sol(sol_code_path.as_ref().unwrap().clone(), None, None)?;
-
-        let mut f = File::create(sol_code_path.as_ref().unwrap())?;
-        let _ = f.write(output.as_bytes());
-
-        if sol_bytecode_path.is_some() {
-            let sol_bytecode =
-                gen_sol_bytecode(sol_code_path.as_ref().unwrap().clone(), "Verifier", runs)
-                    .unwrap();
-            sol_bytecode.save(&sol_bytecode_path.unwrap())?;
-        }
+    if let Some(deployment_code_path) = deployment_code_path {
+        let deployment_code = gen_deployment_code(yul_code.clone()).unwrap();
+        deployment_code.save(&deployment_code_path)?;
     }
+
+    let mut f = File::create(sol_code_path.clone())?;
+    let _ = f.write(yul_code.as_bytes());
+
+    let output = fix_verifier_sol(sol_code_path.clone(), None, None)?;
+
+    let mut f = File::create(sol_code_path.clone())?;
+    let _ = f.write(output.as_bytes());
+
+    if sol_bytecode_path.is_some() {
+        let sol_bytecode = gen_sol_bytecode(sol_code_path, "Verifier", runs).unwrap();
+        sol_bytecode.save(&sol_bytecode_path.unwrap())?;
+    }
+
     Ok(())
 }
 

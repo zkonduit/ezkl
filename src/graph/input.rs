@@ -527,8 +527,6 @@ mod tests {
 
         assert_eq!(serialized, JSON);
 
-        println!("serialized {:?}", serialized);
-
         let expect = serde_json::from_str::<DataSource>(JSON)
             .map_err(|e| e.to_string())
             .unwrap();
@@ -551,8 +549,6 @@ mod tests {
             r#"{"input_data":[[0.05326242372393608,0.07497056573629379,0.05235547572374344]]}"#;
 
         assert_eq!(serialized, JSON);
-
-        println!("serialized {:?}", serialized);
 
         let graph_input3 = serde_json::from_str::<GraphInput>(JSON)
             .map_err(|e| e.to_string())
