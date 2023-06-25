@@ -118,12 +118,14 @@ impl ElGamalChip {
             meta.fixed_column(),
             meta.fixed_column(),
             meta.fixed_column(),
+            meta.fixed_column(),
+            meta.fixed_column(),
         ];
 
         meta.enable_constant(fixed_columns[3]);
 
-        let rc_a = fixed_columns[0..2].try_into().unwrap();
-        let rc_b = fixed_columns[2..4].try_into().unwrap();
+        let rc_a = fixed_columns[0..3].try_into().unwrap();
+        let rc_b = fixed_columns[3..6].try_into().unwrap();
 
         let rns = Rns::<Fq, Fr, NUMBER_OF_LIMBS, BIT_LEN_LIMB>::construct();
 
@@ -139,7 +141,7 @@ impl ElGamalChip {
 
         let poseidon_config = PoseidonChip::configure::<PoseidonSpec>(
             meta,
-            advices[1..3].try_into().unwrap(),
+            advices[1..4].try_into().unwrap(),
             advices[0],
             rc_a,
             rc_b,
