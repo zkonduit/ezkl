@@ -361,7 +361,7 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
       - name: KZG prove and verify aggr tests
-        run: cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ -- --include-ignored --test-threads 8
+        run: cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ --test-threads 8 -- --include-ignored
 
   examples:
     runs-on: ubuntu-latest-32-cores
