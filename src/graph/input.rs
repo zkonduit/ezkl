@@ -476,12 +476,12 @@ impl<'de> Deserialize<'de> for DataSource {
 
         let first_try: Result<FileSourceInner, _> = serde_json::from_str(this_json.get());
 
-        if first_try.is_ok() {
-            return Ok(DataSource::File(first_try.unwrap()));
+        if let Ok(t) = first_try {
+            return Ok(DataSource::File(t));
         }
         let second_try: Result<OnChainSourceInner, _> = serde_json::from_str(this_json.get());
-        if second_try.is_ok() {
-            return Ok(DataSource::OnChain(second_try.unwrap()));
+        if let Ok(t) = second_try {
+            return Ok(DataSource::OnChain(t));
         }
 
         Err(serde::de::Error::custom("failed to deserialize DataSource"))

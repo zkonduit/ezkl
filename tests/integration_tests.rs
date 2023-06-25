@@ -533,11 +533,29 @@ mod native_tests {
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
                     kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, true, false);
+                }
+            });
+
+            seq!(N in 0..= 10 {
+                #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
+                fn kzg_evm_on_chain_output_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params_17();
+                    crate::native_tests::mv_test_(test);
+                    crate::native_tests::start_anvil();
                     kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, false, true);
-                    // TODO: This test is currently failing because need to find a way to
-                    // deploy a contract with a deterministic address. Can either use
-                    // create2 deployment or integrate the verifier factory.
-                    // kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, true, true);
+                }
+            });
+
+
+            seq!(N in 0..= 10 {
+                #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
+                fn kzg_evm_on_chain_input_output_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::init_params_17();
+                    crate::native_tests::mv_test_(test);
+                    crate::native_tests::start_anvil();
+                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, true, true);
                 }
             });
 
@@ -1680,7 +1698,7 @@ mod native_tests {
         assert!(status.success());
 
         let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
-        let uses_data_attestation = format!("--data-attestation");
+        let uses_data_attestation = "--data-attestation".to_string();
         // read in the address
         let addr = std::fs::read_to_string(format!("{}/{}/addr.txt", test_dir, example_name))
             .expect("failed to read address file");

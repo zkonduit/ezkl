@@ -160,28 +160,29 @@ pub async fn deploy_da_verifier_via_solidity(
     let instance_shapes = settings.model_instance_shapes;
 
     let mut instance_idx = 0;
-    match witness.input_data {
-        DataSource::OnChain(source) => {
-            for call in source.calls {
-                calls_to_accounts.push(call);
-                instance_idx += 1;
-            }
+
+    if let DataSource::OnChain(source) = witness.input_data {
+        for call in source.calls {
+            calls_to_accounts.push(call);
+            instance_idx += 1;
         }
-        _ => (),
-    };
-    match witness.output_data {
-        DataSource::OnChain(source) => {
-            let output_scales = settings.model_output_scales;
-            for call in source.calls {
-                calls_to_accounts.push(call);
-            }
+    }
+
+    if let DataSource::OnChain(source) = witness.output_data {
+        let output_scales = settings.model_output_scales;
+        for call in source.calls {
+            calls_to_accounts.push(call);
+        }
+
+        // give each input a scale
+        for scale in output_scales {
             scales.extend(vec![
-                output_scales[instance_idx];
+                scale;
                 instance_shapes[instance_idx].iter().product::<usize>()
             ]);
+            instance_idx += 1;
         }
-        _ => (),
-    };
+    }
 
     let (contract_addresses, call_data, decimals) = if !calls_to_accounts.is_empty() {
         let mut contract_addresses = vec![];
@@ -290,7 +291,7 @@ fn count_decimal_places(num: f32) -> usize {
 ///
 pub async fn setup_test_contract<M: 'static + Middleware>(
     client: Arc<M>,
-    data: &Vec<Vec<f32>>,
+    data: &[Vec<f32>],
 ) -> Result<(ContractInstance<Arc<M>, M>, Vec<u8>), Box<dyn Error>> {
     // save the abi to a tmp file
     let mut sol_path = std::env::temp_dir();
