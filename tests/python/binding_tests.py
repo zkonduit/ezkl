@@ -4,9 +4,7 @@ import pytest
 import json
 import asyncio
 import subprocess
-
-# requries an anvil install
-proc = subprocess.Popen(["anvil", "-p", "3030"])
+import time
 
 folder_path = os.path.abspath(
     os.path.join(
@@ -28,6 +26,20 @@ srs_path = os.path.join(folder_path, 'kzg_test.params')
 params_k17_path = os.path.join(folder_path, 'kzg_test_k17.params')
 params_k20_path = os.path.join(folder_path, 'kzg_test_k20.params')
 anvil_url = "http://localhost:3030"
+
+
+def setup_module(module):
+    """setup anvil."""
+    global proc
+    # requries an anvil install
+    proc = subprocess.Popen(["anvil", "-p", "3030"])
+    time.sleep(1)
+
+
+def teardown_module(module):
+    """teardown anvil.
+    """
+    proc.terminate()
 
 
 def test_table_1l_average():
@@ -609,6 +621,3 @@ def test_evm_aggregate_and_verify_aggr():
     Tests for aggregated proof and verifying aggregate proof
     """
     asyncio.run(evm_aggregate_and_verify_aggr())
-
-
-proc.terminate()
