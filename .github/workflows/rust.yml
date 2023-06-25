@@ -214,19 +214,19 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
       - name: KZG prove and verify tests (EVM)
-        run: cargo test --release --verbose tests_evm::kzg_evm_prove_and_verify -- --test-threads 2
+        run: cargo test --release --verbose tests_evm::kzg_evm_prove_and_verify -- --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed inputs)
-        run: cargo test --release --verbose tests_evm::kzg_evm_hashed_input_prove_and_verify -- --test-threads 2
+        run: cargo test --release --verbose tests_evm::kzg_evm_hashed_input_prove_and_verify -- --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed params)
-        run: cargo test --release --verbose tests_evm::kzg_evm_hashed_params_prove_and_verify -- --test-threads 2
+        run: cargo test --release --verbose tests_evm::kzg_evm_hashed_params_prove_and_verify -- --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed outputs)
-        run: cargo test --release --verbose tests_evm::kzg_evm_hashed_output_prove_and_verify -- --test-threads 2
+        run: cargo test --release --verbose tests_evm::kzg_evm_hashed_output_prove_and_verify -- --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain inputs)
-        run: cargo test --release --verbose tests_evm::kzg_evm_on_chain_input_prove_and_verify -- --test-threads 2
+        run: cargo test --release --verbose tests_evm::kzg_evm_on_chain_input_prove_and_verify -- --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain outputs)
-        run: cargo test --release --verbose tests_evm::kzg_evm_on_chain_output_prove_and_verify -- --test-threads 2
+        run: cargo test --release --verbose tests_evm::kzg_evm_on_chain_output_prove_and_verify -- --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain inputs & outputs)
-        run: cargo test --release --verbose tests_evm::kzg_evm_on_chain_input_output_prove_and_verify -- --test-threads 2
+        run: cargo test --release --verbose tests_evm::kzg_evm_on_chain_input_output_prove_and_verify -- --test-threads 1
 
   prove-and-verify-tests:
     runs-on: ubuntu-latest-32-cores
@@ -324,7 +324,7 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
       - name: KZG prove and verify aggr tests
-        run: cargo test --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ -- --include-ignored --test-threads 2
+        run: cargo test --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ -- --include-ignored --test-threads 8
 
   examples:
     runs-on: ubuntu-latest-32-cores
