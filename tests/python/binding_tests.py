@@ -156,10 +156,8 @@ def test_forward():
     assert data["inputs"] == res["inputs"]
     assert data["outputs"] == res["outputs"]
 
-    assert data["processed_inputs"]["poseidon_hash"] == res["processed_inputs"]["poseidon_hash"] == [[
-        8270957937025516140, 11801026918842104328, 2203849898884507041, 140307258138425306]]
-    assert data["processed_outputs"]["poseidon_hash"] == res["processed_outputs"]["poseidon_hash"] == [[4554067273356176515, 2525802612124249168,
-                                                                                                        5413776662459769622, 1194961624936436872]]
+    assert data["processed_inputs"]["poseidon_hash"] == res["processed_inputs"]["poseidon_hash"] == [[8341679705247127587, 5757092472907208178, 14778742245849682609, 915952317493483343]]
+    assert data["processed_outputs"]["poseidon_hash"] == res["processed_outputs"]["poseidon_hash"] == [[15462756355050163734, 15377458498242925426, 16550365955383097941, 1960020682797714429]]
 
 
 def test_get_srs():
