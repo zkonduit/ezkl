@@ -345,8 +345,8 @@ def test_create_evm_verifier():
         vk_path,
         srs_path,
         settings_path,
+        sol_code_path,
         deployment_code_path,
-        sol_code_path
     )
 
     assert res == True
@@ -565,8 +565,8 @@ async def evm_aggregate_and_verify_aggr():
     res = ezkl_lib.create_evm_verifier_aggr(
         aggregate_vk_path,
         params_k20_path,
-        aggregate_deploy_path,
         sol_code_path,
+        aggregate_deploy_path,
         sol_bytecode_path
     )
 
