@@ -160,11 +160,19 @@ pub async fn deploy_da_verifier_via_solidity(
     let instance_shapes = settings.model_instance_shapes;
 
     let mut instance_idx = 0;
+    let mut contract_instance_offset = 0;
 
     if let DataSource::OnChain(source) = witness.input_data {
         for call in source.calls {
             calls_to_accounts.push(call);
             instance_idx += 1;
+        }
+    } else if let DataSource::File(source) = witness.input_data {
+        if settings.run_args.input_visibility.is_public() {
+            instance_idx += source.len();
+            for s in source {
+                contract_instance_offset += s.len();
+            }
         }
     }
 
@@ -215,7 +223,13 @@ pub async fn deploy_da_verifier_via_solidity(
     info!("decimals: {:#?}", decimals);
 
     let contract = factory
-        .deploy((contract_addresses, call_data, decimals, scales))?
+        .deploy((
+            contract_addresses,
+            call_data,
+            decimals,
+            scales,
+            contract_instance_offset as u32,
+        ))?
         .send()
         .await?;
 
@@ -806,9 +820,10 @@ pub fn fix_verifier_sol(
             let input_scale = input_data.0;
             accounts_len = input_data.1.len();
             contract = contract.replace(
-                "uint constant public INPUT_SCALE = 1<<0;",
-                &format!("uint constant public INPUT_SCALE = 1<<{};", input_scale),
+                "uint public constant INPUT_SCALE = 1 << 0;",
+                &format!("uint public constant INPUT_SCALE = 1 << {};", input_scale),
             );
+
             contract = contract.replace(
                 "uint256 constant INPUT_CALLS = 0;",
                 &format!("uint256 constant INPUT_CALLS = {};", input_calls),
