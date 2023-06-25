@@ -587,7 +587,7 @@ async def evm_aggregate_and_verify_aggr():
         addr_aggr = file.read().rstrip()
 
     res = ezkl_lib.verify_evm(
-        proof_path,
+        aggregate_proof_path,
         addr_aggr,
         rpc_url=anvil_url,
     )
