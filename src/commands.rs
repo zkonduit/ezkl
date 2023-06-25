@@ -409,8 +409,9 @@ pub enum Commands {
         ///  Should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long)]
         test_witness: PathBuf,
+        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
-        rpc_url: String,
+        rpc_url: Option<String>,
     },
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -582,7 +583,7 @@ pub enum Commands {
         /// The path to the Solidity code
         #[arg(long)]
         sol_code_path: PathBuf,
-        /// rpc url
+        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
         rpc_url: Option<String>,
         #[arg(long, default_value = "contract.address")]
@@ -601,7 +602,7 @@ pub enum Commands {
         /// The path to the Solidity code
         #[arg(long)]
         sol_code_path: PathBuf,
-        /// rpc url
+        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
         rpc_url: Option<String>,
         #[arg(long, default_value = "contract_da.address")]
@@ -618,7 +619,7 @@ pub enum Commands {
         /// The path to verfier contract's address
         #[arg(long)]
         addr: H160,
-        /// rpc url
+        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
         rpc_url: Option<String>,
         /// does the verifier use data attestation ?

@@ -1043,7 +1043,7 @@ pub(crate) async fn setup_test_evm_witness(
     model_path: PathBuf,
     settings_path: PathBuf,
     test_witness: PathBuf,
-    rpc_url: String,
+    rpc_url: Option<String>,
 ) -> Result<(), Box<dyn Error>> {
     use crate::graph::TestOnChainData;
 

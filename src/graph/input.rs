@@ -45,14 +45,14 @@ impl OnChainSourceInner {
         data: &FileSourceInner,
         scales: Vec<u32>,
         shapes: Vec<Vec<usize>>,
-        rpc: &RPCUrl,
+        rpc: Option<&str>,
     ) -> Result<(Vec<Tensor<i128>>, Self), Box<dyn std::error::Error>> {
         use crate::eth::{evm_quantize, read_on_chain_inputs, test_on_chain_data};
         use crate::graph::scale_to_multiplier;
         use log::debug;
 
         // Set up local anvil instance for reading on-chain data
-        let (_, client) = crate::eth::setup_eth_backend(Some(rpc)).await?;
+        let (anvil, client) = crate::eth::setup_eth_backend(rpc).await?;
 
         let address = client.address();
 
@@ -88,10 +88,12 @@ impl OnChainSourceInner {
             inputs.push(t);
         }
 
+        let used_rpc = rpc.unwrap_or(&anvil.endpoint()).to_string();
+
         // Fill the input_data field of the GraphInput struct
         Ok((
             inputs,
-            OnChainSourceInner::new(calls_to_accounts.clone(), rpc.clone()),
+            OnChainSourceInner::new(calls_to_accounts.clone(), used_rpc),
         ))
     }
 }

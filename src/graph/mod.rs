@@ -187,8 +187,8 @@ pub struct GraphCircuit {
 pub struct TestOnChainData {
     /// The path to the test witness
     pub data: std::path::PathBuf,
-    /// The path to the params file
-    pub rpc: String,
+    /// rpc endpoint
+    pub rpc: Option<String>,
 }
 
 impl GraphCircuit {
@@ -613,7 +613,7 @@ impl GraphCircuit {
                     input_data,
                     scales,
                     self.model.graph.input_shapes(),
-                    &test_on_chain_data.rpc,
+                    test_on_chain_data.rpc.as_deref(),
                 )
                 .await?;
             self.inputs = datam.0;
@@ -634,7 +634,7 @@ impl GraphCircuit {
                     output_data,
                     self.model.graph.get_output_scales(),
                     self.model.graph.output_shapes(),
-                    &test_on_chain_data.rpc,
+                    test_on_chain_data.rpc.as_deref(),
                 )
                 .await?;
             self.outputs = datum.0;
