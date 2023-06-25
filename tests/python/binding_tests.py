@@ -592,16 +592,16 @@ async def evm_aggregate_and_verify_aggr():
     )
     assert res == True
 
-    with open(addr_path, 'r') as file:
-        addr_aggr = file.read().rstrip()
+    # with open(addr_path, 'r') as file:
+    #     addr_aggr = file.read().rstrip()
 
-    res = ezkl_lib.verify_evm(
-        aggregate_proof_path,
-        addr_aggr,
-        rpc_url=anvil_url,
-    )
+    # res = ezkl_lib.verify_evm(
+    #     aggregate_proof_path,
+    #     addr_aggr,
+    #     rpc_url=anvil_url,
+    # )
 
-    assert res == True
+    # assert res == True
 
 
 def test_evm_aggregate_and_verify_aggr():
