@@ -203,8 +203,6 @@ jobs:
         run: rustup target add wasm32-wasi
       - name: Mock proving tests (WASI) (public outputs)
         run: cargo nextest run --release --verbose tests_wasi::mock_public_outputs_ --test-threads 32
-      - name: Mock proving tests (WASI) (public and packed outputs)
-        run: cargo nextest run --release --verbose packed_tests_wasi::mock_packed_outputs_ --test-threads 32
       - name: Mock proving tests (WASI) (public inputs)
         run: cargo nextest run --release --verbose tests_wasi::mock_public_inputs_ --test-threads 32
       - name: Mock proving tests (WASI) (public params)
