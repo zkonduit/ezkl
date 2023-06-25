@@ -209,7 +209,8 @@ pub fn prove_wasm(
     .unwrap();
 
     // prep public inputs
-    let public_inputs = circuit.prepare_public_inputs(&data, None).unwrap();
+    circuit.load_data(&data).unwrap();
+    let public_inputs = circuit.prepare_public_inputs(&data).unwrap();
 
     let strategy = KZGSingleStrategy::new(&params);
     let proof = create_proof_circuit_kzg(

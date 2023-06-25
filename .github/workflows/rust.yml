@@ -214,15 +214,19 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
       - name: KZG prove and verify tests (EVM)
-        run: cargo test --release --verbose tests_evm::kzg_evm_prove_and_verify -- --test-threads 4
+        run: cargo test --release --verbose tests_evm::kzg_evm_prove_and_verify -- --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed inputs)
-        run: cargo test --release --verbose tests_evm::kzg_evm_hashed_input_prove_and_verify -- --test-threads 4
+        run: cargo test --release --verbose tests_evm::kzg_evm_hashed_input_prove_and_verify -- --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed params)
-        run: cargo test --release --verbose tests_evm::kzg_evm_hashed_params_prove_and_verify -- --test-threads 4
+        run: cargo test --release --verbose tests_evm::kzg_evm_hashed_params_prove_and_verify -- --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed outputs)
-        run: cargo test --release --verbose tests_evm::kzg_evm_hashed_output_prove_and_verify -- --test-threads 4
+        run: cargo test --release --verbose tests_evm::kzg_evm_hashed_output_prove_and_verify -- --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain inputs)
-        run: cargo test --release --verbose tests_evm::kzg_evm_on_chain_input_prove_and_verify -- --test-threads 4
+        run: cargo test --release --verbose tests_evm::kzg_evm_on_chain_input_prove_and_verify -- --test-threads 1
+      - name: KZG prove and verify tests (EVM + on chain outputs)
+        run: cargo test --release --verbose tests_evm::kzg_evm_on_chain_output_prove_and_verify -- --test-threads 1
+      - name: KZG prove and verify tests (EVM + on chain inputs & outputs)
+        run: cargo test --release --verbose tests_evm::kzg_evm_on_chain_input_output_prove_and_verify -- --test-threads 1
 
   prove-and-verify-tests:
     runs-on: ubuntu-latest-32-cores
@@ -272,7 +276,7 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
       - name: fuzz tests (EVM)
-        run: cargo test --release --verbose tests_evm::kzg_evm_fuzz_ -- --test-threads 6
+        run: cargo test --release --verbose tests_evm::kzg_evm_fuzz_ -- --test-threads 2
       - name: fuzz tests
         run: cargo test --release --verbose tests::kzg_fuzz_ -- --test-threads 6
 
@@ -367,6 +371,8 @@ jobs:
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
+      - name: Install Anvil
+        run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
       - name: Build python ezkl_lib
         run: source .env/bin/activate; maturin develop --features python-bindings --release
       - name: Run pytest

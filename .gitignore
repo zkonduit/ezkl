@@ -4,6 +4,8 @@ data
 *.sol
 !QuantizeData.sol
 !TestReads.sol
+!AttestData.sol
+!VerifierBase.sol
 *.pf
 *.vk
 *.pk

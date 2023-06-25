@@ -1,4 +1,6 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
+#[cfg(not(target_arch = "wasm32"))]
+use ethers::types::H160;
 #[cfg(feature = "python-bindings")]
 use pyo3::{
     conversion::{FromPyObject, PyTryFrom},
@@ -11,6 +13,8 @@ use std::error::Error;
 use std::path::PathBuf;
 
 use crate::circuit::{CheckMode, Tolerance};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::graph::TestDataSource;
 use crate::graph::Visibility;
 use crate::pfsys::TranscriptType;
 
@@ -149,9 +153,6 @@ pub struct RunArgs {
     /// The number of batches to split the input data into
     #[arg(long, default_value = "1")]
     pub batch_size: usize,
-    /// Flags whether the inputs are on-chain and should be attested to
-    #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
-    pub on_chain_inputs: bool,
     /// Flags whether inputs are public, private, hashed
     #[arg(long, default_value = "private")]
     pub input_visibility: Visibility,
@@ -394,6 +395,32 @@ pub enum Commands {
         #[arg(short = 'S', long)]
         settings_path: Option<PathBuf>,
     },
+    #[cfg(not(target_arch = "wasm32"))]
+    SetupTestEVMWitness {
+        /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'W', long)]
+        witness: PathBuf,
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long)]
+        model: PathBuf,
+        /// The path to load circuit params from
+        #[arg(long)]
+        settings_path: PathBuf,
+        /// For testing purposes only. The optional path to the .json data file that will be generated that contains the OnChain data storage information
+        /// derived from the file information in the data .json file.
+        ///  Should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'D', long)]
+        test_witness: PathBuf,
+        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
+        #[arg(short = 'U', long)]
+        rpc_url: Option<String>,
+        /// where does the input data come from
+        #[arg(long, default_value = "on-chain")]
+        input_source: TestDataSource,
+        /// where does the output data come from
+        #[arg(long, default_value = "on-chain")]
+        output_source: TestDataSource,
+    },
 
     #[cfg(not(target_arch = "wasm32"))]
     /// Loads model, data, and creates proof
@@ -437,10 +464,6 @@ pub enum Commands {
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = "safe")]
         check_mode: CheckMode,
-        /// Deploy a test contract that stores the input_data in data .json in its storage,
-        /// then reads from it.
-        #[arg(long, default_value = "false", action = clap::ArgAction::Set)]
-        test_reads: bool,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for a single proof
@@ -455,12 +478,12 @@ pub enum Commands {
         /// The path to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
-        /// The path to the compiled yul bytecode code
-        #[arg(long, default_value = "evm_deploy.yul")]
-        deployment_code_path: PathBuf,
         /// The path to output the Solidity code
         #[arg(long, default_value = "evm_deploy.sol")]
-        sol_code_path: Option<PathBuf>,
+        sol_code_path: PathBuf,
+        /// The path to the compiled yul bytecode code
+        #[arg(long, default_value = "evm_deploy.yul")]
+        deployment_code_path: Option<PathBuf>,
         /// The path to output the compiled Solidity bytecode
         #[arg(long, default_value = "evm_deploy.sol.bin")]
         sol_bytecode_path: Option<PathBuf>,
@@ -473,10 +496,7 @@ pub enum Commands {
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier that attests to on-chain inputs for a single proof
-    #[command(
-        name = "create-evm-data-attestation-verifier",
-        arg_required_else_help = true
-    )]
+    #[command(name = "create-evm-da-verifier", arg_required_else_help = true)]
     CreateEVMDataAttestationVerifier {
         /// The path to load the desired srs file from
         #[arg(long)]
@@ -518,12 +538,12 @@ pub enum Commands {
         /// The path to output to load the desired verfication key file
         #[arg(long)]
         vk_path: PathBuf,
+        /// The path to the Solidity code
+        #[arg(long, default_value = "evm_deploy_aggr.sol")]
+        sol_code_path: PathBuf,
         /// The path to the compiled yul bytecode code
         #[arg(long, default_value = "evm_deploy_aggr.yul")]
         deployment_code_path: Option<PathBuf>,
-        /// The path to the Solidity code
-        #[arg(long, default_value = "evm_deploy_aggr.sol")]
-        sol_code_path: Option<PathBuf>,
         /// The path to output the compiled Solidity bytecode
         #[arg(long, default_value = "evm_deploy_aggr.sol.bin")]
         sol_bytecode_path: Option<PathBuf>,
@@ -534,7 +554,6 @@ pub enum Commands {
         optimizer_runs: Option<usize>,
         // todo, optionally allow supplying proving key
     },
-
     /// Verifies a proof, returning accept or reject
     #[command(arg_required_else_help = true)]
     Verify {
@@ -551,7 +570,6 @@ pub enum Commands {
         #[arg(long)]
         srs_path: PathBuf,
     },
-
     /// Verifies an aggregate proof, returning accept or reject
     #[command(arg_required_else_help = true)]
     VerifyAggr {
@@ -568,7 +586,37 @@ pub enum Commands {
         #[arg(long)]
         logrows: u32,
     },
-
+    #[cfg(not(target_arch = "wasm32"))]
+    DeployEvmVerifier {
+        /// The path to the Solidity code
+        #[arg(long)]
+        sol_code_path: PathBuf,
+        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
+        #[arg(short = 'U', long)]
+        rpc_url: Option<String>,
+        #[arg(long, default_value = "contract.address")]
+        /// The path to output the contract address
+        addr_path: PathBuf,
+    },
+    #[cfg(not(target_arch = "wasm32"))]
+    #[command(name = "deploy-evm-da-verifier", arg_required_else_help = true)]
+    DeployEvmDataAttestationVerifier {
+        /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'W', long)]
+        witness: PathBuf,
+        /// The path to load circuit params from
+        #[arg(long)]
+        settings_path: PathBuf,
+        /// The path to the Solidity code
+        #[arg(long)]
+        sol_code_path: PathBuf,
+        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
+        #[arg(short = 'U', long)]
+        rpc_url: Option<String>,
+        #[arg(long, default_value = "contract_da.address")]
+        /// The path to output the contract address
+        addr_path: PathBuf,
+    },
     #[cfg(not(target_arch = "wasm32"))]
     /// Verifies a proof using a local EVM executor, returning accept or reject
     #[command(name = "verify-evm", arg_required_else_help = true)]
@@ -576,22 +624,15 @@ pub enum Commands {
         /// The path to the proof file
         #[arg(long)]
         proof_path: PathBuf,
-        /// The path to verifier contract's deployment code
+        /// The path to verfier contract's address
         #[arg(long)]
-        deployment_code_path: Option<PathBuf>,
-        /// The path to the Solidity code
-        #[arg(long)]
-        sol_code_path: Option<PathBuf>,
-        /// The path to output the compiled Solidity bytecode
-        #[arg(long)]
-        sol_bytecode_path: Option<PathBuf>,
-        /// The path to the .json witness file, which should
-        /// contain the necessary calldata and account addresses  
-        /// needed need to read from all the on-chain
-        /// view functions that return the data that the network
-        /// ingests as inputs.
-        #[arg(short = 'W', long)]
-        witness: Option<PathBuf>,
+        addr: H160,
+        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
+        #[arg(short = 'U', long)]
+        rpc_url: Option<String>,
+        /// does the verifier use data attestation ?
+        #[arg(long, default_value = "false")]
+        data_attestation: bool,
     },
 
     /// Print the proof in hexadecimal

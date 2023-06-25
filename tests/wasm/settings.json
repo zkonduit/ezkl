@@ -11,13 +11,15 @@
         "bits": 5,
         "logrows": 7,
         "batch_size": 1,
-        "on_chain_inputs": false,
         "input_visibility": "Private",
         "output_visibility": "Public",
         "param_visibility": "Private",
         "allocated_constraints": null
     },
     "num_constraints": 24,
+    "model_output_scales": [
+        7
+    ],
     "model_instance_shapes": [
         [
             1,

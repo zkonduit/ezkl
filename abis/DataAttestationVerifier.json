@@ -12,8 +12,13 @@
 				"type": "bytes[][]"
 			},
 			{
-				"internalType": "uint256[]",
+				"internalType": "uint256[][]",
 				"name": "_decimals",
+				"type": "uint256[][]"
+			},
+			{
+				"internalType": "uint256[]",
+				"name": "_outputScale",
 				"type": "uint256[]"
 			}
 		],
@@ -22,7 +27,7 @@
 	},
 	{
 		"inputs": [],
-		"name": "SCALE",
+		"name": "INPUT_SCALE",
 		"outputs": [
 			{
 				"internalType": "uint256",
