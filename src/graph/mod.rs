@@ -182,6 +182,35 @@ pub struct GraphCircuit {
     pub module_settings: ModuleSettings,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+/// The data source for a test
+pub enum TestDataSource {
+    /// The data is loaded from a file
+    File,
+    /// The data is loaded from the chain
+    #[default]
+    OnChain,
+}
+
+impl From<String> for TestDataSource {
+    fn from(value: String) -> Self {
+        match value.to_lowercase().as_str() {
+            "file" => TestDataSource::File,
+            "on-chain" => TestDataSource::OnChain,
+            _ => panic!("not a valid test data source"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+///
+pub struct TestSources {
+    ///
+    pub input: TestDataSource,
+    ///
+    pub output: TestDataSource,
+}
+
 ///
 #[derive(Clone, Debug, Default)]
 pub struct TestOnChainData {
@@ -189,6 +218,8 @@ pub struct TestOnChainData {
     pub data: std::path::PathBuf,
     /// rpc endpoint
     pub rpc: Option<String>,
+    ///
+    pub data_sources: TestSources,
 }
 
 impl GraphCircuit {
@@ -597,7 +628,15 @@ impl GraphCircuit {
         test_on_chain_data: TestOnChainData,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Set up local anvil instance for reading on-chain data
-        if self.settings.run_args.input_visibility.is_public() {
+        if matches!(
+            test_on_chain_data.data_sources.input,
+            TestDataSource::OnChain
+        ) {
+            // if not public then fail
+            if !self.settings.run_args.input_visibility.is_public() {
+                return Err("Cannot use on-chain data source as private data".into());
+            }
+
             let input_data = match &data.input_data {
                 DataSource::File(input_data) => input_data,
                 DataSource::OnChain(_) => panic!(
@@ -621,7 +660,15 @@ impl GraphCircuit {
         } else {
             self.load_inputs(&data.clone().into()).await?;
         }
-        if self.settings.run_args.output_visibility.is_public() {
+        if matches!(
+            test_on_chain_data.data_sources.output,
+            TestDataSource::OnChain
+        ) {
+            // if not public then fail
+            if !self.settings.run_args.output_visibility.is_public() {
+                return Err("Cannot use on-chain data source as private data".into());
+            }
+
             let output_data = match &data.output_data {
                 DataSource::File(output_data) => output_data,
                 DataSource::OnChain(_) => panic!(

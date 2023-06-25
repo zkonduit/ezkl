@@ -532,7 +532,7 @@ mod native_tests {
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, true, false);
+                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, "on-chain", "file");
                 }
             });
 
@@ -543,7 +543,7 @@ mod native_tests {
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, false, true);
+                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, "file", "on-chain");
                 }
             });
 
@@ -555,7 +555,7 @@ mod native_tests {
                     crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, true, true);
+                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, "on-chain", "on-chain");
                 }
             });
 
@@ -1543,20 +1543,14 @@ mod native_tests {
     fn kzg_evm_on_chain_input_prove_and_verify(
         example_name: String,
         num_runs: usize,
-        test_on_chain_inputs: bool,
-        test_on_chain_outputs: bool,
+        input_source: &str,
+        output_source: &str,
     ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
-        let input_visbility = if test_on_chain_inputs {
-            "public"
-        } else {
-            "private"
-        };
-        let output_visbility = if test_on_chain_outputs {
-            "public"
-        } else {
-            "private"
-        };
+
+        // set up the circuit
+        let input_visbility = "public";
+        let output_visbility = "public";
         let model_path = format!("{}/{}/network.onnx", test_dir, example_name);
         let circuit_settings = format!(
             "--settings-path={}/{}/settings.json",
@@ -1614,6 +1608,9 @@ mod native_tests {
         let test_on_chain_data_path = format!("{}/{}/on_chain_input.json", test_dir, example_name);
         let rpc_arg = format!("--rpc-url={}", ANVIL_URL.as_str());
 
+        let test_input_source = format!("--input-source={}", input_source);
+        let test_output_source = format!("--output-source={}", output_source);
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup-test-evm-witness",
@@ -1625,6 +1622,8 @@ mod native_tests {
                 "--test-witness",
                 test_on_chain_data_path.as_str(),
                 rpc_arg.as_str(),
+                test_input_source.as_str(),
+                test_output_source.as_str(),
             ])
             .status()
             .expect("failed to execute process");

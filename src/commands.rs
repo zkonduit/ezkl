@@ -13,6 +13,8 @@ use std::error::Error;
 use std::path::PathBuf;
 
 use crate::circuit::{CheckMode, Tolerance};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::graph::TestDataSource;
 use crate::graph::Visibility;
 use crate::pfsys::TranscriptType;
 
@@ -412,6 +414,12 @@ pub enum Commands {
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
         rpc_url: Option<String>,
+        /// where does the input data come from
+        #[arg(long, default_value = "on-chain")]
+        input_source: TestDataSource,
+        /// where does the output data come from
+        #[arg(long, default_value = "on-chain")]
+        output_source: TestDataSource,
     },
 
     #[cfg(not(target_arch = "wasm32"))]

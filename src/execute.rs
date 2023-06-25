@@ -7,9 +7,9 @@ use crate::eth::{deploy_da_verifier_via_solidity, deploy_verifier_via_solidity};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{fix_verifier_sol, get_contract_artifacts, verify_proof_via_solidity};
 use crate::graph::input::{DataSource, GraphInput};
-#[cfg(not(target_arch = "wasm32"))]
-use crate::graph::Visibility;
 use crate::graph::{scale_to_multiplier, GraphCircuit, GraphSettings, GraphWitness, Model};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::graph::{TestDataSource, TestSources, Visibility};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::evm_verify;
@@ -201,7 +201,20 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             settings_path,
             test_witness,
             rpc_url,
-        } => setup_test_evm_witness(witness, model, settings_path, test_witness, rpc_url).await,
+            input_source,
+            output_source,
+        } => {
+            setup_test_evm_witness(
+                witness,
+                model,
+                settings_path,
+                test_witness,
+                rpc_url,
+                input_source,
+                output_source,
+            )
+            .await
+        }
         #[cfg(not(target_arch = "wasm32"))]
         Commands::Prove {
             witness,
@@ -871,32 +884,27 @@ pub(crate) fn create_evm_data_attestation_verifier(
 
     let data = GraphWitness::from_path(witness)?;
 
-    let output_data = if visibility.output.is_public() {
+    let output_data = if let DataSource::OnChain(source) = data.output_data {
+        if !visibility.output.is_public() {
+            todo!("we currently don't support private output data on chain")
+        }
         let mut on_chain_output_data = vec![];
-        match data.output_data {
-            DataSource::OnChain(source) => {
-                for call in source.calls {
-                    on_chain_output_data.push(call);
-                }
-            }
-            _ => panic!("data source of output_data must be from on-chain for public output data."),
-        };
-
+        for call in source.calls {
+            on_chain_output_data.push(call);
+        }
         Some(on_chain_output_data)
     } else {
         None
     };
 
-    let input_data = if visibility.input.is_public() {
+    let input_data = if let DataSource::OnChain(source) = data.input_data {
+        if !visibility.input.is_public() {
+            todo!("we currently don't support private input data on chain")
+        }
         let mut on_chain_input_data = vec![];
-        match data.input_data {
-            DataSource::OnChain(source) => {
-                for call in source.calls {
-                    on_chain_input_data.push(call);
-                }
-            }
-            _ => panic!("data source of input_data must be from on-chain for public input data."),
-        };
+        for call in source.calls {
+            on_chain_input_data.push(call);
+        }
         Some((settings.run_args.scale, on_chain_input_data))
     } else {
         None
@@ -904,11 +912,12 @@ pub(crate) fn create_evm_data_attestation_verifier(
 
     if input_data.is_some() || output_data.is_some() {
         let output = fix_verifier_sol(sol_code_path.clone(), input_data, output_data)?;
-
         let mut f = File::create(sol_code_path.clone())?;
         let _ = f.write(output.as_bytes());
     } else {
-        panic!("Neither input or output data source is on-chain. Atleast one must be on chain.")
+        return Err(
+            "Neither input or output data source is on-chain. Atleast one must be on chain.".into(),
+        );
     }
     if sol_bytecode_path.is_some() {
         let sol_bytecode =
@@ -1044,6 +1053,8 @@ pub(crate) async fn setup_test_evm_witness(
     settings_path: PathBuf,
     test_witness: PathBuf,
     rpc_url: Option<String>,
+    input_source: TestDataSource,
+    output_source: TestDataSource,
 ) -> Result<(), Box<dyn Error>> {
     use crate::graph::TestOnChainData;
 
@@ -1052,9 +1063,19 @@ pub(crate) async fn setup_test_evm_witness(
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, CheckMode::SAFE)?;
 
+    // if both input and output are from files fail
+    if matches!(input_source, TestDataSource::File) && matches!(output_source, TestDataSource::File)
+    {
+        return Err("Both input and output cannot be from files".into());
+    }
+
     let test_on_chain_witness = TestOnChainData {
         data: test_witness.clone(),
         rpc: rpc_url,
+        data_sources: TestSources {
+            input: input_source,
+            output: output_source,
+        },
     };
 
     circuit
