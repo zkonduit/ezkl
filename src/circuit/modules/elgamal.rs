@@ -45,7 +45,7 @@ const BIT_LEN_LIMB: usize = 64;
 /// The number of instance columns used by the ElGamal circuit.
 pub const NUM_INSTANCE_COLUMNS: usize = 3;
 
-type CircuitHash = PoseidonHash<Fr, PoseidonChip<Fr, 2, 1>, PoseidonSpec, ConstantLength<2>, 2, 1>;
+type CircuitHash = PoseidonHash<Fr, PoseidonChip<Fr, 3, 2>, PoseidonSpec, ConstantLength<2>, 3, 2>;
 
 #[derive(Debug)]
 /// A chip implementing ElGamal encryption.
@@ -55,7 +55,7 @@ pub struct ElGamalChip {
     /// The ECC chip.
     ecc: BaseFieldEccChip<G1Affine, NUMBER_OF_LIMBS, BIT_LEN_LIMB>,
     /// The Poseidon hash chip.
-    poseidon: PoseidonChip<Fr, 2, 1>,
+    poseidon: PoseidonChip<Fr, 3, 2>,
     /// The addition chip.
     add: AddChip,
 }
@@ -65,7 +65,7 @@ pub struct ElGamalChip {
 pub struct ElGamalConfig {
     main_gate_config: MainGateConfig,
     range_config: RangeConfig,
-    poseidon_config: PoseidonConfig<Fr, 2, 1>,
+    poseidon_config: PoseidonConfig<Fr, 3, 2>,
     add_config: AddConfig,
     plaintext_col: Column<Advice>,
     ciphertext_c1_exp_col: Column<Instance>,
@@ -257,7 +257,7 @@ impl ElGamalGadget {
         let x = Integer::from_fe(*coords.x(), Self::rns());
         let y = Integer::from_fe(*coords.y(), Self::rns());
 
-        let hasher = poseidon::Hash::<Fr, PoseidonSpec, ConstantLength<2>, 2, 1>::init();
+        let hasher = poseidon::Hash::<Fr, PoseidonSpec, ConstantLength<2>, 3, 2>::init();
         let dh = hasher.hash([x.native(), y.native()]); // this is Fq now :( (we need Fr)
 
         let mut c2 = vec![];
@@ -271,7 +271,7 @@ impl ElGamalGadget {
 
     /// Hash the secret key to be used as a public input.
     pub fn hash_sk(sk: Fr) -> Fr {
-        let hasher = poseidon::Hash::<Fr, PoseidonSpec, ConstantLength<2>, 2, 1>::init();
+        let hasher = poseidon::Hash::<Fr, PoseidonSpec, ConstantLength<2>, 3, 2>::init();
         // this is Fq now :( (we need Fr)
         hasher.hash([sk, sk])
     }
@@ -286,7 +286,7 @@ impl ElGamalGadget {
         let x = Integer::from_fe(*s.x(), Self::rns());
         let y = Integer::from_fe(*s.y(), Self::rns());
 
-        let hasher = poseidon::Hash::<Fr, PoseidonSpec, ConstantLength<2>, 2, 1>::init();
+        let hasher = poseidon::Hash::<Fr, PoseidonSpec, ConstantLength<2>, 3, 2>::init();
         let dh = hasher.hash([x.native(), y.native()]); // this is Fq now :( (we need Fr)
 
         let mut msg = vec![];

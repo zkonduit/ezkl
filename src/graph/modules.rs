@@ -16,10 +16,10 @@ use super::{VarVisibility, Visibility};
 const POSEIDON_LEN_GRAPH: usize = 10;
 
 // TODO: Need a dummy pass module to get the exact size of each module, this is a rough estimate
-const POSEIDON_CONSTRAINTS_ESTIMATE: usize = 44;
-const ELGAMAL_CONSTRAINTS_ESTIMATE: usize = 44;
+const POSEIDON_CONSTRAINTS_ESTIMATE: usize = 30;
+const ELGAMAL_CONSTRAINTS_ESTIMATE: usize = 30;
 // 2^15
-const POSEIDOIN_FIXED_COST_ESTIMATE: usize = 128;
+const POSEIDOIN_FIXED_COST_ESTIMATE: usize = 88;
 // 2^15
 const ELGAMAL_FIXED_COST_ESTIMATE: usize = 32768;
 
