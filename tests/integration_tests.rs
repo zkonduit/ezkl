@@ -33,7 +33,7 @@ mod native_tests {
                 .spawn()
                 .expect("failed to start anvil process");
 
-            std::thread::sleep(std::time::Duration::from_secs(1));
+            std::thread::sleep(std::time::Duration::from_secs(3));
         });
     }
 
