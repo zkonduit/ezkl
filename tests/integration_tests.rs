@@ -1155,7 +1155,7 @@ mod native_tests {
         // As sanity check, add example that should fail.
         base_args[2] = PF_FAILURE_AGGR;
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args(args)
+            .args(base_args)
             .status()
             .expect("failed to execute process");
         assert!(!status.success());

@@ -539,8 +539,8 @@ async def evm_aggregate_and_verify_aggr():
         settings_path,
     )
 
-    aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')
-    aggregate_vk_path = os.path.join(folder_path, 'aggr_1l_relu.vk')
+    aggregate_proof_path = os.path.join(folder_path, 'aggr_evm_1l_relu.pf')
+    aggregate_vk_path = os.path.join(folder_path, 'aggr_evm_1l_relu.vk')
 
     res = ezkl_lib.aggregate(
         aggregate_proof_path,
@@ -558,9 +558,9 @@ async def evm_aggregate_and_verify_aggr():
     assert os.path.isfile(aggregate_proof_path)
     assert os.path.isfile(aggregate_vk_path)
 
-    aggregate_deploy_path = os.path.join(folder_path, 'aggr_1l_relu.code')
-    sol_code_path = os.path.join(folder_path, 'aggr_1l_relu.sol')
-    sol_bytecode_path = os.path.join(folder_path, 'aggr_1l_relu.bytecode')
+    aggregate_deploy_path = os.path.join(folder_path, 'aggr_evm_1l_relu.code')
+    sol_code_path = os.path.join(folder_path, 'aggr_evm_1l_relu.sol')
+    sol_bytecode_path = os.path.join(folder_path, 'aggr_evm_1l_relu.bytecode')
 
     res = ezkl_lib.create_evm_verifier_aggr(
         aggregate_vk_path,
@@ -582,6 +582,15 @@ async def evm_aggregate_and_verify_aggr():
         sol_code_path,
         rpc_url=anvil_url,
     )
+
+    # as a sanity check
+    res = ezkl_lib.verify_aggr(
+        aggregate_proof_path,
+        aggregate_vk_path,
+        params_k20_path,
+        20,
+    )
+    assert res == True
 
     with open(addr_path, 'r') as file:
         addr_aggr = file.read().rstrip()

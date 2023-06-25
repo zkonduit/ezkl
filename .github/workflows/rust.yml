@@ -272,7 +272,7 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
       - name: fuzz tests (EVM)
-        run: cargo test --release --verbose tests_evm::kzg_evm_fuzz_ -- --test-threads 6
+        run: cargo test --release --verbose tests_evm::kzg_evm_fuzz_ -- --test-threads 2
       - name: fuzz tests
         run: cargo test --release --verbose tests::kzg_fuzz_ -- --test-threads 6
 
@@ -320,7 +320,7 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
       - name: KZG prove and verify aggr tests
-        run: cargo test --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ -- --include-ignored --test-threads 8
+        run: cargo test --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ -- --include-ignored --test-threads 2
 
   examples:
     runs-on: ubuntu-latest-32-cores
