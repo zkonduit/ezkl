@@ -1644,6 +1644,8 @@ mod native_tests {
                 "--transcript=evm",
                 "--strategy=single",
                 circuit_settings.as_str(),
+                "-E",
+                data_path.as_str()
             ])
             .status()
             .expect("failed to execute process");

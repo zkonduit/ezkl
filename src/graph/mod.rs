@@ -332,6 +332,55 @@ impl GraphCircuit {
         Ok(())
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    /// load inputs and outputs for the model
+    pub fn evm_data_safety_check(
+        &mut self,
+        evm_data: &GraphWitness,
+        expected_data: &GraphWitness,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let scale = self.settings.run_args.scale;
+        match &evm_data.input_data {
+            DataSource::OnChain(_) => {
+                // quantize expected data
+                match &expected_data.input_data {
+                    DataSource::File(file_data) => { 
+                        let shapes = self.model.graph.input_shapes();
+                        let input_scales = vec![scale; shapes.len()];
+                        let expected_data = self.load_file_data(
+                            file_data,
+                            &shapes, 
+                            input_scales
+                        )?;
+                        assert_eq!(self.inputs, expected_data, "expected atleast one evm_data field");
+                    }
+                    _ => panic!("expected input_data must come from file source")
+                };
+            },
+            _ => (),
+        }
+        match &evm_data.output_data {
+            DataSource::OnChain(_) => {
+                // quantize expected data
+                match &expected_data.output_data {
+                    DataSource::File(file_data) => { 
+                        let shapes = self.model.graph.output_shapes();
+                        let out_scales = self.model.graph.get_output_scales();
+                        let expected_data = self.load_file_data(
+                            file_data,
+                            &shapes, 
+                            out_scales
+                        )?;
+                        assert_eq!(self.outputs, expected_data, "expected atleast one evm_data field");
+                    }
+                    _ => panic!("expected output_data must come from file source")
+                };
+            }
+            _ => (),
+        }
+        Ok(())
+    }
+
     /// Prepare the public inputs for the circuit.
     pub fn prepare_public_inputs(
         &mut self,

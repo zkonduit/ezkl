@@ -226,6 +226,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             strategy,
             settings_path,
             check_mode,
+            expected_witness,
         } => {
             prove(
                 witness,
@@ -237,6 +238,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 strategy,
                 settings_path,
                 check_mode,
+                expected_witness
             )
             .await
         }
@@ -1096,6 +1098,7 @@ pub(crate) async fn prove(
     strategy: StrategyType,
     settings_path: PathBuf,
     check_mode: CheckMode,
+    expected_witness: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     let data = GraphWitness::from_path(data_path)?;
     use crate::pfsys::load_pk;
@@ -1103,6 +1106,11 @@ pub(crate) async fn prove(
     let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, check_mode)?;
 
     circuit.load_data(&data, None).await?;
+
+    if let Some(expected_witness) = expected_witness {
+        let expected_witness = GraphWitness::from_path(expected_witness)?;
+        circuit.evm_data_safety_check(&data,&expected_witness)?;
+    }
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     let circuit_settings = circuit.settings.clone();

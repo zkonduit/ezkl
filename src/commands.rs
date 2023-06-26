@@ -464,6 +464,10 @@ pub enum Commands {
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = "safe")]
         check_mode: CheckMode,
+        /// The path to the expected .json witness file that we will be used to check that the fetched
+        /// onchain data from witness (if there is any onchain data) is correct before running the proof.
+        #[arg(short = 'E', long)]
+        expected_witness: Option<PathBuf>,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for a single proof
