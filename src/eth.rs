@@ -50,6 +50,8 @@ abigen!(QuantizeData, "./abis/QuantizeData.json");
 
 const TESTREADS_SOL: &str = include_str!("../contracts/TestReads.sol");
 const QUANTIZE_DATA_SOL: &str = include_str!("../contracts/QuantizeData.sol");
+const ATTESTDATA_SOL: &str = include_str!("../contracts/AttestData.sol");
+const VERIFIERBASE_SOL: &str = include_str!("../contracts/VerifierBase.sol");
 
 /// Return an instance of Anvil and a client for the given RPC URL. If none is provided, a local client is used.
 #[cfg(not(target_arch = "wasm32"))]
@@ -807,12 +809,7 @@ pub fn fix_verifier_sol(
 
     let contract = if input_data.is_some() || output_data.is_some() {
         let mut accounts_len = 0;
-        let mut contract = match std::fs::read_to_string("./contracts/AttestData.sol") {
-            Ok(file_content) => file_content,
-            Err(err) => {
-                panic!("Error reading VerifierBase.sol: {}", err);
-            }
-        };
+        let mut contract = ATTESTDATA_SOL.to_string();
         // fill in the quantization params and total calls
         // as constants to the contract to save on gas
         if let Some(input_data) = input_data {
@@ -839,12 +836,7 @@ pub fn fix_verifier_sol(
         }
         contract.replace("AccountCall[]", &format!("AccountCall[{}]", accounts_len))
     } else {
-        match std::fs::read_to_string("./contracts/VerifierBase.sol") {
-            Ok(file_content) => file_content,
-            Err(err) => {
-                panic!("Error reading VerifierBase.sol: {}", err);
-            }
-        }
+        VERIFIERBASE_SOL.to_string()
     };
 
     // Insert the max_transcript_addr into the contract string at the correct position.
