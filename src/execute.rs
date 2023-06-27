@@ -50,7 +50,7 @@ use plotters::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
 use rand::Rng;
 #[cfg(not(target_arch = "wasm32"))]
-use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 #[cfg(not(target_arch = "wasm32"))]
 use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
@@ -614,7 +614,7 @@ pub(crate) async fn calibrate(
         let _r = Gag::stdout().unwrap();
         // Result<Vec<GraphSettings>, &str>
         let tasks = chunks
-            .par_iter()
+            .iter()
             .map(|chunk| {
                 // we need to create a new run args for each chunk
                 // time it
