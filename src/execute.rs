@@ -561,18 +561,34 @@ pub(crate) fn init_spinner() -> ProgressBar {
     pb.set_draw_target(indicatif::ProgressDrawTarget::stdout());
     pb.enable_steady_tick(Duration::from_millis(200));
     pb.set_style(
-        ProgressStyle::with_template("{spinner:.blue} {msg}")
+        ProgressStyle::with_template("[{elapsed_precise}] {spinner:.blue} {msg}")
             .unwrap()
             .tick_strings(&[
-                "-------------------------------- - ✨ ",
-                "-------------------------------- - ⏳ ",
-                "-------------------------------- - 🌎 ",
-                "-------------------------------- - 🔎 ",
-                "-------------------------------- - 🥹 ",
-                "-------------------------------- - 🫠 ",
-                "-------------------------------- - 👾 ",
+                "------ - ✨ ",
+                "------ - ⏳ ",
+                "------ - 🌎 ",
+                "------ - 🔎 ",
+                "------ - 🥹 ",
+                "------ - 🫠 ",
+                "------ - 👾 ",
             ]),
     );
+    pb
+}
+
+// not for wasm targets
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn init_bar(len: u64) -> ProgressBar {
+    let pb = indicatif::ProgressBar::new(len);
+    pb.set_draw_target(indicatif::ProgressDrawTarget::stdout());
+    pb.enable_steady_tick(Duration::from_millis(200));
+    let sty = ProgressStyle::with_template(
+        "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",
+    )
+    .unwrap()
+    .progress_chars("##-");
+    pb.set_style(sty.clone());
+
     pb
 }
 
@@ -591,9 +607,9 @@ pub(crate) async fn calibrate(
     // now retrieve the run args
     let run_args = settings.run_args;
 
-    let pb = init_spinner();
+    let pb = init_bar((4..12).len() as u64);
 
-    pb.set_message("Calibrating...");
+    pb.set_message("calibrating...");
     // we load the model to get the input and output shapes
     let _r = Gag::stdout().unwrap();
     let model = Model::from_run_args(&run_args, &model_path).unwrap();
@@ -608,7 +624,7 @@ pub(crate) async fn calibrate(
     let mut found_params: Vec<GraphSettings> = vec![];
 
     for scale in 4..12 {
-        pb.set_message(format!("Calibrating with scale {}", scale));
+        pb.set_message(format!("scale {}", scale));
         std::thread::sleep(Duration::from_millis(100));
 
         let _r = Gag::stdout().unwrap();
@@ -684,6 +700,7 @@ pub(crate) async fn calibrate(
         }
 
         std::mem::drop(_r);
+        pb.inc(1);
     }
 
     pb.finish_with_message("Calibration Done.");
