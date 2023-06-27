@@ -50,7 +50,7 @@ use plotters::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
 use rand::Rng;
 #[cfg(not(target_arch = "wasm32"))]
-use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 #[cfg(not(target_arch = "wasm32"))]
 use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
@@ -561,18 +561,34 @@ pub(crate) fn init_spinner() -> ProgressBar {
     pb.set_draw_target(indicatif::ProgressDrawTarget::stdout());
     pb.enable_steady_tick(Duration::from_millis(200));
     pb.set_style(
-        ProgressStyle::with_template("{spinner:.blue} {msg}")
+        ProgressStyle::with_template("[{elapsed_precise}] {spinner:.blue} {msg}")
             .unwrap()
             .tick_strings(&[
-                "-------------------------------- - ✨ ",
-                "-------------------------------- - ⏳ ",
-                "-------------------------------- - 🌎 ",
-                "-------------------------------- - 🔎 ",
-                "-------------------------------- - 🥹 ",
-                "-------------------------------- - 🫠 ",
-                "-------------------------------- - 👾 ",
+                "------ - ✨ ",
+                "------ - ⏳ ",
+                "------ - 🌎 ",
+                "------ - 🔎 ",
+                "------ - 🥹 ",
+                "------ - 🫠 ",
+                "------ - 👾 ",
             ]),
     );
+    pb
+}
+
+// not for wasm targets
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn init_bar(len: u64) -> ProgressBar {
+    let pb = indicatif::ProgressBar::new(len);
+    pb.set_draw_target(indicatif::ProgressDrawTarget::stdout());
+    pb.enable_steady_tick(Duration::from_millis(200));
+    let sty = ProgressStyle::with_template(
+        "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",
+    )
+    .unwrap()
+    .progress_chars("##-");
+    pb.set_style(sty.clone());
+
     pb
 }
 
@@ -591,9 +607,9 @@ pub(crate) async fn calibrate(
     // now retrieve the run args
     let run_args = settings.run_args;
 
-    let pb = init_spinner();
+    let pb = init_bar((4..12).len() as u64);
 
-    pb.set_message("Calibrating...");
+    pb.set_message("calibrating...");
     // we load the model to get the input and output shapes
     let _r = Gag::stdout().unwrap();
     let model = Model::from_run_args(&run_args, &model_path).unwrap();
@@ -608,13 +624,13 @@ pub(crate) async fn calibrate(
     let mut found_params: Vec<GraphSettings> = vec![];
 
     for scale in 4..12 {
-        pb.set_message(format!("Calibrating with scale {}", scale));
+        pb.set_message(format!("scale {}", scale));
         std::thread::sleep(Duration::from_millis(100));
 
         let _r = Gag::stdout().unwrap();
         // Result<Vec<GraphSettings>, &str>
         let tasks = chunks
-            .par_iter()
+            .iter()
             .map(|chunk| {
                 // we need to create a new run args for each chunk
                 // time it
@@ -684,6 +700,7 @@ pub(crate) async fn calibrate(
         }
 
         std::mem::drop(_r);
+        pb.inc(1);
     }
 
     pb.finish_with_message("Calibration Done.");
@@ -1413,14 +1430,15 @@ pub(crate) fn run_fuzz_fn(
     let num_failures = AtomicI64::new(0);
     let _r = Gag::stdout().unwrap();
 
-    let pb = init_spinner();
-    pb.set_message("Fuzzing...");
+    let pb = init_bar(num_runs as u64);
+    pb.set_message("fuzzing...");
     (0..num_runs).into_par_iter().for_each(|_| {
         let result = f();
         if result.is_ok() {
             passed.swap(false, Ordering::Relaxed);
             num_failures.fetch_add(1, Ordering::Relaxed);
         }
+        pb.inc(1);
     });
     pb.finish_with_message("Done.");
     std::mem::drop(_r);
