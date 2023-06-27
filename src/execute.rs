@@ -1430,14 +1430,15 @@ pub(crate) fn run_fuzz_fn(
     let num_failures = AtomicI64::new(0);
     let _r = Gag::stdout().unwrap();
 
-    let pb = init_spinner();
-    pb.set_message("Fuzzing...");
+    let pb = init_bar(num_runs as u64);
+    pb.set_message("fuzzing...");
     (0..num_runs).into_par_iter().for_each(|_| {
         let result = f();
         if result.is_ok() {
             passed.swap(false, Ordering::Relaxed);
             num_failures.fetch_add(1, Ordering::Relaxed);
         }
+        pb.inc(1);
     });
     pb.finish_with_message("Done.");
     std::mem::drop(_r);
