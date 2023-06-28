@@ -44,6 +44,8 @@ pub mod fieldutils;
 /// a Halo2 circuit.
 #[cfg(feature = "onnx")]
 pub mod graph;
+/// beautiful logging
+pub mod logger;
 /// Tools for proofs and verification used by cli
 pub mod pfsys;
 /// Python bindings
