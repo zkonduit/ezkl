@@ -1504,9 +1504,11 @@ pub fn sumpool<
 /// ```
 /// use ezkl_lib::tensor::Tensor;
 /// use ezkl_lib::tensor::ops::max_pool2d;
+/// use ezkl_lib::circuit::utils::F32;
 /// use halo2_proofs::circuit::Value;
 /// use halo2_proofs::plonk::Assigned;
 /// use halo2curves::pasta::Fp as F;
+///
 ///
 /// let x = Tensor::<i128>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -1515,8 +1517,17 @@ pub fn sumpool<
 /// let pooled = max_pool2d::<i128>(&x, &(0, 0), &(1, 1), &(2, 2)).unwrap();
 /// let expected: Tensor<i128> = Tensor::<i128>::new(Some(&[5, 4, 4, 6]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled, expected);
+///
+/// let x = Tensor::<f32>::new(Some(&[-0.9180, -0.4702, -0.0882, -0.0885, 0.3940,
+///                                  -0.4884, 0.1395,  1.7860, -0.9729,  1.5160, -0.3346,
+///                                 -0.0601, -0.1140,  0.2522, -0.2938, -0.0355]), &[1,1,4,4]).unwrap();
+/// let x = x.map(|x| F32(x));
+/// let pooled = max_pool2d::<F32>(&x, &(0, 0), &(2, 2), &(2, 2)).unwrap();
+/// let expected = Tensor::<f32>::new(Some(&[0.3940,  1.7860, 1.5160, -0.0355]), &[1, 1, 2, 2]).unwrap();
+/// let expected = expected.map(|x| F32(x));
+/// assert_eq!(pooled, expected);
 /// ```
-pub fn max_pool2d<T: TensorType + std::marker::Sync + std::marker::Send>(
+pub fn max_pool2d<T: TensorType + std::marker::Sync + std::marker::Send + std::cmp::Ord>(
     image: &Tensor<T>,
     padding: &(usize, usize),
     stride: &(usize, usize),
@@ -1537,13 +1548,6 @@ pub fn max_pool2d<T: TensorType + std::marker::Sync + std::marker::Send>(
 
     let mut output: Tensor<T> =
         Tensor::new(None, &[batch, input_channels, horz_slides, vert_slides]).unwrap();
-
-    let fmax = |acc: Option<T>, x: T| -> Option<T> {
-        match (acc, x) {
-            (None, x) => Some(x),
-            (Some(a), x) => a.tmax(&x),
-        }
-    };
 
     let cartesian_coord = vec![
         (0..batch),
@@ -1573,7 +1577,7 @@ pub fn max_pool2d<T: TensorType + std::marker::Sync + std::marker::Send>(
                 ])
                 .unwrap()
                 .into_iter()
-                .fold(None, fmax)
+                .max()
                 .unwrap();
             *o = themax;
         });

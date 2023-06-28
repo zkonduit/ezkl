@@ -808,7 +808,7 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     }
     let image_dims = image.dims();
 
-    let (batch_size, input_channels, image_height, image_width) =
+    let (batch, input_channels, image_height, image_width) =
         (image_dims[0], image_dims[1], image_dims[2], image_dims[3]);
 
     let mut padded_image = image.clone();
@@ -817,30 +817,36 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     let horz_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
     let vert_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
 
-    let mut output: Tensor<ValType<F>> = Tensor::new(
-        None,
-        &[batch_size, input_channels, horz_slides, vert_slides],
-    )?;
+    let mut output: Tensor<ValType<F>> =
+        Tensor::new(None, &[batch, input_channels, horz_slides, vert_slides])?;
 
-    for b in 0..batch_size {
-        for i in 0..input_channels {
-            for j in 0..horz_slides {
-                let rs = j * stride.0;
-                for k in 0..vert_slides {
-                    let cs = k * stride.1;
-                    let slice = padded_image.get_slice(&[
-                        b..b + 1,
-                        i..(i + 1),
-                        rs..(rs + pool_dims.0),
-                        cs..(cs + pool_dims.1),
-                    ])?;
-                    let max_w = max(config, region, &[slice])?;
-                    let max_w = &max_w.get_inner_tensor()?[0];
-                    output.set(&[b, i, j, k], max_w.clone());
-                }
-            }
-        }
-    }
+    let cartesian_coord = vec![
+        (0..batch),
+        (0..input_channels),
+        (0..vert_slides),
+        (0..horz_slides),
+    ]
+    .iter()
+    .cloned()
+    .multi_cartesian_product()
+    .collect::<Vec<_>>();
+
+    output.iter_mut().enumerate().for_each(|(flat_index, o)| {
+        let coord = &cartesian_coord[flat_index];
+        let (b, i, j, k) = (coord[0], coord[1], coord[2], coord[3]);
+        let rs = j * stride.0;
+        let cs = k * stride.1;
+        let slice = padded_image
+            .get_slice(&[
+                b..(b + 1),
+                i..(i + 1),
+                rs..(rs + pool_dims.0),
+                cs..(cs + pool_dims.1),
+            ])
+            .unwrap();
+        let max_w = max(config, region, &[slice]).unwrap();
+        *o = max_w.get_inner_tensor().unwrap()[0].clone();
+    });
 
     let res: ValTensor<F> = output.into();
 
@@ -851,8 +857,8 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
             .iter()
             .all(|&x| x == 0);
         if is_assigned {
-            let safe_max_pool =
-                non_accum_max_pool2d(&image.get_inner()?, &padding, &stride, &pool_dims)?;
+            let raw_values = Into::<Tensor<i32>>::into(image.get_inner()?);
+            let safe_max_pool = non_accum_max_pool2d(&raw_values, &padding, &stride, &pool_dims)?;
 
             assert_eq!(
                 Into::<Tensor<i32>>::into(res.get_inner()?),
