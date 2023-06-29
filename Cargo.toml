@@ -109,10 +109,6 @@ harness = false
 name = "elgamal"
 harness = false
 
-[[bench]]
-name = "accum_pack"
-harness = false
-
 
 [[bench]]
 name = "accum_einsum_matmul"

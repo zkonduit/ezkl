@@ -20,6 +20,7 @@ jobs:
 
   bench_poseidon:
     runs-on: self-hosted
+    needs: [bench_elgamal]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -32,6 +33,7 @@ jobs:
 
   bench_einsum_accum_matmul:
     runs-on: self-hosted
+    needs: [bench_poseidon]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -44,6 +46,7 @@ jobs:
 
   bench_accum_matmul_relu:
     runs-on: self-hosted
+    needs: [bench_poseidon]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -56,6 +59,7 @@ jobs:
 
   bench_relu:
     runs-on: self-hosted
+    needs: [bench_poseidon]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -68,6 +72,7 @@ jobs:
 
   bench_accum_dot:
     runs-on: self-hosted
+    needs: [bench_poseidon]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -80,6 +85,7 @@ jobs:
 
   bench_accum_conv:
     runs-on: self-hosted
+    needs: [bench_poseidon]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -92,6 +98,7 @@ jobs:
 
   bench_accum_sumpool:
     runs-on: self-hosted
+    needs: [bench_poseidon]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -104,6 +111,7 @@ jobs:
 
   bench_pairwise_add:
     runs-on: self-hosted
+    needs: [bench_poseidon]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -116,6 +124,7 @@ jobs:
 
   bench_accum_sum:
     runs-on: self-hosted
+    needs: [bench_poseidon]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -128,6 +137,7 @@ jobs:
 
   bench_pairwise_pow:
     runs-on: self-hosted
+    needs: [bench_poseidon]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -138,14 +148,4 @@ jobs:
       - name: Bench pairwise pow
         run: cargo bench --verbose --bench pairwise_pow
 
-  bench_accum_pack:
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2023-06-27
-          override: true
-          components: rustfmt, clippy
-      - name: Bench accum pack
-        run: cargo bench --verbose --bench accum_pack
+
