@@ -20,8 +20,10 @@ type Decimals = u8;
 type Call = String;
 type RPCUrl = String;
 
-/// Inner elements of inputs/outputs coming from a file
-pub type FileSourceInner = Vec<Vec<f32>>;
+/// Inner elements of inputs coming from a file
+pub type FileSourceInner = Vec<Vec<f64>>;
+/// Inner elements of witness coming from a witness
+pub type WitnessFileSourceInner = Vec<Vec<i128>>;
 /// Inner elements of inputs/outputs coming from on-chain
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialOrd, PartialEq)]
 pub struct OnChainSourceInner {
@@ -42,13 +44,14 @@ impl OnChainSourceInner {
     #[cfg(not(target_arch = "wasm32"))]
     /// Create dummy local on-chain data to test the OnChain data source
     pub async fn test_from_file_data(
-        data: &FileSourceInner,
+        data: &WitnessFileSourceInner,
         scales: Vec<u32>,
         shapes: Vec<Vec<usize>>,
         rpc: Option<&str>,
     ) -> Result<(Vec<Tensor<i128>>, Self), Box<dyn std::error::Error>> {
         use crate::eth::{evm_quantize, read_on_chain_inputs, test_on_chain_data};
         use crate::graph::scale_to_multiplier;
+        use itertools::Itertools;
         use log::debug;
 
         // Set up local anvil instance for reading on-chain data
@@ -56,13 +59,21 @@ impl OnChainSourceInner {
 
         let address = client.address();
 
-        let calls_to_accounts = test_on_chain_data(client.clone(), data).await?;
+        let scales: Vec<f64> = scales.into_iter().map(scale_to_multiplier).collect();
+
+        // unquantize data
+        let float_data = data
+            .iter()
+            .zip(scales.iter())
+            .map(|(t, scale)| t.iter().map(|e| ((*e as f64 / scale) as f32)).collect_vec())
+            .collect::<Vec<Vec<f32>>>();
+
+        let calls_to_accounts = test_on_chain_data(client.clone(), &float_data).await?;
         debug!("Calls to accounts: {:?}", calls_to_accounts);
         let inputs = read_on_chain_inputs(client.clone(), address, &calls_to_accounts).await?;
         debug!("Inputs: {:?}", inputs);
 
         let mut quantized_evm_inputs = vec![];
-        let scales: Vec<f64> = scales.into_iter().map(scale_to_multiplier).collect();
 
         let mut prev = 0;
         for (idx, i) in data.iter().enumerate() {
@@ -141,26 +152,29 @@ impl From<OnChainSourceInner> for DataSource {
 }
 
 /// Enum that defines source of the inputs/outputs to the EZKL model
-/// used for f32 to f64 conversion
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Serialize, PartialOrd, PartialEq)]
 #[serde(untagged)]
-enum DataSourceF64 {
+pub enum WitnessSource {
+    /// .json File data source.
+    File(WitnessFileSourceInner),
+    /// On-chain data source. The first element is the calls to the account, and the second is the RPC url.
     OnChain(OnChainSourceInner),
-    File(Vec<Vec<f64>>),
+}
+impl Default for WitnessSource {
+    fn default() -> Self {
+        WitnessSource::File(vec![vec![]])
+    }
 }
 
-impl From<DataSource> for DataSourceF64 {
-    fn from(source: DataSource) -> Self {
-        match source {
-            DataSource::File(data) => {
-                let data = data
-                    .iter()
-                    .map(|v| v.iter().map(|&f| f as f64).collect::<Vec<_>>())
-                    .collect::<Vec<_>>();
-                DataSourceF64::File(data)
-            }
-            DataSource::OnChain(source) => DataSourceF64::OnChain(source),
-        }
+impl From<WitnessFileSourceInner> for WitnessSource {
+    fn from(data: WitnessFileSourceInner) -> Self {
+        WitnessSource::File(data)
+    }
+}
+
+impl From<OnChainSourceInner> for WitnessSource {
+    fn from(data: OnChainSourceInner) -> Self {
+        WitnessSource::OnChain(data)
     }
 }
 
@@ -170,9 +184,9 @@ impl From<DataSource> for DataSourceF64 {
 pub struct GraphWitness {
     /// Inputs to the model / computational graph (can be empty vectors if inputs are coming from on-chain).
     /// TODO: Add retrieve from on-chain functionality
-    pub input_data: DataSource,
+    pub input_data: WitnessSource,
     /// The expected output of the model (can be empty vectors if outputs are not being constrained).
-    pub output_data: DataSource,
+    pub output_data: WitnessSource,
     /// Optional hashes of the inputs (can be None if there are no commitments). Wrapped as Option for backwards compatibility
     pub processed_inputs: Option<ModuleForwardResult>,
     /// Optional hashes of the params (can be None if there are no commitments). Wrapped as Option for backwards compatibility
@@ -183,7 +197,7 @@ pub struct GraphWitness {
 
 impl GraphWitness {
     ///
-    pub fn new(input_data: DataSource, output_data: DataSource) -> Self {
+    pub fn new(input_data: WitnessSource, output_data: WitnessSource) -> Self {
         GraphWitness {
             input_data,
             output_data,
@@ -211,14 +225,6 @@ impl GraphWitness {
 pub struct GraphInput {
     /// Inputs to the model / computational graph (can be empty vectors if inputs are coming from on-chain).
     pub input_data: DataSource,
-}
-
-impl From<GraphWitness> for GraphInput {
-    fn from(witness: GraphWitness) -> Self {
-        GraphInput {
-            input_data: witness.input_data,
-        }
-    }
 }
 
 impl GraphInput {
@@ -401,6 +407,21 @@ impl ToPyObject for DataSource {
 }
 
 #[cfg(feature = "python-bindings")]
+impl ToPyObject for WitnessSource {
+    fn to_object(&self, py: Python) -> PyObject {
+        match self {
+            WitnessSource::File(data) => data.to_object(py),
+            WitnessSource::OnChain(source) => {
+                let dict = PyDict::new(py);
+                dict.set_item("rpc_url", &source.rpc).unwrap();
+                dict.set_item("calls_to_accounts", &source.calls).unwrap();
+                dict.to_object(py)
+            }
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
 impl ToPyObject for GraphWitness {
     fn to_object(&self, py: Python) -> PyObject {
         // Create a Python dictionary
@@ -459,8 +480,7 @@ impl Serialize for GraphInput {
         S: Serializer,
     {
         let mut state = serializer.serialize_struct("GraphInput", 4)?;
-        let input_data: DataSourceF64 = self.input_data.clone().into();
-        state.serialize_field("input_data", &input_data)?;
+        state.serialize_field("input_data", &self.input_data)?;
         state.end()
     }
 }
@@ -488,16 +508,37 @@ impl<'de> Deserialize<'de> for DataSource {
     }
 }
 
+// !!! ALWAYS USE JSON SERIALIZATION FOR GRAPH INPUT
+// UNTAGGED ENUMS WONT WORK :( as highlighted here:
+impl<'de> Deserialize<'de> for WitnessSource {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let this_json: Box<serde_json::value::RawValue> = Deserialize::deserialize(deserializer)?;
+
+        let first_try: Result<WitnessFileSourceInner, _> = serde_json::from_str(this_json.get());
+
+        if let Ok(t) = first_try {
+            return Ok(WitnessSource::File(t));
+        }
+        let second_try: Result<OnChainSourceInner, _> = serde_json::from_str(this_json.get());
+        if let Ok(t) = second_try {
+            return Ok(WitnessSource::OnChain(t));
+        }
+
+        Err(serde::de::Error::custom("failed to deserialize DataSource"))
+    }
+}
+
 impl Serialize for GraphWitness {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         let mut state = serializer.serialize_struct("GraphWitness", 4)?;
-        let input_data: DataSourceF64 = self.input_data.clone().into();
-        let output_data: DataSourceF64 = self.output_data.clone().into();
-        state.serialize_field("input_data", &input_data)?;
-        state.serialize_field("output_data", &output_data)?;
+        state.serialize_field("input_data", &self.input_data)?;
+        state.serialize_field("output_data", &self.output_data)?;
 
         if let Some(processed_inputs) = &self.processed_inputs {
             state.serialize_field("processed_inputs", &processed_inputs)?;
@@ -540,9 +581,9 @@ mod tests {
     // this is for backwards compatibility with the old format
     fn test_graph_input_serialization_round_trip() {
         let file = GraphInput::new(DataSource::File(vec![vec![
-            0.053_262_424,
-            0.074_970_566,
-            0.052_355_476,
+            0.05326242372393608,
+            0.07497056573629379,
+            0.05235547572374344,
         ]]));
 
         let serialized = serde_json::to_string(&file).unwrap();
@@ -555,7 +596,6 @@ mod tests {
         let graph_input3 = serde_json::from_str::<GraphInput>(JSON)
             .map_err(|e| e.to_string())
             .unwrap();
-        println!("{:?}", graph_input3.input_data);
         assert_eq!(graph_input3, file);
     }
 }

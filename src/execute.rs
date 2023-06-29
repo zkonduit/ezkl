@@ -6,8 +6,8 @@ use crate::commands::{Cli, Commands, RunArgs};
 use crate::eth::{deploy_da_verifier_via_solidity, deploy_verifier_via_solidity};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{fix_verifier_sol, get_contract_artifacts, verify_proof_via_solidity};
-use crate::graph::input::{DataSource, GraphInput};
-use crate::graph::{scale_to_multiplier, GraphCircuit, GraphSettings, GraphWitness, Model};
+use crate::graph::input::{GraphInput, WitnessSource};
+use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::{TestDataSource, TestSources, Visibility};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
@@ -497,9 +497,9 @@ pub(crate) async fn gen_witness(
     let data = GraphInput::from_path(data)?;
 
     #[cfg(not(target_arch = "wasm32"))]
-    circuit.load_inputs(&data).await?;
+    circuit.load_graph_input(&data).await?;
     #[cfg(target_arch = "wasm32")]
-    circuit.load_inputs(&data)?;
+    circuit.load_graph_input(&data)?;
 
     let start_time = Instant::now();
 
@@ -516,22 +516,22 @@ pub(crate) async fn gen_witness(
         res.outputs.iter().map(|t| t.dims()).collect_vec()
     );
 
-    let output_scales = circuit.model.graph.get_output_scales();
-    let output_scales = output_scales
+    let input_witness: Vec<Vec<i128>> = res
+        .inputs
         .iter()
-        .map(|scale| scale_to_multiplier(*scale));
+        .map(|t| t.clone().into_iter().collect_vec())
+        .collect();
 
-    let float_res: Vec<Vec<f32>> = res
+    let output_witness: Vec<Vec<i128>> = res
         .outputs
         .iter()
-        .zip(output_scales)
-        .map(|(t, scale)| t.iter().map(|e| ((*e as f64 / scale) as f32)).collect_vec())
+        .map(|t| t.clone().into_iter().collect_vec())
         .collect();
-    trace!("model forward pass output: {:?}", float_res);
+    trace!("model forward pass output: {:?}", output_witness);
 
     let witness = GraphWitness {
-        input_data: data.input_data,
-        output_data: DataSource::File(float_res),
+        input_data: WitnessSource::File(input_witness),
+        output_data: WitnessSource::File(output_witness),
         processed_inputs: res.processed_inputs,
         processed_params: res.processed_params,
         processed_outputs: res.processed_outputs,
@@ -653,7 +653,7 @@ pub(crate) async fn calibrate(
 
                 tokio::task::spawn(async move {
                     circuit
-                        .load_inputs(&chunk)
+                        .load_graph_input(&chunk)
                         .await
                         .map_err(|_| "failed to load circuit inputs")
                         .unwrap();
@@ -762,9 +762,9 @@ pub(crate) async fn mock(
     let data = GraphWitness::from_path(data_path.clone())?;
 
     #[cfg(not(target_arch = "wasm32"))]
-    circuit.load_data(&data, None).await?;
+    circuit.load_graph_witness(&data, None).await?;
     #[cfg(target_arch = "wasm32")]
-    circuit.load_data(&data)?;
+    circuit.load_graph_witness(&data)?;
 
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
@@ -901,7 +901,7 @@ pub(crate) fn create_evm_data_attestation_verifier(
 
     let data = GraphWitness::from_path(witness)?;
 
-    let output_data = if let DataSource::OnChain(source) = data.output_data {
+    let output_data = if let WitnessSource::OnChain(source) = data.output_data {
         if !visibility.output.is_public() {
             todo!("we currently don't support private output data on chain")
         }
@@ -914,7 +914,7 @@ pub(crate) fn create_evm_data_attestation_verifier(
         None
     };
 
-    let input_data = if let DataSource::OnChain(source) = data.input_data {
+    let input_data = if let WitnessSource::OnChain(source) = data.input_data {
         if !visibility.input.is_public() {
             todo!("we currently don't support private input data on chain")
         }
@@ -1096,7 +1096,7 @@ pub(crate) async fn setup_test_evm_witness(
     };
 
     circuit
-        .load_data(&data, Some(test_on_chain_witness))
+        .load_graph_witness(&data, Some(test_on_chain_witness))
         .await?;
 
     Ok(())
@@ -1119,7 +1119,7 @@ pub(crate) async fn prove(
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, check_mode)?;
 
-    circuit.load_data(&data, None).await?;
+    circuit.load_graph_witness(&data, None).await?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     let circuit_settings = circuit.settings.clone();
@@ -1202,7 +1202,7 @@ pub(crate) async fn fuzz(
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
         .map_err(Box::<dyn Error>::from)?;
 
-    circuit.load_data(&data, None).await?;
+    circuit.load_graph_witness(&data, None).await?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     let strategy = KZGSingleStrategy::new(&params);

@@ -1,4 +1,4 @@
-use crate::graph::input::{CallsToAccount, DataSource, GraphWitness};
+use crate::graph::input::{CallsToAccount, GraphWitness, WitnessSource};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::GraphSettings;
 use crate::pfsys::evm::{DeploymentCode, EvmVerificationError};
@@ -164,12 +164,12 @@ pub async fn deploy_da_verifier_via_solidity(
     let mut instance_idx = 0;
     let mut contract_instance_offset = 0;
 
-    if let DataSource::OnChain(source) = witness.input_data {
+    if let WitnessSource::OnChain(source) = witness.input_data {
         for call in source.calls {
             calls_to_accounts.push(call);
             instance_idx += 1;
         }
-    } else if let DataSource::File(source) = witness.input_data {
+    } else if let WitnessSource::File(source) = witness.input_data {
         if settings.run_args.input_visibility.is_public() {
             instance_idx += source.len();
             for s in source {
@@ -178,7 +178,7 @@ pub async fn deploy_da_verifier_via_solidity(
         }
     }
 
-    if let DataSource::OnChain(source) = witness.output_data {
+    if let WitnessSource::OnChain(source) = witness.output_data {
         let output_scales = settings.model_output_scales;
         for call in source.calls {
             calls_to_accounts.push(call);

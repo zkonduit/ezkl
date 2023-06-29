@@ -3,7 +3,7 @@
 mod native_tests {
 
     use core::panic;
-    use ezkl_lib::graph::DataSource;
+    use ezkl_lib::graph::input::WitnessSource;
     use ezkl_lib::graph::GraphWitness;
     use lazy_static::lazy_static;
     use std::env::var;
@@ -130,28 +130,28 @@ mod native_tests {
                 .expect("failed to load input data");
 
             let input_data = match data.input_data {
-                DataSource::File(data) => data,
-                DataSource::OnChain(_) => panic!("Only File data sources support batching"),
+                WitnessSource::File(data) => data,
+                WitnessSource::OnChain(_) => panic!("Only File data sources support batching"),
             };
 
             let output_data = match data.output_data {
-                DataSource::File(data) => data,
-                DataSource::OnChain(_) => panic!("Only File data sources support batching"),
+                WitnessSource::File(data) => data,
+                WitnessSource::OnChain(_) => panic!("Only File data sources support batching"),
             };
 
-            let duplicated_input_data: Vec<Vec<f32>> = input_data
+            let duplicated_input_data: Vec<Vec<i128>> = input_data
                 .iter()
                 .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
                 .collect();
 
-            let duplicated_output_data: Vec<Vec<f32>> = output_data
+            let duplicated_output_data: Vec<Vec<i128>> = output_data
                 .iter()
                 .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
                 .collect();
 
             let duplicated_data = GraphWitness::new(
-                DataSource::File(duplicated_input_data),
-                DataSource::File(duplicated_output_data),
+                WitnessSource::File(duplicated_input_data),
+                WitnessSource::File(duplicated_output_data),
             );
 
             let res =

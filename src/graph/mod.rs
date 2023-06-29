@@ -13,9 +13,9 @@ pub mod vars;
 
 pub use input::{DataSource, GraphWitness};
 
+use self::input::{FileSourceInner, GraphInput, WitnessFileSourceInner};
 #[cfg(not(target_arch = "wasm32"))]
-use self::input::OnChainSourceInner;
-use self::input::{FileSourceInner, GraphInput};
+use self::input::{OnChainSourceInner, WitnessSource};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
@@ -299,9 +299,12 @@ impl GraphCircuit {
 
     #[cfg(target_arch = "wasm32")]
     /// load inputs and outputs for the model
-    pub fn load_data(&mut self, data: &GraphWitness) -> Result<(), Box<dyn std::error::Error>> {
-        self.load_inputs(&data.clone().into())?;
-        self.load_outputs(data)?;
+    pub fn load_graph_witness(
+        &mut self,
+        data: &GraphWitness,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.inputs = self.load_witness(&data)?;
+        self.outputs = self.load_witness(&data)?;
         // load the module settings
         self.module_settings = ModuleSettings::from(data);
 
@@ -310,7 +313,7 @@ impl GraphCircuit {
 
     #[cfg(not(target_arch = "wasm32"))]
     /// load inputs and outputs for the model
-    pub async fn load_data(
+    pub async fn load_graph_witness(
         &mut self,
         data: &GraphWitness,
         test_on_chain_data: Option<TestOnChainData>,
@@ -322,8 +325,8 @@ impl GraphCircuit {
             self.populate_on_chain_test_data(&mut data, test_path)
                 .await?;
         } else {
-            self.load_inputs(&data.clone().into()).await?;
-            self.load_outputs(&data).await?;
+            self.inputs = self.load_witness(&data).await?;
+            self.outputs = self.load_witness(&data).await?;
         }
 
         // load the module settings
@@ -377,7 +380,10 @@ impl GraphCircuit {
 
     ///
     #[cfg(target_arch = "wasm32")]
-    pub fn load_inputs(&mut self, data: &GraphInput) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn load_graph_input(
+        &mut self,
+        data: &GraphInput,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let shapes = self.model.graph.input_shapes();
         let scales = vec![self.settings.run_args.scale; shapes.len()];
         self.inputs = self.process_data_source(&data.input_data, shapes, scales)?;
@@ -386,7 +392,7 @@ impl GraphCircuit {
 
     ///
     #[cfg(not(target_arch = "wasm32"))]
-    pub async fn load_inputs(
+    pub async fn load_graph_input(
         &mut self,
         data: &GraphInput,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -395,7 +401,20 @@ impl GraphCircuit {
         self.inputs = self
             .process_data_source(&data.input_data, shapes, scales)
             .await?;
+
         Ok(())
+    }
+
+    ///
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn load_witness(
+        &mut self,
+        data: &GraphWitness,
+    ) -> Result<Vec<Tensor<i128>>, Box<dyn std::error::Error>> {
+        let shapes = self.model.graph.input_shapes();
+        let scales = vec![self.settings.run_args.scale; shapes.len()];
+        self.process_witness_source(&data.input_data, shapes, scales)
+            .await
     }
 
     ///
@@ -403,21 +422,7 @@ impl GraphCircuit {
     pub fn load_outputs(&mut self, data: &GraphWitness) -> Result<(), Box<dyn std::error::Error>> {
         let out_scales = self.model.graph.get_output_scales();
         let shapes = self.model.graph.output_shapes();
-        self.outputs = self.process_data_source(&data.output_data, shapes, out_scales)?;
-        Ok(())
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    ///
-    pub async fn load_outputs(
-        &mut self,
-        data: &GraphWitness,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let out_scales = self.model.graph.get_output_scales();
-        let shapes = self.model.graph.output_shapes();
-        self.outputs = self
-            .process_data_source(&data.output_data, shapes, out_scales)
-            .await?;
+        self.outputs = self.process_witness_source(&data.output_data, shapes, out_scales)?;
         Ok(())
     }
 
@@ -455,6 +460,27 @@ impl GraphCircuit {
                     .await
             }
             DataSource::File(file_data) => self.load_file_data(file_data, &shapes, scales),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    /// Process the data source for the model
+    async fn process_witness_source(
+        &mut self,
+        data: &WitnessSource,
+        shapes: Vec<Vec<usize>>,
+        scales: Vec<u32>,
+    ) -> Result<Vec<Tensor<i128>>, Box<dyn std::error::Error>> {
+        match &data {
+            WitnessSource::OnChain(source) => {
+                let mut per_item_scale = vec![];
+                for (i, shape) in shapes.iter().enumerate() {
+                    per_item_scale.extend(vec![scales[i]; shape.iter().product::<usize>()]);
+                }
+                self.load_on_chain_data(source.clone(), &shapes, per_item_scale)
+                    .await
+            }
+            WitnessSource::File(file_data) => self.load_witness_file_data(file_data, &shapes),
         }
     }
 
@@ -505,6 +531,22 @@ impl GraphCircuit {
             let mut t: Tensor<i128> = t.into_iter().into();
             t.reshape(shape);
 
+            data.push(t);
+        }
+        Ok(data)
+    }
+
+    ///
+    pub fn load_witness_file_data(
+        &mut self,
+        file_data: &WitnessFileSourceInner,
+        shapes: &Vec<Vec<usize>>,
+    ) -> Result<Vec<Tensor<i128>>, Box<dyn std::error::Error>> {
+        // quantize the supplied data using the provided scale.
+        let mut data: Vec<Tensor<i128>> = vec![];
+        for (d, shape) in file_data.iter().zip(shapes) {
+            let mut t: Tensor<i128> = d.clone().into_iter().into();
+            t.reshape(shape);
             data.push(t);
         }
         Ok(data)
@@ -638,8 +680,8 @@ impl GraphCircuit {
             }
 
             let input_data = match &data.input_data {
-                DataSource::File(input_data) => input_data,
-                DataSource::OnChain(_) => panic!(
+                WitnessSource::File(input_data) => input_data,
+                WitnessSource::OnChain(_) => panic!(
                     "Cannot use on-chain data source as input for on-chain test. 
                     Will manually populate on-chain data from file source instead"
                 ),
@@ -658,7 +700,7 @@ impl GraphCircuit {
             self.inputs = datam.0;
             data.input_data = datam.1.into();
         } else {
-            self.load_inputs(&data.clone().into()).await?;
+            self.inputs = self.load_witness(&data).await?;
         }
         if matches!(
             test_on_chain_data.data_sources.output,
@@ -670,8 +712,8 @@ impl GraphCircuit {
             }
 
             let output_data = match &data.output_data {
-                DataSource::File(output_data) => output_data,
-                DataSource::OnChain(_) => panic!(
+                WitnessSource::File(output_data) => output_data,
+                WitnessSource::OnChain(_) => panic!(
                     "Cannot use on-chain data source as output for on-chain test. 
                     Will manually populate on-chain data from file source instead"
                 ),
@@ -687,7 +729,7 @@ impl GraphCircuit {
             self.outputs = datum.0;
             data.output_data = datum.1.into();
         } else {
-            self.load_outputs(data).await?;
+            self.outputs = self.load_witness(data).await?;
         }
         // Save the updated GraphInput struct to the data_path
         data.save(test_on_chain_data.data)?;
