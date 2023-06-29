@@ -20,7 +20,6 @@ jobs:
 
   bench_poseidon:
     runs-on: self-hosted
-    needs: [bench_elgamal]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
