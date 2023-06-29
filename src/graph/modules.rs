@@ -19,13 +19,13 @@ const POSEIDON_LEN_GRAPH: usize = 10;
 /// Module sizes
 pub const POSEIDON_CONSTRAINTS_ESTIMATE: usize = 44;
 /// Module sizes
-pub const ELGAMAL_CONSTRAINTS_ESTIMATE: usize = 44;
-// 2^15
+pub const ELGAMAL_CONSTRAINTS_ESTIMATE: usize = 512;
+// 2^7
 /// Module sizes
 pub const POSEIDOIN_FIXED_COST_ESTIMATE: usize = 128;
-// 2^16
+// 2^15
 /// Module sizes
-pub const ELGAMAL_FIXED_COST_ESTIMATE: usize = 65536;
+pub const ELGAMAL_FIXED_COST_ESTIMATE: usize = 32768;
 
 /// Poseidon module type
 pub type ModulePoseidon =
