@@ -303,8 +303,10 @@ impl GraphCircuit {
         &mut self,
         data: &GraphWitness,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        self.inputs = self.load_witness(&data)?;
-        self.outputs = self.load_witness(&data)?;
+        self.inputs =
+            self.process_witness_source(&data.input_data, self.model.graph.input_shapes())?;
+        self.outputs =
+            self.process_witness_source(&data.output_data, self.model.graph.output_shapes())?;
         // load the module settings
         self.module_settings = ModuleSettings::from(data);
 
