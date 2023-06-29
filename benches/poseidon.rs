@@ -59,7 +59,7 @@ impl Circuit<Fr> for MyCircuit {
 fn runposeidon(c: &mut Criterion) {
     let mut group = c.benchmark_group("poseidon");
 
-    for size in [64, 784, 4194304].iter() {
+    for size in [64, 784, 65536, 4194304].iter() {
         let k = ((size * POSEIDON_CONSTRAINTS_ESTIMATE + POSEIDOIN_FIXED_COST_ESTIMATE) as f32)
             .log2()
             .ceil() as u32;
