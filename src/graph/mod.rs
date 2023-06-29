@@ -326,10 +326,18 @@ impl GraphCircuit {
                 .await?;
         } else {
             self.inputs = self
-                .load_witness(&data, self.model.graph.get_input_scales())
+                .process_witness_source(
+                    &data.input_data,
+                    self.model.graph.input_shapes(),
+                    self.model.graph.get_input_scales(),
+                )
                 .await?;
             self.outputs = self
-                .load_witness(&data, self.model.graph.get_output_scales())
+                .process_witness_source(
+                    &data.output_data,
+                    self.model.graph.output_shapes(),
+                    self.model.graph.get_output_scales(),
+                )
                 .await?;
         }
 
@@ -407,28 +415,6 @@ impl GraphCircuit {
             .await?;
 
         Ok(())
-    }
-
-    ///
-    #[cfg(target_arch = "wasm32")]
-    pub fn load_witness(
-        &mut self,
-        data: &GraphWitness,
-    ) -> Result<Vec<Tensor<i128>>, Box<dyn std::error::Error>> {
-        let shapes = self.model.graph.input_shapes();
-        self.process_witness_source(&data.input_data, shapes)
-    }
-
-    ///
-    #[cfg(not(target_arch = "wasm32"))]
-    pub async fn load_witness(
-        &mut self,
-        data: &GraphWitness,
-        scales: Vec<u32>,
-    ) -> Result<Vec<Tensor<i128>>, Box<dyn std::error::Error>> {
-        let shapes = self.model.graph.input_shapes();
-        self.process_witness_source(&data.input_data, shapes, scales)
-            .await
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -721,7 +707,11 @@ impl GraphCircuit {
             data.input_data = datam.1.into();
         } else {
             self.inputs = self
-                .load_witness(data, self.model.graph.get_input_scales())
+                .process_witness_source(
+                    &data.input_data,
+                    self.model.graph.input_shapes(),
+                    self.model.graph.get_input_scales(),
+                )
                 .await?;
         }
         if matches!(
@@ -752,7 +742,11 @@ impl GraphCircuit {
             data.output_data = datum.1.into();
         } else {
             self.outputs = self
-                .load_witness(data, self.model.graph.get_output_scales())
+                .process_witness_source(
+                    &data.input_data,
+                    self.model.graph.input_shapes(),
+                    self.model.graph.get_output_scales(),
+                )
                 .await?;
         }
         // Save the updated GraphInput struct to the data_path
