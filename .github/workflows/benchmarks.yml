@@ -11,7 +11,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2022-11-03
+          toolchain: nightly-2023-06-27
           override: true
           components: rustfmt, clippy
       - name: Bench poseidon
