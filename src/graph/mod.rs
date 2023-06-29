@@ -11,11 +11,11 @@ pub mod utilities;
 /// Representations of a computational graph's variables.
 pub mod vars;
 
-pub use input::{DataSource, GraphWitness};
+pub use input::{DataSource, GraphWitness, WitnessSource};
 
-use self::input::{FileSourceInner, GraphInput, WitnessFileSourceInner};
 #[cfg(not(target_arch = "wasm32"))]
-use self::input::{OnChainSourceInner, WitnessSource};
+use self::input::OnChainSourceInner;
+use self::input::{FileSourceInner, GraphInput, WitnessFileSourceInner};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
@@ -325,8 +325,12 @@ impl GraphCircuit {
             self.populate_on_chain_test_data(&mut data, test_path)
                 .await?;
         } else {
-            self.inputs = self.load_witness(&data).await?;
-            self.outputs = self.load_witness(&data).await?;
+            self.inputs = self
+                .load_witness(&data, self.model.graph.get_input_scales())
+                .await?;
+            self.outputs = self
+                .load_witness(&data, self.model.graph.get_output_scales())
+                .await?;
         }
 
         // load the module settings
@@ -406,24 +410,25 @@ impl GraphCircuit {
     }
 
     ///
-    #[cfg(not(target_arch = "wasm32"))]
-    pub async fn load_witness(
+    #[cfg(target_arch = "wasm32")]
+    pub fn load_witness(
         &mut self,
         data: &GraphWitness,
     ) -> Result<Vec<Tensor<i128>>, Box<dyn std::error::Error>> {
         let shapes = self.model.graph.input_shapes();
-        let scales = vec![self.settings.run_args.scale; shapes.len()];
-        self.process_witness_source(&data.input_data, shapes, scales)
-            .await
+        self.process_witness_source(&data.input_data, shapes)
     }
 
     ///
-    #[cfg(target_arch = "wasm32")]
-    pub fn load_outputs(&mut self, data: &GraphWitness) -> Result<(), Box<dyn std::error::Error>> {
-        let out_scales = self.model.graph.get_output_scales();
-        let shapes = self.model.graph.output_shapes();
-        self.outputs = self.process_witness_source(&data.output_data, shapes, out_scales)?;
-        Ok(())
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn load_witness(
+        &mut self,
+        data: &GraphWitness,
+        scales: Vec<u32>,
+    ) -> Result<Vec<Tensor<i128>>, Box<dyn std::error::Error>> {
+        let shapes = self.model.graph.input_shapes();
+        self.process_witness_source(&data.input_data, shapes, scales)
+            .await
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -439,6 +444,21 @@ impl GraphCircuit {
                 panic!("Cannot use on-chain data source as input for wasm rn.")
             }
             DataSource::File(file_data) => self.load_file_data(file_data, &shapes, scales),
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    /// Process the data source for the model
+    fn process_witness_source(
+        &mut self,
+        data: &WitnessSource,
+        shapes: Vec<Vec<usize>>,
+    ) -> Result<Vec<Tensor<i128>>, Box<dyn std::error::Error>> {
+        match &data {
+            WitnessSource::OnChain(_) => {
+                panic!("Cannot use on-chain data source as input for wasm rn.")
+            }
+            WitnessSource::File(file_data) => self.load_witness_file_data(file_data, &shapes),
         }
     }
 
@@ -700,7 +720,9 @@ impl GraphCircuit {
             self.inputs = datam.0;
             data.input_data = datam.1.into();
         } else {
-            self.inputs = self.load_witness(data).await?;
+            self.inputs = self
+                .load_witness(data, self.model.graph.get_input_scales())
+                .await?;
         }
         if matches!(
             test_on_chain_data.data_sources.output,
@@ -729,7 +751,9 @@ impl GraphCircuit {
             self.outputs = datum.0;
             data.output_data = datum.1.into();
         } else {
-            self.outputs = self.load_witness(data).await?;
+            self.outputs = self
+                .load_witness(data, self.model.graph.get_output_scales())
+                .await?;
         }
         // Save the updated GraphInput struct to the data_path
         data.save(test_on_chain_data.data)?;

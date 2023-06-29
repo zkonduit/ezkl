@@ -182,6 +182,14 @@ impl ParsedNodes {
             .collect_vec()
     }
 
+    /// Returns the fixed point scale of the computational graph's inputs
+    pub fn get_input_scales(&self) -> Vec<u32> {
+        let input_nodes = self.inputs.iter();
+        input_nodes
+            .flat_map(|o| self.nodes.get(o).unwrap().out_scales())
+            .collect_vec()
+    }
+
     /// Returns the fixed point scale of the computational graph's outputs
     pub fn get_output_scales(&self) -> Vec<u32> {
         let output_nodes = self.outputs.iter();
