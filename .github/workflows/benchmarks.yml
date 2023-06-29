@@ -14,10 +14,10 @@ jobs:
           toolchain: nightly-2023-06-27
           override: true
           components: rustfmt, clippy
-      - name: Bench poseidon
-        run: cargo bench --verbose --bench poseidon
       - name: Bench elgamal
         run: cargo bench --verbose --bench elgamal
+      - name: Bench poseidon
+        run: cargo bench --verbose --bench poseidon
       - name: Bench einsum accum matmul
         run: cargo bench --verbose --bench accum_einsum_matmul
       - name: Bench accum matmul relu
