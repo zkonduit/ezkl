@@ -587,7 +587,7 @@ pub(crate) fn init_bar(len: u64) -> ProgressBar {
     )
     .unwrap()
     .progress_chars("##-");
-    pb.set_style(sty.clone());
+    pb.set_style(sty);
 
     pb
 }

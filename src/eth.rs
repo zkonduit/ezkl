@@ -393,7 +393,7 @@ pub fn get_provider(rpc_url: &str) -> Result<Provider<Http>, Box<dyn Error>> {
 /// the number of decimals of the floating point value on chain.
 pub async fn test_on_chain_data<M: 'static + Middleware>(
     client: Arc<M>,
-    data: &Vec<Vec<f32>>,
+    data: &[Vec<f32>],
 ) -> Result<Vec<CallsToAccount>, Box<dyn Error>> {
     let (contract, decimals) = setup_test_contract(client.clone(), data).await?;
 

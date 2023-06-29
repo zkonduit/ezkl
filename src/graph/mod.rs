@@ -700,7 +700,7 @@ impl GraphCircuit {
             self.inputs = datam.0;
             data.input_data = datam.1.into();
         } else {
-            self.inputs = self.load_witness(&data).await?;
+            self.inputs = self.load_witness(data).await?;
         }
         if matches!(
             test_on_chain_data.data_sources.output,
