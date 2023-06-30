@@ -691,4 +691,14 @@ mod tests {
             .unwrap();
         assert_eq!(graph_input3, file);
     }
+
+    //  test for the compatibility with the serialized elements from the mclbn256 library
+    #[test]
+    fn test_python_compat() {
+        let source = Fp::from_raw([18445520602771460712, 838677322461845011, 3079992810, 0]);
+
+        let original_addr = "0x000000000000000000000000b794f5ea0ba39494ce839613fffba74279579268";
+
+        assert_eq!(format!("{:?}", source), original_addr);
+    }
 }
