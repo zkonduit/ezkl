@@ -4,7 +4,7 @@ use std::error::Error;
 
 use crate::{
     circuit::{layouts, utils},
-    fieldutils::i128_to_felt,
+    fieldutils::{felt_to_i128, i128_to_felt},
     graph::scale_to_multiplier,
     tensor::{self, Tensor, TensorError, TensorType},
 };
@@ -32,10 +32,10 @@ pub enum LookupOp {
 impl LookupOp {
     /// a value which is always in the table
     pub fn default_pair<F: PrimeField + TensorType + PartialOrd>(&self) -> (F, F) {
-        let x = vec![0_i128].into_iter().into();
+        let x = vec![i128_to_felt(0_i128)].into_iter().into();
         (
             <F as TensorType>::zero().unwrap(),
-            i128_to_felt(Op::<F>::f(self, &[x]).unwrap().output[0]),
+            Op::<F>::f(self, &[x]).unwrap().output[0],
         )
     }
 }
@@ -45,50 +45,51 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
         self
     }
     /// Matches a [Op] to an operation in the `tensor::ops` module.
-    fn f(&self, x: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
+    fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
+        let x = x[0].clone().map(|x| felt_to_i128(x));
         let res = match &self {
             LookupOp::GreaterThan { a } => Ok(tensor::ops::nonlinearities::greater_than(
-                &x[0],
+                &x,
                 f32::from(*a).into(),
             )),
             LookupOp::Div { denom } => Ok(tensor::ops::nonlinearities::const_div(
-                &x[0],
+                &x,
                 f32::from(*denom).into(),
             )),
-            LookupOp::Recip { scale } => {
-                Ok(tensor::ops::nonlinearities::recip(&x[0], *scale as u32))
-            }
+            LookupOp::Recip { scale } => Ok(tensor::ops::nonlinearities::recip(&x, *scale as u32)),
             LookupOp::ReLU { scale } => {
-                Ok(tensor::ops::nonlinearities::leakyrelu(&x[0], *scale, 0_f64))
+                Ok(tensor::ops::nonlinearities::leakyrelu(&x, *scale, 0_f64))
             }
 
             LookupOp::LeakyReLU { scale, slope } => Ok(tensor::ops::nonlinearities::leakyrelu(
-                &x[0],
+                &x,
                 *scale,
                 slope.0.into(),
             )),
-            LookupOp::Sigmoid { scales } => Ok(tensor::ops::nonlinearities::sigmoid(
-                &x[0], scales.0, scales.1,
-            )),
+            LookupOp::Sigmoid { scales } => {
+                Ok(tensor::ops::nonlinearities::sigmoid(&x, scales.0, scales.1))
+            }
             LookupOp::Sqrt { scales } => {
-                Ok(tensor::ops::nonlinearities::sqrt(&x[0], scales.0, scales.1))
+                Ok(tensor::ops::nonlinearities::sqrt(&x, scales.0, scales.1))
             }
-            LookupOp::Rsqrt { scales } => Ok(tensor::ops::nonlinearities::rsqrt(
-                &x[0], scales.0, scales.1,
-            )),
+            LookupOp::Rsqrt { scales } => {
+                Ok(tensor::ops::nonlinearities::rsqrt(&x, scales.0, scales.1))
+            }
             LookupOp::Tanh { scales } => {
-                Ok(tensor::ops::nonlinearities::tanh(&x[0], scales.0, scales.1))
+                Ok(tensor::ops::nonlinearities::tanh(&x, scales.0, scales.1))
             }
-            LookupOp::Erf { scales } => Ok(tensor::ops::nonlinearities::erffunc(
-                &x[0], scales.0, scales.1,
-            )),
+            LookupOp::Erf { scales } => {
+                Ok(tensor::ops::nonlinearities::erffunc(&x, scales.0, scales.1))
+            }
             LookupOp::Exp { scales } => {
-                Ok(tensor::ops::nonlinearities::exp(&x[0], scales.0, scales.1))
+                Ok(tensor::ops::nonlinearities::exp(&x, scales.0, scales.1))
             }
         }?;
 
+        let output = res.map(|x| i128_to_felt(x));
+
         Ok(ForwardResult {
-            output: res,
+            output,
             intermediate_lookups: vec![],
         })
     }

@@ -1,3 +1,4 @@
+use halo2curves::bn256::Fr as Fp;
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
@@ -23,7 +24,7 @@ type RPCUrl = String;
 /// Inner elements of inputs coming from a file
 pub type FileSourceInner = Vec<Vec<f64>>;
 /// Inner elements of witness coming from a witness
-pub type WitnessFileSourceInner = Vec<Vec<i128>>;
+pub type WitnessFileSourceInner = Vec<Vec<Fp>>;
 /// Inner elements of inputs/outputs coming from on-chain
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialOrd, PartialEq)]
 pub struct OnChainSourceInner {
@@ -48,7 +49,7 @@ impl OnChainSourceInner {
         scales: Vec<u32>,
         shapes: Vec<Vec<usize>>,
         rpc: Option<&str>,
-    ) -> Result<(Vec<Tensor<i128>>, Self), Box<dyn std::error::Error>> {
+    ) -> Result<(Vec<Tensor<Fp>>, Self), Box<dyn std::error::Error>> {
         use crate::eth::{evm_quantize, read_on_chain_inputs, test_on_chain_data};
         use crate::graph::scale_to_multiplier;
         use itertools::Itertools;
@@ -65,7 +66,11 @@ impl OnChainSourceInner {
         let float_data = data
             .iter()
             .zip(scales.iter())
-            .map(|(t, scale)| t.iter().map(|e| ((*e as f64 / scale) as f32)).collect_vec())
+            .map(|(t, scale)| {
+                t.iter()
+                    .map(|e| ((crate::fieldutils::felt_to_i128(*e) as f64 / scale) as f32))
+                    .collect_vec()
+            })
             .collect::<Vec<Vec<f32>>>();
 
         let calls_to_accounts = test_on_chain_data(client.clone(), &float_data).await?;
@@ -92,9 +97,9 @@ impl OnChainSourceInner {
         }
 
         // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
-        let mut inputs: Vec<Tensor<i128>> = vec![];
+        let mut inputs: Vec<Tensor<Fp>> = vec![];
         for (input, shape) in vec![quantized_evm_inputs].iter().zip(shapes) {
-            let mut t: Tensor<i128> = input.iter().cloned().collect();
+            let mut t: Tensor<Fp> = input.iter().cloned().collect();
             t.reshape(&shape);
             inputs.push(t);
         }
@@ -308,11 +313,7 @@ impl GraphInput {
 }
 
 #[cfg(feature = "python-bindings")]
-use halo2curves::{
-    bn256::{Fr as Fp, G1Affine},
-    ff::PrimeField,
-    serde::SerdeObject,
-};
+use halo2curves::{bn256::G1Affine, ff::PrimeField, serde::SerdeObject};
 
 #[cfg(feature = "python-bindings")]
 /// converts fp into Vec<u64>
@@ -410,7 +411,13 @@ impl ToPyObject for DataSource {
 impl ToPyObject for WitnessSource {
     fn to_object(&self, py: Python) -> PyObject {
         match self {
-            WitnessSource::File(data) => data.to_object(py),
+            WitnessSource::File(data) => {
+                let field_elem: Vec<Vec<Vec<u64>>> = data
+                    .iter()
+                    .map(|x| x.iter().map(field_to_vecu64).collect())
+                    .collect();
+                field_elem.to_object(py)
+            }
             WitnessSource::OnChain(source) => {
                 let dict = PyDict::new(py);
                 dict.set_item("rpc_url", &source.rpc).unwrap();

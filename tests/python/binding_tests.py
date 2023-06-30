@@ -153,8 +153,8 @@ def test_forward():
     with open(output_path, "r") as f:
         data = json.load(f)
 
-    assert data["input_data"] == res["input_data"] == [[109, 154, 107, 59, 120, 17, 154, 168, 128, 50, 119, 83]]
-    assert data["output_data"] == res["output_data"] == [[109, 263, 154, 216, 429, 213, 107, 166, 59, 120, 137, 17, 274, 459, 185, 154, 322, 168, 128, 178, 50, 247, 380, 133, 119, 202, 83]]
+    assert data["input_data"] == res["input_data"]
+    assert data["output_data"] == res["output_data"]
 
     assert data["processed_inputs"]["poseidon_hash"] == res["processed_inputs"]["poseidon_hash"] == [[
         8270957937025516140, 11801026918842104328, 2203849898884507041, 140307258138425306]]
@@ -450,8 +450,16 @@ async def aggregate_and_verify_aggr():
 
     proof_path = os.path.join(folder_path, '1l_relu.pf')
 
+    output_path = os.path.join(
+        folder_path,
+        '1l_relu_aggr_witness.json'
+    )
+
+    res = ezkl_lib.gen_witness(data_path, model_path,
+                               output_path, settings_path=settings_path)
+
     ezkl_lib.prove(
-        data_path,
+        output_path,
         model_path,
         pk_path,
         proof_path,
@@ -538,8 +546,16 @@ async def evm_aggregate_and_verify_aggr():
 
     proof_path = os.path.join(folder_path, '1l_relu.pf')
 
+    output_path = os.path.join(
+        folder_path,
+        '1l_relu_aggr_evm_witness.json'
+    )
+
+    res = ezkl_lib.gen_witness(data_path, model_path,
+                               output_path, settings_path=settings_path)
+
     ezkl_lib.prove(
-        data_path,
+        output_path,
         model_path,
         pk_path,
         proof_path,

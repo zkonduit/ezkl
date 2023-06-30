@@ -516,13 +516,13 @@ pub(crate) async fn gen_witness(
         res.outputs.iter().map(|t| t.dims()).collect_vec()
     );
 
-    let input_witness: Vec<Vec<i128>> = res
+    let input_witness: Vec<Vec<Fr>> = res
         .inputs
         .iter()
         .map(|t| t.clone().into_iter().collect_vec())
         .collect();
 
-    let output_witness: Vec<Vec<i128>> = res
+    let output_witness: Vec<Vec<Fr>> = res
         .outputs
         .iter()
         .map(|t| t.clone().into_iter().collect_vec())

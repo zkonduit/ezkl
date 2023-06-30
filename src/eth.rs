@@ -454,7 +454,7 @@ pub async fn evm_quantize<M: 'static + Middleware>(
     client: Arc<M>,
     scales: Vec<f64>,
     data: &(Vec<ethers::types::Bytes>, Vec<u8>),
-) -> Result<Vec<i128>, Box<dyn Error>> {
+) -> Result<Vec<Fr>, Box<dyn Error>> {
     // save the sol to a tmp file
     let mut sol_path = std::env::temp_dir();
     sol_path.push("quantizedata.sol");
@@ -495,7 +495,11 @@ pub async fn evm_quantize<M: 'static + Middleware>(
         .call()
         .await;
 
-    let results = results.unwrap();
+    let results = results
+        .unwrap()
+        .iter()
+        .map(|x| crate::fieldutils::i128_to_felt(*x))
+        .collect::<Vec<Fr>>();
     info!("evm quantization results: {:#?}", results,);
     Ok(results.to_vec())
 }
@@ -513,7 +517,7 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
     if size > MAX_RUNTIME_BYTECODE_SIZE {
         // `_runtime_bytecode` exceeds the limit
         panic!(
-            "Solidity runtime bytecode size is: {:#?}, 
+            "Solidity runtime bytecode size is: {:#?},
             which exceeds 24577 bytes limit.
             Try setting '--optimzer-runs 1' when generating the verifier
             so SOLC can optimize for the smallest deployment",

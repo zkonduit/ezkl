@@ -5,6 +5,7 @@ mod native_tests {
     use core::panic;
     use ezkl_lib::graph::input::WitnessSource;
     use ezkl_lib::graph::GraphWitness;
+    use halo2curves::bn256::Fr;
     use lazy_static::lazy_static;
     use std::env::var;
     use std::process::Command;
@@ -139,12 +140,12 @@ mod native_tests {
                 WitnessSource::OnChain(_) => panic!("Only File data sources support batching"),
             };
 
-            let duplicated_input_data: Vec<Vec<i128>> = input_data
+            let duplicated_input_data: Vec<Vec<Fr>> = input_data
                 .iter()
                 .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
                 .collect();
 
-            let duplicated_output_data: Vec<Vec<i128>> = output_data
+            let duplicated_output_data: Vec<Vec<Fr>> = output_data
                 .iter()
                 .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
                 .collect();

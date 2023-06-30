@@ -3,7 +3,10 @@ use std::{any::Any, error::Error};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor};
+use crate::{
+    fieldutils::{felt_to_i128, i128_to_felt},
+    tensor::{self, Tensor, TensorError, TensorType, ValTensor},
+};
 use halo2curves::ff::PrimeField;
 
 use self::{lookup::LookupOp, region::RegionCtx};
@@ -25,15 +28,15 @@ pub mod region;
 
 /// A struct representing the result of a forward pass.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct ForwardResult {
-    pub(crate) output: Tensor<i128>,
+pub struct ForwardResult<F: PrimeField + TensorType + PartialOrd> {
+    pub(crate) output: Tensor<F>,
     pub(crate) intermediate_lookups: Vec<Tensor<i128>>,
 }
 
 /// An enum representing operations that can be represented as constraints in a circuit.
 pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + Sync + Any {
     /// Matches a [Op] to an operation in the `tensor::ops` module.
-    fn f(&self, x: &[Tensor<i128>]) -> Result<ForwardResult, TensorError>;
+    fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError>;
     /// Returns a string representation of the operation.
     fn as_string(&self) -> String;
 
@@ -97,7 +100,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
         self
     }
 
-    fn f(&self, x: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
+    fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         Ok(ForwardResult {
             output: x[0].clone(),
             intermediate_lookups: vec![],
@@ -143,7 +146,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn f(&self, x: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
+    fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         if self.scale.len() != x.len() {
             return Err(TensorError::DimMismatch("rescaled inputs".to_string()));
         }
@@ -151,10 +154,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
         let mut rescaled_inputs = vec![];
         let inputs = &mut x.to_vec();
         for (i, ri) in inputs.iter_mut().enumerate() {
-            rescaled_inputs.push(tensor::ops::nonlinearities::const_div(
-                ri,
-                self.scale[i].1 as f64,
-            ));
+            let ri = ri.map(|x| felt_to_i128(x));
+            let res = tensor::ops::nonlinearities::const_div(&ri, self.scale[i].1 as f64);
+            let output = res.map(|x| i128_to_felt(x));
+            rescaled_inputs.push(output);
         }
         Op::<F>::f(&*self.inner, &rescaled_inputs)
     }
@@ -218,7 +221,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn f(&self, _: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
+    fn f(&self, _: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         Err(TensorError::WrongMethod)
     }
 
@@ -265,10 +268,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn f(&self, _: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
-        let values = self.quantized_values.clone();
-        let int_values = values.get_int_evals().unwrap();
-        let output = Tensor::new(Some(&int_values), values.dims())?;
+    fn f(&self, _: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
+        let mut output = self.quantized_values.get_felt_evals().unwrap();
+        // make sure its the right shape
+        output.reshape(self.quantized_values.dims());
 
         Ok(ForwardResult {
             output,

@@ -8,6 +8,7 @@ use crate::circuit::hybrid::HybridOp;
 use crate::circuit::region::RegionCtx;
 use crate::circuit::Input;
 use crate::circuit::Unknown;
+use crate::fieldutils::felt_to_i128;
 use crate::{
     circuit::{lookup::LookupOp, BaseConfig as PolyConfig, CheckMode, Op},
     commands::RunArgs,
@@ -40,7 +41,7 @@ use tract_onnx::prelude::Framework;
 #[derive(Clone, Debug)]
 pub struct ForwardResult {
     /// The outputs of the forward pass.
-    pub outputs: Vec<Tensor<i128>>,
+    pub outputs: Vec<Tensor<Fp>>,
     /// The maximum value of any input to a lookup operation.
     pub max_lookup_inputs: i128,
 }
@@ -288,8 +289,8 @@ impl Model {
     /// * `reader` - A reader for an Onnx file.
     /// * `model_inputs` - A vector of [Tensor]s to use as inputs to the model.
     /// * `run_args` - [RunArgs]
-    pub fn forward(&self, model_inputs: &[Tensor<i128>]) -> Result<ForwardResult, Box<dyn Error>> {
-        let mut results: BTreeMap<&usize, Tensor<i128>> = BTreeMap::new();
+    pub fn forward(&self, model_inputs: &[Tensor<Fp>]) -> Result<ForwardResult, Box<dyn Error>> {
+        let mut results: BTreeMap<&usize, Tensor<Fp>> = BTreeMap::new();
         let mut max_lookup_inputs = 0;
         let mut input_idx = 0;
         for (idx, n) in self.graph.nodes.iter() {
@@ -313,7 +314,7 @@ impl Model {
             if !n.required_lookups().is_empty() {
                 let mut max = 0;
                 for i in &inputs {
-                    max = max.max(i.iter().map(|x| x.abs()).max().unwrap());
+                    max = max.max(i.iter().map(|x| felt_to_i128(*x).abs()).max().unwrap());
                 }
                 max_lookup_inputs = max_lookup_inputs.max(max);
             }
