@@ -15,13 +15,12 @@ use halo2_proofs::circuit::Value;
 pub use input::{DataSource, GraphWitness, WitnessSource};
 
 #[cfg(not(target_arch = "wasm32"))]
-use self::input::OnChainSourceInner;
-use self::input::{FileSourceInner, GraphInput, WitnessFileSourceInner};
+use self::input::OnChainSource;
+use self::input::{FileSource, GraphInput, WitnessFileSource};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
 use crate::commands::RunArgs;
-use crate::fieldutils::i128_to_felt;
 use crate::graph::modules::ModuleInstanceOffset;
 use crate::tensor::{Tensor, ValTensor};
 use halo2_proofs::{
@@ -493,7 +492,7 @@ impl GraphCircuit {
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn load_on_chain_data(
         &mut self,
-        source: OnChainSourceInner,
+        source: OnChainSource,
         shapes: &Vec<Vec<usize>>,
         scales: Vec<u32>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
@@ -521,17 +520,14 @@ impl GraphCircuit {
     ///
     pub fn load_file_data(
         &mut self,
-        file_data: &FileSourceInner,
+        file_data: &FileSource,
         shapes: &Vec<Vec<usize>>,
         scales: Vec<u32>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         // quantize the supplied data using the provided scale.
         let mut data: Vec<Tensor<Fp>> = vec![];
         for ((d, shape), scale) in file_data.iter().zip(shapes).zip(scales) {
-            let t: Vec<Fp> = d
-                .par_iter()
-                .map(|x| i128_to_felt(quantize_float(x, 0.0, scale).unwrap()))
-                .collect();
+            let t: Vec<Fp> = d.par_iter().map(|x| x.to_field(scale)).collect();
 
             let mut t: Tensor<Fp> = t.into_iter().into();
             t.reshape(shape);
@@ -544,7 +540,7 @@ impl GraphCircuit {
     ///
     pub fn load_witness_file_data(
         &mut self,
-        file_data: &WitnessFileSourceInner,
+        file_data: &WitnessFileSource,
         shapes: &Vec<Vec<usize>>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         // quantize the supplied data using the provided scale.
@@ -694,14 +690,13 @@ impl GraphCircuit {
             // Get the flatten length of input_data
             let length = input_data.iter().map(|x| x.len()).sum();
             let scales = vec![self.settings.run_args.scale; length];
-            let datam: (Vec<Tensor<Fp>>, OnChainSourceInner) =
-                OnChainSourceInner::test_from_file_data(
-                    input_data,
-                    scales,
-                    self.model.graph.input_shapes(),
-                    test_on_chain_data.rpc.as_deref(),
-                )
-                .await?;
+            let datam: (Vec<Tensor<Fp>>, OnChainSource) = OnChainSource::test_from_file_data(
+                input_data,
+                scales,
+                self.model.graph.input_shapes(),
+                test_on_chain_data.rpc.as_deref(),
+            )
+            .await?;
             self.inputs = datam.0;
             data.input_data = datam.1.into();
         } else {
@@ -729,14 +724,13 @@ impl GraphCircuit {
                     Will manually populate on-chain data from file source instead"
                 ),
             };
-            let datum: (Vec<Tensor<Fp>>, OnChainSourceInner) =
-                OnChainSourceInner::test_from_file_data(
-                    output_data,
-                    self.model.graph.get_output_scales(),
-                    self.model.graph.output_shapes(),
-                    test_on_chain_data.rpc.as_deref(),
-                )
-                .await?;
+            let datum: (Vec<Tensor<Fp>>, OnChainSource) = OnChainSource::test_from_file_data(
+                output_data,
+                self.model.graph.get_output_scales(),
+                self.model.graph.output_shapes(),
+                test_on_chain_data.rpc.as_deref(),
+            )
+            .await?;
             self.outputs = datum.0;
             data.output_data = datum.1.into();
         } else {

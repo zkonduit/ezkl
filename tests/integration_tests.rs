@@ -3,7 +3,7 @@
 mod native_tests {
 
     use core::panic;
-    use ezkl_lib::graph::input::GraphInput;
+    use ezkl_lib::graph::input::{FileSource, GraphInput};
     use ezkl_lib::graph::DataSource;
     use lazy_static::lazy_static;
     use std::env::var;
@@ -134,7 +134,7 @@ mod native_tests {
                 DataSource::OnChain(_) => panic!("Only File data sources support batching"),
             };
 
-            let duplicated_input_data: Vec<Vec<f64>> = input_data
+            let duplicated_input_data: FileSource = input_data
                 .iter()
                 .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
                 .collect();
