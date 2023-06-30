@@ -24,13 +24,24 @@ type Call = String;
 type RPCUrl = String;
 
 ///
-#[derive(Clone, Debug, Serialize, PartialOrd, PartialEq)]
-#[serde(untagged)]
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub enum FileSourceInner {
     /// Inner elements of inputs coming from a file
     Float(f64),
     /// Inner elements of inputs coming from a witness
     Field(Fp),
+}
+
+impl Serialize for FileSourceInner {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            FileSourceInner::Field(data) => field_to_vecu64(data).serialize(serializer),
+            FileSourceInner::Float(data) => data.serialize(serializer),
+        }
+    }
 }
 
 // !!! ALWAYS USE JSON SERIALIZATION FOR GRAPH INPUT
@@ -47,9 +58,9 @@ impl<'de> Deserialize<'de> for FileSourceInner {
         if let Ok(t) = first_try {
             return Ok(FileSourceInner::Float(t));
         }
-        let second_try: Result<Fp, _> = serde_json::from_str(this_json.get());
+        let second_try: Result<[u64; 4], _> = serde_json::from_str(this_json.get());
         if let Ok(t) = second_try {
-            return Ok(FileSourceInner::Field(t));
+            return Ok(FileSourceInner::Field(Fp::from_raw(t)));
         }
 
         Err(serde::de::Error::custom(
@@ -234,9 +245,31 @@ impl From<OnChainSource> for DataSource {
     }
 }
 
+// !!! ALWAYS USE JSON SERIALIZATION FOR GRAPH INPUT
+// UNTAGGED ENUMS WONT WORK :( as highlighted here:
+impl<'de> Deserialize<'de> for DataSource {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let this_json: Box<serde_json::value::RawValue> = Deserialize::deserialize(deserializer)?;
+
+        let first_try: Result<FileSource, _> = serde_json::from_str(this_json.get());
+
+        if let Ok(t) = first_try {
+            return Ok(DataSource::File(t));
+        }
+        let second_try: Result<OnChainSource, _> = serde_json::from_str(this_json.get());
+        if let Ok(t) = second_try {
+            return Ok(DataSource::OnChain(t));
+        }
+
+        Err(serde::de::Error::custom("failed to deserialize DataSource"))
+    }
+}
+
 /// Enum that defines source of the inputs/outputs to the EZKL model
-#[derive(Clone, Debug, Serialize, PartialOrd, PartialEq)]
-#[serde(untagged)]
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub enum WitnessSource {
     /// .json File data source.
     File(WitnessFileSource),
@@ -258,6 +291,64 @@ impl From<WitnessFileSource> for WitnessSource {
 impl From<OnChainSource> for WitnessSource {
     fn from(data: OnChainSource) -> Self {
         WitnessSource::OnChain(data)
+    }
+}
+
+// !!! ALWAYS USE JSON SERIALIZATION FOR GRAPH INPUT
+// UNTAGGED ENUMS WONT WORK :( as highlighted here:
+impl<'de> Deserialize<'de> for WitnessSource {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let this_json: Box<serde_json::value::RawValue> = Deserialize::deserialize(deserializer)?;
+
+        let first_try: Result<Vec<Vec<[u64; 4]>>, _> = serde_json::from_str(this_json.get());
+
+        if let Ok(t) = first_try {
+            let t: Vec<Vec<Fp>> = t
+                .iter()
+                .map(|x| x.iter().map(|fp| Fp::from_raw(*fp)).collect())
+                .collect();
+            return Ok(WitnessSource::File(t));
+        }
+
+        println!("this_json {}", this_json.get());
+
+        let second_try: Result<OnChainSource, _> = serde_json::from_str(this_json.get());
+        if let Ok(t) = second_try {
+            return Ok(WitnessSource::OnChain(t));
+        }
+
+        println!("second_try {:?}", second_try);
+
+        Err(serde::de::Error::custom(
+            "failed to deserialize WitnessSource",
+        ))
+    }
+}
+
+impl Serialize for WitnessSource {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            WitnessSource::File(source) => {
+                let field_elems: Vec<Vec<[u64; 4]>> = source
+                    .iter()
+                    .map(|x| x.iter().map(|fp| field_to_vecu64(fp)).collect())
+                    .collect::<Vec<_>>();
+                field_elems.serialize(serializer)
+            }
+            WitnessSource::OnChain(source) => {
+                // leave it untagged
+                let mut state = serializer.serialize_struct("", 2)?;
+                state.serialize_field("rpc", &source.rpc)?;
+                state.serialize_field("calls", &source.calls)?;
+                state.end()
+            }
+        }
     }
 }
 
@@ -389,26 +480,46 @@ impl GraphInput {
 }
 
 #[cfg(feature = "python-bindings")]
-use halo2curves::{bn256::G1Affine, ff::PrimeField, serde::SerdeObject};
+use halo2curves::bn256::G1Affine;
+use halo2curves::{ff::PrimeField, serde::SerdeObject};
+
+// #[cfg(feature = "python-bindings")]
+/// converts fp into Vec<u64>
+fn field_to_vecu64<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> [u64; 4] {
+    let bytes = fp.to_repr();
+    let bytes_first_u64 = u64::from_le_bytes(bytes.as_ref()[0..8][..].try_into().unwrap());
+    let bytes_second_u64 = u64::from_le_bytes(bytes.as_ref()[8..16][..].try_into().unwrap());
+    let bytes_third_u64 = u64::from_le_bytes(bytes.as_ref()[16..24][..].try_into().unwrap());
+    let bytes_fourth_u64 = u64::from_le_bytes(bytes.as_ref()[24..32][..].try_into().unwrap());
+
+    [
+        bytes_first_u64,
+        bytes_second_u64,
+        bytes_third_u64,
+        bytes_fourth_u64,
+    ]
+}
 
 #[cfg(feature = "python-bindings")]
-/// converts fp into Vec<u64>
-fn field_to_vecu64<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> Vec<u64> {
+fn field_to_vecu64_montgomery<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> [u64; 4] {
     let repr = serde_json::to_string(&fp).unwrap();
-    let b: Vec<u64> = serde_json::from_str(&repr).unwrap();
+    let b: [u64; 4] = serde_json::from_str(&repr).unwrap();
     b
 }
 
 #[cfg(feature = "python-bindings")]
 fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) {
-    let poseidon_hash: Vec<Vec<u64>> = poseidon_hash.iter().map(field_to_vecu64).collect();
+    let poseidon_hash: Vec<[u64; 4]> = poseidon_hash
+        .iter()
+        .map(field_to_vecu64_montgomery)
+        .collect();
     pydict.set_item("poseidon_hash", poseidon_hash).unwrap();
 }
 
 #[cfg(feature = "python-bindings")]
 fn g1affine_to_pydict(g1affine_dict: &PyDict, g1affine: &G1Affine) {
-    let g1affine_x = field_to_vecu64(&g1affine.x);
-    let g1affine_y = field_to_vecu64(&g1affine.y);
+    let g1affine_x = field_to_vecu64_montgomery(&g1affine.x);
+    let g1affine_y = field_to_vecu64_montgomery(&g1affine.y);
     g1affine_dict.set_item("x", g1affine_x).unwrap();
     g1affine_dict.set_item("y", g1affine_y).unwrap();
 }
@@ -418,20 +529,24 @@ use super::modules::ElGamalResult;
 #[cfg(feature = "python-bindings")]
 fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &ElGamalResult) {
     let results_dict = PyDict::new(py);
-    let cipher_text: Vec<Vec<Vec<u64>>> = elgamal_results
+    let cipher_text: Vec<Vec<[u64; 4]>> = elgamal_results
         .ciphertexts
         .iter()
-        .map(|v| v.iter().map(field_to_vecu64).collect::<Vec<Vec<u64>>>())
-        .collect::<Vec<Vec<Vec<u64>>>>();
+        .map(|v| {
+            v.iter()
+                .map(field_to_vecu64_montgomery)
+                .collect::<Vec<[u64; 4]>>()
+        })
+        .collect::<Vec<Vec<[u64; 4]>>>();
     results_dict.set_item("ciphertexts", cipher_text).unwrap();
 
     let variables_dict = PyDict::new(py);
     let variables = &elgamal_results.variables;
 
-    let r = field_to_vecu64(&variables.r);
+    let r = field_to_vecu64_montgomery(&variables.r);
     variables_dict.set_item("r", r).unwrap();
     // elgamal secret key
-    let sk = field_to_vecu64(&variables.sk);
+    let sk = field_to_vecu64_montgomery(&variables.sk);
     variables_dict.set_item("sk", sk).unwrap();
 
     let pk_dict = PyDict::new(py);
@@ -498,7 +613,7 @@ impl ToPyObject for WitnessSource {
     fn to_object(&self, py: Python) -> PyObject {
         match self {
             WitnessSource::File(data) => {
-                let field_elem: Vec<Vec<Vec<u64>>> = data
+                let field_elem: Vec<Vec<[u64; 4]>> = data
                     .iter()
                     .map(|x| x.iter().map(field_to_vecu64).collect())
                     .collect();
@@ -575,52 +690,6 @@ impl Serialize for GraphInput {
         let mut state = serializer.serialize_struct("GraphInput", 4)?;
         state.serialize_field("input_data", &self.input_data)?;
         state.end()
-    }
-}
-
-// !!! ALWAYS USE JSON SERIALIZATION FOR GRAPH INPUT
-// UNTAGGED ENUMS WONT WORK :( as highlighted here:
-impl<'de> Deserialize<'de> for DataSource {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let this_json: Box<serde_json::value::RawValue> = Deserialize::deserialize(deserializer)?;
-
-        let first_try: Result<FileSource, _> = serde_json::from_str(this_json.get());
-
-        if let Ok(t) = first_try {
-            return Ok(DataSource::File(t));
-        }
-        let second_try: Result<OnChainSource, _> = serde_json::from_str(this_json.get());
-        if let Ok(t) = second_try {
-            return Ok(DataSource::OnChain(t));
-        }
-
-        Err(serde::de::Error::custom("failed to deserialize DataSource"))
-    }
-}
-
-// !!! ALWAYS USE JSON SERIALIZATION FOR GRAPH INPUT
-// UNTAGGED ENUMS WONT WORK :( as highlighted here:
-impl<'de> Deserialize<'de> for WitnessSource {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let this_json: Box<serde_json::value::RawValue> = Deserialize::deserialize(deserializer)?;
-
-        let first_try: Result<WitnessFileSource, _> = serde_json::from_str(this_json.get());
-
-        if let Ok(t) = first_try {
-            return Ok(WitnessSource::File(t));
-        }
-        let second_try: Result<OnChainSource, _> = serde_json::from_str(this_json.get());
-        if let Ok(t) = second_try {
-            return Ok(WitnessSource::OnChain(t));
-        }
-
-        Err(serde::de::Error::custom("failed to deserialize DataSource"))
     }
 }
 
