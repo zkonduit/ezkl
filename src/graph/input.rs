@@ -484,6 +484,16 @@ impl ToPyObject for DataSource {
 }
 
 #[cfg(feature = "python-bindings")]
+impl ToPyObject for FileSourceInner {
+    fn to_object(&self, py: Python) -> PyObject {
+        match self {
+            FileSourceInner::Field(data) => field_to_vecu64(data).to_object(py),
+            FileSourceInner::Float(data) => data.to_object(py),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
 impl ToPyObject for WitnessSource {
     fn to_object(&self, py: Python) -> PyObject {
         match self {
