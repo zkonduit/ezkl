@@ -3,8 +3,8 @@
 mod native_tests {
 
     use core::panic;
+    use ezkl_lib::graph::input::GraphInput;
     use ezkl_lib::graph::DataSource;
-    use ezkl_lib::graph::GraphWitness;
     use lazy_static::lazy_static;
     use std::env::var;
     use std::process::Command;
@@ -126,7 +126,7 @@ mod native_tests {
 
             assert!(status.success());
 
-            let data = GraphWitness::from_path(format!("{}/{}/input.json", test_dir, test).into())
+            let data = GraphInput::from_path(format!("{}/{}/input.json", test_dir, test).into())
                 .expect("failed to load input data");
 
             let input_data = match data.input_data {
@@ -134,25 +134,12 @@ mod native_tests {
                 DataSource::OnChain(_) => panic!("Only File data sources support batching"),
             };
 
-            let output_data = match data.output_data {
-                DataSource::File(data) => data,
-                DataSource::OnChain(_) => panic!("Only File data sources support batching"),
-            };
-
-            let duplicated_input_data: Vec<Vec<f32>> = input_data
+            let duplicated_input_data: Vec<Vec<f64>> = input_data
                 .iter()
                 .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
                 .collect();
 
-            let duplicated_output_data: Vec<Vec<f32>> = output_data
-                .iter()
-                .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
-                .collect();
-
-            let duplicated_data = GraphWitness::new(
-                DataSource::File(duplicated_input_data),
-                DataSource::File(duplicated_output_data),
-            );
+            let duplicated_data = GraphInput::new(DataSource::File(duplicated_input_data));
 
             let res =
                 duplicated_data.save(format!("{}/{}/input.json", test_dir, output_dir).into());

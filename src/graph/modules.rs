@@ -2,7 +2,6 @@ use crate::circuit::modules::elgamal::{ElGamalConfig, ElGamalGadget, ElGamalVari
 use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
 use crate::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig};
 use crate::circuit::modules::Module;
-use crate::fieldutils::i128_to_felt;
 use crate::tensor::{Tensor, ValTensor, ValType};
 use halo2_proofs::circuit::{Layouter, Value};
 use halo2_proofs::plonk::{ConstraintSystem, Error};
@@ -320,7 +319,6 @@ impl GraphModules {
         instance_offset: &mut [usize],
     ) -> Result<(), Error> {
         // reserve module 0 for ... modules
-
         values.iter_mut().for_each(|x| {
             // hash the input and replace the constrained cells in the input
             let cloned_x = (*x).clone();
@@ -414,7 +412,7 @@ impl GraphModules {
 
     /// Run forward pass
     pub fn forward(
-        inputs: &[Tensor<i128>],
+        inputs: &[Tensor<Fp>],
         element_visibility: Visibility,
     ) -> Result<ModuleForwardResult, Box<dyn std::error::Error>> {
         let mut rng = &mut rand::thread_rng();
@@ -423,8 +421,7 @@ impl GraphModules {
 
         if element_visibility.is_hashed() {
             let field_elements = inputs.iter().fold(vec![], |mut acc, x| {
-                let field_elements = x.iter().map(|x| i128_to_felt::<Fp>(*x)).collect();
-                let res = ModulePoseidon::run(field_elements).unwrap()[0].clone();
+                let res = ModulePoseidon::run(x.to_vec()).unwrap()[0].clone();
                 acc.extend(res);
                 acc
             });
@@ -435,9 +432,7 @@ impl GraphModules {
             let variables = ElGamalVariables::gen_random(&mut rng);
 
             let elgamal_outputs = inputs.iter().fold(vec![], |mut acc: Vec<Vec<Fp>>, x| {
-                let field_elements = x.iter().map(|x| i128_to_felt::<Fp>(*x)).collect();
-                let ciphers = ElGamalGadget::run((field_elements, variables.clone())).unwrap();
-
+                let ciphers = ElGamalGadget::run((x.to_vec(), variables.clone())).unwrap();
                 if acc.is_empty() {
                     ciphers
                 } else {

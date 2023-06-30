@@ -35,9 +35,9 @@ use tract_onnx::tract_hir::{
 /// * `dims` - the dimensionality of the resulting [Tensor].
 /// * `shift` - offset used in the fixed point representation.
 /// * `scale` - `2^scale` used in the fixed point representation.
-pub fn quantize_float(elem: &f32, shift: f32, scale: u32) -> Result<i128, TensorError> {
-    let mult = scale_to_multiplier(scale) as f32;
-    let max_value = ((i128::MAX as f32 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
+pub fn quantize_float(elem: &f64, shift: f64, scale: u32) -> Result<i128, TensorError> {
+    let mult = scale_to_multiplier(scale);
+    let max_value = ((i128::MAX as f64 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
 
     if *elem > max_value {
         return Err(TensorError::SigBitTruncationError);
@@ -774,14 +774,16 @@ pub fn tensor_to_valtensor<F: PrimeField + TensorType + PartialOrd>(
         Visibility::Public => const_value
             .map(|x| {
                 crate::tensor::ValType::Constant(crate::fieldutils::i128_to_felt::<F>(
-                    quantize_float(&x, 0.0, scale).unwrap(),
+                    quantize_float(&x.into(), 0.0, scale).unwrap(),
                 ))
             })
             .into(),
         Visibility::Private | Visibility::Hashed | Visibility::Encrypted => const_value
             .map(|x| {
                 crate::tensor::ValType::Value(halo2_proofs::circuit::Value::known(
-                    crate::fieldutils::i128_to_felt::<F>(quantize_float(&x, 0.0, scale).unwrap()),
+                    crate::fieldutils::i128_to_felt::<F>(
+                        quantize_float(&x.into(), 0.0, scale).unwrap(),
+                    ),
                 ))
             })
             .into(),

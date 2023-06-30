@@ -98,7 +98,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     }
 
     /// Matches a [Op] to an operation in the `tensor::ops` module.
-    fn f(&self, inputs: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
+    fn f(&self, inputs: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let mut inputs = inputs.to_vec();
         let res = match &self {
             PolyOp::Resize { scale_factor } => tensor::ops::resize(&inputs[0], scale_factor),
@@ -124,14 +124,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             }
             PolyOp::Add { a } => {
                 if let Some(a) = a {
-                    inputs.push(Tensor::new(Some(&a.get_int_evals().unwrap()), a.dims())?);
+                    inputs.push(Tensor::new(Some(&a.get_felt_evals().unwrap()), a.dims())?);
                 }
                 tensor::ops::add(&inputs)
             }
             PolyOp::Sub => tensor::ops::sub(&inputs),
             PolyOp::Mult { a } => {
                 if let Some(a) = a {
-                    inputs.push(Tensor::new(Some(&a.get_int_evals().unwrap()), a.dims())?);
+                    inputs.push(Tensor::new(Some(&a.get_felt_evals().unwrap()), a.dims())?);
                 }
                 tensor::ops::mult(&inputs)
             }
@@ -141,9 +141,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 padding,
                 stride,
             } => {
-                inputs.push(Tensor::new(Some(&a.get_int_evals().unwrap()), a.dims())?);
+                inputs.push(Tensor::new(Some(&a.get_felt_evals().unwrap()), a.dims())?);
                 if let Some(b) = bias {
-                    inputs.push(Tensor::new(Some(&b.get_int_evals().unwrap()), b.dims())?);
+                    inputs.push(Tensor::new(Some(&b.get_felt_evals().unwrap()), b.dims())?);
                 }
                 tensor::ops::conv(&inputs, *padding, *stride)
             }
@@ -154,9 +154,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 output_padding,
                 stride,
             } => {
-                inputs.push(Tensor::new(Some(&a.get_int_evals().unwrap()), a.dims())?);
+                inputs.push(Tensor::new(Some(&a.get_felt_evals().unwrap()), a.dims())?);
                 if let Some(b) = bias {
-                    inputs.push(Tensor::new(Some(&b.get_int_evals().unwrap()), b.dims())?);
+                    inputs.push(Tensor::new(Some(&b.get_felt_evals().unwrap()), b.dims())?);
                 }
                 tensor::ops::deconv(&inputs, *padding, *output_padding, *stride)
             }
@@ -170,7 +170,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                     return Err(TensorError::DimMismatch("pack inputs".to_string()));
                 }
 
-                tensor::ops::pack(&inputs[0], *base as i128, *scale)
+                tensor::ops::pack(&inputs[0], F::from(*base as u64), *scale)
             }
             PolyOp::Pow(u) => {
                 if 1 != inputs.len() {
@@ -218,9 +218,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 layouts::resize(config, region, values[..].try_into()?, scale_factor)?
             }
             PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?)?,
-            PolyOp::Einsum { equation } => {
-                layouts::einsum(config, region, &mut values, equation)?
-            }
+            PolyOp::Einsum { equation } => layouts::einsum(config, region, &mut values, equation)?,
             PolyOp::Gather { dim, index } => {
                 tensor::ops::gather(&values[0].get_inner_tensor()?, *dim, index)?.into()
             }

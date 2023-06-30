@@ -1,4 +1,4 @@
-use crate::graph::input::{CallsToAccount, DataSource, GraphWitness};
+use crate::graph::input::{CallsToAccount, GraphWitness, WitnessSource};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::GraphSettings;
 use crate::pfsys::evm::{DeploymentCode, EvmVerificationError};
@@ -164,12 +164,12 @@ pub async fn deploy_da_verifier_via_solidity(
     let mut instance_idx = 0;
     let mut contract_instance_offset = 0;
 
-    if let DataSource::OnChain(source) = witness.input_data {
+    if let WitnessSource::OnChain(source) = witness.input_data {
         for call in source.calls {
             calls_to_accounts.push(call);
             instance_idx += 1;
         }
-    } else if let DataSource::File(source) = witness.input_data {
+    } else if let WitnessSource::File(source) = witness.input_data {
         if settings.run_args.input_visibility.is_public() {
             instance_idx += source.len();
             for s in source {
@@ -178,7 +178,7 @@ pub async fn deploy_da_verifier_via_solidity(
         }
     }
 
-    if let DataSource::OnChain(source) = witness.output_data {
+    if let WitnessSource::OnChain(source) = witness.output_data {
         let output_scales = settings.model_output_scales;
         for call in source.calls {
             calls_to_accounts.push(call);
@@ -393,7 +393,7 @@ pub fn get_provider(rpc_url: &str) -> Result<Provider<Http>, Box<dyn Error>> {
 /// the number of decimals of the floating point value on chain.
 pub async fn test_on_chain_data<M: 'static + Middleware>(
     client: Arc<M>,
-    data: &Vec<Vec<f32>>,
+    data: &[Vec<f32>],
 ) -> Result<Vec<CallsToAccount>, Box<dyn Error>> {
     let (contract, decimals) = setup_test_contract(client.clone(), data).await?;
 
@@ -454,7 +454,7 @@ pub async fn evm_quantize<M: 'static + Middleware>(
     client: Arc<M>,
     scales: Vec<f64>,
     data: &(Vec<ethers::types::Bytes>, Vec<u8>),
-) -> Result<Vec<i128>, Box<dyn Error>> {
+) -> Result<Vec<Fr>, Box<dyn Error>> {
     // save the sol to a tmp file
     let mut sol_path = std::env::temp_dir();
     sol_path.push("quantizedata.sol");
@@ -495,7 +495,11 @@ pub async fn evm_quantize<M: 'static + Middleware>(
         .call()
         .await;
 
-    let results = results.unwrap();
+    let results = results
+        .unwrap()
+        .iter()
+        .map(|x| crate::fieldutils::i128_to_felt(*x))
+        .collect::<Vec<Fr>>();
     info!("evm quantization results: {:#?}", results,);
     Ok(results.to_vec())
 }
@@ -513,7 +517,7 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
     if size > MAX_RUNTIME_BYTECODE_SIZE {
         // `_runtime_bytecode` exceeds the limit
         panic!(
-            "Solidity runtime bytecode size is: {:#?}, 
+            "Solidity runtime bytecode size is: {:#?},
             which exceeds 24577 bytes limit.
             Try setting '--optimzer-runs 1' when generating the verifier
             so SOLC can optimize for the smallest deployment",

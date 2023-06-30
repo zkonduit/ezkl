@@ -174,8 +174,9 @@ impl VarTensor {
         offset: usize,
         constant: F
     ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error>{ 
+
         let (x, y) = self.cartesian_coord(offset);
-        
+
         match &self {
             VarTensor::Advice { inner: advices, .. } => {
                 region.assign_advice_from_constant(|| "constant", advices[x], y, constant)
@@ -184,10 +185,10 @@ impl VarTensor {
                 region.assign_fixed(|| "constant", fixed[x], y, || Value::known(constant))
             }
             _ => panic!()
-        
+
     }}
 
-   
+
     /// Assigns [ValTensor] to the columns of the inner tensor.
     pub fn assign<F: PrimeField + TensorType + PartialOrd>(
         &self,

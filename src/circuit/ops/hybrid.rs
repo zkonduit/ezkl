@@ -2,6 +2,7 @@ use std::any::Any;
 
 use crate::{
     circuit::{self, layouts, Tolerance},
+    fieldutils::{felt_to_i128, i128_to_felt},
     graph::scale_to_multiplier,
     tensor::{self, Tensor, TensorError, TensorType, ValTensor},
 };
@@ -38,27 +39,32 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     }
 
     /// Matches a [Op] to an operation in the `tensor::ops` module.
-    fn f(&self, inputs: &[Tensor<i128>]) -> Result<ForwardResult, TensorError> {
+    fn f(&self, inputs: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
+        let x = inputs[0].clone().map(|x| felt_to_i128(x));
+
         let (res, intermediate_lookups) = match &self {
-            HybridOp::Max { axes, .. } => (tensor::ops::max_axes(&inputs[0], axes)?, vec![]),
+            HybridOp::Max { axes, .. } => (tensor::ops::max_axes(&x, axes)?, vec![]),
             HybridOp::MaxPool2d {
                 padding,
                 stride,
                 pool_dims,
                 ..
             } => (
-                tensor::ops::max_pool2d(&inputs[0], padding, stride, pool_dims)?,
+                tensor::ops::max_pool2d(&x, padding, stride, pool_dims)?,
                 vec![],
             ),
-            HybridOp::Min { axes, .. } => (tensor::ops::min_axes(&inputs[0], axes)?, vec![]),
+            HybridOp::Min { axes, .. } => (tensor::ops::min_axes(&x, axes)?, vec![]),
             HybridOp::Softmax { scales } => {
-                tensor::ops::nonlinearities::multi_dim_softmax(&inputs[0], scales.0, scales.1)
+                tensor::ops::nonlinearities::multi_dim_softmax(&x, scales.0, scales.1)
             }
-            HybridOp::RangeCheck(..) => (inputs[0].clone(), vec![]),
+            HybridOp::RangeCheck(..) => (x.clone(), vec![]),
         };
 
+        // convert back to felt
+        let output = res.map(|x| i128_to_felt(x));
+
         Ok(ForwardResult {
-            output: res,
+            output,
             intermediate_lookups,
         })
     }

@@ -59,7 +59,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         let smallest = -base.pow(self.bits as u32 - 1);
         let largest = base.pow(self.bits as u32 - 1);
 
-        let inputs = Tensor::from(smallest..=largest);
+        let inputs = Tensor::from(smallest..=largest).map(|x| i128_to_felt(x));
         let evals = Op::<F>::f(&self.nonlinearity, &[inputs.clone()])?;
 
         self.is_assigned = true;
@@ -75,14 +75,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
                                 || format!("nl_i_col row {}", row_offset),
                                 self.table_input,
                                 row_offset,
-                                || Value::known(i128_to_felt::<F>(*input)),
+                                || Value::known(*input),
                             )?;
 
                             table.assign_cell(
                                 || format!("nl_o_col row {}", row_offset),
                                 self.table_output,
                                 row_offset,
-                                || Value::known(i128_to_felt::<F>(evals.output[row_offset])),
+                                || Value::known(evals.output[row_offset]),
                             )?;
                             Ok(())
                         })

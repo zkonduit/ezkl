@@ -195,8 +195,39 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         }
     }
 
+    /// Fetch the underlying [Tensor] of field elements.
+    pub fn get_felt_evals(&self) -> Result<Tensor<F>, Box<dyn Error>> {
+        let mut felt_evals: Vec<F> = vec![];
+        match self {
+            ValTensor::Value {
+                inner: v, dims: _, ..
+            } => {
+                // we have to push to an externally created vector or else vaf.map() returns an evaluation wrapped in Value<> (which we don't want)
+                let _ = v.map(|vaf| match vaf {
+                    ValType::Value(v) => v.map(|f| {
+                        felt_evals.push(f);
+                    }),
+                    ValType::AssignedValue(v) => v.map(|f| {
+                        felt_evals.push(f.evaluate());
+                    }),
+                    ValType::PrevAssigned(v) => v.value_field().map(|f| {
+                        felt_evals.push(f.evaluate());
+                    }),
+                    ValType::Constant(v) => {
+                        felt_evals.push(v);
+                        Value::unknown()
+                    }
+                });
+            }
+            _ => return Err(Box::new(TensorError::WrongMethod)),
+        };
+
+        let res: Tensor<F> = felt_evals.into_iter().into();
+        Ok(res)
+    }
+
     /// Calls `int_evals` on the inner tensor.
-    pub fn get_int_evals(&self) -> Result<Vec<i128>, Box<dyn Error>> {
+    pub fn get_int_evals(&self) -> Result<Tensor<i128>, Box<dyn Error>> {
         // finally convert to vector of integers
         let mut integer_evals: Vec<i128> = vec![];
         match self {
@@ -222,7 +253,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             }
             _ => return Err(Box::new(TensorError::WrongMethod)),
         };
-        Ok(integer_evals)
+        Ok(integer_evals.into_iter().into())
     }
 
     /// Calls `get_slice` on the inner tensor.
