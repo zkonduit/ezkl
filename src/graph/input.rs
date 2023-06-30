@@ -313,14 +313,10 @@ impl<'de> Deserialize<'de> for WitnessSource {
             return Ok(WitnessSource::File(t));
         }
 
-        println!("this_json {}", this_json.get());
-
         let second_try: Result<OnChainSource, _> = serde_json::from_str(this_json.get());
         if let Ok(t) = second_try {
             return Ok(WitnessSource::OnChain(t));
         }
-
-        println!("second_try {:?}", second_try);
 
         Err(serde::de::Error::custom(
             "failed to deserialize WitnessSource",
