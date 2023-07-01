@@ -122,7 +122,7 @@ pub fn verify_wasm(
     let circuit_settings: GraphSettings =
         serde_json::from_slice(&circuit_settings_ser[..]).unwrap();
 
-    let snark_bytes: Snarkbytes = bincode::deserialize(&proof_js[..]).unwrap();
+    let snark_bytes: Snarkbytes = serde_json::from_slice(&proof_js[..]).unwrap();
 
     let instances = snark_bytes
         .instances
@@ -224,7 +224,9 @@ pub fn prove_wasm(
     )
     .unwrap();
 
-    bincode::serialize(&proof.to_bytes()).unwrap()
+    serde_json::to_string(&proof.to_bytes())
+        .unwrap()
+        .into_bytes()
 }
 
 // HELPER FUNCTIONS

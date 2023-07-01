@@ -40,7 +40,7 @@ mod wasm32 {
             instances: vec![vec![vec![0_u8; 32]]],
             transcript_type: ezkl_lib::pfsys::TranscriptType::EVM,
         };
-        let proof = bincode::serialize(&proof).unwrap();
+        let proof = serde_json::to_string(&proof).unwrap().into_bytes();
 
         let value = verify_wasm(
             wasm_bindgen::Clamped(proof),
