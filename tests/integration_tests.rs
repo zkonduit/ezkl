@@ -3,7 +3,7 @@
 mod native_tests {
 
     use core::panic;
-    use ezkl_lib::graph::input::GraphInput;
+    use ezkl_lib::graph::input::{FileSource, GraphInput};
     use ezkl_lib::graph::DataSource;
     use lazy_static::lazy_static;
     use std::env::var;
@@ -134,7 +134,7 @@ mod native_tests {
                 DataSource::OnChain(_) => panic!("Only File data sources support batching"),
             };
 
-            let duplicated_input_data: Vec<Vec<f64>> = input_data
+            let duplicated_input_data: FileSource = input_data
                 .iter()
                 .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
                 .collect();
@@ -931,14 +931,8 @@ mod native_tests {
             .args([
                 "aggregate",
                 "--logrows=23",
-                &format!(
-                    "--settings-paths={}/{}/settings.json",
-                    test_dir, example_name
-                ),
                 "--aggregation-snarks",
                 &format!("{}/{}/proof.pf", test_dir, example_name),
-                "--aggregation-vk-paths",
-                &format!("{}/{}/key.vk", test_dir, example_name),
                 "--proof-path",
                 &format!("{}/{}/aggr.pf", test_dir, example_name),
                 "--vk-path",
@@ -1060,14 +1054,8 @@ mod native_tests {
             .args([
                 "aggregate",
                 "--logrows=23",
-                &format!(
-                    "--settings-paths={}/{}/settings.json",
-                    test_dir, example_name
-                ),
                 "--aggregation-snarks",
                 &format!("{}/{}/evm.pf", test_dir, example_name),
-                "--aggregation-vk-paths",
-                &format!("{}/{}/evm.vk", test_dir, example_name),
                 "--proof-path",
                 &format!("{}/{}/evm_aggr.pf", test_dir, example_name),
                 "--vk-path",

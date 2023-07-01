@@ -226,25 +226,22 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             strategy,
             settings_path,
             check_mode,
-        } => {
-            prove(
-                witness,
-                model,
-                pk_path,
-                proof_path,
-                srs_path,
-                transcript,
-                strategy,
-                settings_path,
-                check_mode,
-            )
-            .await
-        }
+        } => prove(
+            witness,
+            model,
+            pk_path,
+            Some(proof_path),
+            srs_path,
+            transcript,
+            strategy,
+            settings_path,
+            check_mode,
+        )
+        .await
+        .map(|_| ()),
         Commands::Aggregate {
-            settings_paths,
             proof_path,
             aggregation_snarks,
-            aggregation_vk_paths,
             vk_path,
             srs_path,
             transcript,
@@ -253,8 +250,6 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => aggregate(
             proof_path,
             aggregation_snarks,
-            settings_paths,
-            aggregation_vk_paths,
             vk_path,
             srs_path,
             transcript,
@@ -784,7 +779,7 @@ pub(crate) async fn mock(
 }
 
 pub(crate) fn print_proof_hex(proof_path: PathBuf) -> Result<(), Box<dyn Error>> {
-    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
+    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
     for instance in proof.instances {
         println!("{:?}", instance);
     }
@@ -987,7 +982,7 @@ pub(crate) async fn verify_evm(
 ) -> Result<(), Box<dyn Error>> {
     use crate::eth::verify_proof_with_data_attestation;
 
-    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
+    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
 
     let result = if !uses_data_attestation {
         verify_proof_via_solidity(proof.clone(), addr, rpc_url.as_deref()).await?
@@ -1107,13 +1102,13 @@ pub(crate) async fn prove(
     data_path: PathBuf,
     model_path: PathBuf,
     pk_path: PathBuf,
-    proof_path: PathBuf,
+    proof_path: Option<PathBuf>,
     srs_path: PathBuf,
     transcript: TranscriptType,
     strategy: StrategyType,
     settings_path: PathBuf,
     check_mode: CheckMode,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
     let data = GraphWitness::from_path(data_path)?;
     use crate::pfsys::load_pk;
     let circuit_settings = GraphSettings::load(&settings_path)?;
@@ -1167,9 +1162,11 @@ pub(crate) async fn prove(
         elapsed.subsec_millis()
     );
 
-    snark.save(&proof_path)?;
+    if let Some(proof_path) = proof_path {
+        snark.save(&proof_path)?;
+    }
 
-    Ok(())
+    Ok(snark)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1452,8 +1449,6 @@ pub(crate) fn run_fuzz_fn(
 pub(crate) fn aggregate(
     proof_path: PathBuf,
     aggregation_snarks: Vec<PathBuf>,
-    settings_paths: Vec<PathBuf>,
-    aggregation_vk_paths: Vec<PathBuf>,
     vk_path: PathBuf,
     srs_path: PathBuf,
     transcript: TranscriptType,
@@ -1464,24 +1459,8 @@ pub(crate) fn aggregate(
     let params = load_params_cmd(srs_path.clone(), logrows)?;
 
     let mut snarks = vec![];
-
-    for ((proof_path, vk_path), settings_path) in aggregation_snarks
-        .iter()
-        .zip(aggregation_vk_paths)
-        .zip(settings_paths)
-    {
-        let circuit_settings = GraphSettings::load(&settings_path)?;
-        let params_app = load_params_cmd(srs_path.clone(), circuit_settings.run_args.logrows)?;
-        let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
-            vk_path.to_path_buf(),
-            // safe to clone as the inner model is wrapped in an Arc
-            circuit_settings.clone(),
-        )?;
-        snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(
-            proof_path,
-            Some(&params_app),
-            Some(&vk),
-        )?);
+    for proof_path in aggregation_snarks.iter() {
+        snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
     }
     // proof aggregation
     #[cfg(not(target_arch = "wasm32"))]
@@ -1532,7 +1511,7 @@ pub(crate) fn verify(
 ) -> Result<(), Box<dyn Error>> {
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
-    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
+    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
 
     let strategy = KZGSingleStrategy::new(params.verifier_params());
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_settings)?;
@@ -1556,7 +1535,7 @@ pub(crate) fn verify_aggr(
 ) -> Result<(), Box<dyn Error>> {
     let params = load_params_cmd(srs_path, logrows)?;
 
-    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)?;
+    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
 
     let strategy = AccumulatorStrategy::new(params.verifier_params());
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;

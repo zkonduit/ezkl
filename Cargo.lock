@@ -4343,6 +4343,7 @@ dependencies = [
  "poseidon",
  "rand 0.8.5",
  "revm",
+ "serde",
  "sha3 0.10.8",
 ]
 

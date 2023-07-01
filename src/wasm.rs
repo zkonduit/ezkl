@@ -8,8 +8,6 @@ use halo2curves::bn256::{Bn256, Fr, G1Affine};
 use halo2curves::ff::{FromUniformBytes, PrimeField};
 
 use crate::tensor::TensorType;
-use halo2curves::serde::SerdeObject;
-use snark_verifier::system::halo2::compile;
 use wasm_bindgen::prelude::*;
 
 use console_error_panic_hook;
@@ -24,7 +22,6 @@ pub fn init_panic_hook() {
 
 use crate::execute::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 use crate::graph::{GraphCircuit, GraphSettings};
-use crate::pfsys::Snarkbytes;
 
 /// Generate circuit params in browser
 #[wasm_bindgen]
@@ -122,17 +119,7 @@ pub fn verify_wasm(
     let circuit_settings: GraphSettings =
         serde_json::from_slice(&circuit_settings_ser[..]).unwrap();
 
-    let snark_bytes: Snarkbytes = bincode::deserialize(&proof_js[..]).unwrap();
-
-    let instances = snark_bytes
-        .instances
-        .iter()
-        .map(|i| {
-            i.iter()
-                .map(|e| Fr::from_raw_bytes_unchecked(e))
-                .collect::<Vec<Fr>>()
-        })
-        .collect::<Vec<Vec<Fr>>>();
+    let snark: crate::pfsys::Snark<Fr, G1Affine> = serde_json::from_slice(&proof_js[..]).unwrap();
 
     let mut reader = std::io::BufReader::new(&vk[..]);
     let vk = VerifyingKey::<G1Affine>::read::<_, GraphCircuit>(
@@ -141,20 +128,6 @@ pub fn verify_wasm(
         circuit_settings,
     )
     .unwrap();
-
-    let protocol = compile(
-        &params,
-        &vk,
-        snark_verifier::system::halo2::Config::kzg()
-            .with_num_instance(snark_bytes.num_instance.clone()),
-    );
-
-    let snark = crate::pfsys::Snark {
-        instances,
-        proof: snark_bytes.proof,
-        protocol: Some(protocol),
-        transcript_type: snark_bytes.transcript_type,
-    };
 
     let strategy = KZGSingleStrategy::new(params.verifier_params());
 
@@ -224,7 +197,7 @@ pub fn prove_wasm(
     )
     .unwrap();
 
-    bincode::serialize(&proof.to_bytes()).unwrap()
+    serde_json::to_string(&proof).unwrap().into_bytes()
 }
 
 // HELPER FUNCTIONS

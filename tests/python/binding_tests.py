@@ -292,7 +292,7 @@ def test_prove_and_verify():
         "single",
         settings_path,
     )
-    assert res == True
+    assert res['transcript_type'] == 'Poseidon'
     assert os.path.isfile(proof_path)
 
     vk_path = os.path.join(folder_path, 'test.vk')
@@ -333,7 +333,7 @@ def test_prove_evm():
         "single",
         settings_path,
     )
-    assert res == True
+    assert res['transcript_type'] == 'EVM'
     assert os.path.isfile(proof_path)
 
     res = ezkl_lib.print_proof_hex(proof_path)
@@ -475,8 +475,6 @@ async def aggregate_and_verify_aggr():
     res = ezkl_lib.aggregate(
         aggregate_proof_path,
         [proof_path],
-        [settings_path],
-        [vk_path],
         aggregate_vk_path,
         params_k20_path,
         "poseidon",
@@ -571,8 +569,6 @@ async def evm_aggregate_and_verify_aggr():
     res = ezkl_lib.aggregate(
         aggregate_proof_path,
         [proof_path],
-        [settings_path],
-        [vk_path],
         aggregate_vk_path,
         params_k20_path,
         "evm",
