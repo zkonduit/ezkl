@@ -1,4 +1,5 @@
 use crate::fieldutils::i128_to_felt;
+use crate::pfsys::field_to_vecu64;
 use halo2curves::bn256::Fr as Fp;
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
@@ -22,6 +23,11 @@ use super::{modules::ModuleForwardResult, GraphError};
 type Decimals = u8;
 type Call = String;
 type RPCUrl = String;
+
+#[cfg(feature = "python-bindings")]
+use crate::pfsys::field_to_vecu64_montgomery;
+#[cfg(feature = "python-bindings")]
+use halo2curves::bn256::G1Affine;
 
 ///
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
@@ -473,34 +479,6 @@ impl GraphInput {
 
         Ok(batches)
     }
-}
-
-#[cfg(feature = "python-bindings")]
-use halo2curves::bn256::G1Affine;
-use halo2curves::{ff::PrimeField, serde::SerdeObject};
-
-// #[cfg(feature = "python-bindings")]
-/// converts fp into Vec<u64>
-fn field_to_vecu64<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> [u64; 4] {
-    let bytes = fp.to_repr();
-    let bytes_first_u64 = u64::from_le_bytes(bytes.as_ref()[0..8][..].try_into().unwrap());
-    let bytes_second_u64 = u64::from_le_bytes(bytes.as_ref()[8..16][..].try_into().unwrap());
-    let bytes_third_u64 = u64::from_le_bytes(bytes.as_ref()[16..24][..].try_into().unwrap());
-    let bytes_fourth_u64 = u64::from_le_bytes(bytes.as_ref()[24..32][..].try_into().unwrap());
-
-    [
-        bytes_first_u64,
-        bytes_second_u64,
-        bytes_third_u64,
-        bytes_fourth_u64,
-    ]
-}
-
-#[cfg(feature = "python-bindings")]
-fn field_to_vecu64_montgomery<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> [u64; 4] {
-    let repr = serde_json::to_string(&fp).unwrap();
-    let b: [u64; 4] = serde_json::from_str(&repr).unwrap();
-    b
 }
 
 #[cfg(feature = "python-bindings")]
