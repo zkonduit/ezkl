@@ -4,10 +4,11 @@ mod wasm32 {
     use ezkl_lib::circuit::Tolerance;
     use ezkl_lib::commands::RunArgs;
     use ezkl_lib::graph::GraphSettings;
-    use ezkl_lib::pfsys::Snarkbytes;
+    use ezkl_lib::pfsys::Snark;
     use ezkl_lib::wasm::{
         gen_circuit_settings_wasm, gen_pk_wasm, gen_vk_wasm, prove_wasm, verify_wasm,
     };
+    use halo2curves::bn256::{Fr, G1Affine};
     pub use wasm_bindgen_rayon::init_thread_pool;
     use wasm_bindgen_test::*;
 
@@ -34,10 +35,12 @@ mod wasm32 {
 
     #[wasm_bindgen_test]
     async fn verify_fail() {
-        let proof = Snarkbytes {
+        let og_proof: Snark<Fr, G1Affine> = serde_json::from_slice(&PROOF).unwrap();
+
+        let proof: Snark<Fr, G1Affine> = Snark {
             proof: vec![0; 32],
-            num_instance: vec![1],
-            instances: vec![vec![vec![0_u8; 32]]],
+            protocol: og_proof.protocol,
+            instances: vec![vec![Fr::from(0); 32]],
             transcript_type: ezkl_lib::pfsys::TranscriptType::EVM,
         };
         let proof = serde_json::to_string(&proof).unwrap().into_bytes();

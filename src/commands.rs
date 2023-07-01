@@ -313,15 +313,9 @@ pub enum Commands {
     /// Aggregates proofs :)
     #[command(arg_required_else_help = true)]
     Aggregate {
-        /// The path to the settings files.
-        #[arg(long)]
-        settings_paths: Vec<PathBuf>,
         /// The path to the snarks to aggregate over
         #[arg(long)]
         aggregation_snarks: Vec<PathBuf>,
-        /// The path to load the desired verfication key file for the snarks we're aggregating over
-        #[arg(long)]
-        aggregation_vk_paths: Vec<PathBuf>,
         /// The path to save the desired verfication key file
         #[arg(long, default_value = "vk_aggr.key")]
         vk_path: PathBuf,

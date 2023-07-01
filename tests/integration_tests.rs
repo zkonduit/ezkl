@@ -931,14 +931,8 @@ mod native_tests {
             .args([
                 "aggregate",
                 "--logrows=23",
-                &format!(
-                    "--settings-paths={}/{}/settings.json",
-                    test_dir, example_name
-                ),
                 "--aggregation-snarks",
                 &format!("{}/{}/proof.pf", test_dir, example_name),
-                "--aggregation-vk-paths",
-                &format!("{}/{}/key.vk", test_dir, example_name),
                 "--proof-path",
                 &format!("{}/{}/aggr.pf", test_dir, example_name),
                 "--vk-path",
@@ -1060,14 +1054,8 @@ mod native_tests {
             .args([
                 "aggregate",
                 "--logrows=23",
-                &format!(
-                    "--settings-paths={}/{}/settings.json",
-                    test_dir, example_name
-                ),
                 "--aggregation-snarks",
                 &format!("{}/{}/evm.pf", test_dir, example_name),
-                "--aggregation-vk-paths",
-                &format!("{}/{}/evm.vk", test_dir, example_name),
                 "--proof-path",
                 &format!("{}/{}/evm_aggr.pf", test_dir, example_name),
                 "--vk-path",

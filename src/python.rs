@@ -250,13 +250,13 @@ fn prove(
     witness: PathBuf,
     model: PathBuf,
     pk_path: PathBuf,
-    proof_path: PathBuf,
+    proof_path: Option<PathBuf>,
     srs_path: PathBuf,
     transcript: TranscriptType,
     strategy: StrategyType,
     settings_path: PathBuf,
-) -> Result<bool, PyErr> {
-    Runtime::new()
+) -> PyResult<PyObject> {
+    let snark = Runtime::new()
         .unwrap()
         .block_on(crate::execute::prove(
             witness,
@@ -274,7 +274,7 @@ fn prove(
             PyRuntimeError::new_err(err_str)
         })?;
 
-    Ok(true)
+    Python::with_gil(|py| Ok(snark.to_object(py)))
 }
 
 /// verifies a given proof
@@ -302,8 +302,6 @@ fn verify(
 #[pyfunction(signature = (
     proof_path,
     aggregation_snarks,
-    settings_paths,
-    aggregation_vk_paths,
     vk_path,
     srs_path,
     transcript,
@@ -313,8 +311,6 @@ fn verify(
 fn aggregate(
     proof_path: PathBuf,
     aggregation_snarks: Vec<PathBuf>,
-    settings_paths: Vec<PathBuf>,
-    aggregation_vk_paths: Vec<PathBuf>,
     vk_path: PathBuf,
     srs_path: PathBuf,
     transcript: TranscriptType,
@@ -325,8 +321,6 @@ fn aggregate(
     crate::execute::aggregate(
         proof_path,
         aggregation_snarks,
-        settings_paths,
-        aggregation_vk_paths,
         vk_path,
         srs_path,
         transcript,
@@ -558,7 +552,7 @@ fn create_evm_verifier_aggr(
 /// print hex representation of a proof
 #[pyfunction(signature = (proof_path))]
 fn print_proof_hex(proof_path: PathBuf) -> Result<String, PyErr> {
-    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path, None, None)
+    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)
         .map_err(|_| PyIOError::new_err("Failed to load proof"))?;
 
     // let mut return_string: String = "";
