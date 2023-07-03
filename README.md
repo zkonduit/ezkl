@@ -18,6 +18,7 @@ EZKL
 1. Define a computational graph, for instance a neural network (but really any arbitrary set of operations), as you would normally in pytorch or tensorflow.
 2. Export the final graph of operations as an [.onnx](https://onnx.ai/) file and some sample inputs to a `.json` file.
 3. Point `ezkl` to the `.onnx` and `.json` files to generate a ZK-SNARK circuit with which you can prove statements such as:
+
 > "I ran this publicly available neural network on some private data and it produced this output"
 
 > "I ran my private neural network on some public data and it produced this output"
@@ -26,8 +27,10 @@ EZKL
 
 In the backend we use [Halo2](https://github.com/privacy-scaling-explorations/halo2) as a proof system.
 
+The generated proofs can then be used on-chain to verify computation, only the Ethereum Virtual Machine (EVM) is supported at the moment.
 
-- If you have any questions, we'd love for you to open up a discussion topic in [Discussions](https://github.com/zkonduit/ezkl/discussions). Alternatively, you can join the ✨[EZKL Community Telegram Group](https://t.me/+76OjHb5CwJtkMTBh)💫.
+
+- If you have any questions, we'd love for you to open up a discussion topic in [Discussions](https://github.com/zkonduit/ezkl/discussions). Alternatively, you can join the ✨[EZKL Community Telegram Group](https://t.me/+QRzaRvTPIthlYWMx)💫.
 
 
 ### resources 📖
@@ -35,15 +38,15 @@ In the backend we use [Halo2](https://github.com/privacy-scaling-explorations/ha
 |  |  |
 | --- | --- |
 | [docs](https://docs.ezkl.xyz ) | the official ezkl docs page |
+| [colab notebook demo](https://colab.research.google.com/drive/1XuXNKqH7axOelZXyU3gpoTOCvFetIsKu?usp=sharing) | demo of ezkl python bindings on google's colab
 | [tutorial](https://github.com/zkonduit/pyezkl/tree/main/examples/tutorial) | end-to-end tutorial using pytorch and ezkl |
 | [notebook](https://github.com/zkonduit/pyezkl/blob/main/examples/ezkl_demo.ipynb) | end-to-end tutorial using pytorch and ezkl in a jupyter notebook |
-| `cargo doc --open` | compile and open the docs in your default browser |
+| `cargo doc --open` | compile and open the docs in your default browser locally |
 
 
 ----------------------
 
 ## Getting Started ⚙️
-
 
 
 
@@ -90,12 +93,8 @@ The EZKL project has several libraries and repos.
 
 | Repo | Description |
 | --- | --- |
-| [@zkonduit/ezkl](https://github.com/zkonduit/ezkl) | the main ezkl repo in rust |
-| [@zkonduit/pyezkl](https://github.com/zkonduit/pyezkl) | helper functions in python for processing onnx files |
-| [@zkonduit/ezkl-docs](https://github.com/zkonduit/ezkl-docs) | official ezkl docs |
-
-
-
+| [@zkonduit/ezkl](https://github.com/zkonduit/ezkl) | the main ezkl repo in rust with wasm and python bindings |
+| [@zkonduit/pyezkl](https://github.com/zkonduit/pyezkl) | additional functionality written in python to support data science and zero knowledge applications |
 
 ----------------------
 
@@ -113,4 +112,3 @@ More broadly:
 - For PRs we use the [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) naming convention.
 
 - To report bugs or request new features [create a new issue within Issues](https://github.com/zkonduit/ezkl/issues) to inform the greater community.
-
