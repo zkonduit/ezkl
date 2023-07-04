@@ -306,7 +306,7 @@ mod native_tests {
             fn mock_public_outputs_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, "private", "private", "public", 1);
+                mock(test.to_string(), "private", "private", "public", 1);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -315,77 +315,77 @@ mod native_tests {
                 crate::native_tests::mv_test_(test);
                 let large_batch_dir = &format!("large_batches_{}", test);
                 crate::native_tests::mk_data_batches_(test, &large_batch_dir, 10);
-                mock(large_batch_dir.to_string(), 7, 16, 17, "private", "private", "public", 10);
+                mock(large_batch_dir.to_string(), "private", "private", "public", 10);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_inputs_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, "public", "private", "private", 1);
+                mock(test.to_string(), "public", "private", "private", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_params_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17, "private", "public", "private", 1);
+                mock(test.to_string(), "private", "public", "private", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_input_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17,"hashed", "private", "public", 1);
+                mock(test.to_string(), "hashed", "private", "public", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_encrypted_input_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 18,"encrypted", "private", "public", 1);
+                mock(test.to_string(), "encrypted", "private", "public", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_params_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 17,"private", "hashed", "public", 1);
+                mock(test.to_string(), "private", "hashed", "public", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_encrypted_params_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 18,"private", "hashed", "public", 1);
+                mock(test.to_string(), "private", "hashed", "public", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_output_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(),7, 16, 17,"public", "private", "hashed", 1);
+                mock(test.to_string(), "public", "private", "hashed", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_encrypted_output_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 19,"public", "private", "encrypted", 1);
+                mock(test.to_string(), "public", "private", "encrypted", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_encrypted_input_params_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 19,"encrypted", "encrypted", "public", 1);
+                mock(test.to_string(), "encrypted", "encrypted", "public", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_encrypted_all_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 20,"encrypted", "encrypted", "encrypted", 1);
+                mock(test.to_string(), "encrypted", "encrypted", "encrypted", 1);
             }
 
 
@@ -394,14 +394,14 @@ mod native_tests {
             fn mock_encrypted_input_hashed_params_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 7, 16, 19,"encrypted", "hashed", "public", 1);
+                mock(test.to_string(), "encrypted", "hashed", "public", 1);
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_input_output_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(),7, 16, 17,"hashed", "private", "hashed", 1);
+                mock(test.to_string(), "hashed", "private", "hashed", 1);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -409,7 +409,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
                 // needs an extra row for the large model
-                mock(test.to_string(),7, 16, 18,"hashed", "hashed", "public", 1);
+                mock(test.to_string(),"hashed", "hashed", "public", 1);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -417,7 +417,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
                 // needs an extra row for the large model
-                mock(test.to_string(),7, 16, 18,"hashed", "hashed", "hashed", 1);
+                mock(test.to_string(),"hashed", "hashed", "hashed", 1);
             }
 
             #(#[test_case(TESTS[N])])*
@@ -470,7 +470,7 @@ mod native_tests {
             fn large_mock_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
-                mock(test.to_string(), 5, 23, 24, "private", "private", "public", 1);
+                mock(test.to_string(), "private", "private", "public", 1);
             }
         });
     }
@@ -702,9 +702,6 @@ mod native_tests {
     // Mock prove (fast, but does not cover some potential issues)
     fn mock(
         example_name: String,
-        scale: usize,
-        bits: usize,
-        logrows: usize,
         input_visibility: &str,
         param_visibility: &str,
         output_visibility: &str,
@@ -721,13 +718,26 @@ mod native_tests {
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
-                &format!("--bits={}", bits),
-                &format!("--logrows={}", logrows),
-                &format!("--scale={}", scale),
                 &format!("--batch-size={}", batch_size),
                 &format!("--input-visibility={}", input_visibility),
                 &format!("--param-visibility={}", param_visibility),
                 &format!("--output-visibility={}", output_visibility),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "calibrate-settings",
+                "--data",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
             ])
             .status()
             .expect("failed to execute process");
