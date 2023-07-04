@@ -62,7 +62,7 @@ impl Circuit<Fr> for EncryptytionCircuit {
 fn runelgamal(c: &mut Criterion) {
     let mut group = c.benchmark_group("elgamal");
 
-    for size in [64, 784, 2352, 12288].iter() {
+    for size in [2352, 12288, 49152].iter() {
         let mut rng = test_rng();
 
         let k = ((size * ELGAMAL_CONSTRAINTS_ESTIMATE + ELGAMAL_FIXED_COST_ESTIMATE) as f32)
