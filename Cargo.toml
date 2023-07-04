@@ -100,9 +100,12 @@ harness = false
 name = "pairwise_pow"
 harness = false
 
+[[bench]]
+name = "poseidon"
+harness = false
 
 [[bench]]
-name = "accum_pack"
+name = "elgamal"
 harness = false
 
 
