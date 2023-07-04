@@ -121,7 +121,7 @@ fn runelgamal(c: &mut Criterion) {
 
 criterion_group! {
   name = benches;
-  config = Criterion::default().with_plots();
+  config = Criterion::default().with_plots().sample_size(10);
   targets = runelgamal
 }
 criterion_main!(benches);

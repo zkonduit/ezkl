@@ -109,7 +109,7 @@ fn runposeidon(c: &mut Criterion) {
 
 criterion_group! {
   name = benches;
-  config = Criterion::default().with_plots();
+  config = Criterion::default().with_plots().sample_size(10);
   targets = runposeidon
 }
 criterion_main!(benches);
