@@ -4,10 +4,12 @@ on:
     branches: ["main"]
     paths-ignore:
       - "README.md"
+      - "cla.md"
   pull_request:
     branches: ["main"]
     paths-ignore:
       - "README.md"
+      - "cla.md"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
