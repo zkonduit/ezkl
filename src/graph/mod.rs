@@ -577,6 +577,28 @@ impl GraphCircuit {
                 .ceil() as usize
                 + 1;
             let mut logrows = std::cmp::max(min_bits + 1, min_rows_from_constraints);
+            // if public input then public inputs col will have public inputs len
+            if self.settings.run_args.input_visibility.is_public()
+                || self.settings.run_args.output_visibility.is_public()
+            {
+                let max_instance_len = self
+                    .model
+                    .instance_shapes()
+                    .iter()
+                    .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()));
+                let instance_len_logrows = (max_instance_len as f64).log2().ceil() as usize + 1;
+                logrows = std::cmp::max(logrows, instance_len_logrows);
+            // this is for fixed const columns
+            } else if self.settings.run_args.param_visibility.is_public() {
+                // if private input then public inputs col will have 0
+                let total_const_len = self
+                    .model
+                    .const_shapes()
+                    .iter()
+                    .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()));
+                let const_len_logrows = (total_const_len as f64).log2().ceil() as usize + 1;
+                logrows = std::cmp::max(logrows, const_len_logrows);
+            }
 
             // ensure logrows is at least 4
             logrows = std::cmp::max(
