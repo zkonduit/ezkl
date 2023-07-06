@@ -440,8 +440,7 @@ mod tests {
 
         let serialized = serde_json::to_string(&file).unwrap();
 
-        const JSON: &str =
-            r#"{"input_data":[[0.05326242372393608,0.07497056573629379,0.05235547572374344]]}"#;
+        const JSON: &str = r#"{"input_data":[[0.05326242372393608,0.07497056573629379,0.05235547572374344]],"output_data":null}"#;
 
         assert_eq!(serialized, JSON);
 
