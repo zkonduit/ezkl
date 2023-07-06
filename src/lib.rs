@@ -23,6 +23,7 @@
     unsafe_code
 )]
 #![feature(lint_reasons)]
+#![feature(int_roundings)]
 
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!

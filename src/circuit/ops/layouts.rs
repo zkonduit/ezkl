@@ -1363,6 +1363,23 @@ pub fn identity<F: PrimeField + TensorType + PartialOrd>(
     Ok(output)
 }
 
+/// Downsample layout
+pub fn downsample<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    axis: &usize,
+    stride: &usize,
+    modulo: &usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let input = region.assign(&config.inputs[0], &values[0])?;
+    let processed_output =
+        tensor::ops::downsample(&input.get_inner_tensor()?, *axis, *stride, *modulo)?;
+    let output = region.assign(&config.output, &processed_output.into())?;
+    region.increment(input.len());
+    Ok(output)
+}
+
 /// Layout for range check.
 pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
