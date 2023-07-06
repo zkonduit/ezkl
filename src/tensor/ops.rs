@@ -708,6 +708,71 @@ pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, 
     Tensor::new(Some(&[res]), &[1])
 }
 
+/// Downsamples a tensor along a dimension.
+/// # Arguments
+/// * `input` - Tensor
+/// * `dim` - Dimension to downsample along
+/// * `stride` - Stride to downsample by
+/// *  `modulo` - Modulo to downsample by
+/// # Examples
+/// ```
+/// use ezkl_lib::tensor::Tensor;
+/// use ezkl_lib::tensor::ops::downsample;
+/// let x = Tensor::<i128>::new(
+///    Some(&[1, 2, 3, 4, 5, 6]),
+///  &[2, 3],
+/// ).unwrap();
+/// let result = downsample(&x, 0, 1, 1).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[4, 5, 6]), &[1, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = downsample(&x, 1, 2, 0).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 3, 4, 6]), &[2, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = downsample(&x, 1, 2, 1).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 5]), &[2, 1]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = downsample(&x, 1, 2, 2).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[3, 6]), &[2, 1]).unwrap();
+/// assert_eq!(result, expected);
+
+pub fn downsample<T: TensorType>(
+    input: &Tensor<T>,
+    dim: usize,
+    stride: usize,
+    modulo: usize,
+) -> Result<Tensor<T>, TensorError> {
+    let mut output_shape = input.dims().to_vec();
+    output_shape[dim] = (input.dims()[dim] - modulo).div_ceil(stride);
+    let mut output = Tensor::<T>::new(None, &output_shape)?;
+
+    assert!(modulo <= input.dims()[dim]);
+    // now downsample along axis dim offset by modulo
+    let indices = (0..output_shape.len())
+        .map(|i| {
+            if i == dim {
+                let mut index = vec![0; output_shape[i]];
+                for (i, idx) in index.iter_mut().enumerate() {
+                    *idx = i * stride + modulo;
+                }
+                index
+            } else {
+                (0..output_shape[i]).collect_vec()
+            }
+        })
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    output
+        .iter_mut()
+        .zip(indices.iter())
+        .for_each(|(o, i)| *o = input.get(i.as_slice()));
+
+    Ok(output)
+}
+
 /// Gathers a tensor along a dimension.
 /// # Arguments
 /// * `input` - Tensor

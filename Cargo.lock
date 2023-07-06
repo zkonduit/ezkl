@@ -1990,11 +1990,10 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 
 [[package]]
 name = "half"
-version = "2.3.1"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc52e53916c08643f1b56ec082790d1e86a32e58dc5268f897f313fbae7b4872"
+checksum = "02b4af3693f1b705df946e9fe5631932443781d0aabb423b62fcd4d73f6d2fd0"
 dependencies = [
- "cfg-if",
  "crunchy",
  "num-traits",
 ]
@@ -4859,7 +4858,7 @@ dependencies = [
 [[package]]
 name = "tract-core"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=0a661fe#0a661fe8d50a024b5f50d5036fd8ea995a0511ba"
+source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
 dependencies = [
  "anyhow",
  "bit-set",
@@ -4882,10 +4881,10 @@ dependencies = [
 [[package]]
 name = "tract-data"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=0a661fe#0a661fe8d50a024b5f50d5036fd8ea995a0511ba"
+source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
 dependencies = [
  "anyhow",
- "half 2.3.1",
+ "half 2.2.1",
  "itertools",
  "lazy_static",
  "maplit",
@@ -4901,7 +4900,7 @@ dependencies = [
 [[package]]
 name = "tract-hir"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=0a661fe#0a661fe8d50a024b5f50d5036fd8ea995a0511ba"
+source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
 dependencies = [
  "derive-new",
  "log",
@@ -4911,13 +4910,13 @@ dependencies = [
 [[package]]
 name = "tract-linalg"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=0a661fe#0a661fe8d50a024b5f50d5036fd8ea995a0511ba"
+source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
 dependencies = [
  "cc",
  "derive-new",
  "downcast-rs",
  "dyn-clone",
- "half 2.3.1",
+ "half 2.2.1",
  "lazy_static",
  "liquid",
  "liquid-core",
@@ -4934,7 +4933,7 @@ dependencies = [
 [[package]]
 name = "tract-nnef"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=0a661fe#0a661fe8d50a024b5f50d5036fd8ea995a0511ba"
+source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
 dependencies = [
  "byteorder",
  "flate2",
@@ -4948,7 +4947,7 @@ dependencies = [
 [[package]]
 name = "tract-onnx"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=0a661fe#0a661fe8d50a024b5f50d5036fd8ea995a0511ba"
+source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
 dependencies = [
  "bytes",
  "derive-new",
@@ -4965,7 +4964,7 @@ dependencies = [
 [[package]]
 name = "tract-onnx-opl"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=0a661fe#0a661fe8d50a024b5f50d5036fd8ea995a0511ba"
+source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
 dependencies = [
  "getrandom",
  "log",
