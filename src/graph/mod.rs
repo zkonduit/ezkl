@@ -313,8 +313,35 @@ impl GraphCircuit {
         Ok(())
     }
 
+    ///
     #[cfg(not(target_arch = "wasm32"))]
+    pub async fn load_graph_witness(
+        &mut self,
+        data: &GraphWitness,
+        test_on_chain_data: Option<TestOnChainData>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+
+        let mut data = data.clone();
+
+        // mutate it if need be
+        if let Some(test_path) = test_on_chain_data {
+            self.populate_on_chain_test_data(&mut data, test_path)
+                .await?;
+        } else {
+            self.process_data(&data).await?;
+            if let (WitnessSource::OnChain(_), WitnessSource::OnChain(_)) = (&data.input_data, &data.output_data) {
+                self.check_freshness().await?;
+            }
+        }
+
+        // load the module settings
+        self.module_settings = ModuleSettings::from(&data);
+
+        Ok(())
+    }
+
     // This function processes the input and output data
+    #[cfg(not(target_arch = "wasm32"))]
     async fn process_data(&mut self, data: &GraphWitness) -> Result<(), Box<dyn std::error::Error>> {
         self.inputs = self
             .process_witness_source(
@@ -334,6 +361,7 @@ impl GraphCircuit {
     }
 
     // This function checks if the witness is fresh
+    #[cfg(not(target_arch = "wasm32"))]
     async fn check_freshness(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         use itertools::Itertools;
         use halo2curves::bn256::Fr;
@@ -376,31 +404,7 @@ impl GraphCircuit {
         Ok(())
     }
 
-    ///
-    pub async fn load_graph_witness(
-        &mut self,
-        data: &GraphWitness,
-        test_on_chain_data: Option<TestOnChainData>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
 
-        let mut data = data.clone();
-
-        // mutate it if need be
-        if let Some(test_path) = test_on_chain_data {
-            self.populate_on_chain_test_data(&mut data, test_path)
-                .await?;
-        } else {
-            self.process_data(&data).await?;
-            if let (WitnessSource::OnChain(_), WitnessSource::OnChain(_)) = (&data.input_data, &data.output_data) {
-                self.check_freshness().await?;
-            }
-        }
-
-        // load the module settings
-        self.module_settings = ModuleSettings::from(&data);
-
-        Ok(())
-    }
     /// Prepare the public inputs for the circuit.
     pub fn prepare_public_inputs(
         &mut self,
