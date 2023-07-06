@@ -13,6 +13,7 @@ use tract_onnx::tract_core::ops::array::Gather;
 use tract_onnx::tract_core::ops::array::Slice;
 use tract_onnx::tract_core::ops::cnn::DeconvUnary;
 use tract_onnx::tract_core::ops::einsum::EinSum;
+use tract_onnx::tract_core::ops::Downsample;
 
 use tract_onnx::tract_core::ops::element_wise::ElementWiseOp;
 
@@ -614,6 +615,23 @@ pub fn new_op_from_onnx(
                 padding: (padding_h, padding_w),
                 output_padding,
                 stride: (stride_h, stride_w),
+            })
+        }
+        "Downsample" => {
+            let downsample_node: Downsample = match node.op().downcast_ref::<Downsample>() {
+                Some(b) => b.clone(),
+                None => {
+                    return Err(Box::new(GraphError::OpMismatch(
+                        idx,
+                        "downsample".to_string(),
+                    )));
+                }
+            };
+
+            Box::new(PolyOp::Downsample {
+                axis: downsample_node.axis,
+                stride: downsample_node.stride as usize,
+                modulo: downsample_node.modulo,
             })
         }
 

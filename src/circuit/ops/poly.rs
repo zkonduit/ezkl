@@ -18,6 +18,11 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
         padding: (usize, usize),
         stride: (usize, usize),
     },
+    Downsample {
+        axis: usize,
+        stride: usize,
+        modulo: usize,
+    },
     DeConv {
         kernel: ValTensor<F>,
         bias: Option<ValTensor<F>>,
@@ -73,6 +78,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     }
     fn as_string(&self) -> String {
         let name = match &self {
+            PolyOp::Downsample { .. } => "DOWNSAMPLE",
             PolyOp::Resize { .. } => "RESIZE",
             PolyOp::Iff => "IFF",
             PolyOp::Einsum { .. } => "EINSUM",
@@ -101,6 +107,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     fn f(&self, inputs: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let mut inputs = inputs.to_vec();
         let res = match &self {
+            PolyOp::Downsample {
+                axis,
+                stride,
+                modulo,
+            } => tensor::ops::downsample(&inputs[0], *axis, *stride, *modulo),
             PolyOp::Resize { scale_factor } => tensor::ops::resize(&inputs[0], scale_factor),
             PolyOp::Iff => tensor::ops::iff(&inputs[0], &inputs[1], &inputs[2]),
             PolyOp::Einsum { equation } => tensor::ops::einsum(equation, &inputs),
@@ -214,6 +225,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
         let mut values = values.to_vec();
 
         Ok(Some(match self {
+            PolyOp::Downsample {
+                axis,
+                stride,
+                modulo,
+            } => layouts::downsample(config, region, values[..].try_into()?, axis, stride, modulo)?,
             PolyOp::Resize { scale_factor } => {
                 layouts::resize(config, region, values[..].try_into()?, scale_factor)?
             }
@@ -312,6 +328,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
 
     fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
         match self {
+            PolyOp::Downsample { .. } => in_scales[0],
             PolyOp::Resize { .. } => in_scales[0],
             PolyOp::Iff => in_scales[1],
             PolyOp::Einsum { .. } => {

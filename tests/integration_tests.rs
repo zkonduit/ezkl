@@ -154,7 +154,7 @@ mod native_tests {
 
     const LARGE_TESTS: [&str; 3] = ["self_attention", "nanoGPT", "mobilenet"];
 
-    const TESTS: [&str; 34] = [
+    const TESTS: [&str; 35] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -174,6 +174,7 @@ mod native_tests {
         "1l_gelu_noappx",
         // "1l_gelu_tanh_appx",
         "1l_relu",
+        "1l_downsample",
         "1l_tanh",
         "2l_relu_sigmoid_small",
         "2l_relu_fc",
@@ -293,7 +294,7 @@ mod native_tests {
             }
 
 
-            seq!(N in 0..=33 {
+            seq!(N in 0..=34 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
