@@ -4858,7 +4858,7 @@ dependencies = [
 [[package]]
 name = "tract-core"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=2b1522a#2b1522abbc5c10662aed02e64875061a2a26c058"
+source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
 dependencies = [
  "anyhow",
  "bit-set",
@@ -4881,7 +4881,7 @@ dependencies = [
 [[package]]
 name = "tract-data"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=2b1522a#2b1522abbc5c10662aed02e64875061a2a26c058"
+source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
 dependencies = [
  "anyhow",
  "half 2.2.1",
@@ -4900,7 +4900,7 @@ dependencies = [
 [[package]]
 name = "tract-hir"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=2b1522a#2b1522abbc5c10662aed02e64875061a2a26c058"
+source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
 dependencies = [
  "derive-new",
  "log",
@@ -4910,7 +4910,7 @@ dependencies = [
 [[package]]
 name = "tract-linalg"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=2b1522a#2b1522abbc5c10662aed02e64875061a2a26c058"
+source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
 dependencies = [
  "cc",
  "derive-new",
@@ -4933,7 +4933,7 @@ dependencies = [
 [[package]]
 name = "tract-nnef"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=2b1522a#2b1522abbc5c10662aed02e64875061a2a26c058"
+source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
 dependencies = [
  "byteorder",
  "flate2",
@@ -4947,7 +4947,7 @@ dependencies = [
 [[package]]
 name = "tract-onnx"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=2b1522a#2b1522abbc5c10662aed02e64875061a2a26c058"
+source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
 dependencies = [
  "bytes",
  "derive-new",
@@ -4964,7 +4964,7 @@ dependencies = [
 [[package]]
 name = "tract-onnx-opl"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=2b1522a#2b1522abbc5c10662aed02e64875061a2a26c058"
+source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
 dependencies = [
  "getrandom",
  "log",
