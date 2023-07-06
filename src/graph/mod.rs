@@ -314,12 +314,75 @@ impl GraphCircuit {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    /// load inputs and outputs for the model
+    // This function processes the input and output data
+    async fn process_data(&mut self, data: &GraphWitness) -> Result<(), Box<dyn std::error::Error>> {
+        self.inputs = self
+            .process_witness_source(
+                &data.input_data,
+                self.model.graph.input_shapes(),
+                self.model.graph.get_input_scales(),
+            )
+            .await?;
+        self.outputs = self
+            .process_witness_source(
+                &data.output_data,
+                self.model.graph.output_shapes(),
+                self.model.graph.get_output_scales(),
+            )
+            .await?;
+        Ok(())
+    }
+
+    // This function checks if the witness is fresh
+    async fn check_freshness(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        use itertools::Itertools;
+        use halo2curves::bn256::Fr;
+        // run a forward pass to check the witness is fresh
+        let res = self.forward()?;
+        // convert to witness format
+        let input_witness: Vec<Vec<Fr>> = res
+            .inputs
+            .iter()
+            .map(|t| t.clone().into_iter().collect_vec())
+            .collect();
+
+        let output_witness: Vec<Vec<Fr>> = res
+            .outputs
+            .iter()
+            .map(|t| t.clone().into_iter().collect_vec())
+            .collect();
+
+        let fresh_input = self
+            .process_witness_source(
+                &WitnessSource::File(input_witness),
+                self.model.graph.input_shapes(),
+                self.model.graph.get_input_scales(),
+            )
+            .await?;
+        let fresh_output = self
+            .process_witness_source(
+                &WitnessSource::File(output_witness),
+                self.model.graph.output_shapes(),
+                self.model.graph.get_output_scales(),
+            )
+            .await?;
+        // check to make sure the evm witness is fresh by ensuring it matches forward result
+        if fresh_input != self.inputs {
+            panic!("EVM Witness is not fresh. Input data does not match latest forward pass result.")
+        }
+        if fresh_output != self.outputs {
+            panic!("EVM Witness is not fresh. Output data does not match latest forward pass result.")
+        }
+        Ok(())
+    }
+
+    ///
     pub async fn load_graph_witness(
         &mut self,
         data: &GraphWitness,
         test_on_chain_data: Option<TestOnChainData>,
     ) -> Result<(), Box<dyn std::error::Error>> {
+
         let mut data = data.clone();
 
         // mutate it if need be
@@ -327,20 +390,10 @@ impl GraphCircuit {
             self.populate_on_chain_test_data(&mut data, test_path)
                 .await?;
         } else {
-            self.inputs = self
-                .process_witness_source(
-                    &data.input_data,
-                    self.model.graph.input_shapes(),
-                    self.model.graph.get_input_scales(),
-                )
-                .await?;
-            self.outputs = self
-                .process_witness_source(
-                    &data.output_data,
-                    self.model.graph.output_shapes(),
-                    self.model.graph.get_output_scales(),
-                )
-                .await?;
+            self.process_data(&data).await?;
+            if let (WitnessSource::OnChain(_), WitnessSource::OnChain(_)) = (&data.input_data, &data.output_data) {
+                self.check_freshness().await?;
+            }
         }
 
         // load the module settings
@@ -348,7 +401,6 @@ impl GraphCircuit {
 
         Ok(())
     }
-
     /// Prepare the public inputs for the circuit.
     pub fn prepare_public_inputs(
         &mut self,
