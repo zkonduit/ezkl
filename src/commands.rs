@@ -390,10 +390,10 @@ pub enum Commands {
         settings_path: Option<PathBuf>,
     },
     #[cfg(not(target_arch = "wasm32"))]
-    SetupTestEVMWitness {
-        /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'W', long)]
-        witness: PathBuf,
+    SetupTestEVMData {
+        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'D', long)]
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
@@ -403,8 +403,8 @@ pub enum Commands {
         /// For testing purposes only. The optional path to the .json data file that will be generated that contains the OnChain data storage information
         /// derived from the file information in the data .json file.
         ///  Should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'D', long)]
-        test_witness: PathBuf,
+        #[arg(short = 'T', long)]
+        test_data: PathBuf,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
         rpc_url: Option<String>,
@@ -512,13 +512,13 @@ pub enum Commands {
         /// If not set will just use the default unoptimized SOLC configuration.
         #[arg(long)]
         optimizer_runs: Option<usize>,
-        /// The path to the .json witness file, which should
+        /// The path to the .json data file, which should
         /// contain the necessary calldata and accoount addresses  
         /// needed need to read from all the on-chain
         /// view functions that return the data that the network
         /// ingests as inputs.
-        #[arg(short = 'W', long)]
-        witness: PathBuf,
+        #[arg(short = 'D', long)]
+        data: PathBuf,
         // todo, optionally allow supplying proving key
     },
 
@@ -595,9 +595,9 @@ pub enum Commands {
     #[cfg(not(target_arch = "wasm32"))]
     #[command(name = "deploy-evm-da-verifier", arg_required_else_help = true)]
     DeployEvmDataAttestationVerifier {
-        /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'W', long)]
-        witness: PathBuf,
+        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'D', long)]
+        data: PathBuf,
         /// The path to load circuit params from
         #[arg(long)]
         settings_path: PathBuf,

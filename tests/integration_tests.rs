@@ -3,7 +3,7 @@
 mod native_tests {
 
     use core::panic;
-    use ezkl_lib::graph::input::{FileSource, GraphInput};
+    use ezkl_lib::graph::input::{FileSource, GraphData};
     use ezkl_lib::graph::DataSource;
     use lazy_static::lazy_static;
     use std::env::var;
@@ -126,7 +126,7 @@ mod native_tests {
 
             assert!(status.success());
 
-            let data = GraphInput::from_path(format!("{}/{}/input.json", test_dir, test).into())
+            let data = GraphData::from_path(format!("{}/{}/input.json", test_dir, test).into())
                 .expect("failed to load input data");
 
             let input_data = match data.input_data {
@@ -139,7 +139,7 @@ mod native_tests {
                 .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
                 .collect();
 
-            let duplicated_data = GraphInput::new(DataSource::File(duplicated_input_data));
+            let duplicated_data = GraphData::new(DataSource::File(duplicated_input_data));
 
             let res =
                 duplicated_data.save(format!("{}/{}/input.json", test_dir, output_dir).into());
@@ -1558,16 +1558,42 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
+        let data_path = format!("{}/{}/input.json", test_dir, example_name);
+        let witness_path = format!("{}/{}/witness.json", test_dir, example_name);
+        let test_on_chain_data_path = format!("{}/{}/on_chain_input.json", test_dir, example_name);
+        let rpc_arg = format!("--rpc-url={}", ANVIL_URL.as_str());
+
+        let test_input_source = format!("--input-source={}", input_source);
+        let test_output_source = format!("--output-source={}", output_source);
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "setup-test-evm-data",
+                "-D",
+                data_path.as_str(),
+                "-M",
+                model_path.as_str(),
+                circuit_settings.as_str(),
+                "--test-data",
+                test_on_chain_data_path.as_str(),
+                rpc_arg.as_str(),
+                test_input_source.as_str(),
+                test_output_source.as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "gen-witness",
                 "-D",
-                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                test_on_chain_data_path.as_str(),
                 "-M",
                 model_path.as_str(),
                 circuit_settings.as_str(),
                 "-O",
-                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                witness_path.as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -1589,36 +1615,11 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let data_path = format!("{}/{}/input.json", test_dir, example_name);
-        let test_on_chain_data_path = format!("{}/{}/on_chain_input.json", test_dir, example_name);
-        let rpc_arg = format!("--rpc-url={}", ANVIL_URL.as_str());
-
-        let test_input_source = format!("--input-source={}", input_source);
-        let test_output_source = format!("--output-source={}", output_source);
-
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "setup-test-evm-witness",
-                "-W",
-                data_path.as_str(),
-                "-M",
-                model_path.as_str(),
-                circuit_settings.as_str(),
-                "--test-witness",
-                test_on_chain_data_path.as_str(),
-                rpc_arg.as_str(),
-                test_input_source.as_str(),
-                test_output_source.as_str(),
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "prove",
                 "-W",
-                test_on_chain_data_path.as_str(),
+                witness_path.as_str(),
                 "-M",
                 model_path.as_str(),
                 "--proof-path",
@@ -1657,7 +1658,7 @@ mod native_tests {
                 param_arg.as_str(),
                 "--vk-path",
                 vk_arg.as_str(),
-                "-W",
+                "-D",
                 test_on_chain_data_path.as_str(),
                 opt_arg.as_str(),
             ])
@@ -1670,7 +1671,7 @@ mod native_tests {
             .args([
                 "deploy-evm-da-verifier",
                 circuit_settings.as_str(),
-                "-W",
+                "-D",
                 test_on_chain_data_path.as_str(),
                 "--sol-code-path",
                 sol_arg.as_str(),
