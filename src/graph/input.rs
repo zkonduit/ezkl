@@ -402,6 +402,7 @@ impl Serialize for GraphData {
     {
         let mut state = serializer.serialize_struct("GraphData", 4)?;
         state.serialize_field("input_data", &self.input_data)?;
+        state.serialize_field("output_data", &self.output_data)?;
         state.end()
     }
 }
