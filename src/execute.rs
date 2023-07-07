@@ -731,7 +731,7 @@ pub(crate) async fn mock(
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, CheckMode::SAFE)?;
 
-    let data = GraphWitness::from_path(data_path.clone())?;
+    let data = GraphWitness::from_path(data_path)?;
 
     circuit.load_graph_witness(&data)?;
 
@@ -1160,7 +1160,7 @@ pub(crate) async fn fuzz(
     let _r = Gag::stdout().unwrap();
     let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
 
-    let data = GraphWitness::from_path(data_path.clone())?;
+    let data = GraphWitness::from_path(data_path)?;
     // these aren't real values so the sanity checks are mostly meaningless
     let mut circuit = match settings_path {
         Some(path) => {
@@ -1430,7 +1430,7 @@ pub(crate) fn aggregate(
     check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
     // the K used for the aggregation circuit
-    let params = load_params_cmd(srs_path.clone(), logrows)?;
+    let params = load_params_cmd(srs_path, logrows)?;
 
     let mut snarks = vec![];
     for proof_path in aggregation_snarks.iter() {

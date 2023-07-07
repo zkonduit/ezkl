@@ -124,7 +124,7 @@ impl<'de> Deserialize<'de> for WitnessFileSource {
             .iter()
             .map(|x| x.iter().map(|fp| Fp::from_raw(*fp)).collect())
             .collect();
-        return Ok(WitnessFileSource(t));
+        Ok(WitnessFileSource(t))
     }
 }
 
@@ -136,7 +136,7 @@ impl Serialize for WitnessFileSource {
         let field_elems: Vec<Vec<[u64; 4]>> = self
             .0
             .iter()
-            .map(|x| x.iter().map(|fp| field_to_vecu64(fp)).collect())
+            .map(|x| x.iter().map(field_to_vecu64).collect())
             .collect::<Vec<_>>();
         field_elems.serialize(serializer)
     }
@@ -778,7 +778,7 @@ impl GraphCircuit {
         let mut processed_outputs = None;
 
         if visibility.input.requires_processing() {
-            processed_inputs = Some(GraphModules::forward(&inputs, visibility.input)?);
+            processed_inputs = Some(GraphModules::forward(inputs, visibility.input)?);
         }
 
         if visibility.params.requires_processing() {
@@ -793,7 +793,7 @@ impl GraphCircuit {
             )?);
         }
 
-        let model_results = self.model.forward(&inputs)?;
+        let model_results = self.model.forward(inputs)?;
 
         if visibility.output.requires_processing() {
             processed_outputs = Some(GraphModules::forward(
@@ -975,7 +975,7 @@ impl Circuit<Fp> for GraphCircuit {
             .graph_witness
             .get_input_tensor()
             .iter()
-            .map(|i| ValTensor::from(i.map(|x| Value::known(x))))
+            .map(|i| ValTensor::from(i.map(Value::known)))
             .collect::<Vec<ValTensor<Fp>>>();
 
         let mut instance_offset = ModuleInstanceOffset::new();

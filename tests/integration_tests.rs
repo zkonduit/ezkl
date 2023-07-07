@@ -12,6 +12,7 @@ mod native_tests {
     use tempdir::TempDir;
     static COMPILE: Once = Once::new();
     static KZG19: Once = Once::new();
+    static KZG17: Once = Once::new();
     static KZG23: Once = Once::new();
     static KZG26: Once = Once::new();
     static START_ANVIL: Once = Once::new();
@@ -51,6 +52,20 @@ mod native_tests {
                     "gen-srs",
                     &format!("--srs-path={}/kzg19.srs", TEST_DIR.path().to_str().unwrap()),
                     "--logrows=19",
+                ])
+                .status()
+                .expect("failed to execute process");
+            assert!(status.success());
+        });
+    }
+
+    fn init_params_17() {
+        KZG17.call_once(|| {
+            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                .args([
+                    "gen-srs",
+                    &format!("--srs-path={}/kzg17.srs", TEST_DIR.path().to_str().unwrap()),
+                    "--logrows=17",
                 ])
                 .status()
                 .expect("failed to execute process");
@@ -424,17 +439,17 @@ mod native_tests {
             #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::init_params_19();
+                crate::native_tests::init_params_17();
                 crate::native_tests::mv_test_(test);
-                kzg_prove_and_verify(test.to_string(), 19, "safe", "private", "private", "public");
+                kzg_prove_and_verify(test.to_string(), 17, "safe", "private", "private", "public");
             }
 
             #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_hashed_output(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::init_params_19();
+                crate::native_tests::init_params_17();
                 crate::native_tests::mv_test_(test);
-                kzg_prove_and_verify(test.to_string(), 19, "safe", "private", "private", "hashed");
+                kzg_prove_and_verify(test.to_string(), 17, "safe", "private", "private", "hashed");
             }
 
             #(#[test_case(TESTS[N])])*
@@ -517,10 +532,10 @@ mod native_tests {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::init_params_19();
+                    crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, "on-chain", "file");
+                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, "on-chain", "file", 17);
                 }
             });
 
@@ -528,10 +543,10 @@ mod native_tests {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::init_params_19();
+                    crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, "file", "on-chain");
+                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, "file", "on-chain", 17);
                 }
             });
 
@@ -540,10 +555,10 @@ mod native_tests {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::init_params_19();
+                    crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, "on-chain", "on-chain");
+                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, "on-chain", "on-chain", 17);
                 }
             });
 
@@ -553,37 +568,37 @@ mod native_tests {
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::init_params_19();
+                    crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), "private", "private", "public", 1);
+                    kzg_evm_prove_and_verify(test.to_string(), "private", "private", "public", 1, 17);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_hashed_input_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::init_params_19();
+                    crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), "hashed", "private", "private", 1);
+                    kzg_evm_prove_and_verify(test.to_string(), "hashed", "private", "private", 1, 17);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_hashed_params_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::init_params_19();
+                    crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), "private", "hashed", "public", 1);
+                    kzg_evm_prove_and_verify(test.to_string(), "private", "hashed", "public", 1, 17);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_hashed_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::init_params_19();
+                    crate::native_tests::init_params_17();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), "private", "private", "hashed", 1);
+                    kzg_evm_prove_and_verify(test.to_string(), "private", "private", "hashed", 1, 17);
                 }
 
 
@@ -1345,6 +1360,7 @@ mod native_tests {
         param_visibility: &str,
         output_visibility: &str,
         num_runs: usize,
+        logrows: usize,
     ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
         let anvil_url = ANVIL_URL.as_str();
@@ -1409,7 +1425,7 @@ mod native_tests {
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
-                &format!("--srs-path={}/kzg19.srs", test_dir),
+                &format!("--srs-path={}/kzg{}.srs", test_dir, logrows),
                 &format!(
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
@@ -1430,7 +1446,7 @@ mod native_tests {
                 &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--pk-path",
                 &format!("{}/{}/key.pk", test_dir, example_name),
-                &format!("--srs-path={}/kzg19.srs", TEST_DIR.path().to_str().unwrap()),
+                &format!("--srs-path={}/kzg{}.srs", test_dir, logrows),
                 "--transcript=evm",
                 "--strategy=single",
                 &format!(
@@ -1448,7 +1464,7 @@ mod native_tests {
         );
         let code_arg = format!("{}/{}/deployment.code", test_dir, example_name);
         let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
-        let param_arg = format!("--srs-path={}/kzg19.srs", test_dir);
+        let param_arg = format!("--srs-path={}/kzg{}.srs", test_dir, logrows);
         let opt_arg = format!("--optimizer-runs={}", num_runs);
         let rpc_arg = format!("--rpc-url={}", anvil_url);
         let addr_path_arg = format!("--addr-path={}/{}/addr.txt", test_dir, example_name);
@@ -1531,6 +1547,7 @@ mod native_tests {
         num_runs: usize,
         input_source: &str,
         output_source: &str,
+        logrows: usize,
     ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
 
@@ -1609,7 +1626,7 @@ mod native_tests {
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
-                &format!("--srs-path={}/kzg19.srs", test_dir),
+                &format!("--srs-path={}/kzg{}.srs", test_dir, logrows),
                 circuit_settings.as_str(),
             ])
             .status()
@@ -1627,7 +1644,7 @@ mod native_tests {
                 &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--pk-path",
                 &format!("{}/{}/key.pk", test_dir, example_name),
-                &format!("--srs-path={}/kzg19.srs", TEST_DIR.path().to_str().unwrap()),
+                &format!("--srs-path={}/kzg{}.srs", test_dir, logrows),
                 "--transcript=evm",
                 "--strategy=single",
                 circuit_settings.as_str(),
@@ -1641,7 +1658,7 @@ mod native_tests {
             test_dir, example_name
         );
         let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
-        let param_arg = format!("--srs-path={}/kzg19.srs", test_dir);
+        let param_arg = format!("--srs-path={}/kzg{}.srs", test_dir, logrows);
 
         let opt_arg = format!("--optimizer-runs={}", num_runs);
 
