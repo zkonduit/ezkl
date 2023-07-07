@@ -1,5 +1,5 @@
 {
-    "input_data": [
+    "inputs": [
         [
             [
                 2,
@@ -21,7 +21,7 @@
             ]
         ]
     ],
-    "output_data": [
+    "outputs": [
         [
             [
                 0,
@@ -48,5 +48,6 @@
                 0
             ]
         ]
-    ]
+    ],
+    "max_lookup_inputs": 0
 }

@@ -57,7 +57,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Softmax { scales } => {
                 tensor::ops::nonlinearities::multi_dim_softmax(&x, scales.0, scales.1)
             }
-            HybridOp::RangeCheck(..) => (x.clone(), vec![]),
+            HybridOp::RangeCheck(..) => (x, vec![]),
         };
 
         // convert back to felt
