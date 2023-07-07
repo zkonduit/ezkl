@@ -70,7 +70,7 @@ fn runposeidon(c: &mut Criterion) {
             PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, L>::run(message.to_vec())
                 .unwrap();
 
-        let mut image = Tensor::from(message.into_iter().map(|x| Value::known(x)));
+        let mut image = Tensor::from(message.into_iter().map(Value::known));
         image.reshape(&[1, *size]);
 
         let circuit = MyCircuit {

@@ -605,6 +605,17 @@ impl Model {
 
         let start_time = instant::Instant::now();
 
+        // reshape inputs
+        let inputs: Vec<ValTensor<Fp>> = inputs
+            .iter()
+            .zip(self.graph.input_shapes().iter())
+            .map(|(input, shape)| {
+                let mut t = input.clone();
+                t.reshape(shape).unwrap();
+                t
+            })
+            .collect_vec();
+
         let mut results = BTreeMap::<usize, ValTensor<Fp>>::new();
 
         for (i, input_idx) in self.graph.inputs.iter().enumerate() {

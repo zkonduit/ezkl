@@ -153,8 +153,8 @@ def test_forward():
     with open(output_path, "r") as f:
         data = json.load(f)
 
-    assert data["input_data"] == res["input_data"]
-    assert data["output_data"] == res["output_data"]
+    assert data["inputs"] == res["inputs"]
+    assert data["outputs"] == res["outputs"]
 
     assert data["processed_inputs"]["poseidon_hash"] == res["processed_inputs"]["poseidon_hash"] == [[
         8270957937025516140, 11801026918842104328, 2203849898884507041, 140307258138425306]]

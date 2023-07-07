@@ -6,7 +6,7 @@ use crate::commands::{Cli, Commands, RunArgs};
 use crate::eth::{deploy_da_verifier_via_solidity, deploy_verifier_via_solidity};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{fix_verifier_sol, get_contract_artifacts, verify_proof_via_solidity};
-use crate::graph::input::{GraphInput, WitnessSource};
+use crate::graph::input::GraphData;
 use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::{TestDataSource, TestSources, Visibility};
@@ -41,6 +41,7 @@ use halo2curves::ff::Field;
 #[cfg(not(target_arch = "wasm32"))]
 use indicatif::{ProgressBar, ProgressStyle};
 use instant::Instant;
+#[cfg(not(target_arch = "wasm32"))]
 use itertools::Itertools;
 #[cfg(not(target_arch = "wasm32"))]
 use log::debug;
@@ -161,13 +162,13 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             sol_code_path,
             sol_bytecode_path,
             optimizer_runs,
-            witness,
+            data,
         } => create_evm_data_attestation_verifier(
             vk_path,
             srs_path,
             settings_path,
             sol_code_path,
-            witness,
+            data,
             sol_bytecode_path,
             optimizer_runs,
         ),
@@ -195,20 +196,20 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             pk_path,
         } => setup(model, srs_path, settings_path, vk_path, pk_path),
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::SetupTestEVMWitness {
-            witness,
+        Commands::SetupTestEVMData {
+            data,
             model,
             settings_path,
-            test_witness,
+            test_data,
             rpc_url,
             input_source,
             output_source,
         } => {
             setup_test_evm_witness(
-                witness,
+                data,
                 model,
                 settings_path,
-                test_witness,
+                test_data,
                 rpc_url,
                 input_source,
                 output_source,
@@ -276,12 +277,12 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => deploy_evm(sol_code_path, rpc_url, addr_path).await,
         #[cfg(not(target_arch = "wasm32"))]
         Commands::DeployEvmDataAttestationVerifier {
-            witness,
+            data,
             settings_path,
             sol_code_path,
             rpc_url,
             addr_path,
-        } => deploy_da_evm(witness, settings_path, sol_code_path, rpc_url, addr_path).await,
+        } => deploy_da_evm(data, settings_path, sol_code_path, rpc_url, addr_path).await,
         #[cfg(not(target_arch = "wasm32"))]
         Commands::VerifyEVM {
             proof_path,
@@ -489,48 +490,22 @@ pub(crate) async fn gen_witness(
 
     let mut circuit =
         GraphCircuit::from_settings(&circuit_settings, &model_path, CheckMode::UNSAFE)?;
-    let data = GraphInput::from_path(data)?;
+    let data = GraphData::from_path(data)?;
 
     #[cfg(not(target_arch = "wasm32"))]
-    circuit.load_graph_input(&data).await?;
+    let input = circuit.load_graph_input(&data).await?;
     #[cfg(target_arch = "wasm32")]
-    circuit.load_graph_input(&data)?;
+    let input = circuit.load_graph_input(&data)?;
 
     let start_time = Instant::now();
 
-    let res = circuit.forward()?;
+    let witness = circuit.forward(&input)?;
 
     trace!(
         "witness generation (B={:?}) took {:?}",
         circuit_settings.run_args.batch_size,
         start_time.elapsed()
     );
-
-    trace!(
-        "model forward pass output shapes: {:?}",
-        res.outputs.iter().map(|t| t.dims()).collect_vec()
-    );
-
-    let input_witness: Vec<Vec<Fr>> = res
-        .inputs
-        .iter()
-        .map(|t| t.clone().into_iter().collect_vec())
-        .collect();
-
-    let output_witness: Vec<Vec<Fr>> = res
-        .outputs
-        .iter()
-        .map(|t| t.clone().into_iter().collect_vec())
-        .collect();
-    trace!("model forward pass output: {:?}", output_witness);
-
-    let witness = GraphWitness {
-        input_data: WitnessSource::File(input_witness),
-        output_data: WitnessSource::File(output_witness),
-        processed_inputs: res.processed_inputs,
-        processed_params: res.processed_params,
-        processed_outputs: res.processed_outputs,
-    };
 
     if let Some(output_path) = output {
         serde_json::to_writer(&File::create(output_path)?, &witness)?;
@@ -596,7 +571,7 @@ pub(crate) async fn calibrate(
     settings_path: PathBuf,
     target: CalibrationTarget,
 ) -> Result<(), Box<dyn Error>> {
-    let data = GraphInput::from_path(data)?;
+    let data = GraphData::from_path(data)?;
     // load the pre-generated settings
     let settings = GraphSettings::load(&settings_path)?;
     // now retrieve the run args
@@ -647,7 +622,7 @@ pub(crate) async fn calibrate(
                         .unwrap();
 
                 tokio::task::spawn(async move {
-                    circuit
+                    let data = circuit
                         .load_graph_input(&chunk)
                         .await
                         .map_err(|_| "failed to load circuit inputs")
@@ -657,7 +632,9 @@ pub(crate) async fn calibrate(
                         //
                         // ensures we have converged
                         let params_before = circuit.settings.clone();
-                        circuit.calibrate().map_err(|_| "failed to calibrate")?;
+                        circuit
+                            .calibrate(&data)
+                            .map_err(|_| "failed to calibrate")?;
                         let params_after = circuit.settings.clone();
                         if params_before == params_after {
                             break;
@@ -754,11 +731,8 @@ pub(crate) async fn mock(
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, CheckMode::SAFE)?;
 
-    let data = GraphWitness::from_path(data_path.clone())?;
+    let data = GraphWitness::from_path(data_path)?;
 
-    #[cfg(not(target_arch = "wasm32"))]
-    circuit.load_graph_witness(&data, None).await?;
-    #[cfg(target_arch = "wasm32")]
     circuit.load_graph_witness(&data)?;
 
     let public_inputs = circuit.prepare_public_inputs(&data)?;
@@ -873,11 +847,11 @@ pub(crate) fn create_evm_data_attestation_verifier(
     srs_path: PathBuf,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
-    witness: PathBuf,
+    input: PathBuf,
     sol_bytecode_path: Option<PathBuf>,
     runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
-    use crate::graph::VarVisibility;
+    use crate::graph::{DataSource, VarVisibility};
 
     let settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, settings.run_args.logrows)?;
@@ -894,9 +868,9 @@ pub(crate) fn create_evm_data_attestation_verifier(
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(yul_code.as_bytes());
 
-    let data = GraphWitness::from_path(witness)?;
+    let data = GraphData::from_path(input)?;
 
-    let output_data = if let WitnessSource::OnChain(source) = data.output_data {
+    let output_data = if let Some(DataSource::OnChain(source)) = data.output_data {
         if !visibility.output.is_public() {
             todo!("we currently don't support private output data on chain")
         }
@@ -909,7 +883,7 @@ pub(crate) fn create_evm_data_attestation_verifier(
         None
     };
 
-    let input_data = if let WitnessSource::OnChain(source) = data.input_data {
+    let input_data = if let DataSource::OnChain(source) = data.input_data {
         if !visibility.input.is_public() {
             todo!("we currently don't support private input data on chain")
         }
@@ -941,14 +915,14 @@ pub(crate) fn create_evm_data_attestation_verifier(
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn deploy_da_evm(
-    witness: PathBuf,
+    data: PathBuf,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
     addr_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
     let contract_address =
-        deploy_da_verifier_via_solidity(settings_path, witness, sol_code_path, rpc_url.as_deref())
+        deploy_da_verifier_via_solidity(settings_path, data, sol_code_path, rpc_url.as_deref())
             .await?;
     info!("Contract deployed at: {}", contract_address);
 
@@ -1063,7 +1037,7 @@ pub(crate) async fn setup_test_evm_witness(
     data_path: PathBuf,
     model_path: PathBuf,
     settings_path: PathBuf,
-    test_witness: PathBuf,
+    test_data: PathBuf,
     rpc_url: Option<String>,
     input_source: TestDataSource,
     output_source: TestDataSource,
@@ -1071,7 +1045,7 @@ pub(crate) async fn setup_test_evm_witness(
     use crate::graph::TestOnChainData;
 
     info!("run this command in background to keep the instance running for testing");
-    let data = GraphWitness::from_path(data_path)?;
+    let mut data = GraphData::from_path(data_path)?;
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, CheckMode::SAFE)?;
 
@@ -1081,8 +1055,8 @@ pub(crate) async fn setup_test_evm_witness(
         return Err("Both input and output cannot be from files".into());
     }
 
-    let test_on_chain_witness = TestOnChainData {
-        data: test_witness.clone(),
+    let test_on_chain_data = TestOnChainData {
+        data: test_data.clone(),
         rpc: rpc_url,
         data_sources: TestSources {
             input: input_source,
@@ -1091,7 +1065,7 @@ pub(crate) async fn setup_test_evm_witness(
     };
 
     circuit
-        .load_graph_witness(&data, Some(test_on_chain_witness))
+        .populate_on_chain_test_data(&mut data, test_on_chain_data)
         .await?;
 
     Ok(())
@@ -1114,7 +1088,7 @@ pub(crate) async fn prove(
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, check_mode)?;
 
-    circuit.load_graph_witness(&data, None).await?;
+    circuit.load_graph_witness(&data)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     let circuit_settings = circuit.settings.clone();
@@ -1186,7 +1160,7 @@ pub(crate) async fn fuzz(
     let _r = Gag::stdout().unwrap();
     let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
 
-    let data = GraphWitness::from_path(data_path.clone())?;
+    let data = GraphWitness::from_path(data_path)?;
     // these aren't real values so the sanity checks are mostly meaningless
     let mut circuit = match settings_path {
         Some(path) => {
@@ -1199,7 +1173,7 @@ pub(crate) async fn fuzz(
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
         .map_err(Box::<dyn Error>::from)?;
 
-    circuit.load_graph_witness(&data, None).await?;
+    circuit.load_graph_witness(&data)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     let strategy = KZGSingleStrategy::new(&params);
@@ -1456,7 +1430,7 @@ pub(crate) fn aggregate(
     check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
     // the K used for the aggregation circuit
-    let params = load_params_cmd(srs_path.clone(), logrows)?;
+    let params = load_params_cmd(srs_path, logrows)?;
 
     let mut snarks = vec![];
     for proof_path in aggregation_snarks.iter() {
