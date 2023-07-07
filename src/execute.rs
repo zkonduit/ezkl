@@ -861,9 +861,7 @@ pub(crate) fn create_evm_verifier(
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(yul_code.as_bytes());
 
-    // flatten num_instances
-    let instances_count = num_instance.iter().fold(0, |acc, x| acc + x);
-    let output = fix_verifier_sol(sol_code_path.clone(), None, None, Some(instances_count))?;
+    let output = fix_verifier_sol(sol_code_path.clone(), None, None)?;
 
     
     let mut f = File::create(sol_code_path.clone())?;
@@ -939,9 +937,7 @@ pub(crate) fn create_evm_data_attestation_verifier(
     };
 
     if input_data.is_some() || output_data.is_some() {
-         // flatten num_instances
-        let instances_count = num_instance.iter().fold(0, |acc, x| acc + x);
-        let output = fix_verifier_sol(sol_code_path.clone(), input_data, output_data, Some(instances_count))?;
+        let output = fix_verifier_sol(sol_code_path.clone(), input_data, output_data)?;
         let mut f = File::create(sol_code_path.clone())?;
         let _ = f.write(output.as_bytes());
         // fetch abi of the contract
@@ -1048,8 +1044,8 @@ pub(crate) fn create_evm_aggregate_verifier(
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(yul_code.as_bytes());
 
-    let output = fix_verifier_sol(sol_code_path.clone(), None, None, None)?;
-
+    let output = fix_verifier_sol(sol_code_path.clone(), None, None)?;
+    
     
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(output.as_bytes());

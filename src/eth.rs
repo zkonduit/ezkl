@@ -612,8 +612,7 @@ use std::io::{BufRead, BufReader};
 pub fn fix_verifier_sol(
     input_file: PathBuf,
     input_data: Option<(u32, Vec<CallsToAccount>)>,
-    output_data: Option<Vec<CallsToAccount>>,
-    instances_count: Option<usize>,
+    output_data: Option<Vec<CallsToAccount>>
 ) -> Result<String, Box<dyn Error>> {
     let file = File::open(input_file.clone())?;
     let reader = BufReader::new(file);
@@ -900,14 +899,12 @@ pub fn fix_verifier_sol(
         &format!("bytes32[{}] memory transcript", max_transcript_addr),
     );
 
-    if let Some(instances_count) = instances_count {
-        info!("instances_count: {}", instances_count);
-        // Hardcode the fixed array length of pubInputs param
-        contract = contract.replace(
-            "uint256[] calldata",
-            &format!("uint256[{}] calldata", instances_count),
-        );
-    }
+    // Hardcode the fixed array length of pubInputs param
+    contract = contract.replace(
+        "uint256[] calldata",
+        &format!("uint256[{}] calldata", num_pubinputs),
+    );
+
     // Find the index of "assembly {"
     let end_index =
         match contract.find("assembly { /* This is where the proof verification happens*/ }") {
