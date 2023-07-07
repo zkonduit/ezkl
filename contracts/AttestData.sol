@@ -153,7 +153,7 @@ contract DataAttestationVerifier {
         }
     }
 
-    function attestData(uint256[] memory pubInputs) internal view {
+    function attestData(uint256[] calldata pubInputs) internal view {
         require(
             pubInputs.length >= INPUT_CALLS + OUTPUT_CALLS,
             "Invalid public inputs length"
@@ -186,11 +186,11 @@ contract DataAttestationVerifier {
     }
 
     function verifyWithDataAttestation(
-        uint256[] memory pubInputs,
-        bytes memory proof
+        uint256[] calldata pubInputs,
+        bytes calldata proof
     ) public view returns (bool) {
         bool success = true;
-        bytes32[758] memory transcript;
+        bytes32[] memory transcript;
         attestData(pubInputs);
         assembly { /* This is where the proof verification happens*/ }
         return success;

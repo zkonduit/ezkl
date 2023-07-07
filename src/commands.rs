@@ -475,6 +475,9 @@ pub enum Commands {
         /// The path to output the Solidity code
         #[arg(long, default_value = "evm_deploy.sol")]
         sol_code_path: PathBuf,
+        /// The path to output the Solidity verifier ABI
+        #[arg(long, default_value = "verifier_abi.json")]
+        abi_path: PathBuf,
         /// The path to the compiled yul bytecode code
         #[arg(long, default_value = "evm_deploy.yul")]
         deployment_code_path: Option<PathBuf>,
@@ -502,8 +505,11 @@ pub enum Commands {
         #[arg(long)]
         vk_path: PathBuf,
         /// The path to output the Solidity code
-        #[arg(long)]
+        #[arg(long, default_value = "evm_da_deploy.sol")]
         sol_code_path: PathBuf,
+        /// The path to output the Solidity verifier ABI
+        #[arg(long, default_value = "verifier_da_abi.json")]
+        abi_path: PathBuf,
         /// The path to output the compiled Solidity bytecode
         #[arg(long)]
         sol_bytecode_path: Option<PathBuf>,
@@ -535,6 +541,9 @@ pub enum Commands {
         /// The path to the Solidity code
         #[arg(long, default_value = "evm_deploy_aggr.sol")]
         sol_code_path: PathBuf,
+        /// The path to output the Solidity verifier ABI
+        #[arg(long, default_value = "verifier_aggr_abi.json")]
+        abi_path: PathBuf,
         /// The path to the compiled yul bytecode code
         #[arg(long, default_value = "evm_deploy_aggr.yul")]
         deployment_code_path: Option<PathBuf>,

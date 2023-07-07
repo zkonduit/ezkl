@@ -350,12 +350,14 @@ def test_create_evm_verifier():
     settings_path = os.path.join(folder_path, 'settings.json')
     deployment_code_path = os.path.join(folder_path, 'deploy.code')
     sol_code_path = os.path.join(folder_path, 'test.sol')
+    abi_path = os.path.join(folder_path, 'test.abi')
 
     res = ezkl_lib.create_evm_verifier(
         vk_path,
         srs_path,
         settings_path,
         sol_code_path,
+        abi_path,
         deployment_code_path,
     )
 
@@ -583,13 +585,15 @@ async def evm_aggregate_and_verify_aggr():
     aggregate_deploy_path = os.path.join(folder_path, 'aggr_evm_1l_relu.code')
     sol_code_path = os.path.join(folder_path, 'aggr_evm_1l_relu.sol')
     sol_bytecode_path = os.path.join(folder_path, 'aggr_evm_1l_relu.bytecode')
+    abi_path = os.path.join(folder_path, 'aggr_evm_1l_relu.abi')
 
     res = ezkl_lib.create_evm_verifier_aggr(
         aggregate_vk_path,
         params_k20_path,
         sol_code_path,
         aggregate_deploy_path,
-        sol_bytecode_path
+        sol_bytecode_path,
+        abi_path
     )
 
     assert res == True

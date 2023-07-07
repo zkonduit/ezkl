@@ -245,11 +245,9 @@ pub async fn verify_proof_via_solidity(
     addr: ethers::types::Address,
     rpc_url: Option<&str>,
 ) -> Result<bool, Box<dyn Error>> {
-    let (anvil, client) = setup_eth_backend(rpc_url).await?;
+    use ethers::abi::{ParamType, Function, Param, StateMutability, Token};
 
-    let contract = Verifier::new(addr, client.clone());
-
-    let mut public_inputs = vec![];
+    let mut public_inputs: Vec<U256> = vec![];
     let flattened_instances = proof.instances.into_iter().flatten();
 
     for val in flattened_instances {
@@ -258,36 +256,60 @@ pub async fn verify_proof_via_solidity(
         public_inputs.push(u);
     }
 
-    let tx = contract
-        .verify(
-            public_inputs.clone(),
-            ethers::types::Bytes::from(proof.proof.to_vec()),
-        )
-        .tx;
+    info!("public_inputs: {:#?}", public_inputs);
+    info!("proof: {:#?}", ethers::types::Bytes::from(proof.proof.to_vec()));
 
-    info!(
-        "estimated verify gas cost: {:#?}",
-        client.estimate_gas(&tx, None).await?
-    );
+    #[allow(deprecated)]
+    let func = Function {
+        name: "verify".to_owned(),
+        inputs: vec![
+            Param { 
+                name: "pubInputs".to_owned(), 
+                kind: ParamType::FixedArray(Box::new(ParamType::Uint(256)), public_inputs.len()), 
+                internal_type: None 
+            },
+            Param { name: "proof".to_owned(), kind: ParamType::Bytes, internal_type: None },
+        ],
+        outputs: vec![
+            Param { 
+                name: "success".to_owned(), 
+                kind: ParamType::Bool, 
+                internal_type: None
+            }
+        ],
+        constant: None,
+        state_mutability: StateMutability::View,
+    };
 
-    let result = contract
-        .verify(
-            public_inputs,
-            ethers::types::Bytes::from(proof.proof.to_vec()),
-        )
-        .call()
-        .await;
+    let encoded = func.encode_input(&[
+        Token::FixedArray(public_inputs.into_iter().map(Token::Uint).collect()),
+        Token::Bytes(proof.proof.into()),
+    ])?;
+
+    info!("encoded: {:#?}", hex::encode(&encoded));
+    let (anvil, client) = setup_eth_backend(rpc_url).await?;
+    let tx: TypedTransaction = TransactionRequest::default()
+                .to(addr)
+                .from(client.address())
+                .data(encoded)
+                .into();
+            debug!("transaction {:#?}", tx);
+
+    let result = client.call(&tx, None).await;
 
     if result.is_err() {
         return Err(Box::new(EvmVerificationError::SolidityExecution));
     }
     let result = result.unwrap();
+    info!("result: {:#?}", result);
+    // decode return bytes value into uint8
+    let result = result.to_vec().last().unwrap() == &1u8;
     if !result {
         return Err(Box::new(EvmVerificationError::InvalidProof));
     }
 
     drop(anvil);
-    Ok(result)
+    Ok(true)
 }
 
 fn count_decimal_places(num: f32) -> usize {
@@ -342,11 +364,9 @@ pub async fn verify_proof_with_data_attestation(
     addr: ethers::types::Address,
     rpc_url: Option<&str>,
 ) -> Result<bool, Box<dyn Error>> {
-    let (anvil, client) = setup_eth_backend(rpc_url).await?;
+    use ethers::abi::{ParamType, Function, Param, StateMutability, Token};
 
-    let contract = DataAttestationVerifier::new(addr, client.clone());
-
-    let mut public_inputs = vec![];
+    let mut public_inputs: Vec<U256> = vec![];
     let flattened_instances = proof.instances.into_iter().flatten();
 
     for val in flattened_instances {
@@ -356,29 +376,61 @@ pub async fn verify_proof_with_data_attestation(
     }
 
     info!("public_inputs: {:#?}", public_inputs);
+    info!("proof: {:#?}", ethers::types::Bytes::from(proof.proof.to_vec()));
 
-    let call = contract.verify_with_data_attestation(
-        public_inputs.clone(),
-        ethers::types::Bytes::from(proof.proof.to_vec()),
-    );
+    #[allow(deprecated)]
+    let func = Function {
+        name: "verifyWithDataAttestation".to_owned(),
+        inputs: vec![
+            Param { 
+                name: "pubInputs".to_owned(), 
+                kind: ParamType::FixedArray(Box::new(ParamType::Uint(256)), public_inputs.len()), 
+                internal_type: None 
+            },
+            Param { name: "proof".to_owned(), kind: ParamType::Bytes, internal_type: None },
+        ],
+        outputs: vec![
+            Param { 
+                name: "success".to_owned(), 
+                kind: ParamType::Bool, 
+                internal_type: None
+            }
+        ],
+        constant: None,
+        state_mutability: StateMutability::View,
+    };
 
+    let encoded = func.encode_input(&[
+        Token::FixedArray(public_inputs.into_iter().map(Token::Uint).collect()),
+        Token::Bytes(proof.proof.into()),
+    ])?;
+
+    info!("encoded: {:#?}", hex::encode(&encoded));
+    let (anvil, client) = setup_eth_backend(rpc_url).await?;
+    let tx: TypedTransaction = TransactionRequest::default()
+                .to(addr)
+                .from(client.address())
+                .data(encoded)
+                .into();
+            debug!("transaction {:#?}", tx);
     info!(
         "estimated verify gas cost: {:#?}",
-        client.estimate_gas(&call.tx, None).await?
+        client.estimate_gas(&tx, None).await?
     );
 
-    let result = call.call().await;
-
+    let result = client.call(&tx, None).await;
     if result.is_err() {
-        log::error!("solidity execution error: {:#?}", result);
         return Err(Box::new(EvmVerificationError::SolidityExecution));
     }
     let result = result.unwrap();
+    info!("result: {:#?}", result);
+    // decode return bytes value into uint8
+    let result = result.to_vec().last().unwrap() == &1u8;
     if !result {
         return Err(Box::new(EvmVerificationError::InvalidProof));
     }
     drop(anvil);
-    Ok(result)
+    Ok(true)
 }
 
 /// get_provider returns a JSON RPC HTTP Provider
@@ -561,13 +613,13 @@ pub fn fix_verifier_sol(
     input_file: PathBuf,
     input_data: Option<(u32, Vec<CallsToAccount>)>,
     output_data: Option<Vec<CallsToAccount>>,
+    instances_count: Option<usize>,
 ) -> Result<String, Box<dyn Error>> {
     let file = File::open(input_file.clone())?;
     let reader = BufReader::new(file);
 
     let mut transcript_addrs: Vec<u32> = Vec::new();
     let mut modified_lines: Vec<String> = Vec::new();
-    let mut proof_size: u32 = 0;
 
     // convert calldataload 0x0 to 0x40 to read from pubInputs, and the rest
     // from proof
@@ -629,17 +681,16 @@ pub fn fix_verifier_sol(
             let addr = m.get(2).unwrap().as_str();
             let addr_as_num = u32::from_str_radix(addr.strip_prefix("0x").unwrap(), 16)?;
             if addr_as_num <= max_pubinputs_addr {
-                let pub_addr = format!("{:#x}", addr_as_num + 32);
+                let pub_addr = format!("{:#x}", addr_as_num);
                 line = line.replace(
                     calldata_and_addr,
-                    &format!("mload(add(pubInputs, {}))", pub_addr),
+                    &format!("calldataload(add(pubInputs, {}))", pub_addr),
                 );
             } else {
-                proof_size += 1;
-                let proof_addr = format!("{:#x}", addr_as_num - max_pubinputs_addr);
+                let proof_addr = format!("{:#x}", 32 + addr_as_num - max_pubinputs_addr);
                 line = line.replace(
                     calldata_and_addr,
-                    &format!("mload(add(proof, {}))", proof_addr),
+                    &format!("calldataload(add(proof, {}))", proof_addr),
                 );
             }
         }
@@ -844,11 +895,19 @@ pub fn fix_verifier_sol(
     };
 
     // Insert the max_transcript_addr into the contract string at the correct position.
-    _ = contract.replace(
+    let mut contract = contract.replace(
         "bytes32[] memory transcript",
         &format!("bytes32[{}] memory transcript", max_transcript_addr),
     );
 
+    if let Some(instances_count) = instances_count {
+        info!("instances_count: {}", instances_count);
+        // Hardcode the fixed array length of pubInputs param
+        contract = contract.replace(
+            "uint256[] calldata",
+            &format!("uint256[{}] calldata", instances_count),
+        );
+    }
     // Find the index of "assembly {"
     let end_index =
         match contract.find("assembly { /* This is where the proof verification happens*/ }") {
@@ -873,7 +932,7 @@ pub fn fix_verifier_sol(
     writeln!(write, "}} return success; }} }}")?;
 
     // free memory pointer initialization
-    let mut offset = 128;
+    let mut offset = 4;
 
     // replace all mload(add(pubInputs, 0x...))) with mload(0x...
     contract_slice_string = replace_vars_with_offset(
@@ -882,7 +941,7 @@ pub fn fix_verifier_sol(
         offset,
     );
 
-    offset += 32 * num_pubinputs + 32;
+    offset += 32 * num_pubinputs;
 
     // replace all mload(add(proof, 0x...))) with mload(0x...
     contract_slice_string = replace_vars_with_offset(
@@ -891,7 +950,7 @@ pub fn fix_verifier_sol(
         offset,
     );
 
-    offset += 32 * proof_size + 32;
+    offset = 128;
 
     // replace all (add(transcript, 0x...))) with (0x...)
     contract_slice_string = replace_vars_with_offset(
