@@ -437,15 +437,7 @@ impl Module<Fr> for ElGamalGadget {
         // 1. empty maingate instance
         // 2. c1, sk_hash
         // 3. c2
-        vec![0, 0, var_len[0]]
-    }
-
-    fn instance_increment_module(&self) -> Vec<usize> {
-        // in order
-        // 1. empty maingate instance
-        // 2. c1, sk_hash
-        // 3. c2
-        vec![0, 3, 0]
+        vec![0, 3, var_len[0]]
     }
 
     fn run(input: Self::RunInputs) -> Result<Vec<Vec<Fr>>, Box<dyn std::error::Error>> {

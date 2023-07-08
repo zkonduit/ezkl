@@ -45,8 +45,6 @@ pub trait Module<F: PrimeField + TensorType + PartialOrd> {
         input: &[ValTensor<F>],
         row_offsets: Vec<usize>,
     ) -> Result<ValTensor<F>, Error>;
-    /// Number of instance values the module uses
+    /// Number of instance values the module uses every time it is applied
     fn instance_increment_input(&self, _: Vec<usize>) -> Vec<usize>;
-    /// How to increment when creating a new module
-    fn instance_increment_module(&self) -> Vec<usize>;
 }

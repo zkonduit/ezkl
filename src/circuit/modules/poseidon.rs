@@ -68,10 +68,6 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         vec![1]
     }
 
-    fn instance_increment_module(&self) -> Vec<usize> {
-        vec![0]
-    }
-
     /// Constructs a new PoseidonChip
     fn new(config: Self::Config) -> Self {
         Self {
