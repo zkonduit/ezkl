@@ -1498,7 +1498,7 @@ pub(crate) fn verify(
         elapsed.subsec_millis()
     );
     info!("verified: {}", result.is_ok());
-    Ok(())
+    result.map_err(|e| e.into())
 }
 
 pub(crate) fn verify_aggr(
