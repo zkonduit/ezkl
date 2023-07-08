@@ -240,7 +240,7 @@ mod native_tests {
         ("2l_relu_small", "2l_relu_sigmoid_small"),
     ];
 
-    const TESTS_EVM: [&str; 19] = [
+    const TESTS_EVM: [&str; 20] = [
         "1l_mlp",
         "1l_flatten",
         "1l_average",
