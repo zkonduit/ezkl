@@ -258,27 +258,12 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
 
         // in this case its just a dot product :)
         if non_common_coord_size == 1 && inputs.len() == 2 {
-            let overflowed_len = overflowed_len(
-                region.offset(),
-                i * common_coord.len(),
-                config.output.col_size(),
-            );
-            let local_offset = region.offset() + overflowed_len;
-            let mut local_region = RegionCtx::from_wrapped_region(region.region(), local_offset);
-
-            *o = dot(config, &mut local_region, inputs[..].try_into().unwrap())
+            *o = dot(config, region, inputs[..].try_into().unwrap())
                 .unwrap()
                 .get_inner_tensor()
                 .unwrap()[0]
                 .clone();
         } else {
-            // index * the number of elements that are multiplied together during the inner loop of an einsum operation
-            let local_offset =
-                // we subtract 1 because we don't need to add for the first loop
-                region.offset() + i * (common_coord.len() * 2 * (non_common_coord_size) - 1); // we have non_common_coord_size multiplies and adds per inner loop
-
-            let mut local_region = RegionCtx::from_wrapped_region(region.region(), local_offset);
-
             let mut prod = None;
 
             // Compute the cartesian product of all common indices
@@ -312,13 +297,8 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
                         pair[1..]
                             .iter()
                             .fold(ValTensor::from(pair[0].clone()), |acc, x| {
-                                pairwise(
-                                    config,
-                                    &mut local_region,
-                                    &[acc, x.clone().into()],
-                                    BaseOp::Mult,
-                                )
-                                .unwrap()
+                                pairwise(config, region, &[acc, x.clone().into()], BaseOp::Mult)
+                                    .unwrap()
                             });
 
                     if prod.is_none() {
@@ -327,7 +307,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
                         prod = Some(
                             pairwise(
                                 config,
-                                &mut local_region,
+                                region,
                                 &[prod.unwrap(), product_across_pair],
                                 BaseOp::Add,
                             )
@@ -340,33 +320,6 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
             *o = prod.unwrap().get_inner_tensor().unwrap()[0].clone();
         }
     });
-
-    let non_common_indices_size = non_common_indices
-        .into_iter()
-        .filter(|c| !output_eq.contains(**c))
-        .map(|c| indices_to_size[c])
-        .product::<usize>();
-
-    if non_common_indices_size > 1 {
-        let increment = output_shape.iter().product::<usize>()
-            * (2 * common_indices_to_inputs
-                .into_iter()
-                .filter(|c| !output_eq.contains(*c))
-                .map(|c| indices_to_size[&c])
-                .product::<usize>()
-                * non_common_indices_size
-                - 1);
-        region.increment(increment);
-    } else {
-        let vanilla_len = output_shape.iter().product::<usize>()
-            * (common_indices_to_inputs
-                .into_iter()
-                .filter(|c| !output_eq.contains(*c))
-                .map(|c| indices_to_size[&c])
-                .product::<usize>());
-        let overflowed_len = overflowed_len(region.offset(), vanilla_len, config.output.col_size());
-        region.increment(overflowed_len);
-    }
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be 0 so we use this as a flag to check
@@ -1102,23 +1055,8 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
 
         local_kernel.flatten();
 
-        let mut total_len = idx * local_image.len();
-        if has_bias {
-            total_len += idx;
-        }
-        let overflowed_len = overflowed_len(region.offset(), total_len, config.output.col_size());
-        let local_offset = region.offset() + overflowed_len;
-
-        let mut local_region = RegionCtx::from_wrapped_region(region.region(), local_offset);
-
         // this is dot product notation in einsum format
-        let mut res = einsum(
-            config,
-            &mut local_region,
-            &mut [local_image, local_kernel],
-            "i,i->",
-        )
-        .unwrap();
+        let mut res = einsum(config, region, &mut [local_image, local_kernel], "i,i->").unwrap();
 
         if has_bias {
             let bias = values[2]
@@ -1126,7 +1064,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
                 .unwrap()
                 .get_slice(&[start_kernel_index..end_kernel_index])
                 .unwrap();
-            res = pairwise(config, &mut local_region, &[res, bias.into()], BaseOp::Add).unwrap()
+            res = pairwise(config, region, &[res, bias.into()], BaseOp::Add).unwrap()
         }
 
         *o = res.get_inner_tensor().unwrap()[0].clone();
