@@ -1,8 +1,8 @@
 use clap::Parser;
 use colored_json::ToColoredJson;
-use ezkl_lib::commands::Cli;
-use ezkl_lib::execute::run;
-use ezkl_lib::logger::init_logger;
+use ezkl::commands::Cli;
+use ezkl::execute::run;
+use ezkl::logger::init_logger;
 use log::{error, info};
 use rand::prelude::SliceRandom;
 use std::error::Error;
@@ -46,7 +46,7 @@ fn banner() {
         -----------------------------------------------------------
         Easy Zero Knowledge {}.
         -----------------------------------------------------------
-        
+
         ",
             ell.choose(&mut rand::thread_rng()).unwrap()
         )
