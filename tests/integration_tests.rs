@@ -169,7 +169,7 @@ mod native_tests {
 
     const LARGE_TESTS: [&str; 3] = ["self_attention", "nanoGPT", "mobilenet"];
 
-    const TESTS: [&str; 36] = [
+    const TESTS: [&str; 37] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -207,6 +207,7 @@ mod native_tests {
         "1l_max_pool",
         "1l_conv_transpose",
         "1l_upsample",
+        "1l_identity",
         "idolmodel",
     ];
 
@@ -260,6 +261,7 @@ mod native_tests {
         "max",
         "1l_max_pool",
         "idolmodel",
+        "1l_identity",
     ];
 
     const EXAMPLES: [&str; 2] = ["mlp_4d_einsum", "conv2d_mnist"];
@@ -311,7 +313,7 @@ mod native_tests {
             }
 
 
-            seq!(N in 0..=35 {
+            seq!(N in 0..=36 {
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
@@ -565,7 +567,7 @@ mod native_tests {
             });
 
 
-            seq!(N in 0..= 18 {
+            seq!(N in 0..= 19 {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
