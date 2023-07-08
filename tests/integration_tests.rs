@@ -207,7 +207,7 @@ mod native_tests {
         "1l_max_pool",
         "1l_conv_transpose",
         "1l_upsample",
-        "idol_model",
+        "idolmodel",
     ];
 
     const TESTS_AGGR: [&str; 20] = [
@@ -259,7 +259,7 @@ mod native_tests {
         "min",
         "max",
         "1l_max_pool",
-        "idol_model",
+        "idolmodel",
     ];
 
     const EXAMPLES: [&str; 2] = ["mlp_4d_einsum", "conv2d_mnist"];
