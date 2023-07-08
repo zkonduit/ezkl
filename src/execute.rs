@@ -1523,7 +1523,8 @@ pub(crate) fn verify_aggr(
         elapsed.subsec_millis()
     );
     info!("verified: {}", result.is_ok());
-    result.map_err(|e| e.into())
+    result.map_err(|e| e.into())?;
+    Ok(())
 }
 
 /// helper function for load_params
