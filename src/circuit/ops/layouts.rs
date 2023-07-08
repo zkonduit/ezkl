@@ -8,7 +8,6 @@ use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::error;
-use rayon::prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
 use super::{
     chip::{BaseConfig, CheckMode, CircuitError},
@@ -237,7 +236,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         })
         .product::<usize>();
 
-    output.par_iter_mut().enumerate().for_each(|(i, o)| {
+    output.iter_mut().enumerate().for_each(|(i, o)| {
         let coord = cartesian_coord[i].clone();
         // Compute the slice of each input tensor given the current coordinate of the output tensor
         let inputs = (0..inputs.len())
@@ -1069,7 +1068,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     .multi_cartesian_product()
     .collect::<Vec<_>>();
 
-    output.par_iter_mut().enumerate().for_each(|(idx, o)| {
+    output.iter_mut().enumerate().for_each(|(idx, o)| {
         let cartesian_coord_per_group = &cartesian_coord[idx];
         let (batch, group, i, j, k) = (
             cartesian_coord_per_group[0],
