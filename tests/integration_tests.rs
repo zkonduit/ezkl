@@ -3,8 +3,8 @@
 mod native_tests {
 
     use core::panic;
-    use ezkl_lib::graph::input::{FileSource, GraphData};
-    use ezkl_lib::graph::DataSource;
+    use ezkl::graph::input::{FileSource, GraphData};
+    use ezkl::graph::DataSource;
     use lazy_static::lazy_static;
     use std::env::var;
     use std::process::Command;
