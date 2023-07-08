@@ -128,27 +128,46 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         let res = layouter.assign_region(
             || "load message",
             |mut region| {
-                let assigned_message: Result<Vec<AssignedCell<Fp, Fp>>, Error> = message
-                    .get_inner_tensor()
-                    .map_err(|_| Error::Synthesis)?
-                    .iter()
-                    .enumerate()
-                    .map(|(i, value)| {
-                        let x = i % WIDTH;
-                        let y = i / WIDTH;
+                let assigned_message: Result<Vec<AssignedCell<Fp, Fp>>, Error> = match &message {
+                    ValTensor::Value { inner: v, .. } => v
+                        .iter()
+                        .enumerate()
+                        .map(|(i, value)| {
+                            let x = i % WIDTH;
+                            let y = i / WIDTH;
 
-                        match value {
-                            ValType::Value(v) => region.assign_advice(
-                                || format!("load message_{}", i),
-                                self.config.hash_inputs[x],
-                                y,
-                                || *v,
-                            ),
-                            ValType::PrevAssigned(v) => Ok(v.clone()),
-                            _ => panic!("wrong input type, must be previously assigned"),
-                        }
-                    })
-                    .collect();
+                            match value {
+                                ValType::Value(v) => region.assign_advice(
+                                    || format!("load message_{}", i),
+                                    self.config.hash_inputs[x],
+                                    y,
+                                    || *v,
+                                ),
+                                ValType::PrevAssigned(v) => Ok(v.clone()),
+                                _ => panic!("wrong input type, must be previously assigned"),
+                            }
+                        })
+                        .collect(),
+                    ValTensor::Instance {
+                        inner: col, dims, ..
+                    } => {
+                        // this should never ever fail
+                        let num_elems = dims.iter().product::<usize>();
+                        (0..num_elems)
+                            .map(|i| {
+                                let x = i % WIDTH;
+                                let y = i / WIDTH;
+                                region.assign_advice_from_instance(
+                                    || "pub input anchor",
+                                    *col,
+                                    i,
+                                    self.config.hash_inputs[x],
+                                    y,
+                                )
+                            })
+                            .collect()
+                    }
+                };
 
                 let offset = message.len() / WIDTH + 1;
 

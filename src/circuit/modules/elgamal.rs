@@ -477,23 +477,39 @@ impl Module<Fr> for ElGamalGadget {
         let (msg_var, sk_var) = layouter.assign_region(
             || "plaintext",
             |mut region| {
-                let message_word = |i: usize| {
-                    let value = &message.get_inner_tensor().unwrap()[i];
-
-                    match value {
-                        ValType::Value(v) => region.assign_advice(
-                            || format!("load message_{}", i),
-                            self.config.plaintext_col,
-                            i,
-                            || *v,
-                        ),
-                        ValType::PrevAssigned(v) => Ok(v.clone()),
-                        _ => panic!("wrong input type"),
+                let msg_var: Result<Vec<AssignedCell<Fr, Fr>>, Error> = match &message {
+                    ValTensor::Value { inner: v, .. } => v
+                        .iter()
+                        .enumerate()
+                        .map(|(i, value)| match value {
+                            ValType::Value(v) => region.assign_advice(
+                                || format!("load message_{}", i),
+                                self.config.plaintext_col,
+                                i,
+                                || *v,
+                            ),
+                            ValType::PrevAssigned(v) => Ok(v.clone()),
+                            _ => panic!("wrong input type, must be previously assigned"),
+                        })
+                        .collect(),
+                    ValTensor::Instance {
+                        inner: col, dims, ..
+                    } => {
+                        // this should never ever fail
+                        let num_elems = dims.iter().product::<usize>();
+                        (0..num_elems)
+                            .map(|i| {
+                                region.assign_advice_from_instance(
+                                    || "pub input anchor",
+                                    *col,
+                                    i,
+                                    self.config.plaintext_col,
+                                    i,
+                                )
+                            })
+                            .collect()
                     }
                 };
-
-                let msg_var: Result<Vec<AssignedCell<Fr, Fr>>, Error> =
-                    (0..message.len()).map(message_word).collect();
 
                 let sk = match sk.get_inner_tensor().unwrap()[0] {
                     ValType::Value(v) => v,
