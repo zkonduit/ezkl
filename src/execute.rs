@@ -1523,7 +1523,7 @@ pub(crate) fn verify_aggr(
         elapsed.subsec_millis()
     );
     info!("verified: {}", result.is_ok());
-    result.map_err(|e| e.into())?;
+    result?;
     Ok(())
 }
 
