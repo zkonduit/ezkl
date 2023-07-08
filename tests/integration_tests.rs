@@ -449,6 +449,22 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
+            fn kzg_prove_and_verify_public_input_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::init_params_17();
+                crate::native_tests::mv_test_(test);
+                kzg_prove_and_verify(test.to_string(), 17, "safe", "public", "private", "public");
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn kzg_prove_and_verify_public_params_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::init_params_17();
+                crate::native_tests::mv_test_(test);
+                kzg_prove_and_verify(test.to_string(), 17, "safe", "private", "public", "public");
+            }
+
+            #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_hashed_output(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::init_params_17();

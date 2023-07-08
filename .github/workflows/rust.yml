@@ -275,6 +275,10 @@ jobs:
           locked: true
       - name: KZG prove and verify tests
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t --test-threads 8
+      - name: KZG prove and verify tests (public inputs)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_inputs --test-threads 8
+      - name: KZG prove and verify tests (public params)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_params --test-threads 8
       - name: KZG prove and verify tests (hashed outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed --test-threads 8
       - name: KZG prove and verify tests (encrypted outputs)
