@@ -518,7 +518,7 @@ mod native_tests {
 
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, "on-chain", "file");
+                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), "on-chain", "file");
                 }
             });
 
@@ -529,7 +529,7 @@ mod native_tests {
 
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, "file", "on-chain");
+                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), "file", "on-chain");
                 }
             });
 
@@ -541,7 +541,7 @@ mod native_tests {
 
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), 200, "on-chain", "on-chain");
+                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), "on-chain", "on-chain");
                 }
             });
 
@@ -554,7 +554,7 @@ mod native_tests {
 
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), "private", "private", "public", 1);
+                    kzg_evm_prove_and_verify(test.to_string(), "private", "private", "public");
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -563,7 +563,7 @@ mod native_tests {
 
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), "hashed", "private", "private", 1);
+                    kzg_evm_prove_and_verify(test.to_string(), "hashed", "private", "private");
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -572,7 +572,7 @@ mod native_tests {
 
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), "private", "hashed", "public", 1);
+                    kzg_evm_prove_and_verify(test.to_string(), "private", "hashed", "public");
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -581,7 +581,7 @@ mod native_tests {
 
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), "private", "private", "hashed", 1);
+                    kzg_evm_prove_and_verify(test.to_string(), "private", "private", "hashed");
                 }
 
 
@@ -1081,40 +1081,31 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let code_arg = format!("{}/{}/evm_aggr.code", test_dir, example_name);
         let vk_arg = format!("{}/{}/evm_aggr.vk", test_dir, example_name);
 
         fn build_args<'a>(
             base_args: Vec<&'a str>,
-            sol_arg: &'a str,
-            sol_bytecode_arg: &'a str,
+            sol_arg: &'a str
         ) -> Vec<&'a str> {
             let mut args = base_args;
 
             args.push("--sol-code-path");
             args.push(sol_arg);
-            args.push("--sol-bytecode-path");
-            args.push(sol_bytecode_arg);
-
             args
         }
 
         let sol_arg = format!("{}/{}/kzg_aggr.sol", test_dir, example_name);
-        let sol_bytecode_arg = format!("{}/{}/kzg_aggr.code", test_dir, example_name);
         let addr_path_arg = format!("--addr-path={}/{}/addr.txt", test_dir, example_name);
         let rpc_arg = format!("--rpc-url={}", *ANVIL_URL);
 
         let base_args = vec![
             "create-evm-verifier-aggr",
-            "--deployment-code-path",
-            code_arg.as_str(),
             srs_path.as_str(),
             "--vk-path",
-            &vk_arg,
-            "--optimizer-runs=1",
+            vk_arg.as_str(),
         ];
 
-        let args = build_args(base_args, &sol_arg, &sol_bytecode_arg);
+        let args = build_args(base_args, &sol_arg);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(args)
@@ -1332,7 +1323,6 @@ mod native_tests {
         input_visibility: &str,
         param_visibility: &str,
         output_visibility: &str,
-        num_runs: usize,
     ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
         let anvil_url = ANVIL_URL.as_str();
@@ -1420,9 +1410,7 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let code_arg = format!("{}/{}/deployment.code", test_dir, example_name);
         let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
-        let opt_arg = format!("--optimizer-runs={}", num_runs);
         let rpc_arg = format!("--rpc-url={}", anvil_url);
         let addr_path_arg = format!("--addr-path={}/{}/addr.txt", test_dir, example_name);
         let settings_arg = format!("--settings-path={}", settings_path);
@@ -1433,20 +1421,14 @@ mod native_tests {
             &srs_path,
             "--vk-path",
             &vk_arg,
-            &opt_arg,
             &settings_arg,
         ];
 
         let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
-        let sol_bytecode_arg = format!("{}/{}/kzg.code", test_dir, example_name);
 
         // create everything to test the pipeline
         args.push("--sol-code-path");
         args.push(sol_arg.as_str());
-        args.push("--sol-bytecode-path");
-        args.push(sol_bytecode_arg.as_str());
-        args.push("--deployment-code-path");
-        args.push(code_arg.as_str());
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(&args)
@@ -1502,7 +1484,6 @@ mod native_tests {
 
     fn kzg_evm_on_chain_input_prove_and_verify(
         example_name: String,
-        num_runs: usize,
         input_source: &str,
         output_source: &str,
     ) {
@@ -1612,10 +1593,8 @@ mod native_tests {
 
         let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
 
-        let opt_arg = format!("--optimizer-runs={}", num_runs);
 
         let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
-        let sol_bytecode_arg = format!("{}/{}/kzg.code", test_dir, example_name);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1623,14 +1602,11 @@ mod native_tests {
                 format!("--settings-path={}", settings_path).as_str(),
                 "--sol-code-path",
                 sol_arg.as_str(),
-                "--sol-bytecode-path",
-                sol_bytecode_arg.as_str(),
                 &srs_path,
                 "--vk-path",
                 &vk_arg,
                 "-D",
-                test_on_chain_data_path.as_str(),
-                &opt_arg,
+                test_on_chain_data_path.as_str()
             ])
             .status()
             .expect("failed to execute process");
