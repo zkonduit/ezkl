@@ -336,14 +336,10 @@ impl GraphModules {
                 .iter()
                 .enumerate()
             {
+                // increment the instance offset to make way for future module layouts
                 instance_offset[i] += inc;
             }
-            // increment the instance offset to make way for future module layouts
         });
-
-        for (i, inc) in module.instance_increment_module().iter().enumerate() {
-            instance_offset[i] += inc;
-        }
 
         Ok(())
     }

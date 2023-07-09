@@ -150,7 +150,9 @@ where
         let hex_proof = hex::encode(&self.proof);
         state.serialize_field("proof", &hex_proof)?;
         state.serialize_field("transcript_type", &self.transcript_type)?;
-        state.serialize_field("protocol", &self.protocol)?;
+        if self.protocol.is_some() {
+            state.serialize_field("protocol", &self.protocol)?;
+        }
         state.end()
     }
 }
@@ -591,7 +593,7 @@ mod tests {
 
     use super::*;
     use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-    use halo2curves::bn256::Bn256;
+    use halo2curves::bn256::{Bn256, Fr, G1Affine};
     use tempfile::Builder;
 
     #[tokio::test]
@@ -627,5 +629,26 @@ mod tests {
         assert!(res.is_ok());
         let res = srs::load_srs::<KZGCommitmentScheme<Bn256>>(fname);
         assert!(res.is_ok())
+    }
+
+    #[test]
+    fn test_snark_serialization_roundtrip() {
+        let snark = Snark::<Fr, G1Affine> {
+            proof: vec![1, 2, 3, 4, 5, 6, 7, 8],
+            instances: vec![vec![Fr::from(1)], vec![Fr::from(2)]],
+            transcript_type: TranscriptType::EVM,
+            protocol: None,
+        };
+
+        snark
+            .save(&"test_snark_serialization_roundtrip.json".into())
+            .unwrap();
+        let snark2 = Snark::<Fr, G1Affine>::load::<KZGCommitmentScheme<Bn256>>(
+            &"test_snark_serialization_roundtrip.json".into(),
+        )
+        .unwrap();
+        assert_eq!(snark.instances, snark2.instances);
+        assert_eq!(snark.proof, snark2.proof);
+        assert_eq!(snark.transcript_type, snark2.transcript_type);
     }
 }
