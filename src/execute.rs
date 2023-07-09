@@ -141,20 +141,14 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             vk_path,
             srs_path,
             settings_path,
-            deployment_code_path,
             sol_code_path,
-            abi_path,
-            sol_bytecode_path,
-            optimizer_runs,
+            abi_path
         } => create_evm_verifier(
             vk_path,
             srs_path,
             settings_path,
             sol_code_path,
-            abi_path,
-            deployment_code_path,
-            sol_bytecode_path,
-            optimizer_runs,
+            abi_path
         ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMDataAttestationVerifier {
@@ -162,9 +156,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             srs_path,
             settings_path,
             sol_code_path,
-            abi_path, 
-            sol_bytecode_path,
-            optimizer_runs,
+            abi_path,
             data,
         } => create_evm_data_attestation_verifier(
             vk_path,
@@ -172,27 +164,19 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             settings_path,
             sol_code_path,
             abi_path,
-            data,
-            sol_bytecode_path,
-            optimizer_runs,
+            data
         ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifierAggr {
             vk_path,
             srs_path,
-            deployment_code_path,
             sol_code_path,
             abi_path,
-            sol_bytecode_path,
-            optimizer_runs,
         } => create_evm_aggregate_verifier(
             vk_path,
             srs_path,
             sol_code_path,
             abi_path,
-            deployment_code_path,
-            sol_bytecode_path,
-            optimizer_runs,
         ),
         Commands::Setup {
             model,
@@ -774,19 +758,6 @@ pub(crate) fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, B
     })
 }
 
-/// helper function to generate the compiled bytcecode from sol code path
-#[cfg(not(target_arch = "wasm32"))]
-pub fn gen_sol_bytecode(
-    sol_code_path: PathBuf,
-    contract_name: &str,
-    runs: Option<usize>,
-) -> Result<DeploymentCode, Box<dyn Error>> {
-    let (_, bytecode, _) = get_contract_artifacts(sol_code_path, contract_name, runs)?;
-    Ok(DeploymentCode {
-        code: bytecode.to_vec(),
-    })
-}
-
 #[cfg(feature = "render")]
 pub(crate) fn render(model: PathBuf, output: PathBuf, args: RunArgs) -> Result<(), Box<dyn Error>> {
     let circuit = GraphCircuit::from_run_args(&args, &model, CheckMode::UNSAFE)?;
@@ -813,9 +784,6 @@ pub(crate) fn create_evm_verifier(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-    deployment_code_path: Option<PathBuf>,
-    sol_bytecode_path: Option<PathBuf>,
-    runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
@@ -826,11 +794,6 @@ pub(crate) fn create_evm_verifier(
     trace!("params computed");
 
     let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance.clone())?;
-
-    if let Some(deployment_code_path) = deployment_code_path {
-        let deployment_code = gen_deployment_code(yul_code.clone()).unwrap();
-        deployment_code.save(&deployment_code_path)?;
-    }
 
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(yul_code.as_bytes());
@@ -845,11 +808,6 @@ pub(crate) fn create_evm_verifier(
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
-    if sol_bytecode_path.is_some() {
-        let sol_bytecode = gen_sol_bytecode(sol_code_path, "Verifier", runs).unwrap();
-        sol_bytecode.save(&sol_bytecode_path.unwrap())?;
-    }
-
     Ok(())
 }
 
@@ -860,9 +818,7 @@ pub(crate) fn create_evm_data_attestation_verifier(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-    input: PathBuf,
-    sol_bytecode_path: Option<PathBuf>,
-    runs: Option<usize>,
+    input: PathBuf
 ) -> Result<(), Box<dyn Error>> {
     use crate::graph::{DataSource, VarVisibility};
 
@@ -921,11 +877,6 @@ pub(crate) fn create_evm_data_attestation_verifier(
         return Err(
             "Neither input or output data source is on-chain. Atleast one must be on chain.".into(),
         );
-    }
-    if sol_bytecode_path.is_some() {
-        let sol_bytecode =
-            gen_sol_bytecode(sol_code_path, "DataAttestationVerifier", runs).unwrap();
-        sol_bytecode.save(&sol_bytecode_path.unwrap())?;
     }
     Ok(())
 }
@@ -994,9 +945,6 @@ pub(crate) fn create_evm_aggregate_verifier(
     srs_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-    deployment_code_path: Option<PathBuf>,
-    sol_bytecode_path: Option<PathBuf>,
-    runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
     let params: ParamsKZG<Bn256> = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)?;
 
@@ -1008,11 +956,6 @@ pub(crate) fn create_evm_aggregate_verifier(
         AggregationCircuit::num_instance(),
         AggregationCircuit::accumulator_indices(),
     )?;
-
-    if let Some(deployment_code_path) = deployment_code_path {
-        let deployment_code = gen_deployment_code(yul_code.clone()).unwrap();
-        deployment_code.save(&deployment_code_path)?;
-    }
 
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(yul_code.as_bytes());
@@ -1027,11 +970,6 @@ pub(crate) fn create_evm_aggregate_verifier(
     let (abi, _, _) = get_contract_artifacts(sol_code_path.clone(), "Verifier", None)?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
-
-    if sol_bytecode_path.is_some() {
-        let sol_bytecode = gen_sol_bytecode(sol_code_path, "Verifier", runs).unwrap();
-        sol_bytecode.save(&sol_bytecode_path.unwrap())?;
-    }
 
     Ok(())
 }

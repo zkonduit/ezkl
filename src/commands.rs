@@ -478,18 +478,6 @@ pub enum Commands {
         /// The path to output the Solidity verifier ABI
         #[arg(long, default_value = "verifier_abi.json")]
         abi_path: PathBuf,
-        /// The path to the compiled yul bytecode code
-        #[arg(long, default_value = "evm_deploy.yul")]
-        deployment_code_path: Option<PathBuf>,
-        /// The path to output the compiled Solidity bytecode
-        #[arg(long, default_value = "evm_deploy.sol.bin")]
-        sol_bytecode_path: Option<PathBuf>,
-        /// The number of runs set to the SOLC optimizer.
-        /// Lower values optimze for deployment size while higher values optimize for execution cost.
-        /// If not set will just use the default unoptimized SOLC configuration.
-        #[arg(long)]
-        optimizer_runs: Option<usize>,
-        // todo, optionally allow supplying proving key
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier that attests to on-chain inputs for a single proof
@@ -510,14 +498,6 @@ pub enum Commands {
         /// The path to output the Solidity verifier ABI
         #[arg(long, default_value = "verifier_da_abi.json")]
         abi_path: PathBuf,
-        /// The path to output the compiled Solidity bytecode
-        #[arg(long)]
-        sol_bytecode_path: Option<PathBuf>,
-        /// The number of runs set to the SOLC optimizer.
-        /// Lower values optimze for deployment size while higher values optimize for execution cost.
-        /// If not set will just use the default unoptimized SOLC configuration.
-        #[arg(long)]
-        optimizer_runs: Option<usize>,
         /// The path to the .json data file, which should
         /// contain the necessary calldata and accoount addresses  
         /// needed need to read from all the on-chain
@@ -544,17 +524,6 @@ pub enum Commands {
         /// The path to output the Solidity verifier ABI
         #[arg(long, default_value = "verifier_aggr_abi.json")]
         abi_path: PathBuf,
-        /// The path to the compiled yul bytecode code
-        #[arg(long, default_value = "evm_deploy_aggr.yul")]
-        deployment_code_path: Option<PathBuf>,
-        /// The path to output the compiled Solidity bytecode
-        #[arg(long, default_value = "evm_deploy_aggr.sol.bin")]
-        sol_bytecode_path: Option<PathBuf>,
-        /// The number of runs set to the SOLC optimizer.
-        /// Lower values optimze for deployment size while higher values optimize for execution cost.
-        /// If not set will just use the default unoptimized SOLC configuration.
-        #[arg(long)]
-        optimizer_runs: Option<usize>,
         // todo, optionally allow supplying proving key
     },
     /// Verifies a proof, returning accept or reject

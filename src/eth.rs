@@ -2,9 +2,8 @@ use crate::graph::input::{CallsToAccount, GraphData};
 use crate::graph::DataSource;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::GraphSettings;
-use crate::pfsys::evm::{DeploymentCode, EvmVerificationError};
+use crate::pfsys::evm::EvmVerificationError;
 use crate::pfsys::Snark;
-use ethers::abi::Abi;
 use ethers::abi::Contract;
 use ethers::contract::abigen;
 use ethers::contract::ContractFactory;
@@ -85,47 +84,6 @@ pub async fn setup_eth_backend(
 
     Ok((anvil, client))
 }
-///
-pub async fn deploy_verifier_via_yul(
-    yul_code_path: PathBuf,
-    rpc_url: Option<&str>,
-) -> Result<ethers::types::Address, Box<dyn Error>> {
-    let (_, client) = setup_eth_backend(rpc_url).await?;
-
-    let yul_code = DeploymentCode::load(&yul_code_path)?;
-    let bytecode = yul_code.code();
-
-    let factory = ContractFactory::new(
-        // our constructor is empty and ContractFactory only uses the abi constructor -- so this should be safe
-        Abi::default(),
-        (bytecode.clone()).into(),
-        client.clone(),
-    );
-
-    let contract = factory.deploy(())?.send().await?;
-    let addr = contract.address();
-    Ok(addr)
-}
-
-// keep this for now in case we want to use solidity bytecode
-// async fn deploy_verifier_via_solidity_bytecode(
-//     sol_bytecode_path: PathBuf,
-//     rpc_url: Option<&str>,
-// ) -> Result<ethers::types::Address, Box<dyn Error>> {
-//     let (_, client) = setup_eth_backend(rpc_url).await?;
-
-//     let bytecode = DeploymentCode::load(&sol_bytecode_path)?;
-//     let factory = ContractFactory::new(
-//         // our constructor is empty and ContractFactory only uses the abi constructor -- so this should be safe
-//         Abi::default(),
-//         (bytecode.code().clone()).into(),
-//         client.clone(),
-//     );
-
-//     let contract = factory.deploy(())?.send().await?;
-//     let addr = contract.address();
-//     Ok(addr)
-// }
 
 ///
 pub async fn deploy_verifier_via_solidity(

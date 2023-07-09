@@ -362,30 +362,21 @@ fn verify_aggr(
     srs_path,
     settings_path,
     sol_code_path,
-    abi_path,
-    deployment_code_path = None,
-    sol_bytecode_path=None,
-    runs=None,
+    abi_path
 ))]
 fn create_evm_verifier(
     vk_path: PathBuf,
     srs_path: PathBuf,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
-    abi_path: PathBuf,
-    deployment_code_path: Option<PathBuf>,
-    sol_bytecode_path: Option<PathBuf>,
-    runs: Option<usize>,
+    abi_path: PathBuf
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_verifier(
         vk_path,
         srs_path,
         settings_path,
         sol_code_path,
-        abi_path,
-        deployment_code_path,
-        sol_bytecode_path,
-        runs,
+        abi_path
     )
     .map_err(|e| {
         let err_str = format!("Failed to run create_evm_verifier: {}", e);
@@ -402,9 +393,7 @@ fn create_evm_verifier(
     settings_path,
     sol_code_path,
     abi_path,
-    witness,
-    sol_bytecode_path=None,
-    runs=None,
+    input_data
 ))]
 fn create_evm_data_attestation_verifier(
     vk_path: PathBuf,
@@ -412,9 +401,7 @@ fn create_evm_data_attestation_verifier(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-    witness: PathBuf,
-    sol_bytecode_path: Option<PathBuf>,
-    runs: Option<usize>,
+    input_data: PathBuf
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_data_attestation_verifier(
         vk_path,
@@ -422,9 +409,7 @@ fn create_evm_data_attestation_verifier(
         settings_path,
         sol_code_path,
         abi_path,
-        witness,
-        sol_bytecode_path,
-        runs,
+        input_data
     )
     .map_err(|e| {
         let err_str = format!("Failed to run create_evm_data_attestation_verifier: {}", e);
@@ -461,14 +446,14 @@ fn deploy_evm(
 
 #[pyfunction(signature = (
     addr_path,
-    witness,
+    input_data,
     settings_path,
     sol_code_path,
     rpc_url=None,
 ))]
 fn deploy_da_evm(
     addr_path: PathBuf,
-    witness: PathBuf,
+    input_data: PathBuf,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
@@ -476,7 +461,7 @@ fn deploy_da_evm(
     Runtime::new()
         .unwrap()
         .block_on(crate::execute::deploy_da_evm(
-            witness,
+            input_data,
             settings_path,
             sol_code_path,
             rpc_url,
@@ -528,28 +513,19 @@ fn verify_evm(
     vk_path,
     srs_path,
     sol_code_path,
-    abi_path,
-    deployment_code_path=None,
-    sol_bytecode_path=None,
-    runs=None,
+    abi_path
 ))]
 fn create_evm_verifier_aggr(
     vk_path: PathBuf,
     srs_path: PathBuf,
     sol_code_path: PathBuf,
-    abi_path: PathBuf,
-    deployment_code_path: Option<PathBuf>,
-    sol_bytecode_path: Option<PathBuf>,
-    runs: Option<usize>,
+    abi_path: PathBuf
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_aggregate_verifier(
         vk_path,
         srs_path,
         sol_code_path,
-        abi_path,
-        deployment_code_path,
-        sol_bytecode_path,
-        runs,
+        abi_path
     )
     .map_err(|e| {
         let err_str = format!("Failed to run create_evm_verifier_aggr: {}", e);
