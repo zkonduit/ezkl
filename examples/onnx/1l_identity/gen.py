@@ -13,7 +13,7 @@ class MyModel(nn.Module):
 
 circuit = MyModel()
 
-x = 0.1*torch.rand(1, *[128, 130], requires_grad=True)
+x = 0.1*torch.rand(1, *[2], requires_grad=True)
 
 # Flips the neural net into inference mode
 circuit.eval()
