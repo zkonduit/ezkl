@@ -1,4 +1,4 @@
-import ezkl_lib
+import ezkl
 import os
 import pytest
 import json
@@ -67,7 +67,7 @@ def test_table_1l_average():
         "│ RESHAPE │ 7         │ [2]    │ [3, 3, 3]    │ 3   │\n"
         "└─────────┴───────────┴────────┴──────────────┴─────┘"
     )
-    assert ezkl_lib.table(path) == expected_table
+    assert ezkl.table(path) == expected_table
 
 
 def test_gen_srs():
@@ -75,10 +75,10 @@ def test_gen_srs():
     test for gen_srs() with 17 logrows and 20 logrows.
     You may want to comment this test as it takes a long time to run
     """
-    ezkl_lib.gen_srs(params_k17_path, 17)
+    ezkl.gen_srs(params_k17_path, 17)
     assert os.path.isfile(params_k17_path)
 
-    ezkl_lib.gen_srs(params_k20_path, 20)
+    ezkl.gen_srs(params_k20_path, 20)
     assert os.path.isfile(params_k20_path)
 
 
@@ -100,16 +100,16 @@ async def calibrate():
         'settings.json'
     )
 
-    run_args = ezkl_lib.PyRunArgs()
+    run_args = ezkl.PyRunArgs()
     run_args.input_visibility = "hashed"
     run_args.output_visibility = "hashed"
 
     # TODO: Dictionary outputs
-    res = ezkl_lib.gen_settings(
+    res = ezkl.gen_settings(
         model_path, output_path, py_run_args=run_args)
     assert res == True
 
-    res = await ezkl_lib.calibrate_settings(
+    res = await ezkl.calibrate_settings(
         data_path, model_path, output_path, "resources")
     assert res == True
     assert os.path.isfile(output_path)
@@ -147,7 +147,7 @@ def test_forward():
         'settings.json'
     )
 
-    res = ezkl_lib.gen_witness(data_path, model_path,
+    res = ezkl.gen_witness(data_path, model_path,
                                output_path, settings_path=settings_path)
 
     with open(output_path, "r") as f:
@@ -167,7 +167,7 @@ def test_get_srs():
     Test for get_srs
     """
     settings_path = os.path.join(folder_path, 'settings.json')
-    res = ezkl_lib.get_srs(srs_path, settings_path)
+    res = ezkl.get_srs(srs_path, settings_path)
 
     assert res == True
 
@@ -193,7 +193,7 @@ def test_mock():
 
     settings_path = os.path.join(folder_path, 'settings.json')
 
-    res = ezkl_lib.mock(data_path, model_path,
+    res = ezkl.mock(data_path, model_path,
                         settings_path)
     assert res == True
 
@@ -219,7 +219,7 @@ def test_setup():
     vk_path = os.path.join(folder_path, 'test.vk')
     settings_path = os.path.join(folder_path, 'settings.json')
 
-    res = ezkl_lib.setup(
+    res = ezkl.setup(
         model_path,
         vk_path,
         pk_path,
@@ -248,7 +248,7 @@ def test_setup_evm():
     vk_path = os.path.join(folder_path, 'test_evm.vk')
     settings_path = os.path.join(folder_path, 'settings.json')
 
-    res = ezkl_lib.setup(
+    res = ezkl.setup(
         model_path,
         vk_path,
         pk_path,
@@ -282,7 +282,7 @@ def test_prove_and_verify():
     proof_path = os.path.join(folder_path, 'test.pf')
     settings_path = os.path.join(folder_path, 'settings.json')
 
-    res = ezkl_lib.prove(
+    res = ezkl.prove(
         data_path,
         model_path,
         pk_path,
@@ -296,7 +296,7 @@ def test_prove_and_verify():
     assert os.path.isfile(proof_path)
 
     vk_path = os.path.join(folder_path, 'test.vk')
-    res = ezkl_lib.verify(proof_path, settings_path,
+    res = ezkl.verify(proof_path, settings_path,
                           vk_path, srs_path)
     assert res == True
     assert os.path.isfile(vk_path)
@@ -322,7 +322,7 @@ def test_prove_evm():
     pk_path = os.path.join(folder_path, 'test_evm.pk')
     proof_path = os.path.join(folder_path, 'test_evm.pf')
     settings_path = os.path.join(folder_path, 'settings.json')
-    res = ezkl_lib.prove(
+    res = ezkl.prove(
         data_path,
         model_path,
         pk_path,
@@ -335,7 +335,7 @@ def test_prove_evm():
     assert res['transcript_type'] == 'EVM'
     assert os.path.isfile(proof_path)
 
-    res = ezkl_lib.print_proof_hex(proof_path)
+    res = ezkl.print_proof_hex(proof_path)
     # to figure out a better way of testing print_proof_hex
     assert type(res) == str
 
@@ -350,7 +350,7 @@ def test_create_evm_verifier():
     sol_code_path = os.path.join(folder_path, 'test.sol')
     abi_path = os.path.join(folder_path, 'test.abi')
 
-    res = ezkl_lib.create_evm_verifier(
+    res = ezkl.create_evm_verifier(
         vk_path,
         srs_path,
         settings_path,
@@ -373,7 +373,7 @@ def test_deploy_evm():
     # TODO: without optimization there will be out of gas errors
     # sol_code_path = os.path.join(folder_path, 'test.sol')
 
-    res = ezkl_lib.deploy_evm(
+    res = ezkl.deploy_evm(
         addr_path,
         sol_code_path,
         rpc_url=anvil_url,
@@ -398,7 +398,7 @@ def test_verify_evm():
     # TODO: without optimization there will be out of gas errors
     # sol_code_path = os.path.join(folder_path, 'test.sol')
 
-    res = ezkl_lib.verify_evm(
+    res = ezkl.verify_evm(
         proof_path,
         addr,
         rpc_url=anvil_url,
@@ -430,15 +430,15 @@ async def aggregate_and_verify_aggr():
         folder_path, '1l_relu_aggr_settings.json')
 
    # TODO: Dictionary outputs
-    res = ezkl_lib.gen_settings(model_path, settings_path)
+    res = ezkl.gen_settings(model_path, settings_path)
     assert res == True
 
-    res = await ezkl_lib.calibrate_settings(
+    res = await ezkl.calibrate_settings(
         data_path, model_path, settings_path, "resources")
     assert res == True
     assert os.path.isfile(settings_path)
 
-    ezkl_lib.setup(
+    ezkl.setup(
         model_path,
         vk_path,
         pk_path,
@@ -453,10 +453,10 @@ async def aggregate_and_verify_aggr():
         '1l_relu_aggr_witness.json'
     )
 
-    res = ezkl_lib.gen_witness(data_path, model_path,
+    res = ezkl.gen_witness(data_path, model_path,
                                output_path, settings_path=settings_path)
 
-    ezkl_lib.prove(
+    ezkl.prove(
         output_path,
         model_path,
         pk_path,
@@ -470,7 +470,7 @@ async def aggregate_and_verify_aggr():
     aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')
     aggregate_vk_path = os.path.join(folder_path, 'aggr_1l_relu.vk')
 
-    res = ezkl_lib.aggregate(
+    res = ezkl.aggregate(
         aggregate_proof_path,
         [proof_path],
         aggregate_vk_path,
@@ -484,7 +484,7 @@ async def aggregate_and_verify_aggr():
     assert os.path.isfile(aggregate_proof_path)
     assert os.path.isfile(aggregate_vk_path)
 
-    res = ezkl_lib.verify_aggr(
+    res = ezkl.verify_aggr(
         aggregate_proof_path,
         aggregate_vk_path,
         params_k20_path,
@@ -520,19 +520,19 @@ async def evm_aggregate_and_verify_aggr():
     settings_path = os.path.join(
         folder_path, '1l_relu_evm_aggr_settings.json')
 
-    ezkl_lib.gen_settings(
+    ezkl.gen_settings(
         model_path,
         settings_path,
     )
 
-    await ezkl_lib.calibrate_settings(
+    await ezkl.calibrate_settings(
         data_path,
         model_path,
         settings_path,
         "resources",
     )
 
-    ezkl_lib.setup(
+    ezkl.setup(
         model_path,
         vk_path,
         pk_path,
@@ -547,10 +547,10 @@ async def evm_aggregate_and_verify_aggr():
         '1l_relu_aggr_evm_witness.json'
     )
 
-    res = ezkl_lib.gen_witness(data_path, model_path,
+    res = ezkl.gen_witness(data_path, model_path,
                                output_path, settings_path=settings_path)
 
-    ezkl_lib.prove(
+    ezkl.prove(
         output_path,
         model_path,
         pk_path,
@@ -564,7 +564,7 @@ async def evm_aggregate_and_verify_aggr():
     aggregate_proof_path = os.path.join(folder_path, 'aggr_evm_1l_relu.pf')
     aggregate_vk_path = os.path.join(folder_path, 'aggr_evm_1l_relu.vk')
 
-    res = ezkl_lib.aggregate(
+    res = ezkl.aggregate(
         aggregate_proof_path,
         [proof_path],
         aggregate_vk_path,
@@ -581,7 +581,7 @@ async def evm_aggregate_and_verify_aggr():
     sol_code_path = os.path.join(folder_path, 'aggr_evm_1l_relu.sol')
     abi_path = os.path.join(folder_path, 'aggr_evm_1l_relu.abi')
 
-    res = ezkl_lib.create_evm_verifier_aggr(
+    res = ezkl.create_evm_verifier_aggr(
         aggregate_vk_path,
         params_k20_path,
         sol_code_path,
@@ -593,14 +593,14 @@ async def evm_aggregate_and_verify_aggr():
 
     addr_path = os.path.join(folder_path, 'address_aggr.json')
 
-    res = ezkl_lib.deploy_evm(
+    res = ezkl.deploy_evm(
         addr_path,
         sol_code_path,
         rpc_url=anvil_url,
     )
 
     # as a sanity check
-    res = ezkl_lib.verify_aggr(
+    res = ezkl.verify_aggr(
         aggregate_proof_path,
         aggregate_vk_path,
         params_k20_path,
@@ -611,7 +611,7 @@ async def evm_aggregate_and_verify_aggr():
     # with open(addr_path, 'r') as file:
     #     addr_aggr = file.read().rstrip()
 
-    # res = ezkl_lib.verify_evm(
+    # res = ezkl.verify_evm(
     #     aggregate_proof_path,
     #     addr_aggr,
     #     rpc_url=anvil_url,

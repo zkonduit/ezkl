@@ -4,7 +4,7 @@ Generating the SRS is costly so we run this instead of creating a new SRS each
 time we run tests.
 """
 
-import ezkl_lib
+import ezkl
 import os
 
 srs_path = os.path.abspath(
@@ -18,7 +18,7 @@ srs_path = os.path.abspath(
 
 def gen_test_srs(logrows=17):
     """Generates a test srs with 17 log rows"""
-    ezkl_lib.gen_srs(srs_path, logrows)
+    ezkl.gen_srs(srs_path, logrows)
 
 
 def delete_test_srs():
@@ -39,4 +39,4 @@ if __name__ == "__main__":
             'network.onnx'
         )
     )
-    print(ezkl_lib.table(path))
+    print(ezkl.table(path))

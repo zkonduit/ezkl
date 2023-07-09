@@ -35,8 +35,8 @@ jobs:
           args: --release --out dist --features python-bindings
       - name: Install built wheel
         run: |
-          pip install ezkl_lib --no-index --find-links dist --force-reinstall
-          python -c "import ezkl_lib"
+          pip install ezkl --no-index --find-links dist --force-reinstall
+          python -c "import ezkl"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v3
@@ -68,8 +68,8 @@ jobs:
           args: --release --out dist --features python-bindings
       - name: Install built wheel
         run: |
-          pip install ezkl_lib --no-index --find-links dist --force-reinstall
-          python -c "import ezkl_lib"
+          pip install ezkl --no-index --find-links dist --force-reinstall
+          python -c "import ezkl"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v3
@@ -99,8 +99,8 @@ jobs:
     - name: Install built wheel
       if: matrix.target == 'x86_64'
       run: |
-        pip install ezkl_lib --no-index --find-links dist --force-reinstall
-        python -c "import ezkl_lib"
+        pip install ezkl --no-index --find-links dist --force-reinstall
+        python -c "import ezkl"
 
     - name: Upload wheels
       uses: actions/upload-artifact@v3
@@ -150,8 +150,8 @@ jobs:
   #         apt-get install -y --no-install-recommends python3 python3-pip
   #         pip3 install -U pip
   #       run: |
-  #         pip3 install ezkl_lib --no-index --find-links dist/ --force-reinstall
-  #         python3 -c "import ezkl_lib"
+  #         pip3 install ezkl --no-index --find-links dist/ --force-reinstall
+  #         python3 -c "import ezkl"
 
   #   - name: Upload wheels
   #     uses: actions/upload-artifact@v3
@@ -188,8 +188,8 @@ jobs:
         run: |
           apk add py3-pip
           pip3 install -U pip
-          pip3 install ezkl_lib --no-index --find-links /io/dist/ --force-reinstall
-          python3 -c "import ezkl_lib"
+          pip3 install ezkl --no-index --find-links /io/dist/ --force-reinstall
+          python3 -c "import ezkl"
 
     - name: Upload wheels
       uses: actions/upload-artifact@v3
@@ -229,8 +229,8 @@ jobs:
           apk add py3-pip
           pip3 install -U pip
         run: |
-          pip3 install ezkl_lib --no-index --find-links dist/ --force-reinstall
-          python3 -c "import ezkl_lib"
+          pip3 install ezkl --no-index --find-links dist/ --force-reinstall
+          python3 -c "import ezkl"
 
     - name: Upload wheels
       uses: actions/upload-artifact@v3

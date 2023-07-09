@@ -1,10 +1,10 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl_lib::circuit::region::RegionCtx;
-use ezkl_lib::circuit::{ops::lookup::LookupOp, BaseConfig as Config, CheckMode};
-use ezkl_lib::execute::create_proof_circuit_kzg;
-use ezkl_lib::pfsys::TranscriptType;
-use ezkl_lib::pfsys::{create_keys, srs::gen_srs};
-use ezkl_lib::tensor::*;
+use ezkl::circuit::region::RegionCtx;
+use ezkl::circuit::{ops::lookup::LookupOp, BaseConfig as Config, CheckMode};
+use ezkl::execute::create_proof_circuit_kzg;
+use ezkl::pfsys::TranscriptType;
+use ezkl::pfsys::{create_keys, srs::gen_srs};
+use ezkl::tensor::*;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2_proofs::poly::kzg::strategy::SingleStrategy;
 use halo2_proofs::{

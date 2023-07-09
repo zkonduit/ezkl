@@ -1,10 +1,10 @@
-use ezkl_lib::circuit::region::RegionCtx;
-use ezkl_lib::circuit::{
+use ezkl::circuit::region::RegionCtx;
+use ezkl::circuit::{
     ops::lookup::LookupOp, ops::poly::PolyOp, BaseConfig as PolyConfig, CheckMode,
 };
-use ezkl_lib::fieldutils;
-use ezkl_lib::fieldutils::i32_to_felt;
-use ezkl_lib::tensor::*;
+use ezkl::fieldutils;
+use ezkl::fieldutils::i32_to_felt;
+use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},

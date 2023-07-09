@@ -1,11 +1,11 @@
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 #[cfg(test)]
 mod wasm32 {
-    use ezkl_lib::circuit::Tolerance;
-    use ezkl_lib::commands::RunArgs;
-    use ezkl_lib::graph::GraphSettings;
-    use ezkl_lib::pfsys::Snark;
-    use ezkl_lib::wasm::{
+    use ezkl::circuit::Tolerance;
+    use ezkl::commands::RunArgs;
+    use ezkl::graph::GraphSettings;
+    use ezkl::pfsys::Snark;
+    use ezkl::wasm::{
         gen_circuit_settings_wasm, gen_pk_wasm, gen_vk_wasm, prove_wasm, verify_wasm,
     };
     use halo2curves::bn256::{Fr, G1Affine};
@@ -41,7 +41,7 @@ mod wasm32 {
             proof: vec![0; 32],
             protocol: og_proof.protocol,
             instances: vec![vec![Fr::from(0); 32]],
-            transcript_type: ezkl_lib::pfsys::TranscriptType::EVM,
+            transcript_type: ezkl::pfsys::TranscriptType::EVM,
         };
         let proof = serde_json::to_string(&proof).unwrap().into_bytes();
 
