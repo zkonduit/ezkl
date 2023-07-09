@@ -597,19 +597,19 @@ mod native_tests {
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_hashed_input_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::init_params_17();
+                    crate::native_tests::init_params_19();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), "hashed", "private", "private", 1, 17);
+                    kzg_evm_prove_and_verify(test.to_string(), "hashed", "private", "private", 1, 19);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_hashed_params_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::init_params_17();
+                    crate::native_tests::init_params_19();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), "private", "hashed", "public", 1, 17);
+                    kzg_evm_prove_and_verify(test.to_string(), "private", "hashed", "public", 1, 19);
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
