@@ -1083,10 +1083,7 @@ mod native_tests {
 
         let vk_arg = format!("{}/{}/evm_aggr.vk", test_dir, example_name);
 
-        fn build_args<'a>(
-            base_args: Vec<&'a str>,
-            sol_arg: &'a str
-        ) -> Vec<&'a str> {
+        fn build_args<'a>(base_args: Vec<&'a str>, sol_arg: &'a str) -> Vec<&'a str> {
             let mut args = base_args;
 
             args.push("--sol-code-path");
@@ -1593,7 +1590,6 @@ mod native_tests {
 
         let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
 
-
         let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -1606,7 +1602,7 @@ mod native_tests {
                 "--vk-path",
                 &vk_arg,
                 "-D",
-                test_on_chain_data_path.as_str()
+                test_on_chain_data_path.as_str(),
             ])
             .status()
             .expect("failed to execute process");
