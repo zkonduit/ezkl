@@ -137,7 +137,7 @@ mod native_tests {
 
     const PF_FAILURE_AGGR: &str = "examples/test_failure_aggr.proof";
 
-    const LARGE_TESTS: [&str; 3] = ["efficientnet", "self_attention", "nanoGPT", "mobilenet"];
+    const LARGE_TESTS: [&str; 4] = ["efficientnet", "self_attention", "nanoGPT", "mobilenet"];
 
     const TESTS: [&str; 37] = [
         "1l_mlp",
