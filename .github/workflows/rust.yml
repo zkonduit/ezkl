@@ -448,15 +448,13 @@ jobs:
             locked: true
         - name: Install solc
           run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
-        - name: Setup Virtual Env and Install python dependencies
-          run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
         - name: Install Anvil
           run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
         - name: Setup Virtual Env and Install python dependencies
           run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
         - name: Voice tutorial
-          run: cargo nextest run py_tests::tests::voice_
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
         - name: Notebook integration tests
-          run: cargo nextest run py_tests::tests::run_notebook_
-        
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_
+
 
