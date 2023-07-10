@@ -137,7 +137,7 @@ mod native_tests {
 
     const PF_FAILURE_AGGR: &str = "examples/test_failure_aggr.proof";
 
-    const LARGE_TESTS: [&str; 3] = ["self_attention", "nanoGPT", "mobilenet"];
+    const LARGE_TESTS: [&str; 3] = ["efficientnet", "self_attention", "nanoGPT", "mobilenet"];
 
     const TESTS: [&str; 37] = [
         "1l_mlp",
@@ -454,7 +454,7 @@ mod native_tests {
             });
 
 
-            seq!(N in 0..=2 {
+            seq!(N in 0..=3 {
 
             #(#[test_case(LARGE_TESTS[N])])*
             #[ignore]
@@ -1083,10 +1083,7 @@ mod native_tests {
 
         let vk_arg = format!("{}/{}/evm_aggr.vk", test_dir, example_name);
 
-        fn build_args<'a>(
-            base_args: Vec<&'a str>,
-            sol_arg: &'a str
-        ) -> Vec<&'a str> {
+        fn build_args<'a>(base_args: Vec<&'a str>, sol_arg: &'a str) -> Vec<&'a str> {
             let mut args = base_args;
 
             args.push("--sol-code-path");
@@ -1593,7 +1590,6 @@ mod native_tests {
 
         let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
 
-
         let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -1606,7 +1602,7 @@ mod native_tests {
                 "--vk-path",
                 &vk_arg,
                 "-D",
-                test_on_chain_data_path.as_str()
+                test_on_chain_data_path.as_str(),
             ])
             .status()
             .expect("failed to execute process");
