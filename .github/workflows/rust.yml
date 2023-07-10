@@ -461,9 +461,10 @@ jobs:
             # now dump the contents of the file into a file called kaggle.json
             echo $KAGGLE_API_KEY > /home/runner/.kaggle/kaggle.json
             chmod 600 /home/runner/.kaggle/kaggle.json
-        - name: Voice tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
         - name: Notebook integration tests
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_
+        - name: Voice tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
+       
 
 
