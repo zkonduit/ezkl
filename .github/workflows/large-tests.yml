@@ -5,7 +5,8 @@ on:
       tags:
         description: "Test scenario tags"
 jobs:
-  large-tests:
+
+  efficient-net:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3
@@ -21,15 +22,60 @@ jobs:
       - name: efficientnet Mock
         run: cargo nextest --release --verbose tests::large_mock_::large_tests_3_expects --no-capture -- --include-ignored
       - name: efficientnet KZG prove and verify
-        run: cargo nextest --release --verbose tests::large_kzg_prove_and_verify_::large_tests_3_expects --no-capture -- --include-ignored   
+        run: cargo nextest --release --verbose tests::large_kzg_prove_and_verify_::large_tests_3_expects --no-capture -- --include-ignored
+
+  nanoGPT:
+    needs: [efficient-net]
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2022-11-03
+          override: true
+          components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          locked: true 
       - name: nanoGPT Mock
         run: cargo test --release --verbose tests::large_mock_::large_tests_1_expects --no-capture -- --include-ignored
       - name: nanoGPT KZG prove and verify
         run: cargo nextest --release --verbose tests::large_kzg_prove_and_verify_::large_tests_1_expects --no-capture -- --include-ignored
+
+  self-attention:
+    needs: [efficient-net]
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2022-11-03
+          override: true
+          components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          locked: true
       - name: Self Attention Mock
         run: cargo nextest --release --verbose tests::large_mock_::large_tests_0_expects -- --include-ignored
       - name: Self Attention KZG prove and verify
         run: cargo nextest --release --verbose tests::large_kzg_prove_and_verify_::large_tests_0_expects --no-capture -- --include-ignored
+
+  mobilenet:
+    needs: [self-attention, nanoGPT]
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2022-11-03
+          override: true
+          components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          locked: true
       - name: mobilenet Mock
         run: cargo nextest --release --verbose tests::large_mock_::large_tests_2_expects --no-capture -- --include-ignored
       - name: mobilenet KZG prove and verify
