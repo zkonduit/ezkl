@@ -457,13 +457,9 @@ jobs:
           env:
             KAGGLE_API_KEY: ${{ secrets.KAGGLE_API_KEY }}
           run: |
-            cd ~
-            mkdir .kaggle
-            python -m pip install --upgrade kaggle --user
-            python -c "import json, os; kaggle_api_key = os.environ.get('KAGGLE_API_KEY'); kaggle_json = json.loads(kaggle_api_key);\
-            with open('.kaggle/kaggle.json', 'w') as f:
-              json.dump(kaggle_json, f)
-            "
+            mkdir /home/runner/.kaggle
+            # now dump the contents of the file into a file called kaggle.json
+            echo $KAGGLE_API_KEY > /home/runner/.kaggle/kaggle.json
             chmod 600 /home/runner/.kaggle/kaggle.json
         - name: Voice tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
