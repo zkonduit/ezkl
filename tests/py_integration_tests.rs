@@ -43,26 +43,6 @@ mod py_tests {
                 .status()
                 .expect("failed to execute process");
             assert!(status.success());
-            // dump kaggle credentials from env  to kaggle.json
-            // if the kaggle json file does not exist then create it
-            // expand home path to absolute path
-            // if !std::path::Path::("~/.kaggle/kaggle.json").exists() {
-            let kaggle_path = std::path::Path::new("~/.kaggle/kaggle.json")
-                .canonicalize()
-                .unwrap();
-            let kaggle_file = format!(
-                "echo '{}' > ~/.kaggle/kaggle.json",
-                &format!("{{\"username\":\"{}\",\"key\":\"{}\"}}", username, api),
-            );
-            if !kaggle_path.exists() {
-                let api = var("secrets.KAGGLE_API_KEY").unwrap();
-                let username = var("secrets.KAGGLE_USERNAME").unwrap();
-                let status = Command::new("bash")
-                    .args(["-c", &kaggle_file])
-                    .status()
-                    .expect("failed to execute process");
-                assert!(status.success());
-            }
         });
         // set VOICE_DATA_DIR environment variable
         std::env::set_var(

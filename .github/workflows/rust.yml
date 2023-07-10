@@ -452,6 +452,19 @@ jobs:
           run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
         - name: Setup Virtual Env and Install python dependencies
           run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
+        - name: authenticate-kaggle-cli
+          shell: bash
+          env:
+            KAGGLE_API_KEY: ${{ secrets.KAGGLE_API_KEY }}
+          run: |
+            cd ~
+            mkdir .kaggle
+            python -m pip install --upgrade kaggle --user
+            python -c "import json, os; kaggle_api_key = os.environ.get('KAGGLE_API_KEY'); kaggle_json = json.loads(kaggle_api_key);\
+            with open('.kaggle/kaggle.json', 'w') as f:
+              json.dump(kaggle_json, f)
+            "
+            chmod 600 /home/runner/.kaggle/kaggle.json
         - name: Voice tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
         - name: Notebook integration tests
