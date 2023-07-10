@@ -53,38 +53,12 @@ mod py_tests {
 
     fn setup_py_env() {
         ENV_SETUP.call_once(|| {
+            // supposes that you have a virtualenv called .env and have run the following
             // equivalent of python -m venv .env
             // source .env/bin/activate
             // pip install -r requirements.txt
             // maturin develop --release --features python-bindings
-            let status = Command::new("python")
-                .args(["-m", "venv", ".env"])
-                .status()
-                .expect("failed to execute process");
-            assert!(status.success());
-            // make sure env activate exists before running
-            let status = Command::new("ls")
-                .args([".env/bin/activate"])
-                .status()
-                .expect("failed to execute process");
-            assert!(status.success());
 
-            let status = Command::new("bash")
-                .arg("-c")
-                .arg("source .env/bin/activate")
-                .status()
-                .expect("failed to execute process");
-            assert!(status.success());
-            let status = Command::new("pip")
-                .args(["install", "-r", "requirements.txt"])
-                .status()
-                .expect("failed to execute process");
-            assert!(status.success());
-            let status = Command::new("maturin")
-                .args(["develop", "--release", "--features", "python-bindings"])
-                .status()
-                .expect("failed to execute process");
-            assert!(status.success());
             // now install torch, pandas, numpy, seaborn, jupyter
             let status = Command::new("pip")
                 .args([
