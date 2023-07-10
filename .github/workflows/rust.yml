@@ -441,7 +441,11 @@ jobs:
           with:
             toolchain: nightly-2023-06-27
             override: true
-            components: rustfmt, clippy
+            components: rustfmt, clippy   
+        - uses: baptiste0928/cargo-install@v1
+          with:
+            crate: cargo-nextest
+            locked: true
         - name: Install solc
           run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
         - name: Setup Virtual Env and Install python dependencies
