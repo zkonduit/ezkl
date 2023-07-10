@@ -43,6 +43,23 @@ mod py_tests {
                 .status()
                 .expect("failed to execute process");
             assert!(status.success());
+            // dump kaggle credentials from env  to kaggle.json
+            // if the kaggle json file does not exist then create it
+            if !std::path::Path::new("~/.kaggle/kaggle.json").exists() {
+                let api = var("secrets.KAGGLE_API_KEY").unwrap();
+                let username = var("secrets.KAGGLE_USERNAME").unwrap();
+                let status = Command::new("bash")
+                    .args([
+                        "-c",
+                        &format!(
+                            "echo '{}' > ~/.kaggle/kaggle.json",
+                            &format!("{{\"username\":\"{}\",\"key\":\"{}\"}}", username, api),
+                        ),
+                    ])
+                    .status()
+                    .expect("failed to execute process");
+                assert!(status.success());
+            }
         });
         // set VOICE_DATA_DIR environment variable
         std::env::set_var(
@@ -56,7 +73,7 @@ mod py_tests {
             // equivalent of python -m venv .env
             // source .env/bin/activate
             // pip install -r requirements.txt
-            // maturin build --release --features python-bindings
+            // maturin develop --release --features python-bindings
             let status = Command::new("python")
                 .args(["-m", "venv", ".env"])
                 .status()
