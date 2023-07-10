@@ -428,3 +428,28 @@ jobs:
         run: source .env/bin/activate; maturin develop --features python-bindings --release
       - name: Run pytest
         run: source .env/bin/activate; pytest
+
+  python-integration-tests:
+      runs-on: ubuntu-latest-32-cores
+      # needs: [build, build-wasm, library-tests, docs]
+      steps:
+        - uses: actions/checkout@v3
+        - uses: actions/setup-python@v4
+          with:
+            python-version: "3.7"
+        - uses: actions-rs/toolchain@v1
+          with:
+            toolchain: nightly-2023-06-27
+            override: true
+            components: rustfmt, clippy
+        - name: Install solc
+          run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
+        - name: Setup Virtual Env and Install python dependencies
+          run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
+        - name: Install Anvil
+          run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
+        - name: Notebook integration tests
+          run: cargo nextest run py_tests::tests::run_notebook_
+        - name: Voice tutorial
+          run: cargo nextest run py_tests::tests::voice_
+
