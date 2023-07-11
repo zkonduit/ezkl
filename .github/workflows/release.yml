@@ -1,8 +1,13 @@
 name: Create Release with Compiled Binaries
-
 on:
   workflow_dispatch:
-
+    inputs:
+      tag:
+        description: 'The tag to release'
+        required: true
+  push:
+    tags:
+      - '*'
 jobs:
   create-release:
     name: create-release
