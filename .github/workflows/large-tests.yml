@@ -19,10 +19,11 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - name: efficientnet Mock
-        run: cargo nextest run tests::large_mock_::large_tests_3_expects --no-capture -- --include-ignored
       - name: efficientnet KZG prove and verify
         run: cargo nextest run tests::large_kzg_prove_and_verify_::large_tests_3_expects --no-capture -- --include-ignored
+      - name: efficientnet Mock
+        run: cargo nextest run tests::large_mock_::large_tests_3_expects --no-capture -- --include-ignored
+      
 
   nanoGPT:
     needs: [efficient-net]
