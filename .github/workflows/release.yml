@@ -52,23 +52,23 @@ jobs:
         include:
         - build: windows-msvc
           os: windows-latest
-          rust: nightly-2023-06-18
+          rust: nightly-2023-06-27
           target: x86_64-pc-windows-msvc
         - build: macos
           os: macos-13
-          rust: nightly-2023-06-18
+          rust: nightly-2023-06-27
           target: x86_64-apple-darwin
         - build: macos-aarch64
           os: macos-13
-          rust: nightly-2023-06-18
+          rust: nightly-2023-06-27
           target: aarch64-apple-darwin
         - build: linux-musl
           os: ubuntu-22.04
-          rust: nightly-2023-06-18
+          rust: nightly-2023-06-27
           target: x86_64-unknown-linux-musl
         - build: linux-gnu
           os: ubuntu-22.04
-          rust: nightly-2023-06-18
+          rust: nightly-2023-06-27
           target: x86_64-unknown-linux-gnu
 
     steps:
@@ -79,7 +79,7 @@ jobs:
       shell: bash
       run: |
         if [[ "${{ runner.os }}" == "Linux" ]]; then
-          sudo apt-get update && sudo apt-get install -y musl-tools openssl pkg-config libssl-dev
+          sudo apt-get update && sudo apt-get install -y musl-tools
         fi
 
     - name: Install Rust
