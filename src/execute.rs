@@ -69,13 +69,17 @@ use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::time::Duration;
 use thiserror::Error;
 
+#[cfg(not(target_arch = "wasm32"))]
 fn check_solc_requirement() {
     info!("checking solc installation..");
     match Command::new("solc").arg("--version").output() {
         Ok(output) => {
+            #[cfg(not(target_arch = "wasm32"))]
             debug!("solc output: {:#?}", output);
+            #[cfg(not(target_arch = "wasm32"))]
             debug!("solc output success: {:#?}", output.status.success());
             assert!(output.status.success(), "`solc` check failed: {}", String::from_utf8_lossy(&output.stderr));
+            #[cfg(not(target_arch = "wasm32"))]
             debug!("solc check passed, proceeding");
         }
         Err(e) => {
