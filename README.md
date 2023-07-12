@@ -39,9 +39,20 @@ The generated proofs can then be used on-chain to verify computation, only the E
 | --- | --- |
 | [docs](https://docs.ezkl.xyz ) | the official ezkl docs page |
 | [colab notebook demo](https://colab.research.google.com/drive/1XuXNKqH7axOelZXyU3gpoTOCvFetIsKu?usp=sharing) | demo of ezkl python bindings on google's colab
-| [tutorial](https://github.com/zkonduit/pyezkl/tree/main/examples/tutorial) | end-to-end tutorial using pytorch and ezkl |
-| [notebook](https://github.com/zkonduit/pyezkl/blob/main/examples/ezkl_demo.ipynb) | end-to-end tutorial using pytorch and ezkl in a jupyter notebook |
 | `cargo doc --open` | compile and open the docs in your default browser locally |
+
+#### tutorials 
+
+You can find a range of python based tutorials in the `examples/notebooks` section. These all assume you have the `ezkl` python library installed. If you want the bleeding edge version of the library, you can install it from the `main` branch with:
+
+```bash
+python -m venv .env
+source .env/bin/activate
+pip install -r requirements.txt
+maturin develop --release --features python-bindings
+# dependencies specific to tutorials
+pip install torch pandas numpy seaborn jupyter onnx kaggle py-solc-x web3 librosa
+```
 
 
 ----------------------

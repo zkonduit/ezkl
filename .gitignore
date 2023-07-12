@@ -1,5 +1,6 @@
 target
 data
+*.csv
 *.ipynb_checkpoints
 *.sol
 !QuantizeData.sol

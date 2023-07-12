@@ -1019,6 +1019,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dirs"
+version = "5.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44c45a9d03d6676652bcb5e724c7e988de1acad23a711b5217ab9cbecbec2225"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
 name = "dirs-next"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1026,6 +1035,18 @@ checksum = "b98cf8ebf19c3d1b223e151f99a4f9f0690dca41414773390fc824184ac833e1"
 dependencies = [
  "cfg-if",
  "dirs-sys-next",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "520f05a5cbd335fae5a99ff7a6ab8627577660ee5cfd6a94a6a929b52ff0321c"
+dependencies = [
+ "libc",
+ "option-ext",
+ "redox_users",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -1573,6 +1594,7 @@ dependencies = [
  "lazy_static",
  "log",
  "mnist",
+ "openssl",
  "plotters",
  "pyo3",
  "pyo3-asyncio",
@@ -1585,6 +1607,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "shellexpand",
  "snark-verifier",
  "tabled",
  "tempdir",
@@ -2986,6 +3009,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
+name = "openssl-src"
+version = "111.26.0+1.1.1u"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "efc62c9f12b22b8f5208c23a7200a442b2e5999f8bdf80233852122b5a4f6f37"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "openssl-sys"
 version = "0.9.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2993,9 +3025,16 @@ checksum = "374533b0e45f3a7ced10fcaeccca020e66656bc03dac384f852e4e5a7a8104a6"
 dependencies = [
  "cc",
  "libc",
+ "openssl-src",
  "pkg-config",
  "vcpkg",
 ]
+
+[[package]]
+name = "option-ext"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "papergrid"
@@ -4289,6 +4328,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "shellexpand"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da03fa3b94cc19e3ebfc88c4229c49d8f08cdbd1228870a45f0ffdf84988e14b"
+dependencies = [
+ "dirs",
+]
+
+[[package]]
 name = "signature"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4858,7 +4906,7 @@ dependencies = [
 [[package]]
 name = "tract-core"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
+source = "git+https://github.com/sonos/tract/?rev=dc32e4eead2545cc1c9f79b12db3c5255ceaf521#dc32e4eead2545cc1c9f79b12db3c5255ceaf521"
 dependencies = [
  "anyhow",
  "bit-set",
@@ -4881,7 +4929,7 @@ dependencies = [
 [[package]]
 name = "tract-data"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
+source = "git+https://github.com/sonos/tract/?rev=dc32e4eead2545cc1c9f79b12db3c5255ceaf521#dc32e4eead2545cc1c9f79b12db3c5255ceaf521"
 dependencies = [
  "anyhow",
  "half 2.2.1",
@@ -4900,7 +4948,7 @@ dependencies = [
 [[package]]
 name = "tract-hir"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
+source = "git+https://github.com/sonos/tract/?rev=dc32e4eead2545cc1c9f79b12db3c5255ceaf521#dc32e4eead2545cc1c9f79b12db3c5255ceaf521"
 dependencies = [
  "derive-new",
  "log",
@@ -4910,7 +4958,7 @@ dependencies = [
 [[package]]
 name = "tract-linalg"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
+source = "git+https://github.com/sonos/tract/?rev=dc32e4eead2545cc1c9f79b12db3c5255ceaf521#dc32e4eead2545cc1c9f79b12db3c5255ceaf521"
 dependencies = [
  "cc",
  "derive-new",
@@ -4933,7 +4981,7 @@ dependencies = [
 [[package]]
 name = "tract-nnef"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
+source = "git+https://github.com/sonos/tract/?rev=dc32e4eead2545cc1c9f79b12db3c5255ceaf521#dc32e4eead2545cc1c9f79b12db3c5255ceaf521"
 dependencies = [
  "byteorder",
  "flate2",
@@ -4947,7 +4995,7 @@ dependencies = [
 [[package]]
 name = "tract-onnx"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
+source = "git+https://github.com/sonos/tract/?rev=dc32e4eead2545cc1c9f79b12db3c5255ceaf521#dc32e4eead2545cc1c9f79b12db3c5255ceaf521"
 dependencies = [
  "bytes",
  "derive-new",
@@ -4964,7 +5012,7 @@ dependencies = [
 [[package]]
 name = "tract-onnx-opl"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?branch=fixes-1122#b1c13d69a394ac4d35185e9d5162da16b7e90145"
+source = "git+https://github.com/sonos/tract/?rev=dc32e4eead2545cc1c9f79b12db3c5255ceaf521#dc32e4eead2545cc1c9f79b12db3c5255ceaf521"
 dependencies = [
  "getrandom",
  "log",

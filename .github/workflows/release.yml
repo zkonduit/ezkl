@@ -1,9 +1,9 @@
-name: ezkl-lib-release
+name: Create Release with Compiled Binaries
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'The tag to release' 
+        description: 'The tag to release'
         required: true
   push:
     tags:
@@ -52,23 +52,23 @@ jobs:
         include:
         - build: windows-msvc
           os: windows-latest
-          rust: nightly-2023-06-18
+          rust: nightly-2023-06-27
           target: x86_64-pc-windows-msvc
         - build: macos
           os: macos-13
-          rust: nightly-2023-06-18
+          rust: nightly-2023-06-27
           target: x86_64-apple-darwin
         - build: macos-aarch64
           os: macos-13
-          rust: nightly-2023-06-18
+          rust: nightly-2023-06-27
           target: aarch64-apple-darwin
         - build: linux-musl
-          os: ubuntu-20.04
-          rust: nightly-2023-06-18
+          os: ubuntu-22.04
+          rust: nightly-2023-06-27
           target: x86_64-unknown-linux-musl
         - build: linux-gnu
-          os: ubuntu-20.04
-          rust: nightly-2023-06-18
+          os: ubuntu-22.04
+          rust: nightly-2023-06-27
           target: x86_64-unknown-linux-gnu
 
     steps:
@@ -96,7 +96,7 @@ jobs:
         cargo install cross -Z sparse-registry
         if [[ "${{ matrix.os }}" == "macos-13" ]]; then
           echo "CC=clang" >> $GITHUB_ENV
-        elif [[ "${{ matrix.os }}" == "ubuntu-20.04" ]]; then
+        elif [[ "${{ matrix.os }}" == "ubuntu-22.04" ]]; then
           echo "CC=gcc" >> $GITHUB_ENV
         fi
         echo "CARGO=cross" >> $GITHUB_ENV
