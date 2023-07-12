@@ -57,7 +57,9 @@ use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
+#[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
+#[cfg(not(target_arch = "wasm32"))]
 use std::io::ErrorKind::NotFound;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
@@ -1423,7 +1425,6 @@ pub(crate) fn aggregate(
     logrows: u32,
     check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
-    check_solc_requirement();
     // the K used for the aggregation circuit
     let params = load_params_cmd(srs_path, logrows)?;
 
@@ -1478,7 +1479,6 @@ pub(crate) fn verify(
     vk_path: PathBuf,
     srs_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
-    check_solc_requirement();
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
@@ -1503,7 +1503,6 @@ pub(crate) fn verify_aggr(
     srs_path: PathBuf,
     logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
-    check_solc_requirement();
     let params = load_params_cmd(srs_path, logrows)?;
 
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
