@@ -434,7 +434,7 @@ jobs:
         run: source .env/bin/activate; pytest
 
   python-integration-tests:
-      runs-on: ubuntu-latest-32-cores
+      runs-on: 512gb
       needs: [build, build-wasm, library-tests, docs]
       steps:
         - uses: actions/checkout@v3
@@ -445,7 +445,7 @@ jobs:
           with:
             toolchain: nightly-2023-06-27
             override: true
-            components: rustfmt, clippy 
+            components: rustfmt, clippy
         - uses: baptiste0928/cargo-install@v1
           with:
             crate: cargo-nextest

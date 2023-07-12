@@ -34,21 +34,16 @@ mod py_tests {
     }
 
     fn download_voice_data() {
+        let voice_data_dir = "/data/voice_data";
         DOWNLOAD_VOICE_DATA.call_once(|| {
             let status = Command::new("bash")
-                .args([
-                    "examples/notebooks/voice_data.sh",
-                    TEST_DIR.path().to_str().unwrap(),
-                ])
+                .args(["examples/notebooks/voice_data.sh", voice_data_dir])
                 .status()
                 .expect("failed to execute process");
             assert!(status.success());
         });
         // set VOICE_DATA_DIR environment variable
-        std::env::set_var(
-            "VOICE_DATA_DIR",
-            format!("{}", TEST_DIR.path().to_str().unwrap()),
-        );
+        std::env::set_var("VOICE_DATA_DIR", format!("{}", voice_data_dir));
     }
 
     fn setup_py_env() {
