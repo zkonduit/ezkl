@@ -75,7 +75,7 @@ jobs:
       shell: bash
       run: |
         if [[ "${{ runner.os }}" == "Linux" ]]; then
-          sudo apt-get update && sudo apt-get install -y musl-tools pkg-config libssl-dev
+          sudo apt-get update && sudo apt-get install -y musl-tools openssl pkg-config libssl-dev
         fi
 
     - name: Install Rust
