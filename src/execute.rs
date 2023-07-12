@@ -57,6 +57,8 @@ use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
+use std::process::Command;
+use std::io::ErrorKind::NotFound;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::{Cursor, Write};
@@ -66,6 +68,26 @@ use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
 use thiserror::Error;
+
+fn check_solc_requirement() {
+    info!("checking solc installation..");
+    match Command::new("solc").arg("--version").output() {
+        Ok(output) => {
+            debug!("solc output: {:#?}", output);
+            debug!("solc output success: {:#?}", output.status.success());
+            assert!(output.status.success(), "`solc` check failed: {}", String::from_utf8_lossy(&output.stderr));
+            debug!("solc check passed, proceeding");
+        }
+        Err(e) => {
+            if let NotFound = e.kind() {
+                panic!("`solc` was not found! Consider using solc-select or check your PATH! {}", e);
+            } else {
+                panic!("`solc` check failed: {}", e);
+            }
+        }
+    }
+}
+
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
 pub enum ExecutionError {
@@ -785,6 +807,7 @@ pub(crate) fn create_evm_verifier(
     sol_code_path: PathBuf,
     abi_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
 
@@ -821,6 +844,7 @@ pub(crate) fn create_evm_data_attestation_verifier(
     input: PathBuf
 ) -> Result<(), Box<dyn Error>> {
     use crate::graph::{DataSource, VarVisibility};
+    check_solc_requirement();
 
     let settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, settings.run_args.logrows)?;
@@ -923,6 +947,7 @@ pub(crate) async fn verify_evm(
     uses_data_attestation: bool,
 ) -> Result<(), Box<dyn Error>> {
     use crate::eth::verify_proof_with_data_attestation;
+    check_solc_requirement();
 
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
 
@@ -946,6 +971,7 @@ pub(crate) fn create_evm_aggregate_verifier(
     sol_code_path: PathBuf,
     abi_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let params: ParamsKZG<Bn256> = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)?;
 
     let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
@@ -1047,6 +1073,7 @@ pub(crate) async fn prove(
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
     let data = GraphWitness::from_path(data_path)?;
     use crate::pfsys::load_pk;
+    check_solc_requirement();
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, check_mode)?;
 
@@ -1115,6 +1142,7 @@ pub(crate) async fn fuzz(
     run_args: RunArgs,
     settings_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let passed = AtomicBool::new(true);
 
     info!("setting up tests");
@@ -1391,6 +1419,7 @@ pub(crate) fn aggregate(
     logrows: u32,
     check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     // the K used for the aggregation circuit
     let params = load_params_cmd(srs_path, logrows)?;
 
@@ -1445,6 +1474,7 @@ pub(crate) fn verify(
     vk_path: PathBuf,
     srs_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
@@ -1469,6 +1499,7 @@ pub(crate) fn verify_aggr(
     srs_path: PathBuf,
     logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let params = load_params_cmd(srs_path, logrows)?;
 
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
