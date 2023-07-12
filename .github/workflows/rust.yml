@@ -435,7 +435,7 @@ jobs:
 
   python-integration-tests:
       runs-on: 512gb
-      needs: [build, build-wasm, library-tests, docs]
+      # needs: [build, build-wasm, library-tests, docs]
       steps:
         - uses: actions/checkout@v3
         - uses: actions/setup-python@v4

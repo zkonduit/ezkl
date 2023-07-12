@@ -34,10 +34,11 @@ mod py_tests {
     }
 
     fn download_voice_data() {
-        let voice_data_dir = "~/data/voice_data";
+        let voice_data_dir = shellexpand::tilde("~/data/voice_data");
+
         DOWNLOAD_VOICE_DATA.call_once(|| {
             let status = Command::new("bash")
-                .args(["examples/notebooks/voice_data.sh", voice_data_dir])
+                .args(["examples/notebooks/voice_data.sh", &voice_data_dir])
                 .status()
                 .expect("failed to execute process");
             assert!(status.success());
