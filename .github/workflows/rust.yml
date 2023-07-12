@@ -463,10 +463,10 @@ jobs:
           env:
             KAGGLE_API_KEY: ${{ secrets.KAGGLE_API_KEY }}
           run: |
-            mkdir /home/runner/.kaggle
+            mkdir /home/ubuntu/.kaggle
             # now dump the contents of the file into a file called kaggle.json
-            echo $KAGGLE_API_KEY > /home/runner/.kaggle/kaggle.json
-            chmod 600 /home/runner/.kaggle/kaggle.json
+            echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
+            chmod 600 /home/ubuntu/.kaggle/kaggle.json
         - name: Notebook integration tests
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
         - name: Voice tutorial
