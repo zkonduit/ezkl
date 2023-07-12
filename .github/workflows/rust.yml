@@ -434,7 +434,7 @@ jobs:
         run: source .env/bin/activate; pytest
 
   python-integration-tests:
-      runs-on: ubuntu-latest-32-cores
+      runs-on: 512gb
       needs: [build, build-wasm, library-tests, docs]
       steps:
         - uses: actions/checkout@v3
@@ -445,7 +445,7 @@ jobs:
           with:
             toolchain: nightly-2023-06-27
             override: true
-            components: rustfmt, clippy 
+            components: rustfmt, clippy
         - uses: baptiste0928/cargo-install@v1
           with:
             crate: cargo-nextest
@@ -458,15 +458,15 @@ jobs:
           run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
         - name: Build python ezkl
           run: source .env/bin/activate; maturin develop --features python-bindings --release
-        - name: authenticate-kaggle-cli
-          shell: bash
-          env:
-            KAGGLE_API_KEY: ${{ secrets.KAGGLE_API_KEY }}
-          run: |
-            mkdir /home/runner/.kaggle
-            # now dump the contents of the file into a file called kaggle.json
-            echo $KAGGLE_API_KEY > /home/runner/.kaggle/kaggle.json
-            chmod 600 /home/runner/.kaggle/kaggle.json
+        # - name: authenticate-kaggle-cli
+        #   shell: bash
+        #   env:
+        #     KAGGLE_API_KEY: ${{ secrets.KAGGLE_API_KEY }}
+        #   run: |
+        #     mkdir /home/ubuntu/.kaggle
+        #     # now dump the contents of the file into a file called kaggle.json
+        #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
+        #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
         - name: Notebook integration tests
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
         - name: Voice tutorial
