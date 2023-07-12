@@ -24,7 +24,7 @@ jobs:
           architecture: x64
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2022-11-03
+          toolchain: nightly-2023-06-27
           override: true
           components: rustfmt, clippy
 
@@ -57,7 +57,7 @@ jobs:
           architecture: ${{ matrix.target }}
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2022-11-03
+          toolchain: nightly-2023-06-27
           override: true
           components: rustfmt, clippy
 
@@ -221,11 +221,6 @@ jobs:
     - uses: actions/setup-python@v4
       with:
         python-version: 3.7
-
-    - name: Install required libraries
-      shell: bash
-      run: |
-        sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
 
     - name: Build wheels
       uses: PyO3/maturin-action@v1
