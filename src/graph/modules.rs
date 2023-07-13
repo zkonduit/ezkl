@@ -12,7 +12,8 @@ use serde::{Deserialize, Serialize};
 use super::GraphWitness;
 use super::{VarVisibility, Visibility};
 
-const POSEIDON_LEN_GRAPH: usize = 10;
+/// poseidon len to hash in tree
+pub const POSEIDON_LEN_GRAPH: usize = 10;
 
 // TODO: Need a dummy pass module to get the exact size of each module, this is a rough estimate
 /// Module sizes
