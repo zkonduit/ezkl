@@ -61,6 +61,8 @@ use std::error::Error;
 use std::process::Command;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::ErrorKind::NotFound;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::OnceLock;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::{Cursor, Write};
@@ -72,26 +74,31 @@ use std::time::Duration;
 use thiserror::Error;
 
 #[cfg(not(target_arch = "wasm32"))]
+static _SOLC_REQUIREMENT: OnceLock<bool> = OnceLock::new();
+#[cfg(not(target_arch = "wasm32"))]
 fn check_solc_requirement() {
     info!("checking solc installation..");
-    match Command::new("solc").arg("--version").output() {
-        Ok(output) => {
-            #[cfg(not(target_arch = "wasm32"))]
-            debug!("solc output: {:#?}", output);
-            #[cfg(not(target_arch = "wasm32"))]
-            debug!("solc output success: {:#?}", output.status.success());
-            assert!(output.status.success(), "`solc` check failed: {}", String::from_utf8_lossy(&output.stderr));
-            #[cfg(not(target_arch = "wasm32"))]
-            debug!("solc check passed, proceeding");
-        }
-        Err(e) => {
-            if let NotFound = e.kind() {
-                panic!("`solc` was not found! Consider using solc-select or check your PATH! {}", e);
-            } else {
-                panic!("`solc` check failed: {}", e);
+    _SOLC_REQUIREMENT.get_or_init(|| {
+        match Command::new("solc").arg("--version").output() {
+            Ok(output) => {
+                #[cfg(not(target_arch = "wasm32"))]
+                debug!("solc output: {:#?}", output);
+                #[cfg(not(target_arch = "wasm32"))]
+                debug!("solc output success: {:#?}", output.status.success());
+                assert!(output.status.success(), "`solc` check failed: {}", String::from_utf8_lossy(&output.stderr));
+                #[cfg(not(target_arch = "wasm32"))]
+                debug!("solc check passed, proceeding");
+                true
+            }
+            Err(e) => {
+                if let NotFound = e.kind() {
+                    panic!("`solc` was not found! Consider using solc-select or check your PATH! {}", e);
+                } else {
+                    panic!("`solc` check failed: {}", e);
+                }
             }
         }
-    }
+    });
 }
 
 /// A wrapper for tensor related errors.
