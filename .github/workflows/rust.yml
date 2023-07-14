@@ -318,6 +318,28 @@ jobs:
       - name: fuzz tests
         run: cargo nextest run --release --verbose tests::kzg_fuzz_ --test-threads 6
 
+  prove-and-verify-mock-aggr-tests:
+    runs-on: self-hosted
+    # needs:
+    #   [
+    #   build,
+    #   build-wasm,
+    #   library-tests,
+    # ]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-06-27
+          override: true
+          components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          locked: true
+      - name: KZG prove and verify aggr tests
+        run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_mock_prove_and_verify_ --test-threads 8
+
   prove-and-verify-aggr-tests:
     runs-on: self-hosted
     # needs:
@@ -342,7 +364,7 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: KZG prove and verify aggr tests
-        run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_ --test-threads 8
+        run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_ --test-threads 8 -- --include-ignored
 
   prove-and-verify-aggr-evm-tests:
     runs-on: self-hosted

@@ -226,6 +226,10 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         )
         .await
         .map(|_| ()),
+        Commands::MockAggregate {
+            aggregation_snarks,
+            logrows,
+        } => mock_aggregate(aggregation_snarks, logrows),
         Commands::Aggregate {
             proof_path,
             aggregation_snarks,
@@ -1386,6 +1390,34 @@ pub(crate) fn run_fuzz_fn(
     );
 }
 
+pub(crate) fn mock_aggregate(
+    aggregation_snarks: Vec<PathBuf>,
+    logrows: u32,
+) -> Result<(), Box<dyn Error>> {
+    let mut snarks = vec![];
+    for proof_path in aggregation_snarks.iter() {
+        snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
+    }
+    // proof aggregation
+    #[cfg(not(target_arch = "wasm32"))]
+    let pb = {
+        let pb = init_spinner();
+        pb.set_message("Aggregating (may take a while)...");
+        pb
+    };
+
+    let circuit = AggregationCircuit::new(&G1Affine::generator().into(), snarks)?;
+
+    let prover = halo2_proofs::dev::MockProver::run(logrows, &circuit, circuit.instances())
+        .map_err(Box::<dyn Error>::from)?;
+    prover.assert_satisfied();
+    prover
+        .verify()
+        .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
+    pb.finish_with_message("Done.");
+    Ok(())
+}
+
 pub(crate) fn aggregate(
     proof_path: PathBuf,
     aggregation_snarks: Vec<PathBuf>,
@@ -1411,7 +1443,7 @@ pub(crate) fn aggregate(
     };
 
     {
-        let agg_circuit = AggregationCircuit::new(&params, snarks)?;
+        let agg_circuit = AggregationCircuit::new(&params.get_g()[0].into(), snarks)?;
         let agg_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
             &agg_circuit,
             &params,

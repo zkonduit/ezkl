@@ -244,11 +244,21 @@ mod native_tests {
             use crate::native_tests::TESTS_AGGR;
             use test_case::test_case;
             use crate::native_tests::kzg_aggr_prove_and_verify;
+            use crate::native_tests::kzg_aggr_mock_prove_and_verify;
 
 
             seq!(N in 0..=17 {
 
             #(#[test_case(TESTS_AGGR[N])])*
+            fn kzg_aggr_mock_prove_and_verify_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::mv_test_(test);
+                kzg_aggr_mock_prove_and_verify(test.to_string());
+            }
+
+
+            #(#[test_case(TESTS_AGGR[N])])*
+            #[ignore]
             fn kzg_aggr_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
@@ -836,6 +846,114 @@ mod native_tests {
                 "-M",
                 format!("{}/tutorial/network.onnx", test_dir).as_str(),
                 &format!("--settings-path={}/tutorial/settings.json", test_dir),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+    }
+
+    // prove-serialize-verify, the usual full path
+    fn kzg_aggr_mock_prove_and_verify(example_name: String) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "gen-settings",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+                "--bits=2",
+                "-K=3",
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "calibrate-settings",
+                "--data",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "gen-witness",
+                "-D",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+                "-O",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let srs_path = download_srs(17);
+        let srs_path = format!("--srs-path={}", srs_path);
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "setup",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--pk-path",
+                &format!("{}/{}/key.pk", test_dir, example_name),
+                "--vk-path",
+                &format!("{}/{}/key.vk", test_dir, example_name),
+                &srs_path,
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "prove",
+                "-W",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--proof-path",
+                &format!("{}/{}/proof.pf", test_dir, example_name),
+                "--pk-path",
+                &format!("{}/{}/key.pk", test_dir, example_name),
+                &srs_path,
+                "--transcript=poseidon",
+                "--strategy=accum",
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "mock-aggregate",
+                "--logrows=23",
+                "--aggregation-snarks",
+                &format!("{}/{}/proof.pf", test_dir, example_name),
             ])
             .status()
             .expect("failed to execute process");

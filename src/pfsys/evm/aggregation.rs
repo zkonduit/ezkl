@@ -188,10 +188,9 @@ pub struct AggregationCircuit {
 impl AggregationCircuit {
     /// Create a new Aggregation Circuit with a SuccinctVerifyingKey, application snark witnesses (each with a proof and instance variables), and the instance variables and the resulting aggregation circuit proof.
     pub fn new(
-        params: &ParamsKZG<Bn256>,
+        svk: &KzgSuccinctVerifyingKey<G1Affine>,
         snarks: impl IntoIterator<Item = Snark<Fr, G1Affine>>,
     ) -> Result<Self, AggregationError> {
-        let svk = params.get_g()[0].into();
         let snarks = snarks.into_iter().collect_vec();
 
         let mut accumulators = vec![];
@@ -232,7 +231,7 @@ impl AggregationCircuit {
             .concat();
 
         Ok(Self {
-            svk,
+            svk: svk.clone(),
             snarks: snarks.into_iter().map_into().collect(),
             instances,
             as_proof: Value::known(as_proof),
@@ -342,18 +341,15 @@ impl Circuit<Fr> for AggregationCircuit {
         )?;
 
         let mut instance_offset = 0;
-        for (row, limb) in accumulator_limbs.enumerate() {
-            main_gate.expose_public(layouter.namespace(|| ""), limb, row)?;
-            instance_offset = row;
+        for limb in accumulator_limbs {
+            main_gate.expose_public(layouter.namespace(|| ""), limb, instance_offset)?;
+            instance_offset += 1;
         }
 
-        for (row, instance) in snark_instances.into_iter().enumerate() {
-            for (col, limb) in instance.into_iter().enumerate() {
-                main_gate.expose_public(
-                    layouter.namespace(|| ""),
-                    limb,
-                    instance_offset + row + col,
-                )?;
+        for instance in snark_instances.into_iter() {
+            for elem in instance.into_iter() {
+                main_gate.expose_public(layouter.namespace(|| ""), elem, instance_offset)?;
+                instance_offset += 1;
             }
         }
 

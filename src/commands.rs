@@ -310,6 +310,17 @@ pub enum Commands {
         settings_path: PathBuf,
     },
 
+    /// Mock aggregate proofs
+    #[command(arg_required_else_help = true)]
+    MockAggregate {
+        /// The path to the snarks to aggregate over
+        #[arg(long)]
+        aggregation_snarks: Vec<PathBuf>,
+        /// logrows used for aggregation circuit
+        #[arg(long)]
+        logrows: u32,
+    },
+
     /// Aggregates proofs :)
     #[command(arg_required_else_help = true)]
     Aggregate {
