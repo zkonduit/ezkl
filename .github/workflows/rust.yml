@@ -320,16 +320,16 @@ jobs:
 
   prove-and-verify-aggr-tests:
     runs-on: self-hosted
-    needs:
-      [
-        build,
-        build-wasm,
-        library-tests,
-        mock-proving-tests,
-        mock-proving-tests-wasi,
-        python-tests,
-        python-integration-tests,
-      ]
+    # needs:
+    #   [
+    #     build,
+    #     build-wasm,
+    #     library-tests,
+    #     mock-proving-tests,
+    #     mock-proving-tests-wasi,
+    #     python-tests,
+    #     python-integration-tests,
+    #   ]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -346,15 +346,15 @@ jobs:
 
   prove-and-verify-aggr-evm-tests:
     runs-on: self-hosted
-    needs:
-      [
-        build,
-        build-wasm,
-        library-tests,
-        mock-proving-tests,
-        mock-proving-tests-wasi,
-        python-tests,
-      ]
+    # needs:
+    #   [
+    #     build,
+    #     build-wasm,
+    #     library-tests,
+    #     mock-proving-tests,
+    #     mock-proving-tests-wasi,
+    #     python-tests,
+    #   ]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
