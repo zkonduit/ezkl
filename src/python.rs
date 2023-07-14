@@ -369,19 +369,13 @@ fn create_evm_verifier(
     srs_path: PathBuf,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
-    abi_path: PathBuf
+    abi_path: PathBuf,
 ) -> Result<bool, PyErr> {
-    crate::execute::create_evm_verifier(
-        vk_path,
-        srs_path,
-        settings_path,
-        sol_code_path,
-        abi_path
-    )
-    .map_err(|e| {
-        let err_str = format!("Failed to run create_evm_verifier: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
+    crate::execute::create_evm_verifier(vk_path, srs_path, settings_path, sol_code_path, abi_path)
+        .map_err(|e| {
+            let err_str = format!("Failed to run create_evm_verifier: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
 
     Ok(true)
 }
@@ -401,7 +395,7 @@ fn create_evm_data_attestation_verifier(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-    input_data: PathBuf
+    input_data: PathBuf,
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_data_attestation_verifier(
         vk_path,
@@ -409,7 +403,7 @@ fn create_evm_data_attestation_verifier(
         settings_path,
         sol_code_path,
         abi_path,
-        input_data
+        input_data,
     )
     .map_err(|e| {
         let err_str = format!("Failed to run create_evm_data_attestation_verifier: {}", e);
@@ -513,19 +507,22 @@ fn verify_evm(
     vk_path,
     srs_path,
     sol_code_path,
-    abi_path
+    abi_path,
+    aggregation_snarks
 ))]
 fn create_evm_verifier_aggr(
     vk_path: PathBuf,
     srs_path: PathBuf,
     sol_code_path: PathBuf,
-    abi_path: PathBuf
+    abi_path: PathBuf,
+    aggregation_snarks: Vec<PathBuf>,
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_aggregate_verifier(
         vk_path,
         srs_path,
         sol_code_path,
-        abi_path
+        abi_path,
+        aggregation_snarks,
     )
     .map_err(|e| {
         let err_str = format!("Failed to run create_evm_verifier_aggr: {}", e);
