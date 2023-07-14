@@ -319,7 +319,7 @@ jobs:
         run: cargo nextest run --release --verbose tests::kzg_fuzz_ --test-threads 6
 
   prove-and-verify-mock-aggr-tests:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest-32-cores
     # needs:
     #   [
     #   build,
