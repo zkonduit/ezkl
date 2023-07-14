@@ -570,11 +570,10 @@ use std::io::{BufRead, BufReader};
 /// Can optionally attest to on-chain inputs
 pub fn fix_verifier_sol(
     input_file: PathBuf,
+    num_instances: u32,
     input_data: Option<(u32, Vec<CallsToAccount>)>,
     output_data: Option<Vec<CallsToAccount>>
 ) -> Result<String, Box<dyn Error>> {
-    let file = File::open(input_file.clone())?;
-    let reader = BufReader::new(file);
 
     let mut transcript_addrs: Vec<u32> = Vec::new();
     let mut modified_lines: Vec<String> = Vec::new();
@@ -597,30 +596,9 @@ pub fn fix_verifier_sol(
         Regex::new(r"(staticcall\(gas\(\), 0x8, (0x[0-9a-fA-F]+), 0x180, (0x[0-9a-fA-F]+), 0x20)")?;
     let bool_pattern = Regex::new(r":bool")?;
 
-    // Count the number of pub inputs
-    let mut start = None;
-    let mut end = None;
-    for (i, line) in reader.lines().enumerate() {
-        let line = line?;
-        if line.trim().starts_with("mstore(0x20") && start.is_none() {
-            start = Some(i as u32);
-        }
-
-        if line.trim().starts_with("mstore(0x0") {
-            end = Some(i as u32);
-            break;
-        }
-    }
-
-    let num_pubinputs = if let Some(s) = start {
-        end.unwrap() - s
-    } else {
-        0
-    };
-
-    let mut max_pubinputs_addr = 0;
-    if num_pubinputs > 0 {
-        max_pubinputs_addr = num_pubinputs * 32 - 32;
+    let mut max_pubinputs_addr: u32 = 0;
+    if num_instances > 0 {
+        max_pubinputs_addr = num_instances* 32 - 32;
     }
 
     let file = File::open(input_file)?;
@@ -861,7 +839,7 @@ pub fn fix_verifier_sol(
     // Hardcode the fixed array length of pubInputs param
     contract = contract.replace(
         "uint256[] calldata",
-        &format!("uint256[{}] calldata", num_pubinputs),
+        &format!("uint256[{}] calldata", num_instances),
     );
 
     // Find the index of "assembly {"
@@ -897,7 +875,7 @@ pub fn fix_verifier_sol(
         offset,
     );
 
-    offset += 32 * num_pubinputs;
+    offset += 32 * num_instances;
 
     // replace all mload(add(proof, 0x...))) with mload(0x...
     contract_slice_string = replace_vars_with_offset(
