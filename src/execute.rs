@@ -926,6 +926,7 @@ pub(crate) async fn deploy_da_evm(
     rpc_url: Option<String>,
     addr_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let contract_address =
         deploy_da_verifier_via_solidity(settings_path, data, sol_code_path, rpc_url.as_deref())
             .await?;
@@ -943,6 +944,7 @@ pub(crate) async fn deploy_evm(
     rpc_url: Option<String>,
     addr_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let contract_address = deploy_verifier_via_solidity(sol_code_path, rpc_url.as_deref()).await?;
 
     info!("Contract deployed at: {:#?}", contract_address);
