@@ -1414,6 +1414,7 @@ pub(crate) fn mock_aggregate(
     prover
         .verify()
         .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
+    #[cfg(not(target_arch = "wasm32"))]
     pb.finish_with_message("Done.");
     Ok(())
 }
