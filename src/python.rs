@@ -508,7 +508,7 @@ fn verify_evm(
     srs_path,
     sol_code_path,
     abi_path,
-    aggregation_snarks
+    aggregation_settings
 ))]
 fn create_evm_verifier_aggr(
     vk_path: PathBuf,
