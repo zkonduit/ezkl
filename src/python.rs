@@ -515,14 +515,14 @@ fn create_evm_verifier_aggr(
     srs_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-    aggregation_snarks: Vec<PathBuf>,
+    aggregation_settings: Vec<PathBuf>,
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_aggregate_verifier(
         vk_path,
         srs_path,
         sol_code_path,
         abi_path,
-        aggregation_snarks,
+        aggregation_settings,
     )
     .map_err(|e| {
         let err_str = format!("Failed to run create_evm_verifier_aggr: {}", e);
