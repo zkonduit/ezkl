@@ -1,3 +1,7 @@
+use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
+use crate::circuit::modules::poseidon::PoseidonChip;
+use crate::circuit::modules::Module;
+use crate::graph::modules::POSEIDON_LEN_GRAPH;
 use halo2_proofs::plonk::*;
 use halo2_proofs::poly::commitment::{CommitmentScheme, ParamsProver};
 use halo2_proofs::poly::kzg::{
@@ -22,6 +26,20 @@ pub fn init_panic_hook() {
 
 use crate::execute::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 use crate::graph::{GraphCircuit, GraphSettings};
+
+/// Generate a poseidon hash in browser. Input message
+#[wasm_bindgen]
+pub fn poseidon_hash_wasm(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
+    let message: Vec<Fr> = bincode::deserialize(&message[..]).unwrap();
+
+    let output =
+        PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN_GRAPH>::run(
+            message.clone(),
+        )
+        .unwrap();
+
+    bincode::serialize(&output).unwrap()
+}
 
 /// Generate circuit params in browser
 #[wasm_bindgen]

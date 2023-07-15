@@ -834,7 +834,11 @@ pub(crate) fn create_evm_verifier(
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(yul_code.as_bytes());
 
-    let output = fix_verifier_sol(sol_code_path.clone(), None, None)?;
+    let output = fix_verifier_sol(
+        sol_code_path.clone(),
+        num_instance.iter().sum::<usize>().try_into().unwrap(), 
+        None, None
+    )?;
     
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(output.as_bytes());
@@ -903,7 +907,11 @@ pub(crate) fn create_evm_data_attestation_verifier(
     };
 
     if input_data.is_some() || output_data.is_some() {
-        let output = fix_verifier_sol(sol_code_path.clone(), input_data, output_data)?;
+        let output = fix_verifier_sol(
+            sol_code_path.clone(), 
+            num_instance.iter().sum::<usize>().try_into().unwrap(), 
+            input_data, output_data
+        )?;
         let mut f = File::create(sol_code_path.clone())?;
         let _ = f.write(output.as_bytes());
         // fetch abi of the contract
@@ -1001,7 +1009,12 @@ pub(crate) fn create_evm_aggregate_verifier(
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(yul_code.as_bytes());
 
-    let output = fix_verifier_sol(sol_code_path.clone(), None, None)?;
+    let output = fix_verifier_sol(
+        sol_code_path.clone(),
+        AggregationCircuit::num_instance().iter().sum::<usize>().try_into().unwrap(), 
+        None, 
+        None
+    )?;
     
     
     let mut f = File::create(sol_code_path.clone())?;
