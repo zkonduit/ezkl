@@ -1238,10 +1238,7 @@ mod native_tests {
         let sol_arg = format!("{}/{}/kzg_aggr.sol", test_dir, example_name);
         let addr_path_arg = format!("--addr-path={}/{}/addr.txt", test_dir, example_name);
         let rpc_arg = format!("--rpc-url={}", *ANVIL_URL);
-        let settings_arg = format!(
-            "--settings-path={}/{}/settings.json",
-            test_dir, example_name
-        );
+        let settings_arg = format!("{}/{}/settings.json", test_dir, example_name);
 
         let base_args = vec![
             "create-evm-verifier-aggr",

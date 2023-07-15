@@ -586,7 +586,7 @@ async def evm_aggregate_and_verify_aggr():
         params_k20_path,
         sol_code_path,
         abi_path,
-        [proof_path]
+        [settings_path]
     )
 
     assert res == True
