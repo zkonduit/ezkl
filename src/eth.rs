@@ -204,7 +204,7 @@ pub async fn verify_proof_via_solidity(
     addr: ethers::types::Address,
     rpc_url: Option<&str>,
 ) -> Result<bool, Box<dyn Error>> {
-    use ethers::abi::{ParamType, Function, Param, StateMutability, Token};
+    use ethers::abi::{Function, Param, ParamType, StateMutability, Token};
 
     let mut public_inputs: Vec<U256> = vec![];
     let flattened_instances = proof.instances.into_iter().flatten();
@@ -216,26 +216,31 @@ pub async fn verify_proof_via_solidity(
     }
 
     info!("public_inputs: {:#?}", public_inputs);
-    info!("proof: {:#?}", ethers::types::Bytes::from(proof.proof.to_vec()));
+    info!(
+        "proof: {:#?}",
+        ethers::types::Bytes::from(proof.proof.to_vec())
+    );
 
     #[allow(deprecated)]
     let func = Function {
         name: "verify".to_owned(),
         inputs: vec![
-            Param { 
-                name: "pubInputs".to_owned(), 
-                kind: ParamType::FixedArray(Box::new(ParamType::Uint(256)), public_inputs.len()), 
-                internal_type: None 
+            Param {
+                name: "pubInputs".to_owned(),
+                kind: ParamType::FixedArray(Box::new(ParamType::Uint(256)), public_inputs.len()),
+                internal_type: None,
             },
-            Param { name: "proof".to_owned(), kind: ParamType::Bytes, internal_type: None },
+            Param {
+                name: "proof".to_owned(),
+                kind: ParamType::Bytes,
+                internal_type: None,
+            },
         ],
-        outputs: vec![
-            Param { 
-                name: "success".to_owned(), 
-                kind: ParamType::Bool, 
-                internal_type: None
-            }
-        ],
+        outputs: vec![Param {
+            name: "success".to_owned(),
+            kind: ParamType::Bool,
+            internal_type: None,
+        }],
         constant: None,
         state_mutability: StateMutability::View,
     };
@@ -248,11 +253,11 @@ pub async fn verify_proof_via_solidity(
     info!("encoded: {:#?}", hex::encode(&encoded));
     let (anvil, client) = setup_eth_backend(rpc_url).await?;
     let tx: TypedTransaction = TransactionRequest::default()
-                .to(addr)
-                .from(client.address())
-                .data(encoded)
-                .into();
-            debug!("transaction {:#?}", tx);
+        .to(addr)
+        .from(client.address())
+        .data(encoded)
+        .into();
+    debug!("transaction {:#?}", tx);
 
     let result = client.call(&tx, None).await;
 
@@ -323,7 +328,7 @@ pub async fn verify_proof_with_data_attestation(
     addr: ethers::types::Address,
     rpc_url: Option<&str>,
 ) -> Result<bool, Box<dyn Error>> {
-    use ethers::abi::{ParamType, Function, Param, StateMutability, Token};
+    use ethers::abi::{Function, Param, ParamType, StateMutability, Token};
 
     let mut public_inputs: Vec<U256> = vec![];
     let flattened_instances = proof.instances.into_iter().flatten();
@@ -335,26 +340,31 @@ pub async fn verify_proof_with_data_attestation(
     }
 
     info!("public_inputs: {:#?}", public_inputs);
-    info!("proof: {:#?}", ethers::types::Bytes::from(proof.proof.to_vec()));
+    info!(
+        "proof: {:#?}",
+        ethers::types::Bytes::from(proof.proof.to_vec())
+    );
 
     #[allow(deprecated)]
     let func = Function {
         name: "verifyWithDataAttestation".to_owned(),
         inputs: vec![
-            Param { 
-                name: "pubInputs".to_owned(), 
-                kind: ParamType::FixedArray(Box::new(ParamType::Uint(256)), public_inputs.len()), 
-                internal_type: None 
+            Param {
+                name: "pubInputs".to_owned(),
+                kind: ParamType::FixedArray(Box::new(ParamType::Uint(256)), public_inputs.len()),
+                internal_type: None,
             },
-            Param { name: "proof".to_owned(), kind: ParamType::Bytes, internal_type: None },
+            Param {
+                name: "proof".to_owned(),
+                kind: ParamType::Bytes,
+                internal_type: None,
+            },
         ],
-        outputs: vec![
-            Param { 
-                name: "success".to_owned(), 
-                kind: ParamType::Bool, 
-                internal_type: None
-            }
-        ],
+        outputs: vec![Param {
+            name: "success".to_owned(),
+            kind: ParamType::Bool,
+            internal_type: None,
+        }],
         constant: None,
         state_mutability: StateMutability::View,
     };
@@ -367,11 +377,11 @@ pub async fn verify_proof_with_data_attestation(
     info!("encoded: {:#?}", hex::encode(&encoded));
     let (anvil, client) = setup_eth_backend(rpc_url).await?;
     let tx: TypedTransaction = TransactionRequest::default()
-                .to(addr)
-                .from(client.address())
-                .data(encoded)
-                .into();
-            debug!("transaction {:#?}", tx);
+        .to(addr)
+        .from(client.address())
+        .data(encoded)
+        .into();
+    debug!("transaction {:#?}", tx);
     info!(
         "estimated verify gas cost: {:#?}",
         client.estimate_gas(&tx, None).await?
@@ -572,9 +582,8 @@ pub fn fix_verifier_sol(
     input_file: PathBuf,
     num_instances: u32,
     input_data: Option<(u32, Vec<CallsToAccount>)>,
-    output_data: Option<Vec<CallsToAccount>>
+    output_data: Option<Vec<CallsToAccount>>,
 ) -> Result<String, Box<dyn Error>> {
-
     let mut transcript_addrs: Vec<u32> = Vec::new();
     let mut modified_lines: Vec<String> = Vec::new();
 
@@ -598,7 +607,7 @@ pub fn fix_verifier_sol(
 
     let mut max_pubinputs_addr: u32 = 0;
     if num_instances > 0 {
-        max_pubinputs_addr = num_instances* 32 - 32;
+        max_pubinputs_addr = num_instances * 32 - 32;
     }
 
     let file = File::open(input_file)?;
