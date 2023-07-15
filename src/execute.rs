@@ -166,13 +166,13 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             srs_path,
             sol_code_path,
             abi_path,
-            aggregation_snarks,
+            aggregation_settings,
         } => create_evm_aggregate_verifier(
             vk_path,
             srs_path,
             sol_code_path,
             abi_path,
-            aggregation_snarks,
+            aggregation_settings,
         ),
         Commands::Setup {
             model,
@@ -951,28 +951,31 @@ pub(crate) async fn verify_evm(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-use crate::pfsys::SnarkWitness;
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn create_evm_aggregate_verifier(
     vk_path: PathBuf,
     srs_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-    snarks: Vec<PathBuf>,
+    circuit_settings: Vec<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     let params: ParamsKZG<Bn256> = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)?;
 
-    let snarks: Vec<SnarkWitness<Fr, G1Affine>> = snarks
+    let settings: Vec<GraphSettings> = circuit_settings
         .iter()
-        .map(|path| SnarkWitness::from(Snark::load::<KZGCommitmentScheme<Bn256>>(path).unwrap()))
+        .map(|path| GraphSettings::load(&path).unwrap())
         .collect::<Vec<_>>();
+
+    let num_public_inputs: usize = settings
+        .iter()
+        .map(|s| s.total_instances().iter().sum::<usize>())
+        .sum();
 
     let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
 
     let yul_code = gen_aggregation_evm_verifier(
         &params,
         &agg_vk,
-        AggregationCircuit::num_instance(snarks.clone()),
+        AggregationCircuit::num_instance(num_public_inputs),
         AggregationCircuit::accumulator_indices(),
     )?;
 
@@ -981,7 +984,7 @@ pub(crate) fn create_evm_aggregate_verifier(
 
     let output = fix_verifier_sol(
         sol_code_path.clone(),
-        AggregationCircuit::num_instance(snarks)
+        AggregationCircuit::num_instance(num_public_inputs)
             .iter()
             .sum::<usize>()
             .try_into()

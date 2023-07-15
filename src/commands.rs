@@ -535,9 +535,9 @@ pub enum Commands {
         /// The path to output the Solidity verifier ABI
         #[arg(long, default_value = "verifier_aggr_abi.json")]
         abi_path: PathBuf,
-        // aggregate proof paths, used to calculate the number of instances in the aggregate proof
+        // aggregated circuit settings paths, used to calculate the number of instances in the aggregate proof
         #[arg(long)]
-        aggregation_snarks: Vec<PathBuf>,
+        aggregation_settings: Vec<PathBuf>,
     },
     /// Verifies a proof, returning accept or reject
     #[command(arg_required_else_help = true)]

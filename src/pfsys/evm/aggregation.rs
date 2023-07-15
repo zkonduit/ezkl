@@ -244,13 +244,9 @@ impl AggregationCircuit {
     }
 
     /// Number of instance variables for the aggregation circuit, used in generating verifier.
-    pub fn num_instance(snarks: Vec<SnarkWitness<Fr, G1Affine>>) -> Vec<usize> {
+    pub fn num_instance(orginal_circuit_instances: usize) -> Vec<usize> {
         let accumulation_instances = 4 * LIMBS;
-        let snark_instances: usize = snarks
-            .iter()
-            .map(|snark| snark.instances.iter().map(|x| x.len()).sum::<usize>())
-            .sum();
-        vec![accumulation_instances + snark_instances]
+        vec![accumulation_instances + orginal_circuit_instances]
     }
 
     /// Instance variables for the aggregation circuit, fed to verifier.
