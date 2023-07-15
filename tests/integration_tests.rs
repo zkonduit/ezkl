@@ -234,6 +234,27 @@ mod native_tests {
         "1l_identity",
     ];
 
+    const TESTS_EVM_AGGR: [&str; 17] = [
+        "1l_mlp",
+        "1l_reshape",
+        "1l_sigmoid",
+        "1l_div",
+        "1l_sqrt",
+        // "1l_prelu",
+        "1l_var",
+        "1l_leakyrelu",
+        "1l_gelu_noappx",
+        "1l_relu",
+        "1l_tanh",
+        "2l_relu_sigmoid_small",
+        "2l_relu_small",
+        "2l_relu_fc",
+        "min",
+        "max",
+        "idolmodel",
+        "1l_identity",
+    ];
+
     const EXAMPLES: [&str; 2] = ["mlp_4d_einsum", "conv2d_mnist"];
 
     macro_rules! test_func_aggr {
@@ -258,7 +279,6 @@ mod native_tests {
 
 
             #(#[test_case(TESTS_AGGR[N])])*
-            #[ignore]
             fn kzg_aggr_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::mv_test_(test);
@@ -492,6 +512,7 @@ mod native_tests {
         mod tests_evm {
             use seq_macro::seq;
             use crate::native_tests::TESTS_EVM;
+            use crate::native_tests::TESTS_EVM_AGGR;
             use test_case::test_case;
             use crate::native_tests::kzg_evm_prove_and_verify;
             use crate::native_tests::kzg_evm_on_chain_input_prove_and_verify;
@@ -556,6 +577,19 @@ mod native_tests {
             });
 
 
+            seq!(N in 0..= 16 {
+                // these take a particularly long time to run
+                #(#[test_case(TESTS_EVM_AGGR[N])])*
+                #[ignore]
+                fn kzg_evm_aggr_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::mv_test_(test);
+                    crate::native_tests::start_anvil();
+                    kzg_evm_aggr_prove_and_verify(test.to_string());
+                }
+            });
+
+
             seq!(N in 0..= 19 {
 
                 #(#[test_case(TESTS_EVM[N])])*
@@ -603,15 +637,7 @@ mod native_tests {
                     kzg_fuzz(test.to_string(), 7, 16, 17, "evm");
                 }
 
-                // these take a particularly long time to run
-                #(#[test_case(TESTS_EVM[N])])*
-                #[ignore]
-                fn kzg_evm_aggr_prove_and_verify_(test: &str) {
-                    crate::native_tests::init_binary();
-                    crate::native_tests::mv_test_(test);
-                    crate::native_tests::start_anvil();
-                    kzg_evm_aggr_prove_and_verify(test.to_string());
-                }
+
 
             });
     }
