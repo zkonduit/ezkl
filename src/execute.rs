@@ -177,14 +177,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             srs_path,
             settings_path,
             sol_code_path,
-            abi_path
-        } => create_evm_verifier(
-            vk_path,
-            srs_path,
-            settings_path,
-            sol_code_path,
-            abi_path
-        ),
+            abi_path,
+        } => create_evm_verifier(vk_path, srs_path, settings_path, sol_code_path, abi_path),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMDataAttestationVerifier {
             vk_path,
@@ -199,7 +193,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             settings_path,
             sol_code_path,
             abi_path,
-            data
+            data,
         ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifierAggr {
@@ -207,11 +201,13 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             srs_path,
             sol_code_path,
             abi_path,
+            aggregation_settings,
         } => create_evm_aggregate_verifier(
             vk_path,
             srs_path,
             sol_code_path,
             abi_path,
+            aggregation_settings,
         ),
         Commands::Setup {
             model,
@@ -265,6 +261,10 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         )
         .await
         .map(|_| ()),
+        Commands::MockAggregate {
+            aggregation_snarks,
+            logrows,
+        } => mock_aggregate(aggregation_snarks, logrows),
         Commands::Aggregate {
             proof_path,
             aggregation_snarks,
@@ -836,10 +836,11 @@ pub(crate) fn create_evm_verifier(
 
     let output = fix_verifier_sol(
         sol_code_path.clone(),
-        num_instance.iter().sum::<usize>().try_into().unwrap(), 
-        None, None
+        num_instance.iter().sum::<usize>().try_into().unwrap(),
+        None,
+        None,
     )?;
-    
+
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(output.as_bytes());
 
@@ -858,7 +859,7 @@ pub(crate) fn create_evm_data_attestation_verifier(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-    input: PathBuf
+    input: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
     use crate::graph::{DataSource, VarVisibility};
     check_solc_requirement();
@@ -908,14 +909,16 @@ pub(crate) fn create_evm_data_attestation_verifier(
 
     if input_data.is_some() || output_data.is_some() {
         let output = fix_verifier_sol(
-            sol_code_path.clone(), 
-            num_instance.iter().sum::<usize>().try_into().unwrap(), 
-            input_data, output_data
+            sol_code_path.clone(),
+            num_instance.iter().sum::<usize>().try_into().unwrap(),
+            input_data,
+            output_data,
         )?;
         let mut f = File::create(sol_code_path.clone())?;
         let _ = f.write(output.as_bytes());
         // fetch abi of the contract
-        let (abi, _, _) = get_contract_artifacts(sol_code_path.clone(), "DataAttestationVerifier", None)?;
+        let (abi, _, _) =
+            get_contract_artifacts(sol_code_path.clone(), "DataAttestationVerifier", None)?;
         // save abi to file
         serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
     } else {
@@ -993,16 +996,27 @@ pub(crate) fn create_evm_aggregate_verifier(
     srs_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
+    circuit_settings: Vec<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     check_solc_requirement();
     let params: ParamsKZG<Bn256> = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)?;
+
+    let settings: Vec<GraphSettings> = circuit_settings
+        .iter()
+        .map(|path| GraphSettings::load(&path).unwrap())
+        .collect::<Vec<_>>();
+
+    let num_public_inputs: usize = settings
+        .iter()
+        .map(|s| s.total_instances().iter().sum::<usize>())
+        .sum();
 
     let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
 
     let yul_code = gen_aggregation_evm_verifier(
         &params,
         &agg_vk,
-        AggregationCircuit::num_instance(),
+        AggregationCircuit::num_instance(num_public_inputs),
         AggregationCircuit::accumulator_indices(),
     )?;
 
@@ -1011,15 +1025,18 @@ pub(crate) fn create_evm_aggregate_verifier(
 
     let output = fix_verifier_sol(
         sol_code_path.clone(),
-        AggregationCircuit::num_instance().iter().sum::<usize>().try_into().unwrap(), 
-        None, 
-        None
+        AggregationCircuit::num_instance(num_public_inputs)
+            .iter()
+            .sum::<usize>()
+            .try_into()
+            .unwrap(),
+        None,
+        None,
     )?;
-    
-    
+
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(output.as_bytes());
-    
+
     // fetch abi of the contract
     let (abi, _, _) = get_contract_artifacts(sol_code_path.clone(), "Verifier", None)?;
     // save abi to file
@@ -1437,6 +1454,35 @@ pub(crate) fn run_fuzz_fn(
     );
 }
 
+pub(crate) fn mock_aggregate(
+    aggregation_snarks: Vec<PathBuf>,
+    logrows: u32,
+) -> Result<(), Box<dyn Error>> {
+    let mut snarks = vec![];
+    for proof_path in aggregation_snarks.iter() {
+        snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
+    }
+    // proof aggregation
+    #[cfg(not(target_arch = "wasm32"))]
+    let pb = {
+        let pb = init_spinner();
+        pb.set_message("Aggregating (may take a while)...");
+        pb
+    };
+
+    let circuit = AggregationCircuit::new(&G1Affine::generator().into(), snarks)?;
+
+    let prover = halo2_proofs::dev::MockProver::run(logrows, &circuit, circuit.instances())
+        .map_err(Box::<dyn Error>::from)?;
+    prover.assert_satisfied();
+    prover
+        .verify()
+        .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
+    #[cfg(not(target_arch = "wasm32"))]
+    pb.finish_with_message("Done.");
+    Ok(())
+}
+
 pub(crate) fn aggregate(
     proof_path: PathBuf,
     aggregation_snarks: Vec<PathBuf>,
@@ -1462,7 +1508,7 @@ pub(crate) fn aggregate(
     };
 
     {
-        let agg_circuit = AggregationCircuit::new(&params, snarks)?;
+        let agg_circuit = AggregationCircuit::new(&params.get_g()[0].into(), snarks)?;
         let agg_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
             &agg_circuit,
             &params,

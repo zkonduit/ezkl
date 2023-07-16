@@ -148,7 +148,7 @@ def test_forward():
     )
 
     res = ezkl.gen_witness(data_path, model_path,
-                               output_path, settings_path=settings_path)
+                           output_path, settings_path=settings_path)
 
     with open(output_path, "r") as f:
         data = json.load(f)
@@ -194,7 +194,7 @@ def test_mock():
     settings_path = os.path.join(folder_path, 'settings.json')
 
     res = ezkl.mock(data_path, model_path,
-                        settings_path)
+                    settings_path)
     assert res == True
 
 
@@ -297,7 +297,7 @@ def test_prove_and_verify():
 
     vk_path = os.path.join(folder_path, 'test.vk')
     res = ezkl.verify(proof_path, settings_path,
-                          vk_path, srs_path)
+                      vk_path, srs_path)
     assert res == True
     assert os.path.isfile(vk_path)
 
@@ -454,7 +454,7 @@ async def aggregate_and_verify_aggr():
     )
 
     res = ezkl.gen_witness(data_path, model_path,
-                               output_path, settings_path=settings_path)
+                           output_path, settings_path=settings_path)
 
     ezkl.prove(
         output_path,
@@ -548,7 +548,7 @@ async def evm_aggregate_and_verify_aggr():
     )
 
     res = ezkl.gen_witness(data_path, model_path,
-                               output_path, settings_path=settings_path)
+                           output_path, settings_path=settings_path)
 
     ezkl.prove(
         output_path,
@@ -585,7 +585,8 @@ async def evm_aggregate_and_verify_aggr():
         aggregate_vk_path,
         params_k20_path,
         sol_code_path,
-        abi_path
+        abi_path,
+        [settings_path]
     )
 
     assert res == True

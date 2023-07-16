@@ -310,6 +310,17 @@ pub enum Commands {
         settings_path: PathBuf,
     },
 
+    /// Mock aggregate proofs
+    #[command(arg_required_else_help = true)]
+    MockAggregate {
+        /// The path to the snarks to aggregate over
+        #[arg(long)]
+        aggregation_snarks: Vec<PathBuf>,
+        /// logrows used for aggregation circuit
+        #[arg(long)]
+        logrows: u32,
+    },
+
     /// Aggregates proofs :)
     #[command(arg_required_else_help = true)]
     Aggregate {
@@ -524,7 +535,9 @@ pub enum Commands {
         /// The path to output the Solidity verifier ABI
         #[arg(long, default_value = "verifier_aggr_abi.json")]
         abi_path: PathBuf,
-        // todo, optionally allow supplying proving key
+        // aggregated circuit settings paths, used to calculate the number of instances in the aggregate proof
+        #[arg(long)]
+        aggregation_settings: Vec<PathBuf>,
     },
     /// Verifies a proof, returning accept or reject
     #[command(arg_required_else_help = true)]
