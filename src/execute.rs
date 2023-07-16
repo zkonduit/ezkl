@@ -57,6 +57,12 @@ use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
+#[cfg(not(target_arch = "wasm32"))]
+use std::process::Command;
+#[cfg(not(target_arch = "wasm32"))]
+use std::io::ErrorKind::NotFound;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::OnceLock;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::{Cursor, Write};
@@ -66,6 +72,35 @@ use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
 use thiserror::Error;
+
+#[cfg(not(target_arch = "wasm32"))]
+static _SOLC_REQUIREMENT: OnceLock<bool> = OnceLock::new();
+#[cfg(not(target_arch = "wasm32"))]
+fn check_solc_requirement() {
+    info!("checking solc installation..");
+    _SOLC_REQUIREMENT.get_or_init(|| {
+        match Command::new("solc").arg("--version").output() {
+            Ok(output) => {
+                #[cfg(not(target_arch = "wasm32"))]
+                debug!("solc output: {:#?}", output);
+                #[cfg(not(target_arch = "wasm32"))]
+                debug!("solc output success: {:#?}", output.status.success());
+                assert!(output.status.success(), "`solc` check failed: {}", String::from_utf8_lossy(&output.stderr));
+                #[cfg(not(target_arch = "wasm32"))]
+                debug!("solc check passed, proceeding");
+                true
+            }
+            Err(e) => {
+                if let NotFound = e.kind() {
+                    panic!("`solc` was not found! Consider using solc-select or check your PATH! {}", e);
+                } else {
+                    panic!("`solc` check failed: {}", e);
+                }
+            }
+        }
+    });
+}
+
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
 pub enum ExecutionError {
@@ -785,6 +820,7 @@ pub(crate) fn create_evm_verifier(
     sol_code_path: PathBuf,
     abi_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
 
@@ -826,6 +862,7 @@ pub(crate) fn create_evm_data_attestation_verifier(
     input: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
     use crate::graph::{DataSource, VarVisibility};
+    check_solc_requirement();
 
     let settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, settings.run_args.logrows)?;
@@ -900,6 +937,7 @@ pub(crate) async fn deploy_da_evm(
     rpc_url: Option<String>,
     addr_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let contract_address =
         deploy_da_verifier_via_solidity(settings_path, data, sol_code_path, rpc_url.as_deref())
             .await?;
@@ -917,6 +955,7 @@ pub(crate) async fn deploy_evm(
     rpc_url: Option<String>,
     addr_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let contract_address = deploy_verifier_via_solidity(sol_code_path, rpc_url.as_deref()).await?;
 
     info!("Contract deployed at: {:#?}", contract_address);
@@ -934,6 +973,7 @@ pub(crate) async fn verify_evm(
     uses_data_attestation: bool,
 ) -> Result<(), Box<dyn Error>> {
     use crate::eth::verify_proof_with_data_attestation;
+    check_solc_requirement();
 
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
 
@@ -958,6 +998,7 @@ pub(crate) fn create_evm_aggregate_verifier(
     abi_path: PathBuf,
     circuit_settings: Vec<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let params: ParamsKZG<Bn256> = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)?;
 
     let settings: Vec<GraphSettings> = circuit_settings
@@ -1145,6 +1186,7 @@ pub(crate) async fn fuzz(
     run_args: RunArgs,
     settings_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let passed = AtomicBool::new(true);
 
     info!("setting up tests");
