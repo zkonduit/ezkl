@@ -612,14 +612,14 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
 
     let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
 
+    let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
+    lhs.expand(&broadcasted_shape)?;
+    rhs.expand(&broadcasted_shape)?;
+
     if region.is_dummy() {
         region.increment(lhs.len());
         return Ok(lhs);
     }
-
-    let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
-    lhs.expand(&broadcasted_shape)?;
-    rhs.expand(&broadcasted_shape)?;
 
     let mut inputs = vec![];
 
