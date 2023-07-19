@@ -62,7 +62,7 @@ impl ModuleConfigs {
         if (visibility.input.is_encrypted()
             || visibility.output.is_encrypted()
             || visibility.params.is_encrypted())
-            && module_size.elgamal.1[2] > 0
+            && module_size.elgamal.1[1] > 0
         {
             config.elgamal = Some(ElGamalGadget::configure(cs))
         };
