@@ -288,15 +288,12 @@ impl GraphModules {
             if total_len > 0 {
                 // add the 1 time fixed cost of maingate + ecc chips
                 sizes.elgamal.0 += ELGAMAL_FIXED_COST_ESTIMATE * ((sizes.elgamal.0 == 0) as usize);
-                sizes.elgamal.1[1] += 3;
+                sizes.elgamal.1[1] += 4;
             }
             // 1 constraint for each ciphertext c2 elem
             for shape in shapes {
                 let total_len = shape.iter().product::<usize>();
                 sizes.elgamal.0 += ELGAMAL_CONSTRAINTS_ESTIMATE * total_len;
-                if total_len > 0 {
-                    sizes.elgamal.1[2] += 1;
-                }
             }
         }
     }
@@ -332,11 +329,7 @@ impl GraphModules {
                 .layout(layouter, &cloned_x, instance_offset.to_owned())
                 .unwrap();
             x[0].reshape(dims).unwrap();
-            for (i, inc) in module
-                .instance_increment_input(x.iter().map(|x| x.len()).collect())
-                .iter()
-                .enumerate()
-            {
+            for (i, inc) in module.instance_increment_input().iter().enumerate() {
                 // increment the instance offset to make way for future module layouts
                 instance_offset[i] += inc;
             }
