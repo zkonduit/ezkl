@@ -169,11 +169,11 @@ impl VarTensor {
 
     /// Assigns a constant value to a specific cell in the tensor.
     pub fn assign_constant<F: PrimeField + TensorType>(
-        &self, 
+        &self,
         region: &mut Region<F>,
         offset: usize,
         constant: F
-    ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error>{ 
+    ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error>{
 
         let (x, y) = self.cartesian_coord(offset);
 
@@ -192,13 +192,11 @@ impl VarTensor {
     /// Assigns [ValTensor] to the columns of the inner tensor.
     pub fn assign<F: PrimeField + TensorType + PartialOrd>(
         &self,
-        region: &mut Option<Region<F>>,
+        region: &mut Region<F>,
         offset: usize,
         values: &ValTensor<F>,
     ) -> Result<ValTensor<F>, halo2_proofs::plonk::Error> {
-   
-        let mut res = match region {
-            Some(region) => {
+        let mut res: ValTensor<F> =
         match values {
             ValTensor::Instance {
                 inner: instance,
@@ -258,21 +256,40 @@ impl VarTensor {
                     }
                 }
             })?.into()),
-        }
-    }
-    None => Ok(values.clone())
-    }?;
+        }?;
     res.set_scale(values.scale());
     Ok(res)
     }
 
-    
+    /// Assigns specific values (`ValTensor`) to the columns of the inner tensor but allows for column wrapping for accumulated operations. 
+    /// Duplication occurs by copying the last cell of the column to the first cell next column and creating a copy constraint between the two. 
+    pub fn dummy_assign_with_duplication<F: PrimeField + TensorType + PartialOrd>(
+        &self,
+        offset: usize,
+        values: &ValTensor<F>,
+    ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
+        match values {
+            ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
+            ValTensor::Value { inner: v, dims , ..} => {
+                // duplicates every nth element to adjust for column overflow
+                let mut res: ValTensor<F> = v.duplicate_every_n(self.col_size(), offset).unwrap().into();
+                let total_used_len = res.len();
+                res.remove_every_n(self.col_size(), offset).unwrap();
+
+                res.reshape(dims).unwrap();
+                res.set_scale(values.scale());
+
+                Ok((res, total_used_len))
+            }
+        }
+
+    }
 
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor but allows for column wrapping for accumulated operations. 
     /// Duplication occurs by copying the last cell of the column to the first cell next column and creating a copy constraint between the two. 
     pub fn assign_with_duplication<F: PrimeField + TensorType + PartialOrd>(
         &self,
-        region: &mut Option<Region<F>>,
+        region: &mut Region<F>,
         offset: usize,
         values: &ValTensor<F>,
         check_mode: &CheckMode
@@ -283,9 +300,9 @@ impl VarTensor {
         match values {
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
             ValTensor::Value { inner: v, dims , ..} => {
-                // duplicates every nth element to adjust for column overflow               
+                // duplicates every nth element to adjust for column overflow
                 let v = v.duplicate_every_n(self.col_size(), offset).unwrap();
-                let mut res: ValTensor<F> = if let Some(region) = region { 
+                let mut res: ValTensor<F> = {
                     v.enum_map(|coord, k| {
                     let (x, y) = self.cartesian_coord(offset + coord);
                     if matches!(check_mode, CheckMode::SAFE) && coord > 0 && y == 0 {
@@ -293,7 +310,7 @@ impl VarTensor {
                         assert_eq!(Into::<i32>::into(k.clone()), Into::<i32>::into(v[coord - 1].clone()));
                     };
 
-                   
+
                     let cell = match k {
                         ValType::Value(v) => match &self {
                             VarTensor::Fixed { inner: fixed, .. } => {
@@ -302,8 +319,8 @@ impl VarTensor {
                             }
                             VarTensor::Advice { inner: advices, .. } => {
                                 region.assign_advice(|| "k", advices[x], y, || v)
-                                
-                            }, 
+
+                            },
                             _ => unimplemented!(),
                         },
                         ValType::PrevAssigned(v) => match &self {
@@ -348,30 +365,27 @@ impl VarTensor {
                             Err(e)
                         }
                     }
-              
-                })?.into()} else {
-                    v.into()
-                }; 
+
+                })?.into()};
                 let total_used_len = res.len();
                 res.remove_every_n(self.col_size(), offset).unwrap();
-                
+
                 res.reshape(dims).unwrap();
                 res.set_scale(values.scale());
 
-                if matches!(check_mode, CheckMode::SAFE) {     
+                if matches!(check_mode, CheckMode::SAFE) {
                      // during key generation this will be 0 so we use this as a flag to check
                      // TODO: this isn't very safe and would be better to get the phase directly
                     let is_assigned = !Into::<Tensor<i32>>::into(res.clone().get_inner().unwrap())
                     .iter()
                     .all(|&x| x == 0);
-                    if is_assigned {       
+                    if is_assigned {
                         assert_eq!(
                             Into::<Tensor<i32>>::into(values.get_inner().unwrap()),
                             Into::<Tensor<i32>>::into(res.get_inner().unwrap())
                     )};
                 }
 
-                
                 Ok((res, total_used_len))
             }
         }
