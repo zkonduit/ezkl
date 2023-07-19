@@ -245,6 +245,12 @@ jobs:
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_hashed_params_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed outputs)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_hashed_output_prove_and_verify --test-threads 1
+      - name: KZG prove and verify tests (EVM + encrypted inputs)
+        run: cargo nextest run --release --verbose tests_evm::kzg_evm_encrypted_input_prove_and_verify --test-threads 1
+      - name: KZG prove and verify tests (EVM + encrypted params)
+        run: cargo nextest run --release --verbose tests_evm::kzg_evm_encrypted_params_prove_and_verify --test-threads 1
+      - name: KZG prove and verify tests (EVM + encrypted outputs)
+        run: cargo nextest run --release --verbose tests_evm::kzg_evm_encrypted_output_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain inputs)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_input_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain outputs)

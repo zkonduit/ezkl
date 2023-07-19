@@ -546,7 +546,6 @@ mod native_tests {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
                     kzg_evm_on_chain_input_prove_and_verify(test.to_string(), "on-chain", "file");
@@ -557,7 +556,6 @@ mod native_tests {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
                     kzg_evm_on_chain_input_prove_and_verify(test.to_string(), "file", "on-chain");
@@ -569,7 +567,6 @@ mod native_tests {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
                     kzg_evm_on_chain_input_prove_and_verify(test.to_string(), "on-chain", "on-chain");
@@ -595,16 +592,15 @@ mod native_tests {
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
                     kzg_evm_prove_and_verify(test.to_string(), "private", "private", "public");
                 }
 
+
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_hashed_input_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
                     kzg_evm_prove_and_verify(test.to_string(), "hashed", "private", "private");
@@ -622,12 +618,34 @@ mod native_tests {
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_hashed_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
                     kzg_evm_prove_and_verify(test.to_string(), "private", "private", "hashed");
                 }
 
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_encrypted_input_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::mv_test_(test);
+                    crate::native_tests::start_anvil();
+                    kzg_evm_prove_and_verify(test.to_string(), "encrypted", "private", "private");
+                }
+
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_encrypted_params_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::mv_test_(test);
+                    crate::native_tests::start_anvil();
+                    kzg_evm_prove_and_verify(test.to_string(), "private", "encrypted", "public");
+                }
+
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_encrypted_output_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::mv_test_(test);
+                    crate::native_tests::start_anvil();
+                    kzg_evm_prove_and_verify(test.to_string(), "private", "private", "encrypted");
+                }
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_fuzz_(test: &str) {
