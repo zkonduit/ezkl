@@ -215,12 +215,12 @@ fn load_slice_op(
     Ok(op.clone())
 }
 
-/// Matches an onnx node to a [OpKind] and returns a [Node] with the corresponding [OpKind].  
+/// Matches an onnx node to a [crate::circuit::Op].
 /// Arguments
 /// * `idx` - the index of the node in the graph.
 /// * `scale` - the global (circuit) scale.
-/// * `public_params` - whether the node's parameters are public.
-/// * `node` - the [OnnxNode] to be converted into a [Node].
+/// * `param_visibility` - [Visibility] of the node.
+/// * `node` - the [OnnxNode] to be matched.
 /// * `inputs` - the node's inputs.
 pub fn new_op_from_onnx(
     idx: usize,
@@ -764,7 +764,7 @@ pub fn new_op_from_onnx(
     })
 }
 
-/// Extracts the raw values from a [Constant] op.
+/// Extracts the raw values from a [crate::circuit::ops::Constant] op.
 pub fn extract_const_raw_values(boxed_op: Box<dyn crate::circuit::Op<Fp>>) -> Option<Tensor<f32>> {
     boxed_op
         .as_any()
@@ -772,7 +772,7 @@ pub fn extract_const_raw_values(boxed_op: Box<dyn crate::circuit::Op<Fp>>) -> Op
         .map(|c| c.raw_values.clone())
 }
 
-/// Extracts the quantized values from a [Constant] op.
+/// Extracts the quantized values from a [crate::circuit::ops::Constant] op.
 pub fn extract_const_quantized_values(
     boxed_op: Box<dyn crate::circuit::Op<Fp>>,
 ) -> Option<ValTensor<Fp>> {
