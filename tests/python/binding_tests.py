@@ -468,7 +468,8 @@ async def aggregate_and_verify_aggr():
     )
 
     # mock aggregate
-    ezkl.mock_aggregate([proof_path], 20)
+    res = ezkl.mock_aggregate([proof_path], 20)
+    assert res == True
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')
     aggregate_vk_path = os.path.join(folder_path, 'aggr_1l_relu.vk')
