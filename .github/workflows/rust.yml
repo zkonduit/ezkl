@@ -392,10 +392,11 @@ jobs:
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
-      - name: KZG prove and verify aggr tests
-        run: RUST_LOG=trace cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ --test-threads 8 -- --include-ignored
       - name: KZG prove and verify aggr tests (encrypted inputs)
         run: RUST_LOG=trace cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_encrypted_input_prove_and_verify_ --test-threads 8 -- --include-ignored
+      - name: KZG prove and verify aggr tests
+        run: RUST_LOG=trace cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ --test-threads 8 -- --include-ignored
+      
 
   examples:
     runs-on: ubuntu-latest-32-cores
