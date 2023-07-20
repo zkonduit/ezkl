@@ -191,7 +191,7 @@ pub struct CallsToAccount {
     /// A vector of tuples, where index 0 of tuples
     /// are the byte strings representing the ABI encoded function calls to
     /// read the data from the address. This call must return a single
-    /// elementary type (https://docs.soliditylang.org/en/v0.8.20/abi-spec.html#types).
+    /// elementary type (<https://docs.soliditylang.org/en/v0.8.20/abi-spec.html#types>).
     /// The second index of the tuple is the number of decimals for f32 conversion.
     /// We don't support dynamic types currently.
     pub call_data: Vec<(Call, Decimals)>,

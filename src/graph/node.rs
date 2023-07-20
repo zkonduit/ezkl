@@ -27,16 +27,10 @@ fn display_opkind(v: &Box<dyn Op<Fp>>) -> String {
     v.as_string()
 }
 
-/// A single operation in a Model.
-/// # Arguments:
-/// * `opkind` - [OpKind] enum, i.e what operation this node represents.
-/// * `out_scale` - The denominator in the fixed point representation. Tensors of differing scales should not be combined.
-/// * `out_dims` - The shape of the activations which enter and leave the self.
-/// * `inputs` - The indices of other nodes that feed into this self.
-/// * `idx` - The node's unique identifier.
+/// A single operation in a [crate::graph::Model].
 #[derive(Clone, Debug, Tabled)]
 pub struct Node {
-    /// [OpKind] enum, i.e what operation this node represents.
+    /// [Op] i.e what operation this node represents.
     #[tabled(display_with = "display_opkind")]
     pub opkind: Box<dyn Op<Fp>>,
     /// The denominator in the fixed point representation for the node's output. Tensors of differing scales should not be combined.

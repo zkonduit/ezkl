@@ -480,8 +480,8 @@ impl Model {
     /// # Arguments
     /// * `graph` - A tract graph.
     /// * `run_args` - [RunArgs]
-    /// * `mode` - The [Mode] we're using the model in.
     /// * `visibility` - Which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
+    /// * `input_scales` - The scales of the model's inputs.
     pub fn nodes_from_graph(
         graph: &Graph<TypedFact, Box<dyn TypedOp>>,
         run_args: &RunArgs,

@@ -276,7 +276,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         Ok(slice)
     }
 
-    /// Fetches the inner tensor as a [Tensor<Value<F>>]
+    /// Fetches the inner tensor as a `Tensor<ValType<F>`
     pub fn get_inner_tensor(&self) -> Result<Tensor<ValType<F>>, TensorError> {
         Ok(match self {
             ValTensor::Value { inner: v, .. } => v.clone(),
@@ -284,7 +284,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         })
     }
 
-    /// Fetches the inner tensor as a [Tensor<Value<F>>]
+    /// Fetches the inner tensor as a `Tensor<Value<F>>`
     pub fn get_inner(&self) -> Result<Tensor<Value<F>>, TensorError> {
         Ok(match self {
             ValTensor::Value { inner: v, .. } => v.map(|x| match x {

@@ -2007,7 +2007,6 @@ pub mod nonlinearities {
     ///
     /// assert_eq!(result, expected);
     /// ```
-    /// ```
     pub fn exp(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
         // calculate value of output
         let mut output: Tensor<i128> = a.clone();
