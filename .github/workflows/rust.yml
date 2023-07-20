@@ -368,15 +368,15 @@ jobs:
 
   prove-and-verify-aggr-evm-tests:
     runs-on: self-hosted
-    # needs:
-    #   [
-    #     build,
-    #     build-wasm,
-    #     library-tests,
-    #     mock-proving-tests,
-    #     mock-proving-tests-wasi,
-    #     python-tests,
-    #   ]
+    needs:
+      [
+        build,
+        build-wasm,
+        library-tests,
+        mock-proving-tests,
+        mock-proving-tests-wasi,
+        python-tests,
+      ]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -392,11 +392,9 @@ jobs:
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
-      - name: KZG prove and verify aggr tests (encrypted inputs)
-        run: RUST_LOG=trace cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_encrypted_input_prove_and_verify_ --test-threads 8 -- --include-ignored
-      - name: KZG prove and verify aggr tests
+      - name: KZG prove and verify aggr tests (1 with encrypted input)
         run: RUST_LOG=trace cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ --test-threads 8 -- --include-ignored
-      
+
 
   examples:
     runs-on: ubuntu-latest-32-cores
@@ -460,7 +458,7 @@ jobs:
 
   python-integration-tests:
       runs-on: 512gb
-      needs: [build, build-wasm, library-tests, docs]
+      # needs: [build, build-wasm, library-tests, docs]
       steps:
         - uses: actions/checkout@v3
         - uses: actions/setup-python@v4
