@@ -813,9 +813,9 @@ pub fn tensor_to_valtensor<F: PrimeField + TensorType + PartialOrd>(
 /// Flatten a vector of [ValTensor]s into a single [ValTensor].
 pub(crate) fn flatten_valtensors(
     tensors: Vec<ValTensor<Fp>>,
-) -> Result<ValTensor<Fp>, Box<dyn std::error::Error>> {
+) -> Result<Vec<ValTensor<Fp>>, Box<dyn std::error::Error>> {
     if tensors.is_empty() {
-        return Ok(Tensor::<Fp>::new(None, &[0])?.into());
+        return Ok(vec![]);
     }
 
     let mut merged: Vec<ValType<Fp>> = tensors[0]
@@ -829,7 +829,7 @@ pub(crate) fn flatten_valtensors(
     }
 
     let tensor = Tensor::new(Some(&merged), &[merged.len()])?;
-    Ok(tensor.into())
+    Ok(vec![tensor.into()])
 }
 
 /// Split a [ValTensor] into a vector of [ValTensor]s.
@@ -865,7 +865,8 @@ pub mod tests {
 
         assert_eq!(flattened.len(), 30);
 
-        let split = split_valtensor(flattened, vec![vec![2, 5], vec![10], vec![5, 2]]).unwrap();
+        let split =
+            split_valtensor(flattened[0].clone(), vec![vec![2, 5], vec![10], vec![5, 2]]).unwrap();
 
         assert_eq!(split.len(), 3);
         assert_eq!(split[0].len(), 10);

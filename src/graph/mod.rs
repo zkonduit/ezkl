@@ -783,14 +783,13 @@ impl GraphCircuit {
 
         if visibility.params.requires_processing() {
             let params = self.model.get_all_consts();
-            let flattened_params = flatten_valtensors(params)?
-                .get_felt_evals()?
-                .into_iter()
-                .into();
-            processed_params = Some(GraphModules::forward(
-                &[flattened_params],
-                visibility.params,
-            )?);
+            let flattened_params = flatten_valtensors(params)?;
+            let flattened_params = if !flattened_params.is_empty() {
+                vec![flattened_params[0].get_felt_evals()?.into_iter().into()]
+            } else {
+                vec![]
+            };
+            processed_params = Some(GraphModules::forward(&flattened_params, visibility.params)?);
         }
 
         let model_results = self.model.forward(inputs)?;
@@ -992,16 +991,11 @@ impl Circuit<Fp> for GraphCircuit {
         )?;
 
         // now we need to flatten the params
-        let mut flattened_params = vec![];
-        if !self.model.get_all_consts().is_empty() {
-            flattened_params =
-                vec![
-                    flatten_valtensors(self.model.get_all_consts()).map_err(|_| {
-                        log::error!("failed to flatten params");
-                        PlonkError::Synthesis
-                    })?,
-                ];
-        }
+        let mut flattened_params =
+            flatten_valtensors(self.model.get_all_consts()).map_err(|_| {
+                log::error!("failed to flatten params");
+                PlonkError::Synthesis
+            })?;
 
         // now do stuff to the model params
         GraphModules::layout(

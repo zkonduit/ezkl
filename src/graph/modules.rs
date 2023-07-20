@@ -62,7 +62,7 @@ impl ModuleConfigs {
         if (visibility.input.is_encrypted()
             || visibility.output.is_encrypted()
             || visibility.params.is_encrypted())
-            && module_size.elgamal.1[1] > 0
+            && module_size.elgamal.1[0] > 0
         {
             config.elgamal = Some(ElGamalGadget::configure(cs))
         };
@@ -136,7 +136,7 @@ pub struct ElGamalResult {
     /// ElGamal variables
     pub variables: ElGamalVariables,
     /// ElGamal ciphertexts
-    pub ciphertexts: Vec<Vec<Fp>>,
+    pub ciphertexts: Vec<Fp>,
 }
 
 /// Result from a forward pass
@@ -152,7 +152,7 @@ pub struct ModuleForwardResult {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ModuleInstances {
     poseidon: Vec<Fp>,
-    elgamal: Vec<Vec<Fp>>,
+    elgamal: Vec<Fp>,
 }
 
 impl ModuleInstances {
@@ -166,7 +166,7 @@ impl ModuleInstances {
         }
         if !self.elgamal.is_empty() {
             // we extend as its a 2D vector
-            instances.extend(self.elgamal.clone());
+            instances.push(self.elgamal.clone());
         }
         instances
     }
@@ -243,14 +243,9 @@ impl GraphModules {
                 .poseidon
                 .extend(module_res.clone().unwrap().poseidon_hash.unwrap());
         } else if visibility.is_encrypted() {
-            let ciphers = module_res.clone().unwrap().elgamal.unwrap().ciphertexts;
-            if instances.elgamal.is_empty() {
-                instances.elgamal = ciphers;
-            } else if !ciphers[1].is_empty() {
-                for (i, c) in ciphers.iter().enumerate().take(instances.elgamal.len()) {
-                    instances.elgamal[i].extend(c);
-                }
-            }
+            instances
+                .elgamal
+                .extend(module_res.clone().unwrap().elgamal.unwrap().ciphertexts);
         }
     }
 
@@ -284,11 +279,12 @@ impl GraphModules {
                 .iter()
                 .map(|x| x.iter().product::<usize>())
                 .sum::<usize>();
-            // 3 constraints for each ciphertext c1 and sk
+
+            // 4 constraints for each ciphertext c1, c2, and sk
             if total_len > 0 {
                 // add the 1 time fixed cost of maingate + ecc chips
                 sizes.elgamal.0 += ELGAMAL_FIXED_COST_ESTIMATE * ((sizes.elgamal.0 == 0) as usize);
-                sizes.elgamal.1[1] += 4;
+                sizes.elgamal.1[0] += 4;
             }
             // 1 constraint for each ciphertext c2 elem
             for shape in shapes {
@@ -424,17 +420,10 @@ impl GraphModules {
 
         if element_visibility.is_encrypted() {
             let variables = ElGamalVariables::gen_random(&mut rng);
-
-            let elgamal_outputs = inputs.iter().fold(vec![], |mut acc: Vec<Vec<Fp>>, x| {
-                let ciphers = ElGamalGadget::run((x.to_vec(), variables.clone())).unwrap();
-                if acc.is_empty() {
-                    ciphers
-                } else {
-                    for i in 0..acc.len() {
-                        acc[i].extend(ciphers[i].clone());
-                    }
-                    acc
-                }
+            let elgamal_outputs = inputs.iter().fold(vec![], |mut acc, x| {
+                let res = ElGamalGadget::run((x.to_vec(), variables.clone())).unwrap()[0].clone();
+                acc.extend(res);
+                acc
             });
 
             elgamal = Some(ElGamalResult {

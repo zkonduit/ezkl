@@ -539,9 +539,7 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
         // `_runtime_bytecode` exceeds the limit
         panic!(
             "Solidity runtime bytecode size is: {:#?},
-            which exceeds 24577 bytes limit.
-            Try setting '--optimzer-runs 1' when generating the verifier
-            so SOLC can optimize for the smallest deployment",
+            which exceeds 24577 bytes limit.",
             size
         );
     }

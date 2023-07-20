@@ -41,7 +41,7 @@ const C2_H: usize = 3;
 const NUMBER_OF_LIMBS: usize = 4;
 const BIT_LEN_LIMB: usize = 64;
 /// The number of instance columns used by the ElGamal circuit.
-pub const NUM_INSTANCE_COLUMNS: usize = 2;
+pub const NUM_INSTANCE_COLUMNS: usize = 1;
 
 /// The poseidon hash width.
 pub const POSEIDON_WIDTH: usize = 2;
@@ -114,18 +114,13 @@ impl ElGamalChip {
     fn configure(meta: &mut ConstraintSystem<Fr>) -> ElGamalConfig {
         let main_gate_config = MainGate::<Fr>::configure(meta);
         let advices = main_gate_config.advices();
+        let main_fixed_columns = main_gate_config.fixed();
+        let ciphertext_c1_exp_col = main_gate_config.instance();
 
-        let fixed_columns = [
-            meta.fixed_column(),
-            meta.fixed_column(),
-            meta.fixed_column(),
-            meta.fixed_column(),
-        ];
+        let rc_a = main_fixed_columns[3..5].try_into().unwrap();
+        let rc_b = [meta.fixed_column(), meta.fixed_column()];
 
-        meta.enable_constant(fixed_columns[3]);
-
-        let rc_a = fixed_columns[0..2].try_into().unwrap();
-        let rc_b = fixed_columns[2..4].try_into().unwrap();
+        meta.enable_constant(rc_b[0]);
 
         let rns = Rns::<Fq, Fr, NUMBER_OF_LIMBS, BIT_LEN_LIMB>::construct();
 
@@ -138,9 +133,6 @@ impl ElGamalChip {
             composition_bit_lens,
             overflow_bit_lens,
         );
-
-        let ciphertext_c1_exp_col = meta.instance_column();
-        meta.enable_equality(ciphertext_c1_exp_col);
 
         let poseidon_config =
             PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, 2>::configure_with_cols(
@@ -497,9 +489,8 @@ impl Module<Fr> for ElGamalGadget {
 
     fn instance_increment_input(&self) -> Vec<usize> {
         // in order
-        // 1. empty maingate instance
-        // 2. c1, sk_hash, c2_hash
-        vec![0, 4]
+        // 1. c1, sk_hash, c2_hash
+        vec![4]
     }
 
     fn run(input: Self::RunInputs) -> Result<Vec<Vec<Fr>>, Box<dyn std::error::Error>> {
@@ -510,7 +501,7 @@ impl Module<Fr> for ElGamalGadget {
 
         let cipher = Self::encrypt(var.pk, input, var.r);
         // keep 1 empty (maingate instance variable).
-        let mut public_inputs: Vec<Vec<Fr>> = vec![vec![]];
+        let mut public_inputs: Vec<Vec<Fr>> = vec![];
         public_inputs.extend(Self::get_instances(&cipher, Self::hash_sk(var.sk)));
 
         log::trace!("run (N={:?}) took: {:?}", len, start_time.elapsed());
@@ -599,6 +590,8 @@ impl Module<Fr> for ElGamalGadget {
             self.config.config_range(layouter)?;
         }
 
+        let row_offset = row_offsets[0];
+
         let (msg_var, sk_var) = self.layout_inputs(layouter, inputs)?;
 
         let [s, c1] = self.verify_secret(
@@ -618,17 +611,17 @@ impl Module<Fr> for ElGamalGadget {
             .constrain_instance(
                 c1.x().native().cell(),
                 self.config.ciphertext_c1_exp_col,
-                C1_X + row_offsets[1],
+                C1_X + row_offset,
             )
             .and(layouter.constrain_instance(
                 c1.y().native().cell(),
                 self.config.ciphertext_c1_exp_col,
-                C1_Y + row_offsets[1],
+                C1_Y + row_offset,
             ))
             .and(layouter.constrain_instance(
                 sk_hash.cell(),
                 self.config.ciphertext_c1_exp_col,
-                SK_H + row_offsets[1],
+                SK_H + row_offset,
             ))?;
 
         let c2: Result<Vec<AssignedCell<Fr, Fr>>, _> = msg_var
@@ -654,7 +647,7 @@ impl Module<Fr> for ElGamalGadget {
         layouter.constrain_instance(
             c2_hash.cell(),
             self.config.ciphertext_c1_exp_col,
-            C2_H + row_offsets[1],
+            C2_H + row_offset,
         )?;
 
         let assigned_input: Tensor<ValType<Fr>> =
