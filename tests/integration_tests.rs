@@ -582,7 +582,17 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_aggr_prove_and_verify(test.to_string());
+                    kzg_evm_aggr_prove_and_verify(test.to_string(), "private", "private", "public");
+                }
+
+                // these take a particularly long time to run
+                #(#[test_case(TESTS_EVM_AGGR[N])])*
+                #[ignore]
+                fn kzg_evm_aggr_encrypted_input_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    crate::native_tests::mv_test_(test);
+                    crate::native_tests::start_anvil();
+                    kzg_evm_aggr_prove_and_verify(test.to_string(), "encrypted", "private", "public");
                 }
             });
 
@@ -1109,7 +1119,12 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_evm_aggr_prove_and_verify(example_name: String) {
+    fn kzg_evm_aggr_prove_and_verify(
+        example_name: String,
+        input_visibility: &str,
+        param_visibility: &str,
+        output_visibility: &str,
+    ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1120,6 +1135,9 @@ mod native_tests {
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
+                &format!("--input-visibility={}", input_visibility),
+                &format!("--param-visibility={}", param_visibility),
+                &format!("--output-visibility={}", output_visibility),
             ])
             .status()
             .expect("failed to execute process");
