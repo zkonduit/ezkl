@@ -292,15 +292,11 @@ use modules::ElGamalResult;
 #[cfg(feature = "python-bindings")]
 fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &ElGamalResult) {
     let results_dict = PyDict::new(py);
-    let cipher_text: Vec<Vec<[u64; 4]>> = elgamal_results
+    let cipher_text: Vec<[u64; 4]> = elgamal_results
         .ciphertexts
         .iter()
-        .map(|v| {
-            v.iter()
-                .map(field_to_vecu64_montgomery)
-                .collect::<Vec<[u64; 4]>>()
-        })
-        .collect::<Vec<Vec<[u64; 4]>>>();
+        .map(field_to_vecu64_montgomery)
+        .collect();
     results_dict.set_item("ciphertexts", cipher_text).unwrap();
 
     let variables_dict = PyDict::new(py);
