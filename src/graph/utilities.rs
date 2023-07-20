@@ -863,7 +863,7 @@ pub mod tests {
         let flattened =
             flatten_valtensors(vec![tensor1.into(), tensor2.into(), tensor3.into()]).unwrap();
 
-        assert_eq!(flattened.len(), 30);
+        assert_eq!(flattened[0].len(), 30);
 
         let split =
             split_valtensor(flattened[0].clone(), vec![vec![2, 5], vec![10], vec![5, 2]]).unwrap();
