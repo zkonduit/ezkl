@@ -246,7 +246,7 @@ impl GraphModules {
             let ciphers = module_res.clone().unwrap().elgamal.unwrap().ciphertexts;
             if instances.elgamal.is_empty() {
                 instances.elgamal = ciphers;
-            } else if !ciphers[2].is_empty() {
+            } else if !ciphers[1].is_empty() {
                 for (i, c) in ciphers.iter().enumerate().take(instances.elgamal.len()) {
                     instances.elgamal[i].extend(c);
                 }
