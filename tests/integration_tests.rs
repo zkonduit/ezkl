@@ -586,6 +586,7 @@ mod native_tests {
                 }
 
                 // these take a particularly long time to run
+                #[test]
                 #[ignore]
                 fn kzg_evm_aggr_prove_and_verify_encrypted_input_() {
                     let test = "1l_mlp";

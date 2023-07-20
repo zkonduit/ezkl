@@ -136,7 +136,9 @@ pub struct ElGamalResult {
     /// ElGamal variables
     pub variables: ElGamalVariables,
     /// ElGamal ciphertexts
-    pub ciphertexts: Vec<Fp>,
+    pub ciphertexts: Vec<Vec<Fp>>,
+    /// ElGamal encrypted message
+    pub encrypted_messages: Vec<Vec<Fp>>,
 }
 
 /// Result from a forward pass
@@ -243,9 +245,16 @@ impl GraphModules {
                 .poseidon
                 .extend(module_res.clone().unwrap().poseidon_hash.unwrap());
         } else if visibility.is_encrypted() {
-            instances
-                .elgamal
-                .extend(module_res.clone().unwrap().elgamal.unwrap().ciphertexts);
+            instances.elgamal.extend(
+                module_res
+                    .clone()
+                    .unwrap()
+                    .elgamal
+                    .unwrap()
+                    .ciphertexts
+                    .into_iter()
+                    .flatten(),
+            );
         }
     }
 
@@ -420,15 +429,22 @@ impl GraphModules {
 
         if element_visibility.is_encrypted() {
             let variables = ElGamalVariables::gen_random(&mut rng);
-            let elgamal_outputs = inputs.iter().fold(vec![], |mut acc, x| {
+            let ciphertexts = inputs.iter().fold(vec![], |mut acc, x| {
                 let res = ElGamalGadget::run((x.to_vec(), variables.clone())).unwrap()[0].clone();
-                acc.extend(res);
+                acc.push(res);
+                acc
+            });
+
+            let encrypted_messages = inputs.iter().fold(vec![], |mut acc, x| {
+                let res = ElGamalGadget::encrypt(variables.pk, x.to_vec(), variables.r).1;
+                acc.push(res);
                 acc
             });
 
             elgamal = Some(ElGamalResult {
                 variables,
-                ciphertexts: elgamal_outputs,
+                ciphertexts,
+                encrypted_messages,
             });
         }
 
