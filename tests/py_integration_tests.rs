@@ -99,7 +99,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 4] = [
+    const TESTS: [&str; 5] = [
         "encrypted_vis.ipynb",
         "hashed_vis.ipynb",
         "simple_demo.ipynb",
