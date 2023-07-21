@@ -1246,7 +1246,7 @@ mod native_tests {
             .args([
                 "setup-aggregate",
                 "--aggregation-snarks",
-                &format!("{}/{}/proof.pf", test_dir, example_name),
+                &format!("{}/{}/evm.pf", test_dir, example_name),
                 "--logrows=23",
                 "--vk-path",
                 &format!("{}/{}/evm_aggr.vk", test_dir, example_name),
