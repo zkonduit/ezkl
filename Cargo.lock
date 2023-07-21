@@ -1108,7 +1108,7 @@ checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#7070cbc6cfa4bbee66ad5e06459a680d91210bcf"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#4f544cede5b9db073d05df61a42d7886788bb526"
 dependencies = [
  "integer",
  "num-bigint",
@@ -2078,7 +2078,7 @@ dependencies = [
 [[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#7070cbc6cfa4bbee66ad5e06459a680d91210bcf"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#4f544cede5b9db073d05df61a42d7886788bb526"
 dependencies = [
  "halo2_proofs",
  "num-bigint",
@@ -2418,7 +2418,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#7070cbc6cfa4bbee66ad5e06459a680d91210bcf"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#4f544cede5b9db073d05df61a42d7886788bb526"
 dependencies = [
  "maingate",
  "num-bigint",
@@ -2661,7 +2661,7 @@ checksum = "b06a4cde4c0f271a446782e3eff8de789548ce57dbc8eca9292c27f4a42004b4"
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#7070cbc6cfa4bbee66ad5e06459a680d91210bcf"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#4f544cede5b9db073d05df61a42d7886788bb526"
 dependencies = [
  "halo2wrong",
  "num-bigint",

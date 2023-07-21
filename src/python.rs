@@ -212,6 +212,20 @@ fn mock(witness: PathBuf, model: PathBuf, settings_path: PathBuf) -> PyResult<bo
     Ok(true)
 }
 
+/// mocks the aggregate prover
+#[pyfunction(signature = (
+    aggregation_snarks,
+    logrows,
+))]
+fn mock_aggregate(aggregation_snarks: Vec<PathBuf>, logrows: u32) -> PyResult<bool> {
+    crate::execute::mock_aggregate(aggregation_snarks, logrows).map_err(|e| {
+        let err_str = format!("Failed to run mock: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
+
+    Ok(true)
+}
+
 /// runs the prover on a set of inputs
 #[pyfunction(signature = (
     model,
@@ -564,6 +578,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(gen_settings, m)?)?;
     m.add_function(wrap_pyfunction!(calibrate_settings, m)?)?;
     m.add_function(wrap_pyfunction!(aggregate, m)?)?;
+    m.add_function(wrap_pyfunction!(mock_aggregate, m)?)?;
     m.add_function(wrap_pyfunction!(verify_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_evm, m)?)?;

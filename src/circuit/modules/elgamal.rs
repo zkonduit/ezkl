@@ -10,10 +10,6 @@ use crate::circuit::modules::poseidon::spec::PoseidonSpec;
 use crate::tensor::{Tensor, ValTensor, ValType};
 use add_chip::{AddChip, AddConfig, AddInstruction};
 use ark_std::rand::{CryptoRng, RngCore};
-use halo2_gadgets::poseidon::{
-    primitives::{self as poseidon, ConstantLength},
-    Hash as PoseidonHash, Pow5Chip as PoseidonChip, Pow5Config as PoseidonConfig,
-};
 use halo2_proofs::arithmetic::Field;
 use halo2_proofs::circuit::{AssignedCell, Chip, Layouter, Value};
 use halo2_proofs::plonk;
@@ -32,20 +28,27 @@ use std::ops::{Mul, MulAssign};
 use std::rc::Rc;
 use std::vec;
 
+use super::poseidon::{PoseidonChip, PoseidonConfig};
 use super::Module;
 
 // Absolute offsets for public inputs.
 const C1_X: usize = 0;
 const C1_Y: usize = 1;
 const SK_H: usize = 2;
+const C2_H: usize = 3;
 
 ///
 const NUMBER_OF_LIMBS: usize = 4;
 const BIT_LEN_LIMB: usize = 64;
 /// The number of instance columns used by the ElGamal circuit.
-pub const NUM_INSTANCE_COLUMNS: usize = 3;
+pub const NUM_INSTANCE_COLUMNS: usize = 1;
 
-type CircuitHash = PoseidonHash<Fr, PoseidonChip<Fr, 2, 1>, PoseidonSpec, ConstantLength<2>, 2, 1>;
+/// The poseidon hash width.
+pub const POSEIDON_WIDTH: usize = 2;
+/// The poseidon hash rate.
+pub const POSEIDON_RATE: usize = 1;
+/// The poseidon len
+pub const POSEIDON_LEN: usize = 2;
 
 #[derive(Debug)]
 /// A chip implementing ElGamal encryption.
@@ -55,7 +58,7 @@ pub struct ElGamalChip {
     /// The ECC chip.
     ecc: BaseFieldEccChip<G1Affine, NUMBER_OF_LIMBS, BIT_LEN_LIMB>,
     /// The Poseidon hash chip.
-    poseidon: PoseidonChip<Fr, 2, 1>,
+    poseidon: PoseidonChip<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN>,
     /// The addition chip.
     add: AddChip,
 }
@@ -65,11 +68,10 @@ pub struct ElGamalChip {
 pub struct ElGamalConfig {
     main_gate_config: MainGateConfig,
     range_config: RangeConfig,
-    poseidon_config: PoseidonConfig<Fr, 2, 1>,
+    poseidon_config: PoseidonConfig<POSEIDON_WIDTH, POSEIDON_RATE>,
     add_config: AddConfig,
     plaintext_col: Column<Advice>,
     ciphertext_c1_exp_col: Column<Instance>,
-    ciphertext_c2_exp_col: Column<Instance>,
 }
 
 impl ElGamalConfig {
@@ -102,7 +104,7 @@ impl ElGamalChip {
     pub fn new(p: ElGamalConfig) -> ElGamalChip {
         ElGamalChip {
             ecc: BaseFieldEccChip::new(p.ecc_chip_config()),
-            poseidon: PoseidonChip::construct(p.poseidon_config.clone()),
+            poseidon: PoseidonChip::new(p.poseidon_config.clone()),
             add: AddChip::construct(p.add_config.clone()),
             config: p,
         }
@@ -112,18 +114,13 @@ impl ElGamalChip {
     fn configure(meta: &mut ConstraintSystem<Fr>) -> ElGamalConfig {
         let main_gate_config = MainGate::<Fr>::configure(meta);
         let advices = main_gate_config.advices();
+        let main_fixed_columns = main_gate_config.fixed();
+        let ciphertext_c1_exp_col = main_gate_config.instance();
 
-        let fixed_columns = [
-            meta.fixed_column(),
-            meta.fixed_column(),
-            meta.fixed_column(),
-            meta.fixed_column(),
-        ];
+        let rc_a = main_fixed_columns[3..5].try_into().unwrap();
+        let rc_b = [meta.fixed_column(), meta.fixed_column()];
 
-        meta.enable_constant(fixed_columns[3]);
-
-        let rc_a = fixed_columns[0..2].try_into().unwrap();
-        let rc_b = fixed_columns[2..4].try_into().unwrap();
+        meta.enable_constant(rc_b[0]);
 
         let rns = Rns::<Fq, Fr, NUMBER_OF_LIMBS, BIT_LEN_LIMB>::construct();
 
@@ -137,21 +134,17 @@ impl ElGamalChip {
             overflow_bit_lens,
         );
 
-        let poseidon_config = PoseidonChip::configure::<PoseidonSpec>(
-            meta,
-            advices[1..3].try_into().unwrap(),
-            advices[0],
-            rc_a,
-            rc_b,
-        );
+        let poseidon_config =
+            PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, 2>::configure_with_cols(
+                meta,
+                advices[0],
+                rc_a,
+                rc_b,
+                advices[1..3].try_into().unwrap(),
+                None,
+            );
 
         let add_config = AddChip::configure(meta, advices[0], advices[1], advices[2]);
-
-        let ciphertext_c1_exp_col = meta.instance_column();
-        meta.enable_equality(ciphertext_c1_exp_col);
-
-        let ciphertext_c2_exp_col = meta.instance_column();
-        meta.enable_equality(ciphertext_c2_exp_col);
 
         let plaintext_col = advices[1];
 
@@ -162,7 +155,6 @@ impl ElGamalChip {
             add_config,
             plaintext_col,
             ciphertext_c1_exp_col,
-            ciphertext_c2_exp_col,
         }
     }
 }
@@ -257,8 +249,10 @@ impl ElGamalGadget {
         let x = Integer::from_fe(*coords.x(), Self::rns());
         let y = Integer::from_fe(*coords.y(), Self::rns());
 
-        let hasher = poseidon::Hash::<Fr, PoseidonSpec, ConstantLength<2>, 2, 1>::init();
-        let dh = hasher.hash([x.native(), y.native()]); // this is Fq now :( (we need Fr)
+        let dh = PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN>::run(
+            [x.native(), y.native()].to_vec(),
+        )
+        .unwrap()[0][0];
 
         let mut c2 = vec![];
 
@@ -269,11 +263,16 @@ impl ElGamalGadget {
         (c1, c2)
     }
 
+    /// Hash the msssage to be used as a public input.
+    pub fn hash_encrypted_msg(msg: Vec<Fr>) -> Fr {
+        PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN>::run(msg).unwrap()
+            [0][0]
+    }
+
     /// Hash the secret key to be used as a public input.
     pub fn hash_sk(sk: Fr) -> Fr {
-        let hasher = poseidon::Hash::<Fr, PoseidonSpec, ConstantLength<2>, 2, 1>::init();
-        // this is Fq now :( (we need Fr)
-        hasher.hash([sk, sk])
+        PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN>::run(vec![sk, sk])
+            .unwrap()[0][0]
     }
 
     /// Decrypt a ciphertext using the secret key.
@@ -286,8 +285,10 @@ impl ElGamalGadget {
         let x = Integer::from_fe(*s.x(), Self::rns());
         let y = Integer::from_fe(*s.y(), Self::rns());
 
-        let hasher = poseidon::Hash::<Fr, PoseidonSpec, ConstantLength<2>, 2, 1>::init();
-        let dh = hasher.hash([x.native(), y.native()]); // this is Fq now :( (we need Fr)
+        let dh = PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN>::run(
+            [x.native(), y.native()].to_vec(),
+        )
+        .unwrap()[0][0];
 
         let mut msg = vec![];
         for encrypted_m in &c2 {
@@ -313,7 +314,40 @@ impl ElGamalGadget {
 
         c1_and_sk.push(sk_hash);
 
-        vec![c1_and_sk, cipher.1.clone()]
+        c1_and_sk.push(Self::hash_encrypted_msg(cipher.1.clone()));
+
+        vec![c1_and_sk]
+    }
+
+    pub(crate) fn verify_encrypted_msg_hash(
+        &self,
+        mut layouter: impl Layouter<Fr>,
+        config: &ElGamalConfig,
+        encrypted_msg: &[AssignedCell<Fr, Fr>],
+    ) -> Result<AssignedCell<Fr, Fr>, plonk::Error> {
+        let chip = ElGamalChip::new(config.clone());
+
+        // compute dh = poseidon_hash(randomness*pk)
+        let encrypted_msg_hash = {
+            let poseidon_message =
+                Tensor::from(encrypted_msg.iter().map(|m| ValType::from(m.clone())));
+
+            chip.poseidon.layout(
+                &mut layouter.namespace(|| "Poseidon hash (encrypted_msg)"),
+                &[poseidon_message.into()],
+                vec![],
+            )?
+        };
+
+        let encrypted_msg_hash = match &encrypted_msg_hash
+            .get_inner_tensor()
+            .map_err(|_| plonk::Error::Synthesis)?[0]
+        {
+            ValType::PrevAssigned(v) => v.clone(),
+            _ => panic!("poseidon hash should be an assigned value"),
+        };
+
+        Ok(encrypted_msg_hash)
     }
 
     /// Hash the secret key to be used as a public input.
@@ -327,12 +361,22 @@ impl ElGamalGadget {
 
         // compute dh = poseidon_hash(randomness*pk)
         let sk_hash = {
-            let poseidon_hasher =
-                CircuitHash::init(chip.poseidon, layouter.namespace(|| "Poseidon hasher"))?;
-            poseidon_hasher.hash(
-                layouter.namespace(|| "Poseidon hash (sk)"),
-                [sk.clone(), sk.clone()],
+            let poseidon_message =
+                Tensor::from([ValType::from(sk.clone()), ValType::from(sk.clone())].into_iter());
+
+            chip.poseidon.layout(
+                &mut layouter.namespace(|| "Poseidon hash (sk)"),
+                &[poseidon_message.into()],
+                vec![],
             )?
+        };
+
+        let sk_hash = match &sk_hash
+            .get_inner_tensor()
+            .map_err(|_| plonk::Error::Synthesis)?[0]
+        {
+            ValType::PrevAssigned(v) => v.clone(),
+            _ => panic!("poseidon hash should be an assigned value"),
         };
 
         Ok(sk_hash)
@@ -392,13 +436,24 @@ impl ElGamalGadget {
 
         // compute dh = poseidon_hash(randomness*pk)
         let dh = {
-            let poseidon_message = [s.x().native().clone(), s.y().native().clone()];
-            let poseidon_hasher =
-                CircuitHash::init(chip.poseidon, layouter.namespace(|| "Poseidon hasher"))?;
-            poseidon_hasher.hash(
-                layouter.namespace(|| "Poseidon hash (randomness*pk)"),
-                poseidon_message,
+            let poseidon_message = Tensor::from(
+                [
+                    ValType::from(s.x().native().clone()),
+                    ValType::from(s.y().native().clone()),
+                ]
+                .into_iter(),
+            );
+
+            chip.poseidon.layout(
+                &mut layouter.namespace(|| "Poseidon hasher"),
+                &[poseidon_message.into()],
+                vec![0],
             )?
+        };
+
+        let dh = match &dh.get_inner_tensor().map_err(|_| plonk::Error::Synthesis)?[0] {
+            ValType::PrevAssigned(v) => v.clone(),
+            _ => panic!("poseidon hash should be an assigned value"),
         };
 
         // compute c2 = poseidon_hash(nk, rho) + psi.
@@ -432,12 +487,10 @@ impl Module<Fr> for ElGamalGadget {
         "ElGamal"
     }
 
-    fn instance_increment_input(&self, var_len: Vec<usize>) -> Vec<usize> {
+    fn instance_increment_input(&self) -> Vec<usize> {
         // in order
-        // 1. empty maingate instance
-        // 2. c1, sk_hash
-        // 3. c2
-        vec![0, 3, var_len[0]]
+        // 1. c1, sk_hash, c2_hash
+        vec![4]
     }
 
     fn run(input: Self::RunInputs) -> Result<Vec<Vec<Fr>>, Box<dyn std::error::Error>> {
@@ -448,7 +501,7 @@ impl Module<Fr> for ElGamalGadget {
 
         let cipher = Self::encrypt(var.pk, input, var.r);
         // keep 1 empty (maingate instance variable).
-        let mut public_inputs: Vec<Vec<Fr>> = vec![vec![]];
+        let mut public_inputs: Vec<Vec<Fr>> = vec![];
         public_inputs.extend(Self::get_instances(&cipher, Self::hash_sk(var.sk)));
 
         log::trace!("run (N={:?}) took: {:?}", len, start_time.elapsed());
@@ -537,6 +590,8 @@ impl Module<Fr> for ElGamalGadget {
             self.config.config_range(layouter)?;
         }
 
+        let row_offset = row_offsets[0];
+
         let (msg_var, sk_var) = self.layout_inputs(layouter, inputs)?;
 
         let [s, c1] = self.verify_secret(
@@ -544,21 +599,6 @@ impl Module<Fr> for ElGamalGadget {
             &self.config,
             &sk_var,
         )?;
-
-        for (i, m) in msg_var.iter().enumerate() {
-            let c2 = self.verify_encryption(
-                layouter.namespace(|| "verify_encryption"),
-                &self.config,
-                m,
-                &s,
-            )?;
-
-            layouter.constrain_instance(
-                c2.cell(),
-                self.config.ciphertext_c2_exp_col,
-                i + row_offsets[2],
-            )?;
-        }
 
         // Force the public input to be the hash of the secret key so that we can ascertain decryption can happen
         let sk_hash = self.verify_sk_hash(
@@ -571,18 +611,44 @@ impl Module<Fr> for ElGamalGadget {
             .constrain_instance(
                 c1.x().native().cell(),
                 self.config.ciphertext_c1_exp_col,
-                C1_X + row_offsets[1],
+                C1_X + row_offset,
             )
             .and(layouter.constrain_instance(
                 c1.y().native().cell(),
                 self.config.ciphertext_c1_exp_col,
-                C1_Y + row_offsets[1],
+                C1_Y + row_offset,
             ))
             .and(layouter.constrain_instance(
                 sk_hash.cell(),
                 self.config.ciphertext_c1_exp_col,
-                SK_H + row_offsets[1],
+                SK_H + row_offset,
             ))?;
+
+        let c2: Result<Vec<AssignedCell<Fr, Fr>>, _> = msg_var
+            .iter()
+            .map(|m| {
+                self.verify_encryption(
+                    layouter.namespace(|| "verify_encryption"),
+                    &self.config,
+                    m,
+                    &s,
+                )
+            })
+            .collect();
+
+        let c2 = c2?;
+
+        let c2_hash = self.verify_encrypted_msg_hash(
+            layouter.namespace(|| "verify_c2_hash"),
+            &self.config,
+            &c2,
+        )?;
+
+        layouter.constrain_instance(
+            c2_hash.cell(),
+            self.config.ciphertext_c1_exp_col,
+            C2_H + row_offset,
+        )?;
 
         let assigned_input: Tensor<ValType<Fr>> =
             msg_var.iter().map(|e| ValType::from(e.clone())).into();
@@ -603,12 +669,12 @@ mod tests {
     use ark_std::test_rng;
     use halo2_proofs::{circuit::SimpleFloorPlanner, dev::MockProver, plonk::Circuit};
 
-    struct EncryptytionCircuit {
+    struct EncryptionCircuit {
         message: ValTensor<Fr>,
         variables: ElGamalVariables,
     }
 
-    impl Circuit<Fr> for EncryptytionCircuit {
+    impl Circuit<Fr> for EncryptionCircuit {
         type Config = ElGamalConfig;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = ();
@@ -683,7 +749,7 @@ mod tests {
 
         let message: Tensor<ValType<Fr>> = msg.into_iter().map(|m| Value::known(m).into()).into();
 
-        let circuit = EncryptytionCircuit {
+        let circuit = EncryptionCircuit {
             message: message.into(),
             variables: var,
         };

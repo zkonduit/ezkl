@@ -546,7 +546,6 @@ mod native_tests {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
                     kzg_evm_on_chain_input_prove_and_verify(test.to_string(), "on-chain", "file");
@@ -557,7 +556,6 @@ mod native_tests {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
                     kzg_evm_on_chain_input_prove_and_verify(test.to_string(), "file", "on-chain");
@@ -569,7 +567,6 @@ mod native_tests {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
                     kzg_evm_on_chain_input_prove_and_verify(test.to_string(), "on-chain", "on-chain");
@@ -585,7 +582,18 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
-                    kzg_evm_aggr_prove_and_verify(test.to_string());
+                    kzg_evm_aggr_prove_and_verify(test.to_string(), "private", "private", "public");
+                }
+
+                // these take a particularly long time to run
+                #[test]
+                #[ignore]
+                fn kzg_evm_aggr_prove_and_verify_encrypted_input_() {
+                    let test = "1l_mlp";
+                    crate::native_tests::init_binary();
+                    crate::native_tests::mv_test_(test);
+                    crate::native_tests::start_anvil();
+                    kzg_evm_aggr_prove_and_verify(test.to_string(), "encrypted", "private", "public");
                 }
             });
 
@@ -595,16 +603,15 @@ mod native_tests {
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
                     kzg_evm_prove_and_verify(test.to_string(), "private", "private", "public");
                 }
 
+
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_hashed_input_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
                     kzg_evm_prove_and_verify(test.to_string(), "hashed", "private", "private");
@@ -622,7 +629,6 @@ mod native_tests {
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_hashed_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-
                     crate::native_tests::mv_test_(test);
                     crate::native_tests::start_anvil();
                     kzg_evm_prove_and_verify(test.to_string(), "private", "private", "hashed");
@@ -1114,7 +1120,12 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_evm_aggr_prove_and_verify(example_name: String) {
+    fn kzg_evm_aggr_prove_and_verify(
+        example_name: String,
+        input_visibility: &str,
+        param_visibility: &str,
+        output_visibility: &str,
+    ) {
         let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1125,6 +1136,9 @@ mod native_tests {
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
+                &format!("--input-visibility={}", input_visibility),
+                &format!("--param-visibility={}", param_visibility),
+                &format!("--output-visibility={}", output_visibility),
             ])
             .status()
             .expect("failed to execute process");

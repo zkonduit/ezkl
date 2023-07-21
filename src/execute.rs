@@ -57,18 +57,18 @@ use snark_verifier::loader::evm;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
-#[cfg(not(target_arch = "wasm32"))]
-use std::process::Command;
+use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::ErrorKind::NotFound;
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::OnceLock;
-use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::{Cursor, Write};
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
+use std::process::Command;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::OnceLock;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
 use thiserror::Error;
@@ -78,24 +78,29 @@ static _SOLC_REQUIREMENT: OnceLock<bool> = OnceLock::new();
 #[cfg(not(target_arch = "wasm32"))]
 fn check_solc_requirement() {
     info!("checking solc installation..");
-    _SOLC_REQUIREMENT.get_or_init(|| {
-        match Command::new("solc").arg("--version").output() {
-            Ok(output) => {
-                #[cfg(not(target_arch = "wasm32"))]
-                debug!("solc output: {:#?}", output);
-                #[cfg(not(target_arch = "wasm32"))]
-                debug!("solc output success: {:#?}", output.status.success());
-                assert!(output.status.success(), "`solc` check failed: {}", String::from_utf8_lossy(&output.stderr));
-                #[cfg(not(target_arch = "wasm32"))]
-                debug!("solc check passed, proceeding");
-                true
-            }
-            Err(e) => {
-                if let NotFound = e.kind() {
-                    panic!("`solc` was not found! Consider using solc-select or check your PATH! {}", e);
-                } else {
-                    panic!("`solc` check failed: {}", e);
-                }
+    _SOLC_REQUIREMENT.get_or_init(|| match Command::new("solc").arg("--version").output() {
+        Ok(output) => {
+            #[cfg(not(target_arch = "wasm32"))]
+            debug!("solc output: {:#?}", output);
+            #[cfg(not(target_arch = "wasm32"))]
+            debug!("solc output success: {:#?}", output.status.success());
+            assert!(
+                output.status.success(),
+                "`solc` check failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            #[cfg(not(target_arch = "wasm32"))]
+            debug!("solc check passed, proceeding");
+            true
+        }
+        Err(e) => {
+            if let NotFound = e.kind() {
+                panic!(
+                    "`solc` was not found! Consider using solc-select or check your PATH! {}",
+                    e
+                );
+            } else {
+                panic!("`solc` check failed: {}", e);
             }
         }
     });
