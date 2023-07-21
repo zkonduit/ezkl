@@ -44,6 +44,10 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     },
     Identity,
     Reshape(Vec<usize>),
+    MoveAxis {
+        source: usize,
+        destination: usize,
+    },
     Gather {
         dim: usize,
         index: Tensor<usize>,
@@ -78,6 +82,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
     }
     fn as_string(&self) -> String {
         let name = match &self {
+            PolyOp::MoveAxis { .. } => "MOVEAXIS",
             PolyOp::Downsample { .. } => "DOWNSAMPLE",
             PolyOp::Resize { .. } => "RESIZE",
             PolyOp::Iff => "IFF",
@@ -122,6 +127,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 t.reshape(new_dims);
                 Ok(t)
             }
+            PolyOp::MoveAxis {
+                source,
+                destination,
+            } => inputs[0].move_axis(*source, *destination),
             PolyOp::Flatten(new_dims) => {
                 let mut t = inputs[0].clone();
                 t.reshape(new_dims);
@@ -225,6 +234,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
         let mut values = values.to_vec();
 
         Ok(Some(match self {
+            PolyOp::MoveAxis {
+                source,
+                destination,
+            } => layouts::move_axis(values[..].try_into()?, *source, *destination)?,
             PolyOp::Downsample {
                 axis,
                 stride,
@@ -328,6 +341,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
 
     fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
         match self {
+            PolyOp::MoveAxis { .. } => in_scales[0],
             PolyOp::Downsample { .. } => in_scales[0],
             PolyOp::Resize { .. } => in_scales[0],
             PolyOp::Iff => in_scales[1],

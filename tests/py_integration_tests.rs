@@ -69,9 +69,18 @@ mod py_tests {
                     "py-solc-x",
                     "web3",
                     "librosa",
+                    "keras",
+                    "tensorflow",
+                    "tf2onnx",
                 ])
                 .status()
                 .expect("failed to execute process");
+
+            let status = Command::new("pip")
+                .args(["install", "numpy==1.23"])
+                .status()
+                .expect("failed to execute process");
+
             assert!(status.success());
         });
     }
@@ -99,7 +108,8 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 5] = [
+    const TESTS: [&str; 6] = [
+        "keras_simple_demo.ipynb",
         "encrypted_vis.ipynb",
         "hashed_vis.ipynb",
         "simple_demo.ipynb",
@@ -117,7 +127,7 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=4 {
+            seq!(N in 0..=5 {
 
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
