@@ -8,7 +8,6 @@ use crate::circuit::CheckMode;
 use crate::tensor::TensorType;
 use clap::ValueEnum;
 use halo2_proofs::circuit::Value;
-use halo2_proofs::dev::MockProver;
 use halo2_proofs::plonk::{
     create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey,
 };
@@ -410,15 +409,6 @@ where
         + Ord,
     Scheme::Curve: Serialize + DeserializeOwned,
 {
-    // quickly mock prove as a sanity check
-    if check_mode == CheckMode::SAFE {
-        debug!("running mock prover");
-        let prover = MockProver::run(params.k(), &circuit, instances.clone())?;
-        prover
-            .verify()
-            .map_err(|e| Box::<dyn Error>::from(crate::execute::ExecutionError::VerifyError(e)))?;
-    }
-
     let mut transcript = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);
     let mut rng = OsRng;
     let number_instance = instances.iter().map(|x| x.len()).collect();

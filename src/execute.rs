@@ -17,7 +17,7 @@ use crate::pfsys::evm::evm_verify;
 use crate::pfsys::evm::{
     aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier, DeploymentCode, YulCode,
 };
-use crate::pfsys::{create_keys, load_vk, save_params, save_pk, Snark, TranscriptType};
+use crate::pfsys::{create_keys, load_pk, load_vk, save_params, save_pk, Snark, TranscriptType};
 use crate::pfsys::{create_proof_circuit, save_vk, srs::*, verify_proof_circuit};
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::types::H160;
@@ -270,10 +270,17 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             aggregation_snarks,
             logrows,
         } => mock_aggregate(aggregation_snarks, logrows),
+        Commands::SetupAggregate {
+            aggregation_snarks,
+            vk_path,
+            pk_path,
+            srs_path,
+            logrows,
+        } => setup_aggregate(aggregation_snarks, vk_path, pk_path, srs_path, logrows),
         Commands::Aggregate {
             proof_path,
             aggregation_snarks,
-            vk_path,
+            pk_path,
             srs_path,
             transcript,
             logrows,
@@ -281,7 +288,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => aggregate(
             proof_path,
             aggregation_snarks,
-            vk_path,
+            pk_path,
             srs_path,
             transcript,
             logrows,
@@ -1122,7 +1129,6 @@ pub(crate) async fn prove(
     check_mode: CheckMode,
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
     let data = GraphWitness::from_path(data_path)?;
-    use crate::pfsys::load_pk;
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, check_mode)?;
 
@@ -1488,10 +1494,37 @@ pub(crate) fn mock_aggregate(
     Ok(())
 }
 
+pub(crate) fn setup_aggregate(
+    aggregation_snarks: Vec<PathBuf>,
+    vk_path: PathBuf,
+    pk_path: PathBuf,
+    srs_path: PathBuf,
+    logrows: u32,
+) -> Result<(), Box<dyn Error>> {
+    // the K used for the aggregation circuit
+    let params = load_params_cmd(srs_path, logrows)?;
+
+    let mut snarks = vec![];
+    for proof_path in aggregation_snarks.iter() {
+        snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
+    }
+
+    let agg_circuit = AggregationCircuit::new(&params.get_g()[0].into(), snarks)?;
+    let agg_pk =
+        create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(&agg_circuit, &params)?;
+
+    let agg_vk = agg_pk.get_vk();
+
+    // now save
+    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, agg_vk)?;
+    save_pk::<KZGCommitmentScheme<Bn256>>(&pk_path, &agg_pk)?;
+    Ok(())
+}
+
 pub(crate) fn aggregate(
     proof_path: PathBuf,
     aggregation_snarks: Vec<PathBuf>,
-    vk_path: PathBuf,
+    pk_path: PathBuf,
     srs_path: PathBuf,
     transcript: TranscriptType,
     logrows: u32,
@@ -1504,6 +1537,8 @@ pub(crate) fn aggregate(
     for proof_path in aggregation_snarks.iter() {
         snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
     }
+
+    let agg_pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(pk_path, ())?;
     // proof aggregation
     #[cfg(not(target_arch = "wasm32"))]
     let pb = {
@@ -1514,10 +1549,6 @@ pub(crate) fn aggregate(
 
     {
         let agg_circuit = AggregationCircuit::new(&params.get_g()[0].into(), snarks)?;
-        let agg_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
-            &agg_circuit,
-            &params,
-        )?;
 
         let now = Instant::now();
         let snark = create_proof_circuit_kzg(
@@ -1537,7 +1568,6 @@ pub(crate) fn aggregate(
             elapsed.subsec_millis()
         );
         snark.save(&proof_path)?;
-        save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, agg_pk.get_vk())?;
     }
     #[cfg(not(target_arch = "wasm32"))]
     pb.finish_with_message("Done.");

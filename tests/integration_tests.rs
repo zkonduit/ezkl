@@ -1088,6 +1088,24 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+
+        // now setup-aggregate
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "setup-aggregate",
+                "--aggregation-snarks",
+                &format!("{}/{}/proof.pf", test_dir, example_name),
+                "--logrows=23",
+                "--vk-path",
+                &format!("{}/{}/aggr.vk", test_dir, example_name),
+                "--pk-path",
+                &format!("{}/{}/aggr.pk", test_dir, example_name),
+                &srs_path,
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "aggregate",
@@ -1096,8 +1114,8 @@ mod native_tests {
                 &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--proof-path",
                 &format!("{}/{}/aggr.pf", test_dir, example_name),
-                "--vk-path",
-                &format!("{}/{}/aggr.vk", test_dir, example_name),
+                "--pk-path",
+                &format!("{}/{}/aggr.pk", test_dir, example_name),
                 &srs_path,
                 "--transcript=blake",
             ])
@@ -1222,6 +1240,24 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+
+        // now setup-aggregate
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "setup-aggregate",
+                "--aggregation-snarks",
+                &format!("{}/{}/proof.pf", test_dir, example_name),
+                "--logrows=23",
+                "--vk-path",
+                &format!("{}/{}/evm_aggr.vk", test_dir, example_name),
+                "--pk-path",
+                &format!("{}/{}/evm_aggr.pk", test_dir, example_name),
+                &srs_path,
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "aggregate",
@@ -1230,8 +1266,8 @@ mod native_tests {
                 &format!("{}/{}/evm.pf", test_dir, example_name),
                 "--proof-path",
                 &format!("{}/{}/evm_aggr.pf", test_dir, example_name),
-                "--vk-path",
-                &format!("{}/{}/evm_aggr.vk", test_dir, example_name),
+                "--pk-path",
+                &format!("{}/{}/evm_aggr.pk", test_dir, example_name),
                 &srs_path,
                 "--transcript=evm",
             ])

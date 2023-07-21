@@ -312,6 +312,29 @@ fn verify(
     Ok(true)
 }
 
+#[pyfunction(signature = (
+    aggregation_snarks,
+    vk_path,
+    pk_path,
+    srs_path,
+    logrows,
+))]
+fn setup_aggregate(
+    aggregation_snarks: Vec<PathBuf>,
+    vk_path: PathBuf,
+    pk_path: PathBuf,
+    srs_path: PathBuf,
+    logrows: u32,
+) -> Result<bool, PyErr> {
+    crate::execute::setup_aggregate(aggregation_snarks, vk_path, pk_path, srs_path, logrows)
+        .map_err(|e| {
+            let err_str = format!("Failed to setup aggregate: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
+
+    Ok(true)
+}
+
 /// creates an aggregated proof
 #[pyfunction(signature = (
     proof_path,
@@ -579,6 +602,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(calibrate_settings, m)?)?;
     m.add_function(wrap_pyfunction!(aggregate, m)?)?;
     m.add_function(wrap_pyfunction!(mock_aggregate, m)?)?;
+    m.add_function(wrap_pyfunction!(setup_aggregate, m)?)?;
     m.add_function(wrap_pyfunction!(verify_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_evm, m)?)?;
