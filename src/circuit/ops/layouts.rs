@@ -1309,6 +1309,17 @@ pub fn reshape<F: PrimeField + TensorType + PartialOrd>(
     Ok(t)
 }
 
+/// Dummy (no contraints) move_axis layout
+pub fn move_axis<F: PrimeField + TensorType + PartialOrd>(
+    values: &[ValTensor<F>; 1],
+    source: usize,
+    destination: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let mut t = values[0].clone();
+    t.move_axis(source, destination)?;
+    Ok(t)
+}
+
 /// resize layout
 pub fn resize<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,

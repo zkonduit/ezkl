@@ -11,13 +11,12 @@ use log::{debug, warn};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::array::Gather;
 use tract_onnx::tract_core::ops::array::Slice;
+use tract_onnx::tract_core::ops::change_axes::AxisOp;
 use tract_onnx::tract_core::ops::cnn::DeconvUnary;
 use tract_onnx::tract_core::ops::einsum::EinSum;
-use tract_onnx::tract_core::ops::Downsample;
-
 use tract_onnx::tract_core::ops::element_wise::ElementWiseOp;
-
 use tract_onnx::tract_core::ops::nn::{LeakyRelu, Reduce, Softmax};
+use tract_onnx::tract_core::ops::Downsample;
 use tract_onnx::tract_hir::internal::DimLike;
 use tract_onnx::tract_hir::ops::cnn::ConvUnary;
 use tract_onnx::tract_hir::ops::konst::Const;
@@ -127,6 +126,23 @@ fn load_gather_op(
 ) -> Result<Gather, Box<dyn std::error::Error>> {
     // Extract the slope layer hyperparams
     let op: &Gather = match op.downcast_ref::<Gather>() {
+        Some(b) => b,
+        None => {
+            return Err(Box::new(GraphError::OpMismatch(idx, name)));
+        }
+    };
+
+    Ok(op.clone())
+}
+
+///
+fn load_axis_op(
+    op: &dyn tract_onnx::prelude::Op,
+    idx: usize,
+    name: String,
+) -> Result<AxisOp, Box<dyn std::error::Error>> {
+    // Extract the slope layer hyperparams
+    let op: &AxisOp = match op.downcast_ref::<AxisOp>() {
         Some(b) => b,
         None => {
             return Err(Box::new(GraphError::OpMismatch(idx, name)));
@@ -255,6 +271,20 @@ pub fn new_op_from_onnx(
             inputs.pop();
 
             Box::new(crate::circuit::ops::poly::PolyOp::Gather { dim: axis, index })
+        }
+        "MoveAxis" => {
+            let op = load_axis_op(node.op(), idx, node.op().name().to_string())?;
+            match op {
+                AxisOp::Move(from, to) => {
+                    let source = from.to_usize()?;
+                    let destination = to.to_usize()?;
+                    Box::new(crate::circuit::ops::poly::PolyOp::MoveAxis {
+                        source,
+                        destination,
+                    })
+                }
+                _ => todo!(),
+            }
         }
         "Concat" | "InferenceConcat" => {
             let op = load_concat_op(node.op(), idx, node.op().name().to_string())?;
@@ -746,7 +776,7 @@ pub fn new_op_from_onnx(
             );
             Box::new(PolyOp::Pad(padding_h, padding_w))
         }
-        "RmAxis" | "Reshape" => {
+        "RmAxis" | "Reshape" | "AddAxis" => {
             // Extract the slope layer hyperparams
             let shapes = node_output_shapes(&node)?;
             let output_shape = shapes[0].as_ref().unwrap().clone();

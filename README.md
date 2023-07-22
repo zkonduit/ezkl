@@ -51,7 +51,7 @@ source .env/bin/activate
 pip install -r requirements.txt
 maturin develop --release --features python-bindings
 # dependencies specific to tutorials
-pip install torch pandas numpy seaborn jupyter onnx kaggle py-solc-x web3 librosa
+pip install torch pandas numpy seaborn jupyter onnx kaggle py-solc-x web3 librosa tensorflow keras tf2onnx
 ```
 
 
