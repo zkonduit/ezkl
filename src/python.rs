@@ -313,20 +313,20 @@ fn verify(
 }
 
 #[pyfunction(signature = (
-    aggregation_snarks,
+    sample_snarks,
     vk_path,
     pk_path,
     srs_path,
     logrows,
 ))]
 fn setup_aggregate(
-    aggregation_snarks: Vec<PathBuf>,
+    sample_snarks: Vec<PathBuf>,
     vk_path: PathBuf,
     pk_path: PathBuf,
     srs_path: PathBuf,
     logrows: u32,
 ) -> Result<bool, PyErr> {
-    crate::execute::setup_aggregate(aggregation_snarks, vk_path, pk_path, srs_path, logrows)
+    crate::execute::setup_aggregate(sample_snarks, vk_path, pk_path, srs_path, logrows)
         .map_err(|e| {
             let err_str = format!("Failed to setup aggregate: {}", e);
             PyRuntimeError::new_err(err_str)

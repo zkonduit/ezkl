@@ -324,9 +324,9 @@ pub enum Commands {
     /// setup aggregation circuit :)
     #[command(arg_required_else_help = true)]
     SetupAggregate {
-        /// The path to sample snarks to aggregate over
+        /// The path to samples of snarks that will be aggregated over
         #[arg(long)]
-        aggregation_snarks: Vec<PathBuf>,
+        sample_snarks: Vec<PathBuf>,
         /// The path to save the desired verfication key file
         #[arg(long, default_value = "vk_aggr.key")]
         vk_path: PathBuf,

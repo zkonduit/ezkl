@@ -271,12 +271,12 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             logrows,
         } => mock_aggregate(aggregation_snarks, logrows),
         Commands::SetupAggregate {
-            aggregation_snarks,
+            sample_snarks,
             vk_path,
             pk_path,
             srs_path,
             logrows,
-        } => setup_aggregate(aggregation_snarks, vk_path, pk_path, srs_path, logrows),
+        } => setup_aggregate(sample_snarks, vk_path, pk_path, srs_path, logrows),
         Commands::Aggregate {
             proof_path,
             aggregation_snarks,
@@ -1495,7 +1495,7 @@ pub(crate) fn mock_aggregate(
 }
 
 pub(crate) fn setup_aggregate(
-    aggregation_snarks: Vec<PathBuf>,
+    sample_snarks: Vec<PathBuf>,
     vk_path: PathBuf,
     pk_path: PathBuf,
     srs_path: PathBuf,
@@ -1505,7 +1505,7 @@ pub(crate) fn setup_aggregate(
     let params = load_params_cmd(srs_path, logrows)?;
 
     let mut snarks = vec![];
-    for proof_path in aggregation_snarks.iter() {
+    for proof_path in sample_snarks.iter() {
         snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
     }
 
