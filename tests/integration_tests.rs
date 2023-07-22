@@ -1093,7 +1093,7 @@ mod native_tests {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup-aggregate",
-                "--aggregation-snarks",
+                "--sample-snarks",
                 &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--logrows=23",
                 "--vk-path",
@@ -1245,7 +1245,7 @@ mod native_tests {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup-aggregate",
-                "--aggregation-snarks",
+                "--sample-snarks",
                 &format!("{}/{}/evm.pf", test_dir, example_name),
                 "--logrows=23",
                 "--vk-path",
