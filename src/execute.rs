@@ -703,7 +703,10 @@ pub(crate) async fn calibrate(
                 res.push(task);
             }
         }
-        if let Some(best) = res.into_iter().max_by_key(|p| p.run_args.logrows) {
+        if let Some(best) = res
+            .into_iter()
+            .max_by_key(|p| (p.run_args.bits, p.run_args.scale))
+        {
             // pick the one with the largest logrows
             found_params.push(best);
         }
