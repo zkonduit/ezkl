@@ -473,11 +473,20 @@ async def aggregate_and_verify_aggr():
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')
     aggregate_vk_path = os.path.join(folder_path, 'aggr_1l_relu.vk')
+    aggregate_pk_path = os.path.join(folder_path, 'aggr_1l_relu.pk')
+
+    res = ezkl.setup_aggregate(
+        [proof_path],
+        aggregate_vk_path,
+        aggregate_pk_path,
+        params_k20_path,
+        20,
+    )
 
     res = ezkl.aggregate(
         aggregate_proof_path,
         [proof_path],
-        aggregate_vk_path,
+        aggregate_pk_path,
         params_k20_path,
         "poseidon",
         20,
@@ -567,11 +576,20 @@ async def evm_aggregate_and_verify_aggr():
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_evm_1l_relu.pf')
     aggregate_vk_path = os.path.join(folder_path, 'aggr_evm_1l_relu.vk')
+    aggregate_pk_path = os.path.join(folder_path, 'aggr_evm_1l_relu.pk')
+
+    res = ezkl.setup_aggregate(
+        [proof_path],
+        aggregate_vk_path,
+        aggregate_pk_path,
+        params_k20_path,
+        20,
+    )
 
     res = ezkl.aggregate(
         aggregate_proof_path,
         [proof_path],
-        aggregate_vk_path,
+        aggregate_pk_path,
         params_k20_path,
         "evm",
         20,
