@@ -41,6 +41,10 @@ impl LookupOp {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
+    /// Returns a reference to the Any trait.
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let x = x[0].clone().map(|x| felt_to_i128(x));

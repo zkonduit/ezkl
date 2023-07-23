@@ -5,6 +5,7 @@ use crate::graph::new_op_from_onnx;
 use crate::graph::GraphError;
 use halo2curves::bn256::Fr as Fp;
 use log::trace;
+use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -29,10 +30,11 @@ fn display_opkind(v: &Box<dyn Op<Fp>>) -> String {
 }
 
 /// A single operation in a [crate::graph::Model].
-#[derive(Clone, Debug, Tabled, Serialize)]
+#[derive(Clone, Debug, Tabled, Serialize, Deserialize)]
 pub struct Node {
     /// [Op] i.e what operation this node represents.
     #[tabled(display_with = "display_opkind")]
+    #[serde(with = "serde_traitobject")]
     pub opkind: Box<dyn Op<Fp>>,
     /// The denominator in the fixed point representation for the node's output. Tensors of differing scales should not be combined.
     pub out_scale: u32,

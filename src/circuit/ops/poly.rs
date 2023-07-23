@@ -7,8 +7,8 @@ use super::{base::BaseOp, *};
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be expressed as arithmetic (non lookup) operations.
-#[derive(Clone, Debug, Serialize)]
-pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum PolyOp<F: PrimeField + TensorType + PartialOrd>{
     Einsum {
         equation: String,
     },
@@ -76,10 +76,14 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
 
 impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {}
 
-impl<F: PrimeField + TensorType + PartialOrd + Serialize> Op<F> for PolyOp<F>
-where
-    Box<dyn Op<F>>: Serialize,
+impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<'de>> Op<F> for PolyOp<F>
+
 {
+    /// Returns a reference to the Any trait.
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn as_string(&self) -> String {
         let name = match &self {
             PolyOp::MoveAxis { .. } => "MOVEAXIS",

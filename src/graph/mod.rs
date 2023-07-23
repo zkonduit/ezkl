@@ -1008,7 +1008,7 @@ impl Circuit<Fp> for GraphCircuit {
         if !self.model.get_all_consts().is_empty() {
             // now we need to flatten the params
             let consts = self.model.get_all_consts();
-            let mut flattened_params = Tensor::new(Some(&consts), &[consts.len()])
+            let mut flattened_params = vec![Tensor::new(Some(&consts), &[consts.len()])
                 .map_err(|_| {
                     log::error!("failed to flatten params");
                     PlonkError::Synthesis
@@ -1017,26 +1017,28 @@ impl Circuit<Fp> for GraphCircuit {
                 .map_err(|_| {
                     log::error!("failed to combine params");
                     PlonkError::Synthesis
-                })?;
+                })?.into()];
 
             // now do stuff to the model params
             GraphModules::layout(
                 &mut layouter,
                 &config.module_configs,
-                &mut [flattened_params.into()],
+                &mut flattened_params,
                 self.settings.run_args.param_visibility,
                 &mut instance_offset,
                 &self.module_settings.params,
             )?;
+
+
+            let shapes = self.model.const_shapes();
+
+            let split_params = split_valtensor(&flattened_params[0], shapes).map_err(|_| {
+                log::error!("failed to split params");
+                PlonkError::Synthesis
+            })?;
+
             // now the flattened_params have been assigned to and we-assign them to the model consts such that they are constrained to be equal
-            model.replace_consts(
-                split_tensor(flattened_params.clone(), self.model.const_shapes()).map_err(
-                    |_| {
-                        log::error!("failed to replace params");
-                        PlonkError::Synthesis
-                    },
-                )?,
-            );
+            model.replace_consts(split_params);
         }
 
         // create a new module for the model (space 2)

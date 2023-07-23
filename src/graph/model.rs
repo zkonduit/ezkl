@@ -17,6 +17,7 @@ use crate::{
 use halo2curves::bn256::Fr as Fp;
 
 use colored::Colorize;
+use serde::Deserialize;
 use serde::Serialize;
 use tract_onnx::prelude::{
     DatumExt, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
@@ -60,7 +61,7 @@ pub struct ModelConfig {
 pub type NodeGraph = BTreeMap<usize, NodeType>;
 
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
-#[derive(Clone, Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Model {
     /// input indices
     pub graph: ParsedNodes,
@@ -69,7 +70,7 @@ pub struct Model {
 }
 
 /// Enables model as subnode of other models
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum NodeType {
     /// A node in the model
     Node(Node),
@@ -147,7 +148,7 @@ impl NodeType {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 /// A set of EZKL nodes that represent a computational graph.
 pub struct ParsedNodes {
     nodes: BTreeMap<usize, NodeType>,
@@ -832,7 +833,7 @@ impl Model {
     }
 
     /// Replaces all constants in the model with the provided values (in order of indexing)
-    pub fn replace_consts(&mut self, consts: Vec<Tensor<Fp>>) {
+    pub fn replace_consts(&mut self, consts: Vec<ValTensor<Fp>>) {
         let mut const_idx = 0;
         for node in self.graph.nodes.values_mut() {
             match node {
@@ -842,10 +843,13 @@ impl Model {
                         .as_any()
                         .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
                     {
-                        n.opkind = Box::new(crate::circuit::Constant::new(
-                            consts[const_idx].clone(),
+                        let mut op = crate::circuit::Constant::new(
+                            constant.quantized_values.clone(),
                             constant.raw_values.clone(),
-                        ));
+                        );
+                        op.pre_assign(consts[const_idx].clone());
+                        n.opkind = Box::new(op);
+
                         const_idx += 1;
                     };
                 }
