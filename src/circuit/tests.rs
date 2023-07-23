@@ -33,8 +33,8 @@ mod matmul {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MatmulCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -112,8 +112,8 @@ mod matmul_col_overflow {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MatmulCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -191,8 +191,8 @@ mod dot {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -267,8 +267,8 @@ mod dot_col_overflow {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -343,8 +343,8 @@ mod sum {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -415,8 +415,8 @@ mod sum_col_overflow {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -488,8 +488,8 @@ mod composition {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -584,8 +584,8 @@ mod conv {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for ConvCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -705,8 +705,7 @@ mod sumpool {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for ConvCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -786,8 +785,8 @@ mod add_w_shape_casting {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -860,8 +859,8 @@ mod add {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -934,8 +933,8 @@ mod add_with_overflow {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -1146,8 +1145,8 @@ mod sub {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -1216,8 +1215,8 @@ mod mult {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -1290,8 +1289,8 @@ mod pow {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -1358,8 +1357,8 @@ mod pack {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -1430,8 +1429,8 @@ mod rescaled {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -1529,8 +1528,8 @@ mod matmul_relu {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = MyConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
@@ -1633,8 +1632,8 @@ mod rangecheckpercent {
     }
 
     impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    where
-        Box<dyn Op<F>>: Serialize,
+    
+        
     {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
