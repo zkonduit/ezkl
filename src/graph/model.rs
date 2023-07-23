@@ -17,6 +17,7 @@ use crate::{
 use halo2curves::bn256::Fr as Fp;
 
 use colored::Colorize;
+use serde::Serialize;
 use tract_onnx::prelude::{
     DatumExt, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
 };
@@ -59,7 +60,7 @@ pub struct ModelConfig {
 pub type NodeGraph = BTreeMap<usize, NodeType>;
 
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct Model {
     /// input indices
     pub graph: ParsedNodes,
@@ -68,7 +69,7 @@ pub struct Model {
 }
 
 /// Enables model as subnode of other models
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum NodeType {
     /// A node in the model
     Node(Node),
@@ -146,7 +147,7 @@ impl NodeType {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize)]
 /// A set of EZKL nodes that represent a computational graph.
 pub struct ParsedNodes {
     nodes: BTreeMap<usize, NodeType>,
@@ -793,7 +794,7 @@ impl Model {
     }
 
     /// Retrieves all constants from the model.
-    pub fn get_all_consts(&self) -> Vec<ValTensor<Fp>> {
+    pub fn get_all_consts(&self) -> Vec<Tensor<Fp>> {
         let mut consts = vec![];
         for node in self.graph.nodes.values() {
             match node {
@@ -831,7 +832,7 @@ impl Model {
     }
 
     /// Replaces all constants in the model with the provided values (in order of indexing)
-    pub fn replace_consts(&mut self, consts: Vec<ValTensor<Fp>>) {
+    pub fn replace_consts(&mut self, consts: Vec<Tensor<Fp>>) {
         let mut const_idx = 0;
         for node in self.graph.nodes.values_mut() {
             match node {

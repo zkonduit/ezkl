@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use crate::{
     circuit::{self, layouts, Tolerance},
     fieldutils::{felt_to_i128, i128_to_felt},
@@ -34,10 +32,6 @@ pub enum HybridOp {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, inputs: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let x = inputs[0].clone().map(|x| felt_to_i128(x));

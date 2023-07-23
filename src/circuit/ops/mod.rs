@@ -7,7 +7,8 @@ use crate::{
     fieldutils::{felt_to_i128, i128_to_felt},
     tensor::{self, Tensor, TensorError, TensorType, ValTensor},
 };
-use halo2curves::ff::PrimeField;
+use erased_serde::serialize_trait_object;
+use halo2curves::{bn256::Fr, ff::PrimeField, pasta::Fp};
 
 use self::{lookup::LookupOp, region::RegionCtx};
 
@@ -34,7 +35,9 @@ pub struct ForwardResult<F: PrimeField + TensorType + PartialOrd> {
 }
 
 /// An enum representing operations that can be represented as constraints in a circuit.
-pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + Sync + Any {
+pub trait Op<F: PrimeField + TensorType + PartialOrd>:
+    std::fmt::Debug + Send + Sync + Any + erased_serde::Serialize
+{
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError>;
     /// Returns a string representation of the operation.
@@ -75,8 +78,13 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
     fn clone_dyn(&self) -> Box<dyn Op<F>>;
 
     /// Returns a reference to the Any trait.
-    fn as_any(&self) -> &dyn Any;
+    fn as_any(&self) -> &dyn Any {
+        &self
+    }
 }
+
+serialize_trait_object!(Op<Fr>);
+serialize_trait_object!(Op<Fp>);
 
 impl<F: PrimeField + TensorType + PartialOrd> Clone for Box<dyn Op<F>> {
     fn clone(&self) -> Self {
@@ -134,15 +142,21 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
 }
 
 /// A wrapper for an operation that has been rescaled.
-#[derive(Clone, Debug)]
-pub struct Rescaled<F: PrimeField + TensorType + PartialOrd> {
+#[derive(Clone, Debug, Serialize)]
+pub struct Rescaled<F: PrimeField + TensorType + PartialOrd>
+where
+    Box<dyn Op<F>>: Serialize,
+{
     /// The operation to be rescaled.
     pub inner: Box<dyn Op<F>>,
     /// The scale of the operation's inputs.
     pub scale: Vec<(usize, u128)>,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
+impl<F: PrimeField + TensorType + PartialOrd + Serialize> Op<F> for Rescaled<F>
+where
+    Box<dyn Op<F>>: Serialize,
+{
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -246,17 +260,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
 }
 
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
     ///
-    pub quantized_values: ValTensor<F>,
+    pub quantized_values: Tensor<F>,
     ///
     pub raw_values: Tensor<f32>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
     ///
-    pub fn new(quantized_values: ValTensor<F>, raw_values: Tensor<f32>) -> Self {
+    pub fn new(quantized_values: Tensor<F>, raw_values: Tensor<f32>) -> Self {
         Self {
             quantized_values,
             raw_values,
@@ -264,14 +278,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
     }
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
+impl<F: PrimeField + TensorType + PartialOrd + Serialize> Op<F> for Constant<F> {
     fn as_any(&self) -> &dyn Any {
         self
     }
     fn f(&self, _: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
-        let mut output = self.quantized_values.get_felt_evals().unwrap();
-        // make sure its the right shape
-        output.reshape(self.quantized_values.dims());
+        let mut output = self.quantized_values.clone();
 
         Ok(ForwardResult {
             output,
@@ -288,7 +300,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
         _: &mut RegionCtx<F>,
         _: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        Ok(Some(self.quantized_values.clone()))
+        Ok(Some(self.quantized_values.into()))
     }
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
         Box::new(self.clone())
@@ -299,11 +311,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
     }
 }
 
-fn homogenize_input_scales<F: PrimeField + TensorType + PartialOrd>(
+fn homogenize_input_scales<F: PrimeField + TensorType + PartialOrd + Serialize>(
     op: impl Op<F> + Clone,
     input_scales: Vec<u32>,
     inputs_to_scale: Vec<usize>,
-) -> Result<Box<dyn Op<F>>, Box<dyn Error>> {
+) -> Result<Box<dyn Op<F>>, Box<dyn Error>>
+where
+    Box<dyn Op<F>>: Serialize,
+{
     if inputs_to_scale.is_empty() {
         return Ok(Box::new(op));
     }

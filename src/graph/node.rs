@@ -5,6 +5,7 @@ use crate::graph::new_op_from_onnx;
 use crate::graph::GraphError;
 use halo2curves::bn256::Fr as Fp;
 use log::trace;
+use serde::Serialize;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
@@ -28,7 +29,7 @@ fn display_opkind(v: &Box<dyn Op<Fp>>) -> String {
 }
 
 /// A single operation in a [crate::graph::Model].
-#[derive(Clone, Debug, Tabled)]
+#[derive(Clone, Debug, Tabled, Serialize)]
 pub struct Node {
     /// [Op] i.e what operation this node represents.
     #[tabled(display_with = "display_opkind")]

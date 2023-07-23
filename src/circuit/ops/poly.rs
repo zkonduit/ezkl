@@ -7,14 +7,14 @@ use super::{base::BaseOp, *};
 
 #[allow(missing_docs)]
 /// An enum representing the operations that can be expressed as arithmetic (non lookup) operations.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Einsum {
         equation: String,
     },
     Conv {
-        kernel: ValTensor<F>,
-        bias: Option<ValTensor<F>>,
+        kernel: Tensor<F>,
+        bias: Option<Tensor<F>>,
         padding: (usize, usize),
         stride: (usize, usize),
     },
@@ -24,8 +24,8 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
         modulo: usize,
     },
     DeConv {
-        kernel: ValTensor<F>,
-        bias: Option<ValTensor<F>>,
+        kernel: Tensor<F>,
+        bias: Option<Tensor<F>>,
         padding: (usize, usize),
         output_padding: (usize, usize),
         stride: (usize, usize),
@@ -36,11 +36,11 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
         kernel_shape: (usize, usize),
     },
     Add {
-        a: Option<ValTensor<F>>,
+        a: Option<Tensor<F>>,
     },
     Sub,
     Mult {
-        a: Option<ValTensor<F>>,
+        a: Option<Tensor<F>>,
     },
     Identity,
     Reshape(Vec<usize>),
@@ -76,10 +76,10 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
 
 impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {}
 
-impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+impl<F: PrimeField + TensorType + PartialOrd + Serialize> Op<F> for PolyOp<F>
+where
+    Box<dyn Op<F>>: Serialize,
+{
     fn as_string(&self) -> String {
         let name = match &self {
             PolyOp::MoveAxis { .. } => "MOVEAXIS",
@@ -144,14 +144,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             }
             PolyOp::Add { a } => {
                 if let Some(a) = a {
-                    inputs.push(Tensor::new(Some(&a.get_felt_evals().unwrap()), a.dims())?);
+                    inputs.push(a.clone());
                 }
                 tensor::ops::add(&inputs)
             }
             PolyOp::Sub => tensor::ops::sub(&inputs),
             PolyOp::Mult { a } => {
                 if let Some(a) = a {
-                    inputs.push(Tensor::new(Some(&a.get_felt_evals().unwrap()), a.dims())?);
+                    inputs.push(a.clone());
                 }
                 tensor::ops::mult(&inputs)
             }
@@ -161,9 +161,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 padding,
                 stride,
             } => {
-                inputs.push(Tensor::new(Some(&a.get_felt_evals().unwrap()), a.dims())?);
+                inputs.push(a.clone());
                 if let Some(b) = bias {
-                    inputs.push(Tensor::new(Some(&b.get_felt_evals().unwrap()), b.dims())?);
+                    inputs.push(b.clone());
                 }
                 tensor::ops::conv(&inputs, *padding, *stride)
             }
@@ -174,9 +174,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 output_padding,
                 stride,
             } => {
-                inputs.push(Tensor::new(Some(&a.get_felt_evals().unwrap()), a.dims())?);
+                inputs.push(a.clone());
                 if let Some(b) = bias {
-                    inputs.push(Tensor::new(Some(&b.get_felt_evals().unwrap()), b.dims())?);
+                    inputs.push(b.clone());
                 }
                 tensor::ops::deconv(&inputs, *padding, *output_padding, *stride)
             }
@@ -260,9 +260,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 padding,
                 stride,
             } => {
-                values.push(kernel.clone());
+                values.push(kernel.clone().into());
                 if let Some(bias) = bias {
-                    values.push(bias.clone());
+                    values.push(bias.clone().into());
                 }
                 layouts::conv(config, region, values[..].try_into()?, *padding, *stride)?
             }
@@ -273,9 +273,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 output_padding,
                 stride,
             } => {
-                values.push(kernel.clone());
+                values.push(kernel.clone().into());
                 if let Some(bias) = bias {
-                    values.push(bias.clone());
+                    values.push(bias.clone().into());
                 }
                 layouts::deconv(
                     config,
@@ -300,7 +300,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             )?,
             PolyOp::Add { a } => {
                 if let Some(a) = a {
-                    values.push(a.clone());
+                    values.push(a.clone().into());
                 }
 
                 layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Add)?
@@ -308,7 +308,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Sub => layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Sub)?,
             PolyOp::Mult { a } => {
                 if let Some(a) = a {
-                    values.push(a.clone());
+                    values.push(a.clone().into());
                 }
                 layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Mult)?
             }
@@ -356,16 +356,32 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
 
             PolyOp::Sum { .. } => in_scales[0],
             PolyOp::Conv { kernel, bias, .. } => {
-                let output_scale = in_scales[0] + kernel.scale();
+                let kernel_scale = match kernel.scale() {
+                    Some(s) => s,
+                    None => panic!("scale must be set for conv kernel"),
+                };
+                let output_scale = in_scales[0] + kernel_scale;
                 if let Some(b) = bias {
-                    assert_eq!(output_scale, b.scale());
+                    let bias_scale = match b.scale() {
+                        Some(s) => s,
+                        None => panic!("scale must be set for conv bias"),
+                    };
+                    assert_eq!(output_scale, bias_scale);
                 }
                 output_scale
             }
             PolyOp::DeConv { kernel, bias, .. } => {
-                let output_scale = in_scales[0] + kernel.scale();
+                let kernel_scale = match kernel.scale() {
+                    Some(s) => s,
+                    None => panic!("scale must be set for deconv kernel"),
+                };
+                let output_scale = in_scales[0] + kernel_scale;
                 if let Some(b) = bias {
-                    assert_eq!(output_scale, b.scale());
+                    let bias_scale = match b.scale() {
+                        Some(s) => s,
+                        None => panic!("scale must be set for deconv bias"),
+                    };
+                    assert_eq!(output_scale, bias_scale);
                 }
                 output_scale
             }
@@ -374,7 +390,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
                 let mut scale_a = 0;
                 let scale_b = in_scales[0];
                 if let Some(a) = a {
-                    scale_a += a.scale();
+                    let a_scale = match a.scale() {
+                        Some(s) => s,
+                        None => panic!("scale must be set for add constant"),
+                    };
+                    scale_a += a_scale;
                 } else {
                     scale_a += in_scales[1];
                 }
@@ -385,7 +405,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for PolyOp<F> {
             PolyOp::Mult { a } => {
                 let mut scale = in_scales[0];
                 if let Some(a) = a {
-                    scale += a.scale();
+                    let a_scale = match a.scale() {
+                        Some(s) => s,
+                        None => panic!("scale must be set for add constant"),
+                    };
+                    scale += a_scale;
                 } else {
                     scale += in_scales[1];
                 }

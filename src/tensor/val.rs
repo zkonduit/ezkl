@@ -130,7 +130,19 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<ValType<F>>> for ValTe
 impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<F>> for ValTensor<F> {
     fn from(t: Tensor<F>) -> ValTensor<F> {
         ValTensor::Value {
-            inner: t.map(|x| x.into()),
+            inner: t.map(|x|
+                if let Some(vis) = t.visibility {
+                    match vis {
+                        Visibility::Public => x.into(),
+                        Visibility::Private | Visibility::Hashed | Visibility::Encrypted => {
+                            Value::known(x).into()
+                        }
+                    }
+                }
+                else {
+                    panic!("visibility should be set to convert a tensor of field elements to a ValTensor.")
+                }
+            ),
             dims: t.dims().to_vec(),
             scale: 1,
         }

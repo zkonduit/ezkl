@@ -7,13 +7,14 @@ use halo2_proofs::{
     dev::MockProver,
     plonk::{Circuit, ConstraintSystem, Error},
 };
+use halo2curves::bn256::Fr as F;
 use halo2curves::ff::{Field, PrimeField};
-use halo2curves::pasta::pallas;
-use halo2curves::pasta::Fp as F;
 use ops::lookup::LookupOp;
 use ops::region::RegionCtx;
 use rand::rngs::OsRng;
+use serde::Serialize;
 use std::marker::PhantomData;
+
 #[derive(Default)]
 struct TestParams;
 
@@ -31,7 +32,10 @@ mod matmul {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MatmulCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MatmulCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -107,7 +111,10 @@ mod matmul_col_overflow {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MatmulCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MatmulCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -183,7 +190,10 @@ mod dot {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -256,7 +266,10 @@ mod dot_col_overflow {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -329,7 +342,10 @@ mod sum {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -398,7 +414,10 @@ mod sum_col_overflow {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -468,7 +487,10 @@ mod composition {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -557,11 +579,14 @@ mod conv {
 
     #[derive(Clone)]
     struct ConvCircuit<F: PrimeField + TensorType + PartialOrd> {
-        inputs: Vec<ValTensor<F>>,
+        inputs: Vec<Tensor<F>>,
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ConvCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for ConvCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -590,7 +615,7 @@ mod conv {
                         config
                             .layout(
                                 &mut region,
-                                &[self.inputs[0].clone()],
+                                &[self.inputs[0].clone().into()],
                                 Box::new(PolyOp::Conv {
                                     kernel: self.inputs[1].clone(),
                                     bias: None,
@@ -616,27 +641,19 @@ mod conv {
         let in_channels = 3;
         let out_channels = 2;
 
-        let mut image = Tensor::from(
-            (0..in_channels * image_height * image_width)
-                .map(|_| Value::known(pallas::Base::random(OsRng))),
-        );
+        let mut image =
+            Tensor::from((0..in_channels * image_height * image_width).map(|_| F::random(OsRng)));
         image.reshape(&[1, in_channels, image_height, image_width]);
         let mut kernels = Tensor::from(
             (0..{ out_channels * in_channels * kernel_height * kernel_width })
-                .map(|_| Value::known(pallas::Base::random(OsRng))),
+                .map(|_| F::random(OsRng)),
         );
         kernels.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
 
-        let bias =
-            Tensor::from((0..{ out_channels }).map(|_| Value::known(pallas::Base::random(OsRng))));
+        let bias = Tensor::from((0..{ out_channels }).map(|_| F::random(OsRng)));
 
         let circuit = ConvCircuit::<F> {
-            inputs: [
-                ValTensor::from(image),
-                ValTensor::from(kernels),
-                ValTensor::from(bias),
-            ]
-            .to_vec(),
+            inputs: [image, kernels, bias].to_vec(),
             _marker: PhantomData,
         };
 
@@ -654,18 +671,17 @@ mod conv {
         let in_channels = 3;
         let out_channels = 2;
 
-        let mut image = Tensor::from(
-            (0..in_channels * image_height * image_width).map(|i| Value::known(F::from(i as u64))),
-        );
+        let mut image =
+            Tensor::from((0..in_channels * image_height * image_width).map(|i| F::from(i as u64)));
         image.reshape(&[1, in_channels, image_height, image_width]);
         let mut kernels = Tensor::from(
             (0..{ out_channels * in_channels * kernel_height * kernel_width })
-                .map(|i| Value::known(F::from(i as u64))),
+                .map(|i| F::from(i as u64)),
         );
         kernels.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
 
         let circuit = ConvCircuit::<F> {
-            inputs: [ValTensor::from(image), ValTensor::from(kernels)].to_vec(),
+            inputs: [image, kernels].to_vec(),
             _marker: PhantomData,
         };
 
@@ -688,7 +704,10 @@ mod sumpool {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ConvCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for ConvCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -739,8 +758,7 @@ mod sumpool {
         let in_channels = 1;
 
         let mut image = Tensor::from(
-            (0..in_channels * image_height * image_width)
-                .map(|_| Value::known(pallas::Base::random(OsRng))),
+            (0..in_channels * image_height * image_width).map(|_| Value::known(F::random(OsRng))),
         );
         image.reshape(&[1, in_channels, image_height, image_width]);
 
@@ -767,7 +785,10 @@ mod add_w_shape_casting {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -838,7 +859,10 @@ mod add {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -909,7 +933,10 @@ mod add_with_overflow {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1118,7 +1145,10 @@ mod sub {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1185,7 +1215,10 @@ mod mult {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1256,7 +1289,10 @@ mod pow {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1321,7 +1357,10 @@ mod pack {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1390,7 +1429,10 @@ mod rescaled {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1486,7 +1528,10 @@ mod matmul_relu {
         base_config: BaseConfig<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = MyConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1572,7 +1617,6 @@ mod rangecheckpercent {
         dev::MockProver,
         plonk::{Circuit, ConstraintSystem, Error},
     };
-    use halo2curves::pasta::Fp;
 
     const RANGE: f32 = 1.0; // 1 percent error tolerance
     const K: usize = 18;
@@ -1588,7 +1632,10 @@ mod rangecheckpercent {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for MyCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
+    where
+        Box<dyn Op<F>>: Serialize,
+    {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1647,9 +1694,9 @@ mod rangecheckpercent {
     fn test_range_check_percent() {
         // Successful cases
         {
-            let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(100_u64))]), &[1]).unwrap();
-            let out = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(101_u64))]), &[1]).unwrap();
-            let circuit = MyCircuit::<Fp> {
+            let inp = Tensor::new(Some(&[Value::<F>::known(F::from(100_u64))]), &[1]).unwrap();
+            let out = Tensor::new(Some(&[Value::<F>::known(F::from(101_u64))]), &[1]).unwrap();
+            let circuit = MyCircuit::<F> {
                 input: ValTensor::from(inp),
                 output: ValTensor::from(out),
                 _marker: PhantomData,
@@ -1658,9 +1705,9 @@ mod rangecheckpercent {
             prover.assert_satisfied();
         }
         {
-            let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(200_u64))]), &[1]).unwrap();
-            let out = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(199_u64))]), &[1]).unwrap();
-            let circuit = MyCircuit::<Fp> {
+            let inp = Tensor::new(Some(&[Value::<F>::known(F::from(200_u64))]), &[1]).unwrap();
+            let out = Tensor::new(Some(&[Value::<F>::known(F::from(199_u64))]), &[1]).unwrap();
+            let circuit = MyCircuit::<F> {
                 input: ValTensor::from(inp),
                 output: ValTensor::from(out),
                 _marker: PhantomData,
@@ -1671,9 +1718,9 @@ mod rangecheckpercent {
 
         // Unsuccessful case
         {
-            let inp = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(100_u64))]), &[1]).unwrap();
-            let out = Tensor::new(Some(&[Value::<Fp>::known(Fp::from(102_u64))]), &[1]).unwrap();
-            let circuit = MyCircuit::<Fp> {
+            let inp = Tensor::new(Some(&[Value::<F>::known(F::from(100_u64))]), &[1]).unwrap();
+            let out = Tensor::new(Some(&[Value::<F>::known(F::from(102_u64))]), &[1]).unwrap();
+            let circuit = MyCircuit::<F> {
                 input: ValTensor::from(inp),
                 output: ValTensor::from(out),
                 _marker: PhantomData,
@@ -1699,14 +1746,13 @@ mod relu {
         dev::MockProver,
         plonk::{Circuit, ConstraintSystem, Error},
     };
-    use halo2curves::pasta::Fp as F;
 
     #[derive(Clone)]
     struct ReLUCircuit<F: PrimeField + TensorType + PartialOrd> {
         pub input: ValTensor<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for ReLUCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for ReLUCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1779,7 +1825,6 @@ mod softmax {
         dev::MockProver,
         plonk::{Circuit, ConstraintSystem, Error},
     };
-    use halo2curves::pasta::Fp as F;
 
     const K: usize = 18;
     const LEN: usize = 3;
@@ -1791,7 +1836,7 @@ mod softmax {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd> Circuit<F> for SoftmaxCircuit<F> {
+    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for SoftmaxCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;

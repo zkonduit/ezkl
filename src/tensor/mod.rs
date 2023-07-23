@@ -14,6 +14,7 @@ pub use var::*;
 use crate::{
     circuit::utils,
     fieldutils::{felt_to_i32, i128_to_felt, i32_to_felt},
+    graph::Visibility,
 };
 
 use halo2_proofs::{
@@ -265,6 +266,8 @@ impl TensorType for halo2curves::bn256::Fr {
 pub struct Tensor<T: TensorType> {
     inner: Vec<T>,
     dims: Vec<usize>,
+    scale: Option<u32>,
+    visibility: Option<Visibility>,
 }
 
 impl<T: TensorType> IntoIterator for Tensor<T> {
@@ -446,13 +449,37 @@ impl<T: Clone + TensorType> Tensor<T> {
                 Ok(Tensor {
                     inner: Vec::from(v),
                     dims: Vec::from(dims),
+                    scale: None,
+                    visibility: None,
                 })
             }
             None => Ok(Tensor {
                 inner: vec![T::zero().unwrap(); total_dims],
                 dims: Vec::from(dims),
+                scale: None,
+                visibility: None,
             }),
         }
+    }
+
+    /// set the tensor's (optional) scale parameter
+    pub fn set_scale(&mut self, scale: u32) {
+        self.scale = Some(scale)
+    }
+
+    /// set the tensor's (optional) visibility parameter
+    pub fn set_visibility(&mut self, visibility: Visibility) {
+        self.visibility = Some(visibility)
+    }
+
+    /// getter for scale
+    pub fn scale(&self) -> Option<u32> {
+        self.scale
+    }
+
+    /// getter for visibility
+    pub fn visibility(&self) -> Option<Visibility> {
+        self.visibility
     }
 
     /// Returns the number of elements in the tensor.
