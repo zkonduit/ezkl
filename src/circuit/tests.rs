@@ -12,7 +12,6 @@ use halo2curves::ff::{Field, PrimeField};
 use ops::lookup::LookupOp;
 use ops::region::RegionCtx;
 use rand::rngs::OsRng;
-use serde::Serialize;
 use std::marker::PhantomData;
 
 #[derive(Default)]
@@ -32,10 +31,7 @@ mod matmul {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MatmulCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MatmulCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -111,10 +107,7 @@ mod matmul_col_overflow {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MatmulCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MatmulCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -190,10 +183,7 @@ mod dot {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -266,10 +256,7 @@ mod dot_col_overflow {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -342,10 +329,7 @@ mod sum {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -414,10 +398,7 @@ mod sum_col_overflow {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -487,10 +468,7 @@ mod composition {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -583,10 +561,7 @@ mod conv {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for ConvCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for ConvCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -704,9 +679,7 @@ mod sumpool {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for ConvCircuit<F>
-    
-    {
+    impl Circuit<F> for ConvCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -784,10 +757,7 @@ mod add_w_shape_casting {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -858,10 +828,7 @@ mod add {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -932,10 +899,7 @@ mod add_with_overflow {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1144,10 +1108,7 @@ mod sub {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1214,10 +1175,7 @@ mod mult {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1288,10 +1246,7 @@ mod pow {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1356,10 +1311,7 @@ mod pack {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1428,10 +1380,7 @@ mod rescaled {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1527,10 +1476,7 @@ mod matmul_relu {
         base_config: BaseConfig<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MyCircuit<F> {
         type Config = MyConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1631,10 +1577,7 @@ mod rangecheckpercent {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for MyCircuit<F>
-    
-        
-    {
+    impl Circuit<F> for MyCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1751,7 +1694,7 @@ mod relu {
         pub input: ValTensor<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for ReLUCircuit<F> {
+    impl Circuit<F> for ReLUCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -1835,7 +1778,7 @@ mod softmax {
         _marker: PhantomData<F>,
     }
 
-    impl<F: PrimeField + TensorType + PartialOrd + Serialize> Circuit<F> for SoftmaxCircuit<F> {
+    impl Circuit<F> for SoftmaxCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;

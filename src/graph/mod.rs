@@ -1017,7 +1017,8 @@ impl Circuit<Fp> for GraphCircuit {
                 .map_err(|_| {
                     log::error!("failed to combine params");
                     PlonkError::Synthesis
-                })?.into()];
+                })?
+                .into()];
 
             // now do stuff to the model params
             GraphModules::layout(
@@ -1028,7 +1029,6 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut instance_offset,
                 &self.module_settings.params,
             )?;
-
 
             let shapes = self.model.const_shapes();
 

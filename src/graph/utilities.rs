@@ -855,15 +855,18 @@ pub mod tests {
         let tensor2: Tensor<Fp> = (10..20).map(|x| x.into()).into();
         let tensor3: Tensor<Fp> = (20..30).map(|x| x.into()).into();
 
-        let flattened = Tensor::new(Some(&[tensor1, tensor2, tensor3]), &[3])
+        let tensor = Tensor::new(Some(&[tensor1, tensor2, tensor3]), &[3])
             .unwrap()
             .combine()
             .unwrap();
 
+        tensor.set_visibility(Visibility::Public);
+
+        let flattened: ValTensor<Fp> = tensor.into();
+
         assert_eq!(flattened.len(), 30);
 
-        let split =
-            split_tensor(flattened.clone(), vec![vec![2, 5], vec![10], vec![5, 2]]).unwrap();
+        let split = split_valtensor(&flattened, vec![vec![2, 5], vec![10], vec![5, 2]]).unwrap();
 
         assert_eq!(split.len(), 3);
         assert_eq!(split[0].len(), 10);
