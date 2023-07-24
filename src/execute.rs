@@ -860,7 +860,7 @@ pub(crate) fn create_evm_verifier(
     let _ = f.write(output.as_bytes());
 
     // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path.clone(), "Verifier", None)?;
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Verifier", None)?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
@@ -933,7 +933,7 @@ pub(crate) fn create_evm_data_attestation_verifier(
         let _ = f.write(output.as_bytes());
         // fetch abi of the contract
         let (abi, _, _) =
-            get_contract_artifacts(sol_code_path.clone(), "DataAttestationVerifier", None)?;
+            get_contract_artifacts(sol_code_path, "DataAttestationVerifier", None)?;
         // save abi to file
         serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
     } else {
@@ -1018,7 +1018,7 @@ pub(crate) fn create_evm_aggregate_verifier(
 
     let settings: Vec<GraphSettings> = circuit_settings
         .iter()
-        .map(|path| GraphSettings::load(&path).unwrap())
+        .map(|path| GraphSettings::load(path).unwrap())
         .collect::<Vec<_>>();
 
     let num_public_inputs: usize = settings
@@ -1053,7 +1053,7 @@ pub(crate) fn create_evm_aggregate_verifier(
     let _ = f.write(output.as_bytes());
 
     // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path.clone(), "Verifier", None)?;
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Verifier", None)?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 

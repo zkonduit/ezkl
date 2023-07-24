@@ -9,36 +9,32 @@ use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
-use halo2curves::ff::PrimeField;
-use halo2curves::pasta::Fp as F;
+use halo2curves::bn256::Fr as F;
 use std::marker::PhantomData;
 
 const K: usize = 15;
 // A columnar ReLu MLP
 #[derive(Clone)]
-struct MyConfig<F: PrimeField + TensorType + PartialOrd> {
+struct MyConfig {
     layer_config: PolyConfig<F>,
     public_output: Column<Instance>,
 }
 
 #[derive(Clone)]
 struct MyCircuit<
-    F: PrimeField + TensorType + PartialOrd,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened
     const BITS: usize,
 > {
     // Given the stateless MyConfig type information, a DNN trace is determined by its input and the parameters of its layers.
     // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
     input: ValTensor<F>,
-    l0_params: [ValTensor<F>; 2],
-    l2_params: [ValTensor<F>; 2],
+    l0_params: [Tensor<F>; 2],
+    l2_params: [Tensor<F>; 2],
     _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd, const LEN: usize, const BITS: usize> Circuit<F>
-    for MyCircuit<F, LEN, BITS>
-{
-    type Config = MyConfig<F>;
+impl<const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<LEN, BITS> {
+    type Config = MyConfig;
     type FloorPlanner = SimpleFloorPlanner;
     type Params = PhantomData<F>;
 
@@ -100,7 +96,7 @@ impl<F: PrimeField + TensorType + PartialOrd, const LEN: usize, const BITS: usiz
                         .layer_config
                         .layout(
                             &mut region,
-                            &[self.l0_params[0].clone(), self.input.clone()],
+                            &[self.l0_params[0].clone().into(), self.input.clone()],
                             Box::new(PolyOp::Einsum {
                                 equation: "ab,bc->ac".to_string(),
                             }),
@@ -138,7 +134,7 @@ impl<F: PrimeField + TensorType + PartialOrd, const LEN: usize, const BITS: usiz
                         .layer_config
                         .layout(
                             &mut region,
-                            &[self.l2_params[0].clone(), x],
+                            &[self.l2_params[0].clone().into(), x],
                             Box::new(PolyOp::Einsum {
                                 equation: "ab,bc->ac".to_string(),
                             }),
@@ -202,34 +198,39 @@ impl<F: PrimeField + TensorType + PartialOrd, const LEN: usize, const BITS: usiz
 pub fn runmlp() {
     env_logger::init();
     // parameters
-    let l0_kernel: Tensor<Value<F>> = Tensor::<i32>::new(
+    let mut l0_kernel: Tensor<F> = Tensor::<i32>::new(
         Some(&[10, 0, 0, -1, 0, 10, 1, 0, 0, 1, 10, 0, 1, 0, 0, 10]),
         &[4, 4],
     )
     .unwrap()
-    .into();
-    let l0_bias: Tensor<Value<F>> = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[4, 1])
-        .unwrap()
-        .into();
+    .map(i32_to_felt);
+    l0_kernel.set_visibility(ezkl::graph::Visibility::Private);
 
-    let l2_kernel: Tensor<Value<F>> = Tensor::<i32>::new(
+    let mut l0_bias: Tensor<F> = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[4, 1])
+        .unwrap()
+        .map(i32_to_felt);
+    l0_bias.set_visibility(ezkl::graph::Visibility::Private);
+
+    let mut l2_kernel: Tensor<F> = Tensor::<i32>::new(
         Some(&[0, 3, 10, -1, 0, 10, 1, 0, 0, 1, 0, 12, 1, -2, 32, 0]),
         &[4, 4],
     )
     .unwrap()
-    .into();
+    .map(i32_to_felt);
+    l2_kernel.set_visibility(ezkl::graph::Visibility::Private);
     // input data, with 1 padding to allow for bias
     let input: Tensor<Value<F>> = Tensor::<i32>::new(Some(&[-30, -21, 11, 40]), &[4, 1])
         .unwrap()
         .into();
-    let l2_bias: Tensor<Value<F>> = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[4, 1])
+    let mut l2_bias: Tensor<F> = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[4, 1])
         .unwrap()
-        .into();
+        .map(i32_to_felt);
+    l2_bias.set_visibility(ezkl::graph::Visibility::Private);
 
-    let circuit = MyCircuit::<F, 4, 14> {
+    let circuit = MyCircuit::<4, 14> {
         input: input.into(),
-        l0_params: [l0_kernel.into(), l0_bias.into()],
-        l2_params: [l2_kernel.into(), l2_bias.into()],
+        l0_params: [l0_kernel, l0_bias],
+        l2_params: [l2_kernel, l2_bias],
         _marker: PhantomData,
     };
 

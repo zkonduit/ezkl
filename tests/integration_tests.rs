@@ -4,7 +4,7 @@ mod native_tests {
 
     use core::panic;
     use ezkl::graph::input::{FileSource, GraphData};
-    use ezkl::graph::{DataSource, GraphSettings};
+    use ezkl::graph::{DataSource, GraphSettings, Visibility};
     use lazy_static::lazy_static;
     use std::env::var;
     use std::process::Command;
@@ -302,6 +302,7 @@ mod native_tests {
             use crate::native_tests::kzg_prove_and_verify;
             use crate::native_tests::kzg_fuzz;
             use crate::native_tests::render_circuit;
+            use crate::native_tests::model_serialization;
             use crate::native_tests::tutorial as run_tutorial;
 
             #[test]
@@ -312,7 +313,15 @@ mod native_tests {
             }
 
 
+
             seq!(N in 0..=36 {
+
+            #(#[test_case(TESTS[N])])*
+            fn model_serialization_(test: &str) {
+                crate::native_tests::mv_test_(test);
+                // percent tolerance test
+                model_serialization(test.to_string());
+            }
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
@@ -695,6 +704,26 @@ mod native_tests {
     test_func_evm!();
     test_func_examples!();
     test_neg_examples!();
+
+    fn model_serialization(example_name: String) {
+        let test_dir = TEST_DIR.path().to_str().unwrap();
+        let model_path = format!("{}/{}/network.onnx", test_dir, example_name);
+        let serialization_path = format!("{}/{}/network.ezkl", test_dir, example_name);
+        let run_args = ezkl::commands::RunArgs {
+            param_visibility: Visibility::Public,
+            batch_size: 1,
+            ..Default::default()
+        };
+
+        let model =
+            ezkl::graph::Model::new(&mut std::fs::File::open(model_path).unwrap(), run_args)
+                .unwrap();
+
+        model.save(serialization_path.clone().into()).unwrap();
+
+        let loaded_model = ezkl::graph::Model::load(serialization_path.into()).unwrap();
+        assert_eq!(model, loaded_model)
+    }
 
     // Mock prove (fast, but does not cover some potential issues)
     fn neg_mock(example_name: String, counter_example: String) {

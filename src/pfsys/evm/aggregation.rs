@@ -199,14 +199,14 @@ impl AggregationCircuit {
             trace!("Aggregating with snark instances {:?}", snark.instances);
             let mut transcript = PoseidonTranscript::<NativeLoader, _>::new(snark.proof.as_slice());
             let proof = PlonkSuccinctVerifier::read_proof(
-                &svk,
+                svk,
                 snark.protocol.as_ref().unwrap(),
                 &snark.instances,
                 &mut transcript,
             )
             .map_err(|_| AggregationError::ProofRead)?;
             let mut accum = PlonkSuccinctVerifier::verify(
-                &svk,
+                svk,
                 snark.protocol.as_ref().unwrap(),
                 &snark.instances,
                 &proof,
@@ -231,7 +231,7 @@ impl AggregationCircuit {
             .concat();
 
         Ok(Self {
-            svk: svk.clone(),
+            svk: *svk,
             snarks: snarks.into_iter().map_into().collect(),
             instances,
             as_proof: Value::known(as_proof),
@@ -264,7 +264,7 @@ impl AggregationCircuit {
             for instance in snark_instance.iter_mut() {
                 let mut felt_evals = vec![];
                 for value in instance.iter_mut() {
-                    value.map(|v| felt_evals.push(v.clone()));
+                    value.map(|v| felt_evals.push(v));
                 }
                 instances[0].extend(felt_evals);
             }

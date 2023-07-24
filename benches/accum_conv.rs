@@ -28,8 +28,8 @@ const K: usize = 17;
 #[derive(Clone, Debug)]
 struct MyCircuit {
     image: ValTensor<Fr>,
-    kernel: ValTensor<Fr>,
-    bias: ValTensor<Fr>,
+    kernel: Tensor<Fr>,
+    bias: Tensor<Fr>,
 }
 
 impl Circuit<Fr> for MyCircuit {
@@ -100,18 +100,20 @@ fn runcnvrl(c: &mut Criterion) {
                     .map(|_| Value::known(Fr::random(OsRng))),
             );
             image.reshape(&[1, IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH]);
-            let mut kernels = Tensor::from(
+            let mut kernel = Tensor::from(
                 (0..{ OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH })
-                    .map(|_| Value::known(Fr::random(OsRng))),
+                    .map(|_| Fr::random(OsRng)),
             );
-            kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
+            kernel.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
+            kernel.set_visibility(ezkl::graph::Visibility::Private);
 
-            let bias = Tensor::from((0..{ OUT_CHANNELS }).map(|_| Value::known(Fr::random(OsRng))));
+            let mut bias = Tensor::from((0..{ OUT_CHANNELS }).map(|_| Fr::random(OsRng)));
+            bias.set_visibility(ezkl::graph::Visibility::Private);
 
             let circuit = MyCircuit {
                 image: ValTensor::from(image),
-                kernel: ValTensor::from(kernels),
-                bias: ValTensor::from(bias),
+                kernel,
+                bias,
             };
 
             group.throughput(Throughput::Elements(*size as u64));

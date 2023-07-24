@@ -17,6 +17,8 @@ use crate::{
 use halo2curves::bn256::Fr as Fp;
 
 use colored::Colorize;
+use serde::Deserialize;
+use serde::Serialize;
 use tract_onnx::prelude::{
     DatumExt, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
 };
@@ -33,6 +35,9 @@ use log::{debug, info, trace};
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::error::Error;
+use std::fs;
+use std::io::Read;
+use std::path::PathBuf;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::Framework;
@@ -59,7 +64,7 @@ pub struct ModelConfig {
 pub type NodeGraph = BTreeMap<usize, NodeType>;
 
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct Model {
     /// input indices
     pub graph: ParsedNodes,
@@ -68,7 +73,7 @@ pub struct Model {
 }
 
 /// Enables model as subnode of other models
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum NodeType {
     /// A node in the model
     Node(Node),
@@ -146,7 +151,7 @@ impl NodeType {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 /// A set of EZKL nodes that represent a computational graph.
 pub struct ParsedNodes {
     nodes: BTreeMap<usize, NodeType>,
@@ -223,6 +228,25 @@ impl Model {
         debug!("\n {}", om.table_nodes());
 
         Ok(om)
+    }
+
+    ///
+    pub fn save(&self, path: PathBuf) -> Result<(), Box<dyn Error>> {
+        let f = std::fs::File::create(path)?;
+        let writer = std::io::BufWriter::new(f);
+        bincode::serialize_into(writer, &self)?;
+        Ok(())
+    }
+
+    ///
+    pub fn load(path: PathBuf) -> Result<Self, Box<dyn Error>> {
+        // read bytes from file
+        let mut f = std::fs::File::open(&path).expect("no file found");
+        let metadata = fs::metadata(&path).expect("unable to read metadata");
+        let mut buffer = vec![0; metadata.len() as usize];
+        f.read_exact(&mut buffer).expect("buffer overflow");
+        let result = bincode::deserialize(&buffer)?;
+        Ok(result)
     }
 
     /// Generate model parameters for the circuit
@@ -793,7 +817,7 @@ impl Model {
     }
 
     /// Retrieves all constants from the model.
-    pub fn get_all_consts(&self) -> Vec<ValTensor<Fp>> {
+    pub fn get_all_consts(&self) -> Vec<Tensor<Fp>> {
         let mut consts = vec![];
         for node in self.graph.nodes.values() {
             match node {
@@ -841,10 +865,13 @@ impl Model {
                         .as_any()
                         .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
                     {
-                        n.opkind = Box::new(crate::circuit::Constant::new(
-                            consts[const_idx].clone(),
+                        let mut op = crate::circuit::Constant::new(
+                            constant.quantized_values.clone(),
                             constant.raw_values.clone(),
-                        ));
+                        );
+                        op.pre_assign(consts[const_idx].clone());
+                        n.opkind = Box::new(op);
+
                         const_idx += 1;
                     };
                 }

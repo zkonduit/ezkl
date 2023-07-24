@@ -240,21 +240,21 @@ impl GraphModules {
         module_res: &Option<ModuleForwardResult>,
         instances: &mut ModuleInstances,
     ) {
-        if visibility.is_hashed() {
-            instances
-                .poseidon
-                .extend(module_res.clone().unwrap().poseidon_hash.unwrap());
-        } else if visibility.is_encrypted() {
-            instances.elgamal.extend(
-                module_res
-                    .clone()
-                    .unwrap()
-                    .elgamal
-                    .unwrap()
-                    .ciphertexts
-                    .into_iter()
-                    .flatten(),
-            );
+        if let Some(res) = module_res {
+            if visibility.is_hashed() {
+                instances
+                    .poseidon
+                    .extend(res.poseidon_hash.clone().unwrap());
+            } else if visibility.is_encrypted() {
+                instances.elgamal.extend(
+                    res.elgamal
+                        .clone()
+                        .unwrap()
+                        .ciphertexts
+                        .into_iter()
+                        .flatten(),
+                );
+            }
         }
     }
 

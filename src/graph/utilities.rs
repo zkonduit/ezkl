@@ -4,7 +4,7 @@ use super::{GraphError, Visibility};
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::poly::PolyOp;
-use crate::tensor::{Tensor, TensorError, TensorType, ValTensor, ValType};
+use crate::tensor::{Tensor, TensorError, TensorType};
 use halo2curves::bn256::Fr as Fp;
 use halo2curves::ff::PrimeField;
 use log::{debug, warn};
@@ -309,7 +309,7 @@ pub fn new_op_from_onnx(
             let constant_scale = if dt == DatumType::Bool { 0 } else { scale };
             // Quantize the raw value
             let quantized_value =
-                tensor_to_valtensor(raw_value.clone(), constant_scale, param_visibility)?;
+                quantize_tensor(raw_value.clone(), constant_scale, param_visibility)?;
             // Create a constant op
             Box::new(crate::circuit::ops::Constant::new(
                 quantized_value,
@@ -412,7 +412,7 @@ pub fn new_op_from_onnx(
                 let boxed_op = inp.opkind();
                 if let Some(c) = extract_const_raw_values(boxed_op) {
                     inputs.remove(idx);
-                    params = Some(tensor_to_valtensor(c, max_scale, param_visibility)?);
+                    params = Some(quantize_tensor(c, max_scale, param_visibility)?);
                 }
             }
 
@@ -557,13 +557,13 @@ pub fn new_op_from_onnx(
                 (padding[0], padding[1], stride[0], stride[1]);
 
             let kernel = extract_tensor_value(conv_node.kernel.clone())?;
-            let kernel = tensor_to_valtensor(kernel, scale, param_visibility)?;
+            let kernel = quantize_tensor(kernel, scale, param_visibility)?;
 
             let bias = match conv_node.bias.clone() {
                 Some(b) => {
                     let const_value = extract_tensor_value(b)?;
 
-                    let val = tensor_to_valtensor(
+                    let val = quantize_tensor(
                         const_value,
                         scale + inputs[0].out_scales()[0],
                         param_visibility,
@@ -621,13 +621,13 @@ pub fn new_op_from_onnx(
                 (padding[0], padding[1], stride[0], stride[1]);
 
             let kernel = extract_tensor_value(deconv_node.kernel.clone())?;
-            let kernel = tensor_to_valtensor(kernel, scale, param_visibility)?;
+            let kernel = quantize_tensor(kernel, scale, param_visibility)?;
 
             let bias = match deconv_node.bias.clone() {
                 Some(b) => {
                     let const_value = extract_tensor_value(b)?;
 
-                    let val = tensor_to_valtensor(
+                    let val = quantize_tensor(
                         const_value,
                         scale + inputs[0].out_scales()[0],
                         param_visibility,
@@ -805,7 +805,7 @@ pub fn extract_const_raw_values(boxed_op: Box<dyn crate::circuit::Op<Fp>>) -> Op
 /// Extracts the quantized values from a [crate::circuit::ops::Constant] op.
 pub fn extract_const_quantized_values(
     boxed_op: Box<dyn crate::circuit::Op<Fp>>,
-) -> Option<ValTensor<Fp>> {
+) -> Option<Tensor<Fp>> {
     boxed_op
         .as_any()
         .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
@@ -813,58 +813,23 @@ pub fn extract_const_quantized_values(
 }
 
 /// Converts a tensor to a [ValTensor] with a given scale.
-pub fn tensor_to_valtensor<F: PrimeField + TensorType + PartialOrd>(
+pub fn quantize_tensor<F: PrimeField + TensorType + PartialOrd>(
     const_value: Tensor<f32>,
     scale: u32,
     visibility: Visibility,
-) -> Result<ValTensor<F>, Box<dyn std::error::Error>> {
-    let mut value: ValTensor<F> = match visibility {
-        Visibility::Public => const_value
-            .map(|x| {
-                crate::tensor::ValType::Constant(crate::fieldutils::i128_to_felt::<F>(
-                    quantize_float(&x.into(), 0.0, scale).unwrap(),
-                ))
-            })
-            .into(),
-        Visibility::Private | Visibility::Hashed | Visibility::Encrypted => const_value
-            .map(|x| {
-                crate::tensor::ValType::Value(halo2_proofs::circuit::Value::known(
-                    crate::fieldutils::i128_to_felt::<F>(
-                        quantize_float(&x.into(), 0.0, scale).unwrap(),
-                    ),
-                ))
-            })
-            .into(),
-    };
+) -> Result<Tensor<F>, Box<dyn std::error::Error>> {
+    let mut value: Tensor<F> = const_value.map(|x| {
+        crate::fieldutils::i128_to_felt::<F>(quantize_float(&x.into(), 0.0, scale).unwrap())
+    });
     value.set_scale(scale);
+    value.set_visibility(visibility);
     Ok(value)
 }
 
-/// Flatten a vector of [ValTensor]s into a single [ValTensor].
-pub(crate) fn flatten_valtensors(
-    tensors: Vec<ValTensor<Fp>>,
-) -> Result<Vec<ValTensor<Fp>>, Box<dyn std::error::Error>> {
-    if tensors.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let mut merged: Vec<ValType<Fp>> = tensors[0]
-        .get_inner_tensor()?
-        .into_iter()
-        .collect::<Vec<_>>();
-
-    for tensor in tensors.iter().skip(1) {
-        let vals = tensor.get_inner_tensor()?.into_iter();
-        merged.extend(vals);
-    }
-
-    let tensor = Tensor::new(Some(&merged), &[merged.len()])?;
-    Ok(vec![tensor.into()])
-}
-
+use crate::tensor::ValTensor;
 /// Split a [ValTensor] into a vector of [ValTensor]s.
 pub(crate) fn split_valtensor(
-    values: ValTensor<Fp>,
+    values: &ValTensor<Fp>,
     shapes: Vec<Vec<usize>>,
 ) -> Result<Vec<ValTensor<Fp>>, Box<dyn std::error::Error>> {
     let mut tensors: Vec<ValTensor<Fp>> = Vec::new();
@@ -890,13 +855,18 @@ pub mod tests {
         let tensor2: Tensor<Fp> = (10..20).map(|x| x.into()).into();
         let tensor3: Tensor<Fp> = (20..30).map(|x| x.into()).into();
 
-        let flattened =
-            flatten_valtensors(vec![tensor1.into(), tensor2.into(), tensor3.into()]).unwrap();
+        let mut tensor = Tensor::new(Some(&[tensor1, tensor2, tensor3]), &[3])
+            .unwrap()
+            .combine()
+            .unwrap();
 
-        assert_eq!(flattened[0].len(), 30);
+        tensor.set_visibility(Visibility::Public);
 
-        let split =
-            split_valtensor(flattened[0].clone(), vec![vec![2, 5], vec![10], vec![5, 2]]).unwrap();
+        let flattened: ValTensor<Fp> = tensor.into();
+
+        assert_eq!(flattened.len(), 30);
+
+        let split = split_valtensor(&flattened, vec![vec![2, 5], vec![10], vec![5, 2]]).unwrap();
 
         assert_eq!(split.len(), 3);
         assert_eq!(split[0].len(), 10);
