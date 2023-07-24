@@ -166,6 +166,8 @@ jobs:
         run: cargo nextest run --release --verbose tests::mock_public_params_ --test-threads 32
       - name: Mock proving tests (hashed inputs)
         run: cargo nextest run --release --verbose tests::mock_hashed_input_::t  --test-threads 32
+      - name: Mock proving tests (hashed params)
+        run: cargo nextest run --release --verbose tests::mock_hashed_params_::t  --test-threads 32
       - name: Mock proving tests (hashed outputs)
         run: cargo nextest run --release --verbose tests::mock_hashed_output_::t  --test-threads 32
       - name: Mock proving tests (encrypted inputs)
