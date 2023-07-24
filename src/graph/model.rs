@@ -64,7 +64,7 @@ pub struct ModelConfig {
 pub type NodeGraph = BTreeMap<usize, NodeType>;
 
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct Model {
     /// input indices
     pub graph: ParsedNodes,
@@ -73,7 +73,7 @@ pub struct Model {
 }
 
 /// Enables model as subnode of other models
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum NodeType {
     /// A node in the model
     Node(Node),
@@ -151,7 +151,7 @@ impl NodeType {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 /// A set of EZKL nodes that represent a computational graph.
 pub struct ParsedNodes {
     nodes: BTreeMap<usize, NodeType>,

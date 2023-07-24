@@ -50,6 +50,16 @@ pub struct Node {
     pub idx: usize,
 }
 
+impl PartialEq for Node {
+    fn eq(&self, other: &Node) -> bool {
+        (self.out_scale == other.out_scale)
+            && (self.inputs == other.inputs)
+            && (self.out_dims == other.out_dims)
+            && (self.idx == other.idx)
+            && (self.opkind.as_string() == other.opkind.as_string())
+    }
+}
+
 impl Node {
     /// Converts a tract [OnnxNode] into an ezkl [Node].
     /// # Arguments:

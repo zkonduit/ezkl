@@ -8,8 +8,6 @@ use crate::{
     tensor::{self, Tensor, TensorError, TensorType, ValTensor},
 };
 use halo2curves::ff::PrimeField;
-use serde::ser::SerializeStruct;
-use std::marker::PhantomData;
 
 use self::{lookup::LookupOp, region::RegionCtx};
 
@@ -82,7 +80,6 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>:
     fn as_any(&self) -> &dyn Any;
 }
 
-
 impl<F: PrimeField + TensorType + PartialOrd> Clone for Box<dyn Op<F>> {
     fn clone(&self) -> Self {
         self.clone_dyn()
@@ -140,8 +137,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
 
 /// A wrapper for an operation that has been rescaled.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Rescaled<F: PrimeField + TensorType + PartialOrd>
-{
+pub struct Rescaled<F: PrimeField + TensorType + PartialOrd> {
     /// The operation to be rescaled.
     #[serde(with = "serde_traitobject")]
     pub inner: Box<dyn Op<F>>,
@@ -149,8 +145,7 @@ pub struct Rescaled<F: PrimeField + TensorType + PartialOrd>
     pub scale: Vec<(usize, u128)>,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd + Serialize> Op<F> for Rescaled<F>
-{
+impl<F: PrimeField + TensorType + PartialOrd + Serialize> Op<F> for Rescaled<F> {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -254,100 +249,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
 }
 
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
     ///
     pub quantized_values: Tensor<F>,
     ///
     pub raw_values: Tensor<f32>,
     ///
-    pub pre_assigned_val: Option<ValTensor<F>>
-}
-
-impl<F: PrimeField + TensorType + PartialOrd + Serialize> Serialize for Constant<F> {
-    // we assume pre_assigned_val is just None 
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer
-    {
-        let mut state = serializer.serialize_struct("Constant", 2)?;
-        state.serialize_field("quantized_values", &self.quantized_values)?;
-        state.serialize_field("raw_values", &self.raw_values)?;
-        state.end()
-    }
-}
-
-impl<'de, F: PrimeField + TensorType + PartialOrd + for<'b> Deserialize<'b>> Deserialize<'de> for  Constant<F> {
-    // we assume pre_assigned_val is just None
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        // leave it untagged
-        #[derive(Deserialize)]
-        #[serde(field_identifier, rename_all = "lowercase")]
-        enum Field {
-            QuantizedValues,
-            RawValues,
-        }
-
-        struct ConstantVisitor<F: PrimeField + TensorType + PartialOrd + for<'b> Deserialize<'b>> {
-            _marker: std::marker::PhantomData<F>,
-        }
-
-        impl<'de, F: PrimeField + TensorType + PartialOrd + for<'b> Deserialize<'b>>
-            serde::de::Visitor<'de> for ConstantVisitor<F>
-        {
-            type Value = Constant<F>;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("struct Snark")
-            }
-
-            fn visit_map<V>(self, mut map: V) -> Result<Constant<F>, V::Error>
-            where
-                V: serde::de::MapAccess<'de>,
-            {
-                let mut quantized_values: Option<Tensor<F>> = None;
-                let mut raw_values: Option<Tensor<f32>> = None;
-
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        Field::QuantizedValues => {
-                            if quantized_values.is_some() {
-                                return Err(serde::de::Error::duplicate_field("quantized_values"));
-                            }
-                            quantized_values = Some(map.next_value()?);
-                        }
-                        Field::RawValues => {
-                            if raw_values.is_some() {
-                                return Err(serde::de::Error::duplicate_field("raw_values"));
-                            }
-                            raw_values = Some(map.next_value()?);
-                        }
-                    }
-                }
-                let quantized_values =
-                quantized_values.ok_or_else(|| serde::de::Error::missing_field("quantized_values"))?;
-                let raw_values = raw_values.ok_or_else(|| serde::de::Error::missing_field("raw_values"))?;
-
-
-                Ok(Constant {
-                    quantized_values,
-                    raw_values,
-                    pre_assigned_val: None
-                })
-            }
-        }
-        deserializer.deserialize_struct(
-            "Constant",
-            &["quantized_values", "raw_values", "pre_assigned_val"],
-            ConstantVisitor {
-                _marker: PhantomData,
-            },
-        )
-    }
-
+    #[serde(skip)]
+    pub pre_assigned_val: Option<ValTensor<F>>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
@@ -360,13 +270,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
         }
     }
 
-    /// 
+    ///
     pub fn pre_assign(&mut self, val: ValTensor<F>) {
         self.pre_assigned_val = Some(val)
     }
 }
 
-impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<'de>> Op<F> for Constant<F> {
+impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<'de>> Op<F>
+    for Constant<F>
+{
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -392,7 +304,11 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             Ok(Some(value.clone()))
         } else {
             // we gotta constrain it once
-            Ok(Some(layouts::identity(config, region, &[self.quantized_values.clone().into()])?))
+            Ok(Some(layouts::identity(
+                config,
+                region,
+                &[self.quantized_values.clone().into()],
+            )?))
         }
     }
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
@@ -408,8 +324,7 @@ fn homogenize_input_scales<F: PrimeField + TensorType + PartialOrd + Serialize>(
     op: impl Op<F> + Clone,
     input_scales: Vec<u32>,
     inputs_to_scale: Vec<usize>,
-) -> Result<Box<dyn Op<F>>, Box<dyn Error>>
-{
+) -> Result<Box<dyn Op<F>>, Box<dyn Error>> {
     if inputs_to_scale.is_empty() {
         return Ok(Box::new(op));
     }

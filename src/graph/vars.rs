@@ -101,7 +101,7 @@ impl std::fmt::Display for Visibility {
 }
 
 /// Represents whether the model input, model parameters, and model output are Public or Private to the prover.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, PartialOrd)]
 pub struct VarVisibility {
     /// Input to the model or computational graph
     pub input: Visibility,
