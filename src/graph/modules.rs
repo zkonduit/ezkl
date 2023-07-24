@@ -250,7 +250,7 @@ impl GraphModules {
                     res.elgamal
                         .clone()
                         .unwrap()
-                        .encrypted_messages
+                        .ciphertexts
                         .into_iter()
                         .flatten(),
                 );
