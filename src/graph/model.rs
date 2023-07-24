@@ -35,6 +35,9 @@ use log::{debug, info, trace};
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::error::Error;
+use std::fs;
+use std::io::Read;
+use std::path::PathBuf;
 use tabled::Table;
 use tract_onnx;
 use tract_onnx::prelude::Framework;
@@ -225,6 +228,25 @@ impl Model {
         debug!("\n {}", om.table_nodes());
 
         Ok(om)
+    }
+
+    ///
+    pub fn save(&self, path: PathBuf) -> Result<(), Box<dyn Error>> {
+        let f = std::fs::File::create(path)?;
+        let writer = std::io::BufWriter::new(f);
+        bincode::serialize_into(writer, &self)?;
+        Ok(())
+    }
+
+    ///
+    pub fn load(path: PathBuf) -> Result<Self, Box<dyn Error>> {
+        // read bytes from file
+        let mut f = std::fs::File::open(&path).expect("no file found");
+        let metadata = fs::metadata(&path).expect("unable to read metadata");
+        let mut buffer = vec![0; metadata.len() as usize];
+        f.read(&mut buffer).expect("buffer overflow");
+        let result = bincode::deserialize(&buffer)?;
+        Ok(result)
     }
 
     /// Generate model parameters for the circuit

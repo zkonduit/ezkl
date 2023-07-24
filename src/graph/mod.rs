@@ -1005,33 +1005,39 @@ impl Circuit<Fp> for GraphCircuit {
 
         // now we need to assign the flattened params to the model
         let mut model = self.model.clone();
-        if !self.model.get_all_consts().is_empty() {
+        let param_visibility = self.settings.run_args.param_visibility;
+        trace!("running params module layout");
+        if !self.model.get_all_consts().is_empty() && param_visibility.requires_processing() {
             // now we need to flatten the params
             let consts = self.model.get_all_consts();
-            let mut flattened_params = vec![Tensor::new(Some(&consts), &[consts.len()])
-                .map_err(|_| {
-                    log::error!("failed to flatten params");
-                    PlonkError::Synthesis
-                })?
-                .combine()
-                .map_err(|_| {
-                    log::error!("failed to combine params");
-                    PlonkError::Synthesis
-                })?
-                .into()];
+
+            let mut flattened_params = {
+                let mut t = Tensor::new(Some(&consts), &[consts.len()])
+                    .map_err(|_| {
+                        log::error!("failed to flatten params");
+                        PlonkError::Synthesis
+                    })?
+                    .combine()
+                    .map_err(|_| {
+                        log::error!("failed to combine params");
+                        PlonkError::Synthesis
+                    })?;
+                t.set_visibility(param_visibility);
+                vec![t.into()]
+            };
 
             // now do stuff to the model params
             GraphModules::layout(
                 &mut layouter,
                 &config.module_configs,
                 &mut flattened_params,
-                self.settings.run_args.param_visibility,
+                param_visibility,
                 &mut instance_offset,
                 &self.module_settings.params,
             )?;
 
             let shapes = self.model.const_shapes();
-
+            trace!("replacing processed consts");
             let split_params = split_valtensor(&flattened_params[0], shapes).map_err(|_| {
                 log::error!("failed to split params");
                 PlonkError::Synthesis
@@ -1043,7 +1049,7 @@ impl Circuit<Fp> for GraphCircuit {
 
         // create a new module for the model (space 2)
         layouter.assign_region(|| "_new_module", |_| Ok(()))?;
-        trace!("Laying out model");
+        trace!("laying out model");
         let mut outputs = model
             .layout(
                 config.model_config.clone(),

@@ -68,7 +68,8 @@ https://user-images.githubusercontent.com/45801863/236771676-5bbbbfd1-ba6f-418a-
 Note that the library requires a nightly version of the rust toolchain. You can change the default toolchain by running:
 
 ```bash
-rustup override set nightly
+# we set it to this version because of https://github.com/rust-lang/rust/issues/110829
+rustup override set nightly-2023-04-17
 ```
 
 After which you may build the library

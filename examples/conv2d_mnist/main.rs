@@ -6,6 +6,7 @@ use ezkl::fieldutils;
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
+use halo2_proofs::poly::kzg::multiopen::VerifierGWC;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{
@@ -14,20 +15,19 @@ use halo2_proofs::{
     },
     poly::{
         commitment::ParamsProver,
-        ipa::{
-            commitment::{IPACommitmentScheme, ParamsIPA},
-            multiopen::ProverIPA,
+        kzg::{
+            commitment::{KZGCommitmentScheme, ParamsKZG},
+            multiopen::ProverGWC,
             strategy::SingleStrategy,
         },
-        VerificationStrategy,
     },
     transcript::{
         Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
     },
 };
-use halo2curves::ff::PrimeField;
-use halo2curves::pasta::vesta;
-use halo2curves::pasta::Fp as F;
+use halo2curves::bn256::Bn256;
+use halo2curves::bn256::Fr as F;
+
 use instant::Instant;
 use mnist::*;
 use rand::rngs::OsRng;
@@ -39,7 +39,6 @@ const K: usize = 20;
 
 #[derive(Clone)]
 struct Config<
-    F: PrimeField + TensorType + PartialOrd,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust stable
     const CLASSES: usize,
     const BITS: usize,
@@ -63,7 +62,6 @@ struct Config<
 
 #[derive(Clone)]
 struct MyCircuit<
-    F: PrimeField + TensorType + PartialOrd,
     const LEN: usize, //LEN = CHOUT x OH x OW flattened
     const CLASSES: usize,
     const BITS: usize,
@@ -82,12 +80,11 @@ struct MyCircuit<
     // Given the stateless ConvConfig type information, a DNN trace is determined by its input and the parameters of its layers.
     // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
     input: ValTensor<F>,
-    l0_params: [ValTensor<F>; 2],
-    l2_params: [ValTensor<F>; 2],
+    l0_params: [Tensor<F>; 2],
+    l2_params: [Tensor<F>; 2],
 }
 
 impl<
-        F: PrimeField + TensorType + PartialOrd,
         const LEN: usize,
         const CLASSES: usize,
         const BITS: usize,
@@ -102,7 +99,6 @@ impl<
         const PADDING: usize,
     > Circuit<F>
     for MyCircuit<
-        F,
         LEN,
         CLASSES,
         BITS,
@@ -119,7 +115,6 @@ where
     Value<F>: TensorType,
 {
     type Config = Config<
-        F,
         LEN,
         CLASSES,
         BITS,
@@ -203,7 +198,7 @@ where
                         .layer_config
                         .layout(
                             &mut region,
-                            &[self.l2_params[0].clone(), x],
+                            &[self.l2_params[0].clone().into(), x],
                             Box::new(PolyOp::Einsum {
                                 equation: "ij,j->ik".to_string(),
                             }),
@@ -295,7 +290,7 @@ pub fn runconv() {
     input.reshape(&[1, 1, 28, 28]).unwrap();
 
     let myparams = params::Params::new();
-    let mut l0_kernels: ValTensor<F> = Tensor::<Value<F>>::from(
+    let mut l0_kernels = Tensor::<F>::from(
         myparams
             .kernels
             .clone()
@@ -307,47 +302,35 @@ pub fn runconv() {
                 let dx = fl * 32_f32;
                 let rounded = dx.round();
                 let integral: i32 = unsafe { rounded.to_int_unchecked() };
-                let felt = fieldutils::i32_to_felt(integral);
-                Value::known(felt)
+                fieldutils::i32_to_felt(integral)
             }),
-    )
-    .into();
+    );
 
-    l0_kernels
-        .reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH])
-        .unwrap();
+    l0_kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
+    l0_kernels.set_visibility(ezkl::graph::Visibility::Private);
 
-    let l0_bias: ValTensor<F> = Tensor::<Value<F>>::from(
-        (0..OUT_CHANNELS).map(|_| Value::known(fieldutils::i32_to_felt(0))),
-    )
-    .into();
+    let mut l0_bias = Tensor::<F>::from((0..OUT_CHANNELS).map(|_| fieldutils::i32_to_felt(0)));
+    l0_bias.set_visibility(ezkl::graph::Visibility::Private);
 
-    let mut l2_biases: ValTensor<F> =
-        Tensor::<Value<F>>::from(myparams.biases.into_iter().map(|fl| {
-            let dx = fl * 32_f32;
-            let rounded = dx.round();
-            let integral: i32 = unsafe { rounded.to_int_unchecked() };
-            let felt = fieldutils::i32_to_felt(integral);
-            Value::known(felt)
-        }))
-        .into();
+    let mut l2_biases = Tensor::<F>::from(myparams.biases.into_iter().map(|fl| {
+        let dx = fl * 32_f32;
+        let rounded = dx.round();
+        let integral: i32 = unsafe { rounded.to_int_unchecked() };
+        fieldutils::i32_to_felt(integral)
+    }));
+    l2_biases.set_visibility(ezkl::graph::Visibility::Private);
+    l2_biases.reshape(&[l2_biases.len(), 1]);
 
-    l2_biases.reshape(&[l2_biases.len(), 1]).unwrap();
-
-    let mut l2_weights: ValTensor<F> =
-        Tensor::<Value<F>>::from(myparams.weights.into_iter().flatten().map(|fl| {
-            let dx = fl * 32_f32;
-            let rounded = dx.round();
-            let integral: i32 = unsafe { rounded.to_int_unchecked() };
-            let felt = fieldutils::i32_to_felt(integral);
-            Value::known(felt)
-        }))
-        .into();
-
-    l2_weights.reshape(&[CLASSES, LEN]).unwrap();
+    let mut l2_weights = Tensor::<F>::from(myparams.weights.into_iter().flatten().map(|fl| {
+        let dx = fl * 32_f32;
+        let rounded = dx.round();
+        let integral: i32 = unsafe { rounded.to_int_unchecked() };
+        fieldutils::i32_to_felt(integral)
+    }));
+    l2_weights.set_visibility(ezkl::graph::Visibility::Private);
+    l2_weights.reshape(&[CLASSES, LEN]);
 
     let circuit = MyCircuit::<
-        F,
         LEN,
         10,
         16,
@@ -411,7 +394,7 @@ pub fn runconv() {
     //	Real proof
     println!("SRS GENERATION");
     let now = Instant::now();
-    let params: ParamsIPA<vesta::Affine> = ParamsIPA::new(K as u32);
+    let params: ParamsKZG<Bn256> = ParamsKZG::new(K as u32);
     let elapsed = now.elapsed();
     println!(
         "SRS GENERATION took {}.{}",
@@ -446,7 +429,7 @@ pub fn runconv() {
     let now = Instant::now();
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
     let mut rng = OsRng;
-    create_proof::<IPACommitmentScheme<_>, ProverIPA<_>, _, _, _, _>(
+    create_proof::<KZGCommitmentScheme<_>, ProverGWC<_>, _, _, _, _>(
         &params,
         &pk,
         &[circuit],
@@ -466,7 +449,7 @@ pub fn runconv() {
     let now = Instant::now();
     let strategy = SingleStrategy::new(&params);
     let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
-    let verify = verify_proof(
+    let verify = verify_proof::<_, VerifierGWC<_>, _, _, _>(
         &params,
         pk.get_vk(),
         strategy,

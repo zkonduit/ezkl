@@ -855,7 +855,7 @@ pub mod tests {
         let tensor2: Tensor<Fp> = (10..20).map(|x| x.into()).into();
         let tensor3: Tensor<Fp> = (20..30).map(|x| x.into()).into();
 
-        let tensor = Tensor::new(Some(&[tensor1, tensor2, tensor3]), &[3])
+        let mut tensor = Tensor::new(Some(&[tensor1, tensor2, tensor3]), &[3])
             .unwrap()
             .combine()
             .unwrap();

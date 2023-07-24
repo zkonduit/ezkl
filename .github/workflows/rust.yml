@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - name: Build
@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: mwilliamson/setup-wasmtime-action@v2
@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - name: Docs
@@ -70,7 +70,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -90,7 +90,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -104,7 +104,7 @@ jobs:
       - name: Install wasm runner
         run: cargo install wasm-server-runner
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2023-06-27-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2023-04-17-x86_64-unknown-linux-gnu
       - name: Run wasm verifier tests
         run: wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std"
 
@@ -115,7 +115,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: mwilliamson/setup-wasmtime-action@v2
@@ -135,7 +135,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -152,7 +152,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -191,7 +191,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: mwilliamson/setup-wasmtime-action@v2
@@ -226,7 +226,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -268,7 +268,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -302,7 +302,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -330,7 +330,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -356,7 +356,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -381,7 +381,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -405,7 +405,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -424,7 +424,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -444,7 +444,7 @@ jobs:
           python-version: "3.7"
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - name: Install solc
@@ -468,7 +468,7 @@ jobs:
             python-version: "3.9"
         - uses: actions-rs/toolchain@v1
           with:
-            toolchain: nightly-2023-06-27
+            toolchain: nightly-2023-04-17
             override: true
             components: rustfmt, clippy
         - uses: baptiste0928/cargo-install@v1
