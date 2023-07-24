@@ -624,6 +624,7 @@ mod conv {
                 .map(|_| F::random(OsRng)),
         );
         kernels.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
+        kernels.set_visibility(crate::graph::Visibility::Private);
 
         let bias = Tensor::from((0..{ out_channels }).map(|_| F::random(OsRng)));
 
@@ -654,6 +655,7 @@ mod conv {
                 .map(|i| F::from(i as u64)),
         );
         kernels.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
+        kernels.set_visibility(crate::graph::Visibility::Private);
 
         let circuit = ConvCircuit::<F> {
             inputs: [image, kernels].to_vec(),
