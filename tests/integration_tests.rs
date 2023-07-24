@@ -709,9 +709,11 @@ mod native_tests {
         let test_dir = TEST_DIR.path().to_str().unwrap();
         let model_path = format!("{}/{}/network.onnx", test_dir, example_name);
         let serialization_path = format!("{}/{}/network.ezkl", test_dir, example_name);
-        let mut run_args = ezkl::commands::RunArgs::default();
-        run_args.param_visibility = Visibility::Public;
-        run_args.batch_size = 1;
+        let run_args = ezkl::commands::RunArgs {
+            param_visibility: Visibility::Public,
+            batch_size: 1,
+            ..Default::default()
+        };
 
         let model =
             ezkl::graph::Model::new(&mut std::fs::File::open(model_path).unwrap(), run_args)

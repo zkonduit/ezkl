@@ -69,8 +69,8 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
             meta,
             hash_inputs.clone().try_into().unwrap(),
             partial_sbox,
-            rc_a.try_into().unwrap(),
-            rc_b.try_into().unwrap(),
+            rc_a,
+            rc_b,
         );
 
         PoseidonConfig {
@@ -290,9 +290,9 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                 },
             )?;
 
-            return Ok(assigned_input.into());
+            Ok(assigned_input.into())
         } else {
-            return Ok(result.into());
+            Ok(result.into())
         }
     }
 

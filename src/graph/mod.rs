@@ -796,7 +796,7 @@ impl GraphCircuit {
 
         if visibility.params.requires_processing() {
             let params = self.model.get_all_consts();
-            if params.len() > 0 {
+            if !params.is_empty() {
                 let flattened_params = Tensor::new(Some(&params), &[params.len()])?.combine()?;
                 processed_params = Some(GraphModules::forward(
                     &[flattened_params],

@@ -168,7 +168,7 @@ mod py_tests {
                 "--to",
                 "notebook",
                 "--execute",
-                &path.to_str().unwrap(),
+                (path.to_str().unwrap()),
             ])
             .status()
             .expect("failed to execute process");

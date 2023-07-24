@@ -247,7 +247,7 @@ pub async fn verify_proof_via_solidity(
 
     let encoded = func.encode_input(&[
         Token::FixedArray(public_inputs.into_iter().map(Token::Uint).collect()),
-        Token::Bytes(proof.proof.into()),
+        Token::Bytes(proof.proof),
     ])?;
 
     info!("encoded: {:#?}", hex::encode(&encoded));
@@ -371,7 +371,7 @@ pub async fn verify_proof_with_data_attestation(
 
     let encoded = func.encode_input(&[
         Token::FixedArray(public_inputs.into_iter().map(Token::Uint).collect()),
-        Token::Bytes(proof.proof.into()),
+        Token::Bytes(proof.proof),
     ])?;
 
     info!("encoded: {:#?}", hex::encode(&encoded));

@@ -244,7 +244,7 @@ impl Model {
         let mut f = std::fs::File::open(&path).expect("no file found");
         let metadata = fs::metadata(&path).expect("unable to read metadata");
         let mut buffer = vec![0; metadata.len() as usize];
-        f.read(&mut buffer).expect("buffer overflow");
+        f.read_exact(&mut buffer).expect("buffer overflow");
         let result = bincode::deserialize(&buffer)?;
         Ok(result)
     }
