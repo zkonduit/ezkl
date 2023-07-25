@@ -744,11 +744,27 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
                 "mock",
                 "-W",
                 format!("{}/{}/input.json", test_dir, counter_example).as_str(),
                 "-M",
-                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
@@ -802,6 +818,22 @@ mod native_tests {
                 "--data",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -950,6 +982,22 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
                 "gen-witness",
                 "-D",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
@@ -1046,6 +1094,22 @@ mod native_tests {
                 "--data",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1197,6 +1261,22 @@ mod native_tests {
                 "--data",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1420,6 +1500,22 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
         let srs_path = init_params(settings_path.clone().into());
         let srs_path = format!("--srs-path={}", srs_path);
 
@@ -1574,6 +1670,19 @@ mod native_tests {
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 format!("--settings-path={}", settings_path).as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!("--settings-path={}", settings_path).as_str(),
             ])
             .status()
             .expect("failed to execute process");

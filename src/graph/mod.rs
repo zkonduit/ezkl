@@ -854,6 +854,16 @@ impl GraphCircuit {
         Self::new_from_settings(model, params.clone(), check_mode)
     }
 
+    /// Create a new circuit from a set of input data and [GraphSettings].
+    pub fn preprocessed_from_settings(
+        params: &GraphSettings,
+        model_path: &std::path::PathBuf,
+        check_mode: CheckMode,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let model = Model::load(model_path.clone())?;
+        Self::new_from_settings(model, params.clone(), check_mode)
+    }
+
     ///
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn populate_on_chain_test_data(
