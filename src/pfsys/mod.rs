@@ -8,7 +8,6 @@ use crate::circuit::CheckMode;
 use crate::tensor::TensorType;
 use clap::ValueEnum;
 use halo2_proofs::circuit::Value;
-use halo2_proofs::dev::MockProver;
 use halo2_proofs::plonk::{
     create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey,
 };
@@ -61,7 +60,7 @@ impl ToPyObject for TranscriptType {
     }
 }
 
-/// converts fp into Vec<u64>
+/// converts field elem into `Vec<u64>`
 pub fn field_to_vecu64<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> [u64; 4] {
     let bytes: <F as PrimeField>::Repr = fp.to_repr();
     let bytes_first_u64 = u64::from_le_bytes(bytes.as_ref()[0..8][..].try_into().unwrap());
@@ -87,7 +86,7 @@ pub fn vecu64_to_field<F: PrimeField + SerdeObject + FromUniformBytes<64>>(b: &[
     F::from_uniform_bytes(&bytes)
 }
 
-/// converts fp into Vec<u64> in Montgomery form
+/// converts fp into `Vec<u64>` in Montgomery form
 pub fn field_to_vecu64_montgomery<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> [u64; 4] {
     let repr = serde_json::to_string(&fp).unwrap();
     let b: [u64; 4] = serde_json::from_str(&repr).unwrap();
@@ -350,7 +349,7 @@ impl<F: PrimeField + SerdeObject, C: CurveAffine> From<Snark<F, C>> for SnarkWit
     }
 }
 
-/// Creates a [VerifyingKey] and [ProvingKey] for a [ModelCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`).
+/// Creates a [VerifyingKey] and [ProvingKey] for a [crate::graph::GraphCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`).
 pub fn create_keys<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
     circuit: &C,
     params: &'_ Scheme::ParamsProver,
@@ -410,15 +409,6 @@ where
         + Ord,
     Scheme::Curve: Serialize + DeserializeOwned,
 {
-    // quickly mock prove as a sanity check
-    if check_mode == CheckMode::SAFE {
-        debug!("running mock prover");
-        let prover = MockProver::run(params.k(), &circuit, instances.clone())?;
-        prover
-            .verify()
-            .map_err(|e| Box::<dyn Error>::from(crate::execute::ExecutionError::VerifyError(e)))?;
-    }
-
     let mut transcript = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);
     let mut rng = OsRng;
     let number_instance = instances.iter().map(|x| x.len()).collect();

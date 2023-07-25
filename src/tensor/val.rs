@@ -130,7 +130,19 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<ValType<F>>> for ValTe
 impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<F>> for ValTensor<F> {
     fn from(t: Tensor<F>) -> ValTensor<F> {
         ValTensor::Value {
-            inner: t.map(|x| x.into()),
+            inner: t.map(|x|
+                if let Some(vis) = t.visibility {
+                    match vis {
+                        Visibility::Public => x.into(),
+                        Visibility::Private | Visibility::Hashed | Visibility::Encrypted => {
+                            Value::known(x).into()
+                        }
+                    }
+                }
+                else {
+                    panic!("visibility should be set to convert a tensor of field elements to a ValTensor.")
+                }
+            ),
             dims: t.dims().to_vec(),
             scale: 1,
         }
@@ -276,7 +288,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         Ok(slice)
     }
 
-    /// Fetches the inner tensor as a [Tensor<Value<F>>]
+    /// Fetches the inner tensor as a `Tensor<ValType<F>`
     pub fn get_inner_tensor(&self) -> Result<Tensor<ValType<F>>, TensorError> {
         Ok(match self {
             ValTensor::Value { inner: v, .. } => v.clone(),
@@ -284,7 +296,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         })
     }
 
-    /// Fetches the inner tensor as a [Tensor<Value<F>>]
+    /// Fetches the inner tensor as a `Tensor<Value<F>>`
     pub fn get_inner(&self) -> Result<Tensor<Value<F>>, TensorError> {
         Ok(match self {
             ValTensor::Value { inner: v, .. } => v.map(|x| match x {
@@ -303,6 +315,22 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                 inner: v, dims: d, ..
             } => {
                 *v = v.expand(dims)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(Box::new(TensorError::WrongMethod));
+            }
+        };
+        Ok(())
+    }
+
+    /// Calls `move_axis` on the inner tensor.
+    pub fn move_axis(&mut self, source: usize, destination: usize) -> Result<(), Box<dyn Error>> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                *v = v.move_axis(source, destination)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {

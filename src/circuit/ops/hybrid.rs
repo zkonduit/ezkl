@@ -1,5 +1,4 @@
-use std::any::Any;
-
+use super::*;
 use crate::{
     circuit::{self, layouts, Tolerance},
     fieldutils::{felt_to_i128, i128_to_felt},
@@ -7,8 +6,6 @@ use crate::{
     tensor::{self, Tensor, TensorError, TensorType, ValTensor},
 };
 use serde::{Deserialize, Serialize};
-
-use super::{lookup::LookupOp, region::RegionCtx, ForwardResult, Op};
 use halo2curves::ff::PrimeField;
 // import run args from model
 
@@ -34,10 +31,10 @@ pub enum HybridOp {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
+    /// Returns a reference to the Any trait.
     fn as_any(&self) -> &dyn Any {
         self
     }
-
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, inputs: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let x = inputs[0].clone().map(|x| felt_to_i128(x));

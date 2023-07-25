@@ -41,6 +41,7 @@ impl LookupOp {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
+    /// Returns a reference to the Any trait.
     fn as_any(&self) -> &dyn Any {
         self
     }

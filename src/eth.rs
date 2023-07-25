@@ -204,7 +204,7 @@ pub async fn verify_proof_via_solidity(
     addr: ethers::types::Address,
     rpc_url: Option<&str>,
 ) -> Result<bool, Box<dyn Error>> {
-    use ethers::abi::{ParamType, Function, Param, StateMutability, Token};
+    use ethers::abi::{Function, Param, ParamType, StateMutability, Token};
 
     let mut public_inputs: Vec<U256> = vec![];
     let flattened_instances = proof.instances.into_iter().flatten();
@@ -216,43 +216,48 @@ pub async fn verify_proof_via_solidity(
     }
 
     info!("public_inputs: {:#?}", public_inputs);
-    info!("proof: {:#?}", ethers::types::Bytes::from(proof.proof.to_vec()));
+    info!(
+        "proof: {:#?}",
+        ethers::types::Bytes::from(proof.proof.to_vec())
+    );
 
     #[allow(deprecated)]
     let func = Function {
         name: "verify".to_owned(),
         inputs: vec![
-            Param { 
-                name: "pubInputs".to_owned(), 
-                kind: ParamType::FixedArray(Box::new(ParamType::Uint(256)), public_inputs.len()), 
-                internal_type: None 
+            Param {
+                name: "pubInputs".to_owned(),
+                kind: ParamType::FixedArray(Box::new(ParamType::Uint(256)), public_inputs.len()),
+                internal_type: None,
             },
-            Param { name: "proof".to_owned(), kind: ParamType::Bytes, internal_type: None },
+            Param {
+                name: "proof".to_owned(),
+                kind: ParamType::Bytes,
+                internal_type: None,
+            },
         ],
-        outputs: vec![
-            Param { 
-                name: "success".to_owned(), 
-                kind: ParamType::Bool, 
-                internal_type: None
-            }
-        ],
+        outputs: vec![Param {
+            name: "success".to_owned(),
+            kind: ParamType::Bool,
+            internal_type: None,
+        }],
         constant: None,
         state_mutability: StateMutability::View,
     };
 
     let encoded = func.encode_input(&[
         Token::FixedArray(public_inputs.into_iter().map(Token::Uint).collect()),
-        Token::Bytes(proof.proof.into()),
+        Token::Bytes(proof.proof),
     ])?;
 
     info!("encoded: {:#?}", hex::encode(&encoded));
     let (anvil, client) = setup_eth_backend(rpc_url).await?;
     let tx: TypedTransaction = TransactionRequest::default()
-                .to(addr)
-                .from(client.address())
-                .data(encoded)
-                .into();
-            debug!("transaction {:#?}", tx);
+        .to(addr)
+        .from(client.address())
+        .data(encoded)
+        .into();
+    debug!("transaction {:#?}", tx);
 
     let result = client.call(&tx, None).await;
 
@@ -323,7 +328,7 @@ pub async fn verify_proof_with_data_attestation(
     addr: ethers::types::Address,
     rpc_url: Option<&str>,
 ) -> Result<bool, Box<dyn Error>> {
-    use ethers::abi::{ParamType, Function, Param, StateMutability, Token};
+    use ethers::abi::{Function, Param, ParamType, StateMutability, Token};
 
     let mut public_inputs: Vec<U256> = vec![];
     let flattened_instances = proof.instances.into_iter().flatten();
@@ -335,43 +340,48 @@ pub async fn verify_proof_with_data_attestation(
     }
 
     info!("public_inputs: {:#?}", public_inputs);
-    info!("proof: {:#?}", ethers::types::Bytes::from(proof.proof.to_vec()));
+    info!(
+        "proof: {:#?}",
+        ethers::types::Bytes::from(proof.proof.to_vec())
+    );
 
     #[allow(deprecated)]
     let func = Function {
         name: "verifyWithDataAttestation".to_owned(),
         inputs: vec![
-            Param { 
-                name: "pubInputs".to_owned(), 
-                kind: ParamType::FixedArray(Box::new(ParamType::Uint(256)), public_inputs.len()), 
-                internal_type: None 
+            Param {
+                name: "pubInputs".to_owned(),
+                kind: ParamType::FixedArray(Box::new(ParamType::Uint(256)), public_inputs.len()),
+                internal_type: None,
             },
-            Param { name: "proof".to_owned(), kind: ParamType::Bytes, internal_type: None },
+            Param {
+                name: "proof".to_owned(),
+                kind: ParamType::Bytes,
+                internal_type: None,
+            },
         ],
-        outputs: vec![
-            Param { 
-                name: "success".to_owned(), 
-                kind: ParamType::Bool, 
-                internal_type: None
-            }
-        ],
+        outputs: vec![Param {
+            name: "success".to_owned(),
+            kind: ParamType::Bool,
+            internal_type: None,
+        }],
         constant: None,
         state_mutability: StateMutability::View,
     };
 
     let encoded = func.encode_input(&[
         Token::FixedArray(public_inputs.into_iter().map(Token::Uint).collect()),
-        Token::Bytes(proof.proof.into()),
+        Token::Bytes(proof.proof),
     ])?;
 
     info!("encoded: {:#?}", hex::encode(&encoded));
     let (anvil, client) = setup_eth_backend(rpc_url).await?;
     let tx: TypedTransaction = TransactionRequest::default()
-                .to(addr)
-                .from(client.address())
-                .data(encoded)
-                .into();
-            debug!("transaction {:#?}", tx);
+        .to(addr)
+        .from(client.address())
+        .data(encoded)
+        .into();
+    debug!("transaction {:#?}", tx);
     info!(
         "estimated verify gas cost: {:#?}",
         client.estimate_gas(&tx, None).await?
@@ -529,9 +539,7 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
         // `_runtime_bytecode` exceeds the limit
         panic!(
             "Solidity runtime bytecode size is: {:#?},
-            which exceeds 24577 bytes limit.
-            Try setting '--optimzer-runs 1' when generating the verifier
-            so SOLC can optimize for the smallest deployment",
+            which exceeds 24577 bytes limit.",
             size
         );
     }
@@ -570,12 +578,10 @@ use std::io::{BufRead, BufReader};
 /// Can optionally attest to on-chain inputs
 pub fn fix_verifier_sol(
     input_file: PathBuf,
+    num_instances: u32,
     input_data: Option<(u32, Vec<CallsToAccount>)>,
-    output_data: Option<Vec<CallsToAccount>>
+    output_data: Option<Vec<CallsToAccount>>,
 ) -> Result<String, Box<dyn Error>> {
-    let file = File::open(input_file.clone())?;
-    let reader = BufReader::new(file);
-
     let mut transcript_addrs: Vec<u32> = Vec::new();
     let mut modified_lines: Vec<String> = Vec::new();
 
@@ -597,30 +603,9 @@ pub fn fix_verifier_sol(
         Regex::new(r"(staticcall\(gas\(\), 0x8, (0x[0-9a-fA-F]+), 0x180, (0x[0-9a-fA-F]+), 0x20)")?;
     let bool_pattern = Regex::new(r":bool")?;
 
-    // Count the number of pub inputs
-    let mut start = None;
-    let mut end = None;
-    for (i, line) in reader.lines().enumerate() {
-        let line = line?;
-        if line.trim().starts_with("mstore(0x20") && start.is_none() {
-            start = Some(i as u32);
-        }
-
-        if line.trim().starts_with("mstore(0x0") {
-            end = Some(i as u32);
-            break;
-        }
-    }
-
-    let num_pubinputs = if let Some(s) = start {
-        end.unwrap() - s
-    } else {
-        0
-    };
-
-    let mut max_pubinputs_addr = 0;
-    if num_pubinputs > 0 {
-        max_pubinputs_addr = num_pubinputs * 32 - 32;
+    let mut max_pubinputs_addr: u32 = 0;
+    if num_instances > 0 {
+        max_pubinputs_addr = num_instances * 32 - 32;
     }
 
     let file = File::open(input_file)?;
@@ -861,7 +846,7 @@ pub fn fix_verifier_sol(
     // Hardcode the fixed array length of pubInputs param
     contract = contract.replace(
         "uint256[] calldata",
-        &format!("uint256[{}] calldata", num_pubinputs),
+        &format!("uint256[{}] calldata", num_instances),
     );
 
     // Find the index of "assembly {"
@@ -897,7 +882,7 @@ pub fn fix_verifier_sol(
         offset,
     );
 
-    offset += 32 * num_pubinputs;
+    offset += 32 * num_instances;
 
     // replace all mload(add(proof, 0x...))) with mload(0x...
     contract_slice_string = replace_vars_with_offset(

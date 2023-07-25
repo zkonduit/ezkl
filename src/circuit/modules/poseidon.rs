@@ -34,7 +34,7 @@ pub struct PoseidonConfig<const WIDTH: usize, const RATE: usize> {
     ///
     pub hash_inputs: Vec<Column<Advice>>,
     ///
-    pub instance: Column<Instance>,
+    pub instance: Option<Column<Instance>>,
     ///
     pub pow5_config: Pow5Config<Fp, WIDTH, RATE>,
 }
@@ -54,6 +54,34 @@ pub struct PoseidonChip<
 }
 
 impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, const L: usize>
+    PoseidonChip<S, WIDTH, RATE, L>
+{
+    /// Creates a new PoseidonChip
+    pub fn configure_with_cols(
+        meta: &mut ConstraintSystem<Fp>,
+        partial_sbox: Column<Advice>,
+        rc_a: [Column<Fixed>; WIDTH],
+        rc_b: [Column<Fixed>; WIDTH],
+        hash_inputs: Vec<Column<Advice>>,
+        instance: Option<Column<Instance>>,
+    ) -> PoseidonConfig<WIDTH, RATE> {
+        let pow5_config = Pow5Chip::configure::<S>(
+            meta,
+            hash_inputs.clone().try_into().unwrap(),
+            partial_sbox,
+            rc_a,
+            rc_b,
+        );
+
+        PoseidonConfig {
+            pow5_config,
+            instance,
+            hash_inputs,
+        }
+    }
+}
+
+impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, const L: usize>
     Module<Fp> for PoseidonChip<S, WIDTH, RATE, L>
 {
     type Config = PoseidonConfig<WIDTH, RATE>;
@@ -64,7 +92,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         "Poseidon"
     }
 
-    fn instance_increment_input(&self, _: Vec<usize>) -> Vec<usize> {
+    fn instance_increment_input(&self) -> Vec<usize> {
         vec![1]
     }
 
@@ -75,7 +103,6 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
             _marker: PhantomData,
         }
     }
-
     /// Configuration of the PoseidonChip
     fn configure(meta: &mut ConstraintSystem<Fp>) -> Self::Config {
         //  instantiate the required columns
@@ -93,22 +120,17 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         }
         meta.enable_constant(rc_b[0]);
 
-        let pow5_config = Pow5Chip::configure::<S>(
-            meta,
-            hash_inputs.clone().try_into().unwrap(),
-            partial_sbox,
-            rc_a.try_into().unwrap(),
-            rc_b.try_into().unwrap(),
-        );
-
         let instance = meta.instance_column();
         meta.enable_equality(instance);
 
-        PoseidonConfig {
-            pow5_config,
-            instance,
+        Self::configure_with_cols(
+            meta,
+            partial_sbox,
+            rc_a.try_into().unwrap(),
+            rc_b.try_into().unwrap(),
             hash_inputs,
-        }
+            Some(instance),
+        )
     }
 
     fn layout_inputs(
@@ -226,7 +248,6 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                         layouter.namespace(|| "block_hasher"),
                     )?;
 
-                    // you may need to 0 pad the inputs so they fit
                     let hash = hasher.hash(
                         layouter.namespace(|| "hash"),
                         block.to_vec().try_into().map_err(|_| Error::Synthesis)?,
@@ -253,22 +274,26 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
             _ => panic!(),
         };
 
-        layouter.assign_region(
-            || "constrain output",
-            |mut region| {
-                let expected_var = region.assign_advice_from_instance(
-                    || "pub input anchor",
-                    self.config.instance,
-                    row_offset[0],
-                    self.config.hash_inputs[0],
-                    0,
-                )?;
+        if let Some(instance) = self.config.instance {
+            layouter.assign_region(
+                || "constrain output",
+                |mut region| {
+                    let expected_var = region.assign_advice_from_instance(
+                        || "pub input anchor",
+                        instance,
+                        row_offset[0],
+                        self.config.hash_inputs[0],
+                        0,
+                    )?;
 
-                region.constrain_equal(output.cell(), expected_var.cell())
-            },
-        )?;
+                    region.constrain_equal(output.cell(), expected_var.cell())
+                },
+            )?;
 
-        Ok(assigned_input.into())
+            Ok(assigned_input.into())
+        } else {
+            Ok(result.into())
+        }
     }
 
     ///
@@ -285,6 +310,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                 .map(|block| {
                     let mut block = block.to_vec();
                     let remainder = block.len() % L;
+
                     if remainder != 0 {
                         block.extend(vec![Fp::ZERO; L - remainder].iter());
                     }

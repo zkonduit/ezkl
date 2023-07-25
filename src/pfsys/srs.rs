@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
-/// for now we use the urls of the powers of tau ceremony from https://github.com/han0110/halo2-kzg-srs
+/// for now we use the urls of the powers of tau ceremony from <https://github.com/han0110/halo2-kzg-srs>
 pub const PUBLIC_SRS_URL: &str =
     "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/perpetual-powers-of-tau-raw-";
 

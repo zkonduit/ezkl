@@ -303,6 +303,19 @@ fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &
         .collect::<Vec<Vec<[u64; 4]>>>();
     results_dict.set_item("ciphertexts", cipher_text).unwrap();
 
+    let encrypted_messages: Vec<Vec<[u64; 4]>> = elgamal_results
+        .encrypted_messages
+        .iter()
+        .map(|v| {
+            v.iter()
+                .map(field_to_vecu64_montgomery)
+                .collect::<Vec<[u64; 4]>>()
+        })
+        .collect::<Vec<Vec<[u64; 4]>>>();
+    results_dict
+        .set_item("encrypted_messages", encrypted_messages)
+        .unwrap();
+
     let variables_dict = PyDict::new(py);
     let variables = &elgamal_results.variables;
 
@@ -392,7 +405,7 @@ pub struct GraphConfig {
 }
 
 /// Defines the circuit for a computational graph / model loaded from a `.onnx` file.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct GraphCircuit {
     /// The model / graph of computations.
     pub model: Model,
@@ -783,14 +796,13 @@ impl GraphCircuit {
 
         if visibility.params.requires_processing() {
             let params = self.model.get_all_consts();
-            let flattened_params = flatten_valtensors(params)?
-                .get_felt_evals()?
-                .into_iter()
-                .into();
-            processed_params = Some(GraphModules::forward(
-                &[flattened_params],
-                visibility.params,
-            )?);
+            if !params.is_empty() {
+                let flattened_params = Tensor::new(Some(&params), &[params.len()])?.combine()?;
+                processed_params = Some(GraphModules::forward(
+                    &[flattened_params],
+                    visibility.params,
+                )?);
+            }
         }
 
         let model_results = self.model.forward(inputs)?;
@@ -991,45 +1003,53 @@ impl Circuit<Fp> for GraphCircuit {
             &self.module_settings.input,
         )?;
 
-        // now we need to flatten the params
-        let mut flattened_params = vec![];
-        if !self.model.get_all_consts().is_empty() {
-            flattened_params =
-                vec![
-                    flatten_valtensors(self.model.get_all_consts()).map_err(|_| {
-                        log::error!("failed to flatten params");
-                        PlonkError::Synthesis
-                    })?,
-                ];
-        }
-
-        // now do stuff to the model params
-        GraphModules::layout(
-            &mut layouter,
-            &config.module_configs,
-            &mut flattened_params,
-            self.settings.run_args.param_visibility,
-            &mut instance_offset,
-            &self.module_settings.params,
-        )?;
-
         // now we need to assign the flattened params to the model
         let mut model = self.model.clone();
-        if !self.model.get_all_consts().is_empty() {
-            // now the flattened_params have been assigned to and we-assign them to the model consts such that they are constrained to be equal
-            model.replace_consts(
-                split_valtensor(flattened_params[0].clone(), self.model.const_shapes()).map_err(
-                    |_| {
-                        log::error!("failed to replace params");
+        let param_visibility = self.settings.run_args.param_visibility;
+        trace!("running params module layout");
+        if !self.model.get_all_consts().is_empty() && param_visibility.requires_processing() {
+            // now we need to flatten the params
+            let consts = self.model.get_all_consts();
+
+            let mut flattened_params = {
+                let mut t = Tensor::new(Some(&consts), &[consts.len()])
+                    .map_err(|_| {
+                        log::error!("failed to flatten params");
                         PlonkError::Synthesis
-                    },
-                )?,
-            );
+                    })?
+                    .combine()
+                    .map_err(|_| {
+                        log::error!("failed to combine params");
+                        PlonkError::Synthesis
+                    })?;
+                t.set_visibility(param_visibility);
+                vec![t.into()]
+            };
+
+            // now do stuff to the model params
+            GraphModules::layout(
+                &mut layouter,
+                &config.module_configs,
+                &mut flattened_params,
+                param_visibility,
+                &mut instance_offset,
+                &self.module_settings.params,
+            )?;
+
+            let shapes = self.model.const_shapes();
+            trace!("replacing processed consts");
+            let split_params = split_valtensor(&flattened_params[0], shapes).map_err(|_| {
+                log::error!("failed to split params");
+                PlonkError::Synthesis
+            })?;
+
+            // now the flattened_params have been assigned to and we-assign them to the model consts such that they are constrained to be equal
+            model.replace_consts(split_params);
         }
 
         // create a new module for the model (space 2)
         layouter.assign_region(|| "_new_module", |_| Ok(()))?;
-        trace!("Laying out model");
+        trace!("laying out model");
         let mut outputs = model
             .layout(
                 config.model_config.clone(),

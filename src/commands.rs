@@ -310,15 +310,45 @@ pub enum Commands {
         settings_path: PathBuf,
     },
 
+    /// Mock aggregate proofs
+    #[command(arg_required_else_help = true)]
+    MockAggregate {
+        /// The path to the snarks to aggregate over
+        #[arg(long)]
+        aggregation_snarks: Vec<PathBuf>,
+        /// logrows used for aggregation circuit
+        #[arg(long)]
+        logrows: u32,
+    },
+
+    /// setup aggregation circuit :)
+    #[command(arg_required_else_help = true)]
+    SetupAggregate {
+        /// The path to samples of snarks that will be aggregated over
+        #[arg(long)]
+        sample_snarks: Vec<PathBuf>,
+        /// The path to save the desired verfication key file
+        #[arg(long, default_value = "vk_aggr.key")]
+        vk_path: PathBuf,
+        /// The path to save the desired proving key file
+        #[arg(long, default_value = "pk_aggr.key")]
+        pk_path: PathBuf,
+        /// The path to SRS
+        #[arg(long)]
+        srs_path: PathBuf,
+        /// logrows used for aggregation circuit
+        #[arg(long)]
+        logrows: u32,
+    },
     /// Aggregates proofs :)
     #[command(arg_required_else_help = true)]
     Aggregate {
         /// The path to the snarks to aggregate over
         #[arg(long)]
         aggregation_snarks: Vec<PathBuf>,
-        /// The path to save the desired verfication key file
+        /// The path to load the desired verfication key file
         #[arg(long, default_value = "vk_aggr.key")]
-        vk_path: PathBuf,
+        pk_path: PathBuf,
         /// The path to the desired output file
         #[arg(long, default_value = "proof_aggr.proof")]
         proof_path: PathBuf,
@@ -524,7 +554,9 @@ pub enum Commands {
         /// The path to output the Solidity verifier ABI
         #[arg(long, default_value = "verifier_aggr_abi.json")]
         abi_path: PathBuf,
-        // todo, optionally allow supplying proving key
+        // aggregated circuit settings paths, used to calculate the number of instances in the aggregate proof
+        #[arg(long)]
+        aggregation_settings: Vec<PathBuf>,
     },
     /// Verifies a proof, returning accept or reject
     #[command(arg_required_else_help = true)]

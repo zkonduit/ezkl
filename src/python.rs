@@ -212,6 +212,20 @@ fn mock(witness: PathBuf, model: PathBuf, settings_path: PathBuf) -> PyResult<bo
     Ok(true)
 }
 
+/// mocks the aggregate prover
+#[pyfunction(signature = (
+    aggregation_snarks,
+    logrows,
+))]
+fn mock_aggregate(aggregation_snarks: Vec<PathBuf>, logrows: u32) -> PyResult<bool> {
+    crate::execute::mock_aggregate(aggregation_snarks, logrows).map_err(|e| {
+        let err_str = format!("Failed to run mock: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
+
+    Ok(true)
+}
+
 /// runs the prover on a set of inputs
 #[pyfunction(signature = (
     model,
@@ -298,6 +312,29 @@ fn verify(
     Ok(true)
 }
 
+#[pyfunction(signature = (
+    sample_snarks,
+    vk_path,
+    pk_path,
+    srs_path,
+    logrows,
+))]
+fn setup_aggregate(
+    sample_snarks: Vec<PathBuf>,
+    vk_path: PathBuf,
+    pk_path: PathBuf,
+    srs_path: PathBuf,
+    logrows: u32,
+) -> Result<bool, PyErr> {
+    crate::execute::setup_aggregate(sample_snarks, vk_path, pk_path, srs_path, logrows)
+        .map_err(|e| {
+            let err_str = format!("Failed to setup aggregate: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
+
+    Ok(true)
+}
+
 /// creates an aggregated proof
 #[pyfunction(signature = (
     proof_path,
@@ -369,19 +406,13 @@ fn create_evm_verifier(
     srs_path: PathBuf,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
-    abi_path: PathBuf
+    abi_path: PathBuf,
 ) -> Result<bool, PyErr> {
-    crate::execute::create_evm_verifier(
-        vk_path,
-        srs_path,
-        settings_path,
-        sol_code_path,
-        abi_path
-    )
-    .map_err(|e| {
-        let err_str = format!("Failed to run create_evm_verifier: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
+    crate::execute::create_evm_verifier(vk_path, srs_path, settings_path, sol_code_path, abi_path)
+        .map_err(|e| {
+            let err_str = format!("Failed to run create_evm_verifier: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
 
     Ok(true)
 }
@@ -401,7 +432,7 @@ fn create_evm_data_attestation_verifier(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-    input_data: PathBuf
+    input_data: PathBuf,
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_data_attestation_verifier(
         vk_path,
@@ -409,7 +440,7 @@ fn create_evm_data_attestation_verifier(
         settings_path,
         sol_code_path,
         abi_path,
-        input_data
+        input_data,
     )
     .map_err(|e| {
         let err_str = format!("Failed to run create_evm_data_attestation_verifier: {}", e);
@@ -513,19 +544,22 @@ fn verify_evm(
     vk_path,
     srs_path,
     sol_code_path,
-    abi_path
+    abi_path,
+    aggregation_settings
 ))]
 fn create_evm_verifier_aggr(
     vk_path: PathBuf,
     srs_path: PathBuf,
     sol_code_path: PathBuf,
-    abi_path: PathBuf
+    abi_path: PathBuf,
+    aggregation_settings: Vec<PathBuf>,
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_aggregate_verifier(
         vk_path,
         srs_path,
         sol_code_path,
-        abi_path
+        abi_path,
+        aggregation_settings,
     )
     .map_err(|e| {
         let err_str = format!("Failed to run create_evm_verifier_aggr: {}", e);
@@ -567,6 +601,8 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(gen_settings, m)?)?;
     m.add_function(wrap_pyfunction!(calibrate_settings, m)?)?;
     m.add_function(wrap_pyfunction!(aggregate, m)?)?;
+    m.add_function(wrap_pyfunction!(mock_aggregate, m)?)?;
+    m.add_function(wrap_pyfunction!(setup_aggregate, m)?)?;
     m.add_function(wrap_pyfunction!(verify_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_evm, m)?)?;

@@ -2,7 +2,6 @@
 //! Number of round constants: 340
 //! Round constants for GF(p):
 //! Parameters for using rate 4 Poseidon with the BN256 field.
-//! Patterned after [halo2_gadgets::poseidon::primitives::fp]
 //! The parameters can be reproduced by running the following Sage script from
 //! [this repository](https://github.com/daira/pasta-hadeshash):
 //!
@@ -13,7 +12,7 @@
 //! where 1 means "prime field", 0 means "non-negative sbox", 254 is the bitsize
 //! of the field, 5 is the Poseidon width (rate + 1), 8 is the number of full
 //! rounds, 60 is the number of partial rounds.
-//! More info here => https://hackmd.io/@letargicus/SJOvx48Nn
+//! More info here => <https://hackmd.io/@letargicus/SJOvx48Nn>
 use halo2_proofs::halo2curves::bn256::Fr as Fp;
 pub(crate) const ROUND_CONSTANTS: [[Fp; 2]; 64] = [
     [

@@ -34,7 +34,9 @@ pub struct ForwardResult<F: PrimeField + TensorType + PartialOrd> {
 }
 
 /// An enum representing operations that can be represented as constraints in a circuit.
-pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + Sync + Any {
+pub trait Op<F: PrimeField + TensorType + PartialOrd>:
+    std::fmt::Debug + Send + Sync + Any + serde_traitobject::Serialize + serde_traitobject::Deserialize
+{
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError>;
     /// Returns a string representation of the operation.
@@ -134,15 +136,16 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
 }
 
 /// A wrapper for an operation that has been rescaled.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Rescaled<F: PrimeField + TensorType + PartialOrd> {
     /// The operation to be rescaled.
+    #[serde(with = "serde_traitobject")]
     pub inner: Box<dyn Op<F>>,
     /// The scale of the operation's inputs.
     pub scale: Vec<(usize, u128)>,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
+impl<F: PrimeField + TensorType + PartialOrd + Serialize> Op<F> for Rescaled<F> {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -214,7 +217,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Rescaled<F> {
 }
 
 /// An unknown operation.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Unknown;
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
@@ -246,32 +249,41 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
 }
 
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
     ///
-    pub quantized_values: ValTensor<F>,
+    pub quantized_values: Tensor<F>,
     ///
     pub raw_values: Tensor<f32>,
+    ///
+    #[serde(skip)]
+    pub pre_assigned_val: Option<ValTensor<F>>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
     ///
-    pub fn new(quantized_values: ValTensor<F>, raw_values: Tensor<f32>) -> Self {
+    pub fn new(quantized_values: Tensor<F>, raw_values: Tensor<f32>) -> Self {
         Self {
             quantized_values,
             raw_values,
+            pre_assigned_val: None,
         }
+    }
+
+    ///
+    pub fn pre_assign(&mut self, val: ValTensor<F>) {
+        self.pre_assigned_val = Some(val)
     }
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
+impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<'de>> Op<F>
+    for Constant<F>
+{
     fn as_any(&self) -> &dyn Any {
         self
     }
     fn f(&self, _: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
-        let mut output = self.quantized_values.get_felt_evals().unwrap();
-        // make sure its the right shape
-        output.reshape(self.quantized_values.dims());
+        let output = self.quantized_values.clone();
 
         Ok(ForwardResult {
             output,
@@ -284,11 +296,20 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
     }
     fn layout(
         &self,
-        _: &mut crate::circuit::BaseConfig<F>,
-        _: &mut RegionCtx<F>,
+        config: &mut crate::circuit::BaseConfig<F>,
+        region: &mut RegionCtx<F>,
         _: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        Ok(Some(self.quantized_values.clone()))
+        if let Some(value) = &self.pre_assigned_val {
+            Ok(Some(value.clone()))
+        } else {
+            // we gotta constrain it once
+            Ok(Some(layouts::identity(
+                config,
+                region,
+                &[self.quantized_values.clone().into()],
+            )?))
+        }
     }
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
         Box::new(self.clone())
@@ -299,7 +320,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Constant<F> {
     }
 }
 
-fn homogenize_input_scales<F: PrimeField + TensorType + PartialOrd>(
+fn homogenize_input_scales<F: PrimeField + TensorType + PartialOrd + Serialize>(
     op: impl Op<F> + Clone,
     input_scales: Vec<u32>,
     inputs_to_scale: Vec<usize>,

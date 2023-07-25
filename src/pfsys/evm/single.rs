@@ -24,7 +24,6 @@ pub enum SimpleError {
     ProofVerify,
 }
 
-
 /// Create EVM verifier yulcode
 pub fn gen_evm_verifier(
     params: &ParamsKZG<Bn256>,

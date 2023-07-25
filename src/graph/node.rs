@@ -5,6 +5,8 @@ use crate::graph::new_op_from_onnx;
 use crate::graph::GraphError;
 use halo2curves::bn256::Fr as Fp;
 use log::trace;
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
@@ -27,17 +29,12 @@ fn display_opkind(v: &Box<dyn Op<Fp>>) -> String {
     v.as_string()
 }
 
-/// A single operation in a Model.
-/// # Arguments:
-/// * `opkind` - [OpKind] enum, i.e what operation this node represents.
-/// * `out_scale` - The denominator in the fixed point representation. Tensors of differing scales should not be combined.
-/// * `out_dims` - The shape of the activations which enter and leave the self.
-/// * `inputs` - The indices of other nodes that feed into this self.
-/// * `idx` - The node's unique identifier.
-#[derive(Clone, Debug, Tabled)]
+/// A single operation in a [crate::graph::Model].
+#[derive(Clone, Debug, Tabled, Serialize, Deserialize)]
 pub struct Node {
-    /// [OpKind] enum, i.e what operation this node represents.
+    /// [Op] i.e what operation this node represents.
     #[tabled(display_with = "display_opkind")]
+    #[serde(with = "serde_traitobject")]
     pub opkind: Box<dyn Op<Fp>>,
     /// The denominator in the fixed point representation for the node's output. Tensors of differing scales should not be combined.
     pub out_scale: u32,
@@ -51,6 +48,16 @@ pub struct Node {
     pub out_dims: Vec<usize>,
     /// The node's unique identifier.
     pub idx: usize,
+}
+
+impl PartialEq for Node {
+    fn eq(&self, other: &Node) -> bool {
+        (self.out_scale == other.out_scale)
+            && (self.inputs == other.inputs)
+            && (self.out_dims == other.out_dims)
+            && (self.idx == other.idx)
+            && (self.opkind.as_string() == other.opkind.as_string())
+    }
 }
 
 impl Node {

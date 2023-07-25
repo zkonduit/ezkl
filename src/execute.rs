@@ -17,7 +17,7 @@ use crate::pfsys::evm::evm_verify;
 use crate::pfsys::evm::{
     aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier, DeploymentCode, YulCode,
 };
-use crate::pfsys::{create_keys, load_vk, save_params, save_pk, Snark, TranscriptType};
+use crate::pfsys::{create_keys, load_pk, load_vk, save_params, save_pk, Snark, TranscriptType};
 use crate::pfsys::{create_proof_circuit, save_vk, srs::*, verify_proof_circuit};
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::types::H160;
@@ -59,13 +59,53 @@ use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
+use std::io::ErrorKind::NotFound;
+#[cfg(not(target_arch = "wasm32"))]
 use std::io::{Cursor, Write};
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
+use std::process::Command;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::OnceLock;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
 use thiserror::Error;
+
+#[cfg(not(target_arch = "wasm32"))]
+static _SOLC_REQUIREMENT: OnceLock<bool> = OnceLock::new();
+#[cfg(not(target_arch = "wasm32"))]
+fn check_solc_requirement() {
+    info!("checking solc installation..");
+    _SOLC_REQUIREMENT.get_or_init(|| match Command::new("solc").arg("--version").output() {
+        Ok(output) => {
+            #[cfg(not(target_arch = "wasm32"))]
+            debug!("solc output: {:#?}", output);
+            #[cfg(not(target_arch = "wasm32"))]
+            debug!("solc output success: {:#?}", output.status.success());
+            assert!(
+                output.status.success(),
+                "`solc` check failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            #[cfg(not(target_arch = "wasm32"))]
+            debug!("solc check passed, proceeding");
+            true
+        }
+        Err(e) => {
+            if let NotFound = e.kind() {
+                panic!(
+                    "`solc` was not found! Consider using solc-select or check your PATH! {}",
+                    e
+                );
+            } else {
+                panic!("`solc` check failed: {}", e);
+            }
+        }
+    });
+}
+
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
 pub enum ExecutionError {
@@ -142,14 +182,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             srs_path,
             settings_path,
             sol_code_path,
-            abi_path
-        } => create_evm_verifier(
-            vk_path,
-            srs_path,
-            settings_path,
-            sol_code_path,
-            abi_path
-        ),
+            abi_path,
+        } => create_evm_verifier(vk_path, srs_path, settings_path, sol_code_path, abi_path),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMDataAttestationVerifier {
             vk_path,
@@ -164,7 +198,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             settings_path,
             sol_code_path,
             abi_path,
-            data
+            data,
         ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifierAggr {
@@ -172,11 +206,13 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             srs_path,
             sol_code_path,
             abi_path,
+            aggregation_settings,
         } => create_evm_aggregate_verifier(
             vk_path,
             srs_path,
             sol_code_path,
             abi_path,
+            aggregation_settings,
         ),
         Commands::Setup {
             model,
@@ -230,10 +266,21 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         )
         .await
         .map(|_| ()),
+        Commands::MockAggregate {
+            aggregation_snarks,
+            logrows,
+        } => mock_aggregate(aggregation_snarks, logrows),
+        Commands::SetupAggregate {
+            sample_snarks,
+            vk_path,
+            pk_path,
+            srs_path,
+            logrows,
+        } => setup_aggregate(sample_snarks, vk_path, pk_path, srs_path, logrows),
         Commands::Aggregate {
             proof_path,
             aggregation_snarks,
-            vk_path,
+            pk_path,
             srs_path,
             transcript,
             logrows,
@@ -241,7 +288,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => aggregate(
             proof_path,
             aggregation_snarks,
-            vk_path,
+            pk_path,
             srs_path,
             transcript,
             logrows,
@@ -656,7 +703,10 @@ pub(crate) async fn calibrate(
                 res.push(task);
             }
         }
-        if let Some(best) = res.into_iter().max_by_key(|p| p.run_args.logrows) {
+        if let Some(best) = res
+            .into_iter()
+            .max_by_key(|p| (p.run_args.bits, p.run_args.scale))
+        {
             // pick the one with the largest logrows
             found_params.push(best);
         }
@@ -785,6 +835,7 @@ pub(crate) fn create_evm_verifier(
     sol_code_path: PathBuf,
     abi_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
 
@@ -798,13 +849,18 @@ pub(crate) fn create_evm_verifier(
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(yul_code.as_bytes());
 
-    let output = fix_verifier_sol(sol_code_path.clone(), None, None)?;
-    
+    let output = fix_verifier_sol(
+        sol_code_path.clone(),
+        num_instance.iter().sum::<usize>().try_into().unwrap(),
+        None,
+        None,
+    )?;
+
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(output.as_bytes());
 
     // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path.clone(), "Verifier", None)?;
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Verifier", None)?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
@@ -818,9 +874,10 @@ pub(crate) fn create_evm_data_attestation_verifier(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-    input: PathBuf
+    input: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
     use crate::graph::{DataSource, VarVisibility};
+    check_solc_requirement();
 
     let settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, settings.run_args.logrows)?;
@@ -866,11 +923,17 @@ pub(crate) fn create_evm_data_attestation_verifier(
     };
 
     if input_data.is_some() || output_data.is_some() {
-        let output = fix_verifier_sol(sol_code_path.clone(), input_data, output_data)?;
+        let output = fix_verifier_sol(
+            sol_code_path.clone(),
+            num_instance.iter().sum::<usize>().try_into().unwrap(),
+            input_data,
+            output_data,
+        )?;
         let mut f = File::create(sol_code_path.clone())?;
         let _ = f.write(output.as_bytes());
         // fetch abi of the contract
-        let (abi, _, _) = get_contract_artifacts(sol_code_path.clone(), "DataAttestationVerifier", None)?;
+        let (abi, _, _) =
+            get_contract_artifacts(sol_code_path, "DataAttestationVerifier", None)?;
         // save abi to file
         serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
     } else {
@@ -889,6 +952,7 @@ pub(crate) async fn deploy_da_evm(
     rpc_url: Option<String>,
     addr_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let contract_address =
         deploy_da_verifier_via_solidity(settings_path, data, sol_code_path, rpc_url.as_deref())
             .await?;
@@ -906,6 +970,7 @@ pub(crate) async fn deploy_evm(
     rpc_url: Option<String>,
     addr_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let contract_address = deploy_verifier_via_solidity(sol_code_path, rpc_url.as_deref()).await?;
 
     info!("Contract deployed at: {:#?}", contract_address);
@@ -923,6 +988,7 @@ pub(crate) async fn verify_evm(
     uses_data_attestation: bool,
 ) -> Result<(), Box<dyn Error>> {
     use crate::eth::verify_proof_with_data_attestation;
+    check_solc_requirement();
 
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
 
@@ -945,29 +1011,49 @@ pub(crate) fn create_evm_aggregate_verifier(
     srs_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
+    circuit_settings: Vec<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let params: ParamsKZG<Bn256> = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)?;
+
+    let settings: Vec<GraphSettings> = circuit_settings
+        .iter()
+        .map(|path| GraphSettings::load(path).unwrap())
+        .collect::<Vec<_>>();
+
+    let num_public_inputs: usize = settings
+        .iter()
+        .map(|s| s.total_instances().iter().sum::<usize>())
+        .sum();
 
     let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
 
     let yul_code = gen_aggregation_evm_verifier(
         &params,
         &agg_vk,
-        AggregationCircuit::num_instance(),
+        AggregationCircuit::num_instance(num_public_inputs),
         AggregationCircuit::accumulator_indices(),
     )?;
 
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(yul_code.as_bytes());
 
-    let output = fix_verifier_sol(sol_code_path.clone(), None, None)?;
-    
-    
+    let output = fix_verifier_sol(
+        sol_code_path.clone(),
+        AggregationCircuit::num_instance(num_public_inputs)
+            .iter()
+            .sum::<usize>()
+            .try_into()
+            .unwrap(),
+        None,
+        None,
+    )?;
+
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(output.as_bytes());
-    
+
     // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path.clone(), "Verifier", None)?;
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Verifier", None)?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
@@ -1046,7 +1132,6 @@ pub(crate) async fn prove(
     check_mode: CheckMode,
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
     let data = GraphWitness::from_path(data_path)?;
-    use crate::pfsys::load_pk;
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let mut circuit = GraphCircuit::from_settings(&circuit_settings, &model_path, check_mode)?;
 
@@ -1115,6 +1200,7 @@ pub(crate) async fn fuzz(
     run_args: RunArgs,
     settings_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
+    check_solc_requirement();
     let passed = AtomicBool::new(true);
 
     info!("setting up tests");
@@ -1382,18 +1468,10 @@ pub(crate) fn run_fuzz_fn(
     );
 }
 
-pub(crate) fn aggregate(
-    proof_path: PathBuf,
+pub(crate) fn mock_aggregate(
     aggregation_snarks: Vec<PathBuf>,
-    vk_path: PathBuf,
-    srs_path: PathBuf,
-    transcript: TranscriptType,
     logrows: u32,
-    check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
-    // the K used for the aggregation circuit
-    let params = load_params_cmd(srs_path, logrows)?;
-
     let mut snarks = vec![];
     for proof_path in aggregation_snarks.iter() {
         snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
@@ -1406,12 +1484,74 @@ pub(crate) fn aggregate(
         pb
     };
 
+    let circuit = AggregationCircuit::new(&G1Affine::generator().into(), snarks)?;
+
+    let prover = halo2_proofs::dev::MockProver::run(logrows, &circuit, circuit.instances())
+        .map_err(Box::<dyn Error>::from)?;
+    prover.assert_satisfied();
+    prover
+        .verify()
+        .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
+    #[cfg(not(target_arch = "wasm32"))]
+    pb.finish_with_message("Done.");
+    Ok(())
+}
+
+pub(crate) fn setup_aggregate(
+    sample_snarks: Vec<PathBuf>,
+    vk_path: PathBuf,
+    pk_path: PathBuf,
+    srs_path: PathBuf,
+    logrows: u32,
+) -> Result<(), Box<dyn Error>> {
+    // the K used for the aggregation circuit
+    let params = load_params_cmd(srs_path, logrows)?;
+
+    let mut snarks = vec![];
+    for proof_path in sample_snarks.iter() {
+        snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
+    }
+
+    let agg_circuit = AggregationCircuit::new(&params.get_g()[0].into(), snarks)?;
+    let agg_pk =
+        create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(&agg_circuit, &params)?;
+
+    let agg_vk = agg_pk.get_vk();
+
+    // now save
+    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, agg_vk)?;
+    save_pk::<KZGCommitmentScheme<Bn256>>(&pk_path, &agg_pk)?;
+    Ok(())
+}
+
+pub(crate) fn aggregate(
+    proof_path: PathBuf,
+    aggregation_snarks: Vec<PathBuf>,
+    pk_path: PathBuf,
+    srs_path: PathBuf,
+    transcript: TranscriptType,
+    logrows: u32,
+    check_mode: CheckMode,
+) -> Result<(), Box<dyn Error>> {
+    // the K used for the aggregation circuit
+    let params = load_params_cmd(srs_path, logrows)?;
+
+    let mut snarks = vec![];
+    for proof_path in aggregation_snarks.iter() {
+        snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
+    }
+
+    let agg_pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(pk_path, ())?;
+    // proof aggregation
+    #[cfg(not(target_arch = "wasm32"))]
+    let pb = {
+        let pb = init_spinner();
+        pb.set_message("Aggregating (may take a while)...");
+        pb
+    };
+
     {
-        let agg_circuit = AggregationCircuit::new(&params, snarks)?;
-        let agg_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
-            &agg_circuit,
-            &params,
-        )?;
+        let agg_circuit = AggregationCircuit::new(&params.get_g()[0].into(), snarks)?;
 
         let now = Instant::now();
         let snark = create_proof_circuit_kzg(
@@ -1431,7 +1571,6 @@ pub(crate) fn aggregate(
             elapsed.subsec_millis()
         );
         snark.save(&proof_path)?;
-        save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, agg_pk.get_vk())?;
     }
     #[cfg(not(target_arch = "wasm32"))]
     pb.finish_with_message("Done.");

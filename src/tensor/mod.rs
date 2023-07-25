@@ -14,6 +14,7 @@ pub use var::*;
 use crate::{
     circuit::utils,
     fieldutils::{felt_to_i32, i128_to_felt, i32_to_felt},
+    graph::Visibility,
 };
 
 use halo2_proofs::{
@@ -265,6 +266,8 @@ impl TensorType for halo2curves::bn256::Fr {
 pub struct Tensor<T: TensorType> {
     inner: Vec<T>,
     dims: Vec<usize>,
+    scale: Option<u32>,
+    visibility: Option<Visibility>,
 }
 
 impl<T: TensorType> IntoIterator for Tensor<T> {
@@ -446,13 +449,37 @@ impl<T: Clone + TensorType> Tensor<T> {
                 Ok(Tensor {
                     inner: Vec::from(v),
                     dims: Vec::from(dims),
+                    scale: None,
+                    visibility: None,
                 })
             }
             None => Ok(Tensor {
                 inner: vec![T::zero().unwrap(); total_dims],
                 dims: Vec::from(dims),
+                scale: None,
+                visibility: None,
             }),
         }
+    }
+
+    /// set the tensor's (optional) scale parameter
+    pub fn set_scale(&mut self, scale: u32) {
+        self.scale = Some(scale)
+    }
+
+    /// set the tensor's (optional) visibility parameter
+    pub fn set_visibility(&mut self, visibility: Visibility) {
+        self.visibility = Some(visibility)
+    }
+
+    /// getter for scale
+    pub fn scale(&self) -> Option<u32> {
+        self.scale
+    }
+
+    /// getter for visibility
+    pub fn visibility(&self) -> Option<Visibility> {
+        self.visibility
     }
 
     /// Returns the number of elements in the tensor.
@@ -628,6 +655,62 @@ impl<T: Clone + TensorType> Tensor<T> {
     pub fn reshape(&mut self, new_dims: &[usize]) {
         assert!(self.len() == new_dims.iter().product::<usize>());
         self.dims = Vec::from(new_dims);
+    }
+
+    /// Move axis of the tensor
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// let mut a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
+    /// let b = a.move_axis(0, 2).unwrap();
+    /// assert_eq!(b.dims(), &[3, 3, 3]);
+    ///
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 1, 2]).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 3, 5, 2, 4, 6]), &[1, 2, 3]).unwrap();
+    /// let b = a.move_axis(0, 2).unwrap();
+    /// assert_eq!(b, expected);
+    ///
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 3, 2]).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12]), &[2, 2, 3]).unwrap();
+    /// let b = a.move_axis(1, 2).unwrap();
+    /// assert_eq!(b, expected);
+    /// ```
+    pub fn move_axis(&mut self, source: usize, destination: usize) -> Result<Self, TensorError> {
+        assert!(source < self.dims.len());
+        assert!(destination < self.dims.len());
+        let mut new_dims = self.dims.clone();
+        new_dims.remove(source);
+        new_dims.insert(destination, self.dims[source]);
+
+        // now reconfigure the elements appropriately in the new array
+        //  eg. if we have a 3x3x3 array and we want to move the 0th axis to the 2nd position
+        //  we need to move the elements at 0, 1, 2, 3, 4, 5, 6, 7, 8 to 0, 3, 6, 1, 4, 7, 2, 5, 8
+        //  so we need to move the elements at 0, 1, 2 to 0, 3, 6
+        //  and the elements at 3, 4, 5 to 1, 4, 7
+        //  and the elements at 6, 7, 8 to 2, 5, 8
+        let cartesian_coords = new_dims
+            .iter()
+            .map(|d| 0..*d)
+            .multi_cartesian_product()
+            .collect::<Vec<Vec<usize>>>();
+
+        let mut output = Tensor::new(None, &new_dims)?;
+
+        for coord in cartesian_coords {
+            let mut old_coord = vec![0; self.dims.len()];
+            // now fetch the old index
+            for (i, c) in coord.iter().enumerate() {
+                if i == destination {
+                    old_coord[source] = *c;
+                } else if i < source {
+                    old_coord[i] = *c;
+                } else if i >= source {
+                    old_coord[i + 1] = *c;
+                }
+            }
+            output.set(&coord, self.get(&old_coord));
+        }
+
+        Ok(output)
     }
 
     /// Broadcasts the tensor to a given shape

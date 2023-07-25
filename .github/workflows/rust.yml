@@ -26,31 +26,12 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - name: Build
         run: cargo build --verbose
 
-  build-wasm:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2023-06-27
-          override: true
-          components: rustfmt, clippy
-      - uses: mwilliamson/setup-wasmtime-action@v2
-        with:
-          wasmtime-version: "3.0.1"
-      - name: Install wasm32-wasi
-        run: rustup target add wasm32-wasi
-      - name: Build wasm
-        run: cargo build --release --bin ezkl --target=wasm32-wasi
-      - name: Run help
-        run: wasmtime run './target/wasm32-wasi/release/ezkl.wasm' -- --help
 
   docs:
     runs-on: ubuntu-latest
@@ -58,7 +39,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - name: Docs
@@ -70,7 +51,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -83,14 +64,30 @@ jobs:
       - name: Library tests
         run: cargo nextest run --lib --verbose -- --include-ignored
 
-  wasm32-tests:
-    runs-on: ubuntu-latest
-    needs: [build, build-wasm, library-tests, docs]
+  model-serialization:
+    runs-on: ubuntu-latest-32-cores
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
+          override: true
+          components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          locked: true
+      - name: Model serialization
+        run: cargo nextest run native_tests::tests::model_serialization_
+
+  wasm32-tests:
+    runs-on: ubuntu-latest
+    needs: [build,  library-tests, docs]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -104,18 +101,18 @@ jobs:
       - name: Install wasm runner
         run: cargo install wasm-server-runner
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2023-06-27-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2023-04-17-x86_64-unknown-linux-gnu
       - name: Run wasm verifier tests
         run: wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std"
 
   render-circuit:
     runs-on: ubuntu-latest-32-cores
-    needs: [build, build-wasm, library-tests, docs]
+    needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: mwilliamson/setup-wasmtime-action@v2
@@ -130,12 +127,12 @@ jobs:
 
   tutorial:
     runs-on: ubuntu-latest
-    needs: [build, build-wasm, library-tests, docs]
+    needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -147,12 +144,12 @@ jobs:
 
   mock-proving-tests:
     runs-on: ubuntu-latest-32-cores
-    needs: [build, build-wasm, library-tests, docs]
+    needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -169,6 +166,8 @@ jobs:
         run: cargo nextest run --release --verbose tests::mock_public_params_ --test-threads 32
       - name: Mock proving tests (hashed inputs)
         run: cargo nextest run --release --verbose tests::mock_hashed_input_::t  --test-threads 32
+      - name: Mock proving tests (hashed params)
+        run: cargo nextest run --release --verbose tests::mock_hashed_params_::t  --test-threads 32
       - name: Mock proving tests (hashed outputs)
         run: cargo nextest run --release --verbose tests::mock_hashed_output_::t  --test-threads 32
       - name: Mock proving tests (encrypted inputs)
@@ -184,48 +183,21 @@ jobs:
       - name: Mock proving tests (encrypted inputs + hashed params)
         run: cargo nextest run --release --verbose tests::mock_encrypted_input_hashed_params_::t  --test-threads 32
 
-  mock-proving-tests-wasi:
-    runs-on: ubuntu-latest-32-cores
-    needs: [build, build-wasm, library-tests, docs]
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2023-06-27
-          override: true
-          components: rustfmt, clippy
-      - uses: mwilliamson/setup-wasmtime-action@v2
-        with:
-          wasmtime-version: "3.0.1"
-      - uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-nextest
-          locked: true
-      - name: Install wasm32-wasi
-        run: rustup target add wasm32-wasi
-      - name: Mock proving tests (WASI) (public outputs)
-        run: cargo nextest run --release --verbose tests_wasi::mock_public_outputs_ --test-threads 32
-      - name: Mock proving tests (WASI) (public inputs)
-        run: cargo nextest run --release --verbose tests_wasi::mock_public_inputs_ --test-threads 32
-      - name: Mock proving tests (WASI) (public params)
-        run: cargo nextest run --release --verbose tests_wasi::mock_public_params_ --test-threads 32
-
   prove-and-verify-evm-tests:
     runs-on: ubuntu-latest-16-cores
     needs:
       [
         build,
-        build-wasm,
         library-tests,
         mock-proving-tests,
-        mock-proving-tests-wasi,
         python-tests,
+        python-integration-tests,
       ]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -256,17 +228,16 @@ jobs:
     needs:
       [
         build,
-        build-wasm,
         library-tests,
         mock-proving-tests,
-        mock-proving-tests-wasi,
         python-tests,
+        python-integration-tests,
       ]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -289,17 +260,16 @@ jobs:
     needs:
       [
         build,
-        build-wasm,
         library-tests,
         mock-proving-tests,
-        mock-proving-tests-wasi,
         python-tests,
+        python-integration-tests,
       ]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -315,22 +285,18 @@ jobs:
       - name: fuzz tests
         run: cargo nextest run --release --verbose tests::kzg_fuzz_ --test-threads 6
 
-  prove-and-verify-aggr-tests:
-    runs-on: self-hosted
+  prove-and-verify-mock-aggr-tests:
+    runs-on: ubuntu-latest-32-cores
     needs:
       [
-        build,
-        build-wasm,
-        library-tests,
-        mock-proving-tests,
-        mock-proving-tests-wasi,
-        python-tests,
-      ]
+      build,
+      library-tests,
+    ]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -338,24 +304,46 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: KZG prove and verify aggr tests
-        run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_ --test-threads 8
+        run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_mock_prove_and_verify_ --test-threads 8
+
+  prove-and-verify-aggr-tests:
+    runs-on: self-hosted
+    needs:
+      [
+        build,
+        library-tests,
+        mock-proving-tests,
+        python-tests,
+        python-integration-tests,
+      ]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-04-17
+          override: true
+          components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          locked: true
+      - name: KZG prove and verify aggr tests
+        run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_ --test-threads 8 -- --include-ignored
 
   prove-and-verify-aggr-evm-tests:
     runs-on: self-hosted
     needs:
       [
         build,
-        build-wasm,
         library-tests,
         mock-proving-tests,
-        mock-proving-tests-wasi,
         python-tests,
       ]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -367,16 +355,19 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
       - name: KZG prove and verify aggr tests
-        run: cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_ --test-threads 8 -- --include-ignored
+        run: RUST_LOG=trace cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_::t --test-threads 8 -- --include-ignored
+      - name: KZG prove and verify aggr tests (encrypted input)
+        run: RUST_LOG=trace cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_encrypted --test-threads 8 -- --include-ignored
+
 
   examples:
     runs-on: ubuntu-latest-32-cores
-    needs: [build, build-wasm, library-tests, docs]
+    needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -390,12 +381,12 @@ jobs:
 
   neg-tests:
     runs-on: ubuntu-latest
-    needs: [build, build-wasm, library-tests, docs]
+    needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -407,7 +398,7 @@ jobs:
 
   python-tests:
     runs-on: ubuntu-latest-32-cores
-    needs: [build, build-wasm, library-tests, docs]
+    needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
@@ -415,7 +406,7 @@ jobs:
           python-version: "3.7"
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-06-27
+          toolchain: nightly-2023-04-17
           override: true
           components: rustfmt, clippy
       - name: Install solc
@@ -428,3 +419,45 @@ jobs:
         run: source .env/bin/activate; maturin develop --features python-bindings --release
       - name: Run pytest
         run: source .env/bin/activate; pytest
+
+  python-integration-tests:
+      runs-on: 512gb
+      needs: [build,  library-tests, docs]
+      steps:
+        - uses: actions/checkout@v3
+        - uses: actions/setup-python@v4
+          with:
+            python-version: "3.9"
+        - uses: actions-rs/toolchain@v1
+          with:
+            toolchain: nightly-2023-04-17
+            override: true
+            components: rustfmt, clippy
+        - uses: baptiste0928/cargo-install@v1
+          with:
+            crate: cargo-nextest
+            locked: true
+        - name: Install solc
+          run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
+        - name: Install Anvil
+          run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
+        - name: Setup Virtual Env and Install python dependencies
+          run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
+        - name: Build python ezkl
+          run: source .env/bin/activate; maturin develop --features python-bindings --release
+        # - name: authenticate-kaggle-cli
+        #   shell: bash
+        #   env:
+        #     KAGGLE_API_KEY: ${{ secrets.KAGGLE_API_KEY }}
+        #   run: |
+        #     mkdir /home/ubuntu/.kaggle
+        #     # now dump the contents of the file into a file called kaggle.json
+        #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
+        #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+        - name: Notebook integration tests
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
+        - name: Voice tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
+
+
+
