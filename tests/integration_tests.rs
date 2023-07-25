@@ -933,6 +933,19 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
+                "compile-model",
+                "-M",
+                format!("{}/tutorial/network.onnx", test_dir).as_str(),
+                "--compiled-model",
+                format!("{}/tutorial/network.onnx", test_dir).as_str(),
+                &format!("--settings-path={}/tutorial/settings.json", test_dir),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
                 "mock",
                 "-W",
                 format!("{}/tutorial/witness_tutorial.json", test_dir).as_str(),
