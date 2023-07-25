@@ -918,13 +918,11 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "gen-witness",
-                "-D",
-                &format!("{}/tutorial/input.json", test_dir),
+                "compile-model",
                 "-M",
-                &format!("{}/tutorial/network.onnx", test_dir),
-                "-O",
-                &format!("{}/tutorial/witness_tutorial.json", test_dir),
+                format!("{}/tutorial/network.onnx", test_dir).as_str(),
+                "--compiled-model",
+                format!("{}/tutorial/network.onnx", test_dir).as_str(),
                 &format!("--settings-path={}/tutorial/settings.json", test_dir),
             ])
             .status()
@@ -933,11 +931,13 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "gen-witness",
+                "-D",
+                &format!("{}/tutorial/input.json", test_dir),
                 "-M",
-                format!("{}/tutorial/network.onnx", test_dir).as_str(),
-                "--compiled-model",
-                format!("{}/tutorial/network.onnx", test_dir).as_str(),
+                &format!("{}/tutorial/network.onnx", test_dir),
+                "-O",
+                &format!("{}/tutorial/witness_tutorial.json", test_dir),
                 &format!("--settings-path={}/tutorial/settings.json", test_dir),
             ])
             .status()
