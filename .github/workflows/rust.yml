@@ -82,7 +82,7 @@ jobs:
 
   wasm32-tests:
     runs-on: ubuntu-latest
-    # needs: [build,  library-tests, docs]
+    needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
