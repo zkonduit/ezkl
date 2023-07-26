@@ -844,6 +844,16 @@ impl GraphCircuit {
         Self::new(model, *run_args, check_mode)
     }
 
+    ///
+    pub fn preprocessed_from_run_args(
+        run_args: &RunArgs,
+        model_path: &std::path::PathBuf,
+        check_mode: CheckMode,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let model = Model::load(model_path.clone())?;
+        Self::new(model, *run_args, check_mode)
+    }
+
     /// Create a new circuit from a set of input data and [GraphSettings].
     pub fn from_settings(
         params: &GraphSettings,
