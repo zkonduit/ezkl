@@ -228,9 +228,9 @@ pub enum Commands {
         /// The path to the .json data file
         #[arg(short = 'D', long)]
         data: PathBuf,
-        /// The path to the .onnx model file
+        /// The path to the compiled model file
         #[arg(short = 'M', long)]
-        model: PathBuf,
+        compiled_model: PathBuf,
         /// Path to the witness (public and private inputs) .json file
         #[arg(short = 'O', long, default_value = "witness.json")]
         output: PathBuf,
@@ -370,13 +370,25 @@ pub enum Commands {
         #[arg(long, default_value = "safe")]
         check_mode: CheckMode,
     },
-
-    /// Creates pk and vk and circuit params
+    /// Compiles a circuit from onnx to a simplified graph (einsum + other ops) and parameters as sets of field elements
     #[command(arg_required_else_help = true)]
-    Setup {
+    CompileModel {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
+        /// The path to output the processed model
+        #[arg(long)]
+        compiled_model: PathBuf,
+        /// The path to load circuit params from
+        #[arg(short = 'S', long)]
+        settings_path: PathBuf,
+    },
+    /// Creates pk and vk
+    #[command(arg_required_else_help = true)]
+    Setup {
+        /// The path to the compiled model file
+        #[arg(short = 'M', long)]
+        compiled_model: PathBuf,
         /// The srs path
         #[arg(long)]
         srs_path: PathBuf,
@@ -398,9 +410,9 @@ pub enum Commands {
         /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'W', long)]
         witness: PathBuf,
-        /// The path to the .onnx model file
+        /// The path to the processed model file
         #[arg(short = 'M', long)]
-        model: PathBuf,
+        compiled_model: PathBuf,
         #[arg(
             long,
             require_equals = true,
@@ -424,9 +436,9 @@ pub enum Commands {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long)]
         data: PathBuf,
-        /// The path to the .onnx model file
+        /// The path to the compiled model file
         #[arg(short = 'M', long)]
-        model: PathBuf,
+        compiled_model: PathBuf,
         /// The path to load circuit params from
         #[arg(long)]
         settings_path: PathBuf,
@@ -453,9 +465,9 @@ pub enum Commands {
         /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'W', long)]
         witness: PathBuf,
-        /// The path to the .onnx model file
+        /// The path to the compiled model file
         #[arg(short = 'M', long)]
-        model: PathBuf,
+        compiled_model: PathBuf,
         /// The path to load the desired proving key file
         #[arg(long)]
         pk_path: PathBuf,

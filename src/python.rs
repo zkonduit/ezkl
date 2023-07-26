@@ -326,11 +326,30 @@ fn setup_aggregate(
     srs_path: PathBuf,
     logrows: u32,
 ) -> Result<bool, PyErr> {
-    crate::execute::setup_aggregate(sample_snarks, vk_path, pk_path, srs_path, logrows)
-        .map_err(|e| {
+    crate::execute::setup_aggregate(sample_snarks, vk_path, pk_path, srs_path, logrows).map_err(
+        |e| {
             let err_str = format!("Failed to setup aggregate: {}", e);
             PyRuntimeError::new_err(err_str)
-        })?;
+        },
+    )?;
+
+    Ok(true)
+}
+
+#[pyfunction(signature = (
+    model,
+    compiled_model,
+    settings_path,
+))]
+fn compile_model(
+    model: PathBuf,
+    compiled_model: PathBuf,
+    settings_path: PathBuf,
+) -> Result<bool, PyErr> {
+    crate::execute::compile_model(model, compiled_model, settings_path).map_err(|e| {
+        let err_str = format!("Failed to setup aggregate: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
 
     Ok(true)
 }
@@ -603,6 +622,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(aggregate, m)?)?;
     m.add_function(wrap_pyfunction!(mock_aggregate, m)?)?;
     m.add_function(wrap_pyfunction!(setup_aggregate, m)?)?;
+    m.add_function(wrap_pyfunction!(compile_model, m)?)?;
     m.add_function(wrap_pyfunction!(verify_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_evm, m)?)?;

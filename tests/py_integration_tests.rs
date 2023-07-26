@@ -4,11 +4,10 @@ mod py_tests {
 
     use lazy_static::lazy_static;
     use std::env::var;
-    use std::process::Command;
+    use std::process::{Child, Command};
     use std::sync::Once;
     use tempdir::TempDir;
     static COMPILE: Once = Once::new();
-    static START_ANVIL: Once = Once::new();
     static ENV_SETUP: Once = Once::new();
     static DOWNLOAD_VOICE_DATA: Once = Once::new();
 
@@ -17,20 +16,18 @@ mod py_tests {
     lazy_static! {
         static ref CARGO_TARGET_DIR: String =
             var("CARGO_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
-        static ref TEST_DIR: TempDir = TempDir::new("example").unwrap();
         static ref ANVIL_URL: String = "http://localhost:3030".to_string();
     }
 
-    fn start_anvil() {
-        START_ANVIL.call_once(|| {
-            let _ = Command::new("anvil")
-                .args(["-p", "3030"])
-                // .stdout(Stdio::piped())
-                .spawn()
-                .expect("failed to start anvil process");
+    fn start_anvil() -> Child {
+        let child = Command::new("anvil")
+            .args(["-p", "3030"])
+            // .stdout(Stdio::piped())
+            .spawn()
+            .expect("failed to start anvil process");
 
-            std::thread::sleep(std::time::Duration::from_secs(3));
-        });
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        child
     }
 
     fn download_voice_data() {
@@ -92,8 +89,7 @@ mod py_tests {
         });
     }
 
-    fn mv_test_(test: &str) {
-        let test_dir = TEST_DIR.path().to_str().unwrap();
+    fn mv_test_(test_dir: &str, test: &str) {
         let path: std::path::PathBuf = format!("{}/{}", test_dir, test).into();
         if !path.exists() {
             let status = Command::new("cp")
@@ -132,17 +128,25 @@ mod py_tests {
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
                 crate::py_tests::init_binary();
-                crate::py_tests::start_anvil();
-                crate::py_tests::mv_test_(test);
-                run_notebook(test);
+                let mut anvil_child = crate::py_tests::start_anvil();
+                let test_dir: TempDir = TempDir::new("example").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::py_tests::mv_test_(path, test);
+                run_notebook(path, test);
+                test_dir.close().unwrap();
+                anvil_child.kill().unwrap();
             }
             #[test]
             fn voice_notebook_() {
                 crate::py_tests::init_binary();
-                crate::py_tests::start_anvil();
+                let mut anvil_child = crate::py_tests::start_anvil();
                 crate::py_tests::download_voice_data();
-                crate::py_tests::mv_test_("voice_judge.ipynb");
-                run_notebook("voice_judge.ipynb");
+                let test_dir: TempDir = TempDir::new("example").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::py_tests::mv_test_(path, "voice_judge.ipynb");
+                run_notebook(path, "voice_judge.ipynb");
+                test_dir.close().unwrap();
+                anvil_child.kill().unwrap();
             }
 
             });
@@ -151,7 +155,7 @@ mod py_tests {
     };
 }
 
-    fn run_notebook(test: &str) {
+    fn run_notebook(test_dir: &str, test: &str) {
         // activate venv
         let status = Command::new("bash")
             .arg("-c")
@@ -160,7 +164,6 @@ mod py_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let test_dir = TEST_DIR.path().to_str().unwrap();
         let path: std::path::PathBuf = format!("{}/{}", test_dir, test).into();
         let status = Command::new("jupyter")
             .args([
