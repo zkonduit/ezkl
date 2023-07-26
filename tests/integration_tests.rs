@@ -1970,6 +1970,22 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
+                "compile-model",
+                "-M",
+                &model_path,
+                "--compiled-model",
+                &model_path,
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
                 "setup-test-evm-data",
                 "-D",
                 data_path.as_str(),
@@ -1981,22 +1997,6 @@ mod native_tests {
                 rpc_arg.as_str(),
                 test_input_source.as_str(),
                 test_output_source.as_str(),
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "compile-model",
-                "-M",
-                &model_path,
-                "--compiled-model",
-                &model_path,
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
