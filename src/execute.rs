@@ -1254,7 +1254,11 @@ pub(crate) async fn fuzz(
                 CheckMode::UNSAFE,
             )?
         }
-        None => GraphCircuit::from_run_args(&run_args, &compiled_model_path, CheckMode::UNSAFE)?,
+        None => GraphCircuit::preprocessed_from_run_args(
+            &run_args,
+            &compiled_model_path,
+            CheckMode::UNSAFE,
+        )?,
     };
 
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
