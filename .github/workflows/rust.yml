@@ -95,9 +95,7 @@ jobs:
         with:
           wasmtime-version: "3.0.1"
       - name: install chrome
-        run: wget --no-verbose -O /tmp/chrome.deb https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_114.0.5735.198_amd64.deb
-             apt install -y /tmp/chrome.deb
-             rm /tmp/chrome.deb
+        run: wget --no-verbose -O /tmp/chrome.deb https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_114.0.5735.198_amd64.deb; apt install -y /tmp/chrome.deb; rm /tmp/chrome.deb
       - uses: nanasess/setup-chromedriver@v2
       - name: Install wasm32-unknown-unknown
         run: rustup target add wasm32-unknown-unknown
