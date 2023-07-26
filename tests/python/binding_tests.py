@@ -122,6 +122,28 @@ def test_calibrate():
     asyncio.run(calibrate())
 
 
+def test_model_compile():
+    """
+   Test for model compilation/serialization
+   """
+    model_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_average',
+        'network.onnx'
+    )
+    compiled_model_path = os.path.join(
+        folder_path,
+        'model.compiled'
+    )
+    settings_path = os.path.join(
+        folder_path,
+        'settings.json'
+    )
+    res = ezkl.compile_model(model_path, compiled_model_path, settings_path)
+    assert res == True
+
+
 def test_forward():
     """
     Test for vanilla forward pass
@@ -133,10 +155,8 @@ def test_forward():
         'input.json'
     )
     model_path = os.path.join(
-        examples_path,
-        'onnx',
-        '1l_average',
-        'network.onnx'
+        folder_path,
+        'model.compiled'
     )
     output_path = os.path.join(
         folder_path,
@@ -185,10 +205,8 @@ def test_mock():
     )
 
     model_path = os.path.join(
-        examples_path,
-        'onnx',
-        '1l_average',
-        'network.onnx'
+        folder_path,
+        'model.compiled'
     )
 
     settings_path = os.path.join(folder_path, 'settings.json')
@@ -209,10 +227,8 @@ def test_setup():
     )
 
     model_path = os.path.join(
-        examples_path,
-        'onnx',
-        '1l_average',
-        'network.onnx'
+        folder_path,
+        'model.compiled'
     )
 
     pk_path = os.path.join(folder_path, 'test.pk')
@@ -238,10 +254,8 @@ def test_setup_evm():
     """
 
     model_path = os.path.join(
-        examples_path,
-        'onnx',
-        '1l_average',
-        'network.onnx'
+        folder_path,
+        'model.compiled'
     )
 
     pk_path = os.path.join(folder_path, 'test_evm.pk')
@@ -272,10 +286,8 @@ def test_prove_and_verify():
     )
 
     model_path = os.path.join(
-        examples_path,
-        'onnx',
-        '1l_average',
-        'network.onnx'
+        folder_path,
+        'model.compiled'
     )
 
     pk_path = os.path.join(folder_path, 'test.pk')
@@ -313,10 +325,8 @@ def test_prove_evm():
     )
 
     model_path = os.path.join(
-        examples_path,
-        'onnx',
-        '1l_average',
-        'network.onnx'
+        folder_path,
+        'model.compiled'
     )
 
     pk_path = os.path.join(folder_path, 'test_evm.pk')
@@ -424,6 +434,11 @@ async def aggregate_and_verify_aggr():
         'network.onnx'
     )
 
+    compiled_model_path = os.path.join(
+        folder_path,
+        'compiled_relu.onnx'
+    )
+
     pk_path = os.path.join(folder_path, '1l_relu.pk')
     vk_path = os.path.join(folder_path, '1l_relu.vk')
     settings_path = os.path.join(
@@ -438,8 +453,11 @@ async def aggregate_and_verify_aggr():
     assert res == True
     assert os.path.isfile(settings_path)
 
+    res = ezkl.compile_model(model_path, compiled_model_path, settings_path)
+    assert res == True
+
     ezkl.setup(
-        model_path,
+        compiled_model_path,
         vk_path,
         pk_path,
         srs_path,
@@ -453,12 +471,12 @@ async def aggregate_and_verify_aggr():
         '1l_relu_aggr_witness.json'
     )
 
-    res = ezkl.gen_witness(data_path, model_path,
+    res = ezkl.gen_witness(data_path, compiled_model_path,
                            output_path, settings_path=settings_path)
 
     ezkl.prove(
         output_path,
-        model_path,
+        compiled_model_path,
         pk_path,
         proof_path,
         srs_path,
@@ -545,8 +563,16 @@ async def evm_aggregate_and_verify_aggr():
         "resources",
     )
 
+    compiled_model_path = os.path.join(
+        folder_path,
+        'compiled_relu.onnx'
+    )
+
+    res = ezkl.compile_model(model_path, compiled_model_path, settings_path)
+    assert res == True
+
     ezkl.setup(
-        model_path,
+        compiled_model_path,
         vk_path,
         pk_path,
         srs_path,
@@ -560,12 +586,12 @@ async def evm_aggregate_and_verify_aggr():
         '1l_relu_aggr_evm_witness.json'
     )
 
-    res = ezkl.gen_witness(data_path, model_path,
+    res = ezkl.gen_witness(data_path, compiled_model_path,
                            output_path, settings_path=settings_path)
 
     ezkl.prove(
         output_path,
-        model_path,
+        compiled_model_path,
         pk_path,
         proof_path,
         srs_path,

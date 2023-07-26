@@ -91,10 +91,6 @@ jobs:
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@v0.4.0
-      - uses: mwilliamson/setup-wasmtime-action@v2
-        with:
-          wasmtime-version: "3.0.1"
-      - uses: browser-actions/setup-chrome@v1
       - uses: nanasess/setup-chromedriver@v2
       - name: Install wasm32-unknown-unknown
         run: rustup target add wasm32-unknown-unknown

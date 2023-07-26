@@ -7,31 +7,27 @@ mod native_tests {
     use ezkl::graph::{DataSource, GraphSettings, Visibility};
     use lazy_static::lazy_static;
     use std::env::var;
-    use std::process::Command;
+    use std::process::{Child, Command};
     use std::sync::Once;
-    use tempdir::TempDir;
     static COMPILE: Once = Once::new();
-    static START_ANVIL: Once = Once::new();
 
     //Sure to run this once
 
     lazy_static! {
         static ref CARGO_TARGET_DIR: String =
             var("CARGO_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
-        static ref TEST_DIR: TempDir = TempDir::new("example").unwrap();
         static ref ANVIL_URL: String = "http://localhost:3030".to_string();
     }
 
-    fn start_anvil() {
-        START_ANVIL.call_once(|| {
-            let _ = Command::new("anvil")
-                .args(["-p", "3030"])
-                // .stdout(Stdio::piped())
-                .spawn()
-                .expect("failed to start anvil process");
+    fn start_anvil() -> Child {
+        let child = Command::new("anvil")
+            .args(["-p", "3030"])
+            // .stdout(Stdio::piped())
+            .spawn()
+            .expect("failed to start anvil process");
 
-            std::thread::sleep(std::time::Duration::from_secs(3));
-        });
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        child
     }
 
     fn init_binary() {
@@ -41,8 +37,8 @@ mod native_tests {
         });
     }
 
-    fn download_srs(logrows: u32) -> String {
-        let srs_path = format!("{}/kzg{}.srs", TEST_DIR.path().to_str().unwrap(), logrows);
+    fn download_srs(test_dir: &str, logrows: u32) -> String {
+        let srs_path = format!("{}/kzg{}.srs", test_dir, logrows);
         // if does not exist, download it
         if !std::path::Path::new(&srs_path).exists() {
             let status = Command::new("curl")
@@ -50,7 +46,7 @@ mod native_tests {
                     "-o",
                     &format!(
                         "{}/kzg{}.srs",
-                        TEST_DIR.path().to_str().unwrap(),
+                        test_dir,
                         logrows
                     ),
                     &format!(
@@ -65,7 +61,7 @@ mod native_tests {
         srs_path
     }
 
-    fn init_params(settings_path: std::path::PathBuf) -> String {
+    fn init_params(test_dir: &str, settings_path: std::path::PathBuf) -> String {
         println!("using settings path: {}", settings_path.to_str().unwrap());
         // read in settings json
         let settings =
@@ -74,11 +70,10 @@ mod native_tests {
         let settings: GraphSettings = serde_json::from_str(&settings).unwrap();
         let logrows = settings.run_args.logrows;
 
-        download_srs(logrows)
+        download_srs(test_dir, logrows)
     }
 
-    fn mv_test_(test: &str) {
-        let test_dir = TEST_DIR.path().to_str().unwrap();
+    fn mv_test_(test_dir: &str, test: &str) {
         let path: std::path::PathBuf = format!("{}/{}", test_dir, test).into();
         if !path.exists() {
             let status = Command::new("cp")
@@ -93,8 +88,7 @@ mod native_tests {
         }
     }
 
-    fn mk_data_batches_(test: &str, output_dir: &str, num_batches: usize) {
-        let test_dir = TEST_DIR.path().to_str().unwrap();
+    fn mk_data_batches_(test_dir: &str, test: &str, output_dir: &str, num_batches: usize) {
         let path: std::path::PathBuf = format!("{}/{}", test_dir, test).into();
         if !path.exists() {
             panic!("test_dir does not exist")
@@ -266,23 +260,27 @@ mod native_tests {
             use test_case::test_case;
             use crate::native_tests::kzg_aggr_prove_and_verify;
             use crate::native_tests::kzg_aggr_mock_prove_and_verify;
-
+            use tempdir::TempDir;
 
             seq!(N in 0..=17 {
 
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_mock_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                kzg_aggr_mock_prove_and_verify(test.to_string());
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                kzg_aggr_mock_prove_and_verify(path, test.to_string());
+                test_dir.close().unwrap();
             }
 
 
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                kzg_aggr_prove_and_verify(test.to_string());
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                kzg_aggr_prove_and_verify(path, test.to_string());
+                test_dir.close().unwrap();
             }
 
             });
@@ -304,12 +302,16 @@ mod native_tests {
             use crate::native_tests::render_circuit;
             use crate::native_tests::model_serialization;
             use crate::native_tests::tutorial as run_tutorial;
+            use tempdir::TempDir;
 
             #[test]
             fn tutorial_() {
-                crate::native_tests::mv_test_("tutorial");
+                let test_dir = TempDir::new("tutorial").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::native_tests::mv_test_(path, "tutorial");
                 // percent tolerance test
-                run_tutorial("1.0");
+                run_tutorial(path, "1.0");
+                test_dir.close().unwrap();
             }
 
 
@@ -318,102 +320,131 @@ mod native_tests {
 
             #(#[test_case(TESTS[N])])*
             fn model_serialization_(test: &str) {
-                crate::native_tests::mv_test_(test);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::native_tests::mv_test_(path, test);
                 // percent tolerance test
-                model_serialization(test.to_string());
+                model_serialization(path, test.to_string());
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                render_circuit(test.to_string());
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                render_circuit(path, test.to_string());
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_outputs_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                mock(test.to_string(), "private", "private", "public", 1);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "private", "private", "public", 1);
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_large_batch_public_outputs_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                 let large_batch_dir = &format!("large_batches_{}", test);
-                crate::native_tests::mk_data_batches_(test, &large_batch_dir, 10);
-                mock(large_batch_dir.to_string(), "private", "private", "public", 10);
+                crate::native_tests::mk_data_batches_(path, test, &large_batch_dir, 10);
+                mock(path, large_batch_dir.to_string(), "private", "private", "public", 10);
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_inputs_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                mock(test.to_string(), "public", "private", "private", 1);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "public", "private", "private", 1);
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_public_params_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                mock(test.to_string(), "private", "public", "private", 1);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "private", "public", "private", 1);
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_input_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                mock(test.to_string(), "hashed", "private", "public", 1);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "hashed", "private", "public", 1);
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_encrypted_input_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                mock(test.to_string(), "encrypted", "private", "public", 1);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "encrypted", "private", "public", 1);
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_params_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                mock(test.to_string(), "private", "hashed", "public", 1);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "private", "hashed", "public", 1);
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_encrypted_params_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                mock(test.to_string(), "private", "hashed", "public", 1);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "private", "hashed", "public", 1);
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_output_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                mock(test.to_string(), "public", "private", "hashed", 1);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "public", "private", "hashed", 1);
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_encrypted_output_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                mock(test.to_string(), "public", "private", "encrypted", 1);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "public", "private", "encrypted", 1);
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_encrypted_input_params_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                mock(test.to_string(), "encrypted", "encrypted", "public", 1);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "encrypted", "encrypted", "public", 1);
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_encrypted_all_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                mock(test.to_string(), "encrypted", "encrypted", "encrypted", 1);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "encrypted", "encrypted", "encrypted", 1);
+                test_dir.close().unwrap();
             }
 
 
@@ -421,73 +452,93 @@ mod native_tests {
             #(#[test_case(TESTS[N])])*
             fn mock_encrypted_input_hashed_params_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                mock(test.to_string(), "encrypted", "hashed", "public", 1);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "encrypted", "hashed", "public", 1);
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_input_output_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                mock(test.to_string(), "hashed", "private", "hashed", 1);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "hashed", "private", "hashed", 1);
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_input_params_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                 // needs an extra row for the large model
-                mock(test.to_string(),"hashed", "hashed", "public", 1);
+                mock(path, test.to_string(),"hashed", "hashed", "public", 1);
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_all_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                 // needs an extra row for the large model
-                mock(test.to_string(),"hashed", "hashed", "hashed", 1);
+                mock(path, test.to_string(),"hashed", "hashed", "hashed", 1);
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                kzg_prove_and_verify(test.to_string(), "safe", "private", "private", "public");
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public");
+               test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_public_input_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                kzg_prove_and_verify(test.to_string(), "safe", "public", "private", "public");
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "public", "private", "public");
+               test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_public_params_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                kzg_prove_and_verify(test.to_string(), "safe", "private", "public", "public");
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "public", "public");
+               test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_hashed_output(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                kzg_prove_and_verify(test.to_string(), "safe", "private", "private", "hashed");
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "hashed");
+               test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_encrypted_output(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                kzg_prove_and_verify(test.to_string(), "safe", "private", "private", "encrypted");
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "encrypted");
+               test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
             fn kzg_fuzz_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                kzg_fuzz(test.to_string(), 7, 16, 17, "blake");
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                kzg_fuzz(path, test.to_string(), 7, 16, 17, "blake");
+                test_dir.close().unwrap();
             }
 
             });
@@ -499,16 +550,20 @@ mod native_tests {
             #[ignore]
             fn large_kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                kzg_prove_and_verify(test.to_string(), "unsafe", "private", "private", "public");
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                kzg_prove_and_verify(path, test.to_string(), "unsafe", "private", "private", "public");
+                test_dir.close().unwrap();
             }
 
             #(#[test_case(LARGE_TESTS[N])])*
             #[ignore]
             fn large_mock_(test: &str) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test);
-                mock(test.to_string(), "private", "private", "public", 1);
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "private", "private", "public", 1);
+                test_dir.close().unwrap();
             }
         });
     }
@@ -527,6 +582,7 @@ mod native_tests {
             use crate::native_tests::kzg_evm_on_chain_input_prove_and_verify;
             use crate::native_tests::kzg_evm_aggr_prove_and_verify;
             use crate::native_tests::kzg_fuzz;
+            use tempdir::TempDir;
 
             /// Currently only on chain inputs that return a non-negative value are supported.
             const TESTS_ON_CHAIN_INPUT: [&str; 11] = [
@@ -555,9 +611,12 @@ mod native_tests {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::mv_test_(test);
-                    crate::native_tests::start_anvil();
-                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), "on-chain", "file");
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    let mut anvil_child = crate::native_tests::start_anvil();
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file");
+                    test_dir.close().unwrap();
+                    anvil_child.kill().unwrap();
                 }
             });
 
@@ -565,9 +624,12 @@ mod native_tests {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::mv_test_(test);
-                    crate::native_tests::start_anvil();
-                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), "file", "on-chain");
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    let mut anvil_child = crate::native_tests::start_anvil();
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain");
+                    test_dir.close().unwrap();
+                    anvil_child.kill().unwrap();
                 }
             });
 
@@ -576,9 +638,12 @@ mod native_tests {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::mv_test_(test);
-                    crate::native_tests::start_anvil();
-                    kzg_evm_on_chain_input_prove_and_verify(test.to_string(), "on-chain", "on-chain");
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    let mut anvil_child = crate::native_tests::start_anvil();
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain");
+                    test_dir.close().unwrap();
+                    anvil_child.kill().unwrap();
                 }
             });
 
@@ -589,9 +654,12 @@ mod native_tests {
                 #[ignore]
                 fn kzg_evm_aggr_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::mv_test_(test);
-                    crate::native_tests::start_anvil();
-                    kzg_evm_aggr_prove_and_verify(test.to_string(), "private", "private", "public");
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    let mut anvil_child = crate::native_tests::start_anvil();
+                    kzg_evm_aggr_prove_and_verify(path, test.to_string(), "private", "private", "public");
+                    test_dir.close().unwrap();
+                    anvil_child.kill().unwrap();
                 }
 
                 // these take a particularly long time to run
@@ -600,9 +668,12 @@ mod native_tests {
                 fn kzg_evm_aggr_prove_and_verify_encrypted_input_() {
                     let test = "1l_mlp";
                     crate::native_tests::init_binary();
-                    crate::native_tests::mv_test_(test);
-                    crate::native_tests::start_anvil();
-                    kzg_evm_aggr_prove_and_verify(test.to_string(), "encrypted", "private", "public");
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    let mut anvil_child = crate::native_tests::start_anvil();
+                    kzg_evm_aggr_prove_and_verify(path, test.to_string(), "encrypted", "private", "public");
+                    test_dir.close().unwrap();
+                    anvil_child.kill().unwrap();
                 }
             });
 
@@ -612,44 +683,58 @@ mod native_tests {
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::mv_test_(test);
-                    crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), "private", "private", "public");
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    let mut anvil_child = crate::native_tests::start_anvil();
+                    kzg_evm_prove_and_verify(path, test.to_string(), "private", "private", "public");
+                    test_dir.close().unwrap();
+                    anvil_child.kill().unwrap();
                 }
 
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_hashed_input_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::mv_test_(test);
-                    crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), "hashed", "private", "private");
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    let mut anvil_child = crate::native_tests::start_anvil();
+                    kzg_evm_prove_and_verify(path, test.to_string(), "hashed", "private", "private");
+                    test_dir.close().unwrap();
+                    anvil_child.kill().unwrap();
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_hashed_params_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-
-                    crate::native_tests::mv_test_(test);
-                    crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), "private", "hashed", "public");
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    let mut anvil_child = crate::native_tests::start_anvil();
+                    kzg_evm_prove_and_verify(path, test.to_string(), "private", "hashed", "public");
+                    test_dir.close().unwrap();
+                    anvil_child.kill().unwrap();
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_hashed_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::mv_test_(test);
-                    crate::native_tests::start_anvil();
-                    kzg_evm_prove_and_verify(test.to_string(), "private", "private", "hashed");
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    let mut anvil_child = crate::native_tests::start_anvil();
+                    kzg_evm_prove_and_verify(path, test.to_string(), "private", "private", "hashed");
+                    test_dir.close().unwrap();
+                    anvil_child.kill().unwrap();
                 }
 
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_fuzz_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::mv_test_(test);
-                    crate::native_tests::start_anvil();
-                    kzg_fuzz(test.to_string(), 7, 16, 17, "evm");
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    let mut anvil_child = crate::native_tests::start_anvil();
+                    kzg_fuzz(path, test.to_string(), 7, 16, 17, "evm");
+                    test_dir.close().unwrap();
+                    anvil_child.kill().unwrap();
                 }
 
 
@@ -685,13 +770,18 @@ mod native_tests {
             use crate::native_tests::NEG_TESTS;
             use test_case::test_case;
             use crate::native_tests::neg_mock as run;
+            use tempdir::TempDir;
+
             seq!(N in 0..=1 {
             #(#[test_case(NEG_TESTS[N])])*
             fn neg_examples_(test: (&str, &str)) {
                 crate::native_tests::init_binary();
-                crate::native_tests::mv_test_(test.0);
-                crate::native_tests::mv_test_(test.1);
-                run(test.0.to_string(), test.1.to_string());
+                let test_dir = TempDir::new(test.0).unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test.0);
+                crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test.1);
+                run(path, test.0.to_string(), test.1.to_string());
+                test_dir.close().unwrap();
             }
 
             });
@@ -705,8 +795,7 @@ mod native_tests {
     test_func_examples!();
     test_neg_examples!();
 
-    fn model_serialization(example_name: String) {
-        let test_dir = TEST_DIR.path().to_str().unwrap();
+    fn model_serialization(test_dir: &str, example_name: String) {
         let model_path = format!("{}/{}/network.onnx", test_dir, example_name);
         let serialization_path = format!("{}/{}/network.ezkl", test_dir, example_name);
         let run_args = ezkl::commands::RunArgs {
@@ -726,8 +815,7 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
-    fn neg_mock(example_name: String, counter_example: String) {
-        let test_dir = TEST_DIR.path().to_str().unwrap();
+    fn neg_mock(test_dir: &str, example_name: String, counter_example: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "gen-settings",
@@ -744,11 +832,27 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
                 "mock",
                 "-W",
                 format!("{}/{}/input.json", test_dir, counter_example).as_str(),
                 "-M",
-                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
@@ -770,14 +874,13 @@ mod native_tests {
 
     // Mock prove (fast, but does not cover some potential issues)
     fn mock(
+        test_dir: &str,
         example_name: String,
         input_visibility: &str,
         param_visibility: &str,
         output_visibility: &str,
         batch_size: usize,
     ) {
-        let test_dir = TEST_DIR.path().to_str().unwrap();
-
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "gen-settings",
@@ -802,6 +905,22 @@ mod native_tests {
                 "--data",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -848,8 +967,7 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
-    fn render_circuit(example_name: String) {
-        let test_dir = TEST_DIR.path().to_str().unwrap();
+    fn render_circuit(test_dir: &str, example_name: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "render-circuit",
@@ -866,9 +984,7 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
-    fn tutorial(tolerance: &str) {
-        let test_dir = TEST_DIR.path().to_str().unwrap();
-
+    fn tutorial(test_dir: &str, tolerance: &str) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "gen-settings",
@@ -879,6 +995,19 @@ mod native_tests {
                 "--logrows=17",
                 "--scale=4",
                 &format!("--tolerance={}", tolerance),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "compile-model",
+                "-M",
+                format!("{}/tutorial/network.onnx", test_dir).as_str(),
+                "--compiled-model",
+                format!("{}/tutorial/network.onnx", test_dir).as_str(),
+                &format!("--settings-path={}/tutorial/settings.json", test_dir),
             ])
             .status()
             .expect("failed to execute process");
@@ -914,8 +1043,7 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_aggr_mock_prove_and_verify(example_name: String) {
-        let test_dir = TEST_DIR.path().to_str().unwrap();
+    fn kzg_aggr_mock_prove_and_verify(test_dir: &str, example_name: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "gen-settings",
@@ -950,6 +1078,22 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
                 "gen-witness",
                 "-D",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
@@ -966,7 +1110,7 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let srs_path = download_srs(17);
+        let srs_path = download_srs(test_dir, 17);
         let srs_path = format!("--srs-path={}", srs_path);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -1022,8 +1166,7 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_aggr_prove_and_verify(example_name: String) {
-        let test_dir = TEST_DIR.path().to_str().unwrap();
+    fn kzg_aggr_prove_and_verify(test_dir: &str, example_name: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "gen-settings",
@@ -1058,6 +1201,22 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
                 "gen-witness",
                 "-D",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
@@ -1074,7 +1233,7 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let srs_path = download_srs(23);
+        let srs_path = download_srs(test_dir, 23);
         let srs_path = format!("--srs-path={}", srs_path);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -1168,12 +1327,12 @@ mod native_tests {
 
     // prove-serialize-verify, the usual full path
     fn kzg_evm_aggr_prove_and_verify(
+        test_dir: &str,
         example_name: String,
         input_visibility: &str,
         param_visibility: &str,
         output_visibility: &str,
     ) {
-        let test_dir = TEST_DIR.path().to_str().unwrap();
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "gen-settings",
@@ -1209,6 +1368,22 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
                 "gen-witness",
                 "-D",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
@@ -1225,7 +1400,7 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let srs_path = download_srs(23);
+        let srs_path = download_srs(test_dir, 23);
         let srs_path = format!("--srs-path={}", srs_path);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -1383,14 +1558,13 @@ mod native_tests {
 
     // prove-serialize-verify, the usual full path
     fn kzg_prove_and_verify(
+        test_dir: &str,
         example_name: String,
         checkmode: &str,
         input_visibility: &str,
         param_visibility: &str,
         output_visibility: &str,
     ) {
-        let test_dir = TEST_DIR.path().to_str().unwrap();
-
         let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -1420,7 +1594,23 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let srs_path = init_params(settings_path.clone().into());
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let srs_path = init_params(test_dir, settings_path.clone().into());
         let srs_path = format!("--srs-path={}", srs_path);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -1489,9 +1679,14 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_fuzz(example_name: String, scale: usize, bits: usize, logrows: usize, transcript: &str) {
-        let test_dir = TEST_DIR.path().to_str().unwrap();
-
+    fn kzg_fuzz(
+        test_dir: &str,
+        example_name: String,
+        scale: usize,
+        bits: usize,
+        logrows: usize,
+        transcript: &str,
+    ) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "gen-settings",
@@ -1501,6 +1696,22 @@ mod native_tests {
                 format!("{}/{}/settings_fuzz.json", test_dir, example_name).as_str(),
                 &format!("--scale={}", scale),
                 "--batch-size=1",
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings_fuzz.json",
+                    test_dir, example_name
+                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1542,12 +1753,12 @@ mod native_tests {
 
     // prove-serialize-verify, the usual full path
     fn kzg_evm_prove_and_verify(
+        test_dir: &str,
         example_name: String,
         input_visibility: &str,
         param_visibility: &str,
         output_visibility: &str,
     ) {
-        let test_dir = TEST_DIR.path().to_str().unwrap();
         let anvil_url = ANVIL_URL.as_str();
 
         let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
@@ -1579,7 +1790,20 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let srs_path = init_params(settings_path.clone().into());
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!("--settings-path={}", settings_path).as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let srs_path = init_params(test_dir, settings_path.clone().into());
         let srs_path = format!("--srs-path={}", srs_path);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -1706,12 +1930,11 @@ mod native_tests {
     }
 
     fn kzg_evm_on_chain_input_prove_and_verify(
+        test_dir: &str,
         example_name: String,
         input_source: &str,
         output_source: &str,
     ) {
-        let test_dir = TEST_DIR.path().to_str().unwrap();
-
         // set up the circuit
         let input_visbility = "public";
         let output_visbility = "public";
@@ -1734,7 +1957,7 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let srs_path = download_srs(17);
+        let srs_path = download_srs(test_dir, 17);
         let srs_path = format!("--srs-path={}", srs_path);
 
         let data_path = format!("{}/{}/input.json", test_dir, example_name);
@@ -1744,6 +1967,22 @@ mod native_tests {
 
         let test_input_source = format!("--input-source={}", input_source);
         let test_output_source = format!("--output-source={}", output_source);
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "compile-model",
+                "-M",
+                &model_path,
+                "--compiled-model",
+                &model_path,
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
