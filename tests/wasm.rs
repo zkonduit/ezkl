@@ -34,10 +34,10 @@ mod wasm32 {
             message.push(Fr::from(i as u64));
         }
 
-        let message_ser = bincode::serialize(&message).unwrap();
+        let message_ser = serde_json::to_vec(&message).unwrap();
 
         let hash = poseidon_hash_wasm(wasm_bindgen::Clamped(message_ser));
-        let hash: Vec<Vec<Fr>> = bincode::deserialize(&hash[..]).unwrap();
+        let hash: Vec<Vec<Fr>> = serde_json::from_slice(&hash[..]).unwrap();
 
         let reference_hash =
             PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN_GRAPH>::run(
@@ -118,7 +118,7 @@ mod wasm32 {
         };
 
         let serialized_run_args =
-            bincode::serialize(&run_args).expect("Failed to serialize RunArgs");
+            serde_json::to_vec(&run_args).expect("Failed to serialize RunArgs");
 
         let circuit_settings_ser = gen_circuit_settings_wasm(
             wasm_bindgen::Clamped(NETWORK.to_vec()),
@@ -173,7 +173,7 @@ mod wasm32 {
         };
 
         let serialized_run_args =
-            bincode::serialize(&run_args).expect("Failed to serialize RunArgs");
+            serde_json::to_vec(&run_args).expect("Failed to serialize RunArgs");
 
         let circuit_settings_ser = gen_circuit_settings_wasm(
             wasm_bindgen::Clamped(NETWORK.to_vec()),
