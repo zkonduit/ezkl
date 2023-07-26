@@ -82,7 +82,7 @@ jobs:
 
   wasm32-tests:
     runs-on: ubuntu-latest
-    # needs: [build,  library-tests, docs]
+    needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -91,8 +91,6 @@ jobs:
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@v0.4.0
-      # - name: install chrome
-      #   run: wget --no-verbose -O /tmp/chrome.deb https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_114.0.5735.198-1_amd64.deb; sudo apt install -y --allow-downgrades /tmp/chrome.deb; rm /tmp/chrome.deb
       - uses: nanasess/setup-chromedriver@v2
       - name: Install wasm32-unknown-unknown
         run: rustup target add wasm32-unknown-unknown
