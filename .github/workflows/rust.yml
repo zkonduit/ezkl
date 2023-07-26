@@ -95,6 +95,8 @@ jobs:
         with:
           wasmtime-version: "3.0.1"
       - uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
       - uses: nanasess/setup-chromedriver@v2
       - name: Install wasm32-unknown-unknown
         run: rustup target add wasm32-unknown-unknown
