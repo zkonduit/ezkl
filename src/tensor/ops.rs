@@ -980,6 +980,34 @@ pub fn min_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
     Ok(res)
 }
 
+/// Abs a tensor.
+/// # Arguments
+/// * `a` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::abs;
+/// let x = Tensor::<i128>::new(
+///    Some(&[-2, 15, 2, -1, 1, 0]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = abs(&x).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 15, 2, 1, 1, 0]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn abs<T: TensorType + Add<Output = T> + std::cmp::Ord + Neg<Output = T>>(
+    a: &Tensor<T>,
+) -> Result<Tensor<T>, TensorError> {
+    // calculate value of output
+    let mut output: Tensor<T> = a.clone();
+    output.iter_mut().for_each(|a_i| {
+        if *a_i < T::zero().unwrap() {
+            *a_i = -a_i.clone();
+        }
+    });
+    Ok(output)
+}
+
 /// Mins a tensor along specific axes.
 /// # Arguments
 ///

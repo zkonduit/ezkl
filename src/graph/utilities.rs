@@ -390,10 +390,11 @@ pub fn new_op_from_onnx(
                 slope: crate::circuit::utils::F32(leaky_op.alpha),
             })
         }
-        "Neg" => Box::new(PolyOp::Neg),
         "Scan" => {
             panic!("should never reach here")
         }
+        "Abs" => Box::new(HybridOp::Abs),
+        "Neg" => Box::new(PolyOp::Neg),
         "Sigmoid" => Box::new(LookupOp::Sigmoid { scales: (1, 1) }),
         "Sqrt" => Box::new(LookupOp::Sqrt { scales: (1, 1) }),
         "Rsqrt" => Box::new(LookupOp::Rsqrt { scales: (1, 1) }),
