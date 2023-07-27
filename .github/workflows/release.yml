@@ -78,12 +78,12 @@ jobs:
     - name: Set Cargo.toml version to match github tag
       shell: bash
       env:
-        RELEASE_TAG: ${{ env.EZKL_VERSION }}
+        RELEASE_TAG: ${{ github.event.inputs.tag }}
       run: |
         mv Cargo.toml Cargo.toml.orig
-        sed "s/0\\.0\\.0-git/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
+        sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
         mv Cargo.lock Cargo.lock.orig
-        sed "s/0\\.0\\.0-git/${RELEASE_TAG##*\/v}/" Cargo.lock.orig >Cargo.lock
+        sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.lock.orig >Cargo.lock
 
     - name: Install dependencies
       shell: bash
