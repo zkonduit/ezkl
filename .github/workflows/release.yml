@@ -75,6 +75,16 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v3
 
+    - name: Set Cargo.toml version to match github tag
+      shell: bash
+      env:
+        RELEASE_TAG: ${{ env.EZKL_VERSION }}
+      run: |
+        mv Cargo.toml Cargo.toml.orig
+        sed "s/0\\.0\\.0-git/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
+        mv Cargo.lock Cargo.lock.orig
+        sed "s/0\\.0\\.0-git/${RELEASE_TAG##*\/v}/" Cargo.lock.orig >Cargo.lock
+
     - name: Install dependencies
       shell: bash
       run: |
