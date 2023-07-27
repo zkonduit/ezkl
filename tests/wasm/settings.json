@@ -16,6 +16,7 @@
         "param_visibility": "Private",
         "allocated_constraints": null
     },
+    "version": "0.0.0-git",
     "num_constraints": 24,
     "model_output_scales": [
         7

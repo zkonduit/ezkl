@@ -366,6 +366,8 @@ pub struct GraphSettings {
     pub required_lookups: Vec<LookupOp>,
     /// check mode
     pub check_mode: CheckMode,
+    /// ezkl version used
+    pub version: String,
 }
 
 impl GraphSettings {

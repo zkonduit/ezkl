@@ -305,6 +305,7 @@ impl Model {
             required_lookups: lookup_ops,
             model_output_scales: self.graph.get_output_scales(),
             check_mode,
+            version: env!("CARGO_PKG_VERSION").to_string(),
         })
     }
 
