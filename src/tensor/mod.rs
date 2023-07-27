@@ -898,7 +898,7 @@ impl<T: TensorType + Neg<Output = T> + std::marker::Send + std::marker::Sync> Ne
     ///    Some(&[2, 1, 2, 1, 1, 1]),
     ///   &[2, 3],
     /// ).unwrap();
-    /// let result = x.neg().unwrap();
+    /// let result = x.neg();
     /// let expected = Tensor::<i32>::new(Some(&[-2, -1, -2, -1, -1, -1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
