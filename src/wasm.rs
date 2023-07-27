@@ -30,7 +30,7 @@ use crate::graph::{GraphCircuit, GraphSettings};
 /// Generate a poseidon hash in browser. Input message
 #[wasm_bindgen]
 pub fn poseidon_hash_wasm(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
-    let message: Vec<Fr> = bincode::deserialize(&message[..]).unwrap();
+    let message: Vec<Fr> = serde_json::from_slice(&message[..]).unwrap();
 
     let output =
         PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN_GRAPH>::run(
@@ -38,7 +38,7 @@ pub fn poseidon_hash_wasm(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
         )
         .unwrap();
 
-    bincode::serialize(&output).unwrap()
+    serde_json::to_vec(&output).unwrap()
 }
 
 /// Generate circuit params in browser
@@ -47,7 +47,7 @@ pub fn gen_circuit_settings_wasm(
     model_ser: wasm_bindgen::Clamped<Vec<u8>>,
     run_args_ser: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Vec<u8> {
-    let run_args: crate::commands::RunArgs = bincode::deserialize(&run_args_ser[..]).unwrap();
+    let run_args: crate::commands::RunArgs = serde_json::from_slice(&run_args_ser[..]).unwrap();
 
     // Read in circuit
     let mut reader = std::io::BufReader::new(&model_ser[..]);
