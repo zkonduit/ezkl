@@ -24,13 +24,11 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use itertools::Itertools;
-use std::ops::Deref;
-use std::ops::DerefMut;
-use std::ops::Range;
-use std::{cmp::max, ops::Add};
-use std::{error::Error, ops::Mul};
-use std::{fmt::Debug, ops::Sub};
-use std::{iter::Iterator, ops::Div};
+use std::cmp::max;
+use std::error::Error;
+use std::fmt::Debug;
+use std::iter::Iterator;
+use std::ops::{Add, Deref, DerefMut, Div, Mul, Neg, Range, Sub};
 use thiserror::Error;
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
@@ -884,6 +882,32 @@ impl<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync> Ad
         });
 
         Ok(lhs)
+    }
+}
+
+impl<T: TensorType + Neg<Output = T> + std::marker::Send + std::marker::Sync> Neg for Tensor<T> {
+    type Output = Tensor<T>;
+    /// Negates a tensor.
+    /// # Arguments
+    /// * `self` - Tensor
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use std::ops::Neg;
+    /// let x = Tensor::<i32>::new(
+    ///    Some(&[2, 1, 2, 1, 1, 1]),
+    ///   &[2, 3],
+    /// ).unwrap();
+    /// let result = x.neg().unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[-2, -1, -2, -1, -1, -1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    fn neg(self) -> Self {
+        let mut output = self.clone();
+        output.par_iter_mut().for_each(|x| {
+            *x = x.clone().neg();
+        });
+        output
     }
 }
 

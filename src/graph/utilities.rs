@@ -390,6 +390,7 @@ pub fn new_op_from_onnx(
                 slope: crate::circuit::utils::F32(leaky_op.alpha),
             })
         }
+        "Neg" => Box::new(PolyOp::Neg),
         "Scan" => {
             panic!("should never reach here")
         }
@@ -527,6 +528,11 @@ pub fn new_op_from_onnx(
                 pool_dims: (kernel_height, kernel_width),
             })
         }
+        "Ceil" | "Floor" | "Round" | "RoundHalfToEven" => {
+            warn!("using a round op in the circuit which does not make sense in Field arithmetic");
+            Box::new(PolyOp::Identity)
+        }
+        "Cube" => Box::new(PolyOp::Pow(3)),
         "Square" => Box::new(PolyOp::Pow(2)),
         "ConvUnary" => {
             let conv_node: &ConvUnary = match node.op().downcast_ref::<ConvUnary>() {

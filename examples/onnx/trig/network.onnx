@@ -1,4 +1,4 @@
-pytorch2.0.1:è
+pytorch2.0.1:•
 B
 input/softplus/Softplus_output_0/softplus/Softplus"Softplus
 7
@@ -13,8 +13,10 @@ B
 /Acos_output_0/Asin_output_0/Asin"Asin
 -
 /Asin_output_0/Atan_output_0/Atan"Atan
-%
-/Atan_output_0output/Tanh"Tanh	torch_jitZ)
+-
+/Atan_output_0/Tanh_output_0/Tanh"Tanh
+#
+/Tanh_output_0output/Neg"Neg	torch_jitZ)
 input 
 
 

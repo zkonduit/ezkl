@@ -6,7 +6,7 @@ use rayon::{
     prelude::IntoParallelRefIterator,
 };
 use std::collections::{HashMap, HashSet};
-pub use std::ops::{Add, Div, Mul, Sub};
+pub use std::ops::{Add, Div, Mul, Neg, Sub};
 
 /// IFF operation.
 /// # Arguments
@@ -603,6 +603,29 @@ pub fn sub<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sy
     }
 
     Ok(output)
+}
+
+/// Negates a tensor.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::neg;
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = neg(&[x, k]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[-2, -1, -2, -1, -1, -1]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn neg<T: TensorType + Neg<Output = T> + std::marker::Send + std::marker::Sync>(
+    t: &Tensor<T>,
+) -> Result<Tensor<T>, TensorError> {
+    // calculate value of output
+    Ok(-t.clone())
 }
 
 /// Elementwise multiplies multiple tensors.

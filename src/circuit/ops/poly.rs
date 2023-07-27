@@ -8,7 +8,7 @@ use super::{base::BaseOp, *};
 #[allow(missing_docs)]
 /// An enum representing the operations that can be expressed as arithmetic (non lookup) operations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum PolyOp<F: PrimeField + TensorType + PartialOrd>{
+pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Einsum {
         equation: String,
     },
@@ -39,6 +39,7 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd>{
         a: Option<Tensor<F>>,
     },
     Sub,
+    Neg,
     Mult {
         a: Option<Tensor<F>>,
     },
@@ -76,8 +77,8 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd>{
 
 impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {}
 
-impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<'de>> Op<F> for PolyOp<F>
-
+impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<'de>> Op<F>
+    for PolyOp<F>
 {
     /// Returns a reference to the Any trait.
     fn as_any(&self) -> &dyn Any {
@@ -108,6 +109,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Gather { .. } => "GATHER",
             PolyOp::Concat { .. } => "CONCAT",
             PolyOp::Slice { .. } => "SLICE",
+            PolyOp::Neg => "NEG",
         };
         name.into()
     }
@@ -152,6 +154,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 }
                 tensor::ops::add(&inputs)
             }
+            PolyOp::Neg => tensor::ops::neg(&inputs[0]),
             PolyOp::Sub => tensor::ops::sub(&inputs),
             PolyOp::Mult { a } => {
                 if let Some(a) = a {
@@ -250,6 +253,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Resize { scale_factor } => {
                 layouts::resize(config, region, values[..].try_into()?, scale_factor)?
             }
+            PolyOp::Neg => layouts::neg(config, region, values[..].try_into()?)?,
             PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?)?,
             PolyOp::Einsum { equation } => layouts::einsum(config, region, &mut values, equation)?,
             PolyOp::Gather { dim, index } => {
@@ -345,6 +349,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
 
     fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
         match self {
+            PolyOp::Neg => in_scales[0],
             PolyOp::MoveAxis { .. } => in_scales[0],
             PolyOp::Downsample { .. } => in_scales[0],
             PolyOp::Resize { .. } => in_scales[0],

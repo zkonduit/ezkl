@@ -596,6 +596,7 @@ pub fn min_axes<F: PrimeField + TensorType + PartialOrd>(
     Ok(res.into())
 }
 
+
 /// Pairwise (elementwise) op layout
 pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
