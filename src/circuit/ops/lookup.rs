@@ -39,6 +39,7 @@ pub enum LookupOp {
     ATanh { scales: (usize, usize) },
     Erf { scales: (usize, usize) },
     GreaterThan { a: utils::F32 },
+    Sign,
 }
 
 impl LookupOp {
@@ -61,6 +62,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let x = x[0].clone().map(|x| felt_to_i128(x));
         let res = match &self {
+            LookupOp::Sign => Ok(tensor::ops::nonlinearities::sign(&x)),
             LookupOp::GreaterThan { a } => Ok(tensor::ops::nonlinearities::greater_than(
                 &x,
                 f32::from(*a).into(),
@@ -144,6 +146,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     /// Returns the name of the operation
     fn as_string(&self) -> String {
         let name = match self {
+            LookupOp::Sign => "SIGN",
             LookupOp::GreaterThan { .. } => "GREATER_THAN",
             LookupOp::Recip { .. } => "RECIP",
             LookupOp::Div { .. } => "DIV",
@@ -185,8 +188,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
         )?))
     }
 
+    /// Returns the scale of the output of the operation.
+    fn out_scale(&self, _: Vec<u32>, global_scale: u32) -> u32 {
+        match self {
+            LookupOp::Sign | LookupOp::GreaterThan { .. } => 0,
+            _ => global_scale,
+        }
+    }
+
     fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>> {
         match self {
+            LookupOp::Sign => Box::new(LookupOp::Sign),
             LookupOp::Recip { .. } => Box::new(LookupOp::Recip {
                 scale: scale_to_multiplier(inputs_scale[0] + global_scale) as usize,
             }),

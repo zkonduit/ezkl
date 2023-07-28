@@ -533,6 +533,7 @@ pub fn new_op_from_onnx(
             warn!("using a round op in the circuit which does not make sense in Field arithmetic");
             Box::new(PolyOp::Identity)
         }
+        "Sign" => Box::new(LookupOp::Sign),
         "Cube" => Box::new(PolyOp::Pow(3)),
         "Square" => Box::new(PolyOp::Pow(2)),
         "ConvUnary" => {
