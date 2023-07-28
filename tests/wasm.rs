@@ -1,6 +1,8 @@
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 #[cfg(test)]
 mod wasm32 {
+    use ark_std::test_rng;
+    use ezkl::circuit::modules::elgamal::ElGamalVariables;
     use ezkl::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
     use ezkl::circuit::modules::poseidon::PoseidonChip;
     use ezkl::circuit::modules::Module;
@@ -10,8 +12,8 @@ mod wasm32 {
     use ezkl::graph::GraphSettings;
     use ezkl::pfsys::Snark;
     use ezkl::wasm::{
-        gen_circuit_settings_wasm, gen_pk_wasm, gen_vk_wasm, poseidon_hash_wasm, prove_wasm,
-        verify_wasm,
+        elgamal_decrypt_wasm, elgamal_encrypt_wasm, gen_circuit_settings_wasm, gen_pk_wasm,
+        gen_vk_wasm, poseidon_hash_wasm, prove_wasm, verify_wasm,
     };
     use halo2curves::bn256::{Fr, G1Affine};
     pub use wasm_bindgen_rayon::init_thread_pool;
@@ -26,6 +28,37 @@ mod wasm32 {
     pub const WITNESS: &[u8] = include_bytes!("../tests/wasm/test.witness.json");
     pub const PROOF: &[u8] = include_bytes!("../tests/wasm/test.proof");
     pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/test.onnx");
+
+    #[wasm_bindgen_test]
+    async fn verify_elgamal_wasm() {
+        let mut rng = test_rng();
+
+        let var = ElGamalVariables::gen_random(&mut rng);
+
+        let mut message: Vec<Fr> = vec![];
+        for i in 0..32 {
+            message.push(Fr::from(i as u64));
+        }
+
+        let pk = serde_json::to_vec(&var.pk).unwrap();
+        let message_ser = serde_json::to_vec(&message).unwrap();
+        let r = serde_json::to_vec(&var.r).unwrap();
+
+        let cipher = elgamal_encrypt_wasm(
+            wasm_bindgen::Clamped(pk.clone()),
+            wasm_bindgen::Clamped(message_ser.clone()),
+            wasm_bindgen::Clamped(r.clone()),
+        );
+
+        let sk = serde_json::to_vec(&var.sk).unwrap();
+
+        let decrypted_message =
+            elgamal_decrypt_wasm(wasm_bindgen::Clamped(cipher), wasm_bindgen::Clamped(sk));
+
+        let decrypted_message: Vec<Fr> = serde_json::from_slice(&decrypted_message[..]).unwrap();
+
+        assert_eq!(message, decrypted_message)
+    }
 
     #[wasm_bindgen_test]
     async fn verify_hash() {
