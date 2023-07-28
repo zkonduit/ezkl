@@ -188,6 +188,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
         )?))
     }
 
+    /// Returns the scale of the output of the operation.
+    fn out_scale(&self, _: Vec<u32>, global_scale: u32) -> u32 {
+        match self {
+            LookupOp::Sign | LookupOp::GreaterThan { .. } => 0,
+            _ => global_scale,
+        }
+    }
+
     fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>> {
         match self {
             LookupOp::Sign => Box::new(LookupOp::Sign),
