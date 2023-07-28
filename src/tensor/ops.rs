@@ -6,7 +6,7 @@ use rayon::{
     prelude::IntoParallelRefIterator,
 };
 use std::collections::{HashMap, HashSet};
-pub use std::ops::{Add, Div, Mul, Sub};
+pub use std::ops::{Add, Div, Mul, Neg, Sub};
 
 /// IFF operation.
 /// # Arguments
@@ -605,6 +605,29 @@ pub fn sub<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sy
     Ok(output)
 }
 
+/// Negates a tensor.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::neg;
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 1, 2, 1, 1, 1]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = neg(&x).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[-2, -1, -2, -1, -1, -1]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn neg<T: TensorType + Neg<Output = T> + std::marker::Send + std::marker::Sync>(
+    t: &Tensor<T>,
+) -> Result<Tensor<T>, TensorError> {
+    // calculate value of output
+    Ok(-t.clone())
+}
+
 /// Elementwise multiplies multiple tensors.
 /// # Arguments
 ///
@@ -955,6 +978,34 @@ pub fn min_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
     }
 
     Ok(res)
+}
+
+/// Abs a tensor.
+/// # Arguments
+/// * `a` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::abs;
+/// let x = Tensor::<i128>::new(
+///    Some(&[-2, 15, 2, -1, 1, 0]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = abs(&x).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 15, 2, 1, 1, 0]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn abs<T: TensorType + Add<Output = T> + std::cmp::Ord + Neg<Output = T>>(
+    a: &Tensor<T>,
+) -> Result<Tensor<T>, TensorError> {
+    // calculate value of output
+    let mut output: Tensor<T> = a.clone();
+    output.iter_mut().for_each(|a_i| {
+        if *a_i < T::zero().unwrap() {
+            *a_i = -a_i.clone();
+        }
+    });
+    Ok(output)
 }
 
 /// Mins a tensor along specific axes.
@@ -2020,6 +2071,48 @@ pub mod nonlinearities {
         output
     }
 
+    /// Elementwise applies exponential to a tensor of integers.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::ln;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[2, 15, 2, 1, 1, 3000]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = ln(&x, 1, 1);
+    /// let expected = Tensor::<i128>::new(Some(&[1, 3, 1, 0, 0, 8]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    ///
+    ///
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[37, 12, 41]),
+    ///   &[3],
+    /// ).unwrap();
+    /// let result = ln(&x, 512, 512);
+    ///
+    /// let expected = Tensor::<i128>::new(Some(&[-1345, -1922, -1293]), &[3]).unwrap();
+    ///
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn ln(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        // calculate value of output
+        let mut output: Tensor<i128> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            let kix = (*a_i as f64) / (scale_input as f64);
+            let fout = (scale_output as f64) * kix.ln();
+            let rounded = fout.round();
+            output[i] = rounded as i128;
+        }
+        output
+    }
+
     /// softmax layout
     pub fn multi_dim_softmax(
         a: &Tensor<i128>,
@@ -2208,6 +2301,296 @@ pub mod nonlinearities {
         output
     }
 
+    /// Elementwise applies cosine to a tensor of integers.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::cos;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[4, 25, 8, 1, 1, 0]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let result = cos(&x, 1, 128);
+    /// let expected = Tensor::<i128>::new(Some(&[-83, 126, -18, 69, 69, 128]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn cos(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        let mut output = a.clone();
+
+        for i in 0..a.len() {
+            let z = a[i] as f64 / (scale_input as f64);
+            let cosz = (scale_output as f64) * z.cos();
+            output[i] = cosz as i128;
+        }
+
+        output
+    }
+
+    /// Elementwise applies arccosine to a tensor of integers.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::acos;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[4, 25, 8, 1, 1, 0]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let result = acos(&x, 1, 128);
+    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 201]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn acos(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        let mut output = a.clone();
+
+        for i in 0..a.len() {
+            let z = a[i] as f64 / (scale_input as f64);
+            let acos = (scale_output as f64) * z.acos();
+            output[i] = acos as i128;
+        }
+
+        output
+    }
+
+    /// Elementwise applies cosh to a tensor of integers.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::cosh;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[4, 25, 8, 1, 1, 0]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let result = cosh(&x, 1, 128);
+    /// let expected = Tensor::<i128>::new(Some(&[3495, 4608313557592, 190781, 197, 197, 128]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn cosh(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        let mut output = a.clone();
+
+        for i in 0..a.len() {
+            let z = a[i] as f64 / (scale_input as f64);
+            let coshz = (scale_output as f64) * z.cosh();
+            output[i] = coshz as i128;
+        }
+
+        output
+    }
+
+    /// Elementwise applies arccosineh to a tensor of integers.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::acosh;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[4, 25, 8, 1, 1, 0]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let result = acosh(&x, 1, 128);
+    /// let expected = Tensor::<i128>::new(Some(&[264, 500, 354, 0, 0, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn acosh(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        let mut output = a.clone();
+
+        for i in 0..a.len() {
+            let z = a[i] as f64 / (scale_input as f64);
+            let acoshz = (scale_output as f64) * z.acosh();
+            output[i] = acoshz as i128;
+        }
+
+        output
+    }
+
+    /// Elementwise applies sine to a tensor of integers.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::sin;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[4, 25, 8, 1, 1, 0]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let result = sin(&x, 1, 128);
+    /// let expected = Tensor::<i128>::new(Some(&[-96, -16, 126, 107, 107, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn sin(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        let mut output = a.clone();
+
+        for i in 0..a.len() {
+            let z = a[i] as f64 / (scale_input as f64);
+            let sinz = (scale_output as f64) * z.sin();
+            output[i] = sinz as i128;
+        }
+
+        output
+    }
+
+    /// Elementwise applies arcsine to a tensor of integers.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::asin;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[4, 25, 8, 1, 1, 0]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let result = asin(&x, 1, 128);
+    /// let expected = Tensor::<i128>::new(Some(& [0, 0, 0, 201, 201, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn asin(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        let mut output = a.clone();
+
+        for i in 0..a.len() {
+            let z = a[i] as f64 / (scale_input as f64);
+            let asinz = (scale_output as f64) * z.asin();
+            output[i] = asinz as i128;
+        }
+
+        output
+    }
+
+    /// Elementwise applies sineh to a tensor of integers.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::sinh;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[4, 25, 8, 1, 1, 0]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let result = sinh(&x, 1, 128);
+    /// let expected = Tensor::<i128>::new(Some(& [3493, 4608313557592, 190781, 150, 150, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn sinh(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        let mut output = a.clone();
+
+        for i in 0..a.len() {
+            let z = a[i] as f64 / (scale_input as f64);
+            let asinz = (scale_output as f64) * z.sinh();
+            output[i] = asinz as i128;
+        }
+
+        output
+    }
+
+    /// Elementwise applies arcsineh to a tensor of integers.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::asinh;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[4, 25, 8, 1, 1, 0]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let result = asinh(&x, 1, 128);
+    /// let expected = Tensor::<i128>::new(Some(&[268, 500, 355, 112, 112, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn asinh(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        let mut output = a.clone();
+
+        for i in 0..a.len() {
+            let z = a[i] as f64 / (scale_input as f64);
+            let asinhz = (scale_output as f64) * z.asinh();
+            output[i] = asinhz as i128;
+        }
+
+        output
+    }
+
+    /// Elementwise applies tan activation to a tensor of integers.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::tan;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[4, 25, 8, 1, 1, 0]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let result = tan(&x, 1, 128);
+    /// let expected = Tensor::<i128>::new(Some(&[148, -17, -870, 199, 199, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn tan(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        let mut output = a.clone();
+
+        for i in 0..a.len() {
+            let z = a[i] as f64 / (scale_input as f64);
+            let tanz = (scale_output as f64) * z.tan();
+            output[i] = tanz as i128;
+        }
+
+        output
+    }
+
+    /// Elementwise applies arctan activation to a tensor of integers.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::atan;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[4, 25, 8, 1, 1, 0]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let result = atan(&x, 1, 128);
+    /// let expected = Tensor::<i128>::new(Some(&[169, 195, 185, 100, 100, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn atan(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        let mut output = a.clone();
+
+        for i in 0..a.len() {
+            let z = a[i] as f64 / (scale_input as f64);
+            let atanz = (scale_output as f64) * z.atan();
+            output[i] = atanz as i128;
+        }
+
+        output
+    }
+
     /// Elementwise applies tanh activation to a tensor of integers.
     /// # Arguments
     ///
@@ -2222,8 +2605,8 @@ pub mod nonlinearities {
     ///     Some(&[4, 25, 8, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let result = tanh(&x, 1, 1);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 0, 0, 0]), &[2, 3]).unwrap();
+    /// let result = tanh(&x, 1, 128);
+    /// let expected = Tensor::<i128>::new(Some(&[127, 128, 127, 97, 97, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
 
@@ -2232,10 +2615,39 @@ pub mod nonlinearities {
 
         for i in 0..a.len() {
             let z = a[i] as f64 / (scale_input as f64);
-            let numerator = z.exp() - (1.0 / z.exp());
-            let denominator = z.exp() + (1.0 / z.exp());
-            let tanhz = (scale_output as f64) * (numerator / denominator);
+            let tanhz: f64 = (scale_output as f64) * z.tanh();
             output[i] = tanhz as i128;
+        }
+
+        output
+    }
+
+    /// Elementwise applies arctanh activation to a tensor of integers.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::atanh;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[4, 25, 8, 2, 2, 0]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = atanh(&x, 1, 128);
+    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+
+    pub fn atanh(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+        let mut output = a.clone();
+
+        for i in 0..a.len() {
+            let z = a[i] as f64 / (scale_input as f64);
+            let atanhz = (scale_output as f64) * z.atanh();
+            output[i] = atanhz as i128;
         }
 
         output

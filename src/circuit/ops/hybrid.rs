@@ -5,14 +5,15 @@ use crate::{
     graph::scale_to_multiplier,
     tensor::{self, Tensor, TensorError, TensorType, ValTensor},
 };
-use serde::{Deserialize, Serialize};
 use halo2curves::ff::PrimeField;
+use serde::{Deserialize, Serialize};
 // import run args from model
 
 #[allow(missing_docs)]
 /// An enum representing the operations that consist of both lookups and arithmetic operations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum HybridOp {
+    Abs,
     Max {
         axes: Vec<usize>,
     },
@@ -40,6 +41,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
         let x = inputs[0].clone().map(|x| felt_to_i128(x));
 
         let (res, intermediate_lookups) = match &self {
+            HybridOp::Abs => (tensor::ops::abs(&x)?, vec![]),
             HybridOp::Max { axes, .. } => (tensor::ops::max_axes(&x, axes)?, vec![]),
             HybridOp::MaxPool2d {
                 padding,
@@ -68,6 +70,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
 
     fn as_string(&self) -> String {
         let name = match self {
+            HybridOp::Abs => "ABS",
             HybridOp::Max { .. } => "MAX",
             HybridOp::MaxPool2d { .. } => "MAXPOOL2D",
             HybridOp::Min { .. } => "MIN",
@@ -84,6 +87,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
         values: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, Box<dyn std::error::Error>> {
         Ok(Some(match self {
+            HybridOp::Abs => layouts::abs(config, region, values[..].try_into()?)?,
             HybridOp::MaxPool2d {
                 padding,
                 stride,
@@ -141,9 +145,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
 
     fn required_lookups(&self) -> Vec<LookupOp> {
         match self {
-            HybridOp::Max { .. } | HybridOp::Min { .. } | HybridOp::MaxPool2d { .. } => {
-                Op::<F>::required_lookups(&LookupOp::ReLU { scale: 1 })
-            }
+            HybridOp::Max { .. }
+            | HybridOp::Min { .. }
+            | HybridOp::MaxPool2d { .. }
+            | HybridOp::Abs => Op::<F>::required_lookups(&LookupOp::ReLU { scale: 1 }),
             HybridOp::Softmax { scales } => {
                 vec![
                     LookupOp::Exp { scales: *scales },

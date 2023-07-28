@@ -393,10 +393,25 @@ pub fn new_op_from_onnx(
         "Scan" => {
             panic!("should never reach here")
         }
+        "Abs" => Box::new(HybridOp::Abs),
+        "Neg" => Box::new(PolyOp::Neg),
         "Sigmoid" => Box::new(LookupOp::Sigmoid { scales: (1, 1) }),
         "Sqrt" => Box::new(LookupOp::Sqrt { scales: (1, 1) }),
         "Rsqrt" => Box::new(LookupOp::Rsqrt { scales: (1, 1) }),
+        "Exp" => Box::new(LookupOp::Exp { scales: (1, 1) }),
+        "Ln" => Box::new(LookupOp::Ln { scales: (1, 1) }),
+        "Sin" => Box::new(LookupOp::Sin { scales: (1, 1) }),
+        "Cos" => Box::new(LookupOp::Cos { scales: (1, 1) }),
+        "Tan" => Box::new(LookupOp::Tan { scales: (1, 1) }),
+        "Asin" => Box::new(LookupOp::ASin { scales: (1, 1) }),
+        "Acos" => Box::new(LookupOp::ACos { scales: (1, 1) }),
+        "Atan" => Box::new(LookupOp::ATan { scales: (1, 1) }),
+        "Sinh" => Box::new(LookupOp::Sinh { scales: (1, 1) }),
+        "Cosh" => Box::new(LookupOp::Cosh { scales: (1, 1) }),
         "Tanh" => Box::new(LookupOp::Tanh { scales: (1, 1) }),
+        "Asinh" => Box::new(LookupOp::ASinh { scales: (1, 1) }),
+        "Acosh" => Box::new(LookupOp::ACosh { scales: (1, 1) }),
+        "Atanh" => Box::new(LookupOp::ATanh { scales: (1, 1) }),
         "Erf" => Box::new(LookupOp::Erf { scales: (1, 1) }),
         "Source" => Box::new(crate::circuit::ops::Input { scale }),
         "Add" => {
@@ -514,6 +529,11 @@ pub fn new_op_from_onnx(
                 pool_dims: (kernel_height, kernel_width),
             })
         }
+        "Ceil" | "Floor" | "Round" | "RoundHalfToEven" => {
+            warn!("using a round op in the circuit which does not make sense in Field arithmetic");
+            Box::new(PolyOp::Identity)
+        }
+        "Cube" => Box::new(PolyOp::Pow(3)),
         "Square" => Box::new(PolyOp::Pow(2)),
         "ConvUnary" => {
             let conv_node: &ConvUnary = match node.op().downcast_ref::<ConvUnary>() {
