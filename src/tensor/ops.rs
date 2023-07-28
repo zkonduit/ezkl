@@ -2113,6 +2113,37 @@ pub mod nonlinearities {
         output
     }
 
+    /// Elementwise applies sign to a tensor of integers.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::sign;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[-2, 15, 2, 1, 1, 0]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let result = sign(&x);
+    /// let expected = Tensor::<i128>::new(Some(&[-1, 1, 1, 1, 1, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn sign(a: &Tensor<i128>) -> Tensor<i128> {
+        // calculate value of output
+        let mut output: Tensor<i128> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            if *a_i > 0 {
+                output[i] = 1;
+            } else if *a_i < 0 {
+                output[i] = -1;
+            } else {
+                output[i] = 0;
+            }
+        }
+        output
+    }
+
     /// softmax layout
     pub fn multi_dim_softmax(
         a: &Tensor<i128>,

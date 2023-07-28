@@ -27,7 +27,7 @@ class Circuit(nn.Module):
         # x = torch.acosh(x)
         # x = torch.asinh(x)
         # x = torch.atanh(x)
-        return (-x).abs()
+        return (-x).abs().sign()
 
 
 def main():
