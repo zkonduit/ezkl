@@ -23,10 +23,23 @@ pub enum LookupOp {
     Recip { scale: usize },
     LeakyReLU { scale: usize, slope: utils::F32 },
     Sigmoid { scales: (usize, usize) },
+    Ln { scales: (usize, usize) },
     Exp { scales: (usize, usize) },
+    Cos { scales: (usize, usize) },
+    ACos { scales: (usize, usize) },
+    Cosh { scales: (usize, usize) },
+    ACosh { scales: (usize, usize) },
+    Sin { scales: (usize, usize) },
+    ASin { scales: (usize, usize) },
+    Sinh { scales: (usize, usize) },
+    ASinh { scales: (usize, usize) },
+    Tan { scales: (usize, usize) },
+    ATan { scales: (usize, usize) },
     Tanh { scales: (usize, usize) },
+    ATanh { scales: (usize, usize) },
     Erf { scales: (usize, usize) },
     GreaterThan { a: utils::F32 },
+    Sign,
 }
 
 impl LookupOp {
@@ -49,6 +62,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let x = x[0].clone().map(|x| felt_to_i128(x));
         let res = match &self {
+            LookupOp::Sign => Ok(tensor::ops::nonlinearities::sign(&x)),
             LookupOp::GreaterThan { a } => Ok(tensor::ops::nonlinearities::greater_than(
                 &x,
                 f32::from(*a).into(),
@@ -76,14 +90,48 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::Rsqrt { scales } => {
                 Ok(tensor::ops::nonlinearities::rsqrt(&x, scales.0, scales.1))
             }
-            LookupOp::Tanh { scales } => {
-                Ok(tensor::ops::nonlinearities::tanh(&x, scales.0, scales.1))
-            }
             LookupOp::Erf { scales } => {
                 Ok(tensor::ops::nonlinearities::erffunc(&x, scales.0, scales.1))
             }
             LookupOp::Exp { scales } => {
                 Ok(tensor::ops::nonlinearities::exp(&x, scales.0, scales.1))
+            }
+            LookupOp::Ln { scales } => Ok(tensor::ops::nonlinearities::ln(&x, scales.0, scales.1)),
+            LookupOp::Cos { scales } => {
+                Ok(tensor::ops::nonlinearities::cos(&x, scales.0, scales.1))
+            }
+            LookupOp::ACos { scales } => {
+                Ok(tensor::ops::nonlinearities::acos(&x, scales.0, scales.1))
+            }
+            LookupOp::Cosh { scales } => {
+                Ok(tensor::ops::nonlinearities::cosh(&x, scales.0, scales.1))
+            }
+            LookupOp::ACosh { scales } => {
+                Ok(tensor::ops::nonlinearities::acosh(&x, scales.0, scales.1))
+            }
+            LookupOp::Sin { scales } => {
+                Ok(tensor::ops::nonlinearities::sin(&x, scales.0, scales.1))
+            }
+            LookupOp::ASin { scales } => {
+                Ok(tensor::ops::nonlinearities::asin(&x, scales.0, scales.1))
+            }
+            LookupOp::Sinh { scales } => {
+                Ok(tensor::ops::nonlinearities::sinh(&x, scales.0, scales.1))
+            }
+            LookupOp::ASinh { scales } => {
+                Ok(tensor::ops::nonlinearities::asinh(&x, scales.0, scales.1))
+            }
+            LookupOp::Tan { scales } => {
+                Ok(tensor::ops::nonlinearities::tan(&x, scales.0, scales.1))
+            }
+            LookupOp::ATan { scales } => {
+                Ok(tensor::ops::nonlinearities::atan(&x, scales.0, scales.1))
+            }
+            LookupOp::ATanh { scales } => {
+                Ok(tensor::ops::nonlinearities::atanh(&x, scales.0, scales.1))
+            }
+            LookupOp::Tanh { scales } => {
+                Ok(tensor::ops::nonlinearities::tanh(&x, scales.0, scales.1))
             }
         }?;
 
@@ -98,17 +146,30 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     /// Returns the name of the operation
     fn as_string(&self) -> String {
         let name = match self {
+            LookupOp::Sign => "SIGN",
             LookupOp::GreaterThan { .. } => "GREATER_THAN",
             LookupOp::Recip { .. } => "RECIP",
             LookupOp::Div { .. } => "DIV",
+            LookupOp::Ln { .. } => "LN",
             LookupOp::ReLU { .. } => "RELU",
             LookupOp::LeakyReLU { .. } => "LEAKY_RELU",
             LookupOp::Sigmoid { .. } => "SIGMOID",
             LookupOp::Sqrt { .. } => "SQRT",
-            LookupOp::Tanh { .. } => "TANH",
             LookupOp::Erf { .. } => "ERF",
             LookupOp::Rsqrt { .. } => "RSQRT",
             LookupOp::Exp { .. } => "EXP",
+            LookupOp::Tan { .. } => "TAN",
+            LookupOp::ATan { .. } => "ATAN",
+            LookupOp::Tanh { .. } => "TANH",
+            LookupOp::ATanh { .. } => "ATANH",
+            LookupOp::Cos { .. } => "COS",
+            LookupOp::ACos { .. } => "ACOS",
+            LookupOp::Cosh { .. } => "COSH",
+            LookupOp::ACosh { .. } => "ACOSH",
+            LookupOp::Sin { .. } => "SIN",
+            LookupOp::ASin { .. } => "ASIN",
+            LookupOp::Sinh { .. } => "SINH",
+            LookupOp::ASinh { .. } => "ASINH",
         };
         name.into()
     }
@@ -127,8 +188,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
         )?))
     }
 
+    /// Returns the scale of the output of the operation.
+    fn out_scale(&self, _: Vec<u32>, global_scale: u32) -> u32 {
+        match self {
+            LookupOp::Sign | LookupOp::GreaterThan { .. } => 0,
+            _ => global_scale,
+        }
+    }
+
     fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>> {
         match self {
+            LookupOp::Sign => Box::new(LookupOp::Sign),
             LookupOp::Recip { .. } => Box::new(LookupOp::Recip {
                 scale: scale_to_multiplier(inputs_scale[0] + global_scale) as usize,
             }),
@@ -162,6 +232,72 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                     scale_to_multiplier(global_scale) as usize,
                 ),
             }),
+            LookupOp::Cos { .. } => Box::new(LookupOp::Cos {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
+            LookupOp::ACos { .. } => Box::new(LookupOp::ACos {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
+            LookupOp::Cosh { .. } => Box::new(LookupOp::Cosh {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
+            LookupOp::ACosh { .. } => Box::new(LookupOp::ACosh {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
+            LookupOp::Sin { .. } => Box::new(LookupOp::Sin {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
+            LookupOp::ASin { .. } => Box::new(LookupOp::ASin {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
+            LookupOp::Sinh { .. } => Box::new(LookupOp::Sinh {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
+            LookupOp::ASinh { .. } => Box::new(LookupOp::ASinh {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
+            LookupOp::Tan { .. } => Box::new(LookupOp::Tan {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
+            LookupOp::ATan { .. } => Box::new(LookupOp::ATan {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
+            LookupOp::ATanh { .. } => Box::new(LookupOp::ATanh {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
             LookupOp::Tanh { .. } => Box::new(LookupOp::Tanh {
                 scales: (
                     scale_to_multiplier(inputs_scale[0]) as usize,
@@ -175,6 +311,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                 ),
             }),
             LookupOp::Exp { .. } => Box::new(LookupOp::Exp {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+            }),
+            LookupOp::Ln { .. } => Box::new(LookupOp::Ln {
                 scales: (
                     scale_to_multiplier(inputs_scale[0]) as usize,
                     scale_to_multiplier(global_scale) as usize,

@@ -8,7 +8,7 @@ use halo2_proofs::poly::kzg::{
     commitment::{KZGCommitmentScheme, ParamsKZG},
     strategy::SingleStrategy as KZGSingleStrategy,
 };
-use halo2curves::bn256::{Bn256, Fr, G1Affine};
+use halo2curves::bn256::{Bn256, Fr, G1Affine, G1};
 use halo2curves::ff::{FromUniformBytes, PrimeField};
 
 use crate::tensor::TensorType;
@@ -37,6 +37,36 @@ pub fn poseidon_hash_wasm(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
             message.clone(),
         )
         .unwrap();
+
+    serde_json::to_vec(&output).unwrap()
+}
+
+/// Encrypt using elgamal in browser. Input message
+#[wasm_bindgen]
+pub fn elgamal_encrypt_wasm(
+    pk: wasm_bindgen::Clamped<Vec<u8>>,
+    message: wasm_bindgen::Clamped<Vec<u8>>,
+    r: wasm_bindgen::Clamped<Vec<u8>>,
+) -> Vec<u8> {
+    let pk: G1Affine = serde_json::from_slice(&pk[..]).unwrap();
+    let message: Vec<Fr> = serde_json::from_slice(&message[..]).unwrap();
+    let r: Fr = serde_json::from_slice(&r[..]).unwrap();
+
+    let output = crate::circuit::modules::elgamal::ElGamalGadget::encrypt(pk, message, r);
+
+    serde_json::to_vec(&output).unwrap()
+}
+
+/// Decrypt using elgamal in browser. Input message
+#[wasm_bindgen]
+pub fn elgamal_decrypt_wasm(
+    cipher: wasm_bindgen::Clamped<Vec<u8>>,
+    sk: wasm_bindgen::Clamped<Vec<u8>>,
+) -> Vec<u8> {
+    let sk: Fr = serde_json::from_slice(&sk[..]).unwrap();
+    let cipher: (G1, Vec<Fr>) = serde_json::from_slice(&cipher[..]).unwrap();
+
+    let output = crate::circuit::modules::elgamal::ElGamalGadget::decrypt(&cipher, sk);
 
     serde_json::to_vec(&output).unwrap()
 }
