@@ -852,7 +852,10 @@ impl GraphCircuit {
         model_path: &std::path::PathBuf,
         check_mode: CheckMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let model = Model::load(model_path.clone())?;
+        let model = Model::load(model_path.clone()).map_err(|e| {
+            error!("failed to deserialize compiled model. have you called compile-model ?");
+            e
+        })?;
         Self::new(model, *run_args, check_mode)
     }
 
@@ -872,7 +875,10 @@ impl GraphCircuit {
         model_path: &std::path::PathBuf,
         check_mode: CheckMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let model = Model::load(model_path.clone())?;
+        let model = Model::load(model_path.clone()).map_err(|e| {
+            error!("failed to deserialize compiled model. have you called compile-model ?");
+            e
+        })?;
         Self::new_from_settings(model, params.clone(), check_mode)
     }
 
