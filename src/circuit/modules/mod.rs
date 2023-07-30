@@ -5,6 +5,9 @@ pub mod poseidon;
 pub mod elgamal;
 
 ///
+pub mod keccak;
+
+///
 pub mod planner;
 use halo2_proofs::{
     circuit::Layouter,

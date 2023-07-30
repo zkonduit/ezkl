@@ -16,6 +16,7 @@ crate-type = ["cdylib", "rlib"]
 halo2_gadgets = { git = "https://github.com/zkonduit/halo2", default_features = false, branch= "ac/public-cells" }
 halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "ac/public-cells", default_features = false, features = ["thread-safe-region"]}
 halo2curves = { git = 'https://github.com/privacy-scaling-explorations/halo2curves', tag = "0.3.2", features = ["derive_serde"], default_features = false }
+zkevm-circuits = {git = 'https://github.com/privacy-scaling-explorations/zkevm-circuits'}
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
 plotters = { version = "0.3.0", default_features = false, optional = true }
