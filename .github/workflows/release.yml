@@ -22,12 +22,8 @@ jobs:
       - name: Get release version from tag
         shell: bash
         run: |
-          if [[ -z "${{ github.event.inputs.tag }}" ]]; then
-            echo "EZKL_VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-          else
-            echo "EZKL_VERSION=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
-          fi
-          echo "version is: ${{ env.EZKL_VERSION }}"
+           echo "EZKL_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+           echo "version is: ${{ env.EZKL_VERSION }}"
 
       - name: Create Github Release
         id: create-release
@@ -75,15 +71,19 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v3
 
+    - name: Get release version from tag
+      shell: bash
+      run: |
+           echo "EZKL_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+           echo "version is: ${{ env.EZKL_VERSION }}"
+
     - name: Set Cargo.toml version to match github tag
       shell: bash
-      env:
-        RELEASE_TAG: ${{ github.event.inputs.tag }}
       run: |
         mv Cargo.toml Cargo.toml.orig
-        sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
+        sed "s/0\\.0\\.0/${EZKL_VERSION//v}/" Cargo.toml.orig >Cargo.toml
         mv Cargo.lock Cargo.lock.orig
-        sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.lock.orig >Cargo.lock
+        sed "s/0\\.0\\.0/${EZKL_VERSION//v}/" Cargo.lock.orig >Cargo.lock
 
     - name: Install dependencies
       shell: bash
