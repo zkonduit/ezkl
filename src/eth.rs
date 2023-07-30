@@ -272,6 +272,11 @@ pub async fn verify_proof_via_solidity(
         return Err(Box::new(EvmVerificationError::InvalidProof));
     }
 
+    info!(
+        "estimated verify gas cost: {:#?}",
+        client.estimate_gas(&tx, None).await?
+    );
+
     drop(anvil);
     Ok(true)
 }
