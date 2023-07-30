@@ -295,14 +295,20 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     {
         let mut selectors = BTreeMap::new();
 
-        let table =
-            if let std::collections::btree_map::Entry::Vacant(e) = self.tables.entry(nl.clone()) {
-                let table = Table::<F>::configure(cs, bits, nl);
-                e.insert(table.clone());
-                table
+        // we borrow mutably twice so we need to do this dance
+
+        let table = if !self.tables.contains_key(nl) {
+            // as all tables have the same input we see if there's another table who's input we can reuse
+            let table = if let Some(table) = self.tables.values().next() {
+                Table::<F>::configure(cs, bits, nl, Some(table.table_input.clone()))
             } else {
-                return Ok(());
+                Table::<F>::configure(cs, bits, nl, None)
             };
+            self.tables.insert(nl.clone(), table.clone());
+            table
+        } else {
+            return Ok(());
+        };
 
         for x in 0..input.num_cols() {
             let qlookup = cs.complex_selector();
@@ -350,13 +356,17 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
     /// layout_tables must be called before layout.
     pub fn layout_tables(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), Box<dyn Error>> {
-        for table in self.tables.values_mut() {
+        for (i, table) in self.tables.values_mut().enumerate() {
             if !table.is_assigned {
                 debug!(
                     "laying out table for {}",
                     crate::circuit::ops::Op::<F>::as_string(&table.nonlinearity)
                 );
-                table.layout(layouter)?;
+                if i == 0 {
+                    table.layout(layouter, false)?;
+                } else {
+                    table.layout(layouter, true)?;
+                }
             }
         }
         Ok(())
