@@ -23,14 +23,14 @@ jobs:
         shell: bash
         run: |
            echo "EZKL_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-           echo "version is: ${{ env.EZKL_VERSION }}"
+           echo "version is: ${EZKL_VERSION}"
 
       - name: Create Github Release
         id: create-release
         uses: softprops/action-gh-release@v1
         with:
           token: ${{ secrets.RELEASE_TOKEN }}
-          tag_name: ${{ env.EZKL_VERSION }}
+          tag_name: ${EZKL_VERSION}
 
   build-release:
     name: build-release
@@ -75,7 +75,7 @@ jobs:
       shell: bash
       run: |
            echo "EZKL_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-           echo "version is: ${{ env.EZKL_VERSION }}"
+           echo "version is: ${EZKL_VERSION}"
 
     - name: Set Cargo.toml version to match github tag
       shell: bash
