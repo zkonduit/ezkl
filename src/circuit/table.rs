@@ -39,10 +39,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         cs: &mut ConstraintSystem<F>,
         bits: usize,
         nonlinearity: &LookupOp,
+        preexisting_input: Option<TableColumn>,
     ) -> Table<F> {
+        let table_input = preexisting_input.unwrap_or_else(|| cs.lookup_table_column());
+
         Table {
             nonlinearity: nonlinearity.clone(),
-            table_input: cs.lookup_table_column(),
+            table_input,
             table_output: cs.lookup_table_column(),
             is_assigned: false,
             bits,
@@ -50,7 +53,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         }
     }
     /// Assigns values to the constraints generated when calling `configure`.
-    pub fn layout(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), Box<dyn Error>> {
+    pub fn layout(
+        &mut self,
+        layouter: &mut impl Layouter<F>,
+        preassigned_input: bool,
+    ) -> Result<(), Box<dyn Error>> {
         if self.is_assigned {
             return Err(Box::new(CircuitError::TableAlreadyAssigned));
         }
@@ -71,12 +78,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
                         .iter()
                         .enumerate()
                         .map(|(row_offset, input)| {
-                            table.assign_cell(
-                                || format!("nl_i_col row {}", row_offset),
-                                self.table_input,
-                                row_offset,
-                                || Value::known(*input),
-                            )?;
+                            if !preassigned_input {
+                                table.assign_cell(
+                                    || format!("nl_i_col row {}", row_offset),
+                                    self.table_input,
+                                    row_offset,
+                                    || Value::known(*input),
+                                )?;
+                            }
 
                             table.assign_cell(
                                 || format!("nl_o_col row {}", row_offset),
