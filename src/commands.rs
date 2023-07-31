@@ -346,8 +346,8 @@ pub enum Commands {
         /// The path to the snarks to aggregate over
         #[arg(long)]
         aggregation_snarks: Vec<PathBuf>,
-        /// The path to load the desired verfication key file
-        #[arg(long, default_value = "vk_aggr.key")]
+        /// The path to load the desired proving key file
+        #[arg(long)]
         pk_path: PathBuf,
         /// The path to the desired output file
         #[arg(long, default_value = "proof_aggr.proof")]
