@@ -13,9 +13,9 @@ crate-type = ["cdylib", "rlib"]
 
 
 [dependencies]
-halo2_gadgets = { git = "https://github.com/zkonduit/halo2", default_features = false, branch= "ac/public-cells" }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "ac/public-cells", default_features = false, features = ["thread-safe-region"]}
-halo2curves = { git = 'https://github.com/privacy-scaling-explorations/halo2curves', tag = "0.3.2", features = ["derive_serde"], default_features = false }
+halo2_gadgets = { git = "https://github.com/zkonduit/halo2", default_features = false, branch= "ac/update-h2curves" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "ac/update-h2curves", default_features = false, features = ["thread-safe-region"]}
+halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "2f322219b39b67da8979bf2b014b31145e7872b0", package = "halo2curves", features = ["derive_serde"] }
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
 plotters = { version = "0.3.0", default_features = false, optional = true }
@@ -29,6 +29,7 @@ thiserror = { version = "1.0.38", default_features = false }
 hex = { version = "0.4.3", default_features = false }
 halo2_wrong_ecc = { git = "https://github.com/zkonduit/halo2wrong", default_features = false, package = "ecc", branch = "ac/send-sync-region"}
 snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = "ac/send-sync-region", features=["derive_serde"]}
+
 regex = { version = "1", default_features = false }
 colored = { version = "2.0.0",  default_features = false, optional = true}
 env_logger = { version = "0.10.0",  default_features = false, optional = true}

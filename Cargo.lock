@@ -1139,7 +1139,7 @@ checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#4f544cede5b9db073d05df61a42d7886788bb526"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#64e3a06b6be822fcfd4a117d331c6478a181e11e"
 dependencies = [
  "integer",
  "num-bigint",
@@ -1626,7 +1626,7 @@ dependencies = [
  "getrandom",
  "halo2_gadgets",
  "halo2_proofs",
- "halo2curves",
+ "halo2curves 0.1.0 (git+https://github.com/privacy-scaling-explorations/halo2curves?rev=2f322219b39b67da8979bf2b014b31145e7872b0)",
  "hex",
  "indicatif",
  "instant",
@@ -2083,14 +2083,14 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/public-cells#25e834025bb13573c5a6ddc7911875e01c152b92"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/update-h2curves#b154081f47f70fed41b04d67f7813487814f8dc6"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
  "ff",
  "group",
  "halo2_proofs",
- "halo2curves",
+ "halo2curves 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static",
  "rand 0.8.5",
  "subtle",
@@ -2100,12 +2100,12 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/public-cells#25e834025bb13573c5a6ddc7911875e01c152b92"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/update-h2curves#b154081f47f70fed41b04d67f7813487814f8dc6"
 dependencies = [
  "blake2b_simd",
  "ff",
  "group",
- "halo2curves",
+ "halo2curves 0.1.0 (git+https://github.com/privacy-scaling-explorations/halo2curves?rev=2f322219b39b67da8979bf2b014b31145e7872b0)",
  "plotters",
  "rand_chacha",
  "rand_core 0.6.4",
@@ -2113,6 +2113,47 @@ dependencies = [
  "sha3 0.9.1",
  "tabbycat",
  "tracing",
+]
+
+[[package]]
+name = "halo2curves"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6b1142bd1059aacde1b477e0c80c142910f1ceae67fc619311d6a17428007ab"
+dependencies = [
+ "blake2b_simd",
+ "ff",
+ "group",
+ "lazy_static",
+ "num-bigint",
+ "num-traits",
+ "pasta_curves",
+ "paste",
+ "rand 0.8.5",
+ "rand_core 0.6.4",
+ "static_assertions",
+ "subtle",
+]
+
+[[package]]
+name = "halo2curves"
+version = "0.1.0"
+source = "git+https://github.com/privacy-scaling-explorations/halo2curves?rev=2f322219b39b67da8979bf2b014b31145e7872b0#2f322219b39b67da8979bf2b014b31145e7872b0"
+dependencies = [
+ "blake2b_simd",
+ "ff",
+ "group",
+ "lazy_static",
+ "num-bigint",
+ "num-traits",
+ "pasta_curves",
+ "paste",
+ "rand 0.8.5",
+ "rand_core 0.6.4",
+ "serde",
+ "serde_arrays",
+ "static_assertions",
+ "subtle",
 ]
 
 [[package]]
@@ -2129,7 +2170,6 @@ dependencies = [
  "paste",
  "rand 0.8.5",
  "rand_core 0.6.4",
- "serde",
  "static_assertions",
  "subtle",
 ]
@@ -2137,7 +2177,7 @@ dependencies = [
 [[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#4f544cede5b9db073d05df61a42d7886788bb526"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#64e3a06b6be822fcfd4a117d331c6478a181e11e"
 dependencies = [
  "halo2_proofs",
  "num-bigint",
@@ -2498,7 +2538,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#4f544cede5b9db073d05df61a42d7886788bb526"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#64e3a06b6be822fcfd4a117d331c6478a181e11e"
 dependencies = [
  "maingate",
  "num-bigint",
@@ -2750,7 +2790,7 @@ dependencies = [
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#4f544cede5b9db073d05df61a42d7886788bb526"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#64e3a06b6be822fcfd4a117d331c6478a181e11e"
 dependencies = [
  "halo2wrong",
  "num-bigint",
@@ -3533,7 +3573,7 @@ name = "poseidon"
 version = "0.2.0"
 source = "git+https://github.com/privacy-scaling-explorations/poseidon.git?tag=v2023_04_20#807f8f555313f726ca03bdf941f798098f488ba4"
 dependencies = [
- "halo2curves",
+ "halo2curves 0.3.2",
  "subtle",
 ]
 
@@ -4407,6 +4447,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_arrays"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38636132857f68ec3d5f3eb121166d2af33cb55174c4d5ff645db6165cbef0fd"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "serde_cbor"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4589,11 +4638,11 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/send-sync-region#693e8fb3e883db6090d03e5e5a852e02a8d7dfee"
+source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/send-sync-region#9acce727c7b30225b2d4bd642910558e2ae5fd5c"
 dependencies = [
  "ecc",
  "halo2_proofs",
- "halo2curves",
+ "halo2curves 0.1.0 (git+https://github.com/privacy-scaling-explorations/halo2curves?rev=2f322219b39b67da8979bf2b014b31145e7872b0)",
  "hex",
  "itertools",
  "lazy_static",
