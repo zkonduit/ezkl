@@ -71,22 +71,6 @@ pub fn elgamal_decrypt_wasm(
     serde_json::to_vec(&output).unwrap()
 }
 
-/// Generate circuit params in browser
-#[wasm_bindgen]
-pub fn gen_circuit_settings_wasm(
-    model_ser: wasm_bindgen::Clamped<Vec<u8>>,
-    run_args_ser: wasm_bindgen::Clamped<Vec<u8>>,
-) -> Vec<u8> {
-    let run_args: crate::commands::RunArgs = serde_json::from_slice(&run_args_ser[..]).unwrap();
-
-    // Read in circuit
-    let mut reader = std::io::BufReader::new(&model_ser[..]);
-    let model = crate::graph::Model::new(&mut reader, run_args).unwrap();
-    let circuit = GraphCircuit::new(model, run_args, crate::circuit::CheckMode::UNSAFE).unwrap();
-    let circuit_settings = circuit.settings;
-    serde_json::to_vec(&circuit_settings).unwrap()
-}
-
 /// Generate proving key in browser
 #[wasm_bindgen]
 pub fn gen_pk_wasm(
