@@ -9,7 +9,7 @@ use halo2curves::bn256::Fr as Fp;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use super::{GraphWitness, WitnessFileSource};
+use super::{FieldDoubleVector, FieldSingleVector, GraphWitness};
 use super::{VarVisibility, Visibility};
 
 /// poseidon len to hash in tree
@@ -136,16 +136,16 @@ pub struct ElGamalResult {
     /// ElGamal variables
     pub variables: ElGamalVariables,
     /// ElGamal ciphertexts
-    pub ciphertexts: WitnessFileSource,
+    pub ciphertexts: FieldDoubleVector,
     /// ElGamal encrypted message
-    pub encrypted_messages: WitnessFileSource,
+    pub encrypted_messages: FieldDoubleVector,
 }
 
 /// Result from a forward pass
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ModuleForwardResult {
     /// The inputs of the forward pass for poseidon
-    pub poseidon_hash: Option<WitnessFileSource>,
+    pub poseidon_hash: Option<FieldSingleVector>,
     /// The outputs of the forward pass for ElGamal
     pub elgamal: Option<ElGamalResult>,
 }
@@ -244,7 +244,7 @@ impl GraphModules {
             if visibility.is_hashed() {
                 instances
                     .poseidon
-                    .extend(res.poseidon_hash.clone().unwrap().0[0].clone());
+                    .extend(res.poseidon_hash.clone().unwrap().0.clone());
             } else if visibility.is_encrypted() {
                 instances.elgamal.extend(
                     res.elgamal
@@ -421,11 +421,11 @@ impl GraphModules {
 
         if element_visibility.is_hashed() {
             let field_elements = inputs.iter().fold(vec![], |mut acc, x| {
-                let res = ModulePoseidon::run(x.to_vec()).unwrap().clone();
+                let res = ModulePoseidon::run(x.to_vec()).unwrap()[0].clone();
                 acc.extend(res);
                 acc
             });
-            poseidon_hash = Some(WitnessFileSource(field_elements));
+            poseidon_hash = Some(FieldSingleVector(field_elements));
         }
 
         if element_visibility.is_encrypted() {
@@ -446,8 +446,8 @@ impl GraphModules {
 
             elgamal = Some(ElGamalResult {
                 variables,
-                ciphertexts: WitnessFileSource(ciphertexts),
-                encrypted_messages: WitnessFileSource(encrypted_messages),
+                ciphertexts: FieldDoubleVector(ciphertexts),
+                encrypted_messages: FieldDoubleVector(encrypted_messages),
             });
         }
 

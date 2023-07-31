@@ -100,17 +100,17 @@ pub enum GraphError {
 
 /// Inner elements of witness coming from a witness
 #[derive(Clone, Debug, Default)]
-pub struct WitnessFileSource(Vec<Vec<Fp>>);
+pub struct FieldDoubleVector(Vec<Vec<Fp>>);
 
-impl From<Vec<Vec<Fp>>> for WitnessFileSource {
+impl From<Vec<Vec<Fp>>> for FieldDoubleVector {
     fn from(value: Vec<Vec<Fp>>) -> Self {
-        WitnessFileSource(value)
+        FieldDoubleVector(value)
     }
 }
 
 // !!! ALWAYS USE JSON SERIALIZATION FOR GRAPH INPUT
 // UNTAGGED ENUMS WONT WORK :( as highlighted here:
-impl<'de> Deserialize<'de> for WitnessFileSource {
+impl<'de> Deserialize<'de> for FieldDoubleVector {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -124,11 +124,11 @@ impl<'de> Deserialize<'de> for WitnessFileSource {
             .iter()
             .map(|x| x.iter().map(|fp| Fp::from_raw(*fp)).collect())
             .collect();
-        Ok(WitnessFileSource(t))
+        Ok(FieldDoubleVector(t))
     }
 }
 
-impl Serialize for WitnessFileSource {
+impl Serialize for FieldDoubleVector {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -137,6 +137,47 @@ impl Serialize for WitnessFileSource {
             .0
             .iter()
             .map(|x| x.iter().map(field_to_vecu64).collect())
+            .collect::<Vec<_>>();
+        field_elems.serialize(serializer)
+    }
+}
+
+/// Inner elements of witness coming from a witness
+#[derive(Clone, Debug, Default)]
+pub struct FieldSingleVector(Vec<Fp>);
+
+impl From<Vec<Fp>> for FieldSingleVector {
+    fn from(value: Vec<Fp>) -> Self {
+        FieldSingleVector(value)
+    }
+}
+
+// !!! ALWAYS USE JSON SERIALIZATION FOR GRAPH INPUT
+// UNTAGGED ENUMS WONT WORK :( as highlighted here:
+impl<'de> Deserialize<'de> for FieldSingleVector {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let this_json: Box<serde_json::value::RawValue> = Deserialize::deserialize(deserializer)?;
+
+        let t: Vec<[u64; 4]> = serde_json::from_str(this_json.get())
+            .map_err(|_| serde::de::Error::custom("failed to deserialize WitnessSource"))?;
+
+        let t: Vec<Fp> = t.iter().map(|x| Fp::from_raw(*x)).collect();
+        Ok(FieldSingleVector(t))
+    }
+}
+
+impl Serialize for FieldSingleVector {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let field_elems: Vec<[u64; 4]> = self
+            .0
+            .iter()
+            .map(|x| field_to_vecu64(x))
             .collect::<Vec<_>>();
         field_elems.serialize(serializer)
     }
@@ -151,9 +192,9 @@ const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct GraphWitness {
     /// The inputs of the forward pass
-    pub inputs: WitnessFileSource,
+    pub inputs: FieldDoubleVector,
     /// The output of the forward pass
-    pub outputs: WitnessFileSource,
+    pub outputs: FieldDoubleVector,
     /// Any hashes of inputs generated during the forward pass
     pub processed_inputs: Option<ModuleForwardResult>,
     /// Any hashes of params generated during the forward pass
@@ -684,7 +725,7 @@ impl GraphCircuit {
     ///
     pub fn load_witness_file_data(
         &mut self,
-        file_data: &WitnessFileSource,
+        file_data: &FieldDoubleVector,
         shapes: &Vec<Vec<usize>>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         // quantize the supplied data using the provided scale.
