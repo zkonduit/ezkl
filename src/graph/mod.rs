@@ -273,13 +273,11 @@ fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) {
 }
 
 #[cfg(feature = "python-bindings")]
-use crate::pfsys::field_to_vecu64_montgomery;
-#[cfg(feature = "python-bindings")]
 use halo2curves::bn256::G1Affine;
 #[cfg(feature = "python-bindings")]
 fn g1affine_to_pydict(g1affine_dict: &PyDict, g1affine: &G1Affine) {
-    let g1affine_x = field_to_vecu64_montgomery(&g1affine.x);
-    let g1affine_y = field_to_vecu64_montgomery(&g1affine.y);
+    let g1affine_x = field_to_vecu64(&g1affine.x);
+    let g1affine_y = field_to_vecu64(&g1affine.y);
     g1affine_dict.set_item("x", g1affine_x).unwrap();
     g1affine_dict.set_item("y", g1affine_y).unwrap();
 }
@@ -310,10 +308,10 @@ fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &
     let variables_dict = PyDict::new(py);
     let variables = &elgamal_results.variables;
 
-    let r = field_to_vecu64_montgomery(&variables.r);
+    let r = field_to_vecu64(&variables.r);
     variables_dict.set_item("r", r).unwrap();
     // elgamal secret key
-    let sk = field_to_vecu64_montgomery(&variables.sk);
+    let sk = field_to_vecu64(&variables.sk);
     variables_dict.set_item("sk", sk).unwrap();
 
     let pk_dict = PyDict::new(py);
