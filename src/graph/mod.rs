@@ -231,7 +231,7 @@ impl ToPyObject for GraphWitness {
         if let Some(processed_inputs) = &self.processed_inputs {
             //poseidon_hash
             if let Some(processed_inputs_poseidon_hash) = &processed_inputs.poseidon_hash {
-                insert_poseidon_hash_pydict(&dict_inputs, processed_inputs_poseidon_hash);
+                insert_poseidon_hash_pydict(&dict_inputs, &processed_inputs_poseidon_hash.0[0]);
             }
             if let Some(processed_inputs_elgamal) = &processed_inputs.elgamal {
                 insert_elgamal_results_pydict(py, dict_inputs, processed_inputs_elgamal);
@@ -242,7 +242,7 @@ impl ToPyObject for GraphWitness {
 
         if let Some(processed_params) = &self.processed_params {
             if let Some(processed_params_poseidon_hash) = &processed_params.poseidon_hash {
-                insert_poseidon_hash_pydict(dict_params, processed_params_poseidon_hash);
+                insert_poseidon_hash_pydict(dict_params, &processed_params_poseidon_hash.0[0]);
             }
             if let Some(processed_params_elgamal) = &processed_params.elgamal {
                 insert_elgamal_results_pydict(py, dict_params, processed_params_elgamal);
@@ -253,7 +253,7 @@ impl ToPyObject for GraphWitness {
 
         if let Some(processed_outputs) = &self.processed_outputs {
             if let Some(processed_outputs_poseidon_hash) = &processed_outputs.poseidon_hash {
-                insert_poseidon_hash_pydict(dict_outputs, processed_outputs_poseidon_hash);
+                insert_poseidon_hash_pydict(dict_outputs, &processed_outputs_poseidon_hash.0[0]);
             }
             if let Some(processed_outputs_elgamal) = &processed_outputs.elgamal {
                 insert_elgamal_results_pydict(py, dict_outputs, processed_outputs_elgamal);
@@ -268,10 +268,7 @@ impl ToPyObject for GraphWitness {
 
 #[cfg(feature = "python-bindings")]
 fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) {
-    let poseidon_hash: Vec<[u64; 4]> = poseidon_hash
-        .iter()
-        .map(field_to_vecu64_montgomery)
-        .collect();
+    let poseidon_hash: Vec<[u64; 4]> = poseidon_hash.iter().map(field_to_vecu64).collect();
     pydict.set_item("poseidon_hash", poseidon_hash).unwrap();
 }
 
@@ -294,23 +291,17 @@ fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &
     let results_dict = PyDict::new(py);
     let cipher_text: Vec<Vec<[u64; 4]>> = elgamal_results
         .ciphertexts
+        .0
         .iter()
-        .map(|v| {
-            v.iter()
-                .map(field_to_vecu64_montgomery)
-                .collect::<Vec<[u64; 4]>>()
-        })
+        .map(|v| v.iter().map(field_to_vecu64).collect::<Vec<[u64; 4]>>())
         .collect::<Vec<Vec<[u64; 4]>>>();
     results_dict.set_item("ciphertexts", cipher_text).unwrap();
 
     let encrypted_messages: Vec<Vec<[u64; 4]>> = elgamal_results
         .encrypted_messages
+        .0
         .iter()
-        .map(|v| {
-            v.iter()
-                .map(field_to_vecu64_montgomery)
-                .collect::<Vec<[u64; 4]>>()
-        })
+        .map(|v| v.iter().map(field_to_vecu64).collect::<Vec<[u64; 4]>>())
         .collect::<Vec<Vec<[u64; 4]>>>();
     results_dict
         .set_item("encrypted_messages", encrypted_messages)

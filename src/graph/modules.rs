@@ -9,7 +9,7 @@ use halo2curves::bn256::Fr as Fp;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use super::GraphWitness;
+use super::{GraphWitness, WitnessFileSource};
 use super::{VarVisibility, Visibility};
 
 /// poseidon len to hash in tree
@@ -136,16 +136,16 @@ pub struct ElGamalResult {
     /// ElGamal variables
     pub variables: ElGamalVariables,
     /// ElGamal ciphertexts
-    pub ciphertexts: Vec<Vec<Fp>>,
+    pub ciphertexts: WitnessFileSource,
     /// ElGamal encrypted message
-    pub encrypted_messages: Vec<Vec<Fp>>,
+    pub encrypted_messages: WitnessFileSource,
 }
 
 /// Result from a forward pass
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ModuleForwardResult {
     /// The inputs of the forward pass for poseidon
-    pub poseidon_hash: Option<Vec<Fp>>,
+    pub poseidon_hash: Option<WitnessFileSource>,
     /// The outputs of the forward pass for ElGamal
     pub elgamal: Option<ElGamalResult>,
 }
@@ -244,13 +244,14 @@ impl GraphModules {
             if visibility.is_hashed() {
                 instances
                     .poseidon
-                    .extend(res.poseidon_hash.clone().unwrap());
+                    .extend(res.poseidon_hash.clone().unwrap().0[0].clone());
             } else if visibility.is_encrypted() {
                 instances.elgamal.extend(
                     res.elgamal
                         .clone()
                         .unwrap()
                         .ciphertexts
+                        .0
                         .into_iter()
                         .flatten(),
                 );
@@ -420,18 +421,20 @@ impl GraphModules {
 
         if element_visibility.is_hashed() {
             let field_elements = inputs.iter().fold(vec![], |mut acc, x| {
-                let res = ModulePoseidon::run(x.to_vec()).unwrap()[0].clone();
+                let res = ModulePoseidon::run(x.to_vec()).unwrap().clone();
                 acc.extend(res);
                 acc
             });
-            poseidon_hash = Some(field_elements);
+            poseidon_hash = Some(WitnessFileSource(field_elements));
         }
 
         if element_visibility.is_encrypted() {
             let variables = ElGamalVariables::gen_random(&mut rng);
             let ciphertexts = inputs.iter().fold(vec![], |mut acc, x| {
-                let res = ElGamalGadget::run((x.to_vec(), variables.clone())).unwrap()[0].clone();
-                acc.push(res);
+                let res = ElGamalGadget::run((x.to_vec(), variables.clone()))
+                    .unwrap()
+                    .clone();
+                acc.extend(res);
                 acc
             });
 
@@ -443,8 +446,8 @@ impl GraphModules {
 
             elgamal = Some(ElGamalResult {
                 variables,
-                ciphertexts,
-                encrypted_messages,
+                ciphertexts: WitnessFileSource(ciphertexts),
+                encrypted_messages: WitnessFileSource(encrypted_messages),
             });
         }
 
