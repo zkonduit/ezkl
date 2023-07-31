@@ -176,9 +176,9 @@ def test_forward():
     assert data["inputs"] == res["inputs"]
     assert data["outputs"] == res["outputs"]
 
-    assert data["processed_inputs"]["poseidon_hash"][0] == res["processed_inputs"]["poseidon_hash"] == [
+    assert data["processed_inputs"]["poseidon_hash"] == res["processed_inputs"]["poseidon_hash"] == [
         [13250656787953244331, 6427599703873277537, 10144505220959691175, 292751733201779167]]
-    assert data["processed_outputs"]["poseidon_hash"][0] == res["processed_outputs"]["poseidon_hash"] == [
+    assert data["processed_outputs"]["poseidon_hash"] == res["processed_outputs"]["poseidon_hash"] == [
         [12652505662889675846, 5609103816932831989, 7270433874688716388, 2874826183531284668]]
 
 

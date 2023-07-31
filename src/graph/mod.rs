@@ -272,7 +272,7 @@ impl ToPyObject for GraphWitness {
         if let Some(processed_inputs) = &self.processed_inputs {
             //poseidon_hash
             if let Some(processed_inputs_poseidon_hash) = &processed_inputs.poseidon_hash {
-                insert_poseidon_hash_pydict(&dict_inputs, &processed_inputs_poseidon_hash.0[0]);
+                insert_poseidon_hash_pydict(&dict_inputs, &processed_inputs_poseidon_hash.0);
             }
             if let Some(processed_inputs_elgamal) = &processed_inputs.elgamal {
                 insert_elgamal_results_pydict(py, dict_inputs, processed_inputs_elgamal);
@@ -283,7 +283,7 @@ impl ToPyObject for GraphWitness {
 
         if let Some(processed_params) = &self.processed_params {
             if let Some(processed_params_poseidon_hash) = &processed_params.poseidon_hash {
-                insert_poseidon_hash_pydict(dict_params, &processed_params_poseidon_hash.0[0]);
+                insert_poseidon_hash_pydict(dict_params, &processed_params_poseidon_hash.0);
             }
             if let Some(processed_params_elgamal) = &processed_params.elgamal {
                 insert_elgamal_results_pydict(py, dict_params, processed_params_elgamal);
@@ -294,7 +294,7 @@ impl ToPyObject for GraphWitness {
 
         if let Some(processed_outputs) = &self.processed_outputs {
             if let Some(processed_outputs_poseidon_hash) = &processed_outputs.poseidon_hash {
-                insert_poseidon_hash_pydict(dict_outputs, &processed_outputs_poseidon_hash.0[0]);
+                insert_poseidon_hash_pydict(dict_outputs, &processed_outputs_poseidon_hash.0);
             }
             if let Some(processed_outputs_elgamal) = &processed_outputs.elgamal {
                 insert_elgamal_results_pydict(py, dict_outputs, processed_outputs_elgamal);
