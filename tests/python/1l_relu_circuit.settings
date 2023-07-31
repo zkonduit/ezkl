@@ -1,1 +1,0 @@
-{"run_args":{"tolerance":{"Abs":{"val":0}},"scale":4,"bits":7,"logrows":8,"batch_size":1,"input_visibility":"Public","output_visibility":"Public","param_visibility":"Private","pack_base":1,"allocated_constraints":null},"num_constraints":6,"model_instance_shapes":[[1,3],[1,3]],"num_hashes":0,"required_lookups":[{"ReLU":{"scale":1}}],"check_mode":"SAFE"}
