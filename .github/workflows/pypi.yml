@@ -66,11 +66,7 @@ jobs:
         with:
           python-version: 3.7
           architecture: ${{ matrix.target }}
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2023-06-27
-          override: true
-          components: rustfmt, clippy
+
       - name: Set Cargo.toml version to match github tag
         shell: bash
         env:
@@ -93,6 +89,12 @@ jobs:
                 echo !line:/0\.0\.0/=%RELEASE_TAG:/=%% >> Cargo.lock
                 endlocal
             )
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-06-27
+          override: true
+          components: rustfmt, clippy
 
 
       - name: Build wheels
