@@ -3,6 +3,7 @@ use super::{
     *,
 };
 use halo2_proofs::{arithmetic::Field, plonk::Instance};
+use rayon::prelude::IntoParallelRefIterator;
 
 #[derive(Debug, Clone)]
 /// A [ValType] is a wrapper around Halo2 value(s).
@@ -84,10 +85,10 @@ where
     F: Field,
 {
     fn zero() -> Option<Self> {
-        Some(ValType::Value(Value::known(<F as Field>::ZERO)))
+        Some(ValType::Constant(<F as Field>::ZERO))
     }
     fn one() -> Option<Self> {
-        Some(ValType::Value(Value::known(<F as Field>::ONE)))
+        Some(ValType::Constant(<F as Field>::ONE))
     }
 }
 
@@ -406,6 +407,47 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                 inner: v, dims: d, ..
             } => {
                 *v = v.duplicate_every_n(n, initial_offset)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        }
+        Ok(())
+    }
+
+    /// gets constants
+    pub fn get_const_zero_indices(&self) -> Result<Vec<usize>, TensorError> {
+        match self {
+            ValTensor::Value { inner: v, .. } => {
+                let mut indices = vec![];
+                for (i, e) in v.iter().enumerate() {
+                    if let ValType::Constant(r) = e {
+                        if *r == F::ZERO {
+                            indices.push(i);
+                        }
+                    }
+                }
+                Ok(indices)
+            }
+            ValTensor::Instance { .. } => Err(TensorError::WrongMethod),
+        }
+    }
+
+    /// removes constants with inner value 0
+    pub fn remove_indices(&mut self, indices: &[usize]) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                let temp: Vec<ValType<F>> = v
+                    .clone()
+                    .par_iter()
+                    .enumerate()
+                    .filter(|(i, _)| !indices.contains(i))
+                    .map(|x| x.1.clone())
+                    .collect();
+                *v = temp.into_iter().into();
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {

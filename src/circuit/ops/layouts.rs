@@ -60,6 +60,19 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
         return Err(Box::new(TensorError::DimMismatch("dot".to_string())));
     }
 
+    let mut values = values.clone();
+    let mut removal_indices = values[0].get_const_zero_indices()?;
+    removal_indices.extend(values[1].get_const_zero_indices()?);
+    values[0].remove_indices(&removal_indices)?;
+    values[1].remove_indices(&removal_indices)?;
+
+    if region.is_dummy() {
+        let overflowed_len =
+            overflowed_len(region.offset(), values[0].len(), config.output.col_size());
+        region.increment(overflowed_len);
+        return Ok(Tensor::from([ValType::from(Value::known(F::ZERO))].into_iter()).into());
+    }
+
     let mut inputs = vec![];
     let mut assigned_len = 0;
     for (i, input) in values.iter().enumerate() {
@@ -236,38 +249,6 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
             }
         })
         .product::<usize>();
-
-    // if region dummy then increment region by total used len and return
-    if region.is_dummy() {
-        let non_common_indices_size = non_common_indices
-            .into_iter()
-            .filter(|c| !output_eq.contains(**c))
-            .map(|c| indices_to_size[c])
-            .product::<usize>();
-
-        if non_common_indices_size > 1 {
-            let increment = output_shape.iter().product::<usize>()
-                * (2 * common_indices_to_inputs
-                    .into_iter()
-                    .filter(|c| !output_eq.contains(*c))
-                    .map(|c| indices_to_size[&c])
-                    .product::<usize>()
-                    * non_common_indices_size
-                    - 1);
-            region.increment(increment);
-        } else {
-            let vanilla_len = output_shape.iter().product::<usize>()
-                * (common_indices_to_inputs
-                    .into_iter()
-                    .filter(|c| !output_eq.contains(*c))
-                    .map(|c| indices_to_size[&c])
-                    .product::<usize>());
-            let overflowed_len =
-                overflowed_len(region.offset(), vanilla_len, config.output.col_size());
-            region.increment(overflowed_len);
-        }
-        return Ok(output.into());
-    }
 
     output.iter_mut().enumerate().for_each(|(i, o)| {
         let coord = cartesian_coord[i].clone();
@@ -908,8 +889,9 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
 
     let (kernel_height, kernel_width) = (kernel.dims()[2], kernel.dims()[3]);
 
-    let null_val = region.assign_constant(&config.inputs[1], F::from(0))?;
-    region.next();
+    let null_val = ValType::Constant(F::ZERO);
+    // region.assign_constant(&config.inputs[1], F::from(0))?;
+    // region.next();
 
     let mut expanded_image = image.clone();
     expanded_image.intercalate_values(null_val.clone(), stride.0, 2)?;
@@ -1087,19 +1069,6 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
             output.reshape(&[batch_size, output_channels, vert_slides, horz_slides]);
         }
     };
-
-    if region.is_dummy() {
-        // calculate the total number of constraints we added
-        let mut total_len = output.len() * kernel_height * kernel_width * input_channels_per_group;
-        if has_bias {
-            total_len += output.len();
-        }
-        // calculate the number of constraints that overflowed into a subsequent column
-        let overflowed_len = overflowed_len(region.offset(), total_len, config.output.col_size());
-        region.increment(overflowed_len);
-        reshape_output(&mut output);
-        return Ok(output.into());
-    }
 
     output.iter_mut().enumerate().for_each(|(idx, o)| {
         let cartesian_coord_per_group = &cartesian_coord[idx];
