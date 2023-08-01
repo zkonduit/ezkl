@@ -3,7 +3,6 @@ use super::{
     *,
 };
 use halo2_proofs::{arithmetic::Field, plonk::Instance};
-use rayon::prelude::IntoParallelRefIterator;
 
 #[derive(Debug, Clone)]
 /// A [ValType] is a wrapper around Halo2 value(s).
@@ -440,14 +439,12 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                let temp: Vec<ValType<F>> = v
-                    .clone()
-                    .par_iter()
+                *v = v
+                    .iter()
                     .enumerate()
                     .filter(|(i, _)| !indices.contains(i))
                     .map(|x| x.1.clone())
                     .collect();
-                *v = temp.into_iter().into();
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
