@@ -79,20 +79,21 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
             set "RELEASE_TAG=%RELEASE_TAG:v=%"
-            move Cargo.toml Cargo.toml.orig
-            for /f "tokens=* delims=" %%i in ('type Cargo.toml.orig ^& break ^> Cargo.toml') do (
+            copy Cargo.toml Cargo.toml.orig
+            (for /f "tokens=* delims=" %%i in (Cargo.toml.orig) do (
                 set "line=%%i"
                 setlocal enabledelayedexpansion
-                echo !line:/0\.0\.0/=%RELEASE_TAG:/=%% >> Cargo.toml
+                echo(!line:/0\.0\.0/=%RELEASE_TAG:/=%%
                 endlocal
-            )
-            move Cargo.lock Cargo.lock.orig
-            for /f "tokens=* delims=" %%i in ('type Cargo.lock.orig ^& break ^> Cargo.lock') do (
+            )) > Cargo.toml
+
+            copy Cargo.lock Cargo.lock.orig
+            (for /f "tokens=* delims=" %%i in (Cargo.lock.orig) do (
                 set "line=%%i"
                 setlocal enabledelayedexpansion
-                echo !line:/0\.0\.0/=%RELEASE_TAG:/=%% >> Cargo.lock
+                echo(!line:/0\.0\.0/=%RELEASE_TAG:/=%%
                 endlocal
-            )
+            )) > Cargo.lock
 
 
       - name: Build wheels
