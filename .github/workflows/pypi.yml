@@ -22,6 +22,17 @@ jobs:
         with:
           python-version: 3.7
           architecture: x64
+
+      - name: Set Cargo.toml version to match github tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag }}
+        run: |
+            mv Cargo.toml Cargo.toml.orig
+            sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
+            mv Cargo.lock Cargo.lock.orig
+            sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.lock.orig >Cargo.lock
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2023-06-27
@@ -60,6 +71,27 @@ jobs:
           toolchain: nightly-2023-06-27
           override: true
           components: rustfmt, clippy
+      - name: Set Cargo.toml version to match github tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag }}
+        run: |
+            ren Cargo.toml Cargo.toml.orig
+            for /f "tokens=* delims=" %%i in ('type Cargo.toml.orig ^& break ^> Cargo.toml') do (
+                set "line=%%i"
+                setlocal enabledelayedexpansion
+                echo !line:/0\.0\.0/=%RELEASE_TAG:/=%% >> Cargo.toml
+                endlocal
+            )
+
+            ren Cargo.lock Cargo.lock.orig
+            for /f "tokens=* delims=" %%i in ('type Cargo.lock.orig ^& break ^> Cargo.lock') do (
+                set "line=%%i"
+                setlocal enabledelayedexpansion
+                echo !line:/0\.0\.0/=%RELEASE_TAG:/=%% >> Cargo.lock
+                endlocal
+            )
+
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -88,6 +120,16 @@ jobs:
       with:
         python-version: 3.7
         architecture: x64
+
+    - name: Set Cargo.toml version to match github tag
+      shell: bash
+      env:
+        RELEASE_TAG: ${{ github.event.inputs.tag }}
+      run: |
+        mv Cargo.toml Cargo.toml.orig
+        sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
+        mv Cargo.lock Cargo.lock.orig
+        sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.lock.orig >Cargo.lock
 
     - name: Install required libraries
       shell: bash
@@ -177,6 +219,16 @@ jobs:
         python-version: 3.7
         architecture: x64
 
+    - name: Set Cargo.toml version to match github tag
+      shell: bash
+      env:
+        RELEASE_TAG: ${{ github.event.inputs.tag }}
+      run: |
+        mv Cargo.toml Cargo.toml.orig
+        sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
+        mv Cargo.lock Cargo.lock.orig
+        sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.lock.orig >Cargo.lock
+
     - name: Install required libraries
       shell: bash
       run: |
@@ -221,6 +273,16 @@ jobs:
     - uses: actions/setup-python@v4
       with:
         python-version: 3.7
+
+    - name: Set Cargo.toml version to match github tag
+      shell: bash
+      env:
+        RELEASE_TAG: ${{ github.event.inputs.tag }}
+      run: |
+        mv Cargo.toml Cargo.toml.orig
+        sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
+        mv Cargo.lock Cargo.lock.orig
+        sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.lock.orig >Cargo.lock
 
     - name: Build wheels
       uses: PyO3/maturin-action@v1
