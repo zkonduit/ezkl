@@ -26,7 +26,7 @@ jobs:
       - name: Set Cargo.toml version to match github tag
         shell: bash
         env:
-          RELEASE_TAG: ${{ github.event.inputs.tag }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
             mv Cargo.toml Cargo.toml.orig
             sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
@@ -74,7 +74,7 @@ jobs:
       - name: Set Cargo.toml version to match github tag
         shell: bash
         env:
-          RELEASE_TAG: ${{ github.event.inputs.tag }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
             set "RELEASE_TAG=%RELEASE_TAG:v=%"
 
@@ -126,7 +126,7 @@ jobs:
     - name: Set Cargo.toml version to match github tag
       shell: bash
       env:
-        RELEASE_TAG: ${{ github.event.inputs.tag }}
+        RELEASE_TAG: ${{ github.ref_name }}
       run: |
         mv Cargo.toml Cargo.toml.orig
         sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
@@ -224,7 +224,7 @@ jobs:
     - name: Set Cargo.toml version to match github tag
       shell: bash
       env:
-        RELEASE_TAG: ${{ github.event.inputs.tag }}
+        RELEASE_TAG: ${{ github.ref_name }}
       run: |
         mv Cargo.toml Cargo.toml.orig
         sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
@@ -279,7 +279,7 @@ jobs:
     - name: Set Cargo.toml version to match github tag
       shell: bash
       env:
-        RELEASE_TAG: ${{ github.event.inputs.tag }}
+        RELEASE_TAG: ${{ github.ref_name }}
       run: |
         mv Cargo.toml Cargo.toml.orig
         sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
