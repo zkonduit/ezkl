@@ -67,12 +67,6 @@ jobs:
           python-version: 3.7
           architecture: ${{ matrix.target }}
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2023-06-27
-          override: true
-          components: rustfmt, clippy
-
       - name: Set Cargo.toml version to match github tag
         shell: bash
         env:
@@ -82,6 +76,13 @@ jobs:
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
           mv Cargo.lock Cargo.lock.orig
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-06-27
+          override: true
+          components: rustfmt, clippy
+
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
