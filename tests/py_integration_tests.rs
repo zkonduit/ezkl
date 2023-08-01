@@ -105,14 +105,14 @@ mod py_tests {
     }
 
     const TESTS: [&str; 8] = [
+        "mnist_gan.ipynb",
+        "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
         "encrypted_vis.ipynb",
         "hashed_vis.ipynb",
         "simple_demo.ipynb",
         "data_attest.ipynb",
         "variance.ipynb",
-        "mnist_vae.ipynb",
-        "mnist_gan.ipynb",
     ];
 
     macro_rules! test_func {
