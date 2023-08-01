@@ -73,6 +73,11 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
         return Ok(Tensor::from([ValType::from(Value::known(F::ZERO))].into_iter()).into());
     }
 
+    // if empty return a const
+    if values[0].len() == 0 && values[1].len() == 0 {
+        return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
+    }
+
     let mut inputs = vec![];
     let mut assigned_len = 0;
     for (i, input) in values.iter().enumerate() {
@@ -114,7 +119,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
 
     let last_elem = output
         .get_slice(&[output.len() - 1..output.len()])
-        .expect("accum poly: failed to fetch last elem");
+        .expect("dot: failed to fetch last elem");
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         let safe_dot = non_accum_dot(&inputs[..]).map_err(|e| {
