@@ -38,8 +38,11 @@ The generated proofs can then be used on-chain to verify computation, only the E
 |  |  |
 | --- | --- |
 | [docs](https://docs.ezkl.xyz ) | the official ezkl docs page |
-| [colab notebook demo](https://colab.research.google.com/drive/1XuXNKqH7axOelZXyU3gpoTOCvFetIsKu?usp=sharing) | demo of ezkl python bindings on google's colab
 | `cargo doc --open` | compile and open the docs in your default browser locally |
+| [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/zkonduit/ezkl/blob/master/examples/notebooks/simple_demo.ipynb)| a simple demo of the python bindings in action on Colab |
+
+
+
 
 #### tutorials 
 
