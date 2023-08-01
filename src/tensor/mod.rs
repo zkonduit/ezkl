@@ -671,6 +671,11 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// let mut expected = Tensor::<i32>::new(Some(&[1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12]), &[2, 2, 3]).unwrap();
     /// let b = a.move_axis(1, 2).unwrap();
     /// assert_eq!(b, expected);
+    ///
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 3, 2]).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12]), &[2, 2, 3]).unwrap();
+    /// let b = a.move_axis(2, 1).unwrap();
+    /// assert_eq!(b, expected);
     /// ```
     pub fn move_axis(&mut self, source: usize, destination: usize) -> Result<Self, TensorError> {
         assert!(source < self.dims.len());
@@ -695,14 +700,87 @@ impl<T: Clone + TensorType> Tensor<T> {
 
         for coord in cartesian_coords {
             let mut old_coord = vec![0; self.dims.len()];
+
             // now fetch the old index
             for (i, c) in coord.iter().enumerate() {
                 if i == destination {
                     old_coord[source] = *c;
-                } else if i < source {
+                } else if i == source && source < destination {
+                    old_coord[source + 1] = *c;
+                } else if i == source && source > destination {
+                    old_coord[source - 1] = *c;
+                } else if i < source && source < destination {
                     old_coord[i] = *c;
-                } else if i >= source {
+                } else if i < destination && source > destination {
+                    old_coord[i] = *c;
+                } else if i > source && source < destination {
                     old_coord[i + 1] = *c;
+                } else if i > destination && source > destination {
+                    old_coord[i - 1] = *c;
+                } else {
+                    panic!()
+                }
+            }
+            output.set(&coord, self.get(&old_coord));
+        }
+
+        Ok(output)
+    }
+
+    /// Swap axes of the tensor
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// let mut a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
+    /// let b = a.swap_axes(0, 2).unwrap();
+    /// assert_eq!(b.dims(), &[3, 3, 3]);
+    ///
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 1, 2]).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 3, 5, 2, 4, 6]), &[2, 1, 3]).unwrap();
+    /// let b = a.swap_axes(0, 2).unwrap();
+    /// assert_eq!(b, expected);
+    ///
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 3, 2]).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12]), &[2, 2, 3]).unwrap();
+    /// let b = a.swap_axes(1, 2).unwrap();
+    /// assert_eq!(b, expected);
+    ///
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 3, 2]).unwrap();
+    /// let mut expected = Tensor::<i32>::new(Some(&[1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12]), &[2, 2, 3]).unwrap();
+    /// let b = a.swap_axes(2, 1).unwrap();
+    /// assert_eq!(b, expected);
+    /// ```
+    pub fn swap_axes(&mut self, source: usize, destination: usize) -> Result<Self, TensorError> {
+        assert!(source < self.dims.len());
+        assert!(destination < self.dims.len());
+        let mut new_dims = self.dims.clone();
+        new_dims[source] = self.dims[destination];
+        new_dims[destination] = self.dims[source];
+
+        // now reconfigure the elements appropriately in the new array
+        //  eg. if we have a 3x3x3 array and we want to move the 0th axis to the 2nd position
+        //  we need to move the elements at 0, 1, 2, 3, 4, 5, 6, 7, 8 to 0, 3, 6, 1, 4, 7, 2, 5, 8
+        //  so we need to move the elements at 0, 1, 2 to 0, 3, 6
+        //  and the elements at 3, 4, 5 to 1, 4, 7
+        //  and the elements at 6, 7, 8 to 2, 5, 8
+        let cartesian_coords = new_dims
+            .iter()
+            .map(|d| 0..*d)
+            .multi_cartesian_product()
+            .collect::<Vec<Vec<usize>>>();
+
+        let mut output = Tensor::new(None, &new_dims)?;
+
+        for coord in cartesian_coords {
+            let mut old_coord = vec![0; self.dims.len()];
+
+            // now fetch the old index
+            for (i, c) in coord.iter().enumerate() {
+                if i == destination {
+                    old_coord[source] = *c;
+                } else if i == source {
+                    old_coord[destination] = *c;
+                } else {
+                    old_coord[i] = *c;
                 }
             }
             output.set(&coord, self.get(&old_coord));

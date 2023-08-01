@@ -133,7 +133,7 @@ mod native_tests {
 
     const LARGE_TESTS: [&str; 3] = ["self_attention", "nanoGPT", "mobilenet"];
 
-    const TESTS: [&str; 38] = [
+    const TESTS: [&str; 39] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -166,6 +166,7 @@ mod native_tests {
         "4l_relu_conv_fc",
         "1l_erf",
         "1l_var",
+        "1l_elu",
         "min",
         "max",
         "1l_max_pool",
@@ -317,7 +318,7 @@ mod native_tests {
 
 
 
-            seq!(N in 0..=37 {
+            seq!(N in 0..=38 {
 
             #(#[test_case(TESTS[N])])*
             fn model_serialization_(test: &str) {

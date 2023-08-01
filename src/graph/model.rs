@@ -719,6 +719,10 @@ impl Model {
                 region.offset()
             );
             trace!("dims: {:?}", node.out_dims());
+            trace!(
+                "input_dims {:?}",
+                values.iter().map(|v| v.dims()).collect_vec()
+            );
             match node {
                 NodeType::Node(n) => {
                     let res = config

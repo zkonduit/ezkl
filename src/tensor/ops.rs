@@ -1474,24 +1474,6 @@ pub fn deconv<
         .cartesian_product(0..kernel.dims()[1])
         .collect::<Vec<_>>();
 
-    let mut inverted_kernels = vec![];
-
-    for (i, j) in channel_coord {
-        let mut channel = kernel.get_slice(&[i..i + 1, j..j + 1])?;
-        channel = Tensor::from(channel.clone().into_iter().rev());
-        channel.reshape(&[kernel.dims()[2], kernel.dims()[3]]);
-        inverted_kernels.push(channel);
-    }
-
-    let mut deconv_kernel =
-        Tensor::new(Some(&inverted_kernels), &[inverted_kernels.len()])?.combine()?;
-    deconv_kernel.reshape(&[
-        kernel.dims()[1],
-        kernel.dims()[0],
-        kernel.dims()[2],
-        kernel.dims()[3],
-    ]);
-
     let slice_coord = expanded_image
         .dims()
         .iter()
@@ -1508,6 +1490,29 @@ pub fn deconv<
         .collect::<Vec<_>>();
 
     let sliced_expanded_image = expanded_image.get_slice(&slice_coord)?;
+
+    let mut inverted_kernels = vec![];
+
+    for (i, j) in channel_coord {
+        let mut channel = kernel.get_slice(&[i..i + 1, j..j + 1])?;
+        channel = Tensor::from(channel.clone().into_iter().rev());
+        channel.reshape(&[kernel.dims()[2], kernel.dims()[3]]);
+        inverted_kernels.push(channel);
+    }
+
+    let mut deconv_kernel =
+        Tensor::new(Some(&inverted_kernels), &[inverted_kernels.len()])?.combine()?;
+    deconv_kernel.reshape(kernel.dims());
+
+    // tensorflow formatting patch
+    if kernel.dims()[0] == sliced_expanded_image.dims()[1] {
+        deconv_kernel.reshape(&[
+            kernel.dims()[1],
+            kernel.dims()[0],
+            kernel.dims()[2],
+            kernel.dims()[3],
+        ]);
+    }
 
     let input = if has_bias {
         vec![
@@ -1659,8 +1664,8 @@ pub fn max_pool2d<T: TensorType + std::marker::Sync + std::marker::Send + std::c
 
     let padded_image = pad::<T>(image, *padding)?;
 
-    let horz_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
-    let vert_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
+    let vert_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
+    let horz_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
 
     let mut output: Tensor<T> =
         Tensor::new(None, &[batch, input_channels, horz_slides, vert_slides]).unwrap();
@@ -2927,6 +2932,35 @@ pub mod nonlinearities {
 
         for (i, a_i) in a.iter().enumerate() {
             output[i] = i128::from((*a_i as f64 - b) > 0_f64);
+        }
+        output
+    }
+
+    /// Elementwise less than
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `b` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::less_than;
+    ///     
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[2, 1, 2, 7, 1, 1]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let k = 2.0;
+    ///     
+    /// let result = less_than(&x, k);
+    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 0, 1, 1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn less_than(a: &Tensor<i128>, b: f64) -> Tensor<i128> {
+        // calculate value of output
+        let mut output: Tensor<i128> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            output[i] = i128::from((*a_i as f64 - b) < 0_f64);
         }
         output
     }

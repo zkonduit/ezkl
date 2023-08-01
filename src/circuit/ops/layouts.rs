@@ -819,8 +819,8 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     let mut padded_image = image.clone();
     padded_image.pad(padding)?;
 
-    let horz_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
-    let vert_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
+    let vert_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
+    let horz_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
 
     let mut output: Tensor<ValType<F>> =
         Tensor::new(None, &[batch, input_channels, horz_slides, vert_slides])?;
@@ -921,24 +921,6 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
         .cartesian_product(0..kernel.dims()[1])
         .collect::<Vec<_>>();
 
-    let mut inverted_kernels = vec![];
-
-    for (i, j) in channel_coord {
-        let channel = kernel.get_slice(&[i..i + 1, j..j + 1])?;
-        let mut channel = Tensor::from(channel.get_inner_tensor()?.into_iter().rev());
-        channel.reshape(&[kernel.dims()[2], kernel.dims()[3]]);
-        inverted_kernels.push(channel);
-    }
-
-    let mut deconv_kernel =
-        Tensor::new(Some(&inverted_kernels), &[inverted_kernels.len()])?.combine()?;
-    deconv_kernel.reshape(&[
-        kernel.dims()[1],
-        kernel.dims()[0],
-        kernel.dims()[2],
-        kernel.dims()[3],
-    ]);
-
     let slice_coord = expanded_image
         .dims()
         .iter()
@@ -955,6 +937,29 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
         .collect::<Vec<_>>();
 
     let sliced_expanded_image = expanded_image.get_slice(&slice_coord)?;
+
+    let mut inverted_kernels = vec![];
+
+    for (i, j) in channel_coord {
+        let channel = kernel.get_slice(&[i..i + 1, j..j + 1])?;
+        let mut channel = Tensor::from(channel.get_inner_tensor()?.into_iter().rev());
+        channel.reshape(&[kernel.dims()[2], kernel.dims()[3]]);
+        inverted_kernels.push(channel);
+    }
+
+    let mut deconv_kernel =
+        Tensor::new(Some(&inverted_kernels), &[inverted_kernels.len()])?.combine()?;
+    deconv_kernel.reshape(kernel.dims());
+
+    // tensorflow formatting patch
+    if kernel.dims()[0] == sliced_expanded_image.dims()[1] {
+        deconv_kernel.reshape(&[
+            kernel.dims()[1],
+            kernel.dims()[0],
+            kernel.dims()[2],
+            kernel.dims()[3],
+        ]);
+    }
 
     let conv_input = if has_bias {
         vec![
