@@ -29,9 +29,9 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
             mv Cargo.toml Cargo.toml.orig
-            sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
+            sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
             mv Cargo.lock Cargo.lock.orig
-            sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.lock.orig >Cargo.lock
+            sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
 
       - uses: actions-rs/toolchain@v1
         with:
@@ -80,19 +80,22 @@ jobs:
         run: |
             set "RELEASE_TAG=%RELEASE_TAG:v=%"
             move Cargo.toml Cargo.toml.orig
-            for /f "tokens=* delims=" %%i in ('type Cargo.toml.orig ^& break ^> Cargo.toml') do (
+            (for /f "tokens=* delims=" %%i in (Cargo.toml.orig) do (
                 set "line=%%i"
                 setlocal enabledelayedexpansion
-                echo !line:/0\.0\.0/=%RELEASE_TAG:/=%% >> Cargo.toml
+                set "line=!line:/0\.0\.0/=%RELEASE_TAG%!"
+                echo !line!
                 endlocal
-            )
+            )) > Cargo.toml
+
             move Cargo.lock Cargo.lock.orig
-            for /f "tokens=* delims=" %%i in ('type Cargo.lock.orig ^& break ^> Cargo.lock') do (
+            (for /f "tokens=* delims=" %%i in (Cargo.lock.orig) do (
                 set "line=%%i"
                 setlocal enabledelayedexpansion
-                echo !line:/0\.0\.0/=%RELEASE_TAG:/=%% >> Cargo.lock
+                set "line=!line:/0\.0\.0/=%RELEASE_TAG%!"
+                echo !line!
                 endlocal
-            )
+            )) > Cargo.lock
 
 
       - name: Build wheels
@@ -129,9 +132,9 @@ jobs:
         RELEASE_TAG: ${{ github.ref_name }}
       run: |
         mv Cargo.toml Cargo.toml.orig
-        sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
+        sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
         mv Cargo.lock Cargo.lock.orig
-        sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.lock.orig >Cargo.lock
+        sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
 
     - name: Install required libraries
       shell: bash
@@ -227,9 +230,9 @@ jobs:
         RELEASE_TAG: ${{ github.ref_name }}
       run: |
         mv Cargo.toml Cargo.toml.orig
-        sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
+        sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
         mv Cargo.lock Cargo.lock.orig
-        sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.lock.orig >Cargo.lock
+        sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
 
     - name: Install required libraries
       shell: bash
@@ -282,9 +285,9 @@ jobs:
         RELEASE_TAG: ${{ github.ref_name }}
       run: |
         mv Cargo.toml Cargo.toml.orig
-        sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.toml.orig >Cargo.toml
+        sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
         mv Cargo.lock Cargo.lock.orig
-        sed "s/0\\.0\\.0/${RELEASE_TAG##*\/v}/" Cargo.lock.orig >Cargo.lock
+        sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
 
     - name: Build wheels
       uses: PyO3/maturin-action@v1
