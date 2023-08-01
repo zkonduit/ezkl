@@ -2944,15 +2944,15 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::less_than;
-    ///     
+    ///
     /// let x = Tensor::<i128>::new(
     ///    Some(&[2, 1, 2, 7, 1, 1]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let k = 2.0;
-    ///     
+    ///
     /// let result = less_than(&x, k);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 0, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 0, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn less_than(a: &Tensor<i128>, b: f64) -> Tensor<i128> {
