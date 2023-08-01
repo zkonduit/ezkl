@@ -67,35 +67,21 @@ jobs:
           python-version: 3.7
           architecture: ${{ matrix.target }}
 
+      - name: Set Cargo.toml version to match github tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          mv Cargo.toml Cargo.toml.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
+          mv Cargo.lock Cargo.lock.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2023-06-27
           override: true
           components: rustfmt, clippy
-
-      - name: Set Cargo.toml version to match github tag
-        shell: cmd
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-            set "RELEASE_TAG=%RELEASE_TAG:v=%"
-            move Cargo.toml Cargo.toml.orig
-            (for /f "tokens=* delims=" %%i in (Cargo.toml.orig) do (
-                set "line=%%i"
-                setlocal enabledelayedexpansion
-                set "line=!line:/0\.0\.0/=%RELEASE_TAG%!"
-                echo !line!
-                endlocal
-            )) > Cargo.toml
-
-            move Cargo.lock Cargo.lock.orig
-            (for /f "tokens=* delims=" %%i in (Cargo.lock.orig) do (
-                set "line=%%i"
-                setlocal enabledelayedexpansion
-                set "line=!line:/0\.0\.0/=%RELEASE_TAG%!"
-                echo !line!
-                endlocal
-            )) > Cargo.lock
 
 
       - name: Build wheels
