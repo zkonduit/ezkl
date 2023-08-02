@@ -56,13 +56,12 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    if values[0].len() != values[1].len() {
-        return Err(Box::new(TensorError::DimMismatch("dot".to_string())));
-    }
-
     let mut values = values.clone();
-    let mut removal_indices = values[0].get_const_zero_indices()?;
+
+    let mut removal_indices: HashSet<usize> = HashSet::new();
+    removal_indices.extend(values[0].get_const_zero_indices()?);
     removal_indices.extend(values[1].get_const_zero_indices()?);
+    let removal_indices = removal_indices.into_iter().collect_vec();
     values[0].remove_indices(&removal_indices)?;
     values[1].remove_indices(&removal_indices)?;
 
@@ -71,6 +70,10 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
             overflowed_len(region.offset(), values[0].len(), config.output.col_size());
         region.increment(overflowed_len);
         return Ok(Tensor::from([ValType::from(Value::known(F::ZERO))].into_iter()).into());
+    }
+
+    if values[0].len() != values[1].len() {
+        return Err(Box::new(TensorError::DimMismatch("dot".to_string())));
     }
 
     // if empty return a const
@@ -216,6 +219,19 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         .filter(|&x| !common_indices_to_inputs.contains(x))
         .collect::<Vec<_>>();
 
+    let non_common_coord_size = non_common_indices
+        .iter()
+        .map(|d| {
+            // If the current index is in the output equation, then the slice should be the current coordinate
+            if output_eq.contains(**d) {
+                1
+            // Otherwise, the slice should be the entire dimension of the input tensor
+            } else {
+                *indices_to_size.get(d).unwrap()
+            }
+        })
+        .product::<usize>();
+
     let cartesian_coord = output_shape
         .iter()
         .map(|d| 0..*d)
@@ -241,19 +257,6 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     if common_coord.is_empty() {
         common_coord.push(vec![]);
     }
-
-    let non_common_coord_size = non_common_indices
-        .iter()
-        .map(|d| {
-            // If the current index is in the output equation, then the slice should be the current coordinate
-            if output_eq.contains(**d) {
-                1
-            // Otherwise, the slice should be the entire dimension of the input tensor
-            } else {
-                *indices_to_size.get(d).unwrap()
-            }
-        })
-        .product::<usize>();
 
     output.iter_mut().enumerate().for_each(|(i, o)| {
         let coord = cartesian_coord[i].clone();
@@ -589,22 +592,39 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 2],
     op: BaseOp,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    if values.len() != config.inputs.len() {
-        return Err(Box::new(CircuitError::DimMismatch(format!(
-            "pairwise {} layout",
-            op.as_str()
-        ))));
-    }
-
     let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
 
     let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
     lhs.expand(&broadcasted_shape)?;
     rhs.expand(&broadcasted_shape)?;
 
+    let zero_indices_a = lhs.get_const_zero_indices()?;
+    let zero_indices_b = values[1].get_const_zero_indices()?;
+    let zero_indices = zero_indices_a
+        .iter()
+        .chain(zero_indices_b.iter())
+        .cloned()
+        .collect::<HashSet<_>>()
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
+
+    lhs.remove_indices(&zero_indices)?;
+    rhs.remove_indices(&zero_indices)?;
+
+    if lhs.len() != rhs.len() {
+        return Err(Box::new(CircuitError::DimMismatch(format!(
+            "pairwise {} layout",
+            op.as_str()
+        ))));
+    }
+
     if region.is_dummy() {
         region.increment(lhs.len());
-        return Ok(lhs);
+        let vals = vec![ValType::Value(Value::known(F::ZERO)); broadcasted_shape.iter().product()];
+        let mut tensor: Tensor<ValType<F>> = Tensor::from(vals.into_iter());
+        tensor.reshape(&broadcasted_shape);
+        return Ok(tensor.into());
     }
 
     let mut inputs = vec![];
@@ -629,7 +649,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         halo2_proofs::plonk::Error::Synthesis
     })?;
 
-    let mut output = region.assign(&config.output, &op_result.into())?;
+    let output = region.assign(&config.output, &op_result.into())?;
 
     // Enable the selectors
     (0..inputs[0].len()).for_each(|i| {
@@ -641,9 +661,58 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
 
     region.increment(output.len());
 
-    output.reshape(lhs.dims())?;
+    // infill the zero indices with the correct values from values[0] or values[1]
+    let mut actual_output: ValTensor<F> =
+        Into::<Tensor<ValType<F>>>::into((0..values[0].len()).map(|i| {
+            if zero_indices.contains(&i) {
+                let a = values[0].get_inner_tensor().unwrap()[i].clone();
+                let b = values[1].get_inner_tensor().unwrap()[i].clone();
+                let a_is_null = zero_indices_a.contains(&i);
+                let b_is_null = zero_indices_b.contains(&i);
+                let both_null = a_is_null && b_is_null;
 
-    Ok(output)
+                match op {
+                    BaseOp::Add => {
+                        if both_null {
+                            ValType::Constant(F::ZERO)
+                        } else if a_is_null {
+                            b.clone()
+                        } else if b_is_null {
+                            a.clone()
+                        } else {
+                            ValType::Constant(F::ZERO)
+                        }
+                    }
+                    BaseOp::Sub => {
+                        if both_null {
+                            ValType::Constant(F::ZERO)
+                        } else if a_is_null {
+                            let tensor = Tensor::new(Some(&[b]), &[1]).unwrap();
+                            neg(config, region, &[tensor.into()])
+                                .unwrap()
+                                .get_inner_tensor()
+                                .unwrap()[0]
+                                .clone()
+                        } else if b_is_null {
+                            a.clone()
+                        } else {
+                            ValType::Constant(F::ZERO)
+                        }
+                    }
+                    BaseOp::Mult => ValType::Constant(F::ZERO),
+                    _ => panic!(),
+                }
+            } else {
+                output.get_inner_tensor().unwrap()[i].clone()
+            }
+        }))
+        .into();
+
+    actual_output.reshape(&broadcasted_shape)?;
+
+    println!("actual output: {:?}", actual_output.dims());
+
+    Ok(actual_output)
 }
 
 /// Iff

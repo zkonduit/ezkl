@@ -183,7 +183,7 @@ impl Serialize for FieldSingleVector {
     }
 }
 
-const ASSUMED_BLINDING_FACTORS: usize = 6;
+const ASSUMED_BLINDING_FACTORS: usize = 7;
 
 /// 26
 const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;
@@ -757,10 +757,8 @@ impl GraphCircuit {
         } else {
             let min_bits = (res.max_lookup_inputs as f64).log2().ceil() as usize + 1;
 
-            let min_rows_from_constraints = (self.settings.num_constraints as f64
-                + ASSUMED_BLINDING_FACTORS as f64)
-                .log2()
-                .ceil() as usize;
+            let min_rows_from_constraints =
+                (self.settings.num_constraints as f32).log2().ceil() as usize;
             let mut logrows = std::cmp::max(min_bits + 1, min_rows_from_constraints);
             // if public input then public inputs col will have public inputs len
             if self.settings.run_args.input_visibility.is_public()
@@ -771,7 +769,7 @@ impl GraphCircuit {
                     .instance_shapes()
                     .iter()
                     .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()));
-                let instance_len_logrows = (max_instance_len as f64).log2().ceil() as usize;
+                let instance_len_logrows = (max_instance_len as f64).log2().ceil() as usize + 1;
                 logrows = std::cmp::max(logrows, instance_len_logrows);
             // this is for fixed const columns
             } else if self.settings.run_args.param_visibility.is_public() {
@@ -781,12 +779,12 @@ impl GraphCircuit {
                     .const_shapes()
                     .iter()
                     .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()));
-                let const_len_logrows = (total_const_len as f64).log2().ceil() as usize;
+                let const_len_logrows = (total_const_len as f64).log2().ceil() as usize + 1;
                 logrows = std::cmp::max(logrows, const_len_logrows);
             }
 
-            // ensure logrows is at least 4
-            logrows = std::cmp::max(logrows, (ASSUMED_BLINDING_FACTORS as f64).ceil() as usize);
+            // ensure logrows is at least 7
+            logrows = std::cmp::max(logrows, ASSUMED_BLINDING_FACTORS);
 
             logrows = std::cmp::min(logrows, MAX_PUBLIC_SRS as usize);
 
