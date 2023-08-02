@@ -35,14 +35,10 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
         stride: (usize, usize),
         kernel_shape: (usize, usize),
     },
-    Add {
-        a: Option<Tensor<F>>,
-    },
+    Add,
     Sub,
     Neg,
-    Mult {
-        a: Option<Tensor<F>>,
-    },
+    Mult,
     Identity,
     Reshape(Vec<usize>),
     MoveAxis {
@@ -148,20 +144,10 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 }
                 tensor::ops::pad(&inputs[0], (*dim1, *dim2))
             }
-            PolyOp::Add { a } => {
-                if let Some(a) = a {
-                    inputs.push(a.clone());
-                }
-                tensor::ops::add(&inputs)
-            }
+            PolyOp::Add => tensor::ops::add(&inputs),
             PolyOp::Neg => tensor::ops::neg(&inputs[0]),
             PolyOp::Sub => tensor::ops::sub(&inputs),
-            PolyOp::Mult { a } => {
-                if let Some(a) = a {
-                    inputs.push(a.clone());
-                }
-                tensor::ops::mult(&inputs)
-            }
+            PolyOp::Mult => tensor::ops::mult(&inputs),
             PolyOp::Conv {
                 kernel: a,
                 bias,
@@ -306,18 +292,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 *stride,
                 *kernel_shape,
             )?,
-            PolyOp::Add { a } => {
-                if let Some(a) = a {
-                    values.push(a.clone().into());
-                }
-
-                layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Add)?
-            }
+            PolyOp::Add => layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Add)?,
             PolyOp::Sub => layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Sub)?,
-            PolyOp::Mult { a } => {
-                if let Some(a) = a {
-                    values.push(a.clone().into());
-                }
+            PolyOp::Mult => {
                 layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Mult)?
             }
             PolyOp::Identity => layouts::identity(config, region, values[..].try_into()?)?,
@@ -395,33 +372,17 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 output_scale
             }
             PolyOp::SumPool { .. } => in_scales[0],
-            PolyOp::Add { a } => {
+            PolyOp::Add => {
                 let mut scale_a = 0;
                 let scale_b = in_scales[0];
-                if let Some(a) = a {
-                    let a_scale = match a.scale() {
-                        Some(s) => s,
-                        None => panic!("scale must be set for add constant"),
-                    };
-                    scale_a += a_scale;
-                } else {
-                    scale_a += in_scales[1];
-                }
+                scale_a += in_scales[1];
                 assert_eq!(scale_a, scale_b);
                 scale_a
             }
             PolyOp::Sub => in_scales[0],
-            PolyOp::Mult { a } => {
+            PolyOp::Mult => {
                 let mut scale = in_scales[0];
-                if let Some(a) = a {
-                    let a_scale = match a.scale() {
-                        Some(s) => s,
-                        None => panic!("scale must be set for add constant"),
-                    };
-                    scale += a_scale;
-                } else {
-                    scale += in_scales[1];
-                }
+                scale += in_scales[1];
                 scale
             }
             PolyOp::Identity => in_scales[0],

@@ -414,27 +414,9 @@ pub fn new_op_from_onnx(
         "Atanh" => Box::new(LookupOp::ATanh { scales: (1, 1) }),
         "Erf" => Box::new(LookupOp::Erf { scales: (1, 1) }),
         "Source" => Box::new(crate::circuit::ops::Input { scale }),
-        "Add" => {
-            let mut params = None;
-
-            let max_scale = inputs
-                .iter()
-                .map(|x| x.out_scales()[0])
-                .max()
-                .ok_or_else(|| Box::new(GraphError::MissingParams("add".to_string())))?;
-
-            for (idx, inp) in inputs.clone().iter().enumerate() {
-                let boxed_op = inp.opkind();
-                if let Some(c) = extract_const_raw_values(boxed_op) {
-                    inputs.remove(idx);
-                    params = Some(quantize_tensor(c, max_scale, param_visibility)?);
-                }
-            }
-
-            Box::new(PolyOp::Add { a: params })
-        }
+        "Add" => Box::new(PolyOp::Add),
         "Sub" => Box::new(PolyOp::Sub),
-        "Mul" => Box::new(PolyOp::Mult { a: None }),
+        "Mul" => Box::new(PolyOp::Mult),
         "Iff" => Box::new(PolyOp::Iff),
         "Less" => {
             // Extract the slope layer hyperparams
