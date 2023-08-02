@@ -280,7 +280,7 @@ impl GraphModules {
                 sizes.poseidon.0 += POSEIDON_CONSTRAINTS_ESTIMATE * total_len;
                 if total_len > 0 {
                     sizes.poseidon.0 +=
-                        POSEIDOIN_FIXED_COST_ESTIMATE * ((sizes.elgamal.0 == 0) as usize);
+                        POSEIDOIN_FIXED_COST_ESTIMATE * ((sizes.poseidon.0 == 0) as usize);
                     sizes.poseidon.1[0] += 1;
                 }
             }
@@ -293,7 +293,7 @@ impl GraphModules {
             // 4 constraints for each ciphertext c1, c2, and sk
             if total_len > 0 {
                 // add the 1 time fixed cost of maingate + ecc chips
-                sizes.elgamal.0 += ELGAMAL_FIXED_COST_ESTIMATE * ((sizes.elgamal.0 == 0) as usize);
+                sizes.elgamal.0 += ELGAMAL_FIXED_COST_ESTIMATE;
                 sizes.elgamal.1[0] += 4;
             }
             // 1 constraint for each ciphertext c2 elem
