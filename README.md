@@ -39,12 +39,9 @@ The generated proofs can then be used on-chain to verify computation, only the E
 | --- | --- |
 | [docs](https://docs.ezkl.xyz ) | the official ezkl docs page |
 | `cargo doc --open` | compile and open the docs in your default browser locally |
-| [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/zkonduit/ezkl/blob/master/examples/notebooks/simple_demo.ipynb)| a simple demo of the python bindings in action on Colab |
+| [![Simple Example](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/zkonduit/ezkl/blob/master/examples/notebooks/simple_demo.ipynb)| a simple demo of the python bindings in action on Colab |
 
-
-
-
-#### tutorials 
+----------------------
 
 You can find a range of python based tutorials in the `examples/notebooks` section. These all assume you have the `ezkl` python library installed. If you want the bleeding edge version of the library, you can install it from the `main` branch with:
 
