@@ -1082,7 +1082,15 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     stride: (usize, usize),
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let has_bias = values.len() == 3;
-    let (mut image, kernel) = (values[0].clone(), values[1].clone());
+    let (image, kernel) = (values[0].clone(), values[1].clone());
+
+    // assign the kernel
+    let kernel = region.assign(&config.inputs[0], &kernel)?;
+    // assign the image
+    let mut image = region.assign(&config.inputs[1], &image)?;
+    // increment the region
+    region.increment(std::cmp::max(image.len(), kernel.len()));
+
     let og_dims = image.dims().to_vec();
 
     // ensure inputs are 4D tensors

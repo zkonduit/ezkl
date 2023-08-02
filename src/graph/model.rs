@@ -142,6 +142,22 @@ impl NodeType {
         }
     }
 
+    /// bunp scale of node
+    pub fn bump_scale(&mut self, scale: u32) {
+        match self {
+            NodeType::Node(n) => n.out_scale = scale,
+            NodeType::SubGraph { .. } => log::warn!("Cannot bump scale of subgraph"),
+        }
+    }
+
+    /// Replace the operation kind of the node.
+    pub fn replace_opkind(&mut self, opkind: Box<dyn Op<Fp>>) {
+        match self {
+            NodeType::Node(n) => n.opkind = opkind,
+            NodeType::SubGraph { .. } => log::warn!("Cannot replace opkind of subgraph"),
+        }
+    }
+
     /// Returns the operation kind of the node (if any).
     pub fn opkind(&self) -> Box<dyn Op<Fp>> {
         match self {

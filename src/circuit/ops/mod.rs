@@ -206,7 +206,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize> Op<F> for Rescaled<F> 
                 "rescaled inputs".to_string(),
             )));
         }
-
         let res = &layouts::rescale(config, region, values[..].try_into()?, &self.scale)?[..];
         self.inner.layout(config, region, res)
     }
@@ -258,6 +257,8 @@ pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
     ///
     #[serde(skip)]
     pub pre_assigned_val: Option<ValTensor<F>>,
+    ///
+    pub num_uses: usize,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
@@ -267,7 +268,22 @@ impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
             quantized_values,
             raw_values,
             pre_assigned_val: None,
+            num_uses: 0,
         }
+    }
+    /// Requantize the constant.
+    pub fn requantize(&mut self, scale: u32) -> Result<(), Box<dyn Error>> {
+        self.quantized_values = crate::graph::quantize_tensor(
+            self.raw_values.clone(),
+            scale,
+            self.quantized_values.visibility().unwrap(),
+        )?;
+        Ok(())
+    }
+
+    /// Returns true if the constant is only used once.
+    pub fn is_single_use(&self) -> bool {
+        self.num_uses == 1
     }
 
     ///
@@ -302,8 +318,11 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         if let Some(value) = &self.pre_assigned_val {
             Ok(Some(value.clone()))
+        } else if self.is_single_use() {
+            // we can just assign it within the op
+            Ok(Some(self.quantized_values.clone().into()))
         } else {
-            // we gotta constrain it once
+            // we gotta constrain it once if its used multiple times
             Ok(Some(layouts::identity(
                 config,
                 region,
