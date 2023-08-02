@@ -20,9 +20,9 @@ pub const POSEIDON_LEN_GRAPH: usize = 10;
 pub const POSEIDON_CONSTRAINTS_ESTIMATE: usize = 44;
 /// Module sizes
 pub const ELGAMAL_CONSTRAINTS_ESTIMATE: usize = 128;
-// 2^7
+// 2^11
 /// Module sizes
-pub const POSEIDOIN_FIXED_COST_ESTIMATE: usize = 128;
+pub const POSEIDOIN_FIXED_COST_ESTIMATE: usize = 2048;
 // 2^17
 /// Module sizes
 pub const ELGAMAL_FIXED_COST_ESTIMATE: usize = 131072;
