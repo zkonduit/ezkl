@@ -668,6 +668,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
 
     region.increment(output.len());
 
+    let mut j = 0;
     // infill the zero indices with the correct values from values[0] or values[1]
     let mut actual_output: ValTensor<F> =
         Into::<Tensor<ValType<F>>>::into((0..broadcasted_shape.iter().product()).map(|i| {
@@ -710,7 +711,9 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
                     _ => panic!(),
                 }
             } else {
-                output.get_inner_tensor().unwrap()[i].clone()
+                let val = output.get_inner_tensor().unwrap()[j].clone();
+                j += 1;
+                val
             }
         }))
         .into();
