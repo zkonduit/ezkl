@@ -271,6 +271,8 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                 })
                 .collect();
 
+            log::trace!("hashes (N={:?}) took: {:?}", len, start_time.elapsed());
+
             input_cells = hashes?;
         }
 

@@ -372,7 +372,7 @@ impl VarTensor {
 
                     match k {
                         ValType::Constant(f) => {
-                            Ok::<ValType<F>, halo2_proofs::plonk::Error>(ValType::AssignedConstant(cell.clone(), f))
+                            Ok(ValType::AssignedConstant(cell.clone(), f))
                         },
                         ValType::AssignedConstant(_, f) => {
                             Ok(ValType::AssignedConstant(cell.clone(), f))

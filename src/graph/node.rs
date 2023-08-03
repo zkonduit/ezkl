@@ -2,7 +2,6 @@ use super::utilities::node_output_shapes;
 use super::Visibility;
 use crate::circuit::Op;
 use crate::graph::new_op_from_onnx;
-use crate::graph::GraphError;
 use halo2curves::bn256::Fr as Fp;
 use log::trace;
 use serde::Deserialize;
@@ -68,7 +67,7 @@ impl Node {
     /// * `public_params` - flag if parameters of model are public
     /// * `idx` - The node's unique identifier.
     pub fn new(
-        mut node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
+        node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
         other_nodes: &mut BTreeMap<usize, super::NodeType>,
         scale: u32,
         param_visibility: Visibility,
@@ -80,14 +79,26 @@ impl Node {
         // load the node inputs
         let mut inputs = vec![];
 
-        for i in node.inputs.iter_mut() {
-            match other_nodes.get(&i.node) {
-                Some(n) => inputs.push(n.clone()),
-                None => return Err(Box::new(GraphError::MissingNode(i.node))),
+        // we can only take the inputs as mutable once -- so we need to collect them first
+        let mut input_ids = node.inputs.iter().map(|i| i.node).collect::<Vec<_>>();
+
+        other_nodes.iter_mut().for_each(|(i, v)| {
+            if input_ids.contains(i) {
+                inputs.push(v);
             }
-        }
+        });
+
+        inputs.sort_by(|a, b| {
+            let a_idx = input_ids.iter().position(|&x| x == a.idx()).unwrap();
+            let b_idx = input_ids.iter().position(|&x| x == b.idx()).unwrap();
+            a_idx.cmp(&b_idx)
+        });
 
         let mut opkind = new_op_from_onnx(idx, scale, param_visibility, node.clone(), &mut inputs)?; // parses the op name
+
+        // we can only take the inputs as mutable once -- so we need to collect them first
+        let remaining_inputs = node.inputs.iter().map(|i| i.node).collect::<Vec<_>>();
+        input_ids.retain(|&x| remaining_inputs.contains(&x));
 
         // rescale the inputs if necessary to get consistent fixed points
         let in_scales: Vec<u32> = inputs.iter().map(|n| n.out_scales()[0]).collect();
@@ -114,7 +125,7 @@ impl Node {
         Ok(Node {
             idx,
             opkind,
-            inputs: inputs.iter().map(|i| i.idx()).collect(),
+            inputs: input_ids,
             out_dims,
             out_scale,
         })

@@ -1504,22 +1504,21 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     let w = region.assign(&config.lookup_input, x)?;
 
-    // extract integer_valuations
-    let felt_evals: Tensor<F> = w.get_felt_evals().map_err(|e| {
-        error!("{}", e);
-        halo2_proofs::plonk::Error::Synthesis
-    })?;
+    println!("w: {:?}", w.len());
 
-    // for key generation integer_evals will be empty and we need to return a set of unassigned values
-    let output: Tensor<Value<F>> = match felt_evals.len() {
-        // if empty return an unknown val
-        0 => Tensor::from((0..x.dims().iter().product::<usize>()).map(|_| Value::unknown())),
-        // if not empty apply the nonlinearity !
-        _ => {
-            let x = Op::<F>::f(nl, &[felt_evals])?;
-            x.output.map(|elem| Value::known(elem))
-        }
-    };
+    // extract integer_valuations
+    let output: Tensor<Value<F>> = w
+        .get_inner()
+        .map_err(|e| {
+            error!("{}", e);
+            halo2_proofs::plonk::Error::Synthesis
+        })?
+        .map(|elem| {
+            elem.map(|elem| {
+                let elem = Tensor::from([elem].into_iter());
+                Op::<F>::f(nl, &[elem]).unwrap().output[0]
+            })
+        });
 
     let mut output = region.assign(&config.lookup_output, &output.into())?;
 
@@ -1528,6 +1527,9 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
         let selector = config.lookup_selectors.get(&(nl.clone(), x));
         region.enable(selector, y).unwrap();
     });
+
+    println!("x: {:?}", x.len());
+    println!("output: {:?}", output.len());
 
     output.reshape(x.dims())?;
 

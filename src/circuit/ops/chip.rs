@@ -383,15 +383,6 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         values: &[ValTensor<F>],
         op: Box<dyn Op<F>>,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        let mut cp_values = vec![];
-        for v in values.iter() {
-            if let ValTensor::Instance { .. } = v {
-                cp_values.push(super::layouts::identity(self, region, &[v.clone()])?);
-            } else {
-                cp_values.push(v.clone());
-            }
-        }
-        let res = op.layout(self, region, &cp_values);
-        res
+        op.layout(self, region, &values)
     }
 }

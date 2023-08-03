@@ -142,6 +142,27 @@ impl NodeType {
         }
     }
 
+    /// decrement const num times used
+    pub fn decrement_const(&mut self) {
+        match self {
+            NodeType::Node(n) => {
+                if let Some(c) = n
+                    .opkind
+                    .as_any()
+                    .downcast_ref::<crate::circuit::Constant<Fp>>()
+                {
+                    if c.num_uses > 0 {
+                        n.opkind = Box::new(crate::circuit::Constant {
+                            num_uses: c.num_uses - 1,
+                            ..c.clone()
+                        });
+                    }
+                }
+            }
+            NodeType::SubGraph { .. } => log::warn!("Cannot decrement const of subgraph"),
+        }
+    }
+
     /// bunp scale of node
     pub fn bump_scale(&mut self, scale: u32) {
         match self {
@@ -584,6 +605,29 @@ impl Model {
             }
         }
 
+        fn clean_useless_consts(nodes: &mut BTreeMap<usize, NodeType>) {
+            // remove all nodes that are consts with 0 uses now
+            nodes.retain(|_, n| match n {
+                NodeType::Node(n) => {
+                    if let Some(c) = n
+                        .opkind
+                        .as_any()
+                        .downcast_ref::<crate::circuit::Constant<Fp>>()
+                    {
+                        c.num_uses > 0
+                    } else {
+                        true
+                    }
+                }
+                NodeType::SubGraph { model, .. } => {
+                    clean_useless_consts(&mut model.graph.nodes);
+                    true
+                }
+            });
+        }
+
+        clean_useless_consts(&mut nodes);
+
         Ok(nodes)
     }
 
@@ -721,12 +765,24 @@ impl Model {
         region: &mut RegionCtx<Fp>,
         results: &mut BTreeMap<usize, ValTensor<Fp>>,
     ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
+        let inputs = self.graph.inputs.clone();
+        // index over results to get original inputs
+        let orig_inputs: BTreeMap<usize, _> = results
+            .clone()
+            .into_iter()
+            .filter(|(idx, _)| inputs.contains(idx))
+            .collect();
+
         for (idx, node) in self.graph.nodes.iter() {
-            let values: Vec<ValTensor<Fp>> = node
-                .inputs()
-                .iter()
-                .map(|i| results.get(i).unwrap().clone())
-                .collect_vec();
+            let values: Vec<ValTensor<Fp>> = if !node.is_input() {
+                node.inputs()
+                    .iter()
+                    .map(|i| results.get(i).unwrap().clone())
+                    .collect_vec()
+            } else {
+                // we re-assign inputs
+                vec![results.get(idx).unwrap().clone()]
+            };
 
             debug!(
                 "laying out {}: {}, offset:{}",
@@ -739,6 +795,7 @@ impl Model {
                 "input_dims {:?}",
                 values.iter().map(|v| v.dims()).collect_vec()
             );
+
             match node {
                 NodeType::Node(n) => {
                     let res = config
@@ -768,6 +825,10 @@ impl Model {
                 }
             }
         }
+
+        // we do this so we can support multiple passes of the same model and have deterministic results (Non-assigned inputs etc... etc...)
+        results.extend(orig_inputs);
+
         let output_nodes = self.graph.outputs.iter();
         debug!(
             "model outputs are nodes: {:?}",

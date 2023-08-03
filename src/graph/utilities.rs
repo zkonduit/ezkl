@@ -243,7 +243,7 @@ pub fn new_op_from_onnx(
     scale: u32,
     param_visibility: Visibility,
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
-    inputs: &mut Vec<super::NodeType>,
+    inputs: &mut Vec<&mut super::NodeType>,
 ) -> Result<Box<dyn crate::circuit::Op<Fp>>, Box<dyn std::error::Error>> {
     debug!("Loading node: {:?}", node);
     Ok(match node.op().name().as_ref() {
@@ -268,7 +268,10 @@ pub fn new_op_from_onnx(
                 }
             };
 
-            inputs.pop();
+            if let Some(node) = inputs.last_mut() {
+                node.decrement_const();
+                inputs.pop();
+            }
 
             Box::new(crate::circuit::ops::poly::PolyOp::Gather { dim: axis, index })
         }
@@ -357,7 +360,10 @@ pub fn new_op_from_onnx(
             };
 
             if inputs.len() == 2 && unit == 0. {
-                inputs.pop();
+                if let Some(node) = inputs.last_mut() {
+                    node.decrement_const();
+                    inputs.pop();
+                }
                 Box::new(LookupOp::ReLU {
                     scale: inputs[0].out_scales()[0] as usize,
                 })
@@ -473,7 +479,7 @@ pub fn new_op_from_onnx(
             };
 
             if inputs.len() == 2 {
-                *inputs = vec![inputs[1].clone()];
+                inputs.remove(0);
                 Box::new(LookupOp::LessThan {
                     a: crate::circuit::utils::F32(unit),
                 })
@@ -495,7 +501,7 @@ pub fn new_op_from_onnx(
             };
 
             if inputs.len() == 2 {
-                *inputs = vec![inputs[1].clone()];
+                inputs.remove(0);
                 Box::new(LookupOp::GreaterThan {
                     a: crate::circuit::utils::F32(unit),
                 })
@@ -752,9 +758,15 @@ pub fn new_op_from_onnx(
             };
 
             // remove the resize node from the inputs
-            inputs.pop();
+            if let Some(node) = inputs.last_mut() {
+                node.decrement_const();
+                inputs.pop();
+            }
             // remove the scale factor node from the inputs
-            inputs.pop();
+            if let Some(node) = inputs.last_mut() {
+                node.decrement_const();
+                inputs.pop();
+            }
 
             Box::new(PolyOp::Resize { scale_factor })
         }

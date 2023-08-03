@@ -115,11 +115,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
 
     fn layout(
         &self,
-        _: &mut crate::circuit::BaseConfig<F>,
-        _: &mut RegionCtx<F>,
-        _: &[ValTensor<F>],
+        config: &mut crate::circuit::BaseConfig<F>,
+        region: &mut RegionCtx<F>,
+        values: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        Ok(None)
+        Ok(Some(super::layouts::identity(
+            config,
+            region,
+            values[..].try_into()?,
+        )?))
     }
 
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
