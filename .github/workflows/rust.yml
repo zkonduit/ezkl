@@ -179,7 +179,7 @@ jobs:
       - name: Mock proving tests (encrypted inputs + hashed params)
         run: cargo nextest run --release --verbose tests::mock_encrypted_input_hashed_params_::t  --test-threads 32
       - name: Self Attention Mock
-        run: cargo test --release --verbose tests::large_mock_::large_tests_0_expects -- --include-ignored
+        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_0_expects -- --include-ignored
 
   prove-and-verify-evm-tests:
     runs-on: ubuntu-latest-16-cores
