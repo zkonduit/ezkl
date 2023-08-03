@@ -330,7 +330,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::MoveAxis { .. } => in_scales[0],
             PolyOp::Downsample { .. } => in_scales[0],
             PolyOp::Resize { .. } => in_scales[0],
-            PolyOp::Iff => in_scales[0],
+            PolyOp::Iff => in_scales[1],
             PolyOp::Einsum { .. } => {
                 let mut scale = in_scales[0];
                 for s in in_scales.iter().skip(1) {
