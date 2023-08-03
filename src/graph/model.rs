@@ -899,22 +899,22 @@ impl Model {
     }
 
     /// Retrieves all constants from the model.
-    pub fn get_all_consts(&self) -> Vec<Tensor<Fp>> {
-        let mut consts = vec![];
+    pub fn get_all_params(&self) -> Vec<Tensor<Fp>> {
+        let mut params = vec![];
         for node in self.graph.nodes.values() {
             match node {
                 NodeType::Node(n) => {
                     let boxed_op = n.opkind.clone_dyn();
-                    if let Some(constant) = extract_const_quantized_values(boxed_op) {
-                        consts.push(constant);
-                    };
+                    if let Some(constant) = extract_const_quantized_values(boxed_op.clone()) {
+                        params.push(constant);
+                    }
                 }
                 NodeType::SubGraph { model, .. } => {
-                    consts.extend(model.get_all_consts());
+                    params.extend(model.get_all_params());
                 }
             }
         }
-        consts
+        params
     }
 
     /// Shapes of the computational graph's constants
@@ -955,7 +955,7 @@ impl Model {
                         n.opkind = Box::new(op);
 
                         const_idx += 1;
-                    };
+                    }
                 }
                 NodeType::SubGraph { model, .. } => {
                     model.replace_consts(consts.clone());

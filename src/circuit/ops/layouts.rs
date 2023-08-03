@@ -1510,8 +1510,6 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     let w = region.assign(&config.lookup_input, x)?;
 
-    println!("w: {:?}", w.len());
-
     // extract integer_valuations
     let output: Tensor<Value<F>> = w
         .get_inner()
@@ -1533,9 +1531,6 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
         let selector = config.lookup_selectors.get(&(nl.clone(), x));
         region.enable(selector, y).unwrap();
     });
-
-    println!("x: {:?}", x.len());
-    println!("output: {:?}", output.len());
 
     output.reshape(x.dims())?;
 

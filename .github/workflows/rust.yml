@@ -180,6 +180,8 @@ jobs:
         run: cargo nextest run --release --verbose tests::mock_encrypted_input_hashed_params_::t  --test-threads 32
       - name: Self Attention Mock
         run: cargo nextest run --release --verbose tests::large_mock_::large_tests_0_expects -- --include-ignored
+      - name: NanoGPT Mock
+        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_1_expects -- --include-ignored
 
   prove-and-verify-evm-tests:
     runs-on: ubuntu-latest-16-cores
@@ -452,8 +454,20 @@ jobs:
         #     # now dump the contents of the file into a file called kaggle.json
         #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
         #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
-        - name: Notebook integration tests
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
+        - name: Gan tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
+        - name: Keras tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_1_expects
+        - name: Encrypted tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_2_expects
+        - name: Hashed tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_3_expects
+        - name: Simple tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_4_expects
+        - name: Data attestation tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_5_expects
+        - name: Variance tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
         - name: Voice tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
 

@@ -769,7 +769,7 @@ impl GraphCircuit {
                     .instance_shapes()
                     .iter()
                     .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()));
-                let instance_len_logrows = (max_instance_len as f64).log2().ceil() as usize + 1;
+                let instance_len_logrows = (max_instance_len as f64).log2().ceil() as usize;
                 logrows = std::cmp::max(logrows, instance_len_logrows);
             // this is for fixed const columns
             } else if self.settings.run_args.param_visibility.is_public() {
@@ -821,7 +821,7 @@ impl GraphCircuit {
         }
 
         if visibility.params.requires_processing() {
-            let params = self.model.get_all_consts();
+            let params = self.model.get_all_params();
             if !params.is_empty() {
                 let flattened_params = Tensor::new(Some(&params), &[params.len()])?.combine()?;
                 processed_params = Some(GraphModules::forward(
@@ -1059,9 +1059,9 @@ impl Circuit<Fp> for GraphCircuit {
         let mut model = self.model.clone();
         let param_visibility = self.settings.run_args.param_visibility;
         trace!("running params module layout");
-        if !self.model.get_all_consts().is_empty() && param_visibility.requires_processing() {
+        if !self.model.get_all_params().is_empty() && param_visibility.requires_processing() {
             // now we need to flatten the params
-            let consts = self.model.get_all_consts();
+            let consts = self.model.get_all_params();
 
             let mut flattened_params = {
                 let mut t = Tensor::new(Some(&consts), &[consts.len()])
