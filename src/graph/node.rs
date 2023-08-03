@@ -101,7 +101,13 @@ impl Node {
         input_ids.retain(|&x| remaining_inputs.contains(&x));
 
         // rescale the inputs if necessary to get consistent fixed points
-        let in_scales: Vec<u32> = inputs.iter().map(|n| n.out_scales()[0]).collect();
+        let in_scales: Vec<u32> = input_ids
+            .iter()
+            .map(|n| {
+                let idx = inputs.iter().position(|x| *n == x.idx()).unwrap();
+                inputs[idx].out_scales()[0]
+            })
+            .collect();
         opkind = opkind.rescale(in_scales.clone(), scale);
         let out_scale = match in_scales.len() {
             0 => scale,
