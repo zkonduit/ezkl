@@ -9,8 +9,7 @@ mod wasm32 {
     use ezkl::graph::modules::POSEIDON_LEN_GRAPH;
     use ezkl::pfsys::Snark;
     use ezkl::wasm::{
-        elgamal_decrypt_wasm, elgamal_encrypt_wasm, gen_pk_wasm,
-        gen_vk_wasm, poseidon_hash_wasm, prove_wasm, verify_wasm,
+        elgamal_decrypt_wasm, elgamal_encrypt_wasm, poseidon_hash_wasm, prove_wasm, verify_wasm,
     };
     use halo2curves::bn256::{Fr, G1Affine};
     pub use wasm_bindgen_rayon::init_thread_pool;
@@ -126,68 +125,6 @@ mod wasm32 {
         let value = verify_wasm(
             wasm_bindgen::Clamped(proof.to_vec()),
             wasm_bindgen::Clamped(VK.to_vec()),
-            wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
-            wasm_bindgen::Clamped(KZG_PARAMS.to_vec()),
-        );
-        // should not fail
-        assert!(value);
-    }
-
-    #[wasm_bindgen_test]
-    async fn gen_pk_test() {
-        let pk = gen_pk_wasm(
-            wasm_bindgen::Clamped(NETWORK.to_vec()),
-            wasm_bindgen::Clamped(KZG_PARAMS.to_vec()),
-            wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
-        );
-
-        assert!(pk.len() > 0);
-    }
-
-    #[wasm_bindgen_test]
-    async fn gen_vk_test() {
-        let pk = gen_pk_wasm(
-            wasm_bindgen::Clamped(NETWORK.to_vec()),
-            wasm_bindgen::Clamped(KZG_PARAMS.to_vec()),
-            wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
-        );
-
-        let vk = gen_vk_wasm(
-            wasm_bindgen::Clamped(pk),
-            wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
-        );
-
-        assert!(vk.len() > 0);
-    }
-
-    #[wasm_bindgen_test]
-    async fn pk_is_valid_test() {
-        let pk = gen_pk_wasm(
-            wasm_bindgen::Clamped(NETWORK.to_vec()),
-            wasm_bindgen::Clamped(KZG_PARAMS.to_vec()),
-            wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
-        );
-
-        assert!(pk.len() > 0);
-
-        // prove
-        let proof = prove_wasm(
-            wasm_bindgen::Clamped(WITNESS.to_vec()),
-            wasm_bindgen::Clamped(pk.clone()),
-            wasm_bindgen::Clamped(NETWORK.to_vec()),
-            wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
-            wasm_bindgen::Clamped(KZG_PARAMS.to_vec()),
-        );
-        assert!(proof.len() > 0);
-
-        let vk = gen_vk_wasm(
-            wasm_bindgen::Clamped(pk.clone()),
-            wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
-        );
-
-        let value = verify_wasm(
-            wasm_bindgen::Clamped(proof.to_vec()),
-            wasm_bindgen::Clamped(vk),
             wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
             wasm_bindgen::Clamped(KZG_PARAMS.to_vec()),
         );
