@@ -2,7 +2,6 @@ use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEI
 use crate::circuit::modules::poseidon::PoseidonChip;
 use crate::circuit::modules::Module;
 use crate::graph::modules::POSEIDON_LEN_GRAPH;
-//use ark_std::rand::{CryptoRng, RngCore};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use halo2_proofs::plonk::*;
@@ -32,7 +31,8 @@ use crate::graph::{GraphCircuit, GraphSettings};
 
 /// Generate a poseidon hash in browser. Input message
 #[wasm_bindgen]
-pub fn poseidon_hash_wasm(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
+#[allow(non_snake_case)]
+pub fn poseidonHashWasm(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
     let message: Vec<Fr> = serde_json::from_slice(&message[..]).unwrap();
 
     let output =
@@ -47,7 +47,8 @@ pub fn poseidon_hash_wasm(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
 /// Generates random elgamal variables from a random seed value in browser. 
 /// Make sure input seed comes a secure source of randomness
 #[wasm_bindgen]
-pub fn elgamal_gen_random_wasm(
+#[allow(non_snake_case)]
+pub fn elgamalGenRandomWasm(
     rng: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Vec<u8> {
 
@@ -61,7 +62,8 @@ pub fn elgamal_gen_random_wasm(
 
 /// Encrypt using elgamal in browser. Input message
 #[wasm_bindgen]
-pub fn elgamal_encrypt_wasm(
+#[allow(non_snake_case)]
+pub fn elgamalEncryptWasm(
     pk: wasm_bindgen::Clamped<Vec<u8>>,
     message: wasm_bindgen::Clamped<Vec<u8>>,
     r: wasm_bindgen::Clamped<Vec<u8>>,
@@ -77,7 +79,8 @@ pub fn elgamal_encrypt_wasm(
 
 /// Decrypt using elgamal in browser. Input message
 #[wasm_bindgen]
-pub fn elgamal_decrypt_wasm(
+#[allow(non_snake_case)]
+pub fn elgamalDecryptWasm(
     cipher: wasm_bindgen::Clamped<Vec<u8>>,
     sk: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Vec<u8> {
@@ -91,7 +94,8 @@ pub fn elgamal_decrypt_wasm(
 
 /// Verify proof in browser using wasm
 #[wasm_bindgen]
-pub fn verify_wasm(
+#[allow(non_snake_case)]
+pub fn verifyWasm(
     proof_js: wasm_bindgen::Clamped<Vec<u8>>,
     vk: wasm_bindgen::Clamped<Vec<u8>>,
     circuit_settings_ser: wasm_bindgen::Clamped<Vec<u8>>,
@@ -127,7 +131,8 @@ pub fn verify_wasm(
 
 /// Prove in browser using wasm
 #[wasm_bindgen]
-pub fn prove_wasm(
+#[allow(non_snake_case)]
+pub fn proveWasm(
     witness: wasm_bindgen::Clamped<Vec<u8>>,
     pk: wasm_bindgen::Clamped<Vec<u8>>,
     circuit_ser: wasm_bindgen::Clamped<Vec<u8>>,

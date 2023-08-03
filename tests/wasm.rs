@@ -9,7 +9,7 @@ mod wasm32 {
     use ezkl::graph::modules::POSEIDON_LEN_GRAPH;
     use ezkl::pfsys::Snark;
     use ezkl::wasm::{
-        elgamal_gen_random_wasm, elgamal_decrypt_wasm, elgamal_encrypt_wasm, poseidon_hash_wasm, prove_wasm, verify_wasm,
+        elgamalGenRandomWasm, elgamalDecryptWasm, elgamalEncryptWasm, poseidonHashWasm, proveWasm, verifyWasm,
     };
     use halo2curves::bn256::{Fr, G1Affine};
     use rand::rngs::StdRng;
@@ -39,7 +39,7 @@ mod wasm32 {
         let wasm_seed = wasm_bindgen::Clamped(seed.to_vec());
     
         // Use the seed to generate ElGamal variables via WASM function
-        let wasm_output = elgamal_gen_random_wasm(wasm_seed);
+        let wasm_output = elgamalGenRandomWasm(wasm_seed);
     
         // Deserialize the WASM output back into ElGamal variables
         let wasm_vars: ElGamalVariables = serde_json::from_slice(&wasm_output[..]).unwrap();
@@ -67,7 +67,7 @@ mod wasm32 {
         let message_ser = serde_json::to_vec(&message).unwrap();
         let r = serde_json::to_vec(&var.r).unwrap();
 
-        let cipher = elgamal_encrypt_wasm(
+        let cipher = elgamalEncryptWasm(
             wasm_bindgen::Clamped(pk.clone()),
             wasm_bindgen::Clamped(message_ser.clone()),
             wasm_bindgen::Clamped(r.clone()),
@@ -76,7 +76,7 @@ mod wasm32 {
         let sk = serde_json::to_vec(&var.sk).unwrap();
 
         let decrypted_message =
-            elgamal_decrypt_wasm(wasm_bindgen::Clamped(cipher), wasm_bindgen::Clamped(sk));
+            elgamalDecryptWasm(wasm_bindgen::Clamped(cipher), wasm_bindgen::Clamped(sk));
 
         let decrypted_message: Vec<Fr> = serde_json::from_slice(&decrypted_message[..]).unwrap();
 
@@ -92,7 +92,7 @@ mod wasm32 {
 
         let message_ser = serde_json::to_vec(&message).unwrap();
 
-        let hash = poseidon_hash_wasm(wasm_bindgen::Clamped(message_ser));
+        let hash = poseidonHashWasm(wasm_bindgen::Clamped(message_ser));
         let hash: Vec<Vec<Fr>> = serde_json::from_slice(&hash[..]).unwrap();
 
         let reference_hash =
@@ -106,7 +106,7 @@ mod wasm32 {
 
     #[wasm_bindgen_test]
     async fn verify_pass() {
-        let value = verify_wasm(
+        let value = verifyWasm(
             wasm_bindgen::Clamped(PROOF.to_vec()),
             wasm_bindgen::Clamped(VK.to_vec()),
             wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
@@ -127,7 +127,7 @@ mod wasm32 {
         };
         let proof = serde_json::to_string(&proof).unwrap().into_bytes();
 
-        let value = verify_wasm(
+        let value = verifyWasm(
             wasm_bindgen::Clamped(proof),
             wasm_bindgen::Clamped(VK.to_vec()),
             wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
@@ -140,7 +140,7 @@ mod wasm32 {
     #[wasm_bindgen_test]
     async fn prove_pass() {
         // prove
-        let proof = prove_wasm(
+        let proof = proveWasm(
             wasm_bindgen::Clamped(WITNESS.to_vec()),
             wasm_bindgen::Clamped(PK.to_vec()),
             wasm_bindgen::Clamped(NETWORK.to_vec()),
@@ -149,7 +149,7 @@ mod wasm32 {
         );
         assert!(proof.len() > 0);
 
-        let value = verify_wasm(
+        let value = verifyWasm(
             wasm_bindgen::Clamped(proof.to_vec()),
             wasm_bindgen::Clamped(VK.to_vec()),
             wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
