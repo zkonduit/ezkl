@@ -258,13 +258,13 @@ impl VarTensor {
 
                     match k {
                         ValType::Constant(f) => {
-                            Ok::<ValType<F>, halo2_proofs::plonk::Error>(ValType::AssignedConstant(cell.clone(), f))
+                            Ok::<ValType<F>, halo2_proofs::plonk::Error>(ValType::AssignedConstant(cell, f))
                         },
                         ValType::AssignedConstant(_, f) => {
-                            Ok(ValType::AssignedConstant(cell.clone(), f))
+                            Ok(ValType::AssignedConstant(cell, f))
                         },
                         _ => {
-                            Ok(ValType::PrevAssigned(cell.clone()))
+                            Ok(ValType::PrevAssigned(cell))
                         }
                     }
                 })?
@@ -372,13 +372,13 @@ impl VarTensor {
 
                     match k {
                         ValType::Constant(f) => {
-                            Ok(ValType::AssignedConstant(cell.clone(), f))
+                            Ok(ValType::AssignedConstant(cell, f))
                         },
                         ValType::AssignedConstant(_, f) => {
-                            Ok(ValType::AssignedConstant(cell.clone(), f))
+                            Ok(ValType::AssignedConstant(cell, f))
                         },
                         _ => {
-                            Ok(ValType::PrevAssigned(cell.clone()))
+                            Ok(ValType::PrevAssigned(cell))
                         }
                     }
                    

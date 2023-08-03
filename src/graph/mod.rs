@@ -177,7 +177,7 @@ impl Serialize for FieldSingleVector {
         let field_elems: Vec<[u64; 4]> = self
             .0
             .iter()
-            .map(|x| field_to_vecu64(x))
+            .map(field_to_vecu64)
             .collect::<Vec<_>>();
         field_elems.serialize(serializer)
     }

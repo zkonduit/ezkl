@@ -70,7 +70,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     }
 
     // if empty return a const
-    if values[0].len() == 0 && values[1].len() == 0 {
+    if values[0].is_empty() && values[1].is_empty() {
         return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
     }
 
@@ -367,13 +367,13 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
             })?;
 
             assert_eq!(
-                Into::<Tensor<i32>>::into(output.clone().get_inner()?),
+                Into::<Tensor<i32>>::into(output.get_inner()?),
                 Into::<Tensor<i32>>::into(safe_einsum),
             )
         }
     }
 
-    Ok(output.into())
+    Ok(output)
 }
 
 /// Sum accumulated layout
@@ -684,9 +684,9 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
                         if both_null {
                             ValType::Constant(F::ZERO)
                         } else if a_is_null {
-                            b.clone()
+                            b
                         } else if b_is_null {
-                            a.clone()
+                            a
                         } else {
                             ValType::Constant(F::ZERO)
                         }
@@ -702,7 +702,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
                                 .unwrap()[0]
                                 .clone()
                         } else if b_is_null {
-                            a.clone()
+                            a
                         } else {
                             ValType::Constant(F::ZERO)
                         }

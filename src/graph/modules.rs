@@ -244,7 +244,7 @@ impl GraphModules {
             if visibility.is_hashed() {
                 instances
                     .poseidon
-                    .extend(res.poseidon_hash.clone().unwrap().0.clone());
+                    .extend(res.poseidon_hash.clone().unwrap().0);
             } else if visibility.is_encrypted() {
                 instances.elgamal.extend(
                     res.elgamal
@@ -432,7 +432,7 @@ impl GraphModules {
             let ciphertexts = inputs.iter().fold(vec![], |mut acc, x| {
                 let res = ElGamalGadget::run((x.to_vec(), variables.clone()))
                     .unwrap()
-                    .clone();
+                    ;
                 acc.extend(res);
                 acc
             });

@@ -1800,7 +1800,7 @@ mod native_tests {
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--compiled-model",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!("--settings-path={}", settings_path).as_str(),
+                (format!("--settings-path={}", settings_path).as_str()),
             ])
             .status()
             .expect("failed to execute process");

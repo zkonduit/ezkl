@@ -981,7 +981,7 @@ impl<T: TensorType + Neg<Output = T> + std::marker::Send + std::marker::Sync> Ne
     /// assert_eq!(result, expected);
     /// ```
     fn neg(self) -> Self {
-        let mut output = self.clone();
+        let mut output = self;
         output.par_iter_mut().for_each(|x| {
             *x = x.clone().neg();
         });
