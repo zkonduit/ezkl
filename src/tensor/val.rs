@@ -15,6 +15,8 @@ pub enum ValType<F: PrimeField + TensorType + std::marker::Send + std::marker::S
     PrevAssigned(AssignedCell<F, F>),
     /// constant
     Constant(F),
+    /// assigned constant
+    AssignedConstant(AssignedCell<F, F>, F),
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> From<ValType<F>> for i32 {
@@ -40,7 +42,7 @@ impl<F: PrimeField + TensorType + PartialOrd> From<ValType<F>> for i32 {
                 });
                 output
             }
-            ValType::PrevAssigned(v) => {
+            ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
                 let mut output = 0_i32;
                 let mut i = 0;
                 v.value().map(|y| {
@@ -222,9 +224,11 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                     ValType::AssignedValue(v) => v.map(|f| {
                         felt_evals.push(f.evaluate());
                     }),
-                    ValType::PrevAssigned(v) => v.value_field().map(|f| {
-                        felt_evals.push(f.evaluate());
-                    }),
+                    ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
+                        v.value_field().map(|f| {
+                            felt_evals.push(f.evaluate());
+                        })
+                    }
                     ValType::Constant(v) => {
                         felt_evals.push(v);
                         Value::unknown()
@@ -254,9 +258,11 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                     ValType::AssignedValue(v) => v.map(|f| {
                         integer_evals.push(crate::fieldutils::felt_to_i128(f.evaluate()));
                     }),
-                    ValType::PrevAssigned(v) => v.value_field().map(|f| {
-                        integer_evals.push(crate::fieldutils::felt_to_i128(f.evaluate()));
-                    }),
+                    ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
+                        v.value_field().map(|f| {
+                            integer_evals.push(crate::fieldutils::felt_to_i128(f.evaluate()));
+                        })
+                    }
                     ValType::Constant(v) => {
                         integer_evals.push(crate::fieldutils::felt_to_i128(v));
                         Value::unknown()
@@ -302,7 +308,9 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             ValTensor::Value { inner: v, .. } => v.map(|x| match x {
                 ValType::Value(v) => v,
                 ValType::AssignedValue(v) => v.evaluate(),
-                ValType::PrevAssigned(v) => v.value_field().evaluate(),
+                ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
+                    v.value_field().evaluate()
+                }
                 ValType::Constant(v) => Value::known(v),
             }),
             ValTensor::Instance { .. } => return Err(TensorError::WrongMethod),
@@ -422,6 +430,10 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                 let mut indices = vec![];
                 for (i, e) in v.iter().enumerate() {
                     if let ValType::Constant(r) = e {
+                        if *r == F::ZERO {
+                            indices.push(i);
+                        }
+                    } else if let ValType::AssignedConstant(_, r) = e {
                         if *r == F::ZERO {
                             indices.push(i);
                         }

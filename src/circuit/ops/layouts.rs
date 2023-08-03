@@ -65,13 +65,6 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     values[0].remove_indices(&removal_indices)?;
     values[1].remove_indices(&removal_indices)?;
 
-    if region.is_dummy() {
-        let overflowed_len =
-            overflowed_len(region.offset(), values[0].len(), config.output.col_size());
-        region.increment(overflowed_len);
-        return Ok(Tensor::from([ValType::from(Value::known(F::ZERO))].into_iter()).into());
-    }
-
     if values[0].len() != values[1].len() {
         return Err(Box::new(TensorError::DimMismatch("dot".to_string())));
     }
@@ -79,6 +72,13 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     // if empty return a const
     if values[0].len() == 0 && values[1].len() == 0 {
         return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
+    }
+
+    if region.is_dummy() {
+        let overflowed_len =
+            overflowed_len(region.offset(), values[0].len(), config.output.col_size());
+        region.increment(overflowed_len);
+        return Ok(Tensor::from([ValType::from(Value::known(F::ZERO))].into_iter()).into());
     }
 
     let mut inputs = vec![];
