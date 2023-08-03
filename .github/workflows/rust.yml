@@ -140,7 +140,7 @@ jobs:
 
   mock-proving-tests:
     runs-on: 512gb
-    needs: [build,  library-tests, docs]
+    # needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
