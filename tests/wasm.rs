@@ -9,9 +9,12 @@ mod wasm32 {
     use ezkl::graph::modules::POSEIDON_LEN_GRAPH;
     use ezkl::pfsys::Snark;
     use ezkl::wasm::{
-        elgamal_decrypt_wasm, elgamal_encrypt_wasm, poseidon_hash_wasm, prove_wasm, verify_wasm,
+        elgamal_gen_random_wasm, elgamal_decrypt_wasm, elgamal_encrypt_wasm, poseidon_hash_wasm, prove_wasm, verify_wasm,
     };
     use halo2curves::bn256::{Fr, G1Affine};
+    use rand::rngs::StdRng;
+    use rand::RngCore;     // Required for fill_bytes
+    use rand::SeedableRng;
     pub use wasm_bindgen_rayon::init_thread_pool;
     use wasm_bindgen_test::*;
 
@@ -24,6 +27,30 @@ mod wasm32 {
     pub const WITNESS: &[u8] = include_bytes!("../tests/wasm/test.witness.json");
     pub const PROOF: &[u8] = include_bytes!("../tests/wasm/test.proof");
     pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/test.onnx");
+
+    #[wasm_bindgen_test]
+    async fn verify_elgamal_gen_random_wasm() {
+        // Generate a seed value
+        let mut seed = [0u8; 32];
+        let mut rng = test_rng();
+        rng.fill_bytes(&mut seed);
+    
+        // Convert the seed to a wasm-friendly format
+        let wasm_seed = wasm_bindgen::Clamped(seed.to_vec());
+    
+        // Use the seed to generate ElGamal variables via WASM function
+        let wasm_output = elgamal_gen_random_wasm(wasm_seed);
+    
+        // Deserialize the WASM output back into ElGamal variables
+        let wasm_vars: ElGamalVariables = serde_json::from_slice(&wasm_output[..]).unwrap();
+    
+        // Use the same seed to generate ElGamal variables directly
+        let mut rng_from_seed = StdRng::from_seed(seed);
+        let direct_vars = ElGamalVariables::gen_random(&mut rng_from_seed);
+    
+        // Check if both variables are the same
+        assert_eq!(direct_vars, wasm_vars)
+    }
 
     #[wasm_bindgen_test]
     async fn verify_elgamal_wasm() {
