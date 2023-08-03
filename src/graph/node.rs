@@ -97,7 +97,7 @@ impl Node {
         let mut opkind = new_op_from_onnx(idx, scale, param_visibility, node.clone(), &mut inputs)?; // parses the op name
 
         // we can only take the inputs as mutable once -- so we need to collect them first
-        let remaining_inputs = inputs.iter().map(|i| i.node).collect::<Vec<_>>();
+        let remaining_inputs = inputs.iter().map(|i| i.idx()).collect::<Vec<_>>();
         input_ids.retain(|&x| remaining_inputs.contains(&x));
 
         // rescale the inputs if necessary to get consistent fixed points
