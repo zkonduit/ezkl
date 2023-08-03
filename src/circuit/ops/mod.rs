@@ -119,11 +119,16 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
         region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        Ok(Some(super::layouts::identity(
-            config,
-            region,
-            values[..].try_into()?,
-        )?))
+        let value = values[0].clone();
+        if !value.all_prev_assigned() {
+            Ok(Some(super::layouts::identity(
+                config,
+                region,
+                values[..].try_into()?,
+            )?))
+        } else {
+            Ok(Some(value))
+        }
     }
 
     fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {

@@ -139,7 +139,7 @@ jobs:
         run: cargo nextest run --release --verbose tests::tutorial_
 
   mock-proving-tests:
-    runs-on: ubuntu-latest-32-cores
+    runs-on: 512gb
     needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
@@ -178,6 +178,8 @@ jobs:
         run: cargo nextest run --release --verbose tests::mock_encrypted_all_::t  --test-threads 32
       - name: Mock proving tests (encrypted inputs + hashed params)
         run: cargo nextest run --release --verbose tests::mock_encrypted_input_hashed_params_::t  --test-threads 32
+      - name: Self Attention Mock
+        run: cargo test --release --verbose tests::large_mock_::large_tests_0_expects -- --include-ignored
 
   prove-and-verify-evm-tests:
     runs-on: ubuntu-latest-16-cores
@@ -417,7 +419,7 @@ jobs:
         run: source .env/bin/activate; pytest
 
   python-integration-tests:
-      runs-on: 512gb
+      runs-on: 768gb
       # needs: [build,  library-tests, docs]
       steps:
         - uses: actions/checkout@v3

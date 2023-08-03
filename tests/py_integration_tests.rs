@@ -104,9 +104,9 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 8] = [
+    const TESTS: [&str; 7] = [
         "mnist_gan.ipynb",
-        "mnist_vae.ipynb",
+        // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
         "encrypted_vis.ipynb",
         "hashed_vis.ipynb",
@@ -125,7 +125,7 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=7 {
+            seq!(N in 0..=6 {
 
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {

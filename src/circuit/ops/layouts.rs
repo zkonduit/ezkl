@@ -1082,12 +1082,18 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     stride: (usize, usize),
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let has_bias = values.len() == 3;
-    let (image, kernel) = (values[0].clone(), values[1].clone());
+    let (mut image, mut kernel) = (values[0].clone(), values[1].clone());
 
-    // assign the kernel
-    let kernel = region.assign(&config.inputs[0], &kernel)?;
-    // assign the image
-    let mut image = region.assign(&config.inputs[1], &image)?;
+    // we specifically want to use the same kernel and image for all the convolutions and need to enforce this by assigning them
+    // 1. assign the kernel
+    if !kernel.all_prev_assigned() {
+        kernel = region.assign(&config.inputs[0], &kernel)?;
+    }
+    // 2. assign the image
+    if !image.all_prev_assigned() {
+        image = region.assign(&config.inputs[1], &image)?;
+    }
+
     // increment the region
     region.increment(std::cmp::max(image.len(), kernel.len()));
 

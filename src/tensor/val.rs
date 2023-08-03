@@ -19,6 +19,16 @@ pub enum ValType<F: PrimeField + TensorType + std::marker::Send + std::marker::S
     AssignedConstant(AssignedCell<F, F>, F),
 }
 
+impl<F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd> ValType<F> {
+    /// Returns true if the value is previously assigned.
+    pub fn is_prev_assigned(&self) -> bool {
+        match self {
+            ValType::PrevAssigned(_) | ValType::AssignedConstant(..) => true,
+            _ => false,
+        }
+    }
+}
+
 impl<F: PrimeField + TensorType + PartialOrd> From<ValType<F>> for i32 {
     fn from(val: ValType<F>) -> Self {
         match val {
@@ -190,6 +200,14 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             inner: col,
             dims,
             scale,
+        }
+    }
+
+    /// Returns true if all the [ValTensor]'s [Value]s are assigned.
+    pub fn all_prev_assigned(&self) -> bool {
+        match self {
+            ValTensor::Value { inner, .. } => inner.iter().all(|x| x.is_prev_assigned()),
+            ValTensor::Instance { .. } => false,
         }
     }
 

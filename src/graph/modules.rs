@@ -279,8 +279,7 @@ impl GraphModules {
                 let total_len = shape.iter().product::<usize>();
                 sizes.poseidon.0 += POSEIDON_CONSTRAINTS_ESTIMATE * total_len;
                 if total_len > 0 {
-                    sizes.poseidon.0 +=
-                        POSEIDOIN_FIXED_COST_ESTIMATE * ((sizes.poseidon.0 == 0) as usize);
+                    sizes.poseidon.0 += POSEIDOIN_FIXED_COST_ESTIMATE;
                     sizes.poseidon.1[0] += 1;
                 }
             }
