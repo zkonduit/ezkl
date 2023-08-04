@@ -1232,11 +1232,12 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !output.get_inner()?.iter().any(|&x| {
+        let is_assigned = !image.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
             x.map(|_| is_empty = false);
             is_empty
         });
+
         if is_assigned {
             let safe_conv = non_accum_conv(
                 &values
