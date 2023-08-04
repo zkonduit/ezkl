@@ -348,11 +348,11 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !output.get_inner()?.iter().any(|&x| {
-            let mut is_empty = true;
-            x.map(|_| is_empty = false);
-            is_empty
-        });
+        let mut is_assigned = !output.any_unknowns();
+        for val in inputs.iter() {
+            is_assigned = !val.any_unknowns();
+        }
+
         if is_assigned {
             let safe_einsum = non_accum_einsum(
                 &original_eq,
@@ -838,11 +838,10 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !last_elem.get_inner()?.iter().any(|&x| {
-            let mut is_empty = true;
-            x.map(|_| is_empty = false);
-            is_empty
-        });
+        let mut is_assigned = !last_elem.any_unknowns();
+        for val in values.iter() {
+            is_assigned = !val.any_unknowns();
+        }
         if is_assigned {
             let safe_sumpool =
                 non_accum_sumpool(&values[0].get_inner()?, padding, stride, kernel_shape).map_err(
@@ -922,11 +921,10 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !res.get_inner()?.iter().any(|&x| {
-            let mut is_empty = true;
-            x.map(|_| is_empty = false);
-            is_empty
-        });
+        let mut is_assigned = !res.any_unknowns();
+        for val in values.iter() {
+            is_assigned = !val.any_unknowns();
+        }
         if is_assigned {
             let raw_values = Into::<Tensor<i32>>::into(image.get_inner()?);
             let safe_max_pool = non_accum_max_pool2d(&raw_values, &padding, &stride, &pool_dims)?;
@@ -1043,11 +1041,10 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !output.get_inner()?.iter().any(|&x| {
-            let mut is_empty = true;
-            x.map(|_| is_empty = false);
-            is_empty
-        });
+        let mut is_assigned = !output.any_unknowns();
+        for val in inputs.iter() {
+            is_assigned = !val.any_unknowns();
+        }
         if is_assigned {
             let safe_conv = non_accum_deconv(
                 &inputs
@@ -1232,12 +1229,10 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !image.get_inner()?.iter().any(|&x| {
-            let mut is_empty = true;
-            x.map(|_| is_empty = false);
-            is_empty
-        });
-
+        let mut is_assigned = !output.any_unknowns();
+        for val in [image, kernel].iter() {
+            is_assigned = !val.any_unknowns();
+        }
         if is_assigned {
             let safe_conv = non_accum_conv(
                 &values
@@ -1278,11 +1273,10 @@ pub fn pow<F: PrimeField + TensorType + PartialOrd>(
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !t.get_inner()?.iter().any(|&x| {
-            let mut is_empty = true;
-            x.map(|_| is_empty = false);
-            is_empty
-        });
+        let mut is_assigned = !t.any_unknowns();
+        for val in values.iter() {
+            is_assigned = !val.any_unknowns();
+        }
         if is_assigned {
             let safe_pow = values[0].get_inner().unwrap().pow(exponent).map_err(|e| {
                 error!("{}", e);
@@ -1363,11 +1357,10 @@ pub fn pack<F: PrimeField + TensorType + PartialOrd>(
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !res.get_inner()?.iter().any(|&x| {
-            let mut is_empty = true;
-            x.map(|_| is_empty = false);
-            is_empty
-        });
+        let mut is_assigned = !res.any_unknowns();
+        for val in values.iter() {
+            is_assigned = !val.any_unknowns();
+        }
         if is_assigned {
             let safe_pow = non_accum_pack(&values[0].get_inner()?, Value::known(base_t), scale)
                 .map_err(|e| {
@@ -1582,11 +1575,10 @@ pub fn abs<F: PrimeField + TensorType + PartialOrd>(
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !abs.get_inner()?.iter().any(|&x| {
-            let mut is_empty = true;
-            x.map(|_| is_empty = false);
-            is_empty
-        });
+        let mut is_assigned = !abs.any_unknowns();
+        for val in values.iter() {
+            is_assigned = !val.any_unknowns();
+        }
         if is_assigned {
             let mut ref_abs: Tensor<i32> =
                 tensor::ops::abs(&values[0].get_int_evals()?)?.map(|x| x as i32);
@@ -1675,11 +1667,10 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !assigned_max_val.get_inner()?.iter().any(|&x| {
-            let mut is_empty = true;
-            x.map(|_| is_empty = false);
-            is_empty
-        });
+        let mut is_assigned = !assigned_max_val.any_unknowns();
+        for val in values.iter() {
+            is_assigned = !val.any_unknowns();
+        }
         if is_assigned {
             let ref_max: Tensor<i32> = Tensor::new(
                 Some(&[values[0].get_int_evals()?.into_iter().max().unwrap() as i32]),
@@ -1772,11 +1763,10 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !assigned_min_val.get_inner()?.iter().any(|&x| {
-            let mut is_empty = true;
-            x.map(|_| is_empty = false);
-            is_empty
-        });
+        let mut is_assigned = !assigned_min_val.any_unknowns();
+        for val in values.iter() {
+            is_assigned = !val.any_unknowns();
+        }
         if is_assigned {
             let ref_min: Tensor<i32> = Tensor::new(
                 Some(&[values[0].get_int_evals()?.into_iter().min().unwrap() as i32]),
@@ -1867,11 +1857,10 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !softmax.get_inner()?.iter().any(|&x| {
-            let mut is_empty = true;
-            x.map(|_| is_empty = false);
-            is_empty
-        });
+        let mut is_assigned = !softmax.any_unknowns();
+        for val in values.iter() {
+            is_assigned = !val.any_unknowns();
+        }
         if is_assigned {
             let int_evals = Tensor::new(Some(&values[0].get_int_evals()?), values[0].dims())?;
             // scale is double the output
