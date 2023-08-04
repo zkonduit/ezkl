@@ -792,11 +792,7 @@ mod add_w_shape_casting {
                     |region| {
                         let mut region = RegionCtx::new(region, 0);
                         config
-                            .layout(
-                                &mut region,
-                                &self.inputs.clone(),
-                                Box::new(PolyOp::Add { a: None }),
-                            )
+                            .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Add))
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -863,11 +859,7 @@ mod add {
                     |region| {
                         let mut region = RegionCtx::new(region, 0);
                         config
-                            .layout(
-                                &mut region,
-                                &self.inputs.clone(),
-                                Box::new(PolyOp::Add { a: None }),
-                            )
+                            .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Add))
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -934,11 +926,7 @@ mod add_with_overflow {
                     |region| {
                         let mut region = RegionCtx::new(region, 0);
                         config
-                            .layout(
-                                &mut region,
-                                &self.inputs.clone(),
-                                Box::new(PolyOp::Add { a: None }),
-                            )
+                            .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Add))
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -1038,7 +1026,7 @@ mod add_with_overflow_and_poseidon {
                     let mut region = RegionCtx::new(region, 0);
                     config
                         .base
-                        .layout(&mut region, &inputs, Box::new(PolyOp::Add { a: None }))
+                        .layout(&mut region, &inputs, Box::new(PolyOp::Add))
                         .map_err(|_| Error::Synthesis)
                 },
             )?;
@@ -1210,11 +1198,7 @@ mod mult {
                     |region| {
                         let mut region = RegionCtx::new(region, 0);
                         config
-                            .layout(
-                                &mut region,
-                                &self.inputs.clone(),
-                                Box::new(PolyOp::Mult { a: None }),
-                            )
+                            .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Mult))
                             .map_err(|_| Error::Synthesis)
                     },
                 )

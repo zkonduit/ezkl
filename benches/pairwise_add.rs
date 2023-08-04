@@ -54,7 +54,7 @@ impl Circuit<Fr> for MyCircuit {
             |region| {
                 let mut region = region::RegionCtx::new(region, 0);
                 config
-                    .layout(&mut region, &self.inputs, Box::new(PolyOp::Add { a: None }))
+                    .layout(&mut region, &self.inputs, Box::new(PolyOp::Add))
                     .unwrap();
                 Ok(())
             },
