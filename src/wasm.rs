@@ -32,7 +32,7 @@ use crate::graph::{GraphCircuit, GraphSettings};
 /// Generate a poseidon hash in browser. Input message
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn poseidonHashWasm(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
+pub fn poseidonHash(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
     let message: Vec<Fr> = serde_json::from_slice(&message[..]).unwrap();
 
     let output =
@@ -48,7 +48,7 @@ pub fn poseidonHashWasm(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
 /// Make sure input seed comes a secure source of randomness
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn elgamalGenRandomWasm(
+pub fn elgamalGenRandom(
     rng: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Vec<u8> {
 
@@ -63,7 +63,7 @@ pub fn elgamalGenRandomWasm(
 /// Encrypt using elgamal in browser. Input message
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn elgamalEncryptWasm(
+pub fn elgamalEncrypt(
     pk: wasm_bindgen::Clamped<Vec<u8>>,
     message: wasm_bindgen::Clamped<Vec<u8>>,
     r: wasm_bindgen::Clamped<Vec<u8>>,
@@ -80,7 +80,7 @@ pub fn elgamalEncryptWasm(
 /// Decrypt using elgamal in browser. Input message
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn elgamalDecryptWasm(
+pub fn elgamalDecrypt(
     cipher: wasm_bindgen::Clamped<Vec<u8>>,
     sk: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Vec<u8> {
@@ -95,7 +95,7 @@ pub fn elgamalDecryptWasm(
 /// Verify proof in browser using wasm
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn verifyWasm(
+pub fn verify(
     proof_js: wasm_bindgen::Clamped<Vec<u8>>,
     vk: wasm_bindgen::Clamped<Vec<u8>>,
     circuit_settings_ser: wasm_bindgen::Clamped<Vec<u8>>,
@@ -132,7 +132,7 @@ pub fn verifyWasm(
 /// Prove in browser using wasm
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn proveWasm(
+pub fn prove(
     witness: wasm_bindgen::Clamped<Vec<u8>>,
     pk: wasm_bindgen::Clamped<Vec<u8>>,
     circuit_ser: wasm_bindgen::Clamped<Vec<u8>>,
