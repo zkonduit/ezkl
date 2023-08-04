@@ -350,7 +350,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let mut is_assigned = !output.any_unknowns();
         for val in inputs.iter() {
-            is_assigned = !val.any_unknowns();
+            is_assigned = is_assigned && !val.any_unknowns();
         }
 
         if is_assigned {
@@ -840,7 +840,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let mut is_assigned = !last_elem.any_unknowns();
         for val in values.iter() {
-            is_assigned = !val.any_unknowns();
+            is_assigned = is_assigned && !val.any_unknowns();
         }
         if is_assigned {
             let safe_sumpool =
@@ -923,7 +923,7 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let mut is_assigned = !res.any_unknowns();
         for val in values.iter() {
-            is_assigned = !val.any_unknowns();
+            is_assigned = is_assigned && !val.any_unknowns();
         }
         if is_assigned {
             let raw_values = Into::<Tensor<i32>>::into(image.get_inner()?);
@@ -1043,7 +1043,7 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
         // TODO: this isn't very safe and would be better to get the phase directly
         let mut is_assigned = !output.any_unknowns();
         for val in inputs.iter() {
-            is_assigned = !val.any_unknowns();
+            is_assigned = is_assigned && !val.any_unknowns();
         }
         if is_assigned {
             let safe_conv = non_accum_deconv(
@@ -1231,7 +1231,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
         // TODO: this isn't very safe and would be better to get the phase directly
         let mut is_assigned = !output.any_unknowns();
         for val in [image, kernel].iter() {
-            is_assigned = !val.any_unknowns();
+            is_assigned = is_assigned && !val.any_unknowns();
         }
         if is_assigned {
             let safe_conv = non_accum_conv(
@@ -1275,7 +1275,7 @@ pub fn pow<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let mut is_assigned = !t.any_unknowns();
         for val in values.iter() {
-            is_assigned = !val.any_unknowns();
+            is_assigned = is_assigned && !val.any_unknowns();
         }
         if is_assigned {
             let safe_pow = values[0].get_inner().unwrap().pow(exponent).map_err(|e| {
@@ -1359,7 +1359,7 @@ pub fn pack<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let mut is_assigned = !res.any_unknowns();
         for val in values.iter() {
-            is_assigned = !val.any_unknowns();
+            is_assigned = is_assigned && !val.any_unknowns();
         }
         if is_assigned {
             let safe_pow = non_accum_pack(&values[0].get_inner()?, Value::known(base_t), scale)
@@ -1577,7 +1577,7 @@ pub fn abs<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let mut is_assigned = !abs.any_unknowns();
         for val in values.iter() {
-            is_assigned = !val.any_unknowns();
+            is_assigned = is_assigned && !val.any_unknowns();
         }
         if is_assigned {
             let mut ref_abs: Tensor<i32> =
@@ -1669,7 +1669,7 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let mut is_assigned = !assigned_max_val.any_unknowns();
         for val in values.iter() {
-            is_assigned = !val.any_unknowns();
+            is_assigned = is_assigned && !val.any_unknowns();
         }
         if is_assigned {
             let ref_max: Tensor<i32> = Tensor::new(
@@ -1765,7 +1765,7 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let mut is_assigned = !assigned_min_val.any_unknowns();
         for val in values.iter() {
-            is_assigned = !val.any_unknowns();
+            is_assigned = is_assigned && !val.any_unknowns();
         }
         if is_assigned {
             let ref_min: Tensor<i32> = Tensor::new(
@@ -1859,7 +1859,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let mut is_assigned = !softmax.any_unknowns();
         for val in values.iter() {
-            is_assigned = !val.any_unknowns();
+            is_assigned = is_assigned && !val.any_unknowns();
         }
         if is_assigned {
             let int_evals = Tensor::new(Some(&values[0].get_int_evals()?), values[0].dims())?;
