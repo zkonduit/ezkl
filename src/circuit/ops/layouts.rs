@@ -1086,16 +1086,20 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
 
     // we specifically want to use the same kernel and image for all the convolutions and need to enforce this by assigning them
     // 1. assign the kernel
+    let mut assigned_kernel_len = 0;
     if !kernel.all_prev_assigned() {
         kernel = region.assign(&config.inputs[0], &kernel)?;
+        assigned_kernel_len = kernel.len();
     }
     // 2. assign the image
+    let mut assigned_image_len = 0;
     if !image.all_prev_assigned() {
         image = region.assign(&config.inputs[1], &image)?;
+        assigned_image_len = image.len();
     }
 
     // increment the region
-    region.increment(std::cmp::max(image.len(), kernel.len()));
+    region.increment(std::cmp::max(assigned_image_len, assigned_kernel_len));
 
     let og_dims = image.dims().to_vec();
 
