@@ -346,7 +346,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     let output: ValTensor<F> = output.into();
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !output.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
@@ -836,7 +836,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
     last_elem.reshape(&[&[batch_size, image_channels], shape].concat())?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !last_elem.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
@@ -920,7 +920,7 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     let res: ValTensor<F> = output.into();
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !res.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
@@ -1041,7 +1041,7 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
     let output = conv(config, region, &conv_input, (0, 0), (1, 1))?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !output.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
@@ -1230,7 +1230,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     let output: ValTensor<_> = output.into();
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !output.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
@@ -1275,7 +1275,7 @@ pub fn pow<F: PrimeField + TensorType + PartialOrd>(
     }
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !t.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
@@ -1360,7 +1360,7 @@ pub fn pack<F: PrimeField + TensorType + PartialOrd>(
     let res = sum(config, region, &[base_prod])?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !res.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
@@ -1579,7 +1579,7 @@ pub fn abs<F: PrimeField + TensorType + PartialOrd>(
     let abs = pairwise(config, region, &[relu_x, relu_neg_x], BaseOp::Add)?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !abs.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
@@ -1672,7 +1672,7 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
     region.increment(relu_one_minus_sum_relu.len());
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !assigned_max_val.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
@@ -1769,7 +1769,7 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     region.increment(relu_one_minus_sum_relu.len());
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !assigned_min_val.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
@@ -1864,7 +1864,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
     let softmax = pairwise(config, region, &[ex, inv_denom], BaseOp::Mult)?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !softmax.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
