@@ -152,7 +152,7 @@ fn load_axis_op(
     Ok(op.clone())
 }
 
-/// Extracts an axis op from an onnx node.
+/// Extracts a const node from an onnx node.
 fn load_const(
     op: &dyn tract_onnx::prelude::Op,
     idx: usize,
@@ -243,7 +243,7 @@ pub fn new_op_from_onnx(
     scale: u32,
     param_visibility: Visibility,
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
-    inputs: &mut Vec<super::NodeType>,
+    inputs: &mut Vec<&mut super::NodeType>,
 ) -> Result<Box<dyn crate::circuit::Op<Fp>>, Box<dyn std::error::Error>> {
     debug!("Loading node: {:?}", node);
     Ok(match node.op().name().as_ref() {
@@ -268,7 +268,10 @@ pub fn new_op_from_onnx(
                 }
             };
 
-            inputs.pop();
+            if let Some(node) = inputs.last_mut() {
+                node.decrement_const();
+                inputs.pop();
+            }
 
             Box::new(crate::circuit::ops::poly::PolyOp::Gather { dim: axis, index })
         }
@@ -310,11 +313,11 @@ pub fn new_op_from_onnx(
             // Quantize the raw value
             let quantized_value =
                 quantize_tensor(raw_value.clone(), constant_scale, param_visibility)?;
+
+            let mut c = crate::circuit::ops::Constant::new(quantized_value, raw_value);
+            c.num_uses += node.outputs.len();
             // Create a constant op
-            Box::new(crate::circuit::ops::Constant::new(
-                quantized_value,
-                raw_value,
-            ))
+            Box::new(c)
         }
         "Reduce<Min>" => {
             if inputs.len() != 1 {
@@ -345,7 +348,6 @@ pub fn new_op_from_onnx(
         }
         "Max" => {
             // Extract the slope layer hyperparams
-
             let boxed_op = inputs[1].clone().opkind();
             let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
                 if c.len() == 1 {
@@ -358,7 +360,10 @@ pub fn new_op_from_onnx(
             };
 
             if inputs.len() == 2 && unit == 0. {
-                inputs.pop();
+                if let Some(node) = inputs.last_mut() {
+                    node.decrement_const();
+                    inputs.pop();
+                }
                 Box::new(LookupOp::ReLU {
                     scale: inputs[0].out_scales()[0] as usize,
                 })
@@ -415,27 +420,73 @@ pub fn new_op_from_onnx(
         "Erf" => Box::new(LookupOp::Erf { scales: (1, 1) }),
         "Source" => Box::new(crate::circuit::ops::Input { scale }),
         "Add" => {
-            let mut params = None;
-
+            // get the max scale of inputs
             let max_scale = inputs
                 .iter()
                 .map(|x| x.out_scales()[0])
                 .max()
                 .ok_or_else(|| Box::new(GraphError::MissingParams("add".to_string())))?;
 
-            for (idx, inp) in inputs.clone().iter().enumerate() {
+            for inp in inputs.iter_mut() {
                 let boxed_op = inp.opkind();
-                if let Some(c) = extract_const_raw_values(boxed_op) {
-                    inputs.remove(idx);
-                    params = Some(quantize_tensor(c, max_scale, param_visibility)?);
+                if let Some(mut n) = downcast_const_op(boxed_op) {
+                    if n.is_single_use() {
+                        log::debug!("requantizing #{} to {} for add", inp.idx(), max_scale);
+                        n.requantize(max_scale)?;
+                        inp.bump_scale(max_scale);
+                        inp.replace_opkind(Box::new(n));
+                    }
                 }
             }
 
-            Box::new(PolyOp::Add { a: params })
+            Box::new(PolyOp::Add)
         }
-        "Sub" => Box::new(PolyOp::Sub),
-        "Mul" => Box::new(PolyOp::Mult { a: None }),
+        "Sub" => {
+            // get the max scale of inputs
+            let max_scale = inputs
+                .iter()
+                .map(|x| x.out_scales()[0])
+                .max()
+                .ok_or_else(|| Box::new(GraphError::MissingParams("add".to_string())))?;
+
+            for inp in inputs.iter_mut() {
+                let boxed_op = inp.opkind();
+                if let Some(mut n) = downcast_const_op(boxed_op) {
+                    if n.is_single_use() {
+                        log::debug!("requantizing #{} to {} fro sub", inp.idx(), max_scale);
+                        n.requantize(max_scale)?;
+                        inp.bump_scale(max_scale);
+                        inp.replace_opkind(Box::new(n));
+                    }
+                }
+            }
+
+            Box::new(PolyOp::Sub)
+        }
+        "Mul" => Box::new(PolyOp::Mult),
         "Iff" => Box::new(PolyOp::Iff),
+        "Less" => {
+            // Extract the slope layer hyperparams
+            let boxed_op = inputs[0].clone().opkind();
+            let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
+                if c.len() == 1 {
+                    c[0]
+                } else {
+                    todo!()
+                }
+            } else {
+                return Err(Box::new(GraphError::OpMismatch(idx, "less".to_string())));
+            };
+
+            if inputs.len() == 2 {
+                inputs.remove(0);
+                Box::new(LookupOp::LessThan {
+                    a: crate::circuit::utils::F32(unit),
+                })
+            } else {
+                todo!()
+            }
+        }
         "Greater" => {
             // Extract the slope layer hyperparams
             let boxed_op = inputs[0].clone().opkind();
@@ -450,7 +501,7 @@ pub fn new_op_from_onnx(
             };
 
             if inputs.len() == 2 {
-                *inputs = vec![inputs[1].clone()];
+                inputs.remove(0);
                 Box::new(LookupOp::GreaterThan {
                     a: crate::circuit::utils::F32(unit),
                 })
@@ -567,8 +618,9 @@ pub fn new_op_from_onnx(
                     return Err(Box::new(GraphError::MissingParams("strides".to_string())));
                 }
             };
+
             let padding = match &conv_node.pool_spec.padding {
-                PaddingSpec::Explicit(p, _, _) => p,
+                PaddingSpec::Explicit(_, p, _) => p,
                 _ => {
                     return Err(Box::new(GraphError::MissingParams("padding".to_string())));
                 }
@@ -706,9 +758,15 @@ pub fn new_op_from_onnx(
             };
 
             // remove the resize node from the inputs
-            inputs.pop();
+            if let Some(node) = inputs.last_mut() {
+                node.decrement_const();
+                inputs.pop();
+            }
             // remove the scale factor node from the inputs
-            inputs.pop();
+            if let Some(node) = inputs.last_mut() {
+                node.decrement_const();
+                inputs.pop();
+            }
 
             Box::new(PolyOp::Resize { scale_factor })
         }
@@ -815,6 +873,15 @@ pub fn new_op_from_onnx(
     })
 }
 
+///
+pub fn downcast_const_op(
+    boxed_op: Box<dyn crate::circuit::Op<Fp>>,
+) -> Option<crate::circuit::ops::Constant<Fp>> {
+    boxed_op
+        .as_any()
+        .downcast_ref::<crate::circuit::ops::Constant<Fp>>().cloned()
+}
+
 /// Extracts the raw values from a [crate::circuit::ops::Constant] op.
 pub fn extract_const_raw_values(boxed_op: Box<dyn crate::circuit::Op<Fp>>) -> Option<Tensor<f32>> {
     boxed_op
@@ -831,6 +898,21 @@ pub fn extract_const_quantized_values(
         .as_any()
         .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
         .map(|c| c.quantized_values.clone())
+}
+
+/// Extract the quantized values from a conv op
+pub fn extract_conv_values(boxed_op: Box<dyn crate::circuit::Op<Fp>>) -> [Option<Tensor<Fp>>; 2] {
+    let op = boxed_op
+        .as_any()
+        .downcast_ref::<crate::circuit::ops::poly::PolyOp<Fp>>();
+
+    if let Some(op) = op {
+        match op {
+            PolyOp::Conv { kernel, bias, .. } => return [Some(kernel.clone()), bias.clone()],
+            _ => {}
+        }
+    }
+    [None, None]
 }
 
 /// Converts a tensor to a [ValTensor] with a given scale.

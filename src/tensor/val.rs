@@ -15,6 +15,18 @@ pub enum ValType<F: PrimeField + TensorType + std::marker::Send + std::marker::S
     PrevAssigned(AssignedCell<F, F>),
     /// constant
     Constant(F),
+    /// assigned constant
+    AssignedConstant(AssignedCell<F, F>, F),
+}
+
+impl<F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd> ValType<F> {
+    /// Returns true if the value is previously assigned.
+    pub fn is_prev_assigned(&self) -> bool {
+        match self {
+            ValType::PrevAssigned(_) | ValType::AssignedConstant(..) => true,
+            _ => false,
+        }
+    }
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> From<ValType<F>> for i32 {
@@ -40,7 +52,7 @@ impl<F: PrimeField + TensorType + PartialOrd> From<ValType<F>> for i32 {
                 });
                 output
             }
-            ValType::PrevAssigned(v) => {
+            ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
                 let mut output = 0_i32;
                 let mut i = 0;
                 v.value().map(|y| {
@@ -84,10 +96,10 @@ where
     F: Field,
 {
     fn zero() -> Option<Self> {
-        Some(ValType::Value(Value::known(<F as Field>::ZERO)))
+        Some(ValType::Constant(<F as Field>::ZERO))
     }
     fn one() -> Option<Self> {
-        Some(ValType::Value(Value::known(<F as Field>::ONE)))
+        Some(ValType::Constant(<F as Field>::ONE))
     }
 }
 
@@ -190,6 +202,22 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             scale,
         }
     }
+    ///
+    pub fn any_unknowns(&self) -> bool {
+        self.get_inner().unwrap().iter().any(|&x| {
+            let mut is_empty = true;
+            x.map(|_| is_empty = false);
+            is_empty
+        })
+    }
+
+    /// Returns true if all the [ValTensor]'s [Value]s are assigned.
+    pub fn all_prev_assigned(&self) -> bool {
+        match self {
+            ValTensor::Value { inner, .. } => inner.iter().all(|x| x.is_prev_assigned()),
+            ValTensor::Instance { .. } => false,
+        }
+    }
 
     /// Set the [ValTensor]'s scale.
     pub fn set_scale(&mut self, scale: u32) {
@@ -222,9 +250,11 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                     ValType::AssignedValue(v) => v.map(|f| {
                         felt_evals.push(f.evaluate());
                     }),
-                    ValType::PrevAssigned(v) => v.value_field().map(|f| {
-                        felt_evals.push(f.evaluate());
-                    }),
+                    ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
+                        v.value_field().map(|f| {
+                            felt_evals.push(f.evaluate());
+                        })
+                    }
                     ValType::Constant(v) => {
                         felt_evals.push(v);
                         Value::unknown()
@@ -254,9 +284,11 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                     ValType::AssignedValue(v) => v.map(|f| {
                         integer_evals.push(crate::fieldutils::felt_to_i128(f.evaluate()));
                     }),
-                    ValType::PrevAssigned(v) => v.value_field().map(|f| {
-                        integer_evals.push(crate::fieldutils::felt_to_i128(f.evaluate()));
-                    }),
+                    ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
+                        v.value_field().map(|f| {
+                            integer_evals.push(crate::fieldutils::felt_to_i128(f.evaluate()));
+                        })
+                    }
                     ValType::Constant(v) => {
                         integer_evals.push(crate::fieldutils::felt_to_i128(v));
                         Value::unknown()
@@ -302,7 +334,9 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             ValTensor::Value { inner: v, .. } => v.map(|x| match x {
                 ValType::Value(v) => v,
                 ValType::AssignedValue(v) => v.evaluate(),
-                ValType::PrevAssigned(v) => v.value_field().evaluate(),
+                ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
+                    v.value_field().evaluate()
+                }
                 ValType::Constant(v) => Value::known(v),
             }),
             ValTensor::Instance { .. } => return Err(TensorError::WrongMethod),
@@ -406,6 +440,49 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                 inner: v, dims: d, ..
             } => {
                 *v = v.duplicate_every_n(n, initial_offset)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        }
+        Ok(())
+    }
+
+    /// gets constants
+    pub fn get_const_zero_indices(&self) -> Result<Vec<usize>, TensorError> {
+        match self {
+            ValTensor::Value { inner: v, .. } => {
+                let mut indices = vec![];
+                for (i, e) in v.iter().enumerate() {
+                    if let ValType::Constant(r) = e {
+                        if *r == F::ZERO {
+                            indices.push(i);
+                        }
+                    } else if let ValType::AssignedConstant(_, r) = e {
+                        if *r == F::ZERO {
+                            indices.push(i);
+                        }
+                    }
+                }
+                Ok(indices)
+            }
+            ValTensor::Instance { .. } => Err(TensorError::WrongMethod),
+        }
+    }
+
+    /// removes constants with inner value 0
+    pub fn remove_indices(&mut self, indices: &[usize]) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                *v = v
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| !indices.contains(i))
+                    .map(|x| x.1.clone())
+                    .collect();
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {

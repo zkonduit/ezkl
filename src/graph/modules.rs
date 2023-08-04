@@ -20,9 +20,9 @@ pub const POSEIDON_LEN_GRAPH: usize = 10;
 pub const POSEIDON_CONSTRAINTS_ESTIMATE: usize = 44;
 /// Module sizes
 pub const ELGAMAL_CONSTRAINTS_ESTIMATE: usize = 128;
-// 2^7
+// 2^11
 /// Module sizes
-pub const POSEIDOIN_FIXED_COST_ESTIMATE: usize = 128;
+pub const POSEIDOIN_FIXED_COST_ESTIMATE: usize = 2048;
 // 2^17
 /// Module sizes
 pub const ELGAMAL_FIXED_COST_ESTIMATE: usize = 131072;
@@ -244,7 +244,7 @@ impl GraphModules {
             if visibility.is_hashed() {
                 instances
                     .poseidon
-                    .extend(res.poseidon_hash.clone().unwrap().0.clone());
+                    .extend(res.poseidon_hash.clone().unwrap().0);
             } else if visibility.is_encrypted() {
                 instances.elgamal.extend(
                     res.elgamal
@@ -279,8 +279,7 @@ impl GraphModules {
                 let total_len = shape.iter().product::<usize>();
                 sizes.poseidon.0 += POSEIDON_CONSTRAINTS_ESTIMATE * total_len;
                 if total_len > 0 {
-                    sizes.poseidon.0 +=
-                        POSEIDOIN_FIXED_COST_ESTIMATE * ((sizes.elgamal.0 == 0) as usize);
+                    sizes.poseidon.0 += POSEIDOIN_FIXED_COST_ESTIMATE;
                     sizes.poseidon.1[0] += 1;
                 }
             }
@@ -293,7 +292,7 @@ impl GraphModules {
             // 4 constraints for each ciphertext c1, c2, and sk
             if total_len > 0 {
                 // add the 1 time fixed cost of maingate + ecc chips
-                sizes.elgamal.0 += ELGAMAL_FIXED_COST_ESTIMATE * ((sizes.elgamal.0 == 0) as usize);
+                sizes.elgamal.0 += ELGAMAL_FIXED_COST_ESTIMATE;
                 sizes.elgamal.1[0] += 4;
             }
             // 1 constraint for each ciphertext c2 elem
@@ -433,7 +432,7 @@ impl GraphModules {
             let ciphertexts = inputs.iter().fold(vec![], |mut acc, x| {
                 let res = ElGamalGadget::run((x.to_vec(), variables.clone()))
                     .unwrap()
-                    .clone();
+                    ;
                 acc.extend(res);
                 acc
             });

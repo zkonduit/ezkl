@@ -210,10 +210,8 @@ where
                         .layer_config
                         .layout(
                             &mut region,
-                            &[x],
-                            Box::new(PolyOp::Add {
-                                a: Some(self.l2_params[1].clone()),
-                            }),
+                            &[x, self.l2_params[1].clone().into()],
+                            Box::new(PolyOp::Add),
                         )
                         .unwrap()
                         .unwrap();

@@ -111,10 +111,8 @@ impl<const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<LEN, BITS> {
                         .layer_config
                         .layout(
                             &mut region,
-                            &[x],
-                            Box::new(PolyOp::Add {
-                                a: Some(self.l0_params[1].clone()),
-                            }),
+                            &[x, self.l0_params[1].clone().into()],
+                            Box::new(PolyOp::Add),
                         )
                         .unwrap()
                         .unwrap();
@@ -149,10 +147,8 @@ impl<const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<LEN, BITS> {
                         .layer_config
                         .layout(
                             &mut region,
-                            &[x],
-                            Box::new(PolyOp::Add {
-                                a: Some(self.l2_params[1].clone()),
-                            }),
+                            &[x, self.l2_params[1].clone().into()],
+                            Box::new(PolyOp::Add),
                         )
                         .unwrap()
                         .unwrap();

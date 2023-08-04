@@ -161,8 +161,18 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                                     y,
                                     || *v,
                                 ),
-                                ValType::PrevAssigned(v) => Ok(v.clone()),
-                                _ => panic!("wrong input type, must be previously assigned"),
+                                ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
+                                    Ok(v.clone())
+                                }
+                                ValType::Constant(f) => region.assign_advice_from_constant(
+                                    || format!("load message_{}", i),
+                                    self.config.hash_inputs[x],
+                                    y,
+                                    *f,
+                                ),
+                                e => {
+                                    panic!("wrong input type {:?}, must be previously assigned", e)
+                                }
                             }
                         })
                         .collect(),
@@ -260,6 +270,8 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                     hash
                 })
                 .collect();
+
+            log::trace!("hashes (N={:?}) took: {:?}", len, start_time.elapsed());
 
             input_cells = hashes?;
         }

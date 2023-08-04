@@ -142,6 +142,43 @@ impl NodeType {
         }
     }
 
+    /// decrement const num times used
+    pub fn decrement_const(&mut self) {
+        match self {
+            NodeType::Node(n) => {
+                if let Some(c) = n
+                    .opkind
+                    .as_any()
+                    .downcast_ref::<crate::circuit::Constant<Fp>>()
+                {
+                    if c.num_uses > 0 {
+                        n.opkind = Box::new(crate::circuit::Constant {
+                            num_uses: c.num_uses - 1,
+                            ..c.clone()
+                        });
+                    }
+                }
+            }
+            NodeType::SubGraph { .. } => log::warn!("Cannot decrement const of subgraph"),
+        }
+    }
+
+    /// bunp scale of node
+    pub fn bump_scale(&mut self, scale: u32) {
+        match self {
+            NodeType::Node(n) => n.out_scale = scale,
+            NodeType::SubGraph { .. } => log::warn!("Cannot bump scale of subgraph"),
+        }
+    }
+
+    /// Replace the operation kind of the node.
+    pub fn replace_opkind(&mut self, opkind: Box<dyn Op<Fp>>) {
+        match self {
+            NodeType::Node(n) => n.opkind = opkind,
+            NodeType::SubGraph { .. } => log::warn!("Cannot replace opkind of subgraph"),
+        }
+    }
+
     /// Returns the operation kind of the node (if any).
     pub fn opkind(&self) -> Box<dyn Op<Fp>> {
         match self {
@@ -568,6 +605,29 @@ impl Model {
             }
         }
 
+        fn clean_useless_consts(nodes: &mut BTreeMap<usize, NodeType>) {
+            // remove all nodes that are consts with 0 uses now
+            nodes.retain(|_, n| match n {
+                NodeType::Node(n) => {
+                    if let Some(c) = n
+                        .opkind
+                        .as_any()
+                        .downcast_ref::<crate::circuit::Constant<Fp>>()
+                    {
+                        c.num_uses > 0
+                    } else {
+                        true
+                    }
+                }
+                NodeType::SubGraph { model, .. } => {
+                    clean_useless_consts(&mut model.graph.nodes);
+                    true
+                }
+            });
+        }
+
+        clean_useless_consts(&mut nodes);
+
         Ok(nodes)
     }
 
@@ -705,12 +765,24 @@ impl Model {
         region: &mut RegionCtx<Fp>,
         results: &mut BTreeMap<usize, ValTensor<Fp>>,
     ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
+        let inputs = self.graph.inputs.clone();
+        // index over results to get original inputs
+        let orig_inputs: BTreeMap<usize, _> = results
+            .clone()
+            .into_iter()
+            .filter(|(idx, _)| inputs.contains(idx))
+            .collect();
+
         for (idx, node) in self.graph.nodes.iter() {
-            let values: Vec<ValTensor<Fp>> = node
-                .inputs()
-                .iter()
-                .map(|i| results.get(i).unwrap().clone())
-                .collect_vec();
+            let values: Vec<ValTensor<Fp>> = if !node.is_input() {
+                node.inputs()
+                    .iter()
+                    .map(|i| results.get(i).unwrap().clone())
+                    .collect_vec()
+            } else {
+                // we re-assign inputs
+                vec![results.get(idx).unwrap().clone()]
+            };
 
             debug!(
                 "laying out {}: {}, offset:{}",
@@ -719,6 +791,11 @@ impl Model {
                 region.offset()
             );
             trace!("dims: {:?}", node.out_dims());
+            trace!(
+                "input_dims {:?}",
+                values.iter().map(|v| v.dims()).collect_vec()
+            );
+
             match node {
                 NodeType::Node(n) => {
                     let res = config
@@ -748,6 +825,10 @@ impl Model {
                 }
             }
         }
+
+        // we do this so we can support multiple passes of the same model and have deterministic results (Non-assigned inputs etc... etc...)
+        results.extend(orig_inputs);
+
         let output_nodes = self.graph.outputs.iter();
         debug!(
             "model outputs are nodes: {:?}",
@@ -777,7 +858,9 @@ impl Model {
         let inputs: Vec<ValTensor<Fp>> = input_shapes
             .iter()
             .map(|shape| {
-                let t: Tensor<Value<Fp>> = Tensor::new(None, shape).unwrap();
+                let mut t: Tensor<Value<Fp>> =
+                    Tensor::from(vec![Value::<Fp>::unknown(); shape.iter().product()].into_iter());
+                t.reshape(shape);
                 t.into()
             })
             .collect_vec();
@@ -818,22 +901,22 @@ impl Model {
     }
 
     /// Retrieves all constants from the model.
-    pub fn get_all_consts(&self) -> Vec<Tensor<Fp>> {
-        let mut consts = vec![];
+    pub fn get_all_params(&self) -> Vec<Tensor<Fp>> {
+        let mut params = vec![];
         for node in self.graph.nodes.values() {
             match node {
                 NodeType::Node(n) => {
                     let boxed_op = n.opkind.clone_dyn();
-                    if let Some(constant) = extract_const_quantized_values(boxed_op) {
-                        consts.push(constant);
-                    };
+                    if let Some(constant) = extract_const_quantized_values(boxed_op.clone()) {
+                        params.push(constant);
+                    }
                 }
                 NodeType::SubGraph { model, .. } => {
-                    consts.extend(model.get_all_consts());
+                    params.extend(model.get_all_params());
                 }
             }
         }
-        consts
+        params
     }
 
     /// Shapes of the computational graph's constants
@@ -874,7 +957,7 @@ impl Model {
                         n.opkind = Box::new(op);
 
                         const_idx += 1;
-                    };
+                    }
                 }
                 NodeType::SubGraph { model, .. } => {
                     model.replace_consts(consts.clone());

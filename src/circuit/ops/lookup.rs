@@ -39,6 +39,7 @@ pub enum LookupOp {
     ATanh { scales: (usize, usize) },
     Erf { scales: (usize, usize) },
     GreaterThan { a: utils::F32 },
+    LessThan { a: utils::F32 },
     Sign,
 }
 
@@ -63,6 +64,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
         let x = x[0].clone().map(|x| felt_to_i128(x));
         let res = match &self {
             LookupOp::Sign => Ok(tensor::ops::nonlinearities::sign(&x)),
+            LookupOp::LessThan { a } => Ok(tensor::ops::nonlinearities::less_than(
+                &x,
+                f32::from(*a).into(),
+            )),
             LookupOp::GreaterThan { a } => Ok(tensor::ops::nonlinearities::greater_than(
                 &x,
                 f32::from(*a).into(),
@@ -148,6 +153,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
         let name = match self {
             LookupOp::Sign => "SIGN",
             LookupOp::GreaterThan { .. } => "GREATER_THAN",
+            LookupOp::LessThan { .. } => "LESS_THAN",
             LookupOp::Recip { .. } => "RECIP",
             LookupOp::Div { .. } => "DIV",
             LookupOp::Ln { .. } => "LN",
@@ -323,6 +329,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                 ),
             }),
             LookupOp::GreaterThan { a } => Box::new(LookupOp::GreaterThan {
+                a: utils::F32(((a.0 as f64) * scale_to_multiplier(inputs_scale[0])) as f32),
+            }),
+            LookupOp::LessThan { a } => Box::new(LookupOp::LessThan {
                 a: utils::F32(((a.0 as f64) * scale_to_multiplier(inputs_scale[0])) as f32),
             }),
         }
