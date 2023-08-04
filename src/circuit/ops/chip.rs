@@ -300,7 +300,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         let table = if !self.tables.contains_key(nl) {
             // as all tables have the same input we see if there's another table who's input we can reuse
             let table = if let Some(table) = self.tables.values().next() {
-                Table::<F>::configure(cs, bits, nl, Some(table.table_input.clone()))
+                Table::<F>::configure(cs, bits, nl, Some(table.table_input))
             } else {
                 Table::<F>::configure(cs, bits, nl, None)
             };
@@ -383,15 +383,6 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         values: &[ValTensor<F>],
         op: Box<dyn Op<F>>,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        let mut cp_values = vec![];
-        for v in values.iter() {
-            if let ValTensor::Instance { .. } = v {
-                cp_values.push(super::layouts::identity(self, region, &[v.clone()])?);
-            } else {
-                cp_values.push(v.clone());
-            }
-        }
-        let res = op.layout(self, region, &cp_values);
-        res
+        op.layout(self, region, values)
     }
 }

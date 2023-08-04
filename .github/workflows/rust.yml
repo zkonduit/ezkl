@@ -84,7 +84,7 @@ jobs:
 
   wasm32-tests:
     runs-on: ubuntu-latest
-    needs: [build,  library-tests, docs]
+    # needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -94,6 +94,8 @@ jobs:
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: nanasess/setup-chromedriver@v2
+        with:
+          chromedriver-version: '115.0.5790.102'
       - name: Install wasm32-unknown-unknown
         run: rustup target add wasm32-unknown-unknown
       - name: Install wasm runner
@@ -141,8 +143,8 @@ jobs:
         run: cargo nextest run --release --verbose tests::tutorial_
 
   mock-proving-tests:
-    runs-on: ubuntu-latest-32-cores
-    needs: [build,  library-tests, docs]
+    runs-on: 512gb
+    # needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -180,6 +182,10 @@ jobs:
         run: cargo nextest run --release --verbose tests::mock_encrypted_all_::t  --test-threads 32
       - name: Mock proving tests (encrypted inputs + hashed params)
         run: cargo nextest run --release --verbose tests::mock_encrypted_input_hashed_params_::t  --test-threads 32
+      - name: Self Attention Mock
+        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_0_expects -- --include-ignored
+      - name: NanoGPT Mock
+        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_1_expects -- --include-ignored
 
   prove-and-verify-evm-tests:
     runs-on: ubuntu-latest-16-cores
@@ -419,8 +425,8 @@ jobs:
         run: source .env/bin/activate; pytest
 
   python-integration-tests:
-      runs-on: 512gb
-      needs: [build,  library-tests, docs]
+      runs-on: 768gb
+      # needs: [build,  library-tests, docs]
       steps:
         - uses: actions/checkout@v3
         - uses: actions/setup-python@v4
@@ -452,10 +458,22 @@ jobs:
         #     # now dump the contents of the file into a file called kaggle.json
         #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
         #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
-        - name: Notebook integration tests
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
         - name: Voice tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
+        - name: Gan tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
+        - name: Keras tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_1_expects
+        - name: Encrypted tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_2_expects
+        - name: Hashed tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_3_expects
+        - name: Simple tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_4_expects
+        - name: Data attestation tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_5_expects
+        - name: Variance tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
 
 
 

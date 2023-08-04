@@ -675,7 +675,6 @@ pub(crate) async fn calibrate(
                         .unwrap();
 
                     loop {
-                        //
                         // ensures we have converged
                         let params_before = circuit.settings.clone();
                         circuit

@@ -56,8 +56,29 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let mut values = values.clone();
+
+    let mut removal_indices: HashSet<usize> = HashSet::new();
+    removal_indices.extend(values[0].get_const_zero_indices()?);
+    removal_indices.extend(values[1].get_const_zero_indices()?);
+    let removal_indices = removal_indices.into_iter().collect_vec();
+    values[0].remove_indices(&removal_indices)?;
+    values[1].remove_indices(&removal_indices)?;
+
     if values[0].len() != values[1].len() {
         return Err(Box::new(TensorError::DimMismatch("dot".to_string())));
+    }
+
+    // if empty return a const
+    if values[0].is_empty() && values[1].is_empty() {
+        return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
+    }
+
+    if region.is_dummy() {
+        let overflowed_len =
+            overflowed_len(region.offset(), values[0].len(), config.output.col_size());
+        region.increment(overflowed_len);
+        return Ok(Tensor::from([ValType::<F>::from(Value::<F>::unknown())].into_iter()).into());
     }
 
     let mut inputs = vec![];
@@ -101,7 +122,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
 
     let last_elem = output
         .get_slice(&[output.len() - 1..output.len()])
-        .expect("accum poly: failed to fetch last elem");
+        .expect("dot: failed to fetch last elem");
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         let safe_dot = non_accum_dot(&inputs[..]).map_err(|e| {
@@ -198,6 +219,19 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         .filter(|&x| !common_indices_to_inputs.contains(x))
         .collect::<Vec<_>>();
 
+    let non_common_coord_size = non_common_indices
+        .iter()
+        .map(|d| {
+            // If the current index is in the output equation, then the slice should be the current coordinate
+            if output_eq.contains(**d) {
+                1
+            // Otherwise, the slice should be the entire dimension of the input tensor
+            } else {
+                *indices_to_size.get(d).unwrap()
+            }
+        })
+        .product::<usize>();
+
     let cartesian_coord = output_shape
         .iter()
         .map(|d| 0..*d)
@@ -222,51 +256,6 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     // If there are no common indices, then we need to add an empty slice to force one iteration of the loop
     if common_coord.is_empty() {
         common_coord.push(vec![]);
-    }
-
-    let non_common_coord_size = non_common_indices
-        .iter()
-        .map(|d| {
-            // If the current index is in the output equation, then the slice should be the current coordinate
-            if output_eq.contains(**d) {
-                1
-            // Otherwise, the slice should be the entire dimension of the input tensor
-            } else {
-                *indices_to_size.get(d).unwrap()
-            }
-        })
-        .product::<usize>();
-
-    // if region dummy then increment region by total used len and return
-    if region.is_dummy() {
-        let non_common_indices_size = non_common_indices
-            .into_iter()
-            .filter(|c| !output_eq.contains(**c))
-            .map(|c| indices_to_size[c])
-            .product::<usize>();
-
-        if non_common_indices_size > 1 {
-            let increment = output_shape.iter().product::<usize>()
-                * (2 * common_indices_to_inputs
-                    .into_iter()
-                    .filter(|c| !output_eq.contains(*c))
-                    .map(|c| indices_to_size[&c])
-                    .product::<usize>()
-                    * non_common_indices_size
-                    - 1);
-            region.increment(increment);
-        } else {
-            let vanilla_len = output_shape.iter().product::<usize>()
-                * (common_indices_to_inputs
-                    .into_iter()
-                    .filter(|c| !output_eq.contains(*c))
-                    .map(|c| indices_to_size[&c])
-                    .product::<usize>());
-            let overflowed_len =
-                overflowed_len(region.offset(), vanilla_len, config.output.col_size());
-            region.increment(overflowed_len);
-        }
-        return Ok(output.into());
     }
 
     output.iter_mut().enumerate().for_each(|(i, o)| {
@@ -354,12 +343,16 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         }
     });
 
+    let output: ValTensor<F> = output.into();
+
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(ValTensor::from(output.clone()).get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
+        let mut is_assigned = !output.any_unknowns();
+        for val in inputs.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
+
         if is_assigned {
             let safe_einsum = non_accum_einsum(
                 &original_eq,
@@ -374,13 +367,13 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
             })?;
 
             assert_eq!(
-                Into::<Tensor<i32>>::into(ValTensor::from(output.clone()).get_inner()?),
+                Into::<Tensor<i32>>::into(output.get_inner()?),
                 Into::<Tensor<i32>>::into(safe_einsum),
             )
         }
     }
 
-    Ok(output.into())
+    Ok(output)
 }
 
 /// Sum accumulated layout
@@ -603,22 +596,42 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 2],
     op: BaseOp,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    if values.len() != config.inputs.len() {
-        return Err(Box::new(CircuitError::DimMismatch(format!(
-            "pairwise {} layout",
-            op.as_str()
-        ))));
-    }
-
     let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
 
     let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
     lhs.expand(&broadcasted_shape)?;
     rhs.expand(&broadcasted_shape)?;
 
+    let orig_lhs = lhs.clone();
+    let orig_rhs = rhs.clone();
+
+    let zero_indices_a = lhs.get_const_zero_indices()?;
+    let zero_indices_b = rhs.get_const_zero_indices()?;
+    let zero_indices = zero_indices_a
+        .iter()
+        .chain(zero_indices_b.iter())
+        .cloned()
+        .collect::<HashSet<_>>()
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
+
+    lhs.remove_indices(&zero_indices)?;
+    rhs.remove_indices(&zero_indices)?;
+
+    if lhs.len() != rhs.len() {
+        return Err(Box::new(CircuitError::DimMismatch(format!(
+            "pairwise {} layout",
+            op.as_str()
+        ))));
+    }
+
     if region.is_dummy() {
         region.increment(lhs.len());
-        return Ok(lhs);
+        let vals = vec![ValType::Value(Value::<F>::unknown()); broadcasted_shape.iter().product()];
+        let mut tensor: Tensor<ValType<F>> = Tensor::from(vals.into_iter());
+        tensor.reshape(&broadcasted_shape);
+        return Ok(tensor.into());
     }
 
     let mut inputs = vec![];
@@ -643,7 +656,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         halo2_proofs::plonk::Error::Synthesis
     })?;
 
-    let mut output = region.assign(&config.output, &op_result.into())?;
+    let output = region.assign(&config.output, &op_result.into())?;
 
     // Enable the selectors
     (0..inputs[0].len()).for_each(|i| {
@@ -655,9 +668,59 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
 
     region.increment(output.len());
 
-    output.reshape(lhs.dims())?;
+    let mut j = 0;
+    // infill the zero indices with the correct values from values[0] or values[1]
+    let mut actual_output: ValTensor<F> =
+        Into::<Tensor<ValType<F>>>::into((0..broadcasted_shape.iter().product()).map(|i| {
+            if zero_indices.contains(&i) {
+                let a = orig_lhs.get_inner_tensor().unwrap()[i].clone();
+                let b = orig_rhs.get_inner_tensor().unwrap()[i].clone();
+                let a_is_null = zero_indices_a.contains(&i);
+                let b_is_null = zero_indices_b.contains(&i);
+                let both_null = a_is_null && b_is_null;
 
-    Ok(output)
+                match op {
+                    BaseOp::Add => {
+                        if both_null {
+                            ValType::Constant(F::ZERO)
+                        } else if a_is_null {
+                            b
+                        } else if b_is_null {
+                            a
+                        } else {
+                            ValType::Constant(F::ZERO)
+                        }
+                    }
+                    BaseOp::Sub => {
+                        if both_null {
+                            ValType::Constant(F::ZERO)
+                        } else if a_is_null {
+                            let tensor = Tensor::new(Some(&[b]), &[1]).unwrap();
+                            neg(config, region, &[tensor.into()])
+                                .unwrap()
+                                .get_inner_tensor()
+                                .unwrap()[0]
+                                .clone()
+                        } else if b_is_null {
+                            a
+                        } else {
+                            ValType::Constant(F::ZERO)
+                        }
+                    }
+                    BaseOp::Mult => ValType::Constant(F::ZERO),
+                    _ => panic!(),
+                }
+            } else {
+                let val = output.get_inner_tensor().unwrap()[j].clone();
+                j += 1;
+                val
+            }
+        }))
+        .into();
+
+    actual_output.reshape(&broadcasted_shape)?;
+
+    Ok(actual_output)
 }
 
 /// Iff
@@ -675,7 +738,6 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
     region.next();
 
     // make sure mask is boolean
-
     let assigned_mask = region.assign(&config.inputs[1], mask)?;
 
     // Enable the selectors
@@ -774,11 +836,12 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
     last_elem.reshape(&[&[batch_size, image_channels], shape].concat())?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(last_elem.clone().get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
+        let mut is_assigned = !last_elem.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
         if is_assigned {
             let safe_sumpool =
                 non_accum_sumpool(&values[0].get_inner()?, padding, stride, kernel_shape).map_err(
@@ -819,8 +882,8 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     let mut padded_image = image.clone();
     padded_image.pad(padding)?;
 
-    let horz_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
-    let vert_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
+    let vert_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
+    let horz_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
 
     let mut output: Tensor<ValType<F>> =
         Tensor::new(None, &[batch, input_channels, horz_slides, vert_slides])?;
@@ -856,11 +919,12 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     let res: ValTensor<F> = output.into();
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(res.get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
+        let mut is_assigned = !res.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
         if is_assigned {
             let raw_values = Into::<Tensor<i32>>::into(image.get_inner()?);
             let safe_max_pool = non_accum_max_pool2d(&raw_values, &padding, &stride, &pool_dims)?;
@@ -908,8 +972,9 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
 
     let (kernel_height, kernel_width) = (kernel.dims()[2], kernel.dims()[3]);
 
-    let null_val = region.assign_constant(&config.inputs[1], F::from(0))?;
-    region.next();
+    let null_val = ValType::Constant(F::ZERO);
+    // region.assign_constant(&config.inputs[1], F::from(0))?;
+    // region.next();
 
     let mut expanded_image = image.clone();
     expanded_image.intercalate_values(null_val.clone(), stride.0, 2)?;
@@ -920,24 +985,6 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
     let channel_coord = (0..kernel.dims()[0])
         .cartesian_product(0..kernel.dims()[1])
         .collect::<Vec<_>>();
-
-    let mut inverted_kernels = vec![];
-
-    for (i, j) in channel_coord {
-        let channel = kernel.get_slice(&[i..i + 1, j..j + 1])?;
-        let mut channel = Tensor::from(channel.get_inner_tensor()?.into_iter().rev());
-        channel.reshape(&[kernel.dims()[2], kernel.dims()[3]]);
-        inverted_kernels.push(channel);
-    }
-
-    let mut deconv_kernel =
-        Tensor::new(Some(&inverted_kernels), &[inverted_kernels.len()])?.combine()?;
-    deconv_kernel.reshape(&[
-        kernel.dims()[1],
-        kernel.dims()[0],
-        kernel.dims()[2],
-        kernel.dims()[3],
-    ]);
 
     let slice_coord = expanded_image
         .dims()
@@ -956,6 +1003,29 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
 
     let sliced_expanded_image = expanded_image.get_slice(&slice_coord)?;
 
+    let mut inverted_kernels = vec![];
+
+    for (i, j) in channel_coord {
+        let channel = kernel.get_slice(&[i..i + 1, j..j + 1])?;
+        let mut channel = Tensor::from(channel.get_inner_tensor()?.into_iter().rev());
+        channel.reshape(&[kernel.dims()[2], kernel.dims()[3]]);
+        inverted_kernels.push(channel);
+    }
+
+    let mut deconv_kernel =
+        Tensor::new(Some(&inverted_kernels), &[inverted_kernels.len()])?.combine()?;
+    deconv_kernel.reshape(kernel.dims());
+
+    // tensorflow formatting patch
+    if kernel.dims()[0] == sliced_expanded_image.dims()[1] {
+        deconv_kernel.reshape(&[
+            kernel.dims()[1],
+            kernel.dims()[0],
+            kernel.dims()[2],
+            kernel.dims()[3],
+        ]);
+    }
+
     let conv_input = if has_bias {
         vec![
             sliced_expanded_image,
@@ -969,11 +1039,12 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
     let output = conv(config, region, &conv_input, (0, 0), (1, 1))?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(output.get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
+        let mut is_assigned = !output.any_unknowns();
+        for val in inputs.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
         if is_assigned {
             let safe_conv = non_accum_deconv(
                 &inputs
@@ -1008,7 +1079,25 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     stride: (usize, usize),
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let has_bias = values.len() == 3;
-    let (mut image, kernel) = (values[0].clone(), values[1].clone());
+    let (mut image, mut kernel) = (values[0].clone(), values[1].clone());
+
+    // we specifically want to use the same kernel and image for all the convolutions and need to enforce this by assigning them
+    // 1. assign the kernel
+    let mut assigned_kernel_len = 0;
+    if !kernel.all_prev_assigned() {
+        kernel = region.assign(&config.inputs[0], &kernel)?;
+        assigned_kernel_len = kernel.len();
+    }
+    // 2. assign the image
+    let mut assigned_image_len = 0;
+    if !image.all_prev_assigned() {
+        image = region.assign(&config.inputs[1], &image)?;
+        assigned_image_len = image.len();
+    }
+
+    // increment the region
+    region.increment(std::cmp::max(assigned_image_len, assigned_kernel_len));
+
     let og_dims = image.dims().to_vec();
 
     // ensure inputs are 4D tensors
@@ -1083,19 +1172,6 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
         }
     };
 
-    if region.is_dummy() {
-        // calculate the total number of constraints we added
-        let mut total_len = output.len() * kernel_height * kernel_width * input_channels_per_group;
-        if has_bias {
-            total_len += output.len();
-        }
-        // calculate the number of constraints that overflowed into a subsequent column
-        let overflowed_len = overflowed_len(region.offset(), total_len, config.output.col_size());
-        region.increment(overflowed_len);
-        reshape_output(&mut output);
-        return Ok(output.into());
-    }
-
     output.iter_mut().enumerate().for_each(|(idx, o)| {
         let cartesian_coord_per_group = &cartesian_coord[idx];
         let (batch, group, i, j, k) = (
@@ -1151,11 +1227,12 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     let output: ValTensor<_> = output.into();
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(output.get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
+        let mut is_assigned = !output.any_unknowns();
+        for val in [image, kernel].iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
         if is_assigned {
             let safe_conv = non_accum_conv(
                 &values
@@ -1194,11 +1271,12 @@ pub fn pow<F: PrimeField + TensorType + PartialOrd>(
     }
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(t.get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
+        let mut is_assigned = !t.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
         if is_assigned {
             let safe_pow = values[0].get_inner().unwrap().pow(exponent).map_err(|e| {
                 error!("{}", e);
@@ -1277,11 +1355,12 @@ pub fn pack<F: PrimeField + TensorType + PartialOrd>(
     let res = sum(config, region, &[base_prod])?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(res.get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
+        let mut is_assigned = !res.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
         if is_assigned {
             let safe_pow = non_accum_pack(&values[0].get_inner()?, Value::known(base_t), scale)
                 .map_err(|e| {
@@ -1424,27 +1503,28 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     if region.is_dummy() {
         region.increment(x.len());
-        return Ok(x.clone());
+        let dims = x.dims();
+        let vals = vec![ValType::Value(Value::<F>::unknown()); x.len()];
+        let mut x = Tensor::from(vals.into_iter());
+        x.reshape(&dims);
+        return Ok(x.into());
     }
 
     let w = region.assign(&config.lookup_input, x)?;
 
     // extract integer_valuations
-    let felt_evals: Tensor<F> = w.get_felt_evals().map_err(|e| {
-        error!("{}", e);
-        halo2_proofs::plonk::Error::Synthesis
-    })?;
-
-    // for key generation integer_evals will be empty and we need to return a set of unassigned values
-    let output: Tensor<Value<F>> = match felt_evals.len() {
-        // if empty return an unknown val
-        0 => Tensor::from((0..x.dims().iter().product::<usize>()).map(|_| Value::unknown())),
-        // if not empty apply the nonlinearity !
-        _ => {
-            let x = Op::<F>::f(nl, &[felt_evals])?;
-            x.output.map(|elem| Value::known(elem))
-        }
-    };
+    let output: Tensor<Value<F>> = w
+        .get_inner()
+        .map_err(|e| {
+            error!("{}", e);
+            halo2_proofs::plonk::Error::Synthesis
+        })?
+        .map(|elem| {
+            elem.map(|elem| {
+                let elem = Tensor::from([elem].into_iter());
+                Op::<F>::f(nl, &[elem]).unwrap().output[0]
+            })
+        });
 
     let mut output = region.assign(&config.lookup_output, &output.into())?;
 
@@ -1493,11 +1573,12 @@ pub fn abs<F: PrimeField + TensorType + PartialOrd>(
     let abs = pairwise(config, region, &[relu_x, relu_neg_x], BaseOp::Add)?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(abs.get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
+        let mut is_assigned = !abs.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
         if is_assigned {
             let mut ref_abs: Tensor<i32> =
                 tensor::ops::abs(&values[0].get_int_evals()?)?.map(|x| x as i32);
@@ -1584,11 +1665,12 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
     region.increment(relu_one_minus_sum_relu.len());
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(assigned_max_val.get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
+        let mut is_assigned = !assigned_max_val.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
         if is_assigned {
             let ref_max: Tensor<i32> = Tensor::new(
                 Some(&[values[0].get_int_evals()?.into_iter().max().unwrap() as i32]),
@@ -1679,11 +1761,12 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     region.increment(relu_one_minus_sum_relu.len());
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(assigned_min_val.get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
+        let mut is_assigned = !assigned_min_val.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
         if is_assigned {
             let ref_min: Tensor<i32> = Tensor::new(
                 Some(&[values[0].get_int_evals()?.into_iter().min().unwrap() as i32]),
@@ -1772,11 +1855,12 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
     let softmax = pairwise(config, region, &[ex, inv_denom], BaseOp::Mult)?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        // during key generation this will be 0 so we use this as a flag to check
+        // during key generation this will be unknown vals so we use this as a flag to check
         // TODO: this isn't very safe and would be better to get the phase directly
-        let is_assigned = !Into::<Tensor<i32>>::into(softmax.get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
+        let mut is_assigned = !softmax.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
         if is_assigned {
             let int_evals = Tensor::new(Some(&values[0].get_int_evals()?), values[0].dims())?;
             // scale is double the output
@@ -1859,25 +1943,5 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
 
     region.increment(sum.len());
 
-    if matches!(&config.check_mode, CheckMode::SAFE) {
-        let is_assigned = !Into::<Tensor<i32>>::into(sum.get_inner()?)
-            .iter()
-            .all(|&x| x == 0);
-        if is_assigned {
-            let int_evals = &[
-                Tensor::new(Some(&values[0].get_int_evals()?), values[0].dims())?,
-                Tensor::new(Some(&values[1].get_int_evals()?), values[1].dims())?,
-            ];
-            let ref_range_check_percent: Tensor<i128> =
-                tensor::ops::nonlinearities::range_check_percent(
-                    int_evals,
-                    input_scale,
-                    output_scale,
-                    tol,
-                );
-            let output_int_evals = Tensor::new(Some(&sum.get_int_evals()?), values[0].dims())?;
-            assert_eq!(output_int_evals, ref_range_check_percent)
-        }
-    }
     Ok(sum)
 }

@@ -166,10 +166,22 @@ pub struct RunArgs {
     #[arg(long)]
     pub allocated_constraints: Option<usize>,
 }
+use lazy_static::lazy_static;
+
+// if CARGO VERSION is 0.0.0 replace with "source - no compatibility guaranteed"
+lazy_static! {
+    /// The version of the ezkl library
+    pub static ref VERSION: &'static str =  if env!("CARGO_PKG_VERSION") == "0.0.0" {
+       "source - no compatibility guaranteed"
+    } else {
+        env!("CARGO_PKG_VERSION")
+    };
+}
 
 #[allow(missing_docs)]
 #[derive(Parser, Debug, Clone, Deserialize, Serialize)]
-#[command(author, version, about, long_about = None)]
+#[command(author, about, long_about = None)]
+#[clap(version = *VERSION)]
 pub struct Cli {
     #[command(subcommand)]
     #[allow(missing_docs)]

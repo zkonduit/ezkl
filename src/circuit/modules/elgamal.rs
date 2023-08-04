@@ -593,8 +593,16 @@ impl Module<Fr> for ElGamalGadget {
                                 i,
                                 || *v,
                             ),
-                            ValType::PrevAssigned(v) => Ok(v.clone()),
-                            _ => panic!("wrong input type, must be previously assigned"),
+                            ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
+                                Ok(v.clone())
+                            }
+                            ValType::Constant(f) => region.assign_advice_from_constant(
+                                || format!("load message_{}", i),
+                                self.config.plaintext_col,
+                                i,
+                                *f,
+                            ),
+                            e => panic!("wrong input type {:?}, must be previously assigned", e),
                         })
                         .collect(),
                     ValTensor::Instance {

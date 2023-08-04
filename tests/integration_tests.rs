@@ -135,7 +135,7 @@ mod native_tests {
 
     const LARGE_TESTS: [&str; 3] = ["self_attention", "nanoGPT", "mobilenet"];
 
-    const TESTS: [&str; 38] = [
+    const TESTS: [&str; 40] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -168,6 +168,7 @@ mod native_tests {
         "4l_relu_conv_fc",
         "1l_erf",
         "1l_var",
+        "1l_elu",
         "min",
         "max",
         "1l_max_pool",
@@ -176,6 +177,7 @@ mod native_tests {
         "1l_identity",
         "idolmodel",
         "trig",
+        "prelu_gmm",
     ];
 
     const TESTS_AGGR: [&str; 20] = [
@@ -320,7 +322,7 @@ mod native_tests {
 
 
 
-            seq!(N in 0..=37 {
+            seq!(N in 0..=39 {
 
             #(#[test_case(TESTS[N])])*
             fn model_serialization_(test: &str) {
@@ -1941,7 +1943,7 @@ mod native_tests {
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--compiled-model",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!("--settings-path={}", settings_path).as_str(),
+                (format!("--settings-path={}", settings_path).as_str()),
             ])
             .status()
             .expect("failed to execute process");
