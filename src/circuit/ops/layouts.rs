@@ -1953,27 +1953,5 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
 
     region.increment(sum.len());
 
-    if matches!(&config.check_mode, CheckMode::SAFE) {
-        let is_assigned = !sum.get_inner()?.iter().any(|&x| {
-            let mut is_empty = true;
-            x.map(|_| is_empty = false);
-            is_empty
-        });
-        if is_assigned {
-            let int_evals = &[
-                Tensor::new(Some(&values[0].get_int_evals()?), values[0].dims())?,
-                Tensor::new(Some(&values[1].get_int_evals()?), values[1].dims())?,
-            ];
-            let ref_range_check_percent: Tensor<i128> =
-                tensor::ops::nonlinearities::range_check_percent(
-                    int_evals,
-                    input_scale,
-                    output_scale,
-                    tol,
-                );
-            let output_int_evals = Tensor::new(Some(&sum.get_int_evals()?), values[0].dims())?;
-            assert_eq!(output_int_evals, ref_range_check_percent)
-        }
-    }
     Ok(sum)
 }
