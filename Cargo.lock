@@ -4521,8 +4521,7 @@ dependencies = [
 [[package]]
 name = "serde_traitobject"
 version = "0.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c5ae15a5d31f7c57875a480ddd7be02314d264617d0294d961314a6d502e6b1"
+source = "git+https://github.com/zkonduit/serde_traitobject#8bf1f2fa1481fd1c66d21ec984229f8d4446b375"
 dependencies = [
  "erased-serde",
  "metatype",

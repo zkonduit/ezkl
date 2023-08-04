@@ -40,3 +40,4 @@ var/
 *.egg
 .vscode/
 *.whl
+*.bak
