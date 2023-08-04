@@ -879,8 +879,7 @@ pub fn downcast_const_op(
 ) -> Option<crate::circuit::ops::Constant<Fp>> {
     boxed_op
         .as_any()
-        .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
-        .map(|c| c.clone())
+        .downcast_ref::<crate::circuit::ops::Constant<Fp>>().cloned()
 }
 
 /// Extracts the raw values from a [crate::circuit::ops::Constant] op.
@@ -899,6 +898,21 @@ pub fn extract_const_quantized_values(
         .as_any()
         .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
         .map(|c| c.quantized_values.clone())
+}
+
+/// Extract the quantized values from a conv op
+pub fn extract_conv_values(boxed_op: Box<dyn crate::circuit::Op<Fp>>) -> [Option<Tensor<Fp>>; 2] {
+    let op = boxed_op
+        .as_any()
+        .downcast_ref::<crate::circuit::ops::poly::PolyOp<Fp>>();
+
+    if let Some(op) = op {
+        match op {
+            PolyOp::Conv { kernel, bias, .. } => return [Some(kernel.clone()), bias.clone()],
+            _ => {}
+        }
+    }
+    [None, None]
 }
 
 /// Converts a tensor to a [ValTensor] with a given scale.

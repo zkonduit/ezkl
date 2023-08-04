@@ -78,7 +78,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
         let overflowed_len =
             overflowed_len(region.offset(), values[0].len(), config.output.col_size());
         region.increment(overflowed_len);
-        return Ok(Tensor::from([ValType::from(Value::known(F::ZERO))].into_iter()).into());
+        return Ok(Tensor::from([ValType::<F>::from(Value::<F>::unknown())].into_iter()).into());
     }
 
     let mut inputs = vec![];
@@ -350,7 +350,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !output.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
-            x.map(|f| is_empty = f == F::ZERO);
+            x.map(|_| is_empty = false);
             is_empty
         });
         if is_assigned {
@@ -628,7 +628,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
 
     if region.is_dummy() {
         region.increment(lhs.len());
-        let vals = vec![ValType::Value(Value::known(F::ZERO)); broadcasted_shape.iter().product()];
+        let vals = vec![ValType::Value(Value::<F>::unknown()); broadcasted_shape.iter().product()];
         let mut tensor: Tensor<ValType<F>> = Tensor::from(vals.into_iter());
         tensor.reshape(&broadcasted_shape);
         return Ok(tensor.into());
@@ -840,7 +840,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !last_elem.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
-            x.map(|f| is_empty = f == F::ZERO);
+            x.map(|_| is_empty = false);
             is_empty
         });
         if is_assigned {
@@ -924,7 +924,7 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !res.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
-            x.map(|f| is_empty = f == F::ZERO);
+            x.map(|_| is_empty = false);
             is_empty
         });
         if is_assigned {
@@ -1045,7 +1045,7 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !output.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
-            x.map(|f| is_empty = f == F::ZERO);
+            x.map(|_| is_empty = false);
             is_empty
         });
         if is_assigned {
@@ -1234,7 +1234,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !output.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
-            x.map(|f| is_empty = f == F::ZERO);
+            x.map(|_| is_empty = false);
             is_empty
         });
         if is_assigned {
@@ -1279,7 +1279,7 @@ pub fn pow<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !t.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
-            x.map(|f| is_empty = f == F::ZERO);
+            x.map(|_| is_empty = false);
             is_empty
         });
         if is_assigned {
@@ -1364,7 +1364,7 @@ pub fn pack<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !res.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
-            x.map(|f| is_empty = f == F::ZERO);
+            x.map(|_| is_empty = false);
             is_empty
         });
         if is_assigned {
@@ -1509,7 +1509,11 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     if region.is_dummy() {
         region.increment(x.len());
-        return Ok(x.clone());
+        let dims = x.dims();
+        let vals = vec![ValType::Value(Value::<F>::unknown()); x.len()];
+        let mut x = Tensor::from(vals.into_iter());
+        x.reshape(&dims);
+        return Ok(x.into());
     }
 
     let w = region.assign(&config.lookup_input, x)?;
@@ -1579,7 +1583,7 @@ pub fn abs<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !abs.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
-            x.map(|f| is_empty = f == F::ZERO);
+            x.map(|_| is_empty = false);
             is_empty
         });
         if is_assigned {
@@ -1672,7 +1676,7 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !assigned_max_val.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
-            x.map(|f| is_empty = f == F::ZERO);
+            x.map(|_| is_empty = false);
             is_empty
         });
         if is_assigned {
@@ -1769,7 +1773,7 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !assigned_min_val.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
-            x.map(|f| is_empty = f == F::ZERO);
+            x.map(|_| is_empty = false);
             is_empty
         });
         if is_assigned {
@@ -1864,7 +1868,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
         // TODO: this isn't very safe and would be better to get the phase directly
         let is_assigned = !softmax.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
-            x.map(|f| is_empty = f == F::ZERO);
+            x.map(|_| is_empty = false);
             is_empty
         });
         if is_assigned {
@@ -1952,7 +1956,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     if matches!(&config.check_mode, CheckMode::SAFE) {
         let is_assigned = !sum.get_inner()?.iter().any(|&x| {
             let mut is_empty = true;
-            x.map(|f| is_empty = f == F::ZERO);
+            x.map(|_| is_empty = false);
             is_empty
         });
         if is_assigned {

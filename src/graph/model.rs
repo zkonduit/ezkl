@@ -858,7 +858,9 @@ impl Model {
         let inputs: Vec<ValTensor<Fp>> = input_shapes
             .iter()
             .map(|shape| {
-                let t: Tensor<Value<Fp>> = Tensor::new(None, shape).unwrap();
+                let mut t: Tensor<Value<Fp>> =
+                    Tensor::from(vec![Value::<Fp>::unknown(); shape.iter().product()].into_iter());
+                t.reshape(shape);
                 t.into()
             })
             .collect_vec();
