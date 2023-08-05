@@ -468,6 +468,28 @@ pub fn new_op_from_onnx(
         }
         "Mul" => SupportedOp::Linear(PolyOp::Mult),
         "Iff" => SupportedOp::Linear(PolyOp::Iff),
+        "Less" => {
+            // Extract the slope layer hyperparams
+            let boxed_op = inputs[0].clone().opkind();
+            let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
+                if c.len() == 1 {
+                    c[0]
+                } else {
+                    todo!()
+                }
+            } else {
+                return Err(Box::new(GraphError::OpMismatch(idx, "less".to_string())));
+            };
+
+            if inputs.len() == 2 {
+                inputs.remove(0);
+                SupportedOp::Nonlinear(LookupOp::LessThan {
+                    a: crate::circuit::utils::F32(unit),
+                })
+            } else {
+                todo!()
+            }
+        }
         "Greater" => {
             // Extract the slope layer hyperparams
             let boxed_op = inputs[0].clone().opkind();
