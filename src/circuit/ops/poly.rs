@@ -396,10 +396,8 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
         }
     }
 
-    fn rescale(&self, input_scales: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
-        let inputs_to_scale = self.requires_homogenous_input_scales();
-        // creates a rescaled op if the inputs are not homogenous
-        homogenize_input_scales::<F>(self.clone(), input_scales, inputs_to_scale).unwrap()
+    fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
+        Box::new(self.clone())
     }
 
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
