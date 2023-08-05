@@ -1,12 +1,15 @@
+use std::error::Error;
 use std::sync::Arc;
 
-use super::{GraphError, Visibility};
+use super::{GraphError, Rescaled, SupportedOp, Visibility};
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::poly::PolyOp;
+use crate::circuit::Op;
 use crate::tensor::{Tensor, TensorError, TensorType};
 use halo2curves::bn256::Fr as Fp;
 use halo2curves::ff::PrimeField;
+use itertools::Itertools;
 use log::{debug, warn};
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::array::Gather;
@@ -244,7 +247,7 @@ pub fn new_op_from_onnx(
     param_visibility: Visibility,
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
     inputs: &mut Vec<&mut super::NodeType>,
-) -> Result<Box<dyn crate::circuit::Op<Fp>>, Box<dyn std::error::Error>> {
+) -> Result<SupportedOp, Box<dyn std::error::Error>> {
     debug!("Loading node: {:?}", node);
     Ok(match node.op().name().as_ref() {
         "Gather" => {
@@ -273,7 +276,7 @@ pub fn new_op_from_onnx(
                 inputs.pop();
             }
 
-            Box::new(crate::circuit::ops::poly::PolyOp::Gather { dim: axis, index })
+            SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::Gather { dim: axis, index })
         }
         "MoveAxis" => {
             let op = load_axis_op(node.op(), idx, node.op().name().to_string())?;
@@ -281,7 +284,7 @@ pub fn new_op_from_onnx(
                 AxisOp::Move(from, to) => {
                     let source = from.to_usize()?;
                     let destination = to.to_usize()?;
-                    Box::new(crate::circuit::ops::poly::PolyOp::MoveAxis {
+                    SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::MoveAxis {
                         source,
                         destination,
                     })
@@ -292,7 +295,7 @@ pub fn new_op_from_onnx(
         "Concat" | "InferenceConcat" => {
             let op = load_concat_op(node.op(), idx, node.op().name().to_string())?;
             let axis = op.axis;
-            Box::new(crate::circuit::ops::poly::PolyOp::Concat { axis })
+            SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::Concat { axis })
         }
         "Slice" => {
             let slice = load_slice_op(node.op(), node.op().name().to_string())?;
@@ -301,7 +304,7 @@ pub fn new_op_from_onnx(
             let start = slice.start.to_usize()?;
             let end = slice.end.to_usize()?;
 
-            Box::new(PolyOp::Slice { axis, start, end })
+            SupportedOp::Linear(PolyOp::Slice { axis, start, end })
         }
         "Const" => {
             let op: Const = load_const(node.op(), idx, node.op().name().to_string())?;
@@ -317,7 +320,7 @@ pub fn new_op_from_onnx(
             let mut c = crate::circuit::ops::Constant::new(quantized_value, raw_value);
             c.num_uses += node.outputs.len();
             // Create a constant op
-            Box::new(c)
+            SupportedOp::Constant(c)
         }
         "Reduce<Min>" => {
             if inputs.len() != 1 {
@@ -326,7 +329,7 @@ pub fn new_op_from_onnx(
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
             let axes = op.axes.into_iter().collect();
 
-            Box::new(HybridOp::Min { axes })
+            SupportedOp::Hybrid(HybridOp::Min { axes })
         }
         "Reduce<Max>" => {
             if inputs.len() != 1 {
@@ -335,7 +338,7 @@ pub fn new_op_from_onnx(
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
             let axes = op.axes.into_iter().collect();
 
-            Box::new(HybridOp::Max { axes })
+            SupportedOp::Hybrid(HybridOp::Max { axes })
         }
         "Reduce<Sum>" => {
             if inputs.len() != 1 {
@@ -344,7 +347,7 @@ pub fn new_op_from_onnx(
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
             let axes = op.axes.into_iter().collect();
 
-            Box::new(PolyOp::Sum { axes })
+            SupportedOp::Linear(PolyOp::Sum { axes })
         }
         "Max" => {
             // Extract the slope layer hyperparams
@@ -364,7 +367,7 @@ pub fn new_op_from_onnx(
                     node.decrement_const();
                     inputs.pop();
                 }
-                Box::new(LookupOp::ReLU {
+                SupportedOp::Nonlinear(LookupOp::ReLU {
                     scale: inputs[0].out_scales()[0] as usize,
                 })
             } else {
@@ -373,7 +376,7 @@ pub fn new_op_from_onnx(
         }
         "Recip" => {
             // Extract the slope layer hyperparams
-            Box::new(LookupOp::Recip { scale: 1 })
+            SupportedOp::Nonlinear(LookupOp::Recip { scale: 1 })
         }
 
         "LeakyRelu" => {
@@ -390,7 +393,7 @@ pub fn new_op_from_onnx(
                 }
             };
 
-            Box::new(LookupOp::LeakyReLU {
+            SupportedOp::Nonlinear(LookupOp::LeakyReLU {
                 scale: 1,
                 slope: crate::circuit::utils::F32(leaky_op.alpha),
             })
@@ -398,27 +401,27 @@ pub fn new_op_from_onnx(
         "Scan" => {
             panic!("should never reach here")
         }
-        "Abs" => Box::new(HybridOp::Abs),
-        "Neg" => Box::new(PolyOp::Neg),
-        "Sigmoid" => Box::new(LookupOp::Sigmoid { scales: (1, 1) }),
-        "Sqrt" => Box::new(LookupOp::Sqrt { scales: (1, 1) }),
-        "Rsqrt" => Box::new(LookupOp::Rsqrt { scales: (1, 1) }),
-        "Exp" => Box::new(LookupOp::Exp { scales: (1, 1) }),
-        "Ln" => Box::new(LookupOp::Ln { scales: (1, 1) }),
-        "Sin" => Box::new(LookupOp::Sin { scales: (1, 1) }),
-        "Cos" => Box::new(LookupOp::Cos { scales: (1, 1) }),
-        "Tan" => Box::new(LookupOp::Tan { scales: (1, 1) }),
-        "Asin" => Box::new(LookupOp::ASin { scales: (1, 1) }),
-        "Acos" => Box::new(LookupOp::ACos { scales: (1, 1) }),
-        "Atan" => Box::new(LookupOp::ATan { scales: (1, 1) }),
-        "Sinh" => Box::new(LookupOp::Sinh { scales: (1, 1) }),
-        "Cosh" => Box::new(LookupOp::Cosh { scales: (1, 1) }),
-        "Tanh" => Box::new(LookupOp::Tanh { scales: (1, 1) }),
-        "Asinh" => Box::new(LookupOp::ASinh { scales: (1, 1) }),
-        "Acosh" => Box::new(LookupOp::ACosh { scales: (1, 1) }),
-        "Atanh" => Box::new(LookupOp::ATanh { scales: (1, 1) }),
-        "Erf" => Box::new(LookupOp::Erf { scales: (1, 1) }),
-        "Source" => Box::new(crate::circuit::ops::Input { scale }),
+        "Abs" => SupportedOp::Hybrid(HybridOp::Abs),
+        "Neg" => SupportedOp::Linear(PolyOp::Neg),
+        "Sigmoid" => SupportedOp::Nonlinear(LookupOp::Sigmoid { scales: (1, 1) }),
+        "Sqrt" => SupportedOp::Nonlinear(LookupOp::Sqrt { scales: (1, 1) }),
+        "Rsqrt" => SupportedOp::Nonlinear(LookupOp::Rsqrt { scales: (1, 1) }),
+        "Exp" => SupportedOp::Nonlinear(LookupOp::Exp { scales: (1, 1) }),
+        "Ln" => SupportedOp::Nonlinear(LookupOp::Ln { scales: (1, 1) }),
+        "Sin" => SupportedOp::Nonlinear(LookupOp::Sin { scales: (1, 1) }),
+        "Cos" => SupportedOp::Nonlinear(LookupOp::Cos { scales: (1, 1) }),
+        "Tan" => SupportedOp::Nonlinear(LookupOp::Tan { scales: (1, 1) }),
+        "Asin" => SupportedOp::Nonlinear(LookupOp::ASin { scales: (1, 1) }),
+        "Acos" => SupportedOp::Nonlinear(LookupOp::ACos { scales: (1, 1) }),
+        "Atan" => SupportedOp::Nonlinear(LookupOp::ATan { scales: (1, 1) }),
+        "Sinh" => SupportedOp::Nonlinear(LookupOp::Sinh { scales: (1, 1) }),
+        "Cosh" => SupportedOp::Nonlinear(LookupOp::Cosh { scales: (1, 1) }),
+        "Tanh" => SupportedOp::Nonlinear(LookupOp::Tanh { scales: (1, 1) }),
+        "Asinh" => SupportedOp::Nonlinear(LookupOp::ASinh { scales: (1, 1) }),
+        "Acosh" => SupportedOp::Nonlinear(LookupOp::ACosh { scales: (1, 1) }),
+        "Atanh" => SupportedOp::Nonlinear(LookupOp::ATanh { scales: (1, 1) }),
+        "Erf" => SupportedOp::Nonlinear(LookupOp::Erf { scales: (1, 1) }),
+        "Source" => SupportedOp::Input(crate::circuit::ops::Input { scale }),
         "Add" => {
             // get the max scale of inputs
             let max_scale = inputs
@@ -434,12 +437,12 @@ pub fn new_op_from_onnx(
                         log::debug!("requantizing #{} to {} for add", inp.idx(), max_scale);
                         n.requantize(max_scale)?;
                         inp.bump_scale(max_scale);
-                        inp.replace_opkind(Box::new(n));
+                        inp.replace_opkind(SupportedOp::Constant(n));
                     }
                 }
             }
 
-            Box::new(PolyOp::Add)
+            SupportedOp::Linear(PolyOp::Add)
         }
         "Sub" => {
             // get the max scale of inputs
@@ -456,15 +459,15 @@ pub fn new_op_from_onnx(
                         log::debug!("requantizing #{} to {} fro sub", inp.idx(), max_scale);
                         n.requantize(max_scale)?;
                         inp.bump_scale(max_scale);
-                        inp.replace_opkind(Box::new(n));
+                        inp.replace_opkind(SupportedOp::Constant(n));
                     }
                 }
             }
 
-            Box::new(PolyOp::Sub)
+            SupportedOp::Linear(PolyOp::Sub)
         }
-        "Mul" => Box::new(PolyOp::Mult),
-        "Iff" => Box::new(PolyOp::Iff),
+        "Mul" => SupportedOp::Linear(PolyOp::Mult),
+        "Iff" => SupportedOp::Linear(PolyOp::Iff),
         "Less" => {
             // Extract the slope layer hyperparams
             let boxed_op = inputs[0].clone().opkind();
@@ -480,7 +483,7 @@ pub fn new_op_from_onnx(
 
             if inputs.len() == 2 {
                 inputs.remove(0);
-                Box::new(LookupOp::LessThan {
+                SupportedOp::Nonlinear(LookupOp::LessThan {
                     a: crate::circuit::utils::F32(unit),
                 })
             } else {
@@ -502,7 +505,7 @@ pub fn new_op_from_onnx(
 
             if inputs.len() == 2 {
                 inputs.remove(0);
-                Box::new(LookupOp::GreaterThan {
+                SupportedOp::Nonlinear(LookupOp::GreaterThan {
                     a: crate::circuit::utils::F32(unit),
                 })
             } else {
@@ -519,7 +522,7 @@ pub fn new_op_from_onnx(
             };
 
             let axes = &op.axes;
-            Box::new(PolyOp::Einsum {
+            SupportedOp::Linear(PolyOp::Einsum {
                 equation: axes.to_string(),
             })
         }
@@ -540,7 +543,7 @@ pub fn new_op_from_onnx(
                 )));
             }
 
-            Box::new(HybridOp::Softmax { scales: (1, 1) })
+            SupportedOp::Hybrid(HybridOp::Softmax { scales: (1, 1) })
         }
         "MaxPool" => {
             // Extract the padding and stride layer hyperparams
@@ -574,7 +577,7 @@ pub fn new_op_from_onnx(
                 (padding[0], padding[1], stride[0], stride[1]);
             let (kernel_height, kernel_width) = (kernel_shape[0], kernel_shape[1]);
 
-            Box::new(HybridOp::MaxPool2d {
+            SupportedOp::Hybrid(HybridOp::MaxPool2d {
                 padding: (padding_h, padding_w),
                 stride: (stride_h, stride_w),
                 pool_dims: (kernel_height, kernel_width),
@@ -582,11 +585,11 @@ pub fn new_op_from_onnx(
         }
         "Ceil" | "Floor" | "Round" | "RoundHalfToEven" => {
             warn!("using a round op in the circuit which does not make sense in Field arithmetic");
-            Box::new(PolyOp::Identity)
+            SupportedOp::Linear(PolyOp::Identity)
         }
-        "Sign" => Box::new(LookupOp::Sign),
-        "Cube" => Box::new(PolyOp::Pow(3)),
-        "Square" => Box::new(PolyOp::Pow(2)),
+        "Sign" => SupportedOp::Nonlinear(LookupOp::Sign),
+        "Cube" => SupportedOp::Linear(PolyOp::Pow(3)),
+        "Square" => SupportedOp::Linear(PolyOp::Pow(2)),
         "ConvUnary" => {
             let conv_node: &ConvUnary = match node.op().downcast_ref::<ConvUnary>() {
                 Some(b) => b,
@@ -646,7 +649,7 @@ pub fn new_op_from_onnx(
                 None => None,
             };
 
-            Box::new(PolyOp::Conv {
+            SupportedOp::Linear(PolyOp::Conv {
                 kernel,
                 bias,
                 padding: (padding_h, padding_w),
@@ -712,7 +715,7 @@ pub fn new_op_from_onnx(
 
             let output_padding = (deconv_node.adjustments[0], deconv_node.adjustments[1]);
 
-            Box::new(PolyOp::DeConv {
+            SupportedOp::Linear(PolyOp::DeConv {
                 kernel,
                 bias,
                 padding: (padding_h, padding_w),
@@ -731,7 +734,7 @@ pub fn new_op_from_onnx(
                 }
             };
 
-            Box::new(PolyOp::Downsample {
+            SupportedOp::Linear(PolyOp::Downsample {
                 axis: downsample_node.axis,
                 stride: downsample_node.stride as usize,
                 modulo: downsample_node.modulo,
@@ -768,7 +771,7 @@ pub fn new_op_from_onnx(
                 inputs.pop();
             }
 
-            Box::new(PolyOp::Resize { scale_factor })
+            SupportedOp::Linear(PolyOp::Resize { scale_factor })
         }
 
         "SumPool" => {
@@ -803,13 +806,13 @@ pub fn new_op_from_onnx(
                 (padding[0], padding[1], stride[0], stride[1]);
             let (kernel_height, kernel_width) = (kernel_shape[0], kernel_shape[1]);
 
-            Box::new(PolyOp::SumPool {
+            SupportedOp::Linear(PolyOp::SumPool {
                 padding: (padding_h, padding_w),
                 stride: (stride_h, stride_w),
                 kernel_shape: (kernel_height, kernel_width),
             })
         }
-        "GlobalAvgPool" => Box::new(PolyOp::SumPool {
+        "GlobalAvgPool" => SupportedOp::Linear(PolyOp::SumPool {
             padding: (0, 0),
             stride: (1, 1),
             kernel_shape: (inputs[0].out_dims()[0][1], inputs[0].out_dims()[0][2]),
@@ -853,22 +856,22 @@ pub fn new_op_from_onnx(
                 pad_node.pads[padding_len - 2].0,
                 pad_node.pads[padding_len - 1].0,
             );
-            Box::new(PolyOp::Pad(padding_h, padding_w))
+            SupportedOp::Linear(PolyOp::Pad(padding_h, padding_w))
         }
         "RmAxis" | "Reshape" | "AddAxis" => {
             // Extract the slope layer hyperparams
             let shapes = node_output_shapes(&node)?;
             let output_shape = shapes[0].as_ref().unwrap().clone();
 
-            Box::new(PolyOp::Reshape(output_shape))
+            SupportedOp::Linear(PolyOp::Reshape(output_shape))
         }
         "Flatten" => {
             let new_dims: Vec<usize> = vec![inputs[0].out_dims()[0].iter().product::<usize>()];
-            Box::new(PolyOp::Flatten(new_dims))
+            SupportedOp::Linear(PolyOp::Flatten(new_dims))
         }
         c => {
             warn!("Unknown op: {}", c);
-            Box::new(crate::circuit::ops::Unknown)
+            SupportedOp::Unknown(crate::circuit::ops::Unknown)
         }
     })
 }
@@ -879,7 +882,8 @@ pub fn downcast_const_op(
 ) -> Option<crate::circuit::ops::Constant<Fp>> {
     boxed_op
         .as_any()
-        .downcast_ref::<crate::circuit::ops::Constant<Fp>>().cloned()
+        .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
+        .cloned()
 }
 
 /// Extracts the raw values from a [crate::circuit::ops::Constant] op.
@@ -945,6 +949,46 @@ pub(crate) fn split_valtensor(
         start = end;
     }
     Ok(tensors)
+}
+
+///
+pub fn homogenize_input_scales(
+    op: Box<dyn Op<Fp>>,
+    input_scales: Vec<u32>,
+    inputs_to_scale: Vec<usize>,
+) -> Result<Box<dyn Op<Fp>>, Box<dyn Error>> {
+    if inputs_to_scale.is_empty() {
+        return Ok(op);
+    }
+
+    let mut dividers: Vec<u128> = vec![1; input_scales.len()];
+    if !input_scales.windows(2).all(|w| w[0] == w[1]) {
+        let min_scale = input_scales.iter().min().unwrap();
+        let _ = input_scales
+            .iter()
+            .enumerate()
+            .map(|(idx, input_scale)| {
+                if !inputs_to_scale.contains(&idx) {
+                    return;
+                }
+                let scale_diff = input_scale - min_scale;
+                if scale_diff > 0 {
+                    let mult = crate::graph::scale_to_multiplier(scale_diff);
+                    dividers[idx] = mult as u128;
+                }
+            })
+            .collect_vec();
+    }
+
+    // only rescale if need to
+    if dividers.iter().any(|&x| x > 1) {
+        Ok(Box::new(Rescaled {
+            inner: Box::new(op.into()),
+            scale: (0..input_scales.len()).zip(dividers).collect_vec(),
+        }))
+    } else {
+        Ok(op)
+    }
 }
 
 #[cfg(test)]

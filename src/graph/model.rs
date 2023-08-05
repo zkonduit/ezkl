@@ -152,7 +152,7 @@ impl NodeType {
                     .downcast_ref::<crate::circuit::Constant<Fp>>()
                 {
                     if c.num_uses > 0 {
-                        n.opkind = Box::new(crate::circuit::Constant {
+                        n.opkind = SupportedOp::Constant(crate::circuit::Constant {
                             num_uses: c.num_uses - 1,
                             ..c.clone()
                         });
@@ -172,7 +172,7 @@ impl NodeType {
     }
 
     /// Replace the operation kind of the node.
-    pub fn replace_opkind(&mut self, opkind: Box<dyn Op<Fp>>) {
+    pub fn replace_opkind(&mut self, opkind: SupportedOp) {
         match self {
             NodeType::Node(n) => n.opkind = opkind,
             NodeType::SubGraph { .. } => log::warn!("Cannot replace opkind of subgraph"),
@@ -383,7 +383,7 @@ impl Model {
 
             match n {
                 NodeType::Node(n) => {
-                    let res = Op::<Fp>::f(&*n.opkind, &inputs)?;
+                    let res = Op::<Fp>::f(&n.opkind, &inputs)?;
                     // see if any of the intermediate lookup calcs are the max
                     if !res.intermediate_lookups.is_empty() {
                         let mut max = 0;
@@ -594,7 +594,7 @@ impl Model {
                         i,
                     )?;
                     if n.opkind.is_input() {
-                        n.opkind = Box::new(Input {
+                        n.opkind = SupportedOp::Input(Input {
                             scale: input_scales[input_idx],
                         });
                         n.out_scale = n.opkind.out_scale(vec![], 0);
@@ -954,7 +954,7 @@ impl Model {
                             constant.raw_values.clone(),
                         );
                         op.pre_assign(consts[const_idx].clone());
-                        n.opkind = Box::new(op);
+                        n.opkind = SupportedOp::Constant(op);
 
                         const_idx += 1;
                     }

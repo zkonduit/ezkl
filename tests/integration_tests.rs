@@ -6,7 +6,9 @@ mod native_tests {
     use ezkl::graph::input::{FileSource, GraphData};
     use ezkl::graph::{DataSource, GraphSettings, Visibility};
     use lazy_static::lazy_static;
+    use rand::Rng;
     use std::env::var;
+    use std::io::{Read, Write};
     use std::process::{Child, Command};
     use std::sync::Once;
     static COMPILE: Once = Once::new();
@@ -304,6 +306,7 @@ mod native_tests {
             use crate::native_tests::kzg_fuzz;
             use crate::native_tests::render_circuit;
             use crate::native_tests::model_serialization;
+            use crate::native_tests::model_serialization_different_binaries;
             use crate::native_tests::tutorial as run_tutorial;
             use tempdir::TempDir;
 
@@ -330,6 +333,18 @@ mod native_tests {
                 model_serialization(path, test.to_string());
                 test_dir.close().unwrap();
             }
+
+            #(#[test_case(TESTS[N])])*
+            fn model_serialization_different_binaries_(test: &str) {
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::native_tests::mv_test_(path, test);
+                // percent tolerance test
+                model_serialization_different_binaries(path, test.to_string());
+                test_dir.close().unwrap();
+            }
+
+
 
             #(#[test_case(TESTS[N])])*
             fn render_circuit_(test: &str) {
@@ -817,6 +832,116 @@ mod native_tests {
         assert_eq!(model, loaded_model)
     }
 
+    fn model_serialization_different_binaries(test_dir: &str, example_name: String) {
+        let status = Command::new("cargo")
+            .args([
+                "run",
+                "--bin",
+                "ezkl",
+                "--",
+                "gen-settings",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new("cargo")
+            .args([
+                "run",
+                "--bin",
+                "ezkl",
+                "--",
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        // now alter binary slightly
+        // create new temp cargo.toml with a different version
+        // cpy old cargo.toml to cargo.toml.bak
+        let status = Command::new("cp")
+            .args(["Cargo.toml", "Cargo.toml.bak"])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let mut cargo_toml = std::fs::File::open("Cargo.toml").unwrap();
+        let mut cargo_toml_contents = String::new();
+        cargo_toml.read_to_string(&mut cargo_toml_contents).unwrap();
+        let mut cargo_toml_contents = cargo_toml_contents.split("\n").collect::<Vec<_>>();
+
+        // draw a random version number from 0.0.0 to 0.100.100
+        let mut rng = rand::thread_rng();
+        let version = &format!(
+            "version = \"0.{}.{}-test\"",
+            rng.gen_range(0..100),
+            rng.gen_range(0..100)
+        );
+        let cargo_toml_contents = cargo_toml_contents
+            .iter_mut()
+            .map(|line| {
+                if line.starts_with("version") {
+                    *line = version;
+                }
+                *line
+            })
+            .collect::<Vec<_>>();
+        let mut cargo_toml = std::fs::File::create("Cargo.toml").unwrap();
+        cargo_toml
+            .write_all(cargo_toml_contents.join("\n").as_bytes())
+            .unwrap();
+
+        let status = Command::new("cargo")
+            .args([
+                "run",
+                "--bin",
+                "ezkl",
+                "--",
+                "gen-witness",
+                "-D",
+                &format!("{}/{}/input.json", test_dir, example_name),
+                "-M",
+                &format!("{}/{}/network.onnx", test_dir, example_name),
+                "-O",
+                &format!("{}/{}/witness.json", test_dir, example_name),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        // now delete cargo.toml and move cargo.toml.bak to cargo.toml
+        let status = Command::new("rm")
+            .args(["Cargo.toml"])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new("mv")
+            .args(["Cargo.toml.bak", "Cargo.toml"])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+    }
+
     // Mock prove (fast, but does not cover some potential issues)
     fn neg_mock(test_dir: &str, example_name: String, counter_example: String) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -851,9 +976,27 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
+                "gen-witness",
+                "-D",
+                &format!("{}/{}/input.json", test_dir, example_name),
+                "-M",
+                &format!("{}/{}/network.onnx", test_dir, example_name),
+                "-O",
+                &format!("{}/{}/witness.json", test_dir, example_name),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
                 "mock",
                 "-W",
-                format!("{}/{}/input.json", test_dir, counter_example).as_str(),
+                format!("{}/{}/witness.json", test_dir, counter_example).as_str(),
                 "-M",
                 format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
                 &format!(

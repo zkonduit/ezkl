@@ -1,12 +1,8 @@
 use std::{any::Any, error::Error};
 
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    fieldutils::{felt_to_i128, i128_to_felt},
-    tensor::{self, Tensor, TensorError, TensorType, ValTensor},
-};
+use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor};
 use halo2curves::ff::PrimeField;
 
 use self::{lookup::LookupOp, region::RegionCtx};
@@ -34,9 +30,7 @@ pub struct ForwardResult<F: PrimeField + TensorType + PartialOrd> {
 }
 
 /// An enum representing operations that can be represented as constraints in a circuit.
-pub trait Op<F: PrimeField + TensorType + PartialOrd>:
-    std::fmt::Debug + Send + Sync + Any + serde_traitobject::Serialize + serde_traitobject::Deserialize
-{
+pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + Sync + Any {
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError>;
     /// Returns a string representation of the operation.
@@ -137,86 +131,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
 
     fn is_input(&self) -> bool {
         true
-    }
-
-    fn clone_dyn(&self) -> Box<dyn Op<F>> {
-        Box::new(self.clone()) // Forward to the derive(Clone) impl
-    }
-}
-
-/// A wrapper for an operation that has been rescaled.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Rescaled<F: PrimeField + TensorType + PartialOrd> {
-    /// The operation to be rescaled.
-    #[serde(with = "serde_traitobject")]
-    pub inner: Box<dyn Op<F>>,
-    /// The scale of the operation's inputs.
-    pub scale: Vec<(usize, u128)>,
-}
-
-impl<F: PrimeField + TensorType + PartialOrd + Serialize> Op<F> for Rescaled<F> {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
-        if self.scale.len() != x.len() {
-            return Err(TensorError::DimMismatch("rescaled inputs".to_string()));
-        }
-
-        let mut rescaled_inputs = vec![];
-        let inputs = &mut x.to_vec();
-        for (i, ri) in inputs.iter_mut().enumerate() {
-            let ri = ri.map(|x| felt_to_i128(x));
-            let res = tensor::ops::nonlinearities::const_div(&ri, self.scale[i].1 as f64);
-            let output = res.map(|x| i128_to_felt(x));
-            rescaled_inputs.push(output);
-        }
-        Op::<F>::f(&*self.inner, &rescaled_inputs)
-    }
-
-    fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
-        Box::new(self.clone())
-    }
-
-    fn as_string(&self) -> String {
-        format!("RESCALED {}", self.inner.as_string())
-    }
-
-    fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
-        let in_scales = in_scales
-            .into_iter()
-            .zip(self.scale.iter())
-            .map(|(a, b)| a - crate::graph::mult_to_scale(b.1 as f64))
-            .collect();
-
-        Op::<F>::out_scale(&*self.inner, in_scales, _g)
-    }
-
-    fn required_lookups(&self) -> Vec<LookupOp> {
-        let mut required_lookups = vec![];
-        for scale in &self.scale {
-            if scale.1 != 0 {
-                required_lookups.push(LookupOp::Div {
-                    denom: (scale.1 as f32).into(),
-                });
-            }
-        }
-        required_lookups
-    }
-
-    fn layout(
-        &self,
-        config: &mut crate::circuit::BaseConfig<F>,
-        region: &mut RegionCtx<F>,
-        values: &[ValTensor<F>],
-    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        if self.scale.len() != values.len() {
-            return Err(Box::new(TensorError::DimMismatch(
-                "rescaled inputs".to_string(),
-            )));
-        }
-        let res = &layouts::rescale(config, region, values[..].try_into()?, &self.scale)?[..];
-        self.inner.layout(config, region, res)
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
@@ -345,44 +259,5 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
         Box::new(self.clone()) // Forward to the derive(Clone) impl
-    }
-}
-
-fn homogenize_input_scales<F: PrimeField + TensorType + PartialOrd + Serialize>(
-    op: impl Op<F> + Clone,
-    input_scales: Vec<u32>,
-    inputs_to_scale: Vec<usize>,
-) -> Result<Box<dyn Op<F>>, Box<dyn Error>> {
-    if inputs_to_scale.is_empty() {
-        return Ok(Box::new(op));
-    }
-
-    let mut dividers: Vec<u128> = vec![1; input_scales.len()];
-    if !input_scales.windows(2).all(|w| w[0] == w[1]) {
-        let min_scale = input_scales.iter().min().unwrap();
-        let _ = input_scales
-            .iter()
-            .enumerate()
-            .map(|(idx, input_scale)| {
-                if !inputs_to_scale.contains(&idx) {
-                    return;
-                }
-                let scale_diff = input_scale - min_scale;
-                if scale_diff > 0 {
-                    let mult = crate::graph::scale_to_multiplier(scale_diff);
-                    dividers[idx] = mult as u128;
-                }
-            })
-            .collect_vec();
-    }
-
-    // only rescale if need to
-    if dividers.iter().any(|&x| x > 1) {
-        Ok(Box::new(crate::circuit::Rescaled {
-            inner: Box::new(op),
-            scale: (0..input_scales.len()).zip(dividers).collect_vec(),
-        }))
-    } else {
-        Ok(Box::new(op))
     }
 }

@@ -78,7 +78,9 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: Model serialization
-        run: cargo nextest run native_tests::tests::model_serialization_
+        run: cargo nextest run native_tests::tests::model_serialization_::t
+      - name: Model serialization different binary ID
+        run: cargo nextest run native_tests::tests::model_serialization_different_binaries_::t  --test-threads 1
 
   wasm32-tests:
     runs-on: ubuntu-latest
