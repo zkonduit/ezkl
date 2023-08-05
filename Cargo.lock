@@ -1570,7 +1570,7 @@ dependencies = [
 
 [[package]]
 name = "ezkl"
-version = "0.71.30-test"
+version = "0.0.0"
 dependencies = [
  "ark-std",
  "bincode",
