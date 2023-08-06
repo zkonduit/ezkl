@@ -5,8 +5,7 @@ use crate::graph::modules::POSEIDON_LEN_GRAPH;
 use halo2_proofs::plonk::*;
 use halo2_proofs::poly::commitment::{CommitmentScheme, ParamsProver};
 use halo2_proofs::poly::kzg::{
-    commitment::{KZGCommitmentScheme, ParamsKZG},
-    strategy::SingleStrategy as KZGSingleStrategy,
+    commitment::ParamsKZG, strategy::SingleStrategy as KZGSingleStrategy,
 };
 use halo2curves::bn256::{Bn256, Fr, G1Affine, G1};
 use halo2curves::ff::{FromUniformBytes, PrimeField};
@@ -29,7 +28,8 @@ use crate::graph::{GraphCircuit, GraphSettings};
 
 /// Generate a poseidon hash in browser. Input message
 #[wasm_bindgen]
-pub fn poseidon_hash_wasm(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
+#[allow(non_snake_case)]
+pub fn poseidonHash(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
     let message: Vec<Fr> = serde_json::from_slice(&message[..]).unwrap();
 
     let output =
@@ -43,7 +43,8 @@ pub fn poseidon_hash_wasm(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
 
 /// Encrypt using elgamal in browser. Input message
 #[wasm_bindgen]
-pub fn elgamal_encrypt_wasm(
+#[allow(non_snake_case)]
+pub fn elgamalEncrypt(
     pk: wasm_bindgen::Clamped<Vec<u8>>,
     message: wasm_bindgen::Clamped<Vec<u8>>,
     r: wasm_bindgen::Clamped<Vec<u8>>,
@@ -59,7 +60,8 @@ pub fn elgamal_encrypt_wasm(
 
 /// Decrypt using elgamal in browser. Input message
 #[wasm_bindgen]
-pub fn elgamal_decrypt_wasm(
+#[allow(non_snake_case)]
+pub fn elgamalDecrypt(
     cipher: wasm_bindgen::Clamped<Vec<u8>>,
     sk: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Vec<u8> {
@@ -71,74 +73,10 @@ pub fn elgamal_decrypt_wasm(
     serde_json::to_vec(&output).unwrap()
 }
 
-/// Generate proving key in browser
-#[wasm_bindgen]
-pub fn gen_pk_wasm(
-    circuit_ser: wasm_bindgen::Clamped<Vec<u8>>,
-    params_ser: wasm_bindgen::Clamped<Vec<u8>>,
-    circuit_settings_ser: wasm_bindgen::Clamped<Vec<u8>>,
-) -> Vec<u8> {
-    // Read in circuit params
-    let circuit_settings: GraphSettings =
-        serde_json::from_slice(&circuit_settings_ser[..]).unwrap();
-    // Read in kzg params
-    let mut reader = std::io::BufReader::new(&params_ser[..]);
-    let params: ParamsKZG<Bn256> =
-        halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).unwrap();
-    // Read in circuit
-    let mut circuit_reader = std::io::BufReader::new(&circuit_ser[..]);
-    let model = crate::graph::Model::new(&mut circuit_reader, circuit_settings.run_args).unwrap();
-
-    let circuit = GraphCircuit::new(
-        model,
-        circuit_settings.run_args,
-        crate::circuit::CheckMode::UNSAFE,
-    )
-    .unwrap();
-
-    // Create proving key
-    let pk = create_keys_wasm::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
-        .map_err(Box::<dyn std::error::Error>::from)
-        .unwrap();
-
-    let mut serialized_pk = Vec::new();
-    pk.write(&mut serialized_pk, halo2_proofs::SerdeFormat::RawBytes)
-        .unwrap();
-
-    serialized_pk
-}
-
-/// Generate verifying key in browser
-#[wasm_bindgen]
-pub fn gen_vk_wasm(
-    pk: wasm_bindgen::Clamped<Vec<u8>>,
-    circuit_settings_ser: wasm_bindgen::Clamped<Vec<u8>>,
-) -> Vec<u8> {
-    // Read in circuit params
-    let circuit_settings: GraphSettings =
-        serde_json::from_slice(&circuit_settings_ser[..]).unwrap();
-
-    // Read in proving key
-    let mut reader = std::io::BufReader::new(&pk[..]);
-    let pk = ProvingKey::<G1Affine>::read::<_, GraphCircuit>(
-        &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
-        circuit_settings.clone(),
-    )
-    .unwrap();
-
-    let vk = pk.get_vk();
-
-    let mut serialized_vk = Vec::new();
-    vk.write(&mut serialized_vk, halo2_proofs::SerdeFormat::RawBytes)
-        .unwrap();
-
-    serialized_vk
-}
-
 /// Verify proof in browser using wasm
 #[wasm_bindgen]
-pub fn verify_wasm(
+#[allow(non_snake_case)]
+pub fn verify(
     proof_js: wasm_bindgen::Clamped<Vec<u8>>,
     vk: wasm_bindgen::Clamped<Vec<u8>>,
     circuit_settings_ser: wasm_bindgen::Clamped<Vec<u8>>,
@@ -174,7 +112,8 @@ pub fn verify_wasm(
 
 /// Prove in browser using wasm
 #[wasm_bindgen]
-pub fn prove_wasm(
+#[allow(non_snake_case)]
+pub fn prove(
     witness: wasm_bindgen::Clamped<Vec<u8>>,
     pk: wasm_bindgen::Clamped<Vec<u8>>,
     circuit_ser: wasm_bindgen::Clamped<Vec<u8>>,
