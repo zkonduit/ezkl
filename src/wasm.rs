@@ -2,13 +2,10 @@ use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEI
 use crate::circuit::modules::poseidon::PoseidonChip;
 use crate::circuit::modules::Module;
 use crate::graph::modules::POSEIDON_LEN_GRAPH;
-use rand::rngs::StdRng;
-use rand::SeedableRng;
 use halo2_proofs::plonk::*;
 use halo2_proofs::poly::commitment::{CommitmentScheme, ParamsProver};
 use halo2_proofs::poly::kzg::{
-    commitment::ParamsKZG,
-    strategy::SingleStrategy as KZGSingleStrategy,
+    commitment::ParamsKZG, strategy::SingleStrategy as KZGSingleStrategy,
 };
 use halo2curves::bn256::{Bn256, Fr, G1Affine, G1};
 use halo2curves::ff::{FromUniformBytes, PrimeField};
@@ -40,22 +37,6 @@ pub fn poseidonHash(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
             message.clone(),
         )
         .unwrap();
-
-    serde_json::to_vec(&output).unwrap()
-}
-
-/// Generates random elgamal variables from a random seed value in browser. 
-/// Make sure input seed comes a secure source of randomness
-#[wasm_bindgen]
-#[allow(non_snake_case)]
-pub fn elgamalGenRandom(
-    rng: wasm_bindgen::Clamped<Vec<u8>>,
-) -> Vec<u8> {
-
-    let seed: &[u8] = &rng;  
-    let mut rng = StdRng::from_seed(seed.try_into().unwrap()); 
-
-    let output = crate::circuit::modules::elgamal::ElGamalVariables::gen_random(&mut rng);
 
     serde_json::to_vec(&output).unwrap()
 }
