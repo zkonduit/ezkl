@@ -202,19 +202,26 @@ impl Serialize for ElGamalVariables {
     }
 }
 
+/// Wasm based serializing and deserailizing for ElGamalVariables
+#[derive(Deserialize, Serialize, Debug)]
+pub struct ElGamalVariablesSer {
+    ///
+    pub r: [u64; 4],
+    ///
+    pub sk: [u64; 4],
+    ///
+    pub pk: [[u64; 4]; 2],
+    ///
+    pub aux_generator: [[u64; 4]; 2],
+    ///
+    pub window_size: usize, 
+}
+
 impl<'de> Deserialize<'de> for ElGamalVariables {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        #[derive(Deserialize)]
-        struct ElGamalVariablesSer {
-            r: [u64; 4],
-            sk: [u64; 4],
-            pk: [[u64; 4]; 2],
-            aux_generator: [[u64; 4]; 2],
-            window_size: usize,
-        }
 
         let var_ser: ElGamalVariablesSer = Deserialize::deserialize(deserializer)?;
 
@@ -265,7 +272,7 @@ impl ElGamalVariables {
 
         // compute secret_key*generator to derive the public key
         // With BN256, we create the private key from a random number. This is a private key value (sk
-        //  and a public key mapped to the G2 curve:: pk=sk.G2
+        // and a public key mapped to the G2 curve:: pk=sk.G2
         let mut pk = G1::generator();
         pk.mul_assign(sk);
 
@@ -276,6 +283,40 @@ impl ElGamalVariables {
             window_size: 4,
             aux_generator: <G1Affine as CurveAffine>::CurveExt::random(rng).to_affine(),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+/// The cipher returned from the ElGamal encryption.
+pub struct ElGamalCipher {
+    /// c1 := r*G
+    pub c1: G1,
+    /// c2 := m*s
+    pub c2: Vec<Fr>,
+}
+
+
+impl<'de> Deserialize<'de> for ElGamalCipher {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct ElGamalCipherSer {
+            c1: [[u64; 4]; 3],
+            c2: Vec<Fr>,
+        }
+
+        let cipher_ser: ElGamalCipherSer = Deserialize::deserialize(deserializer)?;
+
+        Ok(ElGamalCipher {
+            c1: G1 {
+                x: Fq::from_raw(cipher_ser.c1[0]),
+                y: Fq::from_raw(cipher_ser.c1[1]),
+                z: Fq::from_raw(cipher_ser.c1[2])
+            },
+            c2: cipher_ser.c2,
+        })
     }
 }
 
@@ -300,7 +341,7 @@ impl ElGamalGadget {
     }
 
     /// Encrypt a message using the public key.
-    pub fn encrypt(pk: G1Affine, msg: Vec<Fr>, r: Fr) -> (G1, Vec<Fr>) {
+    pub fn encrypt(pk: G1Affine, msg: Vec<Fr>, r: Fr) -> ElGamalCipher {
         let g = G1Affine::generator();
         let c1 = g.mul(&r);
 
@@ -320,7 +361,7 @@ impl ElGamalGadget {
             c2.push(m + dh);
         }
 
-        (c1, c2)
+        ElGamalCipher { c1, c2 }
     }
 
     /// Hash the msssage to be used as a public input.
@@ -336,9 +377,9 @@ impl ElGamalGadget {
     }
 
     /// Decrypt a ciphertext using the secret key.
-    pub fn decrypt(cipher: &(G1, Vec<Fr>), sk: Fr) -> Vec<Fr> {
-        let c1 = cipher.0;
-        let c2 = cipher.1.clone();
+    pub fn decrypt(cipher: &ElGamalCipher, sk: Fr) -> Vec<Fr> {
+        let c1 = cipher.c1;
+        let c2 = cipher.c2.clone();
 
         let s = c1.mul(sk).to_affine().coordinates().unwrap();
 
@@ -359,9 +400,9 @@ impl ElGamalGadget {
     }
 
     /// Get the public inputs for the circuit.
-    pub fn get_instances(cipher: &(G1, Vec<Fr>), sk_hash: Fr) -> Vec<Vec<Fr>> {
+    pub fn get_instances(cipher: &ElGamalCipher, sk_hash: Fr) -> Vec<Vec<Fr>> {
         let mut c1_and_sk = cipher
-            .0
+            .c1
             .to_affine()
             .coordinates()
             .map(|c| {
@@ -374,7 +415,7 @@ impl ElGamalGadget {
 
         c1_and_sk.push(sk_hash);
 
-        c1_and_sk.push(Self::hash_encrypted_msg(cipher.1.clone()));
+        c1_and_sk.push(Self::hash_encrypted_msg(cipher.c2.clone()));
 
         vec![c1_and_sk]
     }
