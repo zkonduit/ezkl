@@ -125,6 +125,8 @@ pub struct PostgresSource {
     pub host: RPCUrl,
     /// user to connect to postgres
     pub user: String,
+    /// password to connect to postgres
+    pub password: String,
     /// query to execute
     pub query: String,
     /// dbname
@@ -136,10 +138,18 @@ pub struct PostgresSource {
 #[cfg(not(target_arch = "wasm32"))]
 impl PostgresSource {
     /// Create a new PostgresSource
-    pub fn new(host: RPCUrl, port: String, user: String, query: String, dbname: String) -> Self {
+    pub fn new(
+        host: RPCUrl,
+        port: String,
+        user: String,
+        query: String,
+        dbname: String,
+        password: String,
+    ) -> Self {
         PostgresSource {
             host,
             user,
+            password,
             query,
             dbname,
             port,
@@ -154,12 +164,13 @@ impl PostgresSource {
         let query = self.query.clone();
         let dbname = self.dbname.clone();
         let port = self.port.clone();
+        let password = self.password.clone();
 
         let res: Vec<rust_decimal::Decimal> = thread::spawn(move || {
             let mut client = Client::connect(
                 &format!(
-                    "host={} user={} dbname={} port={}",
-                    host, user, dbname, port
+                    "host={} user={} dbname={} port={} password={}",
+                    host, user, dbname, port, password
                 ),
                 NoTls,
             )
