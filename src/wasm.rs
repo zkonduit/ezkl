@@ -6,8 +6,7 @@ use crate::graph::modules::POSEIDON_LEN_GRAPH;
 use halo2_proofs::plonk::*;
 use halo2_proofs::poly::commitment::{CommitmentScheme, ParamsProver};
 use halo2_proofs::poly::kzg::{
-    commitment::ParamsKZG,
-    strategy::SingleStrategy as KZGSingleStrategy,
+    commitment::ParamsKZG, strategy::SingleStrategy as KZGSingleStrategy,
 };
 use halo2curves::bn256::{Bn256, Fr, G1Affine, Fq, G1};
 use halo2curves::ff::{FromUniformBytes, PrimeField};
