@@ -165,13 +165,18 @@ impl PostgresSource {
         let dbname = self.dbname.clone();
         let port = self.port.clone();
         let password = self.password.clone();
+        
+        let config = if password.is_empty() {
+            format!("host={} user={} dbname={} port={}",
+                    host, user, dbname, port)
+        } else {
+            format!("host={} user={} dbname={} port={} password={}",
+                    host, user, dbname, port, password)              
+        };
 
         let res: Vec<rust_decimal::Decimal> = thread::spawn(move || {
             let mut client = Client::connect(
-                &format!(
-                    "host={} user={} dbname={} port={} password={}",
-                    host, user, dbname, port, password
-                ),
+                &,
                 NoTls,
             )
             .unwrap();
