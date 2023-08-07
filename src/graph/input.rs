@@ -1,21 +1,23 @@
 use crate::fieldutils::i128_to_felt;
 use crate::pfsys::field_to_vecu64;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::tensor::Tensor;
 use halo2curves::bn256::Fr as Fp;
+#[cfg(not(target_arch = "wasm32"))]
+use postgres::{Client, NoTls};
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
 use pyo3::ToPyObject;
-// use serde::de::{Visitor, MapAccess};
-// use serde::de::{Visitor, MapAccess};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::tensor::Tensor;
+use rust_decimal::prelude::ToPrimitive;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-// use std::collections::HashMap;
 use std::io::Read;
-// use std::collections::HashMap;
+#[cfg(not(target_arch = "wasm32"))]
+use std::thread;
 
 use super::quantize_float;
 use super::GraphError;
@@ -115,6 +117,96 @@ impl OnChainSource {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+/// Inner elements of inputs/outputs coming from postgres DB
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialOrd, PartialEq)]
+pub struct PostgresSource {
+    /// postgres host
+    pub host: RPCUrl,
+    /// user to connect to postgres
+    pub user: String,
+    /// query to execute
+    pub query: String,
+    /// dbname
+    pub dbname: String,
+    /// port
+    pub port: String,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl PostgresSource {
+    /// Create a new PostgresSource
+    pub fn new(host: RPCUrl, port: String, user: String, query: String, dbname: String) -> Self {
+        PostgresSource {
+            host,
+            user,
+            query,
+            dbname,
+            port,
+        }
+    }
+
+    /// Fetch data from postgres
+    pub fn fetch(&self) -> Result<Vec<Vec<rust_decimal::Decimal>>, Box<dyn std::error::Error>> {
+        // clone to move into thread
+        let user = self.user.clone();
+        let host = self.host.clone();
+        let query = self.query.clone();
+        let dbname = self.dbname.clone();
+        let port = self.port.clone();
+
+        println!("fetching data from postgres: {}", query);
+        println!("host: {}", host);
+        print!("user: {}", user);
+        println!("dbname: {}", dbname);
+
+        let res: Vec<rust_decimal::Decimal> = thread::spawn(move || {
+            let mut client = Client::connect(
+                &format!(
+                    "host={} user={} dbname={} port={}",
+                    host, user, dbname, port
+                ),
+                NoTls,
+            )
+            .unwrap();
+            let mut res: Vec<rust_decimal::Decimal> = Vec::new();
+            // extract rows from query
+            for row in client.query(&query, &[]).unwrap() {
+                // extract features from row
+                for i in 0..row.len() {
+                    res.push(row.get(i));
+                }
+            }
+            res
+        })
+        .join()
+        .map_err(|_| "failed to fetch data from postgres")?;
+
+        Ok(vec![res])
+    }
+
+    /// Fetch data from postgres and format it as a FileSource
+    pub fn fetch_and_format_as_file(
+        &self,
+    ) -> Result<Vec<Vec<FileSourceInner>>, Box<dyn std::error::Error>> {
+        Ok(self
+            .fetch()?
+            .iter()
+            .map(|d| {
+                d.iter()
+                    .map(|d| {
+                        FileSourceInner::Float(
+                            d.to_f64()
+                                .ok_or("could not convert decimal to f64")
+                                .unwrap(),
+                        )
+                    })
+                    .collect()
+            })
+            .collect())
+    }
+}
+
 impl OnChainSource {
     #[cfg(not(target_arch = "wasm32"))]
     /// Create dummy local on-chain data to test the OnChain data source
@@ -206,6 +298,9 @@ pub enum DataSource {
     File(FileSource),
     /// On-chain data source. The first element is the calls to the account, and the second is the RPC url.
     OnChain(OnChainSource),
+    /// Postgres DB
+    #[cfg(not(target_arch = "wasm32"))]
+    DB(PostgresSource),
 }
 impl Default for DataSource {
     fn default() -> Self {
@@ -263,6 +358,13 @@ impl<'de> Deserialize<'de> for DataSource {
         if let Ok(t) = second_try {
             return Ok(DataSource::OnChain(t));
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let third_try: Result<PostgresSource, _> = serde_json::from_str(this_json.get());
+            if let Ok(t) = third_try {
+                return Ok(DataSource::DB(t));
+            }
+        }
 
         Err(serde::de::Error::custom("failed to deserialize DataSource"))
     }
@@ -313,10 +415,16 @@ impl GraphData {
             GraphData {
                 input_data: DataSource::File(data),
                 output_data: _,
-            } => data,
-            _ => {
-                todo!("on-chain data batching not implemented yet")
-            }
+            } => data.clone(),
+            GraphData {
+                input_data: DataSource::OnChain(_),
+                output_data: _,
+            } => todo!("on-chain data batching not implemented yet"),
+            #[cfg(not(target_arch = "wasm32"))]
+            GraphData {
+                input_data: DataSource::DB(data),
+                output_data: _,
+            } => data.fetch_and_format_as_file()?,
         };
 
         for (i, input) in iterable.iter().enumerate() {
@@ -379,6 +487,13 @@ impl ToPyObject for DataSource {
                 let dict = PyDict::new(py);
                 dict.set_item("rpc_url", &source.rpc).unwrap();
                 dict.set_item("calls_to_accounts", &source.calls).unwrap();
+                dict.to_object(py)
+            }
+            DataSource::DB(source) => {
+                let dict = PyDict::new(py);
+                dict.set_item("host", &source.host).unwrap();
+                dict.set_item("user", &source.user).unwrap();
+                dict.set_item("query", &source.query).unwrap();
                 dict.to_object(py)
             }
         }

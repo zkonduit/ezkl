@@ -104,7 +104,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 7] = [
+    const TESTS: [&str; 8] = [
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
@@ -113,6 +113,7 @@ mod py_tests {
         "simple_demo.ipynb",
         "data_attest.ipynb",
         "variance.ipynb",
+        "mean_postgres.ipynb",
     ];
 
     macro_rules! test_func {
@@ -125,7 +126,7 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=6 {
+            seq!(N in 0..=7 {
 
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
