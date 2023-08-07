@@ -458,10 +458,6 @@ jobs:
           with:
             crate: cargo-nextest
             locked: true
-        - name: Install PostgreSQL client
-          run: |
-            apt-get update
-            apt-get install --yes postgresql-client
         - name: Install solc
           run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
         - name: Install Anvil
