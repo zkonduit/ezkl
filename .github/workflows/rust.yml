@@ -480,7 +480,7 @@ jobs:
         #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
         #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
         - name: Mean tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_7_expects
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_7_expects --no-capture
         - name: Voice tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
         - name: Gan tutorial
