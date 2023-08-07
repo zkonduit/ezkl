@@ -176,7 +176,7 @@ impl PostgresSource {
 
         let res: Vec<rust_decimal::Decimal> = thread::spawn(move || {
             let mut client = Client::connect(
-                &,
+                &config,
                 NoTls,
             )
             .unwrap();
