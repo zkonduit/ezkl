@@ -155,11 +155,6 @@ impl PostgresSource {
         let dbname = self.dbname.clone();
         let port = self.port.clone();
 
-        println!("fetching data from postgres: {}", query);
-        println!("host: {}", host);
-        print!("user: {}", user);
-        println!("dbname: {}", dbname);
-
         let res: Vec<rust_decimal::Decimal> = thread::spawn(move || {
             let mut client = Client::connect(
                 &format!(
