@@ -196,9 +196,9 @@ jobs:
       [
         build,
         library-tests,
-        mock-proving-tests,
+       
         python-tests,
-        python-integration-tests,
+        
       ]
     steps:
       - uses: actions/checkout@v3
@@ -236,9 +236,9 @@ jobs:
       [
         build,
         library-tests,
-        mock-proving-tests,
+       
         python-tests,
-        python-integration-tests,
+        
       ]
     steps:
       - uses: actions/checkout@v3
@@ -268,9 +268,9 @@ jobs:
       [
         build,
         library-tests,
-        mock-proving-tests,
+       
         python-tests,
-        python-integration-tests,
+        
       ]
     steps:
       - uses: actions/checkout@v3
@@ -319,9 +319,9 @@ jobs:
       [
         build,
         library-tests,
-        mock-proving-tests,
+       
         python-tests,
-        python-integration-tests,
+        
       ]
     steps:
       - uses: actions/checkout@v3
@@ -343,7 +343,7 @@ jobs:
       [
         build,
         library-tests,
-        mock-proving-tests,
+       
         python-tests,
       ]
     steps:
