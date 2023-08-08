@@ -69,6 +69,7 @@ mod py_tests {
                     "keras",
                     "tensorflow",
                     "tf2onnx",
+                    "pytorch-lightning",
                 ])
                 .status()
                 .expect("failed to execute process");
@@ -104,7 +105,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 8] = [
+    const TESTS: [&str; 9] = [
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
@@ -114,6 +115,7 @@ mod py_tests {
         "data_attest.ipynb",
         "variance.ipynb",
         "mean_postgres.ipynb",
+        "little_transformer.ipynb",
     ];
 
     macro_rules! test_func {
@@ -126,7 +128,7 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=7 {
+            seq!(N in 0..=8 {
 
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
