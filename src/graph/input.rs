@@ -17,6 +17,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::io::Read;
 #[cfg(not(target_arch = "wasm32"))]
 use std::thread;
+#[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::tract_hir::tract_num_traits::ToPrimitive;
 
 use super::quantize_float;
