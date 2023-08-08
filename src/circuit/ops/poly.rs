@@ -407,7 +407,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
         ) {
             vec![0, 1]
         } else if matches!(self, PolyOp::Iff) {
-            vec![0, 2]
+            vec![1, 2]
         } else {
             vec![]
         }
