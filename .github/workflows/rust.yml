@@ -156,6 +156,8 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
+      - name: Multihead Attention Mock
+        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_2_expects -- --include-ignored
       - name: Mock proving tests (public outputs)
         run: cargo nextest run --release --verbose tests::mock_public_outputs_ --test-threads 32
       - name: Mock proving tests (public outputs + batch size == 10)
