@@ -623,7 +623,7 @@ pub(crate) async fn calibrate(
     // now retrieve the run args
     let run_args = settings.run_args;
 
-    let pb = init_bar((4..12).len() as u64);
+    let pb = init_bar((4..16).len() as u64);
 
     pb.set_message("calibrating...");
     // we load the model to get the input and output shapes
@@ -639,7 +639,7 @@ pub(crate) async fn calibrate(
 
     let mut found_params: Vec<GraphSettings> = vec![];
 
-    for scale in 0..16 {
+    for scale in 4..16 {
         pb.set_message(format!("scale {}", scale));
         std::thread::sleep(Duration::from_millis(100));
 
