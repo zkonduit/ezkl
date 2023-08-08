@@ -426,6 +426,27 @@ jobs:
 
   python-integration-tests:
       runs-on: 768gb
+
+        # Service containers to run with `container-job`
+      services:
+        # Label used to access the service container
+        postgres:
+          # Docker Hub image
+          image: postgres
+          env:
+            POSTGRES_USER: ubuntu
+            POSTGRES_HOST_AUTH_METHOD: trust
+          # Set health checks to wait until postgres has started
+          options: >-
+            --health-cmd pg_isready
+            --health-interval 10s
+            --health-timeout 5s
+            --health-retries 5
+          ports:
+            # Maps tcp port 5432 on service container to the host
+            - 5432:5432
+
+
       # needs: [build,  library-tests, docs]
       steps:
         - uses: actions/checkout@v3
@@ -458,6 +479,8 @@ jobs:
         #     # now dump the contents of the file into a file called kaggle.json
         #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
         #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+        - name: Mean tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_7_expects --no-capture
         - name: Voice tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
         - name: Gan tutorial
@@ -474,6 +497,7 @@ jobs:
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_5_expects
         - name: Variance tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
+       
 
 
 

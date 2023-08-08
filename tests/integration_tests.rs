@@ -112,7 +112,7 @@ mod native_tests {
 
             let input_data = match data.input_data {
                 DataSource::File(data) => data,
-                DataSource::OnChain(_) => panic!("Only File data sources support batching"),
+                _ => panic!("Only File data sources support batching"),
             };
 
             let duplicated_input_data: FileSource = input_data
