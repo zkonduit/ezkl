@@ -188,7 +188,7 @@ jobs:
         run: cargo nextest run --release --verbose tests::mock_encrypted_all_::t  --test-threads 32
       - name: Mock proving tests (encrypted inputs + hashed params)
         run: cargo nextest run --release --verbose tests::mock_encrypted_input_hashed_params_::t  --test-threads 32
-      
+
 
   prove-and-verify-evm-tests:
     runs-on: ubuntu-latest-16-cores
@@ -196,9 +196,7 @@ jobs:
       [
         build,
         library-tests,
-       
         python-tests,
-        
       ]
     steps:
       - uses: actions/checkout@v3
@@ -236,9 +234,7 @@ jobs:
       [
         build,
         library-tests,
-       
         python-tests,
-        
       ]
     steps:
       - uses: actions/checkout@v3
@@ -268,9 +264,7 @@ jobs:
       [
         build,
         library-tests,
-       
         python-tests,
-        
       ]
     steps:
       - uses: actions/checkout@v3
@@ -319,9 +313,7 @@ jobs:
       [
         build,
         library-tests,
-       
         python-tests,
-        
       ]
     steps:
       - uses: actions/checkout@v3
@@ -343,7 +335,7 @@ jobs:
       [
         build,
         library-tests,
-       
+
         python-tests,
       ]
     steps:
@@ -502,7 +494,7 @@ jobs:
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_5_expects
         - name: Variance tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
-       
+
 
 
 
