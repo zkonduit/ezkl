@@ -59,7 +59,7 @@ instant = { version = "0.1" }
 reqwest = { version = "0.11.14", default-features = false, features = ["default-tls"] }
 openssl = { version = "0.10.55", features = ["vendored"] }
 postgres = "0.19.5"
-rust_decimal = { version = "1.31.0", features = ["db-postgres"] }
+pg_bigdecimal = "0.1.5"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2.8", features = ["js"] }

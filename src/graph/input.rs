@@ -12,12 +12,12 @@ use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
 use pyo3::ToPyObject;
 #[cfg(not(target_arch = "wasm32"))]
-use rust_decimal::prelude::ToPrimitive;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::io::Read;
 #[cfg(not(target_arch = "wasm32"))]
 use std::thread;
+use tract_onnx::tract_hir::tract_num_traits::ToPrimitive;
 
 use super::quantize_float;
 use super::GraphError;
@@ -157,7 +157,7 @@ impl PostgresSource {
     }
 
     /// Fetch data from postgres
-    pub fn fetch(&self) -> Result<Vec<Vec<rust_decimal::Decimal>>, Box<dyn std::error::Error>> {
+    pub fn fetch(&self) -> Result<Vec<Vec<pg_bigdecimal::PgNumeric>>, Box<dyn std::error::Error>> {
         // clone to move into thread
         let user = self.user.clone();
         let host = self.host.clone();
@@ -165,22 +165,22 @@ impl PostgresSource {
         let dbname = self.dbname.clone();
         let port = self.port.clone();
         let password = self.password.clone();
-        
+
         let config = if password.is_empty() {
-            format!("host={} user={} dbname={} port={}",
-                    host, user, dbname, port)
+            format!(
+                "host={} user={} dbname={} port={}",
+                host, user, dbname, port
+            )
         } else {
-            format!("host={} user={} dbname={} port={} password={}",
-                    host, user, dbname, port, password)              
+            format!(
+                "host={} user={} dbname={} port={} password={}",
+                host, user, dbname, port, password
+            )
         };
 
-        let res: Vec<rust_decimal::Decimal> = thread::spawn(move || {
-            let mut client = Client::connect(
-                &config,
-                NoTls,
-            )
-            .unwrap();
-            let mut res: Vec<rust_decimal::Decimal> = Vec::new();
+        let res: Vec<pg_bigdecimal::PgNumeric> = thread::spawn(move || {
+            let mut client = Client::connect(&config, NoTls).unwrap();
+            let mut res: Vec<pg_bigdecimal::PgNumeric> = Vec::new();
             // extract rows from query
             for row in client.query(&query, &[]).unwrap() {
                 // extract features from row
@@ -207,7 +207,9 @@ impl PostgresSource {
                 d.iter()
                     .map(|d| {
                         FileSourceInner::Float(
-                            d.to_f64()
+                            d.n.as_ref()
+                                .unwrap()
+                                .to_f64()
                                 .ok_or("could not convert decimal to f64")
                                 .unwrap(),
                         )
