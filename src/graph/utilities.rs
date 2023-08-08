@@ -422,50 +422,8 @@ pub fn new_op_from_onnx(
         "Atanh" => SupportedOp::Nonlinear(LookupOp::ATanh { scales: (1, 1) }),
         "Erf" => SupportedOp::Nonlinear(LookupOp::Erf { scales: (1, 1) }),
         "Source" => SupportedOp::Input(crate::circuit::ops::Input { scale }),
-        "Add" => {
-            // get the max scale of inputs
-            let max_scale = inputs
-                .iter()
-                .map(|x| x.out_scales()[0])
-                .max()
-                .ok_or_else(|| Box::new(GraphError::MissingParams("add".to_string())))?;
-
-            for inp in inputs.iter_mut() {
-                let boxed_op = inp.opkind();
-                if let Some(mut n) = downcast_const_op(boxed_op) {
-                    if n.is_single_use() {
-                        log::debug!("requantizing #{} to {} for add", inp.idx(), max_scale);
-                        n.requantize(max_scale)?;
-                        inp.bump_scale(max_scale);
-                        inp.replace_opkind(SupportedOp::Constant(n));
-                    }
-                }
-            }
-
-            SupportedOp::Linear(PolyOp::Add)
-        }
-        "Sub" => {
-            // get the max scale of inputs
-            let max_scale = inputs
-                .iter()
-                .map(|x| x.out_scales()[0])
-                .max()
-                .ok_or_else(|| Box::new(GraphError::MissingParams("add".to_string())))?;
-
-            for inp in inputs.iter_mut() {
-                let boxed_op = inp.opkind();
-                if let Some(mut n) = downcast_const_op(boxed_op) {
-                    if n.is_single_use() {
-                        log::debug!("requantizing #{} to {} fro sub", inp.idx(), max_scale);
-                        n.requantize(max_scale)?;
-                        inp.bump_scale(max_scale);
-                        inp.replace_opkind(SupportedOp::Constant(n));
-                    }
-                }
-            }
-
-            SupportedOp::Linear(PolyOp::Sub)
-        }
+        "Add" => SupportedOp::Linear(PolyOp::Add),
+        "Sub" => SupportedOp::Linear(PolyOp::Sub),
         "Mul" => SupportedOp::Linear(PolyOp::Mult),
         "Iff" => SupportedOp::Linear(PolyOp::Iff),
         "Less" => {

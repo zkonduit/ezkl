@@ -643,7 +643,7 @@ pub(crate) async fn calibrate(
         pb.set_message(format!("scale {}", scale));
         std::thread::sleep(Duration::from_millis(100));
 
-        let _r = Gag::stdout().unwrap();
+        // let _r = Gag::stdout().unwrap();
         // Result<Vec<GraphSettings>, &str>
         let tasks = chunks
             .iter()
@@ -719,7 +719,7 @@ pub(crate) async fn calibrate(
             found_params.push(best);
         }
 
-        std::mem::drop(_r);
+        // std::mem::drop(_r);
         pb.inc(1);
     }
 
