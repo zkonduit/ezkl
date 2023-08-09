@@ -143,7 +143,7 @@ jobs:
         run: cargo nextest run --release --verbose tests::tutorial_
 
   mock-proving-tests:
-    runs-on: 512gb
+    runs-on: 768gb
     # needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
@@ -420,7 +420,7 @@ jobs:
         run: source .env/bin/activate; pytest
 
   python-integration-tests:
-      runs-on: 768gb
+      runs-on: 512gb
 
         # Service containers to run with `container-job`
       services:
