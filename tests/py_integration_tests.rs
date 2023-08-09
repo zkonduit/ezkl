@@ -67,7 +67,7 @@ mod py_tests {
                     "web3",
                     "librosa",
                     "keras",
-                    "tensorflow",
+                    "tensorflow==2.13.0",
                     "tf2onnx",
                     "pytorch-lightning",
                 ])
