@@ -1,0 +1,49 @@
+name: Build and Publish WASM<>JS Bindings
+
+on:
+  # Requires someone to trigger this build script via github workflows
+  # It is required that the codebase is audited by contributors
+  # before triggering to reduce the likelihood of supply chain attacks
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: .
+jobs:
+    wasm-publish:
+        name: publish-wasm-bindings
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repo
+            uses: actions/checkout@v3
+      
+          - name: Add wasm32-unknown-unknown target
+            run: rustup target add wasm32-unknown-unknown
+      
+          - name: Install LLVM and clang
+            run: |
+              sudo apt-get update
+              sudo apt-get install llvm clang-12
+              echo "CC=/opt/llvm/bin/clang" >> $GITHUB_ENV
+              echo "AR=/opt/llvm/bin/llvm-ar" >> $GITHUB_ENV
+      
+          - name: Install wasm-pack
+            run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      
+          - name: Install wasm-server-runner
+            run: cargo install wasm-server-runner
+      
+          - name: Build wasm file
+            run: wasm-pack build --target web . -- -Z build-std="panic_abort,std"
+      
+          - name: Set up Node.js
+            uses: actions/setup-node@v3
+            with:
+              node-version: '18.12.1'
+      
+          - name: Publish to npm
+            run: |
+              cd pkg
+              npm publish
+            env:
+              NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
