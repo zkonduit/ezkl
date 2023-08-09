@@ -301,10 +301,13 @@ pub enum Commands {
         /// The path to output to the desired srs file
         #[arg(long, default_value = "kzg.srs")]
         srs_path: PathBuf,
-        /// Path to circuit_settings file to read in
-        #[arg(short = 'S', long)]
-        settings_path: PathBuf,
-        /// check mode for srs. verifies downloaded srs is valid. set to unsafe for speed.
+        /// Path to circuit_settings file to read in. Overrides logrows if specified.
+        #[arg(short = 'S', long, default_value = None)]
+        settings_path: Option<PathBuf>,
+        /// Number of logrows to use for srs. To manually override the logrows, omit specifying the settings_path
+        #[arg(long, default_value = None)]
+        logrows: Option<u32>,
+        /// Check mode for srs. verifies downloaded srs is valid. set to unsafe for speed.
         #[arg(long, default_value = "safe")]
         check: CheckMode,
     },

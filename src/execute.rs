@@ -143,8 +143,9 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         Commands::GetSrs {
             srs_path,
             settings_path,
+            logrows,
             check,
-        } => get_srs_cmd(srs_path, settings_path, check).await,
+        } => get_srs_cmd(srs_path, settings_path, logrows, check).await,
         Commands::Table { model, args } => table(model, args),
         #[cfg(feature = "render")]
         Commands::RenderCircuit {
@@ -482,36 +483,68 @@ async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn get_srs_cmd(
     srs_path: PathBuf,
-    settings_path: PathBuf,
+    settings_path: Option<PathBuf>,
+    logrows: Option<u32>,
     check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
-    if settings_path.exists() {
-        let settings = GraphSettings::load(&settings_path)?;
-        let k = settings.run_args.logrows;
+    if let Some(settings_p) = settings_path {
+        if settings_p.exists() {
+            let settings = GraphSettings::load(&settings_p)?;
+            let k = settings.run_args.logrows;
 
-        let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
-        let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
-        // check the SRS
-        if matches!(check_mode, CheckMode::SAFE) {
-            #[cfg(not(target_arch = "wasm32"))]
-            let pb = init_spinner();
-            #[cfg(not(target_arch = "wasm32"))]
-            pb.set_message("Validating SRS (this may take a while) ...");
-            ParamsKZG::<Bn256>::read(&mut reader)?;
-            #[cfg(not(target_arch = "wasm32"))]
-            pb.finish_with_message("SRS validated");
+            let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
+            let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
+            // check the SRS
+            if matches!(check_mode, CheckMode::SAFE) {
+                #[cfg(not(target_arch = "wasm32"))]
+                let pb = init_spinner();
+                #[cfg(not(target_arch = "wasm32"))]
+                pb.set_message("Validating SRS (this may take a while) ...");
+                ParamsKZG::<Bn256>::read(&mut reader)?;
+                #[cfg(not(target_arch = "wasm32"))]
+                pb.finish_with_message("SRS validated");
+            }
+
+            let mut file = std::fs::File::create(srs_path)?;
+            file.write_all(reader.get_ref())?;
+
+            info!("SRS downloaded");
+            Ok(())
+        } else {
+            let err_string = format!(
+                "You will need to provide a valid settings file to use the settings option. You should run gen-settings to generate a settings file (and calibrate-settings to pick optimal logrows)."
+            );
+            Err(err_string.into())
         }
-
-        let mut file = std::fs::File::create(srs_path)?;
-        file.write_all(reader.get_ref())?;
-
-        info!("SRS downloaded");
-        Ok(())
     } else {
-        let err_string = format!(
-            "Settings file not found, you should run gen-settings (and calibrate-settings to pick optimal logrows)."
-        );
-        Err(err_string.into())
+        match logrows {
+            None => {
+                let err_string = format!(
+                    "You will need to provide a settings file or set the logrows. You should run gen-settings to generate a settings file (and calibrate-settings to pick optimal logrows)."
+                );
+                Err(err_string.into())
+            }
+            Some(k) => {
+                let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
+                let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
+                // check the SRS
+                if matches!(check_mode, CheckMode::SAFE) {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let pb = init_spinner();
+                    #[cfg(not(target_arch = "wasm32"))]
+                    pb.set_message("Validating SRS (this may take a while) ...");
+                    ParamsKZG::<Bn256>::read(&mut reader)?;
+                    #[cfg(not(target_arch = "wasm32"))]
+                    pb.finish_with_message("SRS validated");
+                }
+
+                let mut file = std::fs::File::create(srs_path)?;
+                file.write_all(reader.get_ref())?;
+
+                info!("SRS downloaded");
+                Ok(())
+            }
+        }
     }
 }
 
