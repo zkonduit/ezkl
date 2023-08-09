@@ -17,6 +17,12 @@ use crate::{
 use halo2curves::bn256::Fr as Fp;
 
 use colored::Colorize;
+use core::panic;
+use halo2_proofs::{
+    circuit::{Layouter, Value},
+    plonk::ConstraintSystem,
+};
+use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
 use tract_onnx::prelude::{
@@ -25,12 +31,6 @@ use tract_onnx::prelude::{
 use tract_onnx::tract_core::downcast_rs::Downcast;
 use tract_onnx::tract_hir::ops::scan::Scan;
 
-use core::panic;
-use halo2_proofs::{
-    circuit::{Layouter, Value},
-    plonk::ConstraintSystem,
-};
-use itertools::Itertools;
 use log::error;
 use log::{debug, info, trace};
 use std::collections::BTreeMap;
@@ -555,6 +555,7 @@ impl Model {
             // Extract the slope layer hyperparams
             match n.op().downcast_ref::<Scan>() {
                 Some(b) => {
+                   
                     let model = b.body.clone();
                     let input_scales = n
                         .inputs
@@ -719,7 +720,12 @@ impl Model {
                 let mut thread_safe_region = RegionCtx::new(region, 0);
 
                 let outputs = self
-                    .layout_nodes(&mut config, &mut thread_safe_region, &mut results)
+                    .layout_nodes(
+                        &mut config,
+                        &mut thread_safe_region,
+                        &mut results,
+                        &self.graph.inputs,
+                    )
                     .map_err(|e| {
                         error!("{}", e);
                         halo2_proofs::plonk::Error::Synthesis
@@ -764,8 +770,9 @@ impl Model {
         config: &mut ModelConfig,
         region: &mut RegionCtx<Fp>,
         results: &mut BTreeMap<usize, ValTensor<Fp>>,
+        inputs: &[usize],
     ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
-        let inputs = self.graph.inputs.clone();
+        println!("inputs: {:?}", inputs);
         // index over results to get original inputs
         let orig_inputs: BTreeMap<usize, _> = results
             .clone()
@@ -773,6 +780,7 @@ impl Model {
             .filter(|(idx, _)| inputs.contains(idx))
             .collect();
 
+        let mut input_iter = 0;
         for (idx, node) in self.graph.nodes.iter() {
             let values: Vec<ValTensor<Fp>> = if !node.is_input() {
                 node.inputs()
@@ -781,7 +789,11 @@ impl Model {
                     .collect_vec()
             } else {
                 // we re-assign inputs
-                vec![results.get(idx).unwrap().clone()]
+                let input_idx = inputs[input_iter];
+                let mut res = results.get(&input_idx).unwrap().clone();
+                res.reshape(&node.out_dims()[0])?;
+                input_iter += 1;
+                vec![res]
             };
 
             debug!(
@@ -817,8 +829,8 @@ impl Model {
                         );
                     }
                 }
-                NodeType::SubGraph { model, .. } => {
-                    let res = model.layout_nodes(config, region, results)?;
+                NodeType::SubGraph { model, inputs, .. } => {
+                    let res = model.layout_nodes(config, region, results, inputs)?;
                     let mut res = res.last().unwrap().clone();
                     res.flatten();
                     results.insert(*idx, res);
@@ -877,7 +889,12 @@ impl Model {
 
         let mut region = RegionCtx::new_dummy(0);
 
-        let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
+        let outputs = self.layout_nodes(
+            &mut model_config,
+            &mut region,
+            &mut results,
+            &self.graph.inputs,
+        )?;
 
         if run_args.output_visibility == Visibility::Public {
             let _ = outputs
