@@ -184,6 +184,7 @@ mod native_tests {
         "idolmodel",
         "trig",
         "prelu_gmm",
+        "lstm",
     ];
 
     const TESTS_AGGR: [&str; 20] = [
@@ -208,7 +209,6 @@ mod native_tests {
         "min",
         "max",
         "1l_max_pool",
-        "lstm",
     ];
 
     const NEG_TESTS: [(&str, &str); 2] = [
