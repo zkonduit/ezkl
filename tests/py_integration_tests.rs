@@ -56,20 +56,20 @@ mod py_tests {
             let status = Command::new("pip")
                 .args([
                     "install",
-                    "torch",
-                    "pandas",
+                    "torch==2.0.1",
+                    "pandas==2.0.3",
                     "numpy",
-                    "seaborn",
-                    "jupyter",
-                    "onnx",
+                    "seaborn==0.12.2",
+                    "jupyter==1.0.0",
+                    "onnx==1.14.0",
                     "kaggle",
                     "py-solc-x",
-                    "web3",
+                    "web3==6.5.0",
                     "librosa",
-                    "keras",
+                    "keras==2.13.1",
                     "tensorflow==2.13.0",
-                    "tf2onnx",
-                    "pytorch-lightning",
+                    "tf2onnx==1.8.4",
+                    "pytorch-lightning==2.0.6",
                 ])
                 .status()
                 .expect("failed to execute process");
