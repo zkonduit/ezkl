@@ -420,7 +420,7 @@ jobs:
         run: source .env/bin/activate; pytest
 
   python-integration-tests:
-      runs-on: 512gb
+      runs-on: ubuntu-latest-32-cores
 
         # Service containers to run with `container-job`
       services:
@@ -474,6 +474,8 @@ jobs:
         #     # now dump the contents of the file into a file called kaggle.json
         #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
         #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+        - name: Keras tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_1_expects
         - name: Gan tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
         - name: Little transformer tutorial
@@ -482,8 +484,6 @@ jobs:
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_7_expects --no-capture
         - name: Voice tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
-        - name: Keras tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_1_expects
         - name: Encrypted tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_2_expects
         - name: Hashed tutorial
