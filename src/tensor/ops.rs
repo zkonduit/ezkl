@@ -1143,8 +1143,6 @@ pub fn conv<
     let (image, kernel) = (&mut inputs[0].clone(), &inputs[1]);
     let og_dims = image.dims().to_vec();
 
-    let (padding_before, padding_after) = (padding[0], padding[1]);
-
     // ensure inputs are 4D tensors
     if og_dims.len() == 3 {
         // adds a dummy batch dimension
@@ -1183,10 +1181,8 @@ pub fn conv<
 
     let padded_image = pad::<T>(image, padding)?;
 
-    let vert_slides =
-        (image_height + padding_before.0 + padding_after.0 - kernel_height) / stride.0 + 1;
-    let horz_slides =
-        (image_width + padding_before.1 + padding_after.1 - kernel_width) / stride.1 + 1;
+    let vert_slides = (image_height + padding[0].0 + padding[1].0 - kernel_height) / stride.0 + 1;
+    let horz_slides = (image_width + padding[0].1 + padding[1].1 - kernel_width) / stride.1 + 1;
 
     let num_groups = input_channels / kernel_dims[1];
     let input_channels_per_group = input_channels / num_groups;
