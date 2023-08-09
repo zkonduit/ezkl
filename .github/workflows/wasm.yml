@@ -24,16 +24,6 @@ jobs:
           - name: Add wasm32-unknown-unknown target
             run: rustup target add wasm32-unknown-unknown
       
-          - name: Install LLVM and clang
-            run: |
-              sudo apt-get update
-              sudo apt-get install llvm clang-12
-              echo "CC=/opt/llvm/bin/clang" >> $GITHUB_ENV
-              echo "AR=/opt/llvm/bin/llvm-ar" >> $GITHUB_ENV
-      
-          - name: Install wasm-pack
-            run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-      
           - name: Install wasm-server-runner
             run: cargo install wasm-server-runner
       
