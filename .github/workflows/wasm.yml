@@ -41,13 +41,11 @@ jobs:
             uses: actions/setup-node@v3
             with:
               node-version: '18.12.1'
-
-          - name: Setup .npmrc file to authenticate
-            run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-      
+              registry-url: 'https://registry.npmjs.org'
           - name: Publish to npm
             run: |
               cd pkg
+              npm ci
               npm publish
             env:
               NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
