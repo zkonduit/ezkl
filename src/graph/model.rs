@@ -772,7 +772,6 @@ impl Model {
         results: &mut BTreeMap<usize, ValTensor<Fp>>,
         inputs: &[usize],
     ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
-        println!("inputs: {:?}", inputs);
         // index over results to get original inputs
         let orig_inputs: BTreeMap<usize, _> = results
             .clone()
