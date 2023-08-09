@@ -66,9 +66,9 @@ mod py_tests {
                     "py-solc-x==1.1.1",
                     "web3==6.5.0",
                     "librosa==0.10.0.post2",
-                    "keras==2.11.0",
-                    "tensorflow==2.11.0",
-                    "tf2onnx==1.8.4",
+                    "keras==2.12.0",
+                    "tensorflow==2.12.0",
+                    "tf2onnx==1.14.0",
                     "pytorch-lightning==2.0.6",
                 ])
                 .status()
