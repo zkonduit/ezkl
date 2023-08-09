@@ -45,6 +45,7 @@ jobs:
           - name: Publish to npm
             run: |
               cd pkg
+              npm install
               npm ci
               npm publish
             env:
