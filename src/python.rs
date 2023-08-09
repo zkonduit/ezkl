@@ -72,16 +72,16 @@ impl From<PyRunArgs> for RunArgs {
     }
 }
 
-// /// Converts 4 u64s to a field element
-// #[pyfunction(signature = (
-//     array,
-// ))]
-// fn vecu64_to_felt(array: [u64; 4]) -> PyResult<String> {
-//     Ok(format!(
-//         "{:?}",
-//         crate::pfsys::vecu64_to_field::<halo2curves::bn256::Fr>(&array)
-//     ))
-// }
+/// Converts 4 u64s to a field element
+#[pyfunction(signature = (
+    array,
+))]
+fn vecu64_to_felt(array: [u64; 4]) -> PyResult<String> {
+    Ok(format!(
+        "{:?}",
+        crate::pfsys::vecu64_to_field::<halo2curves::bn256::Fr>(&array)
+    ))
+}
 
 /// Displays the table as a string in python
 #[pyfunction(signature = (
@@ -620,7 +620,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     // NOTE: DeployVerifierEVM and SendProofEVM will be implemented in python in pyezkl
     pyo3_log::init();
     m.add_class::<PyRunArgs>()?;
-    // m.add_function(wrap_pyfunction!(vecu64_to_felt, m)?)?;
+    m.add_function(wrap_pyfunction!(vecu64_to_felt, m)?)?;
     m.add_function(wrap_pyfunction!(table, m)?)?;
     m.add_function(wrap_pyfunction!(mock, m)?)?;
     m.add_function(wrap_pyfunction!(setup, m)?)?;
