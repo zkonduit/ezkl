@@ -594,7 +594,7 @@ mod conv {
                                 Box::new(PolyOp::Conv {
                                     kernel: self.inputs[1].clone(),
                                     bias: None,
-                                    padding: (1, 1),
+                                    padding: [(1, 1); 2],
                                     stride: (2, 2),
                                 }),
                             )
@@ -717,7 +717,7 @@ mod sumpool {
                                 &mut region,
                                 &self.inputs.clone(),
                                 Box::new(PolyOp::SumPool {
-                                    padding: (0, 0),
+                                    padding: [(0, 0); 2],
                                     stride: (1, 1),
                                     kernel_shape: (3, 3),
                                 }),

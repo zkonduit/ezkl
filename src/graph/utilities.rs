@@ -524,19 +524,18 @@ pub fn new_op_from_onnx(
 
             let stride = pool_spec.strides.clone().unwrap();
             let padding = match &pool_spec.padding {
-                PaddingSpec::Explicit(p, _, _) => p,
+                PaddingSpec::Explicit(b, a, _) => [(b[0], b[1]), (a[0], a[1])],
                 _ => {
                     return Err(Box::new(GraphError::MissingParams("padding".to_string())));
                 }
             };
             let kernel_shape = &pool_spec.kernel_shape;
 
-            let (padding_h, padding_w, stride_h, stride_w) =
-                (padding[0], padding[1], stride[0], stride[1]);
+            let (stride_h, stride_w) = (stride[0], stride[1]);
             let (kernel_height, kernel_width) = (kernel_shape[0], kernel_shape[1]);
 
             SupportedOp::Hybrid(HybridOp::MaxPool2d {
-                padding: (padding_h, padding_w),
+                padding,
                 stride: (stride_h, stride_w),
                 pool_dims: (kernel_height, kernel_width),
             })
@@ -574,21 +573,18 @@ pub fn new_op_from_onnx(
             }
 
             let stride = match conv_node.pool_spec.strides.clone() {
-                Some(s) => s,
+                Some(s) => (s[0], s[1]),
                 None => {
                     return Err(Box::new(GraphError::MissingParams("strides".to_string())));
                 }
             };
 
             let padding = match &conv_node.pool_spec.padding {
-                PaddingSpec::Explicit(_, p, _) => p,
+                PaddingSpec::Explicit(b, a, _) => [(b[0], b[1]), (a[0], a[1])],
                 _ => {
                     return Err(Box::new(GraphError::MissingParams("padding".to_string())));
                 }
             };
-
-            let (padding_h, padding_w, stride_h, stride_w) =
-                (padding[0], padding[1], stride[0], stride[1]);
 
             let kernel = extract_tensor_value(conv_node.kernel.clone())?;
             let kernel = quantize_tensor(kernel, scale, param_visibility)?;
@@ -610,8 +606,8 @@ pub fn new_op_from_onnx(
             SupportedOp::Linear(PolyOp::Conv {
                 kernel,
                 bias,
-                padding: (padding_h, padding_w),
-                stride: (stride_h, stride_w),
+                padding,
+                stride,
             })
         }
         "DeconvUnary" => {
@@ -639,20 +635,17 @@ pub fn new_op_from_onnx(
             }
 
             let stride = match deconv_node.pool_spec.strides.clone() {
-                Some(s) => s,
+                Some(s) => (s[0], s[1]),
                 None => {
                     return Err(Box::new(GraphError::MissingParams("strides".to_string())));
                 }
             };
             let padding = match &deconv_node.pool_spec.padding {
-                PaddingSpec::Explicit(p, _, _) => p,
+                PaddingSpec::Explicit(b, a, _) => [(b[0], b[1]), (a[0], a[1])],
                 _ => {
                     return Err(Box::new(GraphError::MissingParams("padding".to_string())));
                 }
             };
-
-            let (padding_h, padding_w, stride_h, stride_w) =
-                (padding[0], padding[1], stride[0], stride[1]);
 
             let kernel = extract_tensor_value(deconv_node.kernel.clone())?;
             let kernel = quantize_tensor(kernel, scale, param_visibility)?;
@@ -671,14 +664,15 @@ pub fn new_op_from_onnx(
                 None => None,
             };
 
-            let output_padding = (deconv_node.adjustments[0], deconv_node.adjustments[1]);
+            let output_padding: (usize, usize) =
+                (deconv_node.adjustments[0], deconv_node.adjustments[1]);
 
             SupportedOp::Linear(PolyOp::DeConv {
                 kernel,
                 bias,
-                padding: (padding_h, padding_w),
+                padding,
                 output_padding,
-                stride: (stride_h, stride_w),
+                stride,
             })
         }
         "Downsample" => {
@@ -753,25 +747,24 @@ pub fn new_op_from_onnx(
 
             let stride = pool_spec.strides.clone().unwrap();
             let padding = match &pool_spec.padding {
-                PaddingSpec::Explicit(p, _, _) => p,
+                PaddingSpec::Explicit(b, a, _) => [(b[0], b[1]), (a[0], a[1])],
                 _ => {
                     return Err(Box::new(GraphError::MissingParams("padding".to_string())));
                 }
             };
             let kernel_shape = &pool_spec.kernel_shape;
 
-            let (padding_h, padding_w, stride_h, stride_w) =
-                (padding[0], padding[1], stride[0], stride[1]);
+            let (stride_h, stride_w) = (stride[0], stride[1]);
             let (kernel_height, kernel_width) = (kernel_shape[0], kernel_shape[1]);
 
             SupportedOp::Linear(PolyOp::SumPool {
-                padding: (padding_h, padding_w),
+                padding,
                 stride: (stride_h, stride_w),
                 kernel_shape: (kernel_height, kernel_width),
             })
         }
         "GlobalAvgPool" => SupportedOp::Linear(PolyOp::SumPool {
-            padding: (0, 0),
+            padding: [(0, 0); 2],
             stride: (1, 1),
             kernel_shape: (inputs[0].out_dims()[0][1], inputs[0].out_dims()[0][2]),
         }),
@@ -803,18 +796,13 @@ pub fn new_op_from_onnx(
                             .to_string(),
                     )));
                 }
-                if pad_params.0 != pad_params.1 {
-                    return Err(Box::new(GraphError::MisformedParams(
-                        "ezkl currently only supports symmetric padding".to_string(),
-                    )));
-                }
             }
 
-            let (padding_h, padding_w) = (
-                pad_node.pads[padding_len - 2].0,
-                pad_node.pads[padding_len - 1].0,
-            );
-            SupportedOp::Linear(PolyOp::Pad(padding_h, padding_w))
+            let padding = [
+                pad_node.pads[padding_len - 2],
+                pad_node.pads[padding_len - 1],
+            ];
+            SupportedOp::Linear(PolyOp::Pad(padding))
         }
         "RmAxis" | "Reshape" | "AddAxis" => {
             // Extract the slope layer hyperparams

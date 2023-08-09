@@ -1092,7 +1092,7 @@ pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 ///     Some(&[0]),
 ///     &[1],
 /// ).unwrap();
-/// let result = conv::<i128>(&[x, k, b], (0, 0), (1, 1)).unwrap();
+/// let result = conv::<i128>(&[x, k, b], [(0, 0); 2], (1, 1)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[31, 16, 8, 26]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1110,7 +1110,7 @@ pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 ///     &[2],
 /// ).unwrap();
 ///
-/// let result = conv::<i128>(&[x, k, b], (0, 0), (1, 1)).unwrap();
+/// let result = conv::<i128>(&[x, k, b], [(0, 0); 2], (1, 1)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[32, 17, 9, 27, 34, 20, 13, 26]), &[1, 2, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1128,7 +1128,7 @@ pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 ///     &[4],
 /// ).unwrap();
 ///
-/// let result = conv::<i128>(&[x, k, b], (0, 0), (1, 1)).unwrap();
+/// let result = conv::<i128>(&[x, k, b], [(0, 0); 2], (1, 1)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[65, 36, 21, 52, 73, 48, 37, 48, 65, 36, 21, 52, 73, 48, 37, 48]), &[1, 4, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
@@ -1136,12 +1136,14 @@ pub fn conv<
     T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Sync + std::marker::Send,
 >(
     inputs: &[Tensor<T>],
-    padding: (usize, usize),
+    padding: [(usize, usize); 2],
     stride: (usize, usize),
 ) -> Result<Tensor<T>, TensorError> {
     let has_bias = inputs.len() == 3;
     let (image, kernel) = (&mut inputs[0].clone(), &inputs[1]);
     let og_dims = image.dims().to_vec();
+
+    let (padding_before, padding_after) = (padding[0], padding[1]);
 
     // ensure inputs are 4D tensors
     if og_dims.len() == 3 {
@@ -1181,8 +1183,10 @@ pub fn conv<
 
     let padded_image = pad::<T>(image, padding)?;
 
-    let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
-    let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
+    let vert_slides =
+        (image_height + padding_before.0 + padding_after.0 - kernel_height) / stride.0 + 1;
+    let horz_slides =
+        (image_width + padding_before.1 + padding_after.1 - kernel_width) / stride.1 + 1;
 
     let num_groups = input_channels / kernel_dims[1];
     let input_channels_per_group = input_channels / num_groups;
@@ -1328,7 +1332,7 @@ pub fn intercalate_values<T: TensorType>(
 ///     &[1, 1, 2, 2],
 /// ).unwrap();
 ///
-/// let result = deconv::<i128>(&[x, c], (1, 1), (1, 1), (2, 2)).unwrap();
+/// let result = deconv::<i128>(&[x, c], [(1, 1); 2], (1, 1), (2, 2)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[0, 32, 0, 32, 0, 6, 0, 12, 0, 4, 0, 8, 0, 4, 0, 8, 0, 0, 0, 3, 0, 0, 0, 2]), &[1, 2, 3, 4]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1340,7 +1344,7 @@ pub fn intercalate_values<T: TensorType>(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], (0, 0), (0, 0), (1, 1)).unwrap();
+/// let result = deconv::<i128>(&[x, k], [(0, 0); 2], (0, 0), (1, 1)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[6, 14, 4, 2, 17, 21, 0, 1, 5]), &[1, 1, 3, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1353,7 +1357,7 @@ pub fn intercalate_values<T: TensorType>(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], (1, 1), (0, 0), (1, 1)).unwrap();
+/// let result = deconv::<i128>(&[x, k], [(1, 1); 2], (0, 0), (1, 1)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[17]), &[1, 1, 1, 1]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1366,7 +1370,7 @@ pub fn intercalate_values<T: TensorType>(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], (1, 1), (0, 0), (2, 2)).unwrap();
+/// let result = deconv::<i128>(&[x, k], [(1, 1); 2], (0, 0), (2, 2)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[10, 4, 0, 3]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1378,7 +1382,7 @@ pub fn intercalate_values<T: TensorType>(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], (0, 0), (0, 0), (2, 2)).unwrap();
+/// let result = deconv::<i128>(&[x, k], [(0, 0); 2], (0, 0), (2, 2)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[6, 2, 12, 4, 2, 10, 4, 20, 0, 0, 3, 1, 0, 0, 1, 5]), &[1, 1, 4, 4]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1390,7 +1394,7 @@ pub fn intercalate_values<T: TensorType>(
 ///     Some(&[3, 2]),
 ///     &[1, 1, 2, 1],
 /// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], (1, 1), (0, 0), (2, 2)).unwrap();
+/// let result = deconv::<i128>(&[x, k], [(1, 1); 2], (0, 0), (2, 2)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[0, 0]), &[1, 1, 2, 1]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1402,7 +1406,7 @@ pub fn intercalate_values<T: TensorType>(
 ///     Some(&[3, 2]),
 ///     &[1, 1, 2, 1],
 /// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], (0, 0), (0, 0), (2, 2)).unwrap();
+/// let result = deconv::<i128>(&[x, k], [(0, 0); 2], (0, 0), (2, 2)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 1, 4, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1413,7 +1417,7 @@ pub fn intercalate_values<T: TensorType>(
 ///     &[1, 1, 2, 2],
 /// ).unwrap();
 ///
-/// let result = deconv::<i128>(&[x, c], (1, 1), (0, 0), (2, 2)).unwrap();
+/// let result = deconv::<i128>(&[x, c], [(1, 1); 2], (0, 0), (2, 2)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[0, 32, 0, 0, 6, 0, 0, 4, 0, 0, 0, 0]), &[1, 2, 2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1430,7 +1434,7 @@ pub fn intercalate_values<T: TensorType>(
 ///     Some(&[1]),
 ///     &[1],
 /// ).unwrap();
-/// let result = deconv::<i128>(&[x, k, b], (1, 1), (0, 0), (1, 1)).unwrap();
+/// let result = deconv::<i128>(&[x, k, b], [(1, 1); 2], (0, 0), (1, 1)).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[55, 58, 66, 69]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -1439,7 +1443,7 @@ pub fn deconv<
     T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Sync + std::marker::Send,
 >(
     inputs: &[Tensor<T>],
-    padding: (usize, usize),
+    padding: [(usize, usize); 2],
     output_padding: (usize, usize),
     stride: (usize, usize),
 ) -> Result<Tensor<T>, TensorError> {
@@ -1467,7 +1471,7 @@ pub fn deconv<
 
     let mut expanded_image = intercalate_values(image, T::zero().unwrap(), stride.0, 2)?;
     expanded_image = intercalate_values(&expanded_image, T::zero().unwrap(), stride.1, 3)?;
-    expanded_image = pad(&expanded_image, (kernel_height - 1, kernel_width - 1))?;
+    expanded_image = pad(&expanded_image, [(kernel_height - 1, kernel_width - 1); 2])?;
 
     // flip order
     let channel_coord = (0..kernel.dims()[0])
@@ -1480,9 +1484,9 @@ pub fn deconv<
         .enumerate()
         .map(|(i, d)| {
             if i == 2 {
-                padding.0..d - padding.0 + output_padding.0
+                padding[0].0..d - padding[1].0 + output_padding.0
             } else if i == 3 {
-                padding.1..d - padding.1 + output_padding.1
+                padding[0].1..d - padding[1].1 + output_padding.1
             } else {
                 0..*d
             }
@@ -1524,7 +1528,7 @@ pub fn deconv<
         vec![sliced_expanded_image, deconv_kernel.clone()]
     };
 
-    let output = conv(&input, (0, 0), (1, 1))?;
+    let output = conv(&input, [(0, 0); 2], (1, 1))?;
 
     Ok(output)
 }
@@ -1548,7 +1552,7 @@ pub fn deconv<
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 1, 3, 3],
 /// ).unwrap();
-/// let pooled = sumpool::<i128>(&x, (0, 0), (1, 1), (2, 2)).unwrap();
+/// let pooled = sumpool::<i128>(&x, [(0, 0); 2], (1, 1), (2, 2)).unwrap();
 /// let expected: Tensor<i128> = Tensor::<i128>::new(Some(&[11, 8, 8, 10]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled, expected);
 /// ```
@@ -1556,7 +1560,7 @@ pub fn sumpool<
     T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Sync + std::marker::Send,
 >(
     image: &Tensor<T>,
-    padding: (usize, usize),
+    padding: [(usize, usize); 2],
     stride: (usize, usize),
     kernel_shape: (usize, usize),
 ) -> Result<Tensor<T>, TensorError> {
@@ -1573,8 +1577,8 @@ pub fn sumpool<
 
     let padded_image = pad::<T>(image, padding)?;
 
-    let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
-    let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
+    let vert_slides = (image_height + padding[0].0 + padding[1].0 - kernel_height) / stride.0 + 1;
+    let horz_slides = (image_width + padding[0].1 + padding[1].1 - kernel_width) / stride.1 + 1;
 
     // calculate value of output
     let mut output: Tensor<T> =
@@ -1635,7 +1639,7 @@ pub fn sumpool<
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 1, 3, 3],
 /// ).unwrap();
-/// let pooled = max_pool2d::<i128>(&x, &(0, 0), &(1, 1), &(2, 2)).unwrap();
+/// let pooled = max_pool2d::<i128>(&x, &[(0, 0); 2], &(1, 1), &(2, 2)).unwrap();
 /// let expected: Tensor<i128> = Tensor::<i128>::new(Some(&[5, 4, 4, 6]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled, expected);
 ///
@@ -1643,14 +1647,14 @@ pub fn sumpool<
 ///                                  -0.4884, 0.1395,  1.7860, -0.9729,  1.5160, -0.3346,
 ///                                 -0.0601, -0.1140,  0.2522, -0.2938, -0.0355]), &[1,1,4,4]).unwrap();
 /// let x = x.map(|x| F32(x));
-/// let pooled = max_pool2d::<F32>(&x, &(0, 0), &(2, 2), &(2, 2)).unwrap();
+/// let pooled = max_pool2d::<F32>(&x, &[(0, 0); 2], &(2, 2), &(2, 2)).unwrap();
 /// let expected = Tensor::<f32>::new(Some(&[0.3940,  1.7860, 1.5160, -0.0355]), &[1, 1, 2, 2]).unwrap();
 /// let expected = expected.map(|x| F32(x));
 /// assert_eq!(pooled, expected);
 /// ```
 pub fn max_pool2d<T: TensorType + std::marker::Sync + std::marker::Send + std::cmp::Ord>(
     image: &Tensor<T>,
-    padding: &(usize, usize),
+    padding: &[(usize, usize); 2],
     stride: &(usize, usize),
     pool_dims: &(usize, usize),
 ) -> Result<Tensor<T>, TensorError> {
@@ -1664,8 +1668,8 @@ pub fn max_pool2d<T: TensorType + std::marker::Sync + std::marker::Send + std::c
 
     let padded_image = pad::<T>(image, *padding)?;
 
-    let vert_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
-    let horz_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
+    let vert_slides = (image_height + padding[0].0 + padding[1].0 - pool_dims.0) / stride.0 + 1;
+    let horz_slides = (image_width + padding[0].1 + padding[1].1 - pool_dims.1) / stride.1 + 1;
 
     let mut output: Tensor<T> =
         Tensor::new(None, &[batch, input_channels, horz_slides, vert_slides]).unwrap();
@@ -1754,16 +1758,19 @@ pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 1, 3, 3],
 /// ).unwrap();
-/// let result = pad::<i128>(&x, (1, 1)).unwrap();
+/// let result = pad::<i128>(&x, [(1, 1); 2]).unwrap();
 /// let expected = Tensor::<i128>::new(
 ///     Some(&[0, 0, 0, 0, 0, 0, 5, 2, 3, 0, 0, 0, 4, -1, 0, 0, 3, 1, 6, 0, 0, 0, 0, 0, 0]),
 ///     &[1, 1, 5, 5],
 /// ).unwrap();
 /// assert_eq!(result, expected);
+///
+///
+///
 /// ```
 pub fn pad<T: TensorType>(
     image: &Tensor<T>,
-    padding: (usize, usize),
+    padding: [(usize, usize); 2],
 ) -> Result<Tensor<T>, TensorError> {
     if image.dims().len() != 4 {
         return Err(TensorError::DimMismatch("pad".to_string()));
@@ -1774,8 +1781,11 @@ pub fn pad<T: TensorType>(
         image.dims()[2],
         image.dims()[3],
     );
-    let padded_height = height + 2 * padding.0;
-    let padded_width = width + 2 * padding.1;
+
+    let (padding_before, padding_after) = (padding[0], padding[1]);
+
+    let padded_height = height + padding_before.0 + padding_after.0;
+    let padded_width = width + padding_before.1 + padding_after.1;
 
     let mut output =
         Tensor::<T>::new(None, &[batch_size, channels, padded_height, padded_width]).unwrap();
@@ -1785,7 +1795,7 @@ pub fn pad<T: TensorType>(
             for row in 0..height {
                 for col in 0..width {
                     output.set(
-                        &[b, channel, row + padding.0, col + padding.1],
+                        &[b, channel, row + padding_before.0, col + padding_before.1],
                         image.get(&[b, channel, row, col]).clone(),
                     );
                 }

@@ -544,7 +544,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         Ok(())
     }
     /// Calls `pad` on the inner [Tensor].
-    pub fn pad(&mut self, padding: (usize, usize)) -> Result<(), TensorError> {
+    pub fn pad(&mut self, padding: [(usize, usize); 2]) -> Result<(), TensorError> {
         match self {
             ValTensor::Value {
                 inner: v, dims: d, ..

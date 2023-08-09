@@ -15,7 +15,7 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Conv {
         kernel: Tensor<F>,
         bias: Option<Tensor<F>>,
-        padding: (usize, usize),
+        padding: [(usize, usize); 2],
         stride: (usize, usize),
     },
     Downsample {
@@ -26,12 +26,12 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     DeConv {
         kernel: Tensor<F>,
         bias: Option<Tensor<F>>,
-        padding: (usize, usize),
+        padding: [(usize, usize); 2],
         output_padding: (usize, usize),
         stride: (usize, usize),
     },
     SumPool {
-        padding: (usize, usize),
+        padding: [(usize, usize); 2],
         stride: (usize, usize),
         kernel_shape: (usize, usize),
     },
@@ -50,7 +50,7 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
         index: Tensor<usize>,
     },
     Flatten(Vec<usize>),
-    Pad(usize, usize),
+    Pad([(usize, usize); 2]),
     Sum {
         axes: Vec<usize>,
     },
@@ -91,7 +91,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Identity => "IDENTITY",
             PolyOp::Reshape(_) => "RESHAPE",
             PolyOp::Flatten(_) => "FLATTEN",
-            PolyOp::Pad(_, _) => "PAD",
+            PolyOp::Pad(_) => "PAD",
             PolyOp::Add { .. } => "ADD",
             PolyOp::Mult { .. } => "MULT",
             PolyOp::Sub => "SUB",
@@ -138,11 +138,11 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 t.reshape(new_dims);
                 Ok(t)
             }
-            PolyOp::Pad(dim1, dim2) => {
+            PolyOp::Pad(p) => {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("pad inputs".to_string()));
                 }
-                tensor::ops::pad(&inputs[0], (*dim1, *dim2))
+                tensor::ops::pad(&inputs[0], p.clone())
             }
             PolyOp::Add => tensor::ops::add(&inputs),
             PolyOp::Neg => tensor::ops::neg(&inputs[0]),
@@ -299,12 +299,12 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             }
             PolyOp::Identity => layouts::identity(config, region, values[..].try_into()?)?,
             PolyOp::Reshape(d) | PolyOp::Flatten(d) => layouts::reshape(values[..].try_into()?, d)?,
-            PolyOp::Pad(p1, p2) => {
+            PolyOp::Pad(p) => {
                 if values.len() != 1 {
                     return Err(Box::new(TensorError::DimError));
                 }
                 let mut input = values[0].clone();
-                input.pad((*p1, *p2))?;
+                input.pad(*p)?;
                 input
             }
             PolyOp::Pow(exp) => layouts::pow(config, region, values[..].try_into()?, *exp)?,
@@ -387,7 +387,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             }
             PolyOp::Identity => in_scales[0],
             PolyOp::Reshape(_) | PolyOp::Flatten(_) => in_scales[0],
-            PolyOp::Pad(_, _) => in_scales[0],
+            PolyOp::Pad(_) => in_scales[0],
             PolyOp::Pow(pow) => in_scales[0] * (*pow),
             PolyOp::Pack(_, _) => in_scales[0],
             PolyOp::GlobalSumPool => in_scales[0],
