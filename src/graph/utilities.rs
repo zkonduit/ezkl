@@ -799,8 +799,14 @@ pub fn new_op_from_onnx(
             }
 
             let padding = [
-                pad_node.pads[padding_len - 2],
-                pad_node.pads[padding_len - 1],
+                (
+                    pad_node.pads[padding_len - 2].0,
+                    pad_node.pads[padding_len - 1].0,
+                ),
+                (
+                    pad_node.pads[padding_len - 2].1,
+                    pad_node.pads[padding_len - 1].1,
+                ),
             ];
             SupportedOp::Linear(PolyOp::Pad(padding))
         }

@@ -797,9 +797,8 @@ pub(crate) async fn mock(
         public_inputs,
     )
     .map_err(Box::<dyn Error>::from)?;
-    prover.assert_satisfied();
     prover
-        .verify()
+        .verify_par()
         .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
     Ok(())
 }
@@ -1530,9 +1529,8 @@ pub(crate) fn mock_aggregate(
 
     let prover = halo2_proofs::dev::MockProver::run(logrows, &circuit, circuit.instances())
         .map_err(Box::<dyn Error>::from)?;
-    prover.assert_satisfied();
     prover
-        .verify()
+        .verify_par()
         .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
     #[cfg(not(target_arch = "wasm32"))]
     pb.finish_with_message("Done.");
