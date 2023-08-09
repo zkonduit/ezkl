@@ -143,7 +143,7 @@ jobs:
         run: cargo nextest run --release --verbose tests::tutorial_
 
   mock-proving-tests:
-    runs-on: 768gb
+    runs-on: 512gb
     # needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
