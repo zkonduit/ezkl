@@ -32,6 +32,10 @@ jobs:
       
           - name: Build wasm file
             run: wasm-pack build --target web . -- -Z build-std="panic_abort,std"
+            
+          - name: Update package name in package.json
+            run: |
+                sed -i 's/"name": "ezkl"/"name": "ezkl-wasm"/' pkg/package.json
       
           - name: Set up Node.js
             uses: actions/setup-node@v3
