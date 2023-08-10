@@ -69,7 +69,7 @@ impl Circuit<Fr> for MyCircuit {
                         Box::new(PolyOp::Conv {
                             kernel: self.kernel.clone(),
                             bias: Some(self.bias.clone()),
-                            padding: (0, 0),
+                            padding: [(0, 0); 2],
                             stride: (1, 1),
                         }),
                     )

@@ -56,19 +56,20 @@ mod py_tests {
             let status = Command::new("pip")
                 .args([
                     "install",
-                    "torch",
-                    "pandas",
-                    "numpy",
-                    "seaborn",
-                    "jupyter",
-                    "onnx",
-                    "kaggle",
-                    "py-solc-x",
-                    "web3",
-                    "librosa",
-                    "keras",
-                    "tensorflow",
-                    "tf2onnx",
+                    "torch==2.0.1",
+                    "pandas==2.0.3",
+                    "numpy==1.23",
+                    "seaborn==0.12.2",
+                    "jupyter==1.0.0",
+                    "onnx==1.14.0",
+                    "kaggle==1.5.15",
+                    "py-solc-x==1.1.1",
+                    "web3==6.5.0",
+                    "librosa==0.10.0.post2",
+                    "keras==2.12.0",
+                    "tensorflow==2.12.0",
+                    "tf2onnx==1.14.0",
+                    "pytorch-lightning==2.0.6",
                 ])
                 .status()
                 .expect("failed to execute process");
@@ -104,7 +105,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 8] = [
+    const TESTS: [&str; 10] = [
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
@@ -115,6 +116,7 @@ mod py_tests {
         "variance.ipynb",
         "mean_postgres.ipynb",
         "simple_demo_aggregated_proofs.ipynb"
+        "little_transformer.ipynb",
     ];
 
     macro_rules! test_func {
@@ -127,7 +129,7 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=7 {
+            seq!(N in 0..=8 {
 
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
