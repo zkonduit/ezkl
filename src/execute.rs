@@ -145,7 +145,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             settings_path,
             logrows,
             check,
-        } => get_srs_cmd(srs_path, settings_path, logrows, check).await,
+        } => get_srs_cmd(srs_path, Some(settings_path), Some(logrows), check).await,
         Commands::Table { model, args } => table(model, args),
         #[cfg(feature = "render")]
         Commands::RenderCircuit {
