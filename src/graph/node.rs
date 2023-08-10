@@ -59,9 +59,9 @@ impl Op<Fp> for Rescaled {
         let mut rescaled_inputs = vec![];
         let inputs = &mut x.to_vec();
         for (i, ri) in inputs.iter_mut().enumerate() {
-            let ri = ri.map(|x| felt_to_i128(x));
+            let ri = ri.map(felt_to_i128);
             let res = crate::tensor::ops::nonlinearities::const_div(&ri, self.scale[i].1 as f64);
-            let output = res.map(|x| i128_to_felt(x));
+            let output = res.map(i128_to_felt);
             rescaled_inputs.push(output);
         }
         Op::<Fp>::f(&*self.inner, &rescaled_inputs)
@@ -141,34 +141,33 @@ pub enum SupportedOp {
 
 impl From<Box<dyn Op<Fp>>> for SupportedOp {
     fn from(value: Box<dyn Op<Fp>>) -> Self {
-        match value.as_any().downcast_ref::<PolyOp<Fp>>() {
-            Some(op) => return SupportedOp::Linear(op.clone()),
-            None => {}
+        if let Some(op) = value.as_any().downcast_ref::<PolyOp<Fp>>() {
+            return SupportedOp::Linear(op.clone());
         };
-        match value.as_any().downcast_ref::<LookupOp>() {
-            Some(op) => return SupportedOp::Nonlinear(op.clone()),
-            None => {}
+
+        if let Some(op) = value.as_any().downcast_ref::<LookupOp>() {
+            return SupportedOp::Nonlinear(op.clone());
         };
-        match value.as_any().downcast_ref::<HybridOp>() {
-            Some(op) => return SupportedOp::Hybrid(op.clone()),
-            None => {}
+
+        if let Some(op) = value.as_any().downcast_ref::<HybridOp>() {
+            return SupportedOp::Hybrid(op.clone());
         };
-        match value.as_any().downcast_ref::<Input>() {
-            Some(op) => return SupportedOp::Input(op.clone()),
-            None => {}
+
+        if let Some(op) = value.as_any().downcast_ref::<Input>() {
+            return SupportedOp::Input(op.clone());
         };
-        match value.as_any().downcast_ref::<Constant<Fp>>() {
-            Some(op) => return SupportedOp::Constant(op.clone()),
-            None => {}
+
+        if let Some(op) = value.as_any().downcast_ref::<Constant<Fp>>() {
+            return SupportedOp::Constant(op.clone());
         };
-        match value.as_any().downcast_ref::<Unknown>() {
-            Some(op) => return SupportedOp::Unknown(op.clone()),
-            None => {}
+
+        if let Some(op) = value.as_any().downcast_ref::<Unknown>() {
+            return SupportedOp::Unknown(op.clone());
         };
-        match value.as_any().downcast_ref::<Rescaled>() {
-            Some(op) => return SupportedOp::Rescaled(op.clone()),
-            None => {}
+        if let Some(op) = value.as_any().downcast_ref::<Rescaled>() {
+            return SupportedOp::Rescaled(op.clone());
         };
+
         panic!("Unsupported op type")
     }
 }
@@ -300,6 +299,9 @@ impl Op<Fp> for SupportedOp {
     }
 }
 
+/// A node's input is a tensor from another node's output.
+pub type Outlet = (usize, usize);
+
 /// A single operation in a [crate::graph::Model].
 #[derive(Clone, Debug, Tabled, Serialize, Deserialize)]
 pub struct Node {
@@ -312,7 +314,7 @@ pub struct Node {
     // but in_dim is [in], out_dim is [out]
     #[tabled(display_with = "display_vector")]
     /// The indices of the node's inputs.
-    pub inputs: Vec<usize>,
+    pub inputs: Vec<Outlet>,
     #[tabled(display_with = "display_vector")]
     /// Dimensions of output.
     pub out_dims: Vec<usize>,
@@ -351,32 +353,43 @@ impl Node {
         let mut inputs = vec![];
 
         // we can only take the inputs as mutable once -- so we need to collect them first
-        let mut input_ids = node.inputs.iter().map(|i| i.node).collect::<Vec<_>>();
+        let mut input_ids = node
+            .inputs
+            .iter()
+            .map(|i| (i.node, i.slot))
+            .collect::<Vec<_>>();
 
-        other_nodes.iter_mut().for_each(|(i, v)| {
-            if input_ids.contains(i) {
-                inputs.push(v);
+        input_ids.iter().for_each(|(i, _)| {
+            inputs.push(other_nodes.get(i).ok_or("input not found").unwrap().clone())
+        });
+
+        let (mut opkind, deleted_indices) =
+            new_op_from_onnx(idx, scale, param_visibility, node.clone(), &mut inputs)?; // parses the op name
+
+        // we can only take the inputs as mutable once -- so we need to collect them first
+        other_nodes.extend(
+            inputs
+                .iter()
+                .map(|i| (i.idx(), i.clone()))
+                .collect::<BTreeMap<_, _>>(),
+        );
+
+        input_ids.iter_mut().enumerate().for_each(|(i, (idx, _))| {
+            if deleted_indices.contains(&i) {
+                // this input is not used
+                *idx = usize::MAX;
             }
         });
 
-        inputs.sort_by(|a, b| {
-            let a_idx = input_ids.iter().position(|&x| x == a.idx()).unwrap();
-            let b_idx = input_ids.iter().position(|&x| x == b.idx()).unwrap();
-            a_idx.cmp(&b_idx)
-        });
-
-        let mut opkind = new_op_from_onnx(idx, scale, param_visibility, node.clone(), &mut inputs)?; // parses the op name
-
-        // we can only take the inputs as mutable once -- so we need to collect them first
-        let remaining_inputs = inputs.iter().map(|i| i.idx()).collect::<Vec<_>>();
-        input_ids.retain(|&x| remaining_inputs.contains(&x));
+        // remove the inputs that are not used
+        input_ids.retain(|(idx, _)| *idx != usize::MAX);
 
         // rescale the inputs if necessary to get consistent fixed points
         let in_scales: Vec<u32> = input_ids
             .iter()
-            .map(|n| {
-                let idx = inputs.iter().position(|x| *n == x.idx()).unwrap();
-                inputs[idx].out_scales()[0]
+            .map(|(idx, outlet)| {
+                let idx = inputs.iter().position(|x| *idx == x.idx()).unwrap();
+                inputs[idx].out_scales()[*outlet]
             })
             .collect();
         opkind = opkind.rescale(in_scales.clone(), scale).into();

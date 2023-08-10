@@ -184,6 +184,7 @@ mod native_tests {
         "idolmodel",
         "trig",
         "prelu_gmm",
+        // "lstm",
     ];
 
     const TESTS_AGGR: [&str; 20] = [
@@ -889,7 +890,7 @@ mod native_tests {
         let mut cargo_toml = std::fs::File::open("Cargo.toml").unwrap();
         let mut cargo_toml_contents = String::new();
         cargo_toml.read_to_string(&mut cargo_toml_contents).unwrap();
-        let mut cargo_toml_contents = cargo_toml_contents.split("\n").collect::<Vec<_>>();
+        let mut cargo_toml_contents = cargo_toml_contents.split('\n').collect::<Vec<_>>();
 
         // draw a random version number from 0.0.0 to 0.100.100
         let mut rng = rand::thread_rng();

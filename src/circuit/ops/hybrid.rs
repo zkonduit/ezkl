@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum HybridOp {
     Abs,
-    Max {
+    ReduceMax {
         axes: Vec<usize>,
     },
     MaxPool2d {
@@ -22,7 +22,7 @@ pub enum HybridOp {
         stride: (usize, usize),
         pool_dims: (usize, usize),
     },
-    Min {
+    ReduceMin {
         axes: Vec<usize>,
     },
     Softmax {
@@ -42,7 +42,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
 
         let (res, intermediate_lookups) = match &self {
             HybridOp::Abs => (tensor::ops::abs(&x)?, vec![]),
-            HybridOp::Max { axes, .. } => (tensor::ops::max_axes(&x, axes)?, vec![]),
+            HybridOp::ReduceMax { axes, .. } => (tensor::ops::max_axes(&x, axes)?, vec![]),
             HybridOp::MaxPool2d {
                 padding,
                 stride,
@@ -52,7 +52,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 tensor::ops::max_pool2d(&x, padding, stride, pool_dims)?,
                 vec![],
             ),
-            HybridOp::Min { axes, .. } => (tensor::ops::min_axes(&x, axes)?, vec![]),
+            HybridOp::ReduceMin { axes, .. } => (tensor::ops::min_axes(&x, axes)?, vec![]),
             HybridOp::Softmax { scales } => {
                 tensor::ops::nonlinearities::multi_dim_softmax(&x, scales.0, scales.1)
             }
@@ -71,9 +71,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     fn as_string(&self) -> String {
         let name = match self {
             HybridOp::Abs => "ABS",
-            HybridOp::Max { .. } => "MAX",
+            HybridOp::ReduceMax { .. } => "REDUCEMAX",
             HybridOp::MaxPool2d { .. } => "MAXPOOL2D",
-            HybridOp::Min { .. } => "MIN",
+            HybridOp::ReduceMin { .. } => "REDUCEMIN",
             HybridOp::Softmax { .. } => "SOFTMAX",
             HybridOp::RangeCheck(..) => "RANGECHECK",
         };
@@ -100,10 +100,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 *stride,
                 *pool_dims,
             )?,
-            HybridOp::Max { axes } => {
+            HybridOp::ReduceMax { axes } => {
                 layouts::max_axes(config, region, values[..].try_into()?, axes)?
             }
-            HybridOp::Min { axes } => {
+            HybridOp::ReduceMin { axes } => {
                 layouts::min_axes(config, region, values[..].try_into()?, axes)?
             }
             HybridOp::Softmax { scales } => layouts::multi_dim_softmax(
@@ -145,8 +145,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
 
     fn required_lookups(&self) -> Vec<LookupOp> {
         match self {
-            HybridOp::Max { .. }
-            | HybridOp::Min { .. }
+            HybridOp::ReduceMax { .. }
+            | HybridOp::ReduceMin { .. }
             | HybridOp::MaxPool2d { .. }
             | HybridOp::Abs => Op::<F>::required_lookups(&LookupOp::ReLU { scale: 1 }),
             HybridOp::Softmax { scales } => {

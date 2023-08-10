@@ -116,6 +116,7 @@ mod py_tests {
         "variance.ipynb",
         "mean_postgres.ipynb",
         "little_transformer.ipynb",
+        // "lstm.ipynb"
     ];
 
     macro_rules! test_func {

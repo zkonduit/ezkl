@@ -2144,13 +2144,7 @@ pub mod nonlinearities {
         let mut output: Tensor<i128> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
-            if *a_i > 0 {
-                output[i] = 1;
-            } else if *a_i < 0 {
-                output[i] = -1;
-            } else {
-                output[i] = 0;
-            }
+            output[i] = a_i.signum();
         }
         output
     }
@@ -2811,6 +2805,80 @@ pub mod nonlinearities {
                 d_inv_x.round() as i128
             };
         }
+        output
+    }
+
+    /// Elementwise applies max to a tensor of integers.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `b` - scalar
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::max;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[2, 15, 2, 1, 1, -5]),
+    ///   &[2, 3],
+    /// ).unwrap();
+    /// let result = max(&x, 1, 1, 1.0);
+    /// let expected = Tensor::<i128>::new(Some(&[2, 15, 2, 1, 1, 1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn max(
+        a: &Tensor<i128>,
+        in_scale: usize,
+        out_scale: usize,
+        threshold: f64,
+    ) -> Tensor<i128> {
+        // calculate value of output
+        let mut output: Tensor<i128> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            let d_inv_x = (*a_i as f64) / (in_scale as f64);
+            output[i] = if d_inv_x <= threshold {
+                (threshold * (out_scale as f64)).round() as i128
+            } else {
+                (d_inv_x * (out_scale as f64)).round() as i128
+            };
+        }
+
+        output
+    }
+
+    /// Elementwise applies min to a tensor of integers.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `b` - scalar
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::min;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[2, 15, 2, 1, 1, -5]),
+    ///   &[2, 3],
+    /// ).unwrap();
+    /// let result = min(&x, 1, 1, 2.0);
+    /// let expected = Tensor::<i128>::new(Some(&[2, 2, 2, 1, 1, -5]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn min(
+        a: &Tensor<i128>,
+        in_scale: usize,
+        out_scale: usize,
+        threshold: f64,
+    ) -> Tensor<i128> {
+        // calculate value of output
+        let mut output: Tensor<i128> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            let d_inv_x = (*a_i as f64) / (in_scale as f64);
+            output[i] = if d_inv_x >= threshold {
+                (threshold * (out_scale as f64)).round() as i128
+            } else {
+                (d_inv_x * (out_scale as f64)).round() as i128
+            };
+        }
+
         output
     }
 
