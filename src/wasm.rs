@@ -15,6 +15,7 @@ use wasm_bindgen::prelude::*;
 
 use console_error_panic_hook;
 
+#[cfg(feature = "web")]
 pub use wasm_bindgen_rayon::init_thread_pool;
 
 #[wasm_bindgen]
