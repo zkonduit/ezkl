@@ -363,15 +363,10 @@ impl Node {
             inputs.push(other_nodes.get(i).ok_or("input not found").unwrap().clone())
         });
 
-        println!("bc input {:?}", inputs);
-
         let (mut opkind, deleted_indices) =
             new_op_from_onnx(idx, scale, param_visibility, node.clone(), &mut inputs)?; // parses the op name
 
-        println!("ad input {:?}", inputs);
-
         // we can only take the inputs as mutable once -- so we need to collect them first
-
         other_nodes.extend(
             inputs
                 .iter()

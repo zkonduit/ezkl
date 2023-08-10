@@ -554,9 +554,6 @@ impl Model {
             // Extract the slope layer hyperparams
             match n.op().downcast_ref::<Scan>() {
                 Some(b) => {
-                    println!("Found a scan node");
-                    println!("body: {:?}", b);
-
                     let model = b.body.clone();
                     let input_scales = n
                         .inputs
