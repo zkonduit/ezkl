@@ -656,7 +656,7 @@ pub(crate) async fn calibrate(
     // now retrieve the run args
     let run_args = settings.run_args;
 
-    let pb = init_bar((4..12).len() as u64);
+    let pb = init_bar((2..16).len() as u64);
 
     pb.set_message("calibrating...");
     // we load the model to get the input and output shapes
@@ -672,11 +672,11 @@ pub(crate) async fn calibrate(
 
     let mut found_params: Vec<GraphSettings> = vec![];
 
-    for scale in 4..12 {
+    for scale in 2..16 {
         pb.set_message(format!("scale {}", scale));
         std::thread::sleep(Duration::from_millis(100));
 
-        let _r = Gag::stdout().unwrap();
+        // let _r = Gag::stdout().unwrap();
         // Result<Vec<GraphSettings>, &str>
         let tasks = chunks
             .iter()
@@ -752,7 +752,7 @@ pub(crate) async fn calibrate(
             found_params.push(best);
         }
 
-        std::mem::drop(_r);
+        // std::mem::drop(_r);
         pb.inc(1);
     }
 
@@ -830,9 +830,8 @@ pub(crate) async fn mock(
         public_inputs,
     )
     .map_err(Box::<dyn Error>::from)?;
-    prover.assert_satisfied();
     prover
-        .verify()
+        .verify_par()
         .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
     Ok(())
 }
@@ -1563,9 +1562,8 @@ pub(crate) fn mock_aggregate(
 
     let prover = halo2_proofs::dev::MockProver::run(logrows, &circuit, circuit.instances())
         .map_err(Box::<dyn Error>::from)?;
-    prover.assert_satisfied();
     prover
-        .verify()
+        .verify_par()
         .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
     #[cfg(not(target_arch = "wasm32"))]
     pb.finish_with_message("Done.");

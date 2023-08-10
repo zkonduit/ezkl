@@ -18,7 +18,7 @@ pub enum HybridOp {
         axes: Vec<usize>,
     },
     MaxPool2d {
-        padding: (usize, usize),
+        padding: [(usize, usize); 2],
         stride: (usize, usize),
         pool_dims: (usize, usize),
     },
