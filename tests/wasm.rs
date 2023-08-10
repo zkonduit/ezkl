@@ -10,8 +10,9 @@ mod wasm32 {
     use ezkl::pfsys::Snark;
     use ezkl::wasm::{elgamalDecrypt, elgamalEncrypt, poseidonHash, prove, verify};
     use halo2curves::bn256::{Fr, G1Affine};
-    pub use wasm_bindgen_rayon::init_thread_pool;
     use wasm_bindgen_test::*;
+    #[cfg(feature = "web")]
+    pub use wasm_bindgen_rayon::init_thread_pool;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
